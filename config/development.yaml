@@ -1,0 +1,56 @@
+# Development Configuration
+# This file contains development-specific settings
+
+environment: development
+debug: true
+
+database:
+  host: localhost
+  port: 5432
+  name: project_management_dev
+  user: postgres
+  password: ""
+  pool_size: 5
+  max_overflow: 10
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+  max_connections: 5
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  debug: true
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8000"
+  jwt_secret: "dev-secret-key-change-in-production"
+  jwt_algorithm: "HS256"
+  jwt_expire_minutes: 60
+
+llm:
+  provider: "openai"
+  api_key: ""  # Set via environment variable
+  model: "gpt-4o-mini"
+  temperature: 0.7
+  max_tokens: 4000
+  timeout: 30
+
+search:
+  provider: "duckduckgo"
+  brave_api_key: ""  # Set via environment variable
+  tavily_api_key: ""  # Set via environment variable
+  max_results: 10
+  timeout: 10
+
+logging:
+  level: "DEBUG"
+  debug: true
+  log_file: "logs/app.log"
+  error_file: "logs/error.log"
+  structured_file: "logs/structured.log"
+
+

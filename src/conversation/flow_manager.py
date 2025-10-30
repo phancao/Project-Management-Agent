@@ -229,6 +229,15 @@ class ConversationFlowManager:
             IntentType.GET_STATUS: [
                 "project_id"
             ],
+            IntentType.CREATE_WBS: [
+                # WBS can work with just project_name OR project_id
+            ],
+            IntentType.SPRINT_PLANNING: [
+                "project_id"
+            ],
+            IntentType.CREATE_REPORT: [
+                "project_id"
+            ],
             IntentType.HELP: [],
             IntentType.UNKNOWN: []
         }

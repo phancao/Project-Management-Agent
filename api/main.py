@@ -107,8 +107,9 @@ class ProjectResponse(BaseModel):
 # Authentication dependency
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     # TODO: Implement proper JWT authentication
-    # For now, return a mock user
-    return {"user_id": "mock_user_id", "email": "user@example.com"}
+    # For now, return a mock user with a valid UUID
+    # This should match the user created in setup_test_data.py
+    return {"user_id": "f430f348-d65f-427f-9379-3d0f163393d1", "email": "user@example.com"}
 
 # Health check endpoint
 @app.get("/health")

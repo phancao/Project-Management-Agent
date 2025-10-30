@@ -67,7 +67,13 @@ def init_db():
     """
     import logging
     logger = logging.getLogger(__name__)
-    from database.orm_models import Base
+    # Import all models to ensure they're registered with Base
+    from database.orm_models import (
+        Base, User, Project, ProjectGoal, TeamMember, Task, TaskDependency,
+        ResearchSession, KnowledgeBaseItem, ConversationSession, ConversationMessage,
+        ProjectTemplate, ProjectMetric, IntentClassification, IntentFeedback,
+        IntentMetric, LearnedIntentPattern
+    )
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")

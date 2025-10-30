@@ -163,6 +163,11 @@ class ConversationFlowManager:
         
         # Execute appropriate action based on state
         if context.current_state == FlowState.RESEARCH_PHASE:
+            # Skip research for certain intents that don't need it
+            skip_research_intents = [IntentType.CREATE_WBS, IntentType.SPRINT_PLANNING, IntentType.CREATE_REPORT]
+            if context.intent in skip_research_intents:
+                context.current_state = FlowState.EXECUTION_PHASE
+                return await self._handle_execution_phase(context)
             return await self._handle_research_phase(context)
         elif context.current_state == FlowState.PLANNING_PHASE:
             return await self._handle_planning_phase(context)
@@ -430,12 +435,38 @@ class ConversationFlowManager:
             project = None
             if project_id:
                 try:
-                    project = get_project(self.db_session, UUID(project_id))
+                    # Try UUID first
+                    try:
+                        project = get_project(self.db_session, UUID(project_id))
+                    except (ValueError, TypeError):
+                        # If not a UUID, search by name
+                        from database.crud import get_projects
+                        all_projects = get_projects(self.db_session)
+                        for p in all_projects:
+                            if p.name == project_id:
+                                project = p
+                                break
+                    
                     if project:
                         project_name = project.name
                         project_description = project.description
+                        project_id = str(project.id)  # Update to actual UUID
                 except Exception as e:
                     logger.warning(f"Could not fetch project: {e}")
+            
+            # If we have project_name but no project object, search by name
+            if project_name and not project:
+                try:
+                    from database.crud import get_projects
+                    all_projects = get_projects(self.db_session)
+                    for p in all_projects:
+                        if p.name == project_name:
+                            project = p
+                            project_id = str(project.id)
+                            project_description = project.description
+                            break
+                except Exception as e:
+                    logger.warning(f"Could not search for project: {e}")
             
             if not project_name:
                 return {
@@ -960,8 +991,11 @@ Return only valid JSON:"""
 - priority: Updated priority
 - timeline_weeks: Updated timeline in weeks""",
             
-            IntentType.CREATE_WBS: """- project_id: ID of the project
-- breakdown_levels: Number of levels in WBS
+            IntentType.CREATE_WBS: """- project_name: Name of the project
+- project_id: UUID of the project (preferred if available)
+- project_description: Description of the project
+- domain: Project domain or industry
+- breakdown_levels: Number of levels in WBS (default: 3)
 - tasks: List of main tasks""",
             
             IntentType.SPRINT_PLANNING: """- project_id: ID of the project

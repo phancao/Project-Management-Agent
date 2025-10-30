@@ -13,6 +13,19 @@ interface Task {
   due_date?: string;
 }
 
+interface Sprint {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  duration_weeks: number;
+  duration_days: number;
+  capacity_hours: number;
+  planned_hours: number;
+  utilization: number;
+  status: string;
+}
+
 interface Project {
   id: string;
   name: string;
@@ -25,9 +38,12 @@ interface Project {
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Record<string, Task[]>>({});
+  const [sprints, setSprints] = useState<Record<string, Sprint[]>>({});
+  const [sprintTasks, setSprintTasks] = useState<Record<string, Task[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
+  const [expandedSprint, setExpandedSprint] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -38,7 +54,18 @@ export default function ProjectsPage() {
     if (expandedProject && !tasks[expandedProject]) {
       fetchTasks(expandedProject);
     }
+    // Fetch sprints for expanded project
+    if (expandedProject && !sprints[expandedProject]) {
+      fetchSprints(expandedProject);
+    }
   }, [expandedProject]);
+
+  useEffect(() => {
+    // Fetch tasks for expanded sprint
+    if (expandedSprint && !sprintTasks[expandedSprint]) {
+      fetchSprintTasks(expandedSprint);
+    }
+  }, [expandedSprint]);
 
   const fetchProjects = async () => {
     try {
@@ -76,6 +103,40 @@ export default function ProjectsPage() {
       }
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
+    }
+  };
+
+  const fetchSprints = async (projectId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/projects/${projectId}/sprints`, {
+        headers: {
+          'Authorization': 'Bearer mock_token',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSprints(prev => ({ ...prev, [projectId]: data }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch sprints:', err);
+    }
+  };
+
+  const fetchSprintTasks = async (sprintId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/sprints/${sprintId}/tasks`, {
+        headers: {
+          'Authorization': 'Bearer mock_token',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSprintTasks(prev => ({ ...prev, [sprintId]: data }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch sprint tasks:', err);
     }
   };
 
@@ -156,64 +217,157 @@ export default function ProjectsPage() {
                   {project.description || 'No description'}
                 </p>
                 
-                <button
-                  onClick={() => setExpandedProject(expandedProject === project.id ? null : project.id)}
-                  className="w-full mb-4 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-medium text-gray-700 transition-colors"
-                >
-                  {expandedProject === project.id ? 'Hide' : 'Show'} Tasks ({tasks[project.id]?.length || 0})
-                </button>
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => setExpandedProject(expandedProject === project.id ? null : project.id)}
+                    className="flex-1 px-4 py-2 bg-blue-100 hover:bg-blue-200 rounded-md text-sm font-medium text-blue-700 transition-colors"
+                  >
+                    {expandedProject === project.id ? 'Hide' : 'Show'} Details
+                  </button>
+                </div>
 
                 {expandedProject === project.id && (
-                  <div className="border-t pt-4">
-                    {tasks[project.id] ? (
-                      tasks[project.id].length > 0 ? (
-                        <div className="space-y-2">
-                          {tasks[project.id].map((task) => (
-                            <div key={task.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-md">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-medium text-sm text-gray-900">{task.title}</h4>
-                                  <span className={`px-2 py-0.5 text-xs rounded ${
-                                    task.status === 'completed' 
-                                      ? 'bg-green-100 text-green-800'
-                                      : task.status === 'in_progress'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'bg-yellow-100 text-yellow-800'
-                                  }`}>
-                                    {task.status}
-                                  </span>
-                                </div>
-                                {task.description && (
-                                  <p className="text-xs text-gray-600">{task.description}</p>
-                                )}
-                                <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                                  {task.priority && (
-                                    <span className={`px-2 py-0.5 rounded ${
-                                      task.priority === 'high' 
-                                        ? 'bg-red-100 text-red-700'
-                                        : task.priority === 'medium'
-                                        ? 'bg-orange-100 text-orange-700'
-                                        : 'bg-gray-100 text-gray-700'
+                  <div className="border-t pt-4 space-y-6">
+                    {/* Sprints Section */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                        🏃 Sprints ({sprints[project.id]?.length || 0})
+                      </h4>
+                      {sprints[project.id] ? (
+                        sprints[project.id].length > 0 ? (
+                          <div className="space-y-2">
+                            {sprints[project.id].map((sprint) => (
+                              <div key={sprint.id} className="border border-blue-200 rounded-lg overflow-hidden">
+                                <button
+                                  onClick={() => setExpandedSprint(expandedSprint === sprint.id ? null : sprint.id)}
+                                  className="w-full px-3 py-2 bg-blue-50 hover:bg-blue-100 flex items-center justify-between text-sm"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-blue-900">{sprint.name}</span>
+                                    <span className={`px-2 py-0.5 text-xs rounded ${
+                                      sprint.status === 'in_progress' 
+                                        ? 'bg-green-100 text-green-700'
+                                        : sprint.status === 'completed'
+                                        ? 'bg-gray-100 text-gray-700'
+                                        : 'bg-yellow-100 text-yellow-700'
                                     }`}>
-                                      {task.priority}
+                                      {sprint.status}
                                     </span>
+                                  </div>
+                                  <span className="text-xs text-blue-700">
+                                    {expandedSprint === sprint.id ? '▲' : '▼'}
+                                  </span>
+                                </button>
+                                {expandedSprint === sprint.id && (
+                                  <div className="p-3 bg-white border-t border-blue-200">
+                                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
+                                      <div>
+                                        <span className="font-medium">Duration:</span> {sprint.duration_weeks} weeks
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Capacity:</span> {sprint.capacity_hours?.toFixed(1)}h
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Planned:</span> {sprint.planned_hours?.toFixed(1)}h
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Utilization:</span> {sprint.utilization?.toFixed(1)}%
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-medium text-gray-700 mb-2">Tasks:</div>
+                                      {sprintTasks[sprint.id] ? (
+                                        sprintTasks[sprint.id].length > 0 ? (
+                                          <div className="space-y-1">
+                                            {sprintTasks[sprint.id].map((task) => (
+                                              <div key={task.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
+                                                <div>
+                                                  <span className="font-medium">{task.title}</span>
+                                                  {task.assigned_to && (
+                                                    <span className="ml-2 text-gray-500">→ {task.assigned_to}</span>
+                                                  )}
+                                                </div>
+                                                <span className="text-gray-600">{task.estimated_hours}h</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="text-xs text-gray-500">No tasks in sprint</p>
+                                        )
+                                      ) : (
+                                        <p className="text-xs text-gray-500">Loading tasks...</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 text-center py-4">
+                            No sprints yet. Plan a sprint by chatting with the AI!
+                          </p>
+                        )
+                      ) : (
+                        <div className="text-sm text-gray-500 text-center py-4">Loading sprints...</div>
+                      )}
+                    </div>
+
+                    {/* All Tasks Section */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                        📋 All Tasks ({tasks[project.id]?.length || 0})
+                      </h4>
+                      {tasks[project.id] ? (
+                        tasks[project.id].length > 0 ? (
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {tasks[project.id].map((task) => (
+                              <div key={task.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-md">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h5 className="font-medium text-sm text-gray-900">{task.title}</h5>
+                                    <span className={`px-2 py-0.5 text-xs rounded ${
+                                      task.status === 'completed' 
+                                        ? 'bg-green-100 text-green-800'
+                                        : task.status === 'in_progress'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                      {task.status}
+                                    </span>
+                                  </div>
+                                  {task.description && (
+                                    <p className="text-xs text-gray-600">{task.description}</p>
                                   )}
-                                  {task.estimated_hours && (
-                                    <span>⏱️ {task.estimated_hours}h</span>
-                                  )}
+                                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                    {task.priority && (
+                                      <span className={`px-2 py-0.5 rounded ${
+                                        task.priority === 'high' 
+                                          ? 'bg-red-100 text-red-700'
+                                          : task.priority === 'medium'
+                                          ? 'bg-orange-100 text-orange-700'
+                                          : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {task.priority}
+                                      </span>
+                                    )}
+                                    {task.estimated_hours && (
+                                      <span>⏱️ {task.estimated_hours}h</span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 text-center py-4">
+                            No tasks yet. Create tasks by chatting with the AI!
+                          </p>
+                        )
                       ) : (
-                        <p className="text-sm text-gray-500 text-center py-4">
-                          No tasks yet. Create tasks by chatting with the AI!
-                        </p>
-                      )
-                    ) : (
-                      <div className="text-sm text-gray-500 text-center py-4">Loading tasks...</div>
-                    )}
+                        <div className="text-sm text-gray-500 text-center py-4">Loading tasks...</div>
+                      )}
+                    </div>
                   </div>
                 )}
                 

@@ -1,20 +1,35 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ChatKit } from '@openai/chatkit-react';
 import { ProjectDashboard } from '@/components/ProjectDashboard';
 import { ConversationPanel } from '@/components/ConversationPanel';
+import { WBSVisualizer } from '@/components/WBSVisualizer';
+import { SprintPlanner } from '@/components/SprintPlanner';
+import { ReportsDashboard } from '@/components/ReportsDashboard';
 import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useConversation } from '@/hooks/useConversation';
 
+type TabType = 'chat' | 'projects' | 'analytics' | 'wbs' | 'sprint' | 'reports';
+
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'projects' | 'analytics'>('chat');
+  const [activeTab, setActiveTab] = useState<TabType>('chat');
   const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   
   const { messages, sendMessage, isConnected } = useWebSocket(sessionId);
   const { conversationState, intent, missingFields } = useConversation(messages);
+
+  // Store last generated WBS data from chat
+  const [wbsData, setWbsData] = useState<any>(null);
+
+  // Extract WBS data from chat messages
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.data && lastMessage.data.wbs) {
+      setWbsData(lastMessage.data.wbs);
+    }
+  }, [messages]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -43,6 +58,18 @@ export default function HomePage() {
           
           {activeTab === 'projects' && (
             <ProjectDashboard />
+          )}
+          
+          {activeTab === 'wbs' && (
+            <WBSVisualizer wbsData={wbsData} onClose={() => setActiveTab('chat')} />
+          )}
+          
+          {activeTab === 'sprint' && (
+            <SprintPlanner onClose={() => setActiveTab('projects')} />
+          )}
+          
+          {activeTab === 'reports' && (
+            <ReportsDashboard onClose={() => setActiveTab('projects')} />
           )}
           
           {activeTab === 'analytics' && (

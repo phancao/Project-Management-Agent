@@ -1,11 +1,13 @@
 "use client";
 
 import React from 'react';
-import { MessageCircle, FolderOpen, BarChart3, Wifi, WifiOff } from 'lucide-react';
+import { MessageCircle, FolderOpen, BarChart3, Wifi, WifiOff, GitBranch, Calendar, FileText } from 'lucide-react';
+
+type TabType = 'chat' | 'projects' | 'analytics' | 'wbs' | 'sprint' | 'reports';
 
 interface SidebarProps {
-  activeTab: 'chat' | 'projects' | 'analytics';
-  onTabChange: (tab: 'chat' | 'projects' | 'analytics') => void;
+  activeTab: TabType;
+  onTabChange: (tab: TabType) => void;
   isConnected: boolean;
 }
 
@@ -24,10 +26,28 @@ export function Sidebar({ activeTab, onTabChange, isConnected }: SidebarProps) {
       description: 'Manage your projects'
     },
     {
+      id: 'wbs' as const,
+      name: 'WBS',
+      icon: GitBranch,
+      description: 'Work breakdown'
+    },
+    {
+      id: 'sprint' as const,
+      name: 'Sprint Planning',
+      icon: Calendar,
+      description: 'Plan sprints'
+    },
+    {
+      id: 'reports' as const,
+      name: 'Reports',
+      icon: FileText,
+      description: 'Project reports'
+    },
+    {
       id: 'analytics' as const,
       name: 'Analytics',
       icon: BarChart3,
-      description: 'View project analytics'
+      description: 'View analytics'
     }
   ];
 

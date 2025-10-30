@@ -649,6 +649,31 @@ class ConversationFlowManager:
                 except Exception as e:
                     logger.warning(f"Could not search for project: {e}")
             
+            # If still no project found, create one
+            if project_name and not project:
+                try:
+                    from database.crud import create_project
+                    from database.orm_models import Project
+                    from uuid import uuid4
+                    
+                    logger.info(f"Auto-creating project '{project_name}' for WBS")
+                    # Create project using the user_id from context
+                    user_id = UUID("f430f348-d65f-427f-9379-3d0f163393d1")  # Mock user, TODO: get from context
+                    
+                    project = create_project(
+                        db=self.db_session,
+                        name=project_name,
+                        description=project_description or "",
+                        created_by=user_id,
+                        domain=context.gathered_data.get("domain", "general")
+                    )
+                    project_id = str(project.id)
+                    logger.info(f"Created project '{project_name}' with ID {project_id}")
+                except Exception as e:
+                    logger.error(f"Could not auto-create project: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            
             if not project_name:
                 return {
                     "type": "error",

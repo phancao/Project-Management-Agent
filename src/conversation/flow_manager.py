@@ -521,9 +521,11 @@ class ConversationFlowManager:
             
             # Flatten WBS and create tasks in database if project_id provided
             tasks_created = 0
+            logger.info(f"CREATE_WBS - project object: {project}, project.id: {project.id if project else None}")
             if project and project.id:
                 try:
                     flat_tasks = wbs_generator.flatten_wbs(wbs_result["wbs_structure"])
+                    logger.info(f"CREATE_WBS - flattened {len(flat_tasks)} tasks from WBS")
                     
                     for task in flat_tasks:
                         create_task(
@@ -540,6 +542,8 @@ class ConversationFlowManager:
                     logger.info(f"Created {tasks_created} tasks from WBS")
                 except Exception as e:
                     logger.warning(f"Could not create tasks in database: {e}")
+            else:
+                logger.warning(f"CREATE_WBS - Skipping task creation: project={project}, project.id={project.id if project else None}")
             
             context.current_state = FlowState.COMPLETED
             return {

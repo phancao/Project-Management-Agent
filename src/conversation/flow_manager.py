@@ -269,20 +269,17 @@ class ConversationFlowManager:
                 }
             
             try:
-                # Create initial messages for DeerFlow
-                messages = [{"role": "user", "content": f"Research: {topic}"}]
+                # Run DeerFlow workflow with user_input parameter
+                user_input = f"Research: {topic}"
                 
-                # Run DeerFlow workflow
-                async for event in self.run_deerflow_workflow(
-                    messages=messages,
-                    thread_id=context.session_id,
+                # Call the workflow function (returns final state, not an async iterator)
+                result_state = await self.run_deerflow_workflow(
+                    user_input=user_input,
                     max_plan_iterations=1,
                     max_step_num=3,
-                    max_search_results=3,
-                    auto_accepted_plan=True
-                ):
-                    # Stream events back (can be captured by caller)
-                    logger.debug(f"DeerFlow event: {event}")
+                    enable_background_investigation=True,
+                    enable_clarification=False
+                )
                 
                 # After research completes, move to completed state
                 context.current_state = FlowState.COMPLETED

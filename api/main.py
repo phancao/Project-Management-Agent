@@ -4,11 +4,12 @@ FastAPI server for Project Management Agent
 This module provides RESTful APIs and WebSocket endpoints for the project management system.
 """
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, AsyncIterator
 import asyncio
 import json
 import uuid
@@ -133,6 +134,56 @@ async def send_message(
             user_id=current_user.get("user_id")
         )
         return ChatResponse(**response)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Streaming chat endpoint for DeerFlow-style frontend
+@app.post("/api/chat/stream")
+async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
+    """Stream chat responses using Server-Sent Events (SSE)"""
+    try:
+        body = await request.json()
+        user_message = body.get("messages", [{}])[0].get("content", "")
+        session_id = body.get("session_id", str(uuid.uuid4()))
+        
+        # Get flow manager with db session
+        fm = get_flow_manager(db)
+        
+        async def generate_stream() -> AsyncIterator[str]:
+            """Generate SSE stream of chat responses"""
+            try:
+                # Yield initial event
+                yield "event: status\n"
+                yield f"data: {json.dumps({'status': 'processing'})}\n\n"
+                
+                # Process message
+                response = await fm.process_message(
+                    message=user_message,
+                    session_id=session_id,
+                    user_id="f430f348-d65f-427f-9379-3d0f163393d1"  # Mock user
+                )
+                
+                # Yield the response
+                yield "event: message\n"
+                yield f"data: {json.dumps({'message': response.get('message', ''), 'state': response.get('state', 'complete')})}\n\n"
+                
+                # Yield completion event
+                yield "event: complete\n"
+                yield f"data: {json.dumps({'status': 'complete'})}\n\n"
+                
+            except Exception as e:
+                # Yield error event
+                yield "event: error\n"
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no"
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

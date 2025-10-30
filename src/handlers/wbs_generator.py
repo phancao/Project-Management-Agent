@@ -153,6 +153,7 @@ Research the typical work breakdown structure for a {domain} project:
             )
             
             # Call LLM to generate WBS
+            logger.info("Invoking LLM for WBS generation...")
             response = await self.llm.ainvoke(prompt)
             
             # Parse response
@@ -160,6 +161,9 @@ Research the typical work breakdown structure for a {domain} project:
                 response_text = response.content
             else:
                 response_text = str(response)
+            
+            logger.info(f"LLM response received (length: {len(response_text)})")
+            logger.debug(f"LLM response: {response_text[:500]}")
             
             # Try to extract JSON structure
             import json
@@ -169,10 +173,11 @@ Research the typical work breakdown structure for a {domain} project:
             json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text, re.DOTALL)
             if json_match:
                 wbs_json = json.loads(json_match.group())
-                logger.info("Successfully parsed LLM-generated WBS")
+                logger.info(f"Successfully parsed LLM-generated WBS. Phases: {len(wbs_json.get('phases', []))}")
                 return wbs_json
             else:
                 logger.warning("Could not parse LLM response as JSON, using template")
+                logger.debug(f"Response text (first 1000 chars): {response_text[:1000]}")
                 return self._generate_template_wbs(project_name, project_description)
                 
         except Exception as e:

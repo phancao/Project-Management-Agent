@@ -104,7 +104,9 @@ class Task(Base):
     priority = Column(String(20), default='medium')
     estimated_hours = Column(Float)
     actual_hours = Column(Float, default=0)
-    assigned_to = Column(UUID(as_uuid=True), ForeignKey("team_members.id"), nullable=True)
+    assigned_to = Column(UUID(as_uuid=True), nullable=True)
+    # Note: ForeignKey to team_members.id removed to fix SQLAlchemy relationship issue
+    # The FK is still in the database schema, but ORM doesn't enforce it
     due_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

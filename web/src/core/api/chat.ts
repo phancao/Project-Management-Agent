@@ -81,7 +81,8 @@ export async function* chatStream(
     // Add project context to the message if we're in a project-specific chat
     let enhancedMessage = userMessage;
     if (projectId) {
-      enhancedMessage = `${userMessage}\n\n[Context: Project ID: ${projectId}]`;
+      // Add project_id explicitly in a way the LLM will extract it
+      enhancedMessage = `${userMessage}\n\nproject_id: ${projectId}`;
     }
     
     const stream = fetchStream(resolveServiceURL("chat/stream"), {

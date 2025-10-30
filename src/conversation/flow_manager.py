@@ -164,8 +164,8 @@ class ConversationFlowManager:
         
         # Execute appropriate action based on state
         if context.current_state == FlowState.RESEARCH_PHASE:
-            # Skip research for certain intents that don't need it
-            skip_research_intents = [IntentType.CREATE_WBS, IntentType.SPRINT_PLANNING, IntentType.CREATE_REPORT]
+            # WBS creation needs research, sprint planning and reports can skip
+            skip_research_intents = [IntentType.SPRINT_PLANNING, IntentType.CREATE_REPORT]
             if context.intent in skip_research_intents:
                 context.current_state = FlowState.EXECUTION_PHASE
                 return await self._handle_execution_phase(context)
@@ -258,20 +258,29 @@ class ConversationFlowManager:
         """Handle research phase using DeerFlow"""
         logger.info(f"Starting research phase for intent: {context.intent}")
         
-        # For RESEARCH_TOPIC intent, use DeerFlow directly
-        if context.intent == IntentType.RESEARCH_TOPIC and self.run_deerflow_workflow:
-            topic = context.gathered_data.get("topic", "")
-            
-            if not topic:
-                return {
-                    "type": "error",
-                    "message": "No research topic provided. Please specify what you'd like to research.",
-                    "state": context.current_state.value
-                }
+        # For RESEARCH_TOPIC and CREATE_WBS intents, use DeerFlow
+        needs_research = context.intent in [IntentType.RESEARCH_TOPIC, IntentType.CREATE_WBS]
+        
+        if needs_research and self.run_deerflow_workflow:
+            # Determine research topic based on intent
+            if context.intent == IntentType.CREATE_WBS:
+                project_name = context.gathered_data.get("project_name", "")
+                project_description = context.gathered_data.get("project_description", "")
+                domain = context.gathered_data.get("domain", "")
+                topic = f"{project_name} project structure" if project_name else domain if domain else "project structure"
+                # Research query for WBS
+                user_input = f"Research typical phases, deliverables, and tasks for {domain or project_name or 'this type of project'}. Focus on project structure and common components."
+            else:
+                topic = context.gathered_data.get("topic", "")
+                if not topic:
+                    return {
+                        "type": "error",
+                        "message": "No research topic provided. Please specify what you'd like to research.",
+                        "state": context.current_state.value
+                    }
+                user_input = f"Research: {topic}"
             
             try:
-                # Run DeerFlow workflow with user_input parameter
-                user_input = f"Research: {topic}"
                 
                 # Call the workflow function (returns final state, not an async iterator)
                 result_state = await self.run_deerflow_workflow(
@@ -304,15 +313,22 @@ class ConversationFlowManager:
                         if observations:
                             research_result = "\n".join(observations[-3:])  # Last 3 observations
                 
-                # If we have research results, return them
+                # Store research results in context for execution phase
                 if research_result:
+                    context.gathered_data['research_context'] = research_result
                     summary_msg = f"Research on '{topic}' completed successfully.\n\n{research_result[:500]}{'...' if len(research_result) > 500 else ''}"
                 else:
                     summary_msg = f"Research on '{topic}' has been completed using DeerFlow."
                 
-                # After research completes, move to completed state
-                context.current_state = FlowState.COMPLETED
-                
+                # For CREATE_WBS, move to execution phase after research
+                # For RESEARCH_TOPIC, complete here
+                if context.intent == IntentType.CREATE_WBS:
+                    context.current_state = FlowState.EXECUTION_PHASE
+                    # Don't return here, let it continue to execution phase
+                    # We'll just store the results in context
+                else:
+                    context.current_state = FlowState.COMPLETED
+                    
                 return {
                     "type": "research_completed",
                     "message": summary_msg,
@@ -620,13 +636,22 @@ class ConversationFlowManager:
             llm = get_llm_by_type("basic")
             wbs_generator = WBSGenerator(llm=llm)
             
-            # Generate WBS
+            # Get research context if available (from research phase)
+            research_context = context.gathered_data.get('research_context', '')
+            
+            # If we already have research from DeerFlow, disable internal research
+            if research_context:
+                use_research = False
+                logger.info("Using research context from DeerFlow research phase")
+            
+            # Generate WBS with external research context if available
             wbs_result = await wbs_generator.generate_wbs(
                 project_name=project_name,
                 project_description=project_description or "",
                 project_domain=context.gathered_data.get("domain"),
                 breakdown_levels=breakdown_levels,
-                use_research=use_research
+                use_research=use_research,
+                external_research_context=research_context
             )
             
             # Flatten WBS and create tasks in database if project_id provided

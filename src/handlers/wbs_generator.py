@@ -40,7 +40,8 @@ class WBSGenerator:
         project_description: str,
         project_domain: Optional[str] = None,
         breakdown_levels: int = 3,
-        use_research: bool = True
+        use_research: bool = True,
+        external_research_context: str = ""
     ) -> Dict[str, Any]:
         """
         Generate a WBS for a project
@@ -51,15 +52,16 @@ class WBSGenerator:
             project_domain: Domain/industry of the project
             breakdown_levels: Number of levels in WBS (default: 3)
             use_research: Whether to use DeerFlow for research
+            external_research_context: External research context from DeerFlow
             
         Returns:
             Dictionary containing WBS structure and metadata
         """
         logger.info(f"Generating WBS for project: {project_name}")
         
-        # If research enabled, gather context about similar projects
-        research_context = ""
-        if use_research and project_domain:
+        # Use external research context if provided, otherwise do research
+        research_context = external_research_context
+        if not research_context and use_research and project_domain:
             try:
                 research_context = await self._research_project_structure(
                     project_name, project_description, project_domain

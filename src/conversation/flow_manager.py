@@ -651,22 +651,15 @@ class ConversationFlowManager:
             llm = get_llm_by_type("basic")
             wbs_generator = WBSGenerator(llm=llm)
             
-            # Get research context if available (from research phase)
-            research_context = context.gathered_data.get('research_context', '')
-            
-            # If we already have research from DeerFlow, disable internal research
-            if research_context:
-                use_research = False
-                logger.info("Using research context from DeerFlow research phase")
-            
-            # Generate WBS with external research context if available
+            # Generate WBS without internal research (too slow)
+            # WBSGenerator will create tasks based on LLM knowledge
             wbs_result = await wbs_generator.generate_wbs(
                 project_name=project_name,
                 project_description=project_description or "",
                 project_domain=context.gathered_data.get("domain"),
                 breakdown_levels=breakdown_levels,
-                use_research=use_research,
-                external_research_context=research_context
+                use_research=False,  # Disabled for speed
+                external_research_context=""
             )
             
             # Flatten WBS and create tasks in database if project_id provided

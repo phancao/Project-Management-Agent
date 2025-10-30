@@ -281,14 +281,45 @@ class ConversationFlowManager:
                     enable_clarification=False
                 )
                 
+                # Extract research results from final state
+                research_result = ""
+                if result_state and isinstance(result_state, dict):
+                    # Try to get final_report from state
+                    research_result = result_state.get("final_report", "")
+                    
+                    # If no final_report, try to get last message
+                    if not research_result and "messages" in result_state:
+                        messages = result_state["messages"]
+                        if messages:
+                            last_message = messages[-1]
+                            if hasattr(last_message, 'content'):
+                                research_result = last_message.content
+                            elif isinstance(last_message, dict):
+                                research_result = last_message.get("content", "")
+                    
+                    # Fallback to observations if available
+                    if not research_result:
+                        observations = result_state.get("observations", [])
+                        if observations:
+                            research_result = "\n".join(observations[-3:])  # Last 3 observations
+                
+                # If we have research results, return them
+                if research_result:
+                    summary_msg = f"Research on '{topic}' completed successfully.\n\n{research_result[:500]}{'...' if len(research_result) > 500 else ''}"
+                else:
+                    summary_msg = f"Research on '{topic}' has been completed using DeerFlow."
+                
                 # After research completes, move to completed state
                 context.current_state = FlowState.COMPLETED
                 
                 return {
                     "type": "research_completed",
-                    "message": f"Research on '{topic}' has been completed using DeerFlow.",
+                    "message": summary_msg,
                     "state": context.current_state.value,
-                    "data": {"topic": topic}
+                    "data": {
+                        "topic": topic,
+                        "full_results": research_result if research_result else None
+                    }
                 }
             except Exception as e:
                 logger.error(f"DeerFlow research failed: {e}")

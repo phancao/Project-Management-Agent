@@ -152,6 +152,39 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
         async def generate_stream() -> AsyncIterator[str]:
             """Generate SSE stream of chat responses with progress updates"""
             try:
+                # Check if message needs DeerFlow research (CREATE_WBS)
+                needs_research = any(keyword in user_message.lower() for keyword in [
+                    "create wbs", "work breakdown", "research"
+                ])
+                
+                # For research queries, stream DeerFlow updates
+                if needs_research and "create wbs" in user_message.lower():
+                    # Yield initial message
+                    initial_chunk = {
+                        "id": str(uuid.uuid4()),
+                        "thread_id": thread_id,
+                        "agent": "coordinator",
+                        "role": "assistant",
+                        "content": "🦌 **Starting DeerFlow research...**\n\n",
+                        "finish_reason": None
+                    }
+                    yield "event: message_chunk\n"
+                    yield f"data: {json.dumps(initial_chunk)}\n\n"
+                    
+                    # TODO: Stream DeerFlow research progress here
+                    # For now, just indicate research is happening
+                    research_msg = "Researching project structure and best practices..."
+                    research_chunk = {
+                        "id": str(uuid.uuid4()),
+                        "thread_id": thread_id,
+                        "agent": "coordinator",
+                        "role": "assistant",
+                        "content": research_msg + "\n\n",
+                        "finish_reason": None
+                    }
+                    yield "event: message_chunk\n"
+                    yield f"data: {json.dumps(research_chunk)}\n\n"
+                
                 # Process message
                 response = await fm.process_message(
                     message=user_message,

@@ -164,9 +164,8 @@ class ConversationFlowManager:
         
         # Execute appropriate action based on state
         if context.current_state == FlowState.RESEARCH_PHASE:
-            # Skip research for all PM intents for now (too slow for UI)
-            # TODO: Implement incremental streaming for DeerFlow research
-            skip_research_intents = [IntentType.CREATE_WBS, IntentType.SPRINT_PLANNING, IntentType.CREATE_REPORT]
+            # WBS needs research, sprint planning and reports can skip
+            skip_research_intents = [IntentType.SPRINT_PLANNING, IntentType.CREATE_REPORT]
             if context.intent in skip_research_intents:
                 context.current_state = FlowState.EXECUTION_PHASE
                 return await self._handle_execution_phase(context)
@@ -174,8 +173,9 @@ class ConversationFlowManager:
             # If research phase changed state to EXECUTION (e.g., for CREATE_WBS),
             # continue to execution phase instead of returning
             if context.current_state == FlowState.EXECUTION_PHASE:
+                # Research completed, now execute
                 return await self._handle_execution_phase(context)
-            # If research returned None, something went wrong
+            # If research returned None after setting state to something other than EXECUTION, error
             if research_result is None:
                 logger.error("Research phase returned None unexpectedly")
                 return {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
 
 interface Message {
   id: string;
@@ -26,59 +25,61 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // Initialize WebSocket connection
-    const socket = io(process.env.NEXT_PUBLIC_API_URL || 'ws://localhost:8000', {
-      path: '/ws/chat',
-      transports: ['websocket'],
-    });
+    // Build WS URL from NEXT_PUBLIC_API_URL (which points to http(s)://host:port/api)
+    const httpBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+    // Strip trailing /api
+    const base = httpBase.replace(/\/?api\/?$/, '');
+    const wsProtocol = base.startsWith('https') ? 'wss' : 'ws';
+    const wsUrl = `${wsProtocol}://${base.replace(/^https?:\/\//, '')}/ws/chat/${encodeURIComponent(sessionId)}`;
 
-    socketRef.current = socket;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
 
-    socket.on('connect', () => {
-      console.log('WebSocket connected');
+    ws.onopen = () => {
       setIsConnected(true);
       setError(null);
-    });
+    };
 
-    socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
+    ws.onclose = () => {
       setIsConnected(false);
-    });
+    };
 
-    socket.on('connect_error', (err) => {
-      console.error('WebSocket connection error:', err);
+    ws.onerror = (ev) => {
+      console.error('WebSocket error:', ev);
       setError('Connection failed. Please try again.');
-    });
+    };
 
-    socket.on('message', (data: any) => {
-      console.log('Received message:', data);
-      
-      const newMessage: Message = {
-        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        role: 'assistant',
-        content: data.message || 'No message content',
-        timestamp: new Date().toISOString(),
-        type: data.type,
-        state: data.state,
-        intent: data.intent,
-        missing_fields: data.missing_fields,
-        data: data.data,
-      };
-
-      setMessages(prev => [...prev, newMessage]);
-    });
+    ws.onmessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data as string);
+        const newMessage: Message = {
+          id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          role: 'assistant',
+          content: data.message || 'No message content',
+          timestamp: new Date().toISOString(),
+          type: data.type,
+          state: data.state,
+          intent: data.intent,
+          missing_fields: data.missing_fields,
+          data: data.data,
+        };
+        setMessages(prev => [...prev, newMessage]);
+      } catch (e) {
+        console.error('Failed to parse message:', e);
+      }
+    };
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      try { ws.close(); } catch {}
+      wsRef.current = null;
     };
   }, [sessionId]);
 
   const sendMessage = useCallback(async (message: string) => {
-    if (!socketRef.current || !isConnected) {
+    if (!wsRef.current || !isConnected) {
       setError('Not connected to server');
       return;
     }
@@ -94,13 +95,15 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
     setMessages(prev => [...prev, userMessage]);
 
     try {
-      // Send message to server
-      socketRef.current.emit('message', {
-        message,
-        session_id: sessionId,
-        user_id: 'current_user', // TODO: Get from auth context
-        timestamp: new Date().toISOString(),
-      });
+      // Send message as JSON text per FastAPI websocket
+      wsRef.current.send(
+        JSON.stringify({
+          message,
+          session_id: sessionId,
+          user_id: 'current_user', // TODO: integrate auth
+          timestamp: new Date().toISOString(),
+        })
+      );
     } catch (err) {
       console.error('Error sending message:', err);
       setError('Failed to send message');

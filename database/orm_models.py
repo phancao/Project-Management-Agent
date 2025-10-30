@@ -4,7 +4,7 @@ SQLAlchemy ORM models for Project Management Agent
 These models match the database schema in database/schema.sql
 """
 
-from sqlalchemy import Column, String, Text, Integer, Float, DateTime, Boolean, ForeignKey, ARRAY, JSON
+from sqlalchemy import Column, String, Text, Integer, Float, DateTime, Boolean, ForeignKey, ARRAY, JSON, Date
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -54,6 +54,7 @@ class Project(Base):
     tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
     research_sessions = relationship("ResearchSession", back_populates="project", cascade="all, delete-orphan")
     metrics = relationship("ProjectMetric", back_populates="project", cascade="all, delete-orphan")
+    sprints = relationship("Sprint", back_populates="project", cascade="all, delete-orphan")
 
 
 class ProjectGoal(Base):
@@ -292,4 +293,43 @@ class LearnedIntentPattern(Base):
     confidence = Column(Float, default=1.0)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_used_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Sprint(Base):
+    """Sprint model"""
+    __tablename__ = "sprints"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"))
+    name = Column(String(255), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    duration_weeks = Column(Integer)
+    duration_days = Column(Integer)
+    capacity_hours = Column(Float)
+    planned_hours = Column(Float)
+    utilization = Column(Float)  # percentage
+    status = Column(String(50), default='planned')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    project = relationship("Project", back_populates="sprints")
+    sprint_tasks = relationship("SprintTask", back_populates="sprint", cascade="all, delete-orphan")
+
+
+class SprintTask(Base):
+    """Sprint task junction model"""
+    __tablename__ = "sprint_tasks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    sprint_id = Column(UUID(as_uuid=True), ForeignKey("sprints.id", ondelete="CASCADE"))
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"))
+    assigned_to_name = Column(String(255))
+    capacity_used = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    sprint = relationship("Sprint", back_populates="sprint_tasks")
+    task = relationship("Task", foreign_keys=[task_id])
 

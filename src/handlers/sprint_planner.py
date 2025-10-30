@@ -105,18 +105,51 @@ class SprintPlanner:
             selected_tasks, team_members, team_capacity_hours_per_day, duration_days
         )
         
-        # Create sprint plan
-        sprint_plan = SprintPlan(
-            sprint_name=sprint_name,
-            start_date=start_date,
-            end_date=end_date,
-            duration_days=duration_days,
-            capacity_hours=total_capacity,
-            tasks=assigned_tasks,
-            team_members=team_members
-        )
+        # Save sprint to database
+        sprint_id = None
+        if self.db_session:
+            try:
+                from database.orm_models import Sprint, SprintTask
+                from uuid import UUID
+                
+                # Create sprint record
+                sprint = Sprint(
+                    project_id=UUID(project_id),
+                    name=sprint_name,
+                    start_date=start_date.date(),
+                    end_date=end_date.date(),
+                    duration_weeks=duration_weeks,
+                    duration_days=duration_days,
+                    capacity_hours=total_capacity,
+                    planned_hours=total_hours,
+                    utilization=(total_hours / total_capacity * 100) if total_capacity > 0 else 0,
+                    status='planned'
+                )
+                self.db_session.add(sprint)
+                self.db_session.commit()
+                self.db_session.refresh(sprint)
+                sprint_id = str(sprint.id)
+                
+                # Create sprint task records
+                for task in assigned_tasks:
+                    sprint_task = SprintTask(
+                        sprint_id=UUID(sprint_id),
+                        task_id=UUID(task.task_id),
+                        assigned_to_name=task.assigned_to,
+                        capacity_used=task.estimated_hours
+                    )
+                    self.db_session.add(sprint_task)
+                
+                self.db_session.commit()
+                logger.info(f"Sprint saved to database: {sprint_id}")
+            except Exception as e:
+                logger.error(f"Could not save sprint to database: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                self.db_session.rollback()
         
         return {
+            "sprint_id": sprint_id,
             "sprint_name": sprint_name,
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),

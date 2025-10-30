@@ -451,6 +451,75 @@ async def list_tasks(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Sprint management endpoints
+@app.get("/api/projects/{project_id}/sprints")
+async def list_sprints(
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
+):
+    """List all sprints for a project"""
+    try:
+        from uuid import UUID
+        from database.orm_models import Sprint
+        
+        sprints = db.query(Sprint).filter(Sprint.project_id == UUID(project_id)).all()
+        
+        return [
+            {
+                "id": str(s.id),
+                "name": s.name,
+                "start_date": s.start_date.isoformat() if s.start_date else None,
+                "end_date": s.end_date.isoformat() if s.end_date else None,
+                "duration_weeks": s.duration_weeks,
+                "duration_days": s.duration_days,
+                "capacity_hours": s.capacity_hours,
+                "planned_hours": s.planned_hours,
+                "utilization": s.utilization,
+                "status": s.status
+            }
+            for s in sprints
+        ]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/sprints/{sprint_id}/tasks")
+async def get_sprint_tasks(
+    sprint_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
+):
+    """Get all tasks in a sprint"""
+    try:
+        from uuid import UUID
+        from database.orm_models import SprintTask
+        
+        sprint_tasks = db.query(SprintTask).filter(SprintTask.sprint_id == UUID(sprint_id)).all()
+        
+        tasks = []
+        for st in sprint_tasks:
+            # Get the task details
+            from database.orm_models import Task
+            task = db.query(Task).filter(Task.id == st.task_id).first()
+            if task:
+                tasks.append({
+                    "id": str(task.id),
+                    "title": task.title,
+                    "description": task.description,
+                    "estimated_hours": task.estimated_hours,
+                    "priority": task.priority,
+                    "assigned_to": st.assigned_to_name,
+                    "capacity_used": st.capacity_used
+                })
+        
+        return tasks
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid sprint ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Research endpoints
 @app.post("/api/research")
 async def start_research(

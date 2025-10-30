@@ -477,12 +477,20 @@ class ConversationFlowManager:
             # Call planner node
             result = planner_node(planner_state, config)
             
+            logger.info(f"DeerFlow planner result: {result}")
+            logger.info(f"Result type: {type(result)}")
+            
             # Extract the plan from result
             if hasattr(result, 'update') and result.update:
+                logger.info(f"Result has update: {result.update}")
                 current_plan = result.update.get('current_plan')
-                if current_plan:
+                logger.info(f"Current plan: {current_plan}, type: {type(current_plan)}")
+                
+                if current_plan and hasattr(current_plan, 'thought'):
+                    logger.info(f"Plan has thought: {current_plan.thought}")
+                    logger.info(f"Plan has steps: {len(current_plan.steps) if hasattr(current_plan, 'steps') else 0}")
                     return {
-                        "thought": current_plan.thought if hasattr(current_plan, 'thought') else "",
+                        "thought": current_plan.thought,
                         "steps": [
                             {
                                 "title": step.title,
@@ -492,6 +500,7 @@ class ConversationFlowManager:
                         ]
                     }
             
+            logger.warning("No plan extracted from DeerFlow planner")
             return {"thought": "", "steps": []}
         except Exception as e:
             logger.warning(f"Could not use DeerFlow planner: {e}")

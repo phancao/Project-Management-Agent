@@ -184,16 +184,25 @@ def delete_task(db: Session, task_id: UUID) -> bool:
 
 # ==================== TEAM MEMBER CRUD ====================
 
-def create_team_member(db: Session, project_id: UUID, name: str,
-                       email: Optional[str] = None, role: Optional[str] = None,
-                       skills: Optional[str] = None) -> TeamMember:
-    """Add a team member to a project"""
+def create_team_member(db: Session, project_id: UUID, user_id: UUID,
+                       role: Optional[str] = None,
+                       skills: Optional[List[str]] = None,
+                       hourly_rate: Optional[float] = None) -> TeamMember:
+    """Add a team member to a project
+    
+    Args:
+        project_id: Project to add member to
+        user_id: User to add as team member
+        role: Role in the project
+        skills: List of skills
+        hourly_rate: Hourly rate for the member
+    """
     member = TeamMember(
         project_id=project_id,
-        name=name,
-        email=email,
+        user_id=user_id,
         role=role,
-        skills=skills
+        skills=skills,
+        hourly_rate=hourly_rate
     )
     db.add(member)
     db.commit()

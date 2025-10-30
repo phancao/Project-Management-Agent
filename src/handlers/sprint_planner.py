@@ -175,7 +175,16 @@ class SprintPlanner:
             
             members = get_team_members_by_project(self.db_session, UUID(project_id))
             
-            return [member.name for member in members] if members else ["Team Member 1"]
+            # Get user names from member objects
+            if members:
+                from database.crud import get_user
+                user_names = []
+                for member in members:
+                    user = get_user(self.db_session, member.user_id)
+                    if user:
+                        user_names.append(user.name)
+                return user_names if user_names else ["Team Member 1"]
+            return ["Team Member 1"]
         except Exception as e:
             logger.error(f"Could not fetch team members: {e}")
             return ["Team Member 1"]

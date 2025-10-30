@@ -527,21 +527,30 @@ class ConversationFlowManager:
                     flat_tasks = wbs_generator.flatten_wbs(wbs_result["wbs_structure"])
                     logger.info(f"CREATE_WBS - flattened {len(flat_tasks)} tasks from WBS")
                     
-                    for task in flat_tasks:
-                        create_task(
-                            db=self.db_session,
-                            project_id=project.id,
-                            title=task.title,
-                            description=task.description,
-                            priority=task.priority,
-                            estimated_hours=task.estimated_hours,
-                            # Note: Parent task relationship would need proper UUID handling
-                        )
-                        tasks_created += 1
+                    from database.orm_models import Task
                     
+                    # Create tasks using ORM directly to avoid commit issues
+                    for task_data in flat_tasks:
+                        try:
+                            task = Task(
+                                project_id=project.id,
+                                title=task_data.title,
+                                description=task_data.description,
+                                priority=task_data.priority,
+                                estimated_hours=task_data.estimated_hours,
+                                status="todo"
+                            )
+                            self.db_session.add(task)
+                            tasks_created += 1
+                        except Exception as e:
+                            logger.warning(f"Could not add task '{task_data.title}': {e}")
+                    
+                    # Commit all tasks at once
+                    self.db_session.commit()
                     logger.info(f"Created {tasks_created} tasks from WBS")
                 except Exception as e:
-                    logger.warning(f"Could not create tasks in database: {e}")
+                    logger.error(f"Could not create tasks in database: {e}")
+                    self.db_session.rollback()
             else:
                 logger.warning(f"CREATE_WBS - Skipping task creation: project={project}, project.id={project.id if project else None}")
             

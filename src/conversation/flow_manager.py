@@ -445,32 +445,22 @@ class ConversationFlowManager:
         user_query: str,
         context: ConversationContext
     ) -> Dict[str, Any]:
-        """Use LLM to generate a thinking plan for PM tasks"""
+        """Use LLM to generate a thinking plan for PM tasks using DeerFlow prompt style"""
         try:
             from src.llms.llm import get_llm_by_type
+            from src.prompts.template import get_prompt_template
             
-            # Build a simple prompt for thinking steps
-            prompt = f"""You are a project management expert. A user has requested: {user_query}
-
-Think about what steps are needed to accomplish this task. Generate a brief plan with 2-4 clear steps.
-
-Format your response as a JSON object with:
-- "thought": One sentence describing your approach
-- "steps": Array of 2-4 step descriptions (10-15 words each)
-
-Example:
-{{
-  "thought": "I need to analyze the project scope, create a structured WBS, generate detailed tasks, and save them to the database.",
-  "steps": [
-    "Analyze project requirements and scope",
-    "Create hierarchical WBS structure",
-    "Break down into actionable tasks with estimates",
-    "Save tasks to project database"
-  ]
-}}"""
+            # Load the PM thinking prompt template
+            system_prompt = get_prompt_template("pm_thinking", locale="en-US")
+            
+            # Create messages with system prompt + user query
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_query}
+            ]
             
             llm = get_llm_by_type("basic")
-            response = await llm.ainvoke([{"role": "user", "content": prompt}])
+            response = await llm.ainvoke(messages)
             
             content = response.content if hasattr(response, 'content') else str(response)
             logger.info(f"Thinking plan LLM response: {content}")

@@ -104,7 +104,7 @@ class Task(Base):
     priority = Column(String(20), default='medium')
     estimated_hours = Column(Float)
     actual_hours = Column(Float, default=0)
-    assigned_to = Column(UUID(as_uuid=True), ForeignKey("team_members.id"))
+    assigned_to = Column(UUID(as_uuid=True), ForeignKey("team_members.id"), nullable=True)
     due_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -459,6 +459,9 @@ class ConversationFlowManager:
             breakdown_levels = context.gathered_data.get("breakdown_levels", 3)
             use_research = context.gathered_data.get("use_research", True)
             
+            logger.info(f"CREATE_WBS - project_id: {project_id}, project_name: {project_name}")
+            logger.info(f"CREATE_WBS - gathered_data: {context.gathered_data}")
+            
             # Get project from database if project_id provided
             project = None
             if project_id:

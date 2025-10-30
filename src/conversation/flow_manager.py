@@ -6,6 +6,7 @@ and progressive data gathering for project management tasks.
 """
 
 import logging
+import json
 from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
 from dataclasses import dataclass
@@ -412,12 +413,14 @@ class ConversationFlowManager:
                 }
             
             elif context.intent == IntentType.CREATE_WBS:
-                # Generate WBS for project
-                return await self._handle_create_wbs(context)
+                # Generate thinking plan first, then execute
+                thinking_plan = await self._generate_thinking_plan(context)
+                return await self._handle_create_wbs_with_thinking(context, thinking_plan)
             
             elif context.intent == IntentType.SPRINT_PLANNING:
-                # Plan a sprint
-                return await self._handle_sprint_planning(context)
+                # Generate thinking plan first, then execute
+                thinking_plan = await self._generate_thinking_plan(context)
+                return await self._handle_sprint_planning_with_thinking(context, thinking_plan)
             
             elif context.intent == IntentType.CREATE_REPORT:
                 # Generate a report
@@ -438,6 +441,92 @@ class ConversationFlowManager:
                 "message": f"Execution failed: {str(e)}",
                 "state": context.current_state.value
             }
+    
+    async def _generate_thinking_plan(
+        self,
+        context: ConversationContext
+    ) -> List[str]:
+        """Generate a thinking plan showing what steps will be taken"""
+        from src.llms.llm import get_llm_by_type
+        
+        intent_description = {
+            IntentType.CREATE_WBS: "Create a Work Breakdown Structure (WBS)",
+            IntentType.SPRINT_PLANNING: "Plan a sprint and assign tasks"
+        }.get(context.intent, context.intent.value)
+        
+        # Build a prompt to generate thinking steps
+        prompt = f"""You are planning to {intent_description}.
+
+Context gathered so far:
+{json.dumps(context.gathered_data, indent=2)}
+
+Generate a brief thinking plan with 2-4 steps showing how you will approach this task.
+Each step should be a short sentence (20 words or less).
+Return as a JSON array of strings.
+
+Example format:
+["Step 1: Analyze the project requirements and scope", "Step 2: Break down into phases and deliverables", "Step 3: Create tasks and estimate effort", "Step 4: Save tasks to database"]
+
+Your thinking plan:"""
+
+        try:
+            llm = get_llm_by_type("basic")
+            response = await llm.ainvoke([{"role": "user", "content": prompt}])
+            
+            # Extract JSON array from response
+            content = response.content if hasattr(response, 'content') else str(response)
+            
+            # Try to parse JSON array
+            import re
+            json_match = re.search(r'\[.*\]', content, re.DOTALL)
+            if json_match:
+                steps = json.loads(json_match.group())
+                logger.info(f"Generated thinking plan: {steps}")
+                return steps if isinstance(steps, list) else [steps]
+            
+            # Fallback: split by numbered lines
+            steps = []
+            for line in content.split('\n'):
+                line = line.strip()
+                if line and (line[0].isdigit() or line.startswith('-')):
+                    steps.append(re.sub(r'^\d+\.\s*|^-\s*', '', line))
+            
+            return steps if steps else [f"Planning to {intent_description}"]
+        except Exception as e:
+            logger.warning(f"Could not generate thinking plan: {e}")
+            return [f"Planning to {intent_description}"]
+    
+    async def _handle_create_wbs_with_thinking(
+        self,
+        context: ConversationContext,
+        thinking_plan: List[str]
+    ) -> Dict[str, Any]:
+        """Handle CREATE_WBS with thinking steps display"""
+        # For SSE streaming, we need to return multiple responses
+        # Since we can only return one, we'll combine them
+        result = await self._handle_create_wbs(context)
+        
+        # If result is successful, prepend thinking steps
+        if result.get("type") == "execution_completed":
+            thinking_text = "🤔 Thinking:\n\n" + "\n".join(f"{i+1}. {step}" for i, step in enumerate(thinking_plan))
+            result["message"] = thinking_text + "\n\n✅ " + result["message"]
+        
+        return result
+    
+    async def _handle_sprint_planning_with_thinking(
+        self,
+        context: ConversationContext,
+        thinking_plan: List[str]
+    ) -> Dict[str, Any]:
+        """Handle SPRINT_PLANNING with thinking steps display"""
+        result = await self._handle_sprint_planning(context)
+        
+        # If result is successful, prepend thinking steps
+        if result.get("type") == "execution_completed":
+            thinking_text = "🤔 Thinking:\n\n" + "\n".join(f"{i+1}. {step}" for i, step in enumerate(thinking_plan))
+            result["message"] = thinking_text + "\n\n✅ " + result["message"]
+        
+        return result
     
     async def _handle_create_wbs(
         self,

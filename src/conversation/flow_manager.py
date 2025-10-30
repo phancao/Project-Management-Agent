@@ -386,6 +386,10 @@ class ConversationFlowManager:
                 # Plan a sprint
                 return await self._handle_sprint_planning(context)
             
+            elif context.intent == IntentType.CREATE_REPORT:
+                # Generate a report
+                return await self._handle_create_report(context)
+            
             else:
                 context.current_state = FlowState.COMPLETED
                 return {
@@ -560,6 +564,68 @@ class ConversationFlowManager:
             return {
                 "type": "error",
                 "message": f"Failed to plan sprint: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_create_report(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle CREATE_REPORT intent - Generate a project report"""
+        logger.info("Handling CREATE_REPORT intent")
+        
+        try:
+            from src.handlers import ReportGenerator
+            
+            # Get report parameters
+            project_id = context.gathered_data.get("project_id")
+            report_type = context.gathered_data.get("report_type", "status")
+            include_research = context.gathered_data.get("include_research", True)
+            format_type = context.gathered_data.get("format", "markdown")
+            
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Project ID is required to generate a report. Please specify which project.",
+                    "state": context.current_state.value
+                }
+            
+            # Initialize report generator
+            generator = ReportGenerator(db_session=self.db_session)
+            
+            # Generate report
+            report = await generator.generate_report(
+                project_id=project_id,
+                report_type=report_type,
+                include_research=include_research,
+                format=format_type
+            )
+            
+            if "error" in report:
+                return {
+                    "type": "error",
+                    "message": report["error"],
+                    "state": context.current_state.value
+                }
+            
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "execution_completed",
+                "message": f"Report generated successfully for '{report.get('project_name', 'project')}'!",
+                "state": context.current_state.value,
+                "data": {
+                    "report_type": report_type,
+                    "format": format_type,
+                    "content": report.get("content", "")[:1000],  # Preview
+                    "sections": report.get("sections", 0)
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Report generation failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to generate report: {str(e)}",
                 "state": context.current_state.value
             }
     

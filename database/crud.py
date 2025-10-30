@@ -249,6 +249,11 @@ def get_research_session(db: Session, session_id: UUID) -> Optional[ResearchSess
     return db.query(ResearchSession).filter(ResearchSession.id == session_id).first()
 
 
+def get_research_sessions_by_project(db: Session, project_id: UUID) -> List[ResearchSession]:
+    """Get all research sessions for a project"""
+    return db.query(ResearchSession).filter(ResearchSession.project_id == project_id).all()
+
+
 def update_research_session(db: Session, session_id: UUID,
                            research_data: Optional[Dict[str, Any]] = None,
                            findings: Optional[str] = None,

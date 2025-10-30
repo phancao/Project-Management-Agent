@@ -150,10 +150,9 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
         fm = get_flow_manager(db)
         
         async def generate_stream() -> AsyncIterator[str]:
-            """Generate SSE stream of chat responses"""
+            """Generate SSE stream of chat responses with progress updates"""
             try:
-                # TODO: Stream intermediate progress from process_message
-                # For now, process message and yield final result
+                # Process message
                 response = await fm.process_message(
                     message=user_message,
                     session_id=thread_id,
@@ -163,8 +162,42 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 response_message = response.get('message', '')
                 response_state = response.get('state', 'complete')
                 
-                # Yield message chunk event (DeerFlow compatible)
-                # Determine finish reason based on state
+                # Check if message contains thinking plan (🤔)
+                if "🤔 **Thinking:**" in response_message:
+                    # Split into thinking section and execution section
+                    parts = response_message.split("\n\n✅ ")
+                    if len(parts) == 2:
+                        thinking_msg = parts[0] + "\n\n"
+                        execution_msg = parts[1]
+                        
+                        # First yield the thinking plan
+                        thinking_chunk = {
+                            "id": str(uuid.uuid4()),
+                            "thread_id": thread_id,
+                            "agent": "coordinator",
+                            "role": "assistant",
+                            "content": thinking_msg,
+                            "finish_reason": None
+                        }
+                        yield "event: message_chunk\n"
+                        yield f"data: {json.dumps(thinking_chunk)}\n\n"
+                        
+                        # Then yield a progress message
+                        progress_chunk = {
+                            "id": str(uuid.uuid4()),
+                            "thread_id": thread_id,
+                            "agent": "coordinator",
+                            "role": "assistant",
+                            "content": "🚀 **Executing plan...**\n\n",
+                            "finish_reason": None
+                        }
+                        yield "event: message_chunk\n"
+                        yield f"data: {json.dumps(progress_chunk)}\n\n"
+                        
+                        # Finally yield the execution result
+                        response_message = execution_msg
+                
+                # Yield final message chunk
                 finish_reason = None
                 if response_state == 'complete':
                     finish_reason = "stop"
@@ -174,7 +207,6 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 chunk_data = {
                     "id": str(uuid.uuid4()),
                     "thread_id": thread_id,
-                    # Keep agent fixed for DeerFlow UI compatibility
                     "agent": "coordinator",
                     "role": "assistant",
                     "content": response_message or "",

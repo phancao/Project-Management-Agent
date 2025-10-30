@@ -73,9 +73,20 @@ export async function* chatStream(
   
   try{
     const locale = getLocaleFromCookie();
+    
+    // Extract project context from URL if present
+    const urlParams = new URLSearchParams(location.search);
+    const projectId = urlParams.get('project');
+    
+    // Add project context to the message if we're in a project-specific chat
+    let enhancedMessage = userMessage;
+    if (projectId) {
+      enhancedMessage = `${userMessage}\n\n[Context: Project ID: ${projectId}]`;
+    }
+    
     const stream = fetchStream(resolveServiceURL("chat/stream"), {
       body: JSON.stringify({
-        messages: [{ role: "user", content: userMessage }],
+        messages: [{ role: "user", content: enhancedMessage }],
         locale,
         ...params,
       }),

@@ -550,6 +550,8 @@ class ConversationFlowManager:
                     logger.info(f"Created {tasks_created} tasks from WBS")
                 except Exception as e:
                     logger.error(f"Could not create tasks in database: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
                     self.db_session.rollback()
             else:
                 logger.warning(f"CREATE_WBS - Skipping task creation: project={project}, project.id={project.id if project else None}")

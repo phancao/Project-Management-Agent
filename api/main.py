@@ -152,10 +152,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
         async def generate_stream() -> AsyncIterator[str]:
             """Generate SSE stream of chat responses"""
             try:
-                # Generate unique message ID
-                message_id = str(uuid.uuid4())
-                
-                # Process message
+                # TODO: Stream intermediate progress from process_message
+                # For now, process message and yield final result
                 response = await fm.process_message(
                     message=user_message,
                     session_id=thread_id,
@@ -164,6 +162,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 
                 response_message = response.get('message', '')
                 response_state = response.get('state', 'complete')
+                response_type = response.get('type', 'execution_completed')
                 
                 # Yield message chunk event (DeerFlow compatible)
                 # Determine finish reason based on state
@@ -174,9 +173,9 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                     finish_reason = "interrupt"
                 
                 chunk_data = {
-                    "id": message_id,
+                    "id": str(uuid.uuid4()),
                     "thread_id": thread_id,
-                    "agent": "coordinator",  # Default agent
+                    "agent": response_type,  # Use response type as agent name
                     "role": "assistant",
                     "content": response_message,
                     "finish_reason": finish_reason

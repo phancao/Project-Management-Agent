@@ -169,7 +169,12 @@ class ConversationFlowManager:
             if context.intent in skip_research_intents:
                 context.current_state = FlowState.EXECUTION_PHASE
                 return await self._handle_execution_phase(context)
-            return await self._handle_research_phase(context)
+            research_result = await self._handle_research_phase(context)
+            # If research phase changed state to EXECUTION (e.g., for CREATE_WBS),
+            # continue to execution phase instead of returning
+            if context.current_state == FlowState.EXECUTION_PHASE:
+                return await self._handle_execution_phase(context)
+            return research_result
         elif context.current_state == FlowState.PLANNING_PHASE:
             return await self._handle_planning_phase(context)
         elif context.current_state == FlowState.EXECUTION_PHASE:
@@ -324,20 +329,21 @@ class ConversationFlowManager:
                 # For RESEARCH_TOPIC, complete here
                 if context.intent == IntentType.CREATE_WBS:
                     context.current_state = FlowState.EXECUTION_PHASE
-                    # Don't return here, let it continue to execution phase
+                    # Don't return, let it continue to execution phase
                     # We'll just store the results in context
+                    # The process_message will continue to handle_execution_phase
                 else:
                     context.current_state = FlowState.COMPLETED
-                    
-                return {
-                    "type": "research_completed",
-                    "message": summary_msg,
-                    "state": context.current_state.value,
-                    "data": {
-                        "topic": topic,
-                        "full_results": research_result if research_result else None
+                    # Return for RESEARCH_TOPIC intent
+                    return {
+                        "type": "research_completed",
+                        "message": summary_msg,
+                        "state": context.current_state.value,
+                        "data": {
+                            "topic": topic,
+                            "full_results": research_result if research_result else None
+                        }
                     }
-                }
             except Exception as e:
                 logger.error(f"DeerFlow research failed: {e}")
                 return {

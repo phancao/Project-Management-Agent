@@ -20,6 +20,9 @@ from database.models import (
     Task, TaskCreate, TaskUpdate,
     User, UserCreate
 )
+from database.connection import get_db_session
+from database import crud as db_crud
+from sqlalchemy.orm import Session
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -40,8 +43,25 @@ app.add_middleware(
 # Security
 security = HTTPBearer()
 
-# Initialize conversation flow manager
+# Initialize conversation flow manager (will be initialized with DB session)
+# Use a simple instance per request for now
 flow_manager = ConversationFlowManager()
+
+def get_flow_manager(db: Session = Depends(get_db_session)) -> ConversationFlowManager:
+    """Get flow manager with database session"""
+    # Create a new instance each time to ensure fresh db session
+    fm = ConversationFlowManager(db_session=db)
+    return fm
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    from database import init_db
+    try:
+        init_db()
+        print("✅ Database initialized successfully")
+    except Exception as e:
+        print(f"⚠️  Database initialization warning: {e}")
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -99,11 +119,14 @@ async def health_check():
 @app.post("/api/chat", response_model=ChatResponse)
 async def send_message(
     message: ChatMessage,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
 ):
     """Send a message to the conversation flow manager"""
     try:
-        response = await flow_manager.process_message(
+        # Get flow manager with db session
+        fm = get_flow_manager(db)
+        response = await fm.process_message(
             message=message.message,
             session_id=message.session_id,
             user_id=current_user.get("user_id")
@@ -115,11 +138,13 @@ async def send_message(
 @app.get("/api/chat/history/{session_id}")
 async def get_chat_history(
     session_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
 ):
     """Get chat history for a session"""
-    if session_id in flow_manager.contexts:
-        context = flow_manager.contexts[session_id]
+    fm = get_flow_manager(db)
+    if session_id in fm.contexts:
+        context = fm.contexts[session_id]
         return {
             "session_id": session_id,
             "history": context.conversation_history,
@@ -132,12 +157,21 @@ async def get_chat_history(
 @app.websocket("/ws/chat/{session_id}")
 async def websocket_chat(websocket: WebSocket, session_id: str):
     await manager.connect(websocket, session_id)
+    # Note: WebSocket can't use Depends, so we'll need to create flow manager here
+    # For now, using a simple approach without db session in websocket
     try:
         while True:
             data = await websocket.receive_text()
             message_data = json.loads(data)
             
-            # Process message through flow manager
+            # Process message through flow manager (without db session in websocket)
+            # TODO: Get db session in websocket context
+            global flow_manager
+            if flow_manager is None:
+                from database.connection import SessionLocal
+                db = SessionLocal()
+                flow_manager = ConversationFlowManager(db_session=db)
+            
             response = await flow_manager.process_message(
                 message=message_data["message"],
                 session_id=session_id,
@@ -154,78 +188,193 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
 @app.post("/api/projects", response_model=ProjectResponse)
 async def create_project(
     project: ProjectCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
 ):
     """Create a new project"""
-    # TODO: Implement project creation with database
-    project_id = str(uuid.uuid4())
-    return ProjectResponse(
-        id=project_id,
-        name=project.name,
-        description=project.description,
-        status="planning",
-        created_at=datetime.now(),
-        updated_at=datetime.now()
-    )
+    try:
+        # Create project using CRUD
+        new_project = db_crud.create_project(
+            db=db,
+            name=project.name,
+            description=project.description,
+            created_by=current_user.get("user_id"),  # Convert from string to UUID if needed
+            domain=project.domain,
+            priority=project.priority,
+            timeline_weeks=project.timeline_weeks,
+            budget=project.budget
+        )
+        
+        return ProjectResponse(
+            id=str(new_project.id),
+            name=new_project.name,
+            description=new_project.description,
+            status=new_project.status,
+            created_at=new_project.created_at,
+            updated_at=new_project.updated_at
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/projects", response_model=List[ProjectResponse])
 async def list_projects(
     current_user: dict = Depends(get_current_user),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    db: Session = Depends(get_db_session)
 ):
     """List all projects for the current user"""
-    # TODO: Implement project listing with database
-    return []
+    try:
+        projects = db_crud.get_projects(
+            db=db,
+            skip=skip,
+            limit=limit,
+            user_id=current_user.get("user_id")
+        )
+        
+        return [
+            ProjectResponse(
+                id=str(p.id),
+                name=p.name,
+                description=p.description,
+                status=p.status,
+                created_at=p.created_at,
+                updated_at=p.updated_at
+            )
+            for p in projects
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
 ):
     """Get project details"""
-    # TODO: Implement project retrieval with database
-    raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        from uuid import UUID
+        project = db_crud.get_project(db, UUID(project_id))
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        return ProjectResponse(
+            id=str(project.id),
+            name=project.name,
+            description=project.description,
+            status=project.status,
+            created_at=project.created_at,
+            updated_at=project.updated_at
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/projects/{project_id}", response_model=ProjectResponse)
 async def update_project(
     project_id: str,
     project_update: ProjectUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
 ):
     """Update project"""
-    # TODO: Implement project update with database
-    raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        from uuid import UUID
+        # Convert Pydantic model to dict and filter None values
+        update_data = {k: v for k, v in project_update.dict().items() if v is not None}
+        
+        project = db_crud.update_project(db, UUID(project_id), **update_data)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        return ProjectResponse(
+            id=str(project.id),
+            name=project.name,
+            description=project.description,
+            status=project.status,
+            created_at=project.created_at,
+            updated_at=project.updated_at
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/projects/{project_id}")
 async def delete_project(
     project_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
 ):
     """Delete project"""
-    # TODO: Implement project deletion with database
-    return {"message": "Project deleted successfully"}
+    try:
+        from uuid import UUID
+        success = db_crud.delete_project(db, UUID(project_id))
+        if not success:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return {"message": "Project deleted successfully"}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Task management endpoints
 @app.post("/api/projects/{project_id}/tasks")
 async def create_task(
     project_id: str,
     task: TaskCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
 ):
     """Create a new task for a project"""
-    # TODO: Implement task creation with database
-    task_id = str(uuid.uuid4())
-    return {"id": task_id, "message": "Task created successfully"}
+    try:
+        from uuid import UUID
+        new_task = db_crud.create_task(
+            db=db,
+            project_id=UUID(project_id),
+            title=task.title,
+            description=task.description,
+            priority=task.priority,
+            estimated_hours=task.estimated_hours,
+            due_date=task.due_date,
+            assigned_to=task.assigned_to,
+            parent_task_id=task.parent_task_id
+        )
+        return {"id": str(new_task.id), "message": "Task created successfully"}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/projects/{project_id}/tasks")
 async def list_tasks(
     project_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
 ):
     """List all tasks for a project"""
-    # TODO: Implement task listing with database
-    return []
+    try:
+        from uuid import UUID
+        tasks = db_crud.get_tasks_by_project(db, UUID(project_id))
+        return [
+            {
+                "id": str(t.id),
+                "title": t.title,
+                "description": t.description,
+                "status": t.status,
+                "priority": t.priority,
+                "estimated_hours": t.estimated_hours,
+                "actual_hours": t.actual_hours,
+                "due_date": t.due_date.isoformat() if t.due_date else None
+            }
+            for t in tasks
+        ]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Research endpoints
 @app.post("/api/research")
@@ -272,6 +421,61 @@ async def get_project_metrics(
     """Get project metrics and analytics"""
     # TODO: Implement metrics calculation
     return {"project_id": project_id, "metrics": {}}
+
+# Intent feedback endpoint for self-learning
+@app.post("/api/intent/feedback")
+async def record_intent_feedback(
+    feedback: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
+):
+    """Record user feedback on intent classification for self-learning"""
+    try:
+        classification_id = feedback.get("classification_id")
+        feedback_type = feedback.get("feedback_type", "correction")  # correction, confirmation, improvement
+        was_correct = feedback.get("was_correct")
+        user_corrected_intent = feedback.get("user_corrected_intent")
+        user_comment = feedback.get("user_comment")
+        
+        if not classification_id:
+            raise HTTPException(status_code=400, detail="classification_id is required")
+        
+        # Record feedback through flow manager
+        fm = get_flow_manager(db)
+        success = await fm.record_user_feedback(
+            classification_id=classification_id,
+            feedback_type=feedback_type,
+            was_correct=was_correct,
+            user_corrected_intent=user_corrected_intent,
+            user_comment=user_comment
+        )
+        
+        if success:
+            return {"message": "Feedback recorded successfully", "success": True}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to record feedback")
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Get intent metrics endpoint
+@app.get("/api/intent/metrics")
+async def get_intent_metrics(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session)
+):
+    """Get intent classification performance metrics"""
+    try:
+        fm = get_flow_manager(db)
+        if fm.self_learning:
+            metrics = fm.self_learning.get_intent_metrics()
+            return metrics
+        else:
+            return {"message": "Self-learning system not available", "intents": [], "total_intents": 0}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

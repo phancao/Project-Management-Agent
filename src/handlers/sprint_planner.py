@@ -94,6 +94,7 @@ class SprintPlanner:
         
         # Calculate capacity
         total_capacity = len(team_members) * duration_days * team_capacity_hours_per_day
+        logger.info(f"Sprint capacity: {len(team_members)} members × {duration_days} days × {team_capacity_hours_per_day}h = {total_capacity}h")
         
         # Select and assign tasks
         selected_tasks, total_hours = self._select_tasks_for_sprint(
@@ -249,8 +250,16 @@ class SprintPlanner:
         selected = []
         total_hours = 0.0
         
-        for task_data in sorted_tasks:
+        logger.info(f"Selecting tasks from {len(sorted_tasks)} available tasks with capacity {total_capacity}h")
+        
+        for idx, task_data in enumerate(sorted_tasks):
             estimated = task_data["estimated_hours"]
+            
+            # Skip tasks that are too large (likely parent tasks)
+            # A single task shouldn't exceed half the sprint capacity
+            if estimated > total_capacity * 0.5:
+                logger.info(f"Skipping task '{task_data['title']}' - too large ({estimated}h > {total_capacity * 0.5}h)")
+                continue
             
             # Check if we have capacity
             if total_hours + estimated <= total_capacity:
@@ -261,13 +270,15 @@ class SprintPlanner:
                     priority=task_data["priority"]
                 ))
                 total_hours += estimated
+                logger.info(f"Added task '{task_data['title']}' ({estimated}h). Total: {total_hours}h")
             else:
                 # Try to fit a partial task
                 remaining_capacity = total_capacity - total_hours
                 if remaining_capacity > 0:
-                    logger.info(f"Partial task '{task_data['title']}' not added due to capacity limits")
+                    logger.info(f"Task '{task_data['title']}' ({estimated}h) not added - remaining capacity: {remaining_capacity}h")
                 break
         
+        logger.info(f"Selected {len(selected)} tasks totaling {total_hours}h")
         return selected, total_hours
     
     def _assign_tasks_to_team(

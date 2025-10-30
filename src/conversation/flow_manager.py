@@ -491,31 +491,39 @@ Example:
         except Exception as e:
             logger.warning(f"Could not generate thinking plan: {e}")
             import traceback
-            logger.error(traceback.format_exc())
-            return {"thought": "", "steps": []}
+            logger.error(f"Full error: {traceback.format_exc()}")
+            # Return empty plan on error to not block execution
+            return {"thought": "Planning the requested task", "steps": []}
     
     async def _handle_create_wbs_with_deerflow_planner(
         self,
         context: ConversationContext
     ) -> Dict[str, Any]:
-        """Handle CREATE_WBS using DeerFlow planner for thinking"""
-        # First, get thinking plan from DeerFlow
-        user_query = f"Create a Work Breakdown Structure for this project: {json.dumps(context.gathered_data, indent=2)}"
+        """Handle CREATE_WBS using thinking plan"""
+        # First, get thinking plan
+        user_query = f"Create a Work Breakdown Structure for this project"
         planner_result = await self._use_deerflow_planner_to_think(user_query, context)
         
         # Execute our WBS handler
         result = await self._handle_create_wbs(context)
         
         # If successful, prepend thinking steps
-        if result.get("type") == "execution_completed" and planner_result.get("steps"):
+        if result.get("type") == "execution_completed":
             thinking_parts = []
             if planner_result.get("thought"):
                 thinking_parts.append(f"💭 {planner_result['thought']}")
-            thinking_parts.append("\n📋 Plan:")
-            for i, step in enumerate(planner_result['steps'], 1):
-                thinking_parts.append(f"{i}. {step['title']}")
             
-            result["message"] = "🤔 **Thinking:**\n\n" + "\n".join(thinking_parts) + "\n\n✅ " + result["message"]
+            if planner_result.get("steps"):
+                thinking_parts.append("\n📋 Plan:")
+                for i, step in enumerate(planner_result['steps'], 1):
+                    # Handle both dict and string step formats
+                    if isinstance(step, dict):
+                        thinking_parts.append(f"{i}. {step.get('title', str(step))}")
+                    else:
+                        thinking_parts.append(f"{i}. {step}")
+            
+            if thinking_parts:
+                result["message"] = "🤔 **Thinking:**\n\n" + "\n".join(thinking_parts) + "\n\n✅ " + result["message"]
         
         return result
     
@@ -523,24 +531,31 @@ Example:
         self,
         context: ConversationContext
     ) -> Dict[str, Any]:
-        """Handle SPRINT_PLANNING using DeerFlow planner for thinking"""
-        # First, get thinking plan from DeerFlow
-        user_query = f"Plan sprints for this project: {json.dumps(context.gathered_data, indent=2)}"
+        """Handle SPRINT_PLANNING using thinking plan"""
+        # First, get thinking plan
+        user_query = f"Plan sprints for this project"
         planner_result = await self._use_deerflow_planner_to_think(user_query, context)
         
         # Execute our sprint handler
         result = await self._handle_sprint_planning(context)
         
         # If successful, prepend thinking steps
-        if result.get("type") == "execution_completed" and planner_result.get("steps"):
+        if result.get("type") == "execution_completed":
             thinking_parts = []
             if planner_result.get("thought"):
                 thinking_parts.append(f"💭 {planner_result['thought']}")
-            thinking_parts.append("\n📋 Plan:")
-            for i, step in enumerate(planner_result['steps'], 1):
-                thinking_parts.append(f"{i}. {step['title']}")
             
-            result["message"] = "🤔 **Thinking:**\n\n" + "\n".join(thinking_parts) + "\n\n✅ " + result["message"]
+            if planner_result.get("steps"):
+                thinking_parts.append("\n📋 Plan:")
+                for i, step in enumerate(planner_result['steps'], 1):
+                    # Handle both dict and string step formats
+                    if isinstance(step, dict):
+                        thinking_parts.append(f"{i}. {step.get('title', str(step))}")
+                    else:
+                        thinking_parts.append(f"{i}. {step}")
+            
+            if thinking_parts:
+                result["message"] = "🤔 **Thinking:**\n\n" + "\n".join(thinking_parts) + "\n\n✅ " + result["message"]
         
         return result
     

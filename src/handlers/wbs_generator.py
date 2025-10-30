@@ -169,16 +169,39 @@ Research the typical work breakdown structure for a {domain} project:
             import json
             import re
             
-            # Look for JSON in the response
-            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text, re.DOTALL)
-            if json_match:
-                wbs_json = json.loads(json_match.group())
-                logger.info(f"Successfully parsed LLM-generated WBS. Phases: {len(wbs_json.get('phases', []))}")
-                return wbs_json
-            else:
-                logger.warning("Could not parse LLM response as JSON, using template")
-                logger.debug(f"Response text (first 1000 chars): {response_text[:1000]}")
-                return self._generate_template_wbs(project_name, project_description)
+            # Look for JSON in the response - try to find the outermost object
+            # First, try to find JSON between ```json and ``` markers
+            json_block_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+            if json_block_match:
+                try:
+                    wbs_json = json.loads(json_block_match.group(1))
+                    logger.info(f"Successfully parsed JSON block. Phases: {len(wbs_json.get('phases', []))}")
+                    return wbs_json
+                except json.JSONDecodeError:
+                    logger.warning("Could not parse JSON block")
+            
+            # If no JSON block found, try to find outermost JSON object
+            # Count braces to find complete object
+            brace_count = 0
+            start_idx = response_text.find('{')
+            if start_idx != -1:
+                for i in range(start_idx, len(response_text)):
+                    if response_text[i] == '{':
+                        brace_count += 1
+                    elif response_text[i] == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            try:
+                                wbs_json = json.loads(response_text[start_idx:i+1])
+                                logger.info(f"Successfully parsed outermost JSON object. Phases: {len(wbs_json.get('phases', []))}")
+                                return wbs_json
+                            except json.JSONDecodeError:
+                                logger.warning("Could not parse outermost JSON object")
+                            break
+            
+            logger.warning("Could not find valid JSON in response, using template")
+            logger.debug(f"Response text (first 1000 chars): {response_text[:1000]}")
+            return self._generate_template_wbs(project_name, project_description)
                 
         except Exception as e:
             logger.error(f"LLM WBS generation failed: {e}")

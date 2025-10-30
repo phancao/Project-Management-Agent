@@ -164,8 +164,9 @@ class ConversationFlowManager:
         
         # Execute appropriate action based on state
         if context.current_state == FlowState.RESEARCH_PHASE:
-            # WBS creation needs research, sprint planning and reports can skip
-            skip_research_intents = [IntentType.SPRINT_PLANNING, IntentType.CREATE_REPORT]
+            # Skip research for all PM intents for now (too slow for UI)
+            # TODO: Implement incremental streaming for DeerFlow research
+            skip_research_intents = [IntentType.CREATE_WBS, IntentType.SPRINT_PLANNING, IntentType.CREATE_REPORT]
             if context.intent in skip_research_intents:
                 context.current_state = FlowState.EXECUTION_PHASE
                 return await self._handle_execution_phase(context)
@@ -174,6 +175,14 @@ class ConversationFlowManager:
             # continue to execution phase instead of returning
             if context.current_state == FlowState.EXECUTION_PHASE:
                 return await self._handle_execution_phase(context)
+            # If research returned None, something went wrong
+            if research_result is None:
+                logger.error("Research phase returned None unexpectedly")
+                return {
+                    "type": "error",
+                    "message": "Research phase failed to complete",
+                    "state": context.current_state.value
+                }
             return research_result
         elif context.current_state == FlowState.PLANNING_PHASE:
             return await self._handle_planning_phase(context)
@@ -329,9 +338,9 @@ class ConversationFlowManager:
                 # For RESEARCH_TOPIC, complete here
                 if context.intent == IntentType.CREATE_WBS:
                     context.current_state = FlowState.EXECUTION_PHASE
-                    # Don't return, let it continue to execution phase
-                    # We'll just store the results in context
+                    # Return None to signal continuation to execution phase
                     # The process_message will continue to handle_execution_phase
+                    return None
                 else:
                     context.current_state = FlowState.COMPLETED
                     # Return for RESEARCH_TOPIC intent

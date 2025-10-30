@@ -593,6 +593,9 @@ class ConversationFlowManager:
             duration_weeks = context.gathered_data.get("duration_weeks", 2)
             team_capacity = context.gathered_data.get("capacity_hours_per_day", 6.0)
             
+            logger.info(f"SPRINT_PLANNING - project_id: {project_id}")
+            logger.info(f"SPRINT_PLANNING - gathered_data: {context.gathered_data}")
+            
             if not project_id:
                 return {
                     "type": "error",

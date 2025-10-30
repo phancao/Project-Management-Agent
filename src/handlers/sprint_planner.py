@@ -175,15 +175,18 @@ class SprintPlanner:
     async def _get_available_tasks(self, project_id: str) -> List[Dict[str, Any]]:
         """Get available (unassigned) tasks from project"""
         if not self.db_session:
+            logger.warning("No db_session available for fetching tasks")
             return []
         
         try:
             from database.crud import get_tasks_by_project
             from uuid import UUID
             
+            logger.info(f"Fetching tasks for project_id: {project_id}")
             tasks = get_tasks_by_project(self.db_session, UUID(project_id), status="todo")
+            logger.info(f"Found {len(tasks)} tasks with status='todo'")
             
-            return [
+            result = [
                 {
                     "id": str(task.id),
                     "title": task.title,
@@ -193,8 +196,12 @@ class SprintPlanner:
                 }
                 for task in tasks
             ]
+            logger.info(f"Returning {len(result)} tasks for sprint planning")
+            return result
         except Exception as e:
             logger.error(f"Could not fetch tasks: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
     
     async def _get_team_members(self, project_id: str) -> List[str]:

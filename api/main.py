@@ -144,7 +144,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
     try:
         body = await request.json()
         user_message = body.get("messages", [{}])[0].get("content", "")
-        session_id = body.get("session_id", str(uuid.uuid4()))
+        thread_id = body.get("thread_id", str(uuid.uuid4()))
         
         # Get flow manager with db session
         fm = get_flow_manager(db)
@@ -152,29 +152,52 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
         async def generate_stream() -> AsyncIterator[str]:
             """Generate SSE stream of chat responses"""
             try:
-                # Yield initial event
-                yield "event: status\n"
-                yield f"data: {json.dumps({'status': 'processing'})}\n\n"
+                # Generate unique message ID
+                message_id = str(uuid.uuid4())
                 
                 # Process message
                 response = await fm.process_message(
                     message=user_message,
-                    session_id=session_id,
+                    session_id=thread_id,
                     user_id="f430f348-d65f-427f-9379-3d0f163393d1"  # Mock user
                 )
                 
-                # Yield the response
-                yield "event: message\n"
-                yield f"data: {json.dumps({'message': response.get('message', ''), 'state': response.get('state', 'complete')})}\n\n"
+                response_message = response.get('message', '')
+                response_state = response.get('state', 'complete')
                 
-                # Yield completion event
-                yield "event: complete\n"
-                yield f"data: {json.dumps({'status': 'complete'})}\n\n"
+                # Yield message chunk event (DeerFlow compatible)
+                # Determine finish reason based on state
+                finish_reason = None
+                if response_state == 'complete':
+                    finish_reason = "stop"
+                elif '?' in response_message or 'specify' in response_message.lower():
+                    finish_reason = "interrupt"
+                
+                chunk_data = {
+                    "id": message_id,
+                    "thread_id": thread_id,
+                    "agent": "coordinator",  # Default agent
+                    "role": "assistant",
+                    "content": response_message,
+                    "finish_reason": finish_reason
+                }
+                
+                yield "event: message_chunk\n"
+                yield f"data: {json.dumps(chunk_data)}\n\n"
                 
             except Exception as e:
-                # Yield error event
-                yield "event: error\n"
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                # Yield error as message chunk
+                error_message = f"Error: {str(e)}"
+                error_data = {
+                    "id": str(uuid.uuid4()),
+                    "thread_id": thread_id,
+                    "agent": "coordinator",
+                    "role": "assistant",
+                    "content": error_message,
+                    "finish_reason": "stop"
+                }
+                yield "event: message_chunk\n"
+                yield f"data: {json.dumps(error_data)}\n\n"
         
         return StreamingResponse(
             generate_stream(),

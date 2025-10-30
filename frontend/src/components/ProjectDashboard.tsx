@@ -1,22 +1,17 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Plus, Search, Filter, MoreVertical, Calendar, Users, Clock, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Search, Filter, MoreVertical, Calendar, Users, Clock, CheckCircle, FolderOpen } from 'lucide-react';
+import { projectAPI, Project as ProjectType, Task } from '@/services/api';
 
-interface Project {
-  id: string;
-  name: string;
-  description: string;
-  status: 'planning' | 'active' | 'on_hold' | 'completed';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  timeline: string;
+interface ProjectStats {
   teamSize: number;
   progress: number;
   tasksCompleted: number;
   totalTasks: number;
 }
 
-const mockProjects: Project[] = [
+const mockProjects: (ProjectType & ProjectStats & { timeline: string })[] = [
   {
     id: '1',
     name: 'E-commerce Platform',
@@ -56,9 +51,70 @@ const mockProjects: Project[] = [
 ];
 
 export function ProjectDashboard() {
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
+  const [projects, setProjects] = useState<(ProjectType & Partial<ProjectStats> & { timeline?: string })[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tasksByProject, setTasksByProject] = useState<Record<string, Task[]>>({});
+
+  // Fetch projects from backend
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        setIsLoading(true);
+        const data = await projectAPI.list();
+        
+        // Enhance projects with stats
+        const enhancedProjects = await Promise.all(
+          data.map(async (project) => {
+            try {
+              // Fetch tasks for each project
+              const tasks = await projectAPI.getTasks(project.id);
+              const completedTasks = tasks.filter(t => t.status === 'completed').length;
+              const totalEstimatedHours = tasks
+                .filter(t => t.estimated_hours)
+                .reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
+              const completedHours = tasks
+                .filter(t => t.status === 'completed' && t.estimated_hours)
+                .reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
+              
+              return {
+                ...project,
+                tasksCompleted: completedTasks,
+                totalTasks: tasks.length,
+                progress: totalEstimatedHours > 0 ? Math.round((completedHours / totalEstimatedHours) * 100) : 0,
+                teamSize: 0, // TODO: Fetch team members
+                timeline: project.timeline_weeks ? `${project.timeline_weeks} weeks` : 'N/A',
+              };
+            } catch (err) {
+              console.error(`Error fetching tasks for project ${project.id}:`, err);
+              return {
+                ...project,
+                tasksCompleted: 0,
+                totalTasks: 0,
+                progress: 0,
+                teamSize: 0,
+                timeline: project.timeline_weeks ? `${project.timeline_weeks} weeks` : 'N/A',
+              };
+            }
+          })
+        );
+        
+        setProjects(enhancedProjects);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching projects:', err);
+        setError('Failed to load projects');
+        // Fallback to mock data
+        setProjects(mockProjects as any);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchProjects();
+  }, []);
 
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -100,6 +156,25 @@ export function ProjectDashboard() {
           <span>New Project</span>
         </button>
       </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="text-center py-12">
+          <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-600">Loading projects...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !isLoading && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* Content (only show if not loading) */}
+      {!isLoading && (
+        <>
 
       {/* Filters */}
       <div className="flex space-x-4">
@@ -221,6 +296,8 @@ export function ProjectDashboard() {
             Create Project
           </button>
         </div>
+      )}
+      </>
       )}
     </div>
   );

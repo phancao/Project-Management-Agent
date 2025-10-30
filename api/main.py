@@ -162,7 +162,6 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 
                 response_message = response.get('message', '')
                 response_state = response.get('state', 'complete')
-                response_type = response.get('type', 'execution_completed')
                 
                 # Yield message chunk event (DeerFlow compatible)
                 # Determine finish reason based on state
@@ -175,9 +174,10 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 chunk_data = {
                     "id": str(uuid.uuid4()),
                     "thread_id": thread_id,
-                    "agent": response_type,  # Use response type as agent name
+                    # Keep agent fixed for DeerFlow UI compatibility
+                    "agent": "coordinator",
                     "role": "assistant",
-                    "content": response_message,
+                    "content": response_message or "",
                     "finish_reason": finish_reason
                 }
                 

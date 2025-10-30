@@ -378,6 +378,14 @@ class ConversationFlowManager:
                     "data": {"research_session_id": str(session.id)}
                 }
             
+            elif context.intent == IntentType.CREATE_WBS:
+                # Generate WBS for project
+                return await self._handle_create_wbs(context)
+            
+            elif context.intent == IntentType.SPRINT_PLANNING:
+                # Plan a sprint
+                return await self._handle_sprint_planning(context)
+            
             else:
                 context.current_state = FlowState.COMPLETED
                 return {
@@ -391,6 +399,167 @@ class ConversationFlowManager:
             return {
                 "type": "error",
                 "message": f"Execution failed: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_create_wbs(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle CREATE_WBS intent - Generate WBS for a project"""
+        logger.info("Handling CREATE_WBS intent")
+        
+        try:
+            from src.handlers import WBSGenerator
+            from src.llms.llm import get_llm_by_type
+            from database.crud import create_task, get_project
+            from uuid import UUID
+            
+            # Get project information
+            project_id = context.gathered_data.get("project_id")
+            project_name = context.gathered_data.get("project_name")
+            project_description = context.gathered_data.get("project_description")
+            breakdown_levels = context.gathered_data.get("breakdown_levels", 3)
+            use_research = context.gathered_data.get("use_research", True)
+            
+            # Get project from database if project_id provided
+            project = None
+            if project_id:
+                try:
+                    project = get_project(self.db_session, UUID(project_id))
+                    if project:
+                        project_name = project.name
+                        project_description = project.description
+                except Exception as e:
+                    logger.warning(f"Could not fetch project: {e}")
+            
+            if not project_name:
+                return {
+                    "type": "error",
+                    "message": "Project name is required to create a WBS. Please specify which project.",
+                    "state": context.current_state.value
+                }
+            
+            # Initialize WBS generator with LLM
+            llm = get_llm_by_type("basic")
+            wbs_generator = WBSGenerator(llm=llm)
+            
+            # Generate WBS
+            wbs_result = await wbs_generator.generate_wbs(
+                project_name=project_name,
+                project_description=project_description or "",
+                project_domain=context.gathered_data.get("domain"),
+                breakdown_levels=breakdown_levels,
+                use_research=use_research
+            )
+            
+            # Flatten WBS and create tasks in database if project_id provided
+            tasks_created = 0
+            if project and project.id:
+                try:
+                    flat_tasks = wbs_generator.flatten_wbs(wbs_result["wbs_structure"])
+                    
+                    for task in flat_tasks:
+                        create_task(
+                            db=self.db_session,
+                            project_id=project.id,
+                            title=task.title,
+                            description=task.description,
+                            priority=task.priority,
+                            estimated_hours=task.estimated_hours,
+                            # Note: Parent task relationship would need proper UUID handling
+                        )
+                        tasks_created += 1
+                    
+                    logger.info(f"Created {tasks_created} tasks from WBS")
+                except Exception as e:
+                    logger.warning(f"Could not create tasks in database: {e}")
+            
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "execution_completed",
+                "message": f"WBS generated successfully for '{project_name}'! Created {wbs_result['total_tasks']} tasks.",
+                "state": context.current_state.value,
+                "data": {
+                    "wbs": wbs_result,
+                    "tasks_created": tasks_created
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"WBS generation failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to generate WBS: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_sprint_planning(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle SPRINT_PLANNING intent - Create a sprint plan"""
+        logger.info("Handling SPRINT_PLANNING intent")
+        
+        try:
+            from src.handlers import SprintPlanner
+            from database.crud import get_project
+            from uuid import UUID
+            
+            # Get sprint information
+            project_id = context.gathered_data.get("project_id")
+            sprint_name = context.gathered_data.get("sprint_name", "Sprint 1")
+            duration_weeks = context.gathered_data.get("duration_weeks", 2)
+            team_capacity = context.gathered_data.get("capacity_hours_per_day", 6.0)
+            
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Project ID is required to plan a sprint. Please specify which project.",
+                    "state": context.current_state.value
+                }
+            
+            # Verify project exists
+            try:
+                project = get_project(self.db_session, UUID(project_id))
+                if not project:
+                    return {
+                        "type": "error",
+                        "message": f"Project with ID {project_id} not found.",
+                        "state": context.current_state.value
+                    }
+            except Exception as e:
+                logger.warning(f"Could not fetch project: {e}")
+                return {
+                    "type": "error",
+                    "message": f"Invalid project ID format: {project_id}",
+                    "state": context.current_state.value
+                }
+            
+            # Initialize sprint planner
+            planner = SprintPlanner(db_session=self.db_session)
+            
+            # Generate sprint plan
+            sprint_plan = await planner.plan_sprint(
+                project_id=project_id,
+                sprint_name=sprint_name,
+                duration_weeks=duration_weeks,
+                team_capacity_hours_per_day=team_capacity
+            )
+            
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "execution_completed",
+                "message": f"Sprint '{sprint_name}' planned successfully! Assigned {sprint_plan['tasks_assigned']} tasks.",
+                "state": context.current_state.value,
+                "data": sprint_plan
+            }
+        
+        except Exception as e:
+            logger.error(f"Sprint planning failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to plan sprint: {str(e)}",
                 "state": context.current_state.value
             }
     

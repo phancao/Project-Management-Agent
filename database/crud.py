@@ -182,6 +182,41 @@ def delete_task(db: Session, task_id: UUID) -> bool:
     return True
 
 
+# ==================== TEAM MEMBER CRUD ====================
+
+def create_team_member(db: Session, project_id: UUID, name: str,
+                       email: Optional[str] = None, role: Optional[str] = None,
+                       skills: Optional[str] = None) -> TeamMember:
+    """Add a team member to a project"""
+    member = TeamMember(
+        project_id=project_id,
+        name=name,
+        email=email,
+        role=role,
+        skills=skills
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return member
+
+
+def get_team_members_by_project(db: Session, project_id: UUID) -> List[TeamMember]:
+    """Get all team members for a project"""
+    return db.query(TeamMember).filter(TeamMember.project_id == project_id).all()
+
+
+def delete_team_member(db: Session, member_id: UUID) -> bool:
+    """Remove a team member from a project"""
+    member = db.query(TeamMember).filter(TeamMember.id == member_id).first()
+    if not member:
+        return False
+    
+    db.delete(member)
+    db.commit()
+    return True
+
+
 # ==================== RESEARCH SESSION CRUD ====================
 
 def create_research_session(db: Session, topic: str,

@@ -445,65 +445,53 @@ class ConversationFlowManager:
         user_query: str,
         context: ConversationContext
     ) -> Dict[str, Any]:
-        """Use DeerFlow's planner to generate a thinking plan for PM tasks"""
+        """Use LLM to generate a thinking plan for PM tasks"""
         try:
-            from src.graph.nodes import planner_node
-            from src.graph.types import State
-            from langchain_core.runnables import RunnableConfig
-            from src.config.configuration import Configuration
+            from src.llms.llm import get_llm_by_type
             
-            # Create a minimal state for DeerFlow planner
-            planner_state = {
-                "messages": [{"role": "user", "content": user_query}],
-                "research_topic": user_query,
-                "plan_iterations": 0,
-                "locale": "en-US",
-                "enable_background_investigation": False,
-                "enable_clarification": False
+            # Build a simple prompt for thinking steps
+            prompt = f"""You are a project management expert. A user has requested: {user_query}
+
+Think about what steps are needed to accomplish this task. Generate a brief plan with 2-4 clear steps.
+
+Format your response as a JSON object with:
+- "thought": One sentence describing your approach
+- "steps": Array of 2-4 step descriptions (10-15 words each)
+
+Example:
+{{
+  "thought": "I need to analyze the project scope, create a structured WBS, generate detailed tasks, and save them to the database.",
+  "steps": [
+    "Analyze project requirements and scope",
+    "Create hierarchical WBS structure",
+    "Break down into actionable tasks with estimates",
+    "Save tasks to project database"
+  ]
+}}"""
+            
+            llm = get_llm_by_type("basic")
+            response = await llm.ainvoke([{"role": "user", "content": prompt}])
+            
+            content = response.content if hasattr(response, 'content') else str(response)
+            logger.info(f"Thinking plan LLM response: {content}")
+            
+            # Try to extract JSON
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                plan = json.loads(json_match.group())
+                logger.info(f"Extracted thinking plan: {plan}")
+                return plan
+            
+            # Fallback
+            return {
+                "thought": "Planning the requested task",
+                "steps": ["Analyzing requirements", "Executing task", "Saving results"]
             }
-            
-            # Create config
-            config = RunnableConfig(
-                configurable={
-                    "max_plan_iterations": 1,
-                    "max_step_num": 4,
-                    "mcp_settings": {},
-                    "enforce_web_search": False,
-                    "enable_deep_thinking": False
-                },
-                recursion_limit=10
-            )
-            
-            # Call planner node
-            result = planner_node(planner_state, config)
-            
-            logger.info(f"DeerFlow planner result: {result}")
-            logger.info(f"Result type: {type(result)}")
-            
-            # Extract the plan from result
-            if hasattr(result, 'update') and result.update:
-                logger.info(f"Result has update: {result.update}")
-                current_plan = result.update.get('current_plan')
-                logger.info(f"Current plan: {current_plan}, type: {type(current_plan)}")
-                
-                if current_plan and hasattr(current_plan, 'thought'):
-                    logger.info(f"Plan has thought: {current_plan.thought}")
-                    logger.info(f"Plan has steps: {len(current_plan.steps) if hasattr(current_plan, 'steps') else 0}")
-                    return {
-                        "thought": current_plan.thought,
-                        "steps": [
-                            {
-                                "title": step.title,
-                                "description": step.description
-                            }
-                            for step in (current_plan.steps if hasattr(current_plan, 'steps') else [])
-                        ]
-                    }
-            
-            logger.warning("No plan extracted from DeerFlow planner")
-            return {"thought": "", "steps": []}
         except Exception as e:
-            logger.warning(f"Could not use DeerFlow planner: {e}")
+            logger.warning(f"Could not generate thinking plan: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {"thought": "", "steps": []}
     
     async def _handle_create_wbs_with_deerflow_planner(

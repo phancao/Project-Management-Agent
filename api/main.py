@@ -4,6 +4,7 @@ FastAPI server for Project Management Agent
 This module provides RESTful APIs and WebSocket endpoints for the project management system.
 """
 
+import logging
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -15,7 +16,10 @@ import json
 import uuid
 from datetime import datetime
 
-from src.conversation.flow_manager import ConversationFlowManager, ConversationContext
+logger = logging.getLogger(__name__)
+
+from src.conversation.flow_manager import ConversationFlowManager
+from src.workflow import run_agent_workflow_stream
 from database.models import (
     Project, ProjectCreate, ProjectUpdate, 
     Task, TaskCreate, TaskUpdate,
@@ -117,6 +121,18 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
+# Config endpoint for DeerFlow UI compatibility
+@app.get("/api/config")
+async def get_config():
+    """Return default config to prevent 404 errors"""
+    return {
+        "rag": {"provider": ""},
+        "models": {
+            "basic": [],
+            "reasoning": []
+        }
+    }
+
 # Chat endpoints
 @app.post("/api/chat", response_model=ChatResponse)
 async def send_message(
@@ -171,19 +187,147 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                     yield "event: message_chunk\n"
                     yield f"data: {json.dumps(initial_chunk)}\n\n"
                     
-                    # TODO: Stream DeerFlow research progress here
-                    # For now, just indicate research is happening
-                    research_msg = "Researching project structure and best practices..."
-                    research_chunk = {
-                        "id": str(uuid.uuid4()),
-                        "thread_id": thread_id,
-                        "agent": "coordinator",
-                        "role": "assistant",
-                        "content": research_msg + "\n\n",
-                        "finish_reason": None
-                    }
-                    yield "event: message_chunk\n"
-                    yield f"data: {json.dumps(research_chunk)}\n\n"
+                    # Stream DeerFlow research progress
+                    try:
+                        # Extract project info for research query
+                        project_name = ""
+                        if "create wbs" in user_message.lower():
+                            # Try to extract project name from message
+                            parts = user_message.lower().split("wbs")
+                            if len(parts) > 1:
+                                remaining = parts[1].strip().split()
+                                if remaining:
+                                    # Get first few words as project name
+                                    project_name = " ".join(remaining[:3]).replace("and", "").strip()
+                        
+                        research_query = f"Research typical phases, deliverables, and tasks for {project_name or 'this type of project'}. Focus on project structure and common components."
+                        
+                        # Call streaming workflow
+                        research_chunk = {
+                            "id": str(uuid.uuid4()),
+                            "thread_id": thread_id,
+                            "agent": "coordinator",
+                            "role": "assistant",
+                            "content": "🔍 Researching project structure and best practices...\n\n",
+                            "finish_reason": None
+                        }
+                        yield "event: message_chunk\n"
+                        yield f"data: {json.dumps(research_chunk)}\n\n"
+                        
+                        # Stream intermediate states from DeerFlow
+                        last_step_emitted = ""
+                        final_research_state = None
+                        async for state in run_agent_workflow_stream(
+                            user_input=research_query,
+                            max_plan_iterations=1,
+                            max_step_num=3,
+                            enable_background_investigation=True,
+                            enable_clarification=False
+                        ):
+                            # Store final state for later use
+                            final_research_state = state
+                            
+                            # Extract progress information from state
+                            if isinstance(state, dict):
+                                # Check for current plan
+                                current_plan = state.get("current_plan")
+                                if current_plan:
+                                    # Handle Pydantic Plan object or dict
+                                    if hasattr(current_plan, 'title'):
+                                        # Pydantic model
+                                        plan_title = current_plan.title
+                                    elif isinstance(current_plan, dict):
+                                        # Dict
+                                        plan_title = current_plan.get("title", "")
+                                    else:
+                                        # String representation
+                                        plan_title = str(current_plan)
+                                    
+                                    if plan_title and plan_title != last_step_emitted:
+                                        progress_msg = f"📋 Planning: {plan_title}\n\n"
+                                        progress_chunk = {
+                                            "id": str(uuid.uuid4()),
+                                            "thread_id": thread_id,
+                                            "agent": "coordinator",
+                                            "role": "assistant",
+                                            "content": progress_msg,
+                                            "finish_reason": None
+                                        }
+                                        yield "event: message_chunk\n"
+                                        yield f"data: {json.dumps(progress_chunk)}\n\n"
+                                        last_step_emitted = plan_title
+                                
+                                # Check for messages with agent names
+                                messages = state.get("messages", [])
+                                if messages:
+                                    last_msg = messages[-1]
+                                    if isinstance(last_msg, dict):
+                                        agent_name = last_msg.get("name", "")
+                                        content = last_msg.get("content", "")
+                                        if agent_name and agent_name not in ["planner", "reporter"] and len(content) > 50:
+                                            step_msg = f"⚙️ {agent_name.capitalize()} agent working...\n\n"
+                                            step_chunk = {
+                                                "id": str(uuid.uuid4()),
+                                                "thread_id": thread_id,
+                                                "agent": "coordinator",
+                                                "role": "assistant",
+                                                "content": step_msg,
+                                                "finish_reason": None
+                                            }
+                                            yield "event: message_chunk\n"
+                                            yield f"data: {json.dumps(step_chunk)}\n\n"
+                        
+                        # Store research result in context to avoid re-running
+                        if final_research_state and isinstance(final_research_state, dict):
+                            # Get or create context
+                            from src.conversation.flow_manager import ConversationContext, FlowState, IntentType
+                            
+                            # Get context for this session
+                            if thread_id not in fm.contexts:
+                                fm.contexts[thread_id] = ConversationContext(
+                                    session_id=thread_id,
+                                    current_state=FlowState.INTENT_DETECTION,
+                                    intent=IntentType.UNKNOWN,
+                                    gathered_data={},
+                                    required_fields=[],
+                                    conversation_history=[],
+                                    created_at=datetime.now(),
+                                    updated_at=datetime.now()
+                                )
+                            
+                            # Extract research results
+                            context = fm.contexts[thread_id]
+                            research_result = ""
+                            if "final_report" in final_research_state:
+                                research_result = final_research_state["final_report"]
+                            elif "messages" in final_research_state:
+                                messages = final_research_state["messages"]
+                                if messages:
+                                    last_msg = messages[-1]
+                                    if isinstance(last_msg, dict):
+                                        research_result = last_msg.get("content", "")
+                            
+                            # Store in gathered_data to skip re-research in process_message
+                            if research_result:
+                                context.gathered_data['research_context'] = research_result
+                                context.gathered_data['research_already_done'] = True
+                                logger.info(f"Stored research result in context for session {thread_id}")
+                        
+                        # Emit completion message
+                        complete_chunk = {
+                            "id": str(uuid.uuid4()),
+                            "thread_id": thread_id,
+                            "agent": "coordinator",
+                            "role": "assistant",
+                            "content": "✅ Research completed!\n\n",
+                            "finish_reason": None
+                        }
+                        yield "event: message_chunk\n"
+                        yield f"data: {json.dumps(complete_chunk)}\n\n"
+                        
+                    except Exception as research_error:
+                        logger.error(f"DeerFlow streaming failed: {research_error}")
+                        # Continue with normal flow even if streaming fails
                 
                 # Process message
                 response = await fm.process_message(

@@ -91,11 +91,13 @@ class ConversationFlowManager:
         
         # Import DeerFlow workflow for research tasks
         try:
-            from src.workflow import run_agent_workflow_async
+            from src.workflow import run_agent_workflow_async, run_agent_workflow_stream
             self.run_deerflow_workflow = run_agent_workflow_async
+            self.run_deerflow_workflow_stream = run_agent_workflow_stream
         except ImportError:
             logger.warning("DeerFlow workflow not available")
             self.run_deerflow_workflow = None
+            self.run_deerflow_workflow_stream = None
         
     async def process_message(
         self, 
@@ -124,26 +126,59 @@ class ConversationFlowManager:
             "timestamp": datetime.now().isoformat()
         })
         
-        # Classify intent if not already done
+        # Generate PM plan or use existing plan
         if context.current_state == FlowState.INTENT_DETECTION:
-            context.intent = await self.intent_classifier.classify(
-                message, 
-                conversation_history=context.conversation_history
+            # Extract basic info from message first (project name, etc.)
+            initial_data = await self.data_extractor.extract_project_data(
+                message=message,
+                intent=IntentType.CREATE_WBS,  # Use WBS as default for extraction
+                gathered_data={}
             )
+            context.gathered_data.update(initial_data)
+            logger.info(f"Extracted initial data: {initial_data}")
             
-            # Record classification for learning
-            if self.self_learning:
-                classification_id = self.self_learning.record_classification(
-                    session_id=session_id,
-                    message=message,
-                    classified_intent=context.intent.value,
-                    confidence_score=0.8,  # TODO: Get actual confidence from LLM
+            # Try to generate a PM plan for multi-task execution
+            pm_plan = await self._generate_pm_plan(message, context)
+            
+            if pm_plan and pm_plan.get('steps'):
+                # Multi-task execution: use plan-based approach
+                context.gathered_data['_pm_plan'] = pm_plan
+                context.gathered_data['_current_step_index'] = 0
+                context.current_state = FlowState.PLANNING_PHASE
+                logger.info(f"Generated PM plan with {len(pm_plan.get('steps', []))} steps")
+            else:
+                # Fallback to legacy intent-based approach
+                logger.info("Could not generate PM plan, falling back to intent-based classification")
+                initial_intent = await self.intent_classifier.classify(
+                    message, 
                     conversation_history=context.conversation_history
                 )
-                # Store classification ID in context for later feedback
-                context.gathered_data['last_classification_id'] = classification_id
-            
-            context.current_state = FlowState.CONTEXT_GATHERING
+                
+                # Check if message contains multiple tasks (WBS + sprint planning, etc.)
+                message_lower = message.lower()
+                has_wbs_mention = any(keyword in message_lower for keyword in [
+                    "wbs", "work breakdown", "work breakdown structure"
+                ])
+                
+                # If WBS is mentioned, use CREATE_WBS as primary intent
+                if has_wbs_mention:
+                    context.intent = IntentType.CREATE_WBS
+                    logger.info(f"Message contains WBS keywords, using CREATE_WBS as primary intent")
+                else:
+                    context.intent = initial_intent
+                
+                # Record classification for learning
+                if self.self_learning:
+                    classification_id = self.self_learning.record_classification(
+                        session_id=session_id,
+                        message=message,
+                        classified_intent=context.intent.value,
+                        confidence_score=0.8,
+                        conversation_history=context.conversation_history
+                    )
+                    context.gathered_data['last_classification_id'] = classification_id
+                
+                context.current_state = FlowState.CONTEXT_GATHERING
             
         # Check if we have enough context
         if context.current_state == FlowState.CONTEXT_GATHERING:
@@ -158,17 +193,17 @@ class ConversationFlowManager:
             context.gathered_data.update(extracted_data)
             
             if await self._has_enough_context(context):
-                context.current_state = FlowState.RESEARCH_PHASE
+                # Determine next state based on intent - some need research, others go straight to execution
+                needs_research = context.intent in [IntentType.RESEARCH_TOPIC, IntentType.CREATE_WBS]
+                if needs_research:
+                    context.current_state = FlowState.RESEARCH_PHASE
+                else:
+                    context.current_state = FlowState.EXECUTION_PHASE
             else:
                 return await self._generate_clarification_response(context)
         
         # Execute appropriate action based on state
         if context.current_state == FlowState.RESEARCH_PHASE:
-            # WBS needs research, sprint planning and reports can skip
-            skip_research_intents = [IntentType.SPRINT_PLANNING, IntentType.CREATE_REPORT]
-            if context.intent in skip_research_intents:
-                context.current_state = FlowState.EXECUTION_PHASE
-                return await self._handle_execution_phase(context)
             research_result = await self._handle_research_phase(context)
             # If research phase changed state to EXECUTION (e.g., for CREATE_WBS),
             # continue to execution phase instead of returning
@@ -281,6 +316,12 @@ class ConversationFlowManager:
         """Handle research phase using DeerFlow"""
         logger.info(f"Starting research phase for intent: {context.intent}")
         
+        # Skip if research already done (from streaming)
+        if context.gathered_data.get('research_already_done'):
+            logger.info("Research already completed via streaming, skipping")
+            context.current_state = FlowState.EXECUTION_PHASE
+            return None
+        
         # For RESEARCH_TOPIC and CREATE_WBS intents, use DeerFlow
         needs_research = context.intent in [IntentType.RESEARCH_TOPIC, IntentType.CREATE_WBS]
         
@@ -369,29 +410,105 @@ class ConversationFlowManager:
                     "message": f"Research failed: {str(e)}",
                     "state": context.current_state.value
                 }
-        else:
-            # For other intents that need research background
-            context.current_state = FlowState.PLANNING_PHASE
-            
-            return {
-                "type": "research_started",
-                "message": "Starting research phase...",
-                "state": context.current_state.value
-            }
     
     async def _handle_planning_phase(
         self, 
         context: ConversationContext
     ) -> Dict[str, Any]:
-        """Handle planning phase using AgentSDK"""
-        # TODO: Integrate with AgentSDK
-        context.current_state = FlowState.EXECUTION_PHASE
+        """Handle plan-based execution phase"""
+        from src.prompts.pm_planner_model import PMStepType
         
+        pm_plan = context.gathered_data.get('_pm_plan')
+        if not pm_plan:
+            logger.error("Planning phase activated but no PM plan found")
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "error",
+                "message": "Execution plan not found",
+                "state": context.current_state.value
+            }
+        
+        steps = pm_plan.get('steps', [])
+        current_step_index = context.gathered_data.get('_current_step_index', 0)
+        overall_thought = pm_plan.get('overall_thought', '')
+        
+        # Execute all steps sequentially
+        results = []
+        for idx, step in enumerate(steps):
+            logger.info(f"Executing step {idx + 1}/{len(steps)}: {step.get('title')}")
+            
+            # Map PMStepType to IntentType and execute
+            step_type_str = step.get('step_type')
+            step_result = await self._execute_pm_step(step, context)
+            results.append({
+                'step': step.get('title'),
+                'type': step.get('step_type'),
+                'result': step_result
+            })
+        
+        # Build response message
+        response_parts = []
+        if overall_thought:
+            response_parts.append(f"🤔 **Thinking:**\n\n💭 {overall_thought}\n\n📋 **Plan:**")
+            for i, step in enumerate(steps, 1):
+                response_parts.append(f"{i}. {step.get('title')}")
+            response_parts.append("")
+        
+        response_parts.append("🚀 **Executing plan...**\n")
+        
+        for result in results:
+            if result['result'].get('type') == 'execution_completed':
+                response_parts.append(f"✅ {result['step']}\n   {result['result'].get('message', 'Completed')}")
+            else:
+                response_parts.append(f"❌ {result['step']}\n   {result['result'].get('message', 'Failed')}")
+        
+        context.current_state = FlowState.COMPLETED
         return {
-            "type": "planning_started",
-            "message": "Starting planning phase...",
+            "type": "execution_completed",
+            "message": "\n".join(response_parts),
             "state": context.current_state.value
         }
+    
+    async def _execute_pm_step(
+        self,
+        step: Dict[str, Any],
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Execute a single PM plan step"""
+        from src.prompts.pm_planner_model import PMStepType
+        
+        step_type = step.get('step_type')
+        logger.info(f"Executing PM step: {step_type}")
+        
+        # Map PMStepType to IntentType and execute
+        if step_type == PMStepType.CREATE_WBS:
+            # Extract project info from step description
+            description = step.get('description', '')
+            if 'project' in description.lower():
+                # Try to extract project name from description
+                context.gathered_data['project_name'] = step.get('title', '').split(':')[-1].strip()
+                context.intent = IntentType.CREATE_WBS
+                return await self._handle_create_wbs_with_deerflow_planner(context)
+        
+        elif step_type == PMStepType.SPRINT_PLANNING:
+            context.intent = IntentType.SPRINT_PLANNING
+            return await self._handle_sprint_planning_with_deerflow_planner(context)
+        
+        elif step_type == PMStepType.CREATE_PROJECT:
+            # Extract project info
+            context.intent = IntentType.CREATE_PROJECT
+            return await self._execute_intent(IntentType.CREATE_PROJECT, context)
+        
+        elif step_type == PMStepType.RESEARCH:
+            context.intent = IntentType.RESEARCH_TOPIC
+            return await self._execute_intent(IntentType.RESEARCH_TOPIC, context)
+        
+        else:
+            logger.warning(f"Unknown or unsupported PM step type: {step_type}")
+            return {
+                "type": "error",
+                "message": f"Unsupported step type: {step_type}"
+            }
     
     async def _handle_execution_phase(
         self, 
@@ -409,19 +526,28 @@ class ConversationFlowManager:
                 "state": context.current_state.value
             }
         
+        # Use general intent executor
+        return await self._execute_intent(context.intent, context)
+    
+    async def _execute_intent(
+        self,
+        intent: IntentType,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Execute a specific intent - extracted for reuse in multi-step flows"""
         try:
             from database.crud import (
                 create_project, create_research_session
             )
             
             # Execute based on intent
-            if context.intent == IntentType.CREATE_PROJECT:
+            if intent == IntentType.CREATE_PROJECT:
                 # Create project in database
                 project = create_project(
                     db=self.db_session,
                     name=context.gathered_data.get("name", "Untitled Project"),
                     description=context.gathered_data.get("description"),
-                    created_by=context.gathered_data.get("created_by"),  # Will need UUID conversion
+                    created_by=context.gathered_data.get("created_by"),
                     domain=context.gathered_data.get("domain"),
                     priority=context.gathered_data.get("priority", "medium"),
                     timeline_weeks=context.gathered_data.get("timeline_weeks"),
@@ -436,7 +562,7 @@ class ConversationFlowManager:
                     "data": {"project_id": str(project.id)}
                 }
             
-            elif context.intent == IntentType.RESEARCH_TOPIC:
+            elif intent == IntentType.RESEARCH_TOPIC:
                 # Create research session in database
                 session = create_research_session(
                     db=self.db_session,
@@ -452,15 +578,15 @@ class ConversationFlowManager:
                     "data": {"research_session_id": str(session.id)}
                 }
             
-            elif context.intent == IntentType.CREATE_WBS:
+            elif intent == IntentType.CREATE_WBS:
                 # Use DeerFlow planner for thinking steps
                 return await self._handle_create_wbs_with_deerflow_planner(context)
             
-            elif context.intent == IntentType.SPRINT_PLANNING:
+            elif intent == IntentType.SPRINT_PLANNING:
                 # Use DeerFlow planner for thinking steps
                 return await self._handle_sprint_planning_with_deerflow_planner(context)
             
-            elif context.intent == IntentType.CREATE_REPORT:
+            elif intent == IntentType.CREATE_REPORT:
                 # Generate a report
                 return await self._handle_create_report(context)
             
@@ -473,12 +599,61 @@ class ConversationFlowManager:
                 }
         
         except Exception as e:
-            logger.error(f"Execution failed: {e}")
+            logger.error(f"Execution failed for {intent.value}: {e}")
             return {
                 "type": "error",
                 "message": f"Execution failed: {str(e)}",
                 "state": context.current_state.value
             }
+    
+    async def _generate_pm_plan(
+        self,
+        user_message: str,
+        context: ConversationContext
+    ) -> Optional[Dict[str, Any]]:
+        """Generate a PM execution plan from user message"""
+        try:
+            from src.llms.llm import get_llm_by_type
+            from src.prompts.template import get_prompt_template
+            from src.prompts.pm_planner_model import PMPlan, PMStepType
+            
+            # Load the PM planner prompt template
+            system_prompt = get_prompt_template("pm_planner", locale="en-US")
+            
+            # Create messages with system prompt + user message
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ]
+            
+            llm = get_llm_by_type("basic")
+            response = await llm.ainvoke(messages)
+            
+            content = response.content if hasattr(response, 'content') else str(response)
+            logger.info(f"PM plan LLM response: {content}")
+            
+            # Try to extract JSON
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                plan_data = json.loads(json_match.group())
+                
+                # Validate and return
+                try:
+                    pm_plan = PMPlan(**plan_data)
+                    logger.info(f"Generated PM plan with {len(pm_plan.steps)} steps")
+                    return pm_plan.model_dump()
+                except Exception as validation_error:
+                    logger.warning(f"PM plan validation failed: {validation_error}")
+                    logger.warning(f"Plan data: {plan_data}")
+                    return None
+            
+            return None
+        except Exception as e:
+            logger.error(f"Could not generate PM plan: {e}")
+            import traceback
+            logger.error(f"Full error: {traceback.format_exc()}")
+            return None
     
     async def _use_deerflow_planner_to_think(
         self,
@@ -531,7 +706,7 @@ class ConversationFlowManager:
     ) -> Dict[str, Any]:
         """Handle CREATE_WBS using thinking plan"""
         # First, get thinking plan
-        user_query = f"Create a Work Breakdown Structure for this project"
+        user_query = "Create a Work Breakdown Structure for this project"
         planner_result = await self._use_deerflow_planner_to_think(user_query, context)
         
         # Execute our WBS handler
@@ -554,8 +729,94 @@ class ConversationFlowManager:
             
             if thinking_parts:
                 result["message"] = "🤔 **Thinking:**\n\n" + "\n".join(thinking_parts) + "\n\n✅ " + result["message"]
+            
+            # Check if there are additional tasks to execute (multi-step support)
+            tasks = context.gathered_data.get("tasks")
+            if tasks and isinstance(tasks, list) and len(tasks) > 1:
+                # There are more tasks after WBS
+                remaining_tasks = tasks[1:]  # Skip the first task which was WBS
+                logger.info(f"Multi-step: Found {len(remaining_tasks)} additional tasks: {remaining_tasks}")
+                
+                # Execute additional tasks
+                for task_description in remaining_tasks:
+                    intent = self._detect_intent_from_task(task_description)
+                    if intent and intent != IntentType.UNKNOWN:
+                        logger.info(f"Multi-step: Executing {intent.value} for '{task_description}'")
+                        # Update context for next intent
+                        old_intent = context.intent
+                        context.intent = intent
+                        context.current_state = FlowState.EXECUTION_PHASE
+                        
+                        # Execute the next task using general execution handler
+                        next_result = await self._execute_intent(intent, context)
+                        if next_result.get("type") == "execution_completed":
+                            result["message"] += f"\n\n✅ {next_result['message']}"
+                        elif next_result.get("type") == "error":
+                            result["message"] += f"\n\n❌ {next_result['message']}"
+                        
+                        # Reset intent for proper completion
+                        context.intent = old_intent
         
         return result
+    
+    def _detect_intent_from_task(self, task_description: str) -> IntentType:
+        """Detect intent from a task description string"""
+        task_lower = task_description.lower()
+        
+        # Research / investigate
+        if "research" in task_lower or "investigate" in task_lower:
+            return IntentType.RESEARCH_TOPIC
+        
+        # Sprint planning
+        elif "sprint" in task_lower and ("plan" in task_lower or "create" in task_lower):
+            return IntentType.SPRINT_PLANNING
+        
+        # WBS creation
+        elif "wbs" in task_lower or "work breakdown" in task_lower:
+            return IntentType.CREATE_WBS
+        
+        # Report generation
+        elif "report" in task_lower or "generate report" in task_lower:
+            return IntentType.CREATE_REPORT
+        
+        # Project creation
+        elif "create project" in task_lower or "new project" in task_lower:
+            return IntentType.CREATE_PROJECT
+        
+        # Task planning
+        elif "plan task" in task_lower or "task planning" in task_lower:
+            return IntentType.PLAN_TASKS
+        
+        # Task breakdown
+        elif "task breakdown" in task_lower or "breakdown" in task_lower:
+            return IntentType.TASK_BREAKDOWN
+        
+        # Dependency analysis
+        elif "dependency" in task_lower or "critical path" in task_lower:
+            return IntentType.DEPENDENCY_ANALYSIS
+        
+        # Gantt chart
+        elif "gantt" in task_lower or "timeline" in task_lower:
+            return IntentType.GANTT_CHART
+        
+        # Status check
+        elif "status" in task_lower or "progress" in task_lower:
+            return IntentType.GET_STATUS
+        
+        # Task assignment
+        elif "assign" in task_lower or "allocation" in task_lower:
+            return IntentType.ASSIGN_TASKS
+        
+        # Resource check
+        elif "resource" in task_lower or "capacity" in task_lower:
+            return IntentType.CHECK_RESOURCES
+        
+        # Update project
+        elif "update" in task_lower or "modify" in task_lower:
+            return IntentType.UPDATE_PROJECT
+        
+        else:
+            return IntentType.UNKNOWN
     
     async def _handle_sprint_planning_with_deerflow_planner(
         self,
@@ -563,7 +824,7 @@ class ConversationFlowManager:
     ) -> Dict[str, Any]:
         """Handle SPRINT_PLANNING using thinking plan"""
         # First, get thinking plan
-        user_query = f"Plan sprints for this project"
+        user_query = "Plan sprints for this project"
         planner_result = await self._use_deerflow_planner_to_think(user_query, context)
         
         # Execute our sprint handler
@@ -699,6 +960,12 @@ class ConversationFlowManager:
             # Flatten WBS and create tasks in database if project_id provided
             tasks_created = 0
             logger.info(f"CREATE_WBS - project object: {project}, project.id: {project.id if project else None}")
+            
+            # Store project_id in gathered_data for multi-step workflows
+            if project and project.id:
+                context.gathered_data["project_id"] = str(project.id)
+                logger.info(f"Stored project_id {str(project.id)} in context for multi-step workflows")
+            
             if project and project.id:
                 try:
                     flat_tasks = wbs_generator.flatten_wbs(wbs_result["wbs_structure"])

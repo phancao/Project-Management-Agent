@@ -85,7 +85,8 @@ export async function* chatStream(
       enhancedMessage = `${userMessage}\n\nproject_id: ${projectId}`;
     }
     
-    const stream = fetchStream(resolveServiceURL("chat/stream"), {
+    // Use PM chat endpoint for project management tasks
+    const stream = fetchStream(resolveServiceURL("pm/chat/stream"), {
       body: JSON.stringify({
         messages: [{ role: "user", content: enhancedMessage }],
         locale,

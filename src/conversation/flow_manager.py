@@ -646,6 +646,10 @@ class ConversationFlowManager:
         context: ConversationContext
     ) -> Optional[Dict[str, Any]]:
         """Generate a PM execution plan from user message"""
+        import time
+        plan_start = time.time()
+        logger.info("[TIMING] generate_pm_plan started")
+        
         try:
             from src.llms.llm import get_llm_by_type
             from src.prompts.template import get_prompt_template
@@ -660,8 +664,10 @@ class ConversationFlowManager:
                 {"role": "user", "content": user_message}
             ]
             
+            llm_start = time.time()
             llm = get_llm_by_type("basic")
             response = await llm.ainvoke(messages)
+            logger.info(f"[TIMING] LLM invoke completed: {time.time() - llm_start:.2f}s")
             
             content = response.content if hasattr(response, 'content') else str(response)
             logger.info(f"PM plan LLM response: {content}")
@@ -675,7 +681,7 @@ class ConversationFlowManager:
                 # Validate and return
                 try:
                     pm_plan = PMPlan(**plan_data)
-                    logger.info(f"Generated PM plan with {len(pm_plan.steps)} steps")
+                    logger.info(f"Generated PM plan with {len(pm_plan.steps)} steps in {time.time() - plan_start:.2f}s")
                     # Use mode='json' to serialize enums as strings
                     return pm_plan.model_dump(mode='json')
                 except Exception as validation_error:
@@ -685,7 +691,7 @@ class ConversationFlowManager:
             
             return None
         except Exception as e:
-            logger.error(f"Could not generate PM plan: {e}")
+            logger.error(f"Could not generate PM plan: {e} - {time.time() - plan_start:.2f}s")
             import traceback
             logger.error(f"Full error: {traceback.format_exc()}")
             return None

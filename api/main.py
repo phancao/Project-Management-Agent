@@ -167,11 +167,17 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
         
         async def generate_stream() -> AsyncIterator[str]:
             """Generate SSE stream of chat responses with progress updates"""
+            import time
+            api_start = time.time()
+            logger.info(f"[API-TIMING] generate_stream started")
+            
             try:
                 # First, generate PM plan to check if CREATE_WBS is needed
                 # This is fast (one LLM call) and tells us if we need DeerFlow research
+                plan_start = time.time()
                 temp_context = fm._get_or_create_context(thread_id)
                 pm_plan = await fm.generate_pm_plan(user_message, temp_context)
+                logger.info(f"[API-TIMING] PM plan generated: {time.time() - plan_start:.2f}s")
                 
                 # Check if plan has CREATE_WBS steps that need research
                 needs_research = False
@@ -180,6 +186,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         if step.get('step_type') == 'create_wbs':
                             needs_research = True
                             break
+                
+                logger.info(f"[API-TIMING] Needs research: {needs_research} - {time.time() - api_start:.2f}s")
                 
                 # For research queries, stream DeerFlow updates
                 if needs_research:
@@ -223,6 +231,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         yield f"data: {json.dumps(research_chunk)}\n\n"
                         
                         # Stream intermediate states from DeerFlow
+                        research_start = time.time()
+                        logger.info(f"[API-TIMING] Starting DeerFlow research: {time.time() - api_start:.2f}s")
                         last_step_emitted = ""
                         final_research_state = None
                         async for state in run_agent_workflow_stream(
@@ -327,6 +337,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                                 logger.info(f"Stored research result in context for session {thread_id}")
                         
                         # Emit completion message
+                        research_duration = time.time() - research_start
+                        logger.info(f"[API-TIMING] DeerFlow research completed: {research_duration:.2f}s")
                         complete_chunk = {
                             "id": str(uuid.uuid4()),
                             "thread_id": thread_id,
@@ -337,7 +349,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         }
                         yield "event: message_chunk\n"
                         yield f"data: {json.dumps(complete_chunk)}\n\n"
-                        
+                    
                     except Exception as research_error:
                         logger.error(f"DeerFlow streaming failed: {research_error}")
                         # Continue with normal flow even if streaming fails
@@ -354,12 +366,15 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 async def process_with_streaming():
                     nonlocal stream_done
                     try:
+                        process_start = time.time()
+                        logger.info(f"[API-TIMING] process_with_streaming started: {time.time() - api_start:.2f}s")
                         response = await fm.process_message(
                             message=user_message,
                             session_id=thread_id,
                             user_id="f430f348-d65f-427f-9379-3d0f163393d1",  # Mock user
                             stream_callback=stream_callback
                         )
+                        logger.info(f"[API-TIMING] process_message completed: {time.time() - process_start:.2f}s")
                         # Put a sentinel to signal completion
                         await stream_queue.put(None)
                         return response
@@ -370,6 +385,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 
                 # Start processing in background
                 process_task = asyncio.create_task(process_with_streaming())
+                logger.info(f"[API-TIMING] process_task started: {time.time() - api_start:.2f}s")
                 
                 # Stream chunks as they arrive
                 while True:
@@ -424,6 +440,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 }
                 yield "event: message_chunk\n"
                 yield f"data: {json.dumps(chunk_data)}\n\n"
+                
+                logger.info(f"[API-TIMING] Total response time: {time.time() - api_start:.2f}s")
                 
             except Exception as e:
                 # Yield error as message chunk

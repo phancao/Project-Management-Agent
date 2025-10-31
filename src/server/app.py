@@ -9,7 +9,7 @@ import os
 from typing import Annotated, Any, List, Optional, cast
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from langchain_core.messages import AIMessageChunk, BaseMessage, ToolMessage
@@ -894,3 +894,452 @@ async def config():
         rag=RAGConfigResponse(provider=SELECTED_RAG_PROVIDER),
         models=get_configured_llm_models(),
     )
+
+# Project Management Agent API endpoints
+try:
+    from database.models import Project, ProjectCreate, ProjectUpdate, Task, TaskCreate
+    from database.connection import get_db_session
+    from database import crud as db_crud
+    from fastapi import Depends
+    from sqlalchemy.orm import Session
+    from uuid import UUID
+    
+    # Mock authentication dependency for PM API compatibility
+    async def get_current_user():
+        return {"user_id": "f430f348-d65f-427f-9379-3d0f163393d1", "email": "user@example.com"}
+    
+    # Pydantic models for responses
+    from pydantic import BaseModel
+    from datetime import datetime
+    
+    class ProjectResponse(BaseModel):
+        id: str
+        name: str
+        description: Optional[str]
+        status: str
+        created_at: datetime
+        updated_at: datetime
+    
+    class SprintResponse(BaseModel):
+        id: str
+        project_id: str
+        name: str
+        start_date: Optional[datetime]
+        end_date: Optional[datetime]
+        status: str
+        capacity: float
+        
+    class TaskResponse(BaseModel):
+        id: str
+        project_id: str
+        title: str
+        description: Optional[str]
+        status: str
+        priority: str
+        assigned_to: Optional[str]
+    
+    @app.get("/api/projects")
+    async def list_projects(
+        db: Session = Depends(get_db_session)
+    ):
+        """List all projects"""
+        try:
+            current_user = await get_current_user()
+            projects = db_crud.get_projects(
+                db=db,
+                skip=0,
+                limit=100,
+                user_id=current_user.get("user_id")
+            )
+            return [
+                ProjectResponse(
+                    id=str(p.id),
+                    name=p.name,
+                    description=p.description,
+                    status=p.status,
+                    created_at=p.created_at,
+                    updated_at=p.updated_at
+                )
+                for p in projects
+            ]
+        except Exception as e:
+            logger.error(f"Error listing projects: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/projects/{project_id}/tasks")
+    async def list_tasks(
+        project_id: str,
+        db: Session = Depends(get_db_session)
+    ):
+        """List tasks for a project"""
+        try:
+            tasks = db_crud.get_tasks(db=db, project_id=UUID(project_id))
+            return [
+                TaskResponse(
+                    id=str(t.id),
+                    project_id=str(t.project_id),
+                    title=t.title,
+                    description=t.description,
+                    status=t.status,
+                    priority=t.priority,
+                    assigned_to=str(t.assigned_to) if t.assigned_to else None
+                )
+                for t in tasks
+            ]
+        except Exception as e:
+            logger.error(f"Error listing tasks: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/projects/{project_id}/sprints")
+    async def list_sprints(
+        project_id: str,
+        db: Session = Depends(get_db_session)
+    ):
+        """List sprints for a project"""
+        try:
+            from database.orm_models import Sprint
+            sprints = db.query(Sprint).filter(Sprint.project_id == UUID(project_id)).all()
+            return [
+                SprintResponse(
+                    id=str(s.id),
+                    project_id=str(s.project_id),
+                    name=s.name,
+                    start_date=s.start_date,
+                    end_date=s.end_date,
+                    status=s.status,
+                    capacity=s.capacity
+                )
+                for s in sprints
+            ]
+        except Exception as e:
+            logger.error(f"Error listing sprints: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/sprints/{sprint_id}/tasks")
+    async def list_sprint_tasks(
+        sprint_id: str,
+        db: Session = Depends(get_db_session)
+    ):
+        """List tasks for a sprint"""
+        try:
+            from database.orm_models import SprintTask, Task
+            sprint_tasks = db.query(SprintTask, Task).join(Task, SprintTask.task_id == Task.id).filter(SprintTask.sprint_id == UUID(sprint_id)).all()
+            return [
+                TaskResponse(
+                    id=str(t.id),
+                    project_id=str(t.project_id),
+                    title=t.title,
+                    description=t.description,
+                    status=t.status,
+                    priority=t.priority,
+                    assigned_to=str(t.assigned_to) if t.assigned_to else None
+                )
+                for st, t in sprint_tasks
+            ]
+        except Exception as e:
+            logger.error(f"Error listing sprint tasks: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    # PM Chat endpoint
+    @app.post("/api/pm/chat/stream")
+    async def pm_chat_stream(request: Request):
+        """Stream chat responses for Project Management tasks"""
+        try:
+            from src.conversation.flow_manager import ConversationFlowManager
+            from src.workflow import run_agent_workflow_stream
+            from database.connection import get_db_session
+            from sqlalchemy.orm import Session
+            from fastapi import Depends
+            from fastapi.responses import StreamingResponse
+            import asyncio
+            import json
+            import uuid
+            import time
+            
+            body = await request.json()
+            user_message = body.get("messages", [{}])[0].get("content", "")
+            thread_id = body.get("thread_id", str(uuid.uuid4()))
+            
+            # Get database session
+            db_gen = get_db_session()
+            db = next(db_gen)
+            
+            try:
+                # Get flow manager with db session
+                fm = ConversationFlowManager(db_session=db)
+                
+                async def generate_stream() -> AsyncIterator[str]:
+                    """Generate SSE stream of chat responses with progress updates"""
+                    api_start = time.time()
+                    logger.info(f"[PM-CHAT-TIMING] generate_stream started")
+                    
+                    try:
+                        # First, generate PM plan to check if CREATE_WBS is needed
+                        plan_start = time.time()
+                        temp_context = fm._get_or_create_context(thread_id)
+                        pm_plan = await fm.generate_pm_plan(user_message, temp_context)
+                        logger.info(f"[PM-CHAT-TIMING] PM plan generated: {time.time() - plan_start:.2f}s")
+                        
+                        # Check if plan has CREATE_WBS steps that need research
+                        needs_research = False
+                        if pm_plan and pm_plan.get('steps'):
+                            for step in pm_plan.get('steps', []):
+                                if step.get('step_type') == 'create_wbs':
+                                    needs_research = True
+                                    break
+                        
+                        logger.info(f"[PM-CHAT-TIMING] Needs research: {needs_research} - {time.time() - api_start:.2f}s")
+                        
+                        # For research queries, stream DeerFlow updates
+                        if needs_research:
+                            initial_chunk = {
+                                "id": str(uuid.uuid4()),
+                                "thread_id": thread_id,
+                                "agent": "coordinator",
+                                "role": "assistant",
+                                "content": "🦌 **Starting DeerFlow research...**\n\n",
+                                "finish_reason": None
+                            }
+                            yield "event: message_chunk\n"
+                            yield f"data: {json.dumps(initial_chunk)}\n\n"
+                            
+                            try:
+                                # Extract project name from message
+                                project_name = ""
+                                if "create wbs" in user_message.lower() or "tạo wbs" in user_message.lower():
+                                    parts = user_message.lower().split("wbs")
+                                    if len(parts) > 1:
+                                        remaining = parts[1].strip().split()
+                                        if remaining:
+                                            project_name = " ".join(remaining[:3]).replace("and", "").replace("và", "").strip()
+                                
+                                research_query = f"Research typical phases, deliverables, and tasks for {project_name or 'this type of project'}. Focus on project structure and common components."
+                                
+                                # Stream DeerFlow research progress
+                                research_chunk = {
+                                    "id": str(uuid.uuid4()),
+                                    "thread_id": thread_id,
+                                    "agent": "coordinator",
+                                    "role": "assistant",
+                                    "content": "🔍 Researching project structure and best practices...\n\n",
+                                    "finish_reason": None
+                                }
+                                yield "event: message_chunk\n"
+                                yield f"data: {json.dumps(research_chunk)}\n\n"
+                                
+                                research_start = time.time()
+                                logger.info(f"[PM-CHAT-TIMING] Starting DeerFlow research: {time.time() - api_start:.2f}s")
+                                last_step_emitted = ""
+                                final_research_state = None
+                                
+                                async for state in run_agent_workflow_stream(
+                                    user_input=research_query,
+                                    max_plan_iterations=1,
+                                    max_step_num=3,
+                                    enable_background_investigation=True,
+                                    enable_clarification=False
+                                ):
+                                    final_research_state = state
+                                    
+                                    if isinstance(state, dict):
+                                        current_plan = state.get("current_plan")
+                                        if current_plan:
+                                            from src.prompts.planner_model import Plan
+                                            
+                                            if isinstance(current_plan, Plan):
+                                                plan_title = current_plan.title
+                                            elif isinstance(current_plan, dict):
+                                                plan_title = current_plan.get("title", "")
+                                            elif isinstance(current_plan, str):
+                                                continue
+                                            else:
+                                                plan_title = str(current_plan)
+                                            
+                                            if plan_title and plan_title != last_step_emitted:
+                                                progress_msg = f"📋 Planning: {plan_title}\n\n"
+                                                progress_chunk = {
+                                                    "id": str(uuid.uuid4()),
+                                                    "thread_id": thread_id,
+                                                    "agent": "coordinator",
+                                                    "role": "assistant",
+                                                    "content": progress_msg,
+                                                    "finish_reason": None
+                                                }
+                                                yield "event: message_chunk\n"
+                                                yield f"data: {json.dumps(progress_chunk)}\n\n"
+                                                last_step_emitted = plan_title
+                                        
+                                        messages = state.get("messages", [])
+                                        if messages:
+                                            last_msg = messages[-1]
+                                            if isinstance(last_msg, dict):
+                                                agent_name = last_msg.get("name", "")
+                                                content = last_msg.get("content", "")
+                                                if agent_name and agent_name not in ["planner", "reporter"] and len(content) > 50:
+                                                    step_msg = f"⚙️ {agent_name.capitalize()} agent working...\n\n"
+                                                    step_chunk = {
+                                                        "id": str(uuid.uuid4()),
+                                                        "thread_id": thread_id,
+                                                        "agent": "coordinator",
+                                                        "role": "assistant",
+                                                        "content": step_msg,
+                                                        "finish_reason": None
+                                                    }
+                                                    yield "event: message_chunk\n"
+                                                    yield f"data: {json.dumps(step_chunk)}\n\n"
+                                
+                                # Store research result
+                                if final_research_state and isinstance(final_research_state, dict):
+                                    from src.conversation.flow_manager import ConversationContext, FlowState, IntentType
+                                    from datetime import datetime
+                                    
+                                    if thread_id not in fm.contexts:
+                                        fm.contexts[thread_id] = ConversationContext(
+                                            session_id=thread_id,
+                                            current_state=FlowState.INTENT_DETECTION,
+                                            intent=IntentType.UNKNOWN,
+                                            gathered_data={},
+                                            required_fields=[],
+                                            conversation_history=[],
+                                            created_at=datetime.now(),
+                                            updated_at=datetime.now()
+                                        )
+                                    
+                                    context = fm.contexts[thread_id]
+                                    research_result = ""
+                                    if "final_report" in final_research_state:
+                                        research_result = final_research_state["final_report"]
+                                    elif "messages" in final_research_state:
+                                        messages = final_research_state["messages"]
+                                        if messages:
+                                            last_msg = messages[-1]
+                                            if isinstance(last_msg, dict):
+                                                research_result = last_msg.get("content", "")
+                                    
+                                    if research_result:
+                                        context.gathered_data['research_context'] = research_result
+                                        context.gathered_data['research_already_done'] = True
+                                        logger.info(f"Stored research result in context for session {thread_id}")
+                                
+                                research_duration = time.time() - research_start
+                                logger.info(f"[PM-CHAT-TIMING] DeerFlow research completed: {research_duration:.2f}s")
+                                complete_chunk = {
+                                    "id": str(uuid.uuid4()),
+                                    "thread_id": thread_id,
+                                    "agent": "coordinator",
+                                    "role": "assistant",
+                                    "content": "✅ Research completed!\n\n",
+                                    "finish_reason": None
+                                }
+                                yield "event: message_chunk\n"
+                                yield f"data: {json.dumps(complete_chunk)}\n\n"
+                            
+                            except Exception as research_error:
+                                logger.error(f"DeerFlow streaming failed: {research_error}")
+                        
+                        # Create queue to collect streaming chunks
+                        stream_queue = asyncio.Queue()
+                        
+                        async def stream_callback(content: str):
+                            """Callback to capture streaming chunks"""
+                            await stream_queue.put(content)
+                        
+                        async def process_with_streaming():
+                            try:
+                                process_start = time.time()
+                                logger.info(f"[PM-CHAT-TIMING] process_with_streaming started: {time.time() - api_start:.2f}s")
+                                response = await fm.process_message(
+                                    message=user_message,
+                                    session_id=thread_id,
+                                    user_id="f430f348-d65f-427f-9379-3d0f163393d1",
+                                    stream_callback=stream_callback
+                                )
+                                logger.info(f"[PM-CHAT-TIMING] process_message completed: {time.time() - process_start:.2f}s")
+                                await stream_queue.put(None)
+                                return response
+                            except Exception as e:
+                                logger.error(f"Error in process_message: {e}")
+                                await stream_queue.put(None)
+                                return None
+                        
+                        process_task = asyncio.create_task(process_with_streaming())
+                        logger.info(f"[PM-CHAT-TIMING] process_task started: {time.time() - api_start:.2f}s")
+                        
+                        while True:
+                            try:
+                                chunk = await asyncio.wait_for(stream_queue.get(), timeout=1.0)
+                                if chunk is None:
+                                    break
+                                
+                                chunk_data = {
+                                    "id": str(uuid.uuid4()),
+                                    "thread_id": thread_id,
+                                    "agent": "coordinator",
+                                    "role": "assistant",
+                                    "content": chunk,
+                                    "finish_reason": None
+                                }
+                                yield "event: message_chunk\n"
+                                yield f"data: {json.dumps(chunk_data)}\n\n"
+                            except asyncio.TimeoutError:
+                                if process_task.done():
+                                    break
+                                continue
+                        
+                        response = await process_task
+                        if response:
+                            response_message = response.get('message', '')
+                            response_state = response.get('state', 'complete')
+                            finish_reason = None
+                            if response_state == 'complete':
+                                finish_reason = "stop"
+                            elif '?' in response_message or 'specify' in response_message.lower():
+                                finish_reason = "interrupt"
+                        else:
+                            finish_reason = "stop"
+                            response_message = ""
+                        
+                        chunk_data = {
+                            "id": str(uuid.uuid4()),
+                            "thread_id": thread_id,
+                            "agent": "coordinator",
+                            "role": "assistant",
+                            "content": "",
+                            "finish_reason": finish_reason
+                        }
+                        yield "event: message_chunk\n"
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
+                        
+                        logger.info(f"[PM-CHAT-TIMING] Total response time: {time.time() - api_start:.2f}s")
+                    
+                    except Exception as e:
+                        error_message = f"Error: {str(e)}"
+                        error_data = {
+                            "id": str(uuid.uuid4()),
+                            "thread_id": thread_id,
+                            "agent": "coordinator",
+                            "role": "assistant",
+                            "content": error_message,
+                            "finish_reason": "stop"
+                        }
+                        yield "event: message_chunk\n"
+                        yield f"data: {json.dumps(error_data)}\n\n"
+                
+                return StreamingResponse(
+                    generate_stream(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "X-Accel-Buffering": "no"
+                    }
+                )
+            finally:
+                db.close()
+        
+        except Exception as e:
+            logger.error(f"PM chat error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    logger.info("✅ Project Management API endpoints registered (including /api/pm/chat/stream)")
+except Exception as e:
+    logger.warning(f"⚠️  Could not register Project Management API: {e}")

@@ -81,6 +81,33 @@ CREATE TABLE task_dependencies (
     UNIQUE(task_id, depends_on_task_id)
 );
 
+-- Sprints table
+CREATE TABLE sprints (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    duration_weeks INTEGER,
+    duration_days INTEGER,
+    capacity_hours FLOAT,
+    planned_hours FLOAT,
+    utilization FLOAT,
+    status VARCHAR(50) DEFAULT 'planned',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Sprint tasks junction table
+CREATE TABLE sprint_tasks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sprint_id UUID REFERENCES sprints(id) ON DELETE CASCADE,
+    task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+    assigned_to_name VARCHAR(255),
+    capacity_used FLOAT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Research sessions (DeerFlow integration)
 CREATE TABLE research_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -66,16 +66,19 @@ export async function* chatStream(
 ) {
   if (
     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY ||
-    location.search.includes("mock") ||
-    location.search.includes("replay=")
+    (typeof window !== "undefined" && window.location.search.includes("mock")) ||
+    (typeof window !== "undefined" && window.location.search.includes("replay="))
   ) 
     return yield* chatReplayStream(userMessage, params, options);
   
   try{
     const locale = getLocaleFromCookie();
     
+    // Determine which endpoint to use based on current path
+    const isPMChat = typeof window !== "undefined" && window.location.pathname.startsWith("/pm/chat");
+    
     // Extract project context from URL if present
-    const urlParams = new URLSearchParams(location.search);
+    const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
     const projectId = urlParams.get('project');
     
     // Add project context to the message if we're in a project-specific chat
@@ -85,8 +88,9 @@ export async function* chatStream(
       enhancedMessage = `${userMessage}\n\nproject_id: ${projectId}`;
     }
     
-    // Use PM chat endpoint for project management tasks
-    const stream = fetchStream(resolveServiceURL("pm/chat/stream"), {
+    // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
+    const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
+    const stream = fetchStream(resolveServiceURL(endpoint), {
       body: JSON.stringify({
         messages: [{ role: "user", content: enhancedMessage }],
         locale,
@@ -125,7 +129,7 @@ async function* chatReplayStream(
   },
   options: { abortSignal?: AbortSignal } = {},
 ): AsyncIterable<ChatEvent> {
-  const urlParams = new URLSearchParams(window.location.search);
+  const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
   let replayFilePath = "";
   if (urlParams.has("mock")) {
     if (urlParams.get("mock")) {
@@ -141,7 +145,8 @@ async function* chatReplayStream(
     }
     fastForwardReplaying = true;
   } else {
-    const replayId = extractReplayIdFromSearchParams(window.location.search);
+    const searchString = typeof window !== "undefined" ? window.location.search : "";
+    const replayId = extractReplayIdFromSearchParams(searchString);
     if (replayId) {
       replayFilePath = `/replay/${replayId}.txt`;
     } else {

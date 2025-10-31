@@ -922,12 +922,15 @@ try:
     
     class SprintResponse(BaseModel):
         id: str
-        project_id: str
         name: str
         start_date: Optional[datetime]
         end_date: Optional[datetime]
+        duration_weeks: Optional[int]
+        duration_days: Optional[int]
+        capacity_hours: Optional[float]
+        planned_hours: Optional[float]
+        utilization: Optional[float]
         status: str
-        capacity: float
         
     class TaskResponse(BaseModel):
         id: str
@@ -973,7 +976,7 @@ try:
     ):
         """List tasks for a project"""
         try:
-            tasks = db_crud.get_tasks(db=db, project_id=UUID(project_id))
+            tasks = db_crud.get_tasks_by_project(db=db, project_id=UUID(project_id))
             return [
                 TaskResponse(
                     id=str(t.id),
@@ -1002,12 +1005,15 @@ try:
             return [
                 SprintResponse(
                     id=str(s.id),
-                    project_id=str(s.project_id),
                     name=s.name,
                     start_date=s.start_date,
                     end_date=s.end_date,
-                    status=s.status,
-                    capacity=s.capacity
+                    duration_weeks=s.duration_weeks,
+                    duration_days=s.duration_days,
+                    capacity_hours=s.capacity_hours,
+                    planned_hours=s.planned_hours,
+                    utilization=s.utilization,
+                    status=s.status
                 )
                 for s in sprints
             ]

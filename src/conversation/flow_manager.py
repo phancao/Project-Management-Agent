@@ -416,8 +416,8 @@ class ConversationFlowManager:
                 return {
                     "type": "error",
                     "message": f"Research failed: {str(e)}",
-            "state": context.current_state.value
-        }
+                    "state": context.current_state.value
+                }
     
     async def _handle_planning_phase(
         self, 
@@ -425,7 +425,6 @@ class ConversationFlowManager:
         stream_callback: Optional[callable] = None
     ) -> Dict[str, Any]:
         """Handle plan-based execution phase with optional streaming"""
-        from src.prompts.pm_planner_model import PMStepType
         import time
         
         start_time = time.time()

@@ -156,7 +156,7 @@ class SprintPlanner:
         sprint_id = None
         if self.db_session:
             try:
-                from database.orm_models import Sprint, SprintTask
+                from database.orm_models import Sprint, SprintTask as SprintTaskORM
                 from uuid import UUID
                 
                 # Create sprint record
@@ -179,13 +179,13 @@ class SprintPlanner:
                 
                 # Create sprint task records
                 for task in assigned_tasks:
-                    sprint_task = SprintTask(
+                    sprint_task_orm = SprintTaskORM(
                         sprint_id=UUID(sprint_id),
                         task_id=UUID(task.task_id),
                         assigned_to_name=task.assigned_to,
                         capacity_used=task.estimated_hours
                     )
-                    self.db_session.add(sprint_task)
+                    self.db_session.add(sprint_task_orm)
                 
                 self.db_session.commit()
                 logger.info(f"Sprint saved to database: {sprint_id}")
@@ -227,7 +227,7 @@ class SprintPlanner:
         
         try:
             from database.crud import get_tasks_by_project
-            from database.orm_models import SprintTask
+            from database.orm_models import SprintTask as SprintTaskORM
             from uuid import UUID
             
             logger.info(f"Fetching tasks for project_id: {project_id}")
@@ -237,7 +237,7 @@ class SprintPlanner:
             # Get tasks already assigned to sprints
             assigned_task_ids = set()
             try:
-                sprint_tasks = self.db_session.query(SprintTask.task_id).all()
+                sprint_tasks = self.db_session.query(SprintTaskORM.task_id).all()
                 assigned_task_ids = {str(sprint_task[0]) for sprint_task in sprint_tasks}
                 logger.info(f"Found {len(assigned_task_ids)} tasks already assigned to sprints")
             except Exception as e:

@@ -1258,9 +1258,22 @@ class ConversationFlowManager:
             tasks = get_tasks_by_project(self.db_session, UUID(project_id))
             
             context.current_state = FlowState.COMPLETED
+            
+            # Format message with task list
+            message_parts = [f"Found **{len(tasks)}** tasks for project '{project.name}':\n"]
+            for i, task in enumerate(tasks, 1):
+                priority_emoji = "🔴" if task.priority == "high" else "🟡" if task.priority == "medium" else "🟢"
+                hours_text = f"{task.estimated_hours}h" if task.estimated_hours else "N/A"
+                message_parts.append(
+                    f"{i}. **{task.title}**\n"
+                    f"   - Status: {task.status}\n"
+                    f"   - Priority: {priority_emoji} {task.priority}\n"
+                    f"   - Estimated: {hours_text}\n"
+                )
+            
             return {
                 "type": "execution_completed",
-                "message": f"Found {len(tasks)} tasks for project '{project.name}'",
+                "message": "\n".join(message_parts),
                 "state": context.current_state.value,
                 "data": {
                     "project_name": project.name,
@@ -1320,9 +1333,23 @@ class ConversationFlowManager:
             sprints = self.db_session.query(Sprint).filter(Sprint.project_id == UUID(project_id)).all()
             
             context.current_state = FlowState.COMPLETED
+            
+            # Format message with sprint list
+            message_parts = [f"Found **{len(sprints)}** sprints for project '{project.name}':\n"]
+            for i, sprint in enumerate(sprints, 1):
+                utilization = sprint.utilization if sprint.utilization else 0
+                utilization_emoji = "🟢" if utilization < 70 else "🟡" if utilization < 90 else "🔴"
+                message_parts.append(
+                    f"{i}. **{sprint.name}**\n"
+                    f"   - Status: {sprint.status}\n"
+                    f"   - Capacity: {sprint.capacity_hours or 0:.0f}h\n"
+                    f"   - Planned: {sprint.planned_hours or 0:.0f}h\n"
+                    f"   - Utilization: {utilization_emoji} {utilization:.0f}%\n"
+                )
+            
             return {
                 "type": "execution_completed",
-                "message": f"Found {len(sprints)} sprints for project '{project.name}'",
+                "message": "\n".join(message_parts),
                 "state": context.current_state.value,
                 "data": {
                     "project_name": project.name,
@@ -1390,9 +1417,32 @@ class ConversationFlowManager:
                 tasks_by_status[status] = tasks_by_status.get(status, 0) + 1
             
             context.current_state = FlowState.COMPLETED
+            
+            # Format message with project status
+            status_emoji = {
+                'completed': '✅',
+                'in_progress': '🚀',
+                'planned': '📋',
+                'blocked': '⚠️',
+                'cancelled': '❌'
+            }.get(project.status, '📊')
+            
+            message_parts = [
+                f"## Project Status: **{project.name}**\n",
+                f"{status_emoji} **Overall Status:** {project.status}\n",
+                f"\n📊 **Summary:**\n",
+                f"- Total Tasks: **{len(tasks)}**\n",
+                f"- Total Sprints: **{len(sprints)}**\n"
+            ]
+            
+            if tasks_by_status:
+                message_parts.append(f"\n📋 **Tasks by Status:**\n")
+                for status, count in sorted(tasks_by_status.items()):
+                    message_parts.append(f"- {status}: **{count}**\n")
+            
             return {
                 "type": "execution_completed",
-                "message": f"Project '{project.name}' status retrieved",
+                "message": "".join(message_parts),
                 "state": context.current_state.value,
                 "data": {
                     "project_name": project.name,

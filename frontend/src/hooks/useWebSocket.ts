@@ -51,22 +51,22 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
       console.error('WebSocket error:', ev);
       setError('Connection failed. Please try again.');
     };
-
+      
     ws.onmessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data as string);
-        const newMessage: Message = {
-          id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          role: 'assistant',
-          content: data.message || 'No message content',
-          timestamp: new Date().toISOString(),
-          type: data.type,
-          state: data.state,
-          intent: data.intent,
-          missing_fields: data.missing_fields,
-          data: data.data,
-        };
-        setMessages(prev => [...prev, newMessage]);
+      const newMessage: Message = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        role: 'assistant',
+        content: data.message || 'No message content',
+        timestamp: new Date().toISOString(),
+        type: data.type,
+        state: data.state,
+        intent: data.intent,
+        missing_fields: data.missing_fields,
+        data: data.data,
+      };
+      setMessages(prev => [...prev, newMessage]);
       } catch (e) {
         console.error('Failed to parse message:', e);
       }
@@ -98,10 +98,10 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
       // Send message as JSON text per FastAPI websocket
       wsRef.current.send(
         JSON.stringify({
-          message,
-          session_id: sessionId,
+        message,
+        session_id: sessionId,
           user_id: 'current_user', // TODO: integrate auth
-          timestamp: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
         })
       );
     } catch (err) {

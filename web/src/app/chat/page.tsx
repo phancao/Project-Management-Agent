@@ -73,17 +73,17 @@ function ChatPageContent() {
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/">
                   🦌 DeerFlow
-                </Link>
-              </Button>
-            </Tooltip>
-            <ThemeToggle />
-            <Suspense>
-              <SettingsDialog />
-            </Suspense>
-          </div>
-        </header>
-        <Main />
-      </div>
+              </Link>
+            </Button>
+          </Tooltip>
+          <ThemeToggle />
+          <Suspense>
+            <SettingsDialog />
+          </Suspense>
+        </div>
+      </header>
+      <Main />
+    </div>
     </>
   );
 }

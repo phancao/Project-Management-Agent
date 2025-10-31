@@ -103,7 +103,8 @@ class ConversationFlowManager:
         self, 
         message: str, 
         session_id: str,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        stream_callback: Optional[callable] = None
     ) -> Dict[str, Any]:
         """
         Process incoming message and return appropriate response
@@ -112,6 +113,7 @@ class ConversationFlowManager:
             message: User's message
             session_id: Unique session identifier
             user_id: Optional user identifier
+            stream_callback: Optional callback to yield intermediate results (async function)
             
         Returns:
             Response dictionary with message, actions, and metadata
@@ -138,7 +140,7 @@ class ConversationFlowManager:
             logger.info(f"Extracted initial data: {initial_data}")
             
             # Try to generate a PM plan for multi-task execution
-            pm_plan = await self._generate_pm_plan(message, context)
+            pm_plan = await self.generate_pm_plan(message, context)
             
             if pm_plan and pm_plan.get('steps'):
                 # Multi-task execution: use plan-based approach
@@ -220,7 +222,7 @@ class ConversationFlowManager:
                 }
             return research_result
         elif context.current_state == FlowState.PLANNING_PHASE:
-            return await self._handle_planning_phase(context)
+            return await self._handle_planning_phase(context, stream_callback)
         elif context.current_state == FlowState.EXECUTION_PHASE:
             return await self._handle_execution_phase(context)
         else:
@@ -413,10 +415,15 @@ class ConversationFlowManager:
     
     async def _handle_planning_phase(
         self, 
-        context: ConversationContext
+        context: ConversationContext,
+        stream_callback: Optional[callable] = None
     ) -> Dict[str, Any]:
-        """Handle plan-based execution phase"""
+        """Handle plan-based execution phase with optional streaming"""
         from src.prompts.pm_planner_model import PMStepType
+        import time
+        
+        start_time = time.time()
+        logger.info(f"[TIMING] _handle_planning_phase started")
         
         pm_plan = context.gathered_data.get('_pm_plan')
         if not pm_plan:
@@ -431,22 +438,9 @@ class ConversationFlowManager:
         steps = pm_plan.get('steps', [])
         current_step_index = context.gathered_data.get('_current_step_index', 0)
         overall_thought = pm_plan.get('overall_thought', '')
+        logger.info(f"[TIMING] Plan has {len(steps)} steps - {time.time() - start_time:.2f}s")
         
-        # Execute all steps sequentially
-        results = []
-        for idx, step in enumerate(steps):
-            logger.info(f"Executing step {idx + 1}/{len(steps)}: {step.get('title')}")
-            
-            # Map PMStepType to IntentType and execute
-            step_type_str = step.get('step_type')
-            step_result = await self._execute_pm_step(step, context)
-            results.append({
-                'step': step.get('title'),
-                'type': step.get('step_type'),
-                'result': step_result
-            })
-        
-        # Build response message
+        # Build initial response message parts
         response_parts = []
         if overall_thought:
             response_parts.append(f"🤔 **Thinking:**\n\n💭 {overall_thought}\n\n📋 **Plan:**")
@@ -456,11 +450,52 @@ class ConversationFlowManager:
         
         response_parts.append("🚀 **Executing plan...**\n")
         
-        for result in results:
-            if result['result'].get('type') == 'execution_completed':
-                response_parts.append(f"✅ {result['step']}\n   {result['result'].get('message', 'Completed')}")
+        # If streaming, yield initial thinking/plan
+        if stream_callback:
+            await stream_callback("\n".join(response_parts))
+        
+        # Execute all steps sequentially and build results incrementally
+        results = []
+        for idx, step in enumerate(steps):
+            step_start = time.time()
+            logger.info(f"[TIMING] Executing step {idx + 1}/{len(steps)}: {step.get('title')} - {time.time() - start_time:.2f}s")
+            
+            # Map PMStepType to IntentType and execute
+            step_type_str = step.get('step_type')
+            step_result = await self._execute_pm_step(step, context)
+            
+            step_duration = time.time() - step_start
+            logger.info(f"[TIMING] Step {idx + 1} completed in {step_duration:.2f}s - {time.time() - start_time:.2f}s total")
+            
+            results.append({
+                'step': step.get('title'),
+                'type': step.get('step_type'),
+                'result': step_result
+            })
+            
+            # Build this step's result message - extract just the result part
+            result_msg = step_result.get('message', 'Completed' if step_result.get('type') == 'execution_completed' else 'Failed')
+            
+            # Remove thinking/plan sections from message if present (they're in overall plan)
+            if "🤔 **Thinking:**" in result_msg:
+                # Extract only the part after the last ✅ marker
+                parts = result_msg.split("✅ ")
+                if len(parts) > 1:
+                    # Last part is the actual result
+                    result_msg = parts[-1]
+                    # Remove leading whitespace
+                    result_msg = result_msg.lstrip()
+            
+            if step_result.get('type') == 'execution_completed':
+                step_msg = f"✅ {step.get('title')}\n   {result_msg}"
             else:
-                response_parts.append(f"❌ {result['step']}\n   {result['result'].get('message', 'Failed')}")
+                step_msg = f"❌ {step.get('title')}\n   {result_msg}"
+            
+            response_parts.append(step_msg)
+            
+            # If streaming, yield this step's result immediately
+            if stream_callback:
+                await stream_callback(step_msg)
         
         context.current_state = FlowState.COMPLETED
         return {
@@ -480,34 +515,33 @@ class ConversationFlowManager:
         step_type = step.get('step_type')
         logger.info(f"Executing PM step: {step_type}")
         
-        # Map PMStepType to IntentType and execute
-        if step_type == PMStepType.CREATE_WBS:
-            # Extract project info from step description
-            description = step.get('description', '')
-            if 'project' in description.lower():
-                # Try to extract project name from description
-                context.gathered_data['project_name'] = step.get('title', '').split(':')[-1].strip()
-                context.intent = IntentType.CREATE_WBS
-                return await self._handle_create_wbs_with_deerflow_planner(context)
+        # Handle both string and enum types
+        step_type_str = step_type.value if isinstance(step_type, PMStepType) else step_type
         
-        elif step_type == PMStepType.SPRINT_PLANNING:
+        # Map PMStepType to IntentType and execute
+        if step_type_str == "create_wbs":
+            # Project name already extracted from user message, just execute
+            context.intent = IntentType.CREATE_WBS
+            return await self._handle_create_wbs_with_deerflow_planner(context)
+        
+        elif step_type_str == "sprint_planning":
             context.intent = IntentType.SPRINT_PLANNING
             return await self._handle_sprint_planning_with_deerflow_planner(context)
         
-        elif step_type == PMStepType.CREATE_PROJECT:
+        elif step_type_str == "create_project":
             # Extract project info
             context.intent = IntentType.CREATE_PROJECT
             return await self._execute_intent(IntentType.CREATE_PROJECT, context)
         
-        elif step_type == PMStepType.RESEARCH:
+        elif step_type_str == "research":
             context.intent = IntentType.RESEARCH_TOPIC
             return await self._execute_intent(IntentType.RESEARCH_TOPIC, context)
         
         else:
-            logger.warning(f"Unknown or unsupported PM step type: {step_type}")
+            logger.warning(f"Unknown or unsupported PM step type: {step_type_str}")
             return {
                 "type": "error",
-                "message": f"Unsupported step type: {step_type}"
+                "message": f"Unsupported step type: {step_type_str}"
             }
     
     async def _handle_execution_phase(
@@ -606,7 +640,7 @@ class ConversationFlowManager:
                 "state": context.current_state.value
             }
     
-    async def _generate_pm_plan(
+    async def generate_pm_plan(
         self,
         user_message: str,
         context: ConversationContext
@@ -642,7 +676,8 @@ class ConversationFlowManager:
                 try:
                     pm_plan = PMPlan(**plan_data)
                     logger.info(f"Generated PM plan with {len(pm_plan.steps)} steps")
-                    return pm_plan.model_dump()
+                    # Use mode='json' to serialize enums as strings
+                    return pm_plan.model_dump(mode='json')
                 except Exception as validation_error:
                     logger.warning(f"PM plan validation failed: {validation_error}")
                     logger.warning(f"Plan data: {plan_data}")

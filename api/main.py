@@ -168,13 +168,21 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
         async def generate_stream() -> AsyncIterator[str]:
             """Generate SSE stream of chat responses with progress updates"""
             try:
-                # Check if message needs DeerFlow research (CREATE_WBS)
-                needs_research = any(keyword in user_message.lower() for keyword in [
-                    "create wbs", "work breakdown", "research"
-                ])
+                # First, generate PM plan to check if CREATE_WBS is needed
+                # This is fast (one LLM call) and tells us if we need DeerFlow research
+                temp_context = fm._get_or_create_context(thread_id)
+                pm_plan = await fm.generate_pm_plan(user_message, temp_context)
+                
+                # Check if plan has CREATE_WBS steps that need research
+                needs_research = False
+                if pm_plan and pm_plan.get('steps'):
+                    for step in pm_plan.get('steps', []):
+                        if step.get('step_type') == 'create_wbs':
+                            needs_research = True
+                            break
                 
                 # For research queries, stream DeerFlow updates
-                if needs_research and "create wbs" in user_message.lower():
+                if needs_research:
                     # Yield initial message
                     initial_chunk = {
                         "id": str(uuid.uuid4()),
@@ -232,15 +240,20 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                                 # Check for current plan
                                 current_plan = state.get("current_plan")
                                 if current_plan:
-                                    # Handle Pydantic Plan object or dict
-                                    if hasattr(current_plan, 'title'):
-                                        # Pydantic model
+                                    # Handle different plan types
+                                    from src.prompts.planner_model import Plan
+                                    
+                                    if isinstance(current_plan, Plan):
+                                        # Pydantic Plan model
                                         plan_title = current_plan.title
                                     elif isinstance(current_plan, dict):
                                         # Dict
                                         plan_title = current_plan.get("title", "")
+                                    elif isinstance(current_plan, str):
+                                        # String - skip it to avoid the .title() method issue
+                                        continue
                                     else:
-                                        # String representation
+                                        # Unknown type - convert to string
                                         plan_title = str(current_plan)
                                     
                                     if plan_title and plan_title != last_step_emitted:
@@ -329,67 +342,86 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         logger.error(f"DeerFlow streaming failed: {research_error}")
                         # Continue with normal flow even if streaming fails
                 
-                # Process message
-                response = await fm.process_message(
-                    message=user_message,
-                    session_id=thread_id,
-                    user_id="f430f348-d65f-427f-9379-3d0f163393d1"  # Mock user
-                )
+                # Create a queue to collect streaming chunks
+                stream_queue = asyncio.Queue()
+                stream_done = False
                 
-                response_message = response.get('message', '')
-                response_state = response.get('state', 'complete')
+                async def stream_callback(content: str):
+                    """Callback to capture streaming chunks"""
+                    await stream_queue.put(content)
                 
-                # Check if message contains thinking plan (🤔)
-                if "🤔 **Thinking:**" in response_message:
-                    # Split into thinking section and execution section
-                    parts = response_message.split("\n\n✅ ")
-                    if len(parts) == 2:
-                        thinking_msg = parts[0] + "\n\n"
-                        execution_msg = parts[1]
+                # Process message in background with streaming
+                async def process_with_streaming():
+                    nonlocal stream_done
+                    try:
+                        response = await fm.process_message(
+                            message=user_message,
+                            session_id=thread_id,
+                            user_id="f430f348-d65f-427f-9379-3d0f163393d1",  # Mock user
+                            stream_callback=stream_callback
+                        )
+                        # Put a sentinel to signal completion
+                        await stream_queue.put(None)
+                        return response
+                    except Exception as e:
+                        logger.error(f"Error in process_message: {e}")
+                        await stream_queue.put(None)
+                        return None
+                
+                # Start processing in background
+                process_task = asyncio.create_task(process_with_streaming())
+                
+                # Stream chunks as they arrive
+                while True:
+                    try:
+                        # Wait for chunk with timeout
+                        chunk = await asyncio.wait_for(stream_queue.get(), timeout=1.0)
                         
-                        # First yield the thinking plan
-                        thinking_chunk = {
+                        if chunk is None:  # Sentinel - done
+                            break
+                        
+                        # Yield chunk immediately
+                        chunk_data = {
                             "id": str(uuid.uuid4()),
                             "thread_id": thread_id,
                             "agent": "coordinator",
                             "role": "assistant",
-                            "content": thinking_msg,
+                            "content": chunk,
                             "finish_reason": None
                         }
                         yield "event: message_chunk\n"
-                        yield f"data: {json.dumps(thinking_chunk)}\n\n"
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
                         
-                        # Then yield a progress message
-                        progress_chunk = {
-                            "id": str(uuid.uuid4()),
-                            "thread_id": thread_id,
-                            "agent": "coordinator",
-                            "role": "assistant",
-                            "content": "🚀 **Executing plan...**\n\n",
-                            "finish_reason": None
-                        }
-                        yield "event: message_chunk\n"
-                        yield f"data: {json.dumps(progress_chunk)}\n\n"
-                        
-                        # Finally yield the execution result
-                        response_message = execution_msg
+                    except asyncio.TimeoutError:
+                        # Check if task is done
+                        if process_task.done():
+                            break
+                        continue
                 
-                # Yield final message chunk
-                finish_reason = None
-                if response_state == 'complete':
+                # Get final response
+                response = await process_task
+                if response:
+                    response_message = response.get('message', '')
+                    response_state = response.get('state', 'complete')
+                    
+                    finish_reason = None
+                    if response_state == 'complete':
+                        finish_reason = "stop"
+                    elif '?' in response_message or 'specify' in response_message.lower():
+                        finish_reason = "interrupt"
+                else:
                     finish_reason = "stop"
-                elif '?' in response_message or 'specify' in response_message.lower():
-                    finish_reason = "interrupt"
-                
+                    response_message = ""
+                    
+                # Yield final chunk with finish reason
                 chunk_data = {
                     "id": str(uuid.uuid4()),
                     "thread_id": thread_id,
                     "agent": "coordinator",
                     "role": "assistant",
-                    "content": response_message or "",
+                    "content": "",
                     "finish_reason": finish_reason
                 }
-                
                 yield "event: message_chunk\n"
                 yield f"data: {json.dumps(chunk_data)}\n\n"
                 

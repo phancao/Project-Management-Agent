@@ -1,5 +1,6 @@
 "use client";
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 interface Task {
@@ -72,22 +73,24 @@ export default function ProjectsPage() {
   };
 
   useEffect(() => {
-    fetchProjects();
+    void fetchProjects();
   }, []);
 
   useEffect(() => {
     if (expandedProject && !tasks[expandedProject]) {
-      fetchTasks(expandedProject);
+      void fetchTasks(expandedProject);
     }
     if (expandedProject && !sprints[expandedProject]) {
-      fetchSprints(expandedProject);
+      void fetchSprints(expandedProject);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedProject]);
 
   useEffect(() => {
     if (expandedSprint && !sprintTasks[expandedSprint]) {
-      fetchSprintTasks(expandedSprint);
+      void fetchSprintTasks(expandedSprint);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedSprint]);
 
   const fetchProjects = async () => {
@@ -201,18 +204,18 @@ export default function ProjectsPage() {
               <p className="text-gray-600 mt-1">Manage your AI-powered project development</p>
             </div>
             <div className="flex gap-3">
-              <a 
+              <Link 
                 href="/" 
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
               >
                 Home
-              </a>
-              <a 
+              </Link>
+              <Link 
                 href="/chat" 
                 className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-all font-semibold"
               >
                 💬 Start Chat
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -225,12 +228,12 @@ export default function ProjectsPage() {
             <div className="text-6xl mb-4">🎯</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Projects Yet</h2>
             <p className="text-gray-600 mb-6">Create your first project by chatting with the AI assistant!</p>
-            <a 
+            <Link 
               href="/chat"
               className="inline-block px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-all font-semibold"
             >
               🚀 Get Started
-            </a>
+            </Link>
           </div>
         ) : (
           <>
@@ -282,13 +285,13 @@ export default function ProjectsPage() {
                         <div className="grid grid-cols-2 gap-3">
                           <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
                             <div className="text-2xl font-bold text-blue-700">
-                              {sprints[project.id]?.length || 0}
+                              {sprints[project.id]?.length ?? 0}
                             </div>
                             <div className="text-xs text-blue-600 font-medium mt-1">Sprints</div>
                           </div>
                           <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
                             <div className="text-2xl font-bold text-purple-700">
-                              {tasks[project.id]?.length || 0}
+                              {tasks[project.id]?.length ?? 0}
                             </div>
                             <div className="text-xs text-purple-600 font-medium mt-1">Tasks</div>
                           </div>
@@ -299,13 +302,13 @@ export default function ProjectsPage() {
                           <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
                             🏃 Sprint Plans
                             <span className="text-sm font-normal text-gray-500">
-                              ({sprints[project.id]?.length || 0})
+                              ({sprints[project.id]?.length ?? 0})
                             </span>
                           </h4>
                           {sprints[project.id] ? (
-                            sprints[project.id].length > 0 ? (
+                            sprints[project.id]!.length > 0 ? (
                               <div className="space-y-2">
-                                {sprints[project.id].map((sprint) => (
+                                {sprints[project.id]!.map((sprint) => (
                                   <div key={sprint.id} className="border-2 border-blue-200 rounded-xl overflow-hidden bg-white hover:border-blue-400 transition-colors">
                                     <button
                                       onClick={() => setExpandedSprint(expandedSprint === sprint.id ? null : sprint.id)}
@@ -345,13 +348,13 @@ export default function ProjectsPage() {
                                           <div className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-2">
                                             📋 Sprint Tasks
                                             <span className="font-normal text-gray-500">
-                                              ({sprintTasks[sprint.id]?.length || 0})
+                                              ({sprintTasks[sprint.id]?.length ?? 0})
                                             </span>
                                           </div>
                                           {sprintTasks[sprint.id] ? (
-                                            sprintTasks[sprint.id].length > 0 ? (
+                                            sprintTasks[sprint.id]!.length > 0 ? (
                                               <div className="space-y-2">
-                                                {sprintTasks[sprint.id].map((task) => (
+                                                {sprintTasks[sprint.id]!.map((task) => (
                                                   <div key={task.id} className="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
                                                     <div className="flex-1 min-w-0">
                                                       <div className="font-medium text-sm text-gray-900 truncate">{task.title}</div>
@@ -398,12 +401,12 @@ export default function ProjectsPage() {
                                 <p className="text-sm font-medium text-gray-700">
                                   No sprints planned yet
                                 </p>
-                                <a 
+                                <Link 
                                   href={`/chat?project=${project.id}`}
                                   className="text-xs text-blue-600 hover:underline mt-1 inline-block"
                                 >
                                   Plan a sprint →
-                                </a>
+                                </Link>
                               </div>
                             )
                           ) : (
@@ -418,13 +421,13 @@ export default function ProjectsPage() {
                           <h4 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
                             📋 All Project Tasks
                             <span className="text-sm font-normal text-gray-500">
-                              ({tasks[project.id]?.length || 0})
+                              ({tasks[project.id]?.length ?? 0})
                             </span>
                           </h4>
                           {tasks[project.id] ? (
-                            tasks[project.id].length > 0 ? (
+                            tasks[project.id]!.length > 0 ? (
                               <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-                                {tasks[project.id].map((task) => (
+                                {tasks[project.id]!.map((task) => (
                                   <div key={task.id} className="p-3 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all">
                                     <div className="flex items-start justify-between gap-3">
                                       <div className="flex-1 min-w-0">
@@ -465,12 +468,12 @@ export default function ProjectsPage() {
                                 <p className="text-sm font-medium text-gray-700">
                                   No tasks created yet
                                 </p>
-                                <a 
+                                <Link 
                                   href={`/chat?project=${project.id}`}
                                   className="text-xs text-purple-600 hover:underline mt-1 inline-block"
                                 >
                                   Create tasks →
-                                </a>
+                                </Link>
                               </div>
                             )
                           ) : (
@@ -488,13 +491,13 @@ export default function ProjectsPage() {
                     <span className="text-xs text-gray-600">
                       Created {new Date(project.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
-                    <a 
+                    <Link 
                       href={`/chat?project=${project.id}`}
                       className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
                     >
                       Open Chat
                       <span className="text-blue-600">→</span>
-                    </a>
+                    </Link>
                   </div>
                 </div>
               ))}

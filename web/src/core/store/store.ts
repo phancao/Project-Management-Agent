@@ -449,7 +449,7 @@ export function useLastFeedbackMessageId() {
         const lastMessage = state.messages.get(
           state.messageIds[state.messageIds.length - 1]!,
         );
-        if (lastMessage && lastMessage.finishReason === "interrupt") {
+        if (lastMessage?.finishReason === "interrupt") {
           return state.messageIds[state.messageIds.length - 2];
         }
       }

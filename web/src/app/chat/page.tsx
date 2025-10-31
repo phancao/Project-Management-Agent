@@ -6,9 +6,9 @@
 import { GithubOutlined } from "@ant-design/icons";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
 
 import { Button } from "~/components/ui/button";
 

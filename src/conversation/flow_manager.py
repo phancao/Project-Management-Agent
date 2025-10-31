@@ -1468,13 +1468,91 @@ class ConversationFlowManager:
         """Handle UPDATE_TASK intent - Update a task"""
         logger.info("Handling UPDATE_TASK intent")
         
-        # TODO: Implement task update logic
-        context.current_state = FlowState.COMPLETED
-        return {
-            "type": "execution_completed",
-            "message": "Task update functionality coming soon",
-            "state": context.current_state.value
-        }
+        try:
+            from database.crud import get_task, update_task
+            from uuid import UUID
+            
+            task_id = context.gathered_data.get("task_id")
+            task_title = context.gathered_data.get("task_title")
+            
+            if not task_id and not task_title:
+                return {
+                    "type": "error",
+                    "message": "Task ID or title is required to update a task. Please specify which task.",
+                    "state": context.current_state.value
+                }
+            
+            # If only title provided, need to find task
+            task = None
+            if task_id:
+                task = get_task(self.db_session, UUID(task_id))
+            elif task_title:
+                # Search for task by title
+                from database.orm_models import Task
+                tasks = self.db_session.query(Task).filter(Task.title.ilike(f"%{task_title}%")).all()
+                if len(tasks) == 1:
+                    task = tasks[0]
+                elif len(tasks) > 1:
+                    return {
+                        "type": "error",
+                        "message": f"Multiple tasks found with title '{task_title}'. Please specify task ID.",
+                        "state": context.current_state.value
+                    }
+            
+            if not task:
+                return {
+                    "type": "error",
+                    "message": f"Task not found. Please check the task ID or title.",
+                    "state": context.current_state.value
+                }
+            
+            # Extract update fields
+            update_fields = {}
+            if "new_title" in context.gathered_data:
+                update_fields["title"] = context.gathered_data["new_title"]
+            if "new_status" in context.gathered_data:
+                update_fields["status"] = context.gathered_data["new_status"]
+            if "new_priority" in context.gathered_data:
+                update_fields["priority"] = context.gathered_data["new_priority"]
+            if "new_estimated_hours" in context.gathered_data:
+                update_fields["estimated_hours"] = context.gathered_data["new_estimated_hours"]
+            if "new_description" in context.gathered_data:
+                update_fields["description"] = context.gathered_data["new_description"]
+            
+            if not update_fields:
+                return {
+                    "type": "error",
+                    "message": "No update fields provided. Please specify what to update (status, priority, title, etc.).",
+                    "state": context.current_state.value
+                }
+            
+            # Update task
+            updated_task = update_task(self.db_session, task.id, **update_fields)
+            
+            context.current_state = FlowState.COMPLETED
+            
+            # Format success message
+            updates = ", ".join([f"{k.replace('_', ' ').title()}: {v}" for k, v in update_fields.items()])
+            message = f"✅ Task **{task.title}** updated successfully!\n\n**Changes:** {updates}"
+            
+            return {
+                "type": "execution_completed",
+                "message": message,
+                "state": context.current_state.value,
+                "data": {
+                    "task_id": str(updated_task.id),
+                    "task_title": updated_task.title,
+                    "updates": update_fields
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Update task failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to update task: {str(e)}",
+                "state": context.current_state.value
+            }
     
     async def _handle_update_sprint(
         self,
@@ -1483,13 +1561,107 @@ class ConversationFlowManager:
         """Handle UPDATE_SPRINT intent - Update a sprint"""
         logger.info("Handling UPDATE_SPRINT intent")
         
-        # TODO: Implement sprint update logic
-        context.current_state = FlowState.COMPLETED
-        return {
-            "type": "execution_completed",
-            "message": "Sprint update functionality coming soon",
-            "state": context.current_state.value
-        }
+        try:
+            from database.crud import get_sprint, update_sprint
+            from uuid import UUID
+            
+            sprint_id = context.gathered_data.get("sprint_id")
+            sprint_name = context.gathered_data.get("sprint_name")
+            
+            if not sprint_id and not sprint_name:
+                return {
+                    "type": "error",
+                    "message": "Sprint ID or name is required to update a sprint. Please specify which sprint.",
+                    "state": context.current_state.value
+                }
+            
+            # If only name provided, need to find sprint
+            sprint = None
+            if sprint_id:
+                sprint = get_sprint(self.db_session, UUID(sprint_id))
+            elif sprint_name:
+                # Search for sprint by name
+                from database.orm_models import Sprint
+                sprints = self.db_session.query(Sprint).filter(Sprint.name.ilike(f"%{sprint_name}%")).all()
+                if len(sprints) == 1:
+                    sprint = sprints[0]
+                elif len(sprints) > 1:
+                    return {
+                        "type": "error",
+                        "message": f"Multiple sprints found with name '{sprint_name}'. Please specify sprint ID.",
+                        "state": context.current_state.value
+                    }
+            
+            if not sprint:
+                return {
+                    "type": "error",
+                    "message": f"Sprint not found. Please check the sprint ID or name.",
+                    "state": context.current_state.value
+                }
+            
+            # Extract update fields
+            update_fields = {}
+            if "new_status" in context.gathered_data:
+                update_fields["status"] = context.gathered_data["new_status"]
+            if "new_name" in context.gathered_data:
+                update_fields["name"] = context.gathered_data["new_name"]
+            if "new_capacity_hours" in context.gathered_data:
+                update_fields["capacity_hours"] = context.gathered_data["new_capacity_hours"]
+            if "new_start_date" in context.gathered_data:
+                from datetime import datetime
+                try:
+                    update_fields["start_date"] = datetime.strptime(context.gathered_data["new_start_date"], "%Y-%m-%d").date()
+                except ValueError:
+                    return {
+                        "type": "error",
+                        "message": "Invalid start date format. Please use YYYY-MM-DD.",
+                        "state": context.current_state.value
+                    }
+            if "new_end_date" in context.gathered_data:
+                from datetime import datetime
+                try:
+                    update_fields["end_date"] = datetime.strptime(context.gathered_data["new_end_date"], "%Y-%m-%d").date()
+                except ValueError:
+                    return {
+                        "type": "error",
+                        "message": "Invalid end date format. Please use YYYY-MM-DD.",
+                        "state": context.current_state.value
+                    }
+            
+            if not update_fields:
+                return {
+                    "type": "error",
+                    "message": "No update fields provided. Please specify what to update (status, name, capacity, etc.).",
+                    "state": context.current_state.value
+                }
+            
+            # Update sprint
+            updated_sprint = update_sprint(self.db_session, sprint.id, **update_fields)
+            
+            context.current_state = FlowState.COMPLETED
+            
+            # Format success message
+            updates = ", ".join([f"{k.replace('_', ' ').title()}: {v}" for k, v in update_fields.items()])
+            message = f"✅ Sprint **{sprint.name}** updated successfully!\n\n**Changes:** {updates}"
+            
+            return {
+                "type": "execution_completed",
+                "message": message,
+                "state": context.current_state.value,
+                "data": {
+                    "sprint_id": str(updated_sprint.id),
+                    "sprint_name": updated_sprint.name,
+                    "updates": update_fields
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Update sprint failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to update sprint: {str(e)}",
+                "state": context.current_state.value
+            }
     
     async def _handle_unknown_state(
         self, 
@@ -1821,6 +1993,22 @@ Return only valid JSON:"""
 - status: New status
 - priority: Updated priority
 - timeline_weeks: Updated timeline in weeks""",
+            
+            IntentType.UPDATE_TASK: """- task_id: UUID of the task (preferred)
+- task_title: Title of the task to find
+- new_title: New title for the task
+- new_status: New status ("todo", "in_progress", "completed", "blocked")
+- new_priority: New priority ("low", "medium", "high", "urgent")
+- new_estimated_hours: New estimated hours (number)
+- new_description: New description for the task""",
+            
+            IntentType.UPDATE_SPRINT: """- sprint_id: UUID of the sprint (preferred)
+- sprint_name: Name of the sprint to find
+- new_status: New status ("planned", "active", "completed", "blocked")
+- new_name: New name for the sprint
+- new_capacity_hours: New capacity in hours (number)
+- new_start_date: New start date (format: YYYY-MM-DD)
+- new_end_date: New end date (format: YYYY-MM-DD)""",
             
             IntentType.CREATE_WBS: """- project_name: Name of the project
 - project_id: UUID of the project (preferred if available)

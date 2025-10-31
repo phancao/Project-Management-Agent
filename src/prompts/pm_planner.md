@@ -205,6 +205,46 @@ Output:
 }
 ```
 
+## Example 7: Update Task Query
+
+User: "Mark the 'Setup CI/CD Pipeline' task as completed"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will update the task status to completed.",
+  "steps": [
+    {
+      "step_type": "update_task",
+      "title": "Update Task Status",
+      "description": "Change task status to completed for 'Setup CI/CD Pipeline'",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 8: Update Sprint Query
+
+User: "Change Sprint 1 capacity to 80 hours"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will update the sprint capacity to 80 hours.",
+  "steps": [
+    {
+      "step_type": "update_sprint",
+      "title": "Update Sprint Capacity",
+      "description": "Change Sprint 1 capacity to 80 hours",
+      "requires_context": true
+    }
+  ]
+}
+```
+
 # Guidelines
 
 1. **Identify all tasks**: If user says "Create WBS AND plan sprints", create multiple steps

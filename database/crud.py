@@ -10,7 +10,7 @@ from datetime import datetime
 from database.orm_models import (
     User, Project, Task, ProjectGoal, TeamMember, TaskDependency,
     ResearchSession, KnowledgeBaseItem, ConversationSession, ConversationMessage,
-    ProjectTemplate, ProjectMetric
+    ProjectTemplate, ProjectMetric, Sprint
 )
 
 
@@ -380,4 +380,32 @@ def search_knowledge(db: Session, query_text: str, limit: int = 10) -> List[Know
     return db.query(KnowledgeBaseItem).filter(
         KnowledgeBaseItem.content.ilike(f"%{query_text}%")
     ).limit(limit).all()
+
+
+# ==================== SPRINT CRUD ====================
+
+def get_sprint(db: Session, sprint_id: UUID) -> Optional[Sprint]:
+    """Get sprint by ID"""
+    return db.query(Sprint).filter(Sprint.id == sprint_id).first()
+
+
+def get_sprints_by_project(db: Session, project_id: UUID) -> List[Sprint]:
+    """Get all sprints for a project"""
+    return db.query(Sprint).filter(Sprint.project_id == project_id).all()
+
+
+def update_sprint(db: Session, sprint_id: UUID, **kwargs) -> Optional[Sprint]:
+    """Update sprint by ID"""
+    sprint = get_sprint(db, sprint_id)
+    if not sprint:
+        return None
+    
+    for key, value in kwargs.items():
+        if hasattr(sprint, key) and value is not None:
+            setattr(sprint, key, value)
+    
+    sprint.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(sprint)
+    return sprint
 

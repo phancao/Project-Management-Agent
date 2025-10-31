@@ -402,7 +402,7 @@ export default function ProjectsPage() {
                                   No sprints planned yet
                                 </p>
                                 <Link 
-                                  href={`/chat?project=${project.id}`}
+                                  href={`/pm/chat?project=${project.id}`}
                                   className="text-xs text-blue-600 hover:underline mt-1 inline-block"
                                 >
                                   Plan a sprint →
@@ -469,7 +469,7 @@ export default function ProjectsPage() {
                                   No tasks created yet
                                 </p>
                                 <Link 
-                                  href={`/chat?project=${project.id}`}
+                                  href={`/pm/chat?project=${project.id}`}
                                   className="text-xs text-purple-600 hover:underline mt-1 inline-block"
                                 >
                                   Create tasks →
@@ -492,7 +492,7 @@ export default function ProjectsPage() {
                       Created {new Date(project.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                     <Link 
-                      href={`/chat?project=${project.id}`}
+                      href={`/pm/chat?project=${project.id}`}
                       className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
                     >
                       Open Chat

@@ -72,7 +72,8 @@ def init_db():
         Base, User, Project, ProjectGoal, TeamMember, Task, TaskDependency,
         ResearchSession, KnowledgeBaseItem, ConversationSession, ConversationMessage,
         ProjectTemplate, ProjectMetric, IntentClassification, IntentFeedback,
-        IntentMetric, LearnedIntentPattern, Sprint, SprintTask
+        IntentMetric, LearnedIntentPattern, Sprint, SprintTask,
+        PMProviderConnection, ProjectSyncMapping
     )
     try:
         Base.metadata.create_all(bind=engine)

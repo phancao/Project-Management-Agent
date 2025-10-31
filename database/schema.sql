@@ -213,6 +213,40 @@ CREATE TRIGGER update_knowledge_base_updated_at BEFORE UPDATE ON knowledge_base
 CREATE TRIGGER update_conversation_sessions_updated_at BEFORE UPDATE ON conversation_sessions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- PM Provider connections (for external PM system integration)
+CREATE TABLE pm_provider_connections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    provider_type VARCHAR(50) NOT NULL, -- 'openproject', 'jira', 'clickup', etc.
+    base_url VARCHAR(500) NOT NULL,
+    api_key VARCHAR(500),
+    api_token VARCHAR(500),
+    username VARCHAR(255),
+    organization_id VARCHAR(255),
+    project_key VARCHAR(255),
+    workspace_id VARCHAR(255),
+    additional_config JSONB,
+    is_active BOOLEAN DEFAULT true,
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_sync_at TIMESTAMP
+);
+
+-- Sync mapping between our internal projects and external PM system projects
+CREATE TABLE project_sync_mappings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    internal_project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    provider_connection_id UUID REFERENCES pm_provider_connections(id) ON DELETE CASCADE,
+    external_project_id VARCHAR(255) NOT NULL, -- ID in external system
+    sync_enabled BOOLEAN DEFAULT true,
+    last_sync_at TIMESTAMP,
+    sync_config JSONB, -- Direction, auto-sync settings, etc.
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(internal_project_id, provider_connection_id)
+);
+
 -- Sample data
 INSERT INTO users (email, name, role) VALUES 
 ('admin@example.com', 'System Administrator', 'admin'),

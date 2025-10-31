@@ -333,3 +333,39 @@ class SprintTask(Base):
     sprint = relationship("Sprint", back_populates="sprint_tasks")
     task = relationship("Task", foreign_keys=[task_id])
 
+
+class PMProviderConnection(Base):
+    """PM provider connection model"""
+    __tablename__ = "pm_provider_connections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    provider_type = Column(String(50), nullable=False)
+    base_url = Column(String(500), nullable=False)
+    api_key = Column(String(500), nullable=True)
+    api_token = Column(String(500), nullable=True)
+    username = Column(String(255), nullable=True)
+    organization_id = Column(String(255), nullable=True)
+    project_key = Column(String(255), nullable=True)
+    workspace_id = Column(String(255), nullable=True)
+    additional_config = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_sync_at = Column(DateTime, nullable=True)
+
+
+class ProjectSyncMapping(Base):
+    """Project sync mapping model"""
+    __tablename__ = "project_sync_mappings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    internal_project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"))
+    provider_connection_id = Column(UUID(as_uuid=True), ForeignKey("pm_provider_connections.id", ondelete="CASCADE"))
+    external_project_id = Column(String(255), nullable=False)
+    sync_enabled = Column(Boolean, default=True)
+    last_sync_at = Column(DateTime, nullable=True)
+    sync_config = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

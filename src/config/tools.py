@@ -31,3 +31,16 @@ class RAGProvider(enum.Enum):
 
 
 SELECTED_RAG_PROVIDER = os.getenv("RAG_PROVIDER")
+
+
+class PMProvider(enum.Enum):
+    """Project Management provider types"""
+    INTERNAL = "internal"  # Our internal database
+    OPENPROJECT = "openproject"
+    JIRA = "jira"
+    CLICKUP = "clickup"
+    ASANA = "asana"
+    TRELLO = "trello"
+
+
+SELECTED_PM_PROVIDER = os.getenv("PM_PROVIDER", PMProvider.INTERNAL.value)

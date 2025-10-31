@@ -1105,8 +1105,10 @@ class ConversationFlowManager:
                     "state": context.current_state.value
                 }
             
-            # Initialize sprint planner
-            planner = SprintPlanner(db_session=self.db_session)
+            # Initialize sprint planner with LLM
+            from src.llms.llm import get_llm_by_type
+            llm = get_llm_by_type("basic")
+            planner = SprintPlanner(db_session=self.db_session, llm=llm)
             
             # Generate sprint plan
             sprint_plan = await planner.plan_sprint(

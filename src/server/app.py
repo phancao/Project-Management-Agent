@@ -6,7 +6,7 @@ import base64
 import json
 import logging
 import os
-from typing import Annotated, Any, List, Optional, cast
+from typing import Annotated, Any, AsyncIterator, List, Optional, cast
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, Request

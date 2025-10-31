@@ -180,7 +180,9 @@ class ConversationFlowManager:
                     )
                     context.gathered_data['last_classification_id'] = classification_id
                 
-            context.current_state = FlowState.CONTEXT_GATHERING
+                # Only set to CONTEXT_GATHERING if not already in PLANMNING_PHASE
+                if context.current_state != FlowState.PLANNING_PHASE:
+                    context.current_state = FlowState.CONTEXT_GATHERING
             
         # Check if we have enough context
         if context.current_state == FlowState.CONTEXT_GATHERING:
@@ -197,12 +199,16 @@ class ConversationFlowManager:
             if await self._has_enough_context(context):
                 # Determine next state based on intent - some need research, others go straight to execution
                 needs_research = context.intent in [IntentType.RESEARCH_TOPIC, IntentType.CREATE_WBS]
+                logger.info(f"Has enough context. Intent: {context.intent}, needs_research: {needs_research}")
                 if needs_research:
-                context.current_state = FlowState.RESEARCH_PHASE
+                    context.current_state = FlowState.RESEARCH_PHASE
                 else:
                     context.current_state = FlowState.EXECUTION_PHASE
+                logger.info(f"State set to: {context.current_state}")
             else:
                 return await self._generate_clarification_response(context)
+        
+        logger.info(f"Final current_state: {context.current_state}, intent: {context.intent}")
         
         # Execute appropriate action based on state
         if context.current_state == FlowState.RESEARCH_PHASE:
@@ -339,7 +345,7 @@ class ConversationFlowManager:
             else:
                 topic = context.gathered_data.get("topic", "")
                 if not topic:
-        return {
+                    return {
                         "type": "error",
                         "message": "No research topic provided. Please specify what you'd like to research.",
                         "state": context.current_state.value
@@ -429,11 +435,11 @@ class ConversationFlowManager:
         if not pm_plan:
             logger.error("Planning phase activated but no PM plan found")
             context.current_state = FlowState.COMPLETED
-        return {
+            return {
                 "type": "error",
                 "message": "Execution plan not found",
-            "state": context.current_state.value
-        }
+                "state": context.current_state.value
+            }
         
         steps = pm_plan.get('steps', [])
         current_step_index = context.gathered_data.get('_current_step_index', 0)
@@ -553,7 +559,7 @@ class ConversationFlowManager:
         
         if not self.db_session:
             logger.warning("Database session not available, skipping execution")
-        context.current_state = FlowState.COMPLETED
+            context.current_state = FlowState.COMPLETED
             return {
                 "type": "execution_completed",
                 "message": "Project management tasks completed (no database available).",
@@ -589,8 +595,8 @@ class ConversationFlowManager:
                 )
                 
                 context.current_state = FlowState.COMPLETED
-        return {
-            "type": "execution_completed",
+                return {
+                    "type": "execution_completed",
                     "message": f"Project '{project.name}' created successfully!",
                     "state": context.current_state.value,
                     "data": {"project_id": str(project.id)}

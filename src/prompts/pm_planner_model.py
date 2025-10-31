@@ -17,6 +17,11 @@ class PMStepType(str, Enum):
     CREATE_REPORT = "create_report"
     GANTT_CHART = "gantt_chart"
     DEPENDENCY_ANALYSIS = "dependency_analysis"
+    LIST_TASKS = "list_tasks"
+    LIST_SPRINTS = "list_sprints"
+    GET_PROJECT_STATUS = "get_project_status"
+    UPDATE_TASK = "update_task"
+    UPDATE_SPRINT = "update_sprint"
     UNKNOWN = "unknown"
 
 

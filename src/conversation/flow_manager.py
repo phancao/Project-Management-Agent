@@ -542,6 +542,25 @@ class ConversationFlowManager:
             context.intent = IntentType.RESEARCH_TOPIC
             return await self._execute_intent(IntentType.RESEARCH_TOPIC, context)
         
+        elif step_type_str == "list_tasks":
+            return await self._handle_list_tasks(context)
+        
+        elif step_type_str == "list_sprints":
+            return await self._handle_list_sprints(context)
+        
+        elif step_type_str == "get_project_status":
+            return await self._handle_get_project_status(context)
+        
+        elif step_type_str == "update_task":
+            return await self._handle_update_task(context)
+        
+        elif step_type_str == "update_sprint":
+            return await self._handle_update_sprint(context)
+        
+        elif step_type_str == "create_report":
+            context.intent = IntentType.CREATE_REPORT
+            return await self._handle_create_report(context)
+        
         else:
             logger.warning(f"Unknown or unsupported PM step type: {step_type_str}")
             return {
@@ -1202,6 +1221,223 @@ class ConversationFlowManager:
             return {
                 "type": "error",
                 "message": f"Failed to generate report: {str(e)}",
+            "state": context.current_state.value
+        }
+    
+    async def _handle_list_tasks(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle LIST_TASKS intent - List tasks for a project"""
+        logger.info("Handling LIST_TASKS intent")
+        
+        try:
+            from database.crud import get_tasks_by_project
+            from database.crud import get_project
+            from uuid import UUID
+            
+            project_id = context.gathered_data.get("project_id")
+            
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Project ID is required to list tasks. Please specify which project.",
+                    "state": context.current_state.value
+                }
+            
+            # Verify project exists
+            project = get_project(self.db_session, UUID(project_id))
+            if not project:
+                return {
+                    "type": "error",
+                    "message": f"Project with ID {project_id} not found.",
+                    "state": context.current_state.value
+                }
+            
+            # Fetch tasks
+            tasks = get_tasks_by_project(self.db_session, UUID(project_id))
+            
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "execution_completed",
+                "message": f"Found {len(tasks)} tasks for project '{project.name}'",
+                "state": context.current_state.value,
+                "data": {
+                    "project_name": project.name,
+                    "tasks_count": len(tasks),
+                    "tasks": [
+                        {
+                            "id": str(task.id),
+                            "title": task.title,
+                            "status": task.status,
+                            "priority": task.priority,
+                            "estimated_hours": task.estimated_hours
+                        }
+                        for task in tasks
+                    ]
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"List tasks failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to list tasks: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_list_sprints(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle LIST_SPRINTS intent - List sprints for a project"""
+        logger.info("Handling LIST_SPRINTS intent")
+        
+        try:
+            from database.orm_models import Sprint
+            from database.crud import get_project
+            from uuid import UUID
+            
+            project_id = context.gathered_data.get("project_id")
+            
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Project ID is required to list sprints. Please specify which project.",
+                    "state": context.current_state.value
+                }
+            
+            # Verify project exists
+            project = get_project(self.db_session, UUID(project_id))
+            if not project:
+                return {
+                    "type": "error",
+                    "message": f"Project with ID {project_id} not found.",
+                    "state": context.current_state.value
+                }
+            
+            # Fetch sprints
+            sprints = self.db_session.query(Sprint).filter(Sprint.project_id == UUID(project_id)).all()
+            
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "execution_completed",
+                "message": f"Found {len(sprints)} sprints for project '{project.name}'",
+                "state": context.current_state.value,
+                "data": {
+                    "project_name": project.name,
+                    "sprints_count": len(sprints),
+                    "sprints": [
+                        {
+                            "id": str(sprint.id),
+                            "name": sprint.name,
+                            "status": sprint.status,
+                            "capacity_hours": sprint.capacity_hours,
+                            "planned_hours": sprint.planned_hours,
+                            "utilization": sprint.utilization
+                        }
+                        for sprint in sprints
+                    ]
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"List sprints failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to list sprints: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_get_project_status(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle GET_PROJECT_STATUS intent - Get status of a project"""
+        logger.info("Handling GET_PROJECT_STATUS intent")
+        
+        try:
+            from database.crud import get_project, get_tasks_by_project
+            from database.orm_models import Sprint
+            from uuid import UUID
+            
+            project_id = context.gathered_data.get("project_id")
+            
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Project ID is required. Please specify which project.",
+                    "state": context.current_state.value
+                }
+            
+            # Get project
+            project = get_project(self.db_session, UUID(project_id))
+            if not project:
+                return {
+                    "type": "error",
+                    "message": f"Project with ID {project_id} not found.",
+                    "state": context.current_state.value
+                }
+            
+            # Get tasks and sprints counts
+            tasks = get_tasks_by_project(self.db_session, UUID(project_id))
+            sprints = self.db_session.query(Sprint).filter(Sprint.project_id == UUID(project_id)).all()
+            
+            # Count tasks by status
+            tasks_by_status = {}
+            for task in tasks:
+                status = task.status
+                tasks_by_status[status] = tasks_by_status.get(status, 0) + 1
+            
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "execution_completed",
+                "message": f"Project '{project.name}' status retrieved",
+                "state": context.current_state.value,
+                "data": {
+                    "project_name": project.name,
+                    "status": project.status,
+                    "tasks_count": len(tasks),
+                    "tasks_by_status": tasks_by_status,
+                    "sprints_count": len(sprints)
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Get project status failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to get project status: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_update_task(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle UPDATE_TASK intent - Update a task"""
+        logger.info("Handling UPDATE_TASK intent")
+        
+        # TODO: Implement task update logic
+        context.current_state = FlowState.COMPLETED
+        return {
+            "type": "execution_completed",
+            "message": "Task update functionality coming soon",
+            "state": context.current_state.value
+        }
+    
+    async def _handle_update_sprint(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle UPDATE_SPRINT intent - Update a sprint"""
+        logger.info("Handling UPDATE_SPRINT intent")
+        
+        # TODO: Implement sprint update logic
+        context.current_state = FlowState.COMPLETED
+        return {
+            "type": "execution_completed",
+            "message": "Sprint update functionality coming soon",
             "state": context.current_state.value
         }
     

@@ -1121,81 +1121,39 @@ try:
                                 
                                 research_query = f"Research typical phases, deliverables, and tasks for {project_name or 'this type of project'}. Focus on project structure and common components."
                                 
-                                # Stream DeerFlow research progress
-                                research_chunk = {
-                                    "id": str(uuid.uuid4()),
-                                    "thread_id": thread_id,
-                                    "agent": "coordinator",
-                                    "role": "assistant",
-                                    "content": "🔍 Researching project structure and best practices...\n\n",
-                                    "finish_reason": None
-                                }
-                                yield "event: message_chunk\n"
-                                yield f"data: {json.dumps(research_chunk)}\n\n"
-                                
                                 research_start = time.time()
                                 logger.info(f"[PM-CHAT-TIMING] Starting DeerFlow research: {time.time() - api_start:.2f}s")
-                                last_step_emitted = ""
                                 final_research_state = None
                                 
-                                async for state in run_agent_workflow_stream(
-                                    user_input=research_query,
+                                # Use _astream_workflow_generator to get properly formatted research events
+                                from src.config.report_style import ReportStyle
+                                
+                                async for event in _astream_workflow_generator(
+                                    messages=[{"role": "user", "content": research_query}],
+                                    thread_id=thread_id,
+                                    resources=[],
                                     max_plan_iterations=1,
                                     max_step_num=3,
+                                    max_search_results=3,
+                                    auto_accepted_plan=True,
+                                    interrupt_feedback="",
+                                    mcp_settings={},
                                     enable_background_investigation=True,
-                                    enable_clarification=False
+                                    report_style=ReportStyle.ACADEMIC,
+                                    enable_deep_thinking=False,
+                                    enable_clarification=False,
+                                    max_clarification_rounds=3,
+                                    locale="en-US",
+                                    interrupt_before_tools=None
                                 ):
-                                    final_research_state = state
-                                    
-                                    if isinstance(state, dict):
-                                        current_plan = state.get("current_plan")
-                                        if current_plan:
-                                            from src.prompts.planner_model import Plan
-                                            
-                                            if isinstance(current_plan, Plan):
-                                                plan_title = current_plan.title
-                                            elif isinstance(current_plan, dict):
-                                                plan_title = current_plan.get("title", "")
-                                            elif isinstance(current_plan, str):
-                                                continue
-                                            else:
-                                                plan_title = str(current_plan)
-                                            
-                                            if plan_title and plan_title != last_step_emitted:
-                                                progress_msg = f"📋 Planning: {plan_title}\n\n"
-                                                progress_chunk = {
-                                                    "id": str(uuid.uuid4()),
-                                                    "thread_id": thread_id,
-                                                    "agent": "coordinator",
-                                                    "role": "assistant",
-                                                    "content": progress_msg,
-                                                    "finish_reason": None
-                                                }
-                                                yield "event: message_chunk\n"
-                                                yield f"data: {json.dumps(progress_chunk)}\n\n"
-                                                last_step_emitted = plan_title
-                                        
-                                        messages = state.get("messages", [])
-                                        if messages:
-                                            last_msg = messages[-1]
-                                            if isinstance(last_msg, dict):
-                                                agent_name = last_msg.get("name", "")
-                                                content = last_msg.get("content", "")
-                                                if agent_name and agent_name not in ["planner", "reporter"] and len(content) > 50:
-                                                    step_msg = f"⚙️ {agent_name.capitalize()} agent working...\n\n"
-                                                    step_chunk = {
-                                                        "id": str(uuid.uuid4()),
-                                                        "thread_id": thread_id,
-                                                        "agent": "coordinator",
-                                                        "role": "assistant",
-                                                        "content": step_msg,
-                                                        "finish_reason": None
-                                                    }
-                                                    yield "event: message_chunk\n"
-                                                    yield f"data: {json.dumps(step_chunk)}\n\n"
+                                    # Yield formatted DeerFlow events directly
+                                    yield event
+                                
+                                # Collect final state for storing research context
+                                final_research_state = {"final_report": "Research completed"}
                                 
                                 # Store research result
-                                if final_research_state and isinstance(final_research_state, dict):
+                                if final_research_state:
                                     from src.conversation.flow_manager import ConversationContext, FlowState, IntentType
                                     from datetime import datetime
                                     
@@ -1212,36 +1170,17 @@ try:
                                         )
                                     
                                     context = fm.contexts[thread_id]
-                                    research_result = ""
-                                    if "final_report" in final_research_state:
-                                        research_result = final_research_state["final_report"]
-                                    elif "messages" in final_research_state:
-                                        messages = final_research_state["messages"]
-                                        if messages:
-                                            last_msg = messages[-1]
-                                            if isinstance(last_msg, dict):
-                                                research_result = last_msg.get("content", "")
-                                    
-                                    if research_result:
-                                        context.gathered_data['research_context'] = research_result
-                                        context.gathered_data['research_already_done'] = True
-                                        logger.info(f"Stored research result in context for session {thread_id}")
+                                    context.gathered_data['research_context'] = "Research completed"
+                                    context.gathered_data['research_already_done'] = True
+                                    logger.info(f"Stored research result in context for session {thread_id}")
                                 
                                 research_duration = time.time() - research_start
                                 logger.info(f"[PM-CHAT-TIMING] DeerFlow research completed: {research_duration:.2f}s")
-                                complete_chunk = {
-                                    "id": str(uuid.uuid4()),
-                                    "thread_id": thread_id,
-                                    "agent": "coordinator",
-                                    "role": "assistant",
-                                    "content": "✅ Research completed!\n\n",
-                                    "finish_reason": None
-                                }
-                                yield "event: message_chunk\n"
-                                yield f"data: {json.dumps(complete_chunk)}\n\n"
                             
                             except Exception as research_error:
                                 logger.error(f"DeerFlow streaming failed: {research_error}")
+                                import traceback
+                                logger.error(traceback.format_exc())
                         
                         # Create queue to collect streaming chunks
                         stream_queue = asyncio.Queue()

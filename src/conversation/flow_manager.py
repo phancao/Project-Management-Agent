@@ -572,9 +572,31 @@ class ConversationFlowManager:
             return await self._handle_get_project_status(context)
         
         elif step_type_str == "update_task":
+            # Extract update data from the last user message before execution
+            if context.conversation_history:
+                last_message = context.conversation_history[-1].get("content", "")
+                if last_message:
+                    update_data = await self.data_extractor.extract_project_data(
+                        message=last_message,
+                        intent=IntentType.UPDATE_TASK,
+                        gathered_data=context.gathered_data
+                    )
+                    context.gathered_data.update(update_data)
+                    logger.info(f"Extracted update_task data: {update_data}")
             return await self._handle_update_task(context)
         
         elif step_type_str == "update_sprint":
+            # Extract update data from the last user message before execution
+            if context.conversation_history:
+                last_message = context.conversation_history[-1].get("content", "")
+                if last_message:
+                    update_data = await self.data_extractor.extract_project_data(
+                        message=last_message,
+                        intent=IntentType.UPDATE_SPRINT,
+                        gathered_data=context.gathered_data
+                    )
+                    context.gathered_data.update(update_data)
+                    logger.info(f"Extracted update_sprint data: {update_data}")
             return await self._handle_update_sprint(context)
         
         elif step_type_str == "create_report":
@@ -1507,9 +1529,14 @@ class ConversationFlowManager:
             if task_id:
                 task = get_task(self.db_session, UUID(task_id))
             elif task_title:
-                # Search for task by title
+                # Search for task by title (exact match first, then partial)
                 from database.orm_models import Task
-                tasks = self.db_session.query(Task).filter(Task.title.ilike(f"%{task_title}%")).all()
+                # Try exact match first
+                tasks = self.db_session.query(Task).filter(Task.title == task_title).all()
+                # If no exact match, try partial match
+                if not tasks:
+                    tasks = self.db_session.query(Task).filter(Task.title.ilike(f"%{task_title}%")).all()
+                
                 if len(tasks) == 1:
                     task = tasks[0]
                 elif len(tasks) > 1:
@@ -1600,9 +1627,14 @@ class ConversationFlowManager:
             if sprint_id:
                 sprint = get_sprint(self.db_session, UUID(sprint_id))
             elif sprint_name:
-                # Search for sprint by name
+                # Search for sprint by name (exact match first, then partial)
                 from database.orm_models import Sprint
-                sprints = self.db_session.query(Sprint).filter(Sprint.name.ilike(f"%{sprint_name}%")).all()
+                # Try exact match first
+                sprints = self.db_session.query(Sprint).filter(Sprint.name == sprint_name).all()
+                # If no exact match, try partial match
+                if not sprints:
+                    sprints = self.db_session.query(Sprint).filter(Sprint.name.ilike(f"%{sprint_name}%")).all()
+                
                 if len(sprints) == 1:
                     sprint = sprints[0]
                 elif len(sprints) > 1:

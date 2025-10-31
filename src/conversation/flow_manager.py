@@ -20,6 +20,8 @@ class IntentType(Enum):
     PLAN_TASKS = "plan_tasks"
     RESEARCH_TOPIC = "research_topic"
     UPDATE_PROJECT = "update_project"
+    UPDATE_TASK = "update_task"
+    UPDATE_SPRINT = "update_sprint"
     GET_STATUS = "get_status"
     HELP = "help"
     # New Project Management intents
@@ -31,6 +33,9 @@ class IntentType(Enum):
     TASK_BREAKDOWN = "task_breakdown"
     DEPENDENCY_ANALYSIS = "dependency_analysis"
     GANTT_CHART = "gantt_chart"
+    LIST_TASKS = "list_tasks"
+    LIST_SPRINTS = "list_sprints"
+    GET_PROJECT_STATUS = "get_project_status"
     UNKNOWN = "unknown"
 
 class FlowState(Enum):
@@ -269,6 +274,12 @@ class ConversationFlowManager:
             IntentType.UPDATE_PROJECT: [
                 "project_id", "update_type", "new_values"
             ],
+            IntentType.UPDATE_TASK: [
+                # Can work with task_id OR task_title
+            ],
+            IntentType.UPDATE_SPRINT: [
+                # Can work with sprint_id OR sprint_name
+            ],
             IntentType.GET_STATUS: [
                 "project_id"
             ],
@@ -279,6 +290,15 @@ class ConversationFlowManager:
                 "project_id"
             ],
             IntentType.CREATE_REPORT: [
+                "project_id"
+            ],
+            IntentType.LIST_TASKS: [
+                "project_id"
+            ],
+            IntentType.LIST_SPRINTS: [
+                "project_id"
+            ],
+            IntentType.GET_PROJECT_STATUS: [
                 "project_id"
             ],
             IntentType.HELP: [],
@@ -1729,6 +1749,13 @@ class IntentClassifier:
                 "update project", "modify project", "change project",
                 "edit project"
             ],
+            IntentType.UPDATE_TASK: [
+                "update task", "modify task", "change task", "edit task",
+                "mark task", "complete task", "finish task"
+            ],
+            IntentType.UPDATE_SPRINT: [
+                "update sprint", "modify sprint", "change sprint", "edit sprint"
+            ],
             IntentType.GET_STATUS: [
                 "status", "progress", "how is", "project status"
             ],
@@ -1775,7 +1802,12 @@ class IntentClassifier:
                 "plan_tasks": "User wants to plan or break down tasks",
                 "research_topic": "User wants to research a topic",
                 "update_project": "User wants to modify an existing project",
+                "update_task": "User wants to update or modify a task (status, priority, title, etc.)",
+                "update_sprint": "User wants to update or modify a sprint (status, name, capacity, etc.)",
                 "get_status": "User wants to check project status or progress",
+                "get_project_status": "User wants to get project status and summary",
+                "list_tasks": "User wants to list or show tasks for a project",
+                "list_sprints": "User wants to list or show sprints for a project",
                 "create_wbs": "User wants to create a Work Breakdown Structure (WBS)",
                 "sprint_planning": "User wants to plan a sprint or sprint cycle",
                 "assign_tasks": "User wants to assign tasks to team members",

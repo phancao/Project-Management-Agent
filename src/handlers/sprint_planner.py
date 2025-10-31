@@ -214,18 +214,28 @@ class SprintPlanner:
         }
     
     async def _get_available_tasks(self, project_id: str) -> List[Dict[str, Any]]:
-        """Get available (unassigned) tasks from project"""
+        """Get available (unassigned) tasks from project, excluding tasks already in sprints"""
         if not self.db_session:
             logger.warning("No db_session available for fetching tasks")
             return []
         
         try:
             from database.crud import get_tasks_by_project
+            from database.orm_models import SprintTask
             from uuid import UUID
             
             logger.info(f"Fetching tasks for project_id: {project_id}")
             tasks = get_tasks_by_project(self.db_session, UUID(project_id), status="todo")
             logger.info(f"Found {len(tasks)} tasks with status='todo'")
+            
+            # Get tasks already assigned to sprints
+            assigned_task_ids = set()
+            try:
+                sprint_tasks = self.db_session.query(SprintTask.task_id).all()
+                assigned_task_ids = {str(sprint_task[0]) for sprint_task in sprint_tasks}
+                logger.info(f"Found {len(assigned_task_ids)} tasks already assigned to sprints")
+            except Exception as e:
+                logger.warning(f"Could not fetch sprint tasks: {e}")
             
             result = [
                 {
@@ -236,8 +246,9 @@ class SprintPlanner:
                     "priority": task.priority or "medium"
                 }
                 for task in tasks
+                if str(task.id) not in assigned_task_ids
             ]
-            logger.info(f"Returning {len(result)} tasks for sprint planning")
+            logger.info(f"Returning {len(result)} available tasks for sprint planning")
             return result
         except Exception as e:
             logger.error(f"Could not fetch tasks: {e}")

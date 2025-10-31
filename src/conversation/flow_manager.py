@@ -1113,15 +1113,19 @@ class ConversationFlowManager:
             # Generate sprint plan
             sprint_plan = await planner.plan_sprint(
                 project_id=project_id,
-                sprint_name=sprint_name,
+                sprint_name="",  # Let LLM generate the name
                 duration_weeks=duration_weeks,
                 team_capacity_hours_per_day=team_capacity
             )
             
             context.current_state = FlowState.COMPLETED
+            
+            # Use LLM-generated sprint name
+            actual_sprint_name = sprint_plan.get('sprint_name', 'Sprint')
+            
             return {
                 "type": "execution_completed",
-                "message": f"Sprint '{sprint_name}' planned successfully! Assigned {sprint_plan['tasks_assigned']} tasks.",
+                "message": f"Sprint '{actual_sprint_name}' planned successfully! Assigned {sprint_plan['tasks_assigned']} tasks.",
                 "state": context.current_state.value,
                 "data": sprint_plan
             }

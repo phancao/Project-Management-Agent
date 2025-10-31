@@ -102,12 +102,18 @@ class SprintPlanner:
         if self.llm:
             try:
                 logger.info("Using LLM for sprint planning")
+                # Get project context
+                project_name = self._get_project_name(project_id)
+                project_description = self._get_project_description(project_id)
+                
                 sprint_plan = await self._generate_sprint_plan_with_llm(
                     available_tasks=available_tasks,
                     team_members=team_members,
                     total_capacity=total_capacity,
                     duration_days=duration_days,
                     project_id=project_id,
+                    project_name=project_name,
+                    project_description=project_description,
                     default_sprint_name=sprint_name
                 )
                 # Convert LLM plan to SprintTask objects
@@ -379,6 +385,32 @@ class SprintPlanner:
         
         return tasks
     
+    def _get_project_name(self, project_id: str) -> str:
+        """Get project name"""
+        if not self.db_session:
+            return ""
+        try:
+            from database.crud import get_project
+            from uuid import UUID
+            project = get_project(self.db_session, UUID(project_id))
+            return project.name if project else ""
+        except Exception as e:
+            logger.warning(f"Could not get project name: {e}")
+            return ""
+    
+    def _get_project_description(self, project_id: str) -> str:
+        """Get project description"""
+        if not self.db_session:
+            return ""
+        try:
+            from database.crud import get_project
+            from uuid import UUID
+            project = get_project(self.db_session, UUID(project_id))
+            return project.description or ""
+        except Exception as e:
+            logger.warning(f"Could not get project description: {e}")
+            return ""
+    
     async def _generate_sprint_plan_with_llm(
         self,
         available_tasks: List[Dict[str, Any]],
@@ -386,6 +418,8 @@ class SprintPlanner:
         total_capacity: float,
         duration_days: int,
         project_id: str,
+        project_name: str = "",
+        project_description: str = "",
         default_sprint_name: str = ""
     ) -> Dict[str, Any]:
         """
@@ -396,7 +430,9 @@ class SprintPlanner:
                 available_tasks=available_tasks,
                 team_members=team_members,
                 total_capacity=total_capacity,
-                duration_days=duration_days
+                duration_days=duration_days,
+                project_name=project_name,
+                project_description=project_description
             )
             
             # Call LLM to generate sprint plan
@@ -459,7 +495,9 @@ class SprintPlanner:
         available_tasks: List[Dict[str, Any]],
         team_members: List[str],
         total_capacity: float,
-        duration_days: int
+        duration_days: int,
+        project_name: str = "",
+        project_description: str = ""
     ) -> List[Dict[str, str]]:
         """Build prompt for LLM to generate sprint plan"""
         from src.prompts.template import get_prompt_template
@@ -467,13 +505,19 @@ class SprintPlanner:
         # Load the sprint planner prompt template
         system_prompt = get_prompt_template("sprint_planner", locale="en-US")
         
-        # Build user message with task details
+        # Build user message with task details and context
+        project_context = ""
+        if project_name:
+            project_context = f"\n\nProject: {project_name}"
+            if project_description:
+                project_context += f"\nDescription: {project_description}"
+        
         tasks_section = "\n".join([
             f"- ID: {task['id']}, Title: {task['title']}, Hours: {task['estimated_hours']}, Priority: {task['priority']}"
             for task in available_tasks
         ])
         
-        user_message = f"""Create a sprint plan for these available tasks:
+        user_message = f"""Create a sprint plan for these available tasks:{project_context}
 
 Available Tasks ({len(available_tasks)} total):
 {tasks_section}
@@ -482,6 +526,12 @@ Team Members: {', '.join(team_members)}
 Total Sprint Capacity: {total_capacity} hours
 Duration: {duration_days} days
 Capacity per member per day: {total_capacity / (len(team_members) * duration_days) if len(team_members) > 0 else 0:.1f} hours
+
+Based on the project context and available tasks, analyze which tasks should be prioritized for this sprint. Consider:
+- Dependencies: Which tasks should be done first?
+- Value delivery: What provides the most value to the project?
+- Coherence: Which tasks form a logical sprint goal?
+- Risk mitigation: What should be tackled early to reduce risks?
 
 Please select tasks that fit within the capacity and create a goal-oriented sprint name based on the selected tasks."""
         

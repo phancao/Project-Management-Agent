@@ -23,6 +23,11 @@ Available step types:
 - **create_wbs**: Generate a Work Breakdown Structure
 - **sprint_planning**: Plan sprints and assign tasks
 - **task_assignment**: Assign tasks to team members
+- **list_tasks**: List/show all tasks for a project
+- **list_sprints**: List/show all sprints for a project
+- **get_project_status**: Get status and summary of a project
+- **update_task**: Update a task's properties
+- **update_sprint**: Update a sprint's properties
 - **research**: Research a topic using DeerFlow
 - **create_report**: Generate project reports
 - **gantt_chart**: Create timeline/Gantt chart
@@ -134,6 +139,66 @@ Output:
       "step_type": "sprint_planning",
       "title": "Lập kế hoạch Sprint 2",
       "description": "Tạo sprint 2 tuần thứ hai với các tasks còn lại",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 4: List Tasks Query
+
+User: "Show all tasks for this project"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will retrieve and display all tasks for the specified project.",
+  "steps": [
+    {
+      "step_type": "list_tasks",
+      "title": "List All Tasks",
+      "description": "Retrieve and display all tasks for this project",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 5: Project Status Query
+
+User: "What's the status of this project?"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will retrieve the current status and summary statistics for this project.",
+  "steps": [
+    {
+      "step_type": "get_project_status",
+      "title": "Get Project Status",
+      "description": "Retrieve project status, task counts, and sprint information",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 6: List Sprints Query
+
+User: "List all sprints"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will retrieve and display all sprints for this project.",
+  "steps": [
+    {
+      "step_type": "list_sprints",
+      "title": "List All Sprints",
+      "description": "Retrieve and display all sprints for this project",
       "requires_context": true
     }
   ]

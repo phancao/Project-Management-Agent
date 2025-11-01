@@ -84,6 +84,16 @@ class ConversationFlowManager:
         self.data_extractor = DataExtractor()
         self.db_session = db_session
         
+        # Initialize PM provider (OpenProject, JIRA, etc.)
+        self.pm_provider = None
+        try:
+            from src.pm_providers import build_pm_provider
+            self.pm_provider = build_pm_provider(db_session=db_session)
+            if self.pm_provider:
+                logger.info(f"PM Provider initialized: {self.pm_provider.__class__.__name__}")
+        except Exception as e:
+            logger.warning(f"Could not initialize PM provider: {e}")
+        
         # Initialize self-learning system
         self.self_learning = None
         if db_session:
@@ -2099,3 +2109,63 @@ Return only valid JSON:"""
         }
         
         return descriptions.get(intent, "- No specific fields defined")
+    
+    # ==================== PM Provider Helper Methods ====================
+    
+    def _db_project_to_pm(self, project) -> 'PMProject':
+        """Convert internal Project model to PMProject"""
+        from src.pm_providers.models import PMProject
+        from datetime import date, datetime
+        
+        return PMProject(
+            id=str(project.id) if hasattr(project, 'id') else None,
+            name=project.name,
+            description=project.description,
+            status=project.status if hasattr(project, 'status') else None,
+            created_at=project.created_at if hasattr(project, 'created_at') else None,
+            updated_at=project.updated_at if hasattr(project, 'updated_at') else None
+        )
+    
+    def _db_task_to_pm(self, task) -> 'PMTask':
+        """Convert internal Task model to PMTask"""
+        from src.pm_providers.models import PMTask
+        
+        return PMTask(
+            id=str(task.id) if hasattr(task, 'id') else None,
+            title=task.title,
+            description=task.description,
+            status=task.status,
+            priority=task.priority,
+            project_id=str(task.project_id) if hasattr(task, 'project_id') else None,
+            estimated_hours=task.estimated_hours,
+            due_date=task.due_date if hasattr(task, 'due_date') else None,
+            created_at=task.created_at if hasattr(task, 'created_at') else None,
+            updated_at=task.updated_at if hasattr(task, 'updated_at') else None
+        )
+    
+    def _pm_project_to_db(self, pm_project: 'PMProject'):
+        """Convert PMProject to internal Project model"""
+        from database.orm_models import Project
+        from datetime import datetime
+        
+        return Project(
+            name=pm_project.name,
+            description=pm_project.description or "",
+            status=pm_project.status,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+    
+    def _pm_task_to_db(self, pm_task: 'PMTask', project_id=None):
+        """Convert PMTask to internal Task model"""
+        from database.orm_models import Task
+        from uuid import UUID
+        
+        return Task(
+            project_id=UUID(project_id) if project_id else None,
+            title=pm_task.title,
+            description=pm_task.description,
+            status=pm_task.status or "todo",
+            priority=pm_task.priority or "medium",
+            estimated_hours=pm_task.estimated_hours
+        )

@@ -269,13 +269,8 @@ class ConversationFlowManager:
         return self.contexts[session_id]
     
     def _should_use_pm_provider(self) -> bool:
-        """Check if PM provider should be used instead of internal DB"""
-        if not self.pm_provider:
-            return False
-        
-        # Check if provider is internal or external
-        provider_type = self.pm_provider.__class__.__name__
-        return provider_type not in ('InternalPMProvider', None)
+        """Check if PM provider should be used - always True since we removed internal DB"""
+        return self.pm_provider is not None
     
     def _get_required_fields_for_intent(self, intent: IntentType) -> List[str]:
         """Get required fields for specific intent"""
@@ -1302,39 +1297,18 @@ class ConversationFlowManager:
                     "state": context.current_state.value
                 }
             
-            # Use PM provider if configured
-            if self._should_use_pm_provider():
-                # Use external PM provider (OpenProject, JIRA, etc.)
-                from src.pm_providers.models import PMTask
-                
-                project = await self.pm_provider.get_project(project_id)
-                if not project:
-                    return {
-                        "type": "error",
-                        "message": f"Project with ID {project_id} not found.",
-                        "state": context.current_state.value
-                    }
-                
-                pm_tasks = await self.pm_provider.list_tasks(project_id=project_id)
-                
-                # Convert PM tasks to internal format for display
-                tasks = pm_tasks
-                project_name = project.name
-            else:
-                # Use internal database
-                from database.crud import get_tasks_by_project, get_project
-                from uuid import UUID
-                
-                project = get_project(self.db_session, UUID(project_id))
-                if not project:
-                    return {
-                        "type": "error",
-                        "message": f"Project with ID {project_id} not found.",
-                        "state": context.current_state.value
-                    }
-                
-                tasks = get_tasks_by_project(self.db_session, UUID(project_id))
-                project_name = project.name
+            # Use PM provider (OpenProject, JIRA, etc.)
+            project = await self.pm_provider.get_project(project_id)
+            if not project:
+                return {
+                    "type": "error",
+                    "message": f"Project with ID {project_id} not found.",
+                    "state": context.current_state.value
+                }
+            
+            pm_tasks = await self.pm_provider.list_tasks(project_id=project_id)
+            tasks = pm_tasks
+            project_name = project.name
             
             context.current_state = FlowState.COMPLETED
             
@@ -1399,36 +1373,18 @@ class ConversationFlowManager:
                     "state": context.current_state.value
                 }
             
-            # Use PM provider if configured
-            if self._should_use_pm_provider():
-                # Use external PM provider (OpenProject, JIRA, etc.)
-                project = await self.pm_provider.get_project(project_id)
-                if not project:
-                    return {
-                        "type": "error",
-                        "message": f"Project with ID {project_id} not found.",
-                        "state": context.current_state.value
-                    }
-                
-                pm_sprints = await self.pm_provider.list_sprints(project_id=project_id)
-                sprints = pm_sprints
-                project_name = project.name
-            else:
-                # Use internal database
-                from database.orm_models import Sprint
-                from database.crud import get_project
-                from uuid import UUID
-                
-                project = get_project(self.db_session, UUID(project_id))
-                if not project:
-                    return {
-                        "type": "error",
-                        "message": f"Project with ID {project_id} not found.",
-                        "state": context.current_state.value
-                    }
-                
-                sprints = self.db_session.query(Sprint).filter(Sprint.project_id == UUID(project_id)).all()
-                project_name = project.name
+            # Use PM provider (OpenProject, JIRA, etc.)
+            project = await self.pm_provider.get_project(project_id)
+            if not project:
+                return {
+                    "type": "error",
+                    "message": f"Project with ID {project_id} not found.",
+                    "state": context.current_state.value
+                }
+            
+            pm_sprints = await self.pm_provider.list_sprints(project_id=project_id)
+            sprints = pm_sprints
+            project_name = project.name
             
             context.current_state = FlowState.COMPLETED
             
@@ -1605,9 +1561,8 @@ class ConversationFlowManager:
                     "state": context.current_state.value
                 }
             
-            # Use PM provider if configured and we have task_id
-            if self._should_use_pm_provider() and task_id:
-                # Use external PM provider
+            # Use PM provider - require task_id (no title lookup support)
+            if task_id:
                 task = await self.pm_provider.get_task(task_id)
                 if not task:
                     return {
@@ -1619,41 +1574,12 @@ class ConversationFlowManager:
                 updated_task = await self.pm_provider.update_task(task_id, update_fields)
                 task_title_result = updated_task.title if hasattr(updated_task, 'title') else task_title
             else:
-                # Use internal database
-                from database.crud import get_task, update_task
-                from uuid import UUID
-                
-                # If only title provided, need to find task
-                task = None
-                if task_id:
-                    task = get_task(self.db_session, UUID(task_id))
-                elif task_title:
-                    # Search for task by title (exact match first, then partial)
-                    from database.orm_models import Task
-                    # Try exact match first
-                    tasks = self.db_session.query(Task).filter(Task.title == task_title).all()
-                    # If no exact match, try partial match
-                    if not tasks:
-                        tasks = self.db_session.query(Task).filter(Task.title.ilike(f"%{task_title}%")).all()
-                    
-                    if len(tasks) == 1:
-                        task = tasks[0]
-                    elif len(tasks) > 1:
-                        return {
-                            "type": "error",
-                            "message": f"Multiple tasks found with title '{task_title}'. Please specify task ID.",
-                            "state": context.current_state.value
-                        }
-                
-                if not task:
-                    return {
-                        "type": "error",
-                        "message": f"Task not found. Please check the task ID or title.",
-                        "state": context.current_state.value
-                    }
-                
-                updated_task = update_task(self.db_session, task.id, **update_fields)
-                task_title_result = updated_task.title if hasattr(updated_task, 'title') else task_title
+                # Title lookup not supported with PM providers
+                return {
+                    "type": "error",
+                    "message": f"Please specify task ID to update. Title lookup is not supported.",
+                    "state": context.current_state.value
+                }
             
             context.current_state = FlowState.COMPLETED
             
@@ -1734,9 +1660,8 @@ class ConversationFlowManager:
                     "state": context.current_state.value
                 }
             
-            # Use PM provider if configured and we have sprint_id
-            if self._should_use_pm_provider() and sprint_id:
-                # Use external PM provider
+            # Use PM provider - require sprint_id (no name lookup support)
+            if sprint_id:
                 sprint = await self.pm_provider.get_sprint(sprint_id)
                 if not sprint:
                     return {
@@ -1748,41 +1673,12 @@ class ConversationFlowManager:
                 updated_sprint = await self.pm_provider.update_sprint(sprint_id, update_fields)
                 sprint_name_result = updated_sprint.name if hasattr(updated_sprint, 'name') else sprint_name
             else:
-                # Use internal database
-                from database.crud import get_sprint, update_sprint
-                from uuid import UUID
-                
-                # If only name provided, need to find sprint
-                sprint = None
-                if sprint_id:
-                    sprint = get_sprint(self.db_session, UUID(sprint_id))
-                elif sprint_name:
-                    # Search for sprint by name (exact match first, then partial)
-                    from database.orm_models import Sprint
-                    # Try exact match first
-                    sprints = self.db_session.query(Sprint).filter(Sprint.name == sprint_name).all()
-                    # If no exact match, try partial match
-                    if not sprints:
-                        sprints = self.db_session.query(Sprint).filter(Sprint.name.ilike(f"%{sprint_name}%")).all()
-                    
-                    if len(sprints) == 1:
-                        sprint = sprints[0]
-                    elif len(sprints) > 1:
-                        return {
-                            "type": "error",
-                            "message": f"Multiple sprints found with name '{sprint_name}'. Please specify sprint ID.",
-                            "state": context.current_state.value
-                        }
-                
-                if not sprint:
-                    return {
-                        "type": "error",
-                        "message": f"Sprint not found. Please check the sprint ID or name.",
-                        "state": context.current_state.value
-                    }
-                
-                updated_sprint = update_sprint(self.db_session, sprint.id, **update_fields)
-                sprint_name_result = updated_sprint.name if hasattr(updated_sprint, 'name') else sprint_name
+                # Name lookup not supported with PM providers
+                return {
+                    "type": "error",
+                    "message": f"Please specify sprint ID to update. Name lookup is not supported.",
+                    "state": context.current_state.value
+                }
             
             context.current_state = FlowState.COMPLETED
             

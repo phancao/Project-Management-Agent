@@ -100,6 +100,9 @@ load_examples()
 in_memory_store = InMemoryStore()
 graph = build_graph_with_memory()
 
+# Global ConversationFlowManager singleton to maintain session contexts
+flow_manager = None
+
 
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
@@ -1071,8 +1074,12 @@ try:
             db = next(db_gen)
             
             try:
-                # Get flow manager with db session
-                fm = ConversationFlowManager(db_session=db)
+                # Use global flow manager singleton to maintain session contexts
+                global flow_manager
+                if flow_manager is None:
+                    flow_manager = ConversationFlowManager(db_session=db)
+                    logger.info("Created global ConversationFlowManager singleton")
+                fm = flow_manager
                 
                 async def generate_stream() -> AsyncIterator[str]:
                     """Generate SSE stream of chat responses with progress updates"""
@@ -1196,8 +1203,16 @@ try:
                                 return response
                             except Exception as e:
                                 logger.error(f"Error in process_message: {e}")
+                                import traceback
+                                logger.error(traceback.format_exc())
+                                error_msg = f"❌ Error processing request: {str(e)}"
+                                await stream_callback(error_msg)
                                 await stream_queue.put(None)
-                                return None
+                                return {
+                                    "type": "error",
+                                    "message": error_msg,
+                                    "state": "error"
+                                }
                         
                         process_task = asyncio.create_task(process_with_streaming())
                         logger.info(f"[PM-CHAT-TIMING] process_task started: {time.time() - api_start:.2f}s")
@@ -1223,18 +1238,34 @@ try:
                                     break
                                 continue
                         
-                        response = await process_task
+                        try:
+                            response = await process_task
+                        except Exception as task_error:
+                            logger.error(f"Task execution failed: {task_error}")
+                            import traceback
+                            logger.error(traceback.format_exc())
+                            response = {
+                                "type": "error",
+                                "message": f"❌ Task execution failed: {str(task_error)}",
+                                "state": "error"
+                            }
+                        
                         if response:
                             response_message = response.get('message', '')
                             response_state = response.get('state', 'complete')
+                            response_type = response.get('type', 'execution_completed')
                             finish_reason = None
-                            if response_state == 'complete':
+                            if response_type == 'error':
+                                finish_reason = "error"
+                            elif response_state == 'complete' or response_state == 'completed':
                                 finish_reason = "stop"
                             elif '?' in response_message or 'specify' in response_message.lower():
                                 finish_reason = "interrupt"
+                            else:
+                                finish_reason = "stop"
                         else:
-                            finish_reason = "stop"
-                            response_message = ""
+                            finish_reason = "error"
+                            response_message = "❌ No response received from processing"
                         
                         chunk_data = {
                             "id": str(uuid.uuid4()),

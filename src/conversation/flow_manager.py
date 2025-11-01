@@ -33,9 +33,13 @@ class IntentType(Enum):
     TASK_BREAKDOWN = "task_breakdown"
     DEPENDENCY_ANALYSIS = "dependency_analysis"
     GANTT_CHART = "gantt_chart"
+    LIST_PROJECTS = "list_projects"
     LIST_TASKS = "list_tasks"
     LIST_SPRINTS = "list_sprints"
     GET_PROJECT_STATUS = "get_project_status"
+    SWITCH_PROJECT = "switch_project"
+    SWITCH_SPRINT = "switch_sprint"
+    SWITCH_TASK = "switch_task"
     UNKNOWN = "unknown"
 
 class FlowState(Enum):
@@ -149,7 +153,7 @@ class ConversationFlowManager:
             initial_data = await self.data_extractor.extract_project_data(
                 message=message,
                 intent=IntentType.CREATE_WBS,  # Use WBS as default for extraction
-                gathered_data={}
+                gathered_data=context.gathered_data.copy()  # Pass existing context
             )
             context.gathered_data.update(initial_data)
             logger.info(f"Extracted initial data: {initial_data}")
@@ -301,6 +305,18 @@ class ConversationFlowManager:
             ],
             IntentType.GET_PROJECT_STATUS: [
                 "project_id"
+            ],
+            IntentType.LIST_PROJECTS: [
+                # No required fields, just lists all projects
+            ],
+            IntentType.SWITCH_PROJECT: [
+                # Can work with project_id OR project_name
+            ],
+            IntentType.SWITCH_SPRINT: [
+                # Can work with sprint_id OR sprint_name (requires project context)
+            ],
+            IntentType.SWITCH_TASK: [
+                # Can work with task_id OR task_title (requires project context)
             ],
             IntentType.HELP: [],
             IntentType.UNKNOWN: []
@@ -523,7 +539,10 @@ class ConversationFlowManager:
             if stream_callback:
                 await stream_callback(step_msg)
         
-        context.current_state = FlowState.COMPLETED
+        # Don't override state if a switch handler has set it back to INTENT_DETECTION
+        if context.current_state != FlowState.INTENT_DETECTION:
+            context.current_state = FlowState.COMPLETED
+        
         return {
             "type": "execution_completed",
             "message": "\n".join(response_parts),
@@ -562,6 +581,18 @@ class ConversationFlowManager:
         elif step_type_str == "research":
             context.intent = IntentType.RESEARCH_TOPIC
             return await self._execute_intent(IntentType.RESEARCH_TOPIC, context)
+        
+        elif step_type_str == "switch_project":
+            return await self._handle_switch_project(context)
+        
+        elif step_type_str == "switch_sprint":
+            return await self._handle_switch_sprint(context)
+        
+        elif step_type_str == "switch_task":
+            return await self._handle_switch_task(context)
+        
+        elif step_type_str == "list_projects":
+            return await self._handle_list_projects(context)
         
         elif step_type_str == "list_tasks":
             return await self._handle_list_tasks(context)
@@ -1267,6 +1298,309 @@ class ConversationFlowManager:
             "state": context.current_state.value
         }
     
+    async def _handle_switch_project(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle SWITCH_PROJECT intent - Set the active project context"""
+        logger.info("Handling SWITCH_PROJECT intent")
+        
+        try:
+            project_id = context.gathered_data.get("project_id")
+            project_name = context.gathered_data.get("project_name")
+            
+            # If project_id not provided, try to find by project_name
+            if not project_id:
+                if project_name:
+                    # Search for project by name
+                    all_projects = await self.pm_provider.list_projects()
+                    matching_projects = [p for p in all_projects if p.name.lower() == project_name.lower()]
+                    
+                    if len(matching_projects) == 0:
+                        return {
+                            "type": "error",
+                            "message": f"Project '{project_name}' not found.",
+                            "state": context.current_state.value
+                        }
+                    elif len(matching_projects) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple projects found with name '{project_name}'. Please specify project ID.",
+                            "state": context.current_state.value
+                        }
+                    else:
+                        project_id = str(matching_projects[0].id)
+                        project_name = matching_projects[0].name
+                        logger.info(f"Found project '{project_name}' with ID: {project_id}")
+                else:
+                    return {
+                        "type": "error",
+                        "message": "Project ID or name is required to switch project. Please specify which project.",
+                        "state": context.current_state.value
+                    }
+            else:
+                # Get project to retrieve name
+                project = await self.pm_provider.get_project(project_id)
+                if not project:
+                    return {
+                        "type": "error",
+                        "message": f"Project with ID {project_id} not found.",
+                        "state": context.current_state.value
+                    }
+                project_name = project.name
+            
+            # Store active project in context for future commands
+            context.gathered_data['active_project_id'] = project_id
+            context.gathered_data['active_project_name'] = project_name
+            
+            # Reset state to INTENT_DETECTION so next message can process normally
+            context.current_state = FlowState.INTENT_DETECTION
+            
+            return {
+                "type": "execution_completed",
+                "message": f"✅ Switched to project: **{project_name}** (ID: `{project_id}`)\n\nNow I'll use this project as the default for all your commands. You can ask me to:\n- List tasks: 'show all tasks'\n- List sprints: 'list sprints'\n- Check status: 'what's the status?'\n- Update tasks: 'mark task X as done'",
+                "state": "complete",
+                "data": {
+                    "project_id": project_id,
+                    "project_name": project_name
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Switch project failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to switch project: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_switch_sprint(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle SWITCH_SPRINT intent - Set the active sprint context"""
+        logger.info("Handling SWITCH_SPRINT intent")
+        
+        try:
+            # Get active project first
+            project_id = context.gathered_data.get("active_project_id")
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Please switch to a project first before selecting a sprint.",
+                    "state": context.current_state.value
+                }
+            
+            sprint_id = context.gathered_data.get("sprint_id")
+            sprint_name = context.gathered_data.get("sprint_name")
+            
+            # If sprint_id not provided, try to find by sprint_name
+            if not sprint_id:
+                if sprint_name:
+                    # Search for sprint by name within the project
+                    all_sprints = await self.pm_provider.list_sprints(project_id=project_id)
+                    matching_sprints = [s for s in all_sprints if s.name and s.name.lower() == sprint_name.lower()]
+                    
+                    if len(matching_sprints) == 0:
+                        return {
+                            "type": "error",
+                            "message": f"Sprint '{sprint_name}' not found in this project.",
+                            "state": context.current_state.value
+                        }
+                    elif len(matching_sprints) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple sprints found with name '{sprint_name}'. Please specify sprint ID.",
+                            "state": context.current_state.value
+                        }
+                    else:
+                        sprint_id = str(matching_sprints[0].id)
+                        sprint_name = matching_sprints[0].name
+                        logger.info(f"Found sprint '{sprint_name}' with ID: {sprint_id}")
+                else:
+                    return {
+                        "type": "error",
+                        "message": "Sprint ID or name is required to switch sprint. Please specify which sprint.",
+                        "state": context.current_state.value
+                    }
+            
+            # Store active sprint in context for future commands
+            context.gathered_data['active_sprint_id'] = sprint_id
+            context.gathered_data['active_sprint_name'] = sprint_name
+            
+            # Reset state to INTENT_DETECTION so next message can process normally
+            context.current_state = FlowState.INTENT_DETECTION
+            
+            return {
+                "type": "execution_completed",
+                "message": f"✅ Switched to sprint: **{sprint_name}** (ID: `{sprint_id}`)\n\nNow I'll use this sprint as the default for all your commands. You can ask me to:\n- List tasks in sprint: 'show tasks'\n- Check sprint status: 'what's the sprint status?'\n- Update sprint: 'extend sprint by 3 days'",
+                "state": "complete",
+                "data": {
+                    "sprint_id": sprint_id,
+                    "sprint_name": sprint_name
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Switch sprint failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to switch sprint: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_switch_task(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle SWITCH_TASK intent - Set the active task context"""
+        logger.info("Handling SWITCH_TASK intent")
+        
+        try:
+            # Get active project first
+            project_id = context.gathered_data.get("active_project_id")
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Please switch to a project first before selecting a task.",
+                    "state": context.current_state.value
+                }
+            
+            task_id = context.gathered_data.get("task_id")
+            task_title = context.gathered_data.get("task_title")
+            
+            # If task_id not provided, try to find by task_title
+            if not task_id:
+                if task_title:
+                    # Search for task by title within the project
+                    all_tasks = await self.pm_provider.list_tasks(project_id=project_id)
+                    matching_tasks = [t for t in all_tasks if t.title and t.title.lower() == task_title.lower()]
+                    
+                    if len(matching_tasks) == 0:
+                        return {
+                            "type": "error",
+                            "message": f"Task '{task_title}' not found in this project.",
+                            "state": context.current_state.value
+                        }
+                    elif len(matching_tasks) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple tasks found with title '{task_title}'. Please specify task ID.",
+                            "state": context.current_state.value
+                        }
+                    else:
+                        task_id = str(matching_tasks[0].id)
+                        task_title = matching_tasks[0].title
+                        logger.info(f"Found task '{task_title}' with ID: {task_id}")
+                else:
+                    return {
+                        "type": "error",
+                        "message": "Task ID or title is required to switch task. Please specify which task.",
+                        "state": context.current_state.value
+                    }
+            
+            # Get full task details
+            task = await self.pm_provider.get_task(task_id)
+            if not task:
+                return {
+                    "type": "error",
+                    "message": f"Task with ID {task_id} not found.",
+                    "state": context.current_state.value
+                }
+            
+            # Store active task in context for future commands
+            context.gathered_data['active_task_id'] = task_id
+            context.gathered_data['active_task_title'] = task.title
+            
+            # Reset state to INTENT_DETECTION so next message can process normally
+            context.current_state = FlowState.INTENT_DETECTION
+            
+            # Build task details message
+            status = getattr(task, 'status', 'unknown')
+            priority = getattr(task, 'priority', 'medium')
+            hours = getattr(task, 'estimated_hours', None)
+            priority_emoji = "🔴" if priority == "high" else "🟡" if priority == "medium" else "🟢"
+            hours_text = f"{hours}h" if hours else "N/A"
+            
+            return {
+                "type": "execution_completed",
+                "message": f"✅ Switched to task: **{task.title}** (ID: `{task_id}`)\n\n**Task Details:**\n- Status: {status}\n- Priority: {priority_emoji} {priority}\n- Estimated: {hours_text}\n\nNow you can discuss this task in detail. You can ask me to:\n- Update status: 'mark as in progress'\n- Change priority: 'set to high priority'\n- Update time: 'estimate 8 hours'\n- Add details: 'add description of implementation approach'",
+                "state": "complete",
+                "data": {
+                    "task_id": task_id,
+                    "task_title": task.title,
+                    "task": {
+                        "status": status,
+                        "priority": priority,
+                        "estimated_hours": hours
+                    }
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Switch task failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to switch task: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_list_projects(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle LIST_PROJECTS intent - List all projects"""
+        logger.info("Handling LIST_PROJECTS intent")
+        
+        try:
+            # Use PM provider (OpenProject, JIRA, etc.)
+            pm_projects = await self.pm_provider.list_projects()
+            projects = pm_projects
+            
+            context.current_state = FlowState.COMPLETED
+            
+            # Format message with project list
+            message_parts = [f"Found **{len(projects)}** projects:\n"]
+            for i, project in enumerate(projects, 1):
+                message_parts.append(
+                    f"{i}. **{project.name}**\n"
+                    f"   - ID: `{project.id}`\n"
+                    f"   - Description: {project.description or 'N/A'}\n"
+                )
+            
+            return {
+                "type": "execution_completed",
+                "message": "\n".join(message_parts),
+                "state": context.current_state.value,
+                "data": {
+                    "projects_count": len(projects),
+                    "projects": [
+                        {
+                            "id": str(project.id) if hasattr(project, 'id') else None,
+                            "name": project.name,
+                            "description": project.description
+                        }
+                        for project in projects
+                    ]
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"List projects failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to list projects: {str(e)}",
+                "state": context.current_state.value
+            }
+    
     async def _handle_list_tasks(
         self,
         context: ConversationContext
@@ -1276,13 +1610,40 @@ class ConversationFlowManager:
         
         try:
             project_id = context.gathered_data.get("project_id")
+            project_name = context.gathered_data.get("project_name")
             
+            # If project_id not provided, try to find by project_name or use active project
             if not project_id:
-                return {
-                    "type": "error",
-                    "message": "Project ID is required to list tasks. Please specify which project.",
-                    "state": context.current_state.value
-                }
+                if project_name:
+                    # Search for project by name
+                    all_projects = await self.pm_provider.list_projects()
+                    matching_projects = [p for p in all_projects if p.name.lower() == project_name.lower()]
+                    
+                    if len(matching_projects) == 0:
+                        return {
+                            "type": "error",
+                            "message": f"Project '{project_name}' not found.",
+                            "state": context.current_state.value
+                        }
+                    elif len(matching_projects) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple projects found with name '{project_name}'. Please specify project ID.",
+                            "state": context.current_state.value
+                        }
+                    else:
+                        project_id = str(matching_projects[0].id)
+                        logger.info(f"Found project '{project_name}' with ID: {project_id}")
+                elif context.gathered_data.get("active_project_id"):
+                    # Use active project from context
+                    project_id = context.gathered_data.get("active_project_id")
+                    logger.info(f"Using active project ID: {project_id}")
+                else:
+                    return {
+                        "type": "error",
+                        "message": "Project ID or name is required to list tasks. Please specify which project, or switch to a project first.",
+                        "state": context.current_state.value
+                    }
             
             # Use PM provider (OpenProject, JIRA, etc.)
             project = await self.pm_provider.get_project(project_id)
@@ -1352,13 +1713,40 @@ class ConversationFlowManager:
         
         try:
             project_id = context.gathered_data.get("project_id")
+            project_name = context.gathered_data.get("project_name")
             
+            # If project_id not provided, try to find by project_name
             if not project_id:
-                return {
-                    "type": "error",
-                    "message": "Project ID is required to list sprints. Please specify which project.",
-                    "state": context.current_state.value
-                }
+                if project_name:
+                    # Search for project by name
+                    all_projects = await self.pm_provider.list_projects()
+                    matching_projects = [p for p in all_projects if p.name.lower() == project_name.lower()]
+                    
+                    if len(matching_projects) == 0:
+                        return {
+                            "type": "error",
+                            "message": f"Project '{project_name}' not found.",
+                            "state": context.current_state.value
+                        }
+                    elif len(matching_projects) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple projects found with name '{project_name}'. Please specify project ID.",
+                            "state": context.current_state.value
+                        }
+                    else:
+                        project_id = str(matching_projects[0].id)
+                        logger.info(f"Found project '{project_name}' with ID: {project_id}")
+                elif context.gathered_data.get("active_project_id"):
+                    # Use active project from context
+                    project_id = context.gathered_data.get("active_project_id")
+                    logger.info(f"Using active project ID: {project_id}")
+                else:
+                    return {
+                        "type": "error",
+                        "message": "Project ID or name is required to list sprints. Please specify which project, or switch to a project first.",
+                        "state": context.current_state.value
+                    }
             
             # Use PM provider (OpenProject, JIRA, etc.)
             project = await self.pm_provider.get_project(project_id)
@@ -1433,21 +1821,44 @@ class ConversationFlowManager:
         logger.info("Handling GET_PROJECT_STATUS intent")
         
         try:
-            from database.crud import get_project, get_tasks_by_project
-            from database.orm_models import Sprint
-            from uuid import UUID
-            
             project_id = context.gathered_data.get("project_id")
+            project_name = context.gathered_data.get("project_name")
             
+            # If project_id not provided, try to find by project_name
             if not project_id:
-                return {
-                    "type": "error",
-                    "message": "Project ID is required. Please specify which project.",
-                    "state": context.current_state.value
-                }
+                if project_name:
+                    # Search for project by name
+                    all_projects = await self.pm_provider.list_projects()
+                    matching_projects = [p for p in all_projects if p.name.lower() == project_name.lower()]
+                    
+                    if len(matching_projects) == 0:
+                        return {
+                            "type": "error",
+                            "message": f"Project '{project_name}' not found.",
+                            "state": context.current_state.value
+                        }
+                    elif len(matching_projects) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple projects found with name '{project_name}'. Please specify project ID.",
+                            "state": context.current_state.value
+                        }
+                    else:
+                        project_id = str(matching_projects[0].id)
+                        logger.info(f"Found project '{project_name}' with ID: {project_id}")
+                elif context.gathered_data.get("active_project_id"):
+                    # Use active project from context
+                    project_id = context.gathered_data.get("active_project_id")
+                    logger.info(f"Using active project ID: {project_id}")
+                else:
+                    return {
+                        "type": "error",
+                        "message": "Project ID or name is required. Please specify which project, or switch to a project first.",
+                        "state": context.current_state.value
+                    }
             
-            # Get project
-            project = get_project(self.db_session, UUID(project_id))
+            # Use PM provider (OpenProject, JIRA, etc.)
+            project = await self.pm_provider.get_project(project_id)
             if not project:
                 return {
                     "type": "error",
@@ -1456,29 +1867,30 @@ class ConversationFlowManager:
                 }
             
             # Get tasks and sprints counts
-            tasks = get_tasks_by_project(self.db_session, UUID(project_id))
-            sprints = self.db_session.query(Sprint).filter(Sprint.project_id == UUID(project_id)).all()
+            tasks = await self.pm_provider.list_tasks(project_id=project_id)
+            sprints = await self.pm_provider.list_sprints(project_id=project_id)
             
             # Count tasks by status
             tasks_by_status = {}
             for task in tasks:
-                status = task.status
+                status = task.status if hasattr(task, 'status') else 'unknown'
                 tasks_by_status[status] = tasks_by_status.get(status, 0) + 1
             
             context.current_state = FlowState.COMPLETED
             
             # Format message with project status
+            project_status = project.status if hasattr(project, 'status') else 'unknown'
             status_emoji = {
                 'completed': '✅',
                 'in_progress': '🚀',
                 'planned': '📋',
                 'blocked': '⚠️',
                 'cancelled': '❌'
-            }.get(project.status, '📊')
+            }.get(project_status, '📊')
             
             message_parts = [
                 f"## Project Status: **{project.name}**\n",
-                f"{status_emoji} **Overall Status:** {project.status}\n",
+                f"{status_emoji} **Overall Status:** {project_status}\n",
                 f"\n📊 **Summary:**\n",
                 f"- Total Tasks: **{len(tasks)}**\n",
                 f"- Total Sprints: **{len(sprints)}**\n"
@@ -1495,7 +1907,7 @@ class ConversationFlowManager:
                 "state": context.current_state.value,
                 "data": {
                     "project_name": project.name,
-                    "status": project.status,
+                    "status": project_status,
                     "tasks_count": len(tasks),
                     "tasks_by_status": tasks_by_status,
                     "sprints_count": len(sprints)
@@ -1504,6 +1916,8 @@ class ConversationFlowManager:
         
         except Exception as e:
             logger.error(f"Get project status failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {
                 "type": "error",
                 "message": f"Failed to get project status: {str(e)}",

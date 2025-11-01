@@ -23,9 +23,13 @@ Available step types:
 - **create_wbs**: Generate a Work Breakdown Structure
 - **sprint_planning**: Plan sprints and assign tasks
 - **task_assignment**: Assign tasks to team members
+- **list_projects**: List/show all projects
 - **list_tasks**: List/show all tasks for a project
 - **list_sprints**: List/show all sprints for a project
 - **get_project_status**: Get status and summary of a project
+- **switch_project**: Switch to/activate a project for focused work
+- **switch_sprint**: Switch to/activate a sprint within current project
+- **switch_task**: Switch to/activate a task within current project for detailed discussion
 - **update_task**: Update a task's properties
 - **update_sprint**: Update a sprint's properties
 - **research**: Research a topic using DeerFlow
@@ -145,7 +149,27 @@ Output:
 }
 ```
 
-## Example 4: List Tasks Query
+## Example 4: List Projects Query
+
+User: "List all my projects"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will retrieve and display all projects.",
+  "steps": [
+    {
+      "step_type": "list_projects",
+      "title": "List All Projects",
+      "description": "Retrieve and display all projects",
+      "requires_context": false
+    }
+  ]
+}
+```
+
+## Example 5: List Tasks Query
 
 User: "Show all tasks for this project"
 
@@ -165,7 +189,7 @@ Output:
 }
 ```
 
-## Example 5: Project Status Query
+## Example 6: Project Status Query
 
 User: "What's the status of this project?"
 
@@ -185,7 +209,7 @@ Output:
 }
 ```
 
-## Example 6: List Sprints Query
+## Example 7: List Sprints Query
 
 User: "List all sprints"
 
@@ -205,7 +229,7 @@ Output:
 }
 ```
 
-## Example 7: Update Task Query
+## Example 8: Update Task Query
 
 User: "Mark the 'Setup CI/CD Pipeline' task as completed"
 
@@ -225,7 +249,7 @@ Output:
 }
 ```
 
-## Example 8: Update Sprint Query
+## Example 9: Update Sprint Query
 
 User: "Change Sprint 1 capacity to 80 hours"
 
@@ -239,6 +263,66 @@ Output:
       "step_type": "update_sprint",
       "title": "Update Sprint Capacity",
       "description": "Change Sprint 1 capacity to 80 hours",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 10: Switch to Project (Focus Work)
+
+User: "ok we will start working in scrum project"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will switch the active project context to scrum project so all subsequent commands apply to it.",
+  "steps": [
+    {
+      "step_type": "switch_project",
+      "title": "Switch to Scrum Project",
+      "description": "Set scrum project as the active project for focused work",
+      "requires_context": false
+    }
+  ]
+}
+```
+
+## Example 11: Switch to Sprint (Backlog Work)
+
+User: "let's work on sprint 1"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will switch to sprint 1 to work on its tasks.",
+  "steps": [
+    {
+      "step_type": "switch_sprint",
+      "title": "Switch to Sprint 1",
+      "description": "Activate sprint 1 for focused sprint work",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 12: Switch to Task (Detailed Discussion)
+
+User: "I want to discuss the login screen task in detail"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will switch to the login screen task so we can discuss it in detail.",
+  "steps": [
+    {
+      "step_type": "switch_task",
+      "title": "Switch to Login Screen Task",
+      "description": "Activate login screen task for detailed discussion",
       "requires_context": true
     }
   ]

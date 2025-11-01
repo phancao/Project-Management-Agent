@@ -166,23 +166,10 @@ class ConversationFlowManager:
             else:
                 # Fallback to legacy intent-based approach
                 logger.info("Could not generate PM plan, falling back to intent-based classification")
-                initial_intent = await self.intent_classifier.classify(
+                context.intent = await self.intent_classifier.classify(
                     message, 
                     conversation_history=context.conversation_history
                 )
-                
-                # Check if message contains multiple tasks (WBS + sprint planning, etc.)
-                message_lower = message.lower()
-                has_wbs_mention = any(keyword in message_lower for keyword in [
-                    "wbs", "work breakdown", "work breakdown structure"
-                ])
-                
-                # If WBS is mentioned, use CREATE_WBS as primary intent
-                if has_wbs_mention:
-                    context.intent = IntentType.CREATE_WBS
-                    logger.info(f"Message contains WBS keywords, using CREATE_WBS as primary intent")
-                else:
-                    context.intent = initial_intent
                 
                 # Record classification for learning
                 if self.self_learning:
@@ -1877,13 +1864,13 @@ Return only the intent key (e.g., "create_project"):"""
                     logger.info(f"LLM classified intent: {intent_str}")
                     return intent
             
-            # Fallback to keyword matching if LLM didn't return a valid intent
-            logger.warning(f"LLM returned unknown intent: {intent_str}, falling back to keywords")
-            return await self._classify_with_keywords(message)
+            # If LLM didn't return a valid intent, return UNKNOWN instead of keyword fallback
+            logger.warning(f"LLM returned unknown intent: {intent_str}, returning UNKNOWN")
+            return IntentType.UNKNOWN
             
         except Exception as e:
-            logger.error(f"LLM-based intent classification failed: {e}, falling back to keywords")
-            return await self._classify_with_keywords(message)
+            logger.error(f"LLM-based intent classification failed: {e}, returning UNKNOWN")
+            return IntentType.UNKNOWN
     
     async def _classify_with_keywords(self, message: str) -> IntentType:
         """Fallback: classify using keyword matching"""

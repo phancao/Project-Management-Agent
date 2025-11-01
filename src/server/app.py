@@ -1110,16 +1110,8 @@ try:
                             yield f"data: {json.dumps(initial_chunk)}\n\n"
                             
                             try:
-                                # Extract project name from message
-                                project_name = ""
-                                if "create wbs" in user_message.lower() or "tạo wbs" in user_message.lower():
-                                    parts = user_message.lower().split("wbs")
-                                    if len(parts) > 1:
-                                        remaining = parts[1].strip().split()
-                                        if remaining:
-                                            project_name = " ".join(remaining[:3]).replace("and", "").replace("và", "").strip()
-                                
-                                research_query = f"Research typical phases, deliverables, and tasks for {project_name or 'this type of project'}. Focus on project structure and common components."
+                                # Let LLM extract project name from full context
+                                research_query = f"Research typical phases, deliverables, and tasks based on the user's request: {user_message}. Focus on project structure and common components."
                                 
                                 research_start = time.time()
                                 logger.info(f"[PM-CHAT-TIMING] Starting DeerFlow research: {time.time() - api_start:.2f}s")

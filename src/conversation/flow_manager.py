@@ -268,6 +268,15 @@ class ConversationFlowManager:
             )
         return self.contexts[session_id]
     
+    def _should_use_pm_provider(self) -> bool:
+        """Check if PM provider should be used instead of internal DB"""
+        if not self.pm_provider:
+            return False
+        
+        # Check if provider is internal or external
+        provider_type = self.pm_provider.__class__.__name__
+        return provider_type not in ('InternalPMProvider', None)
+    
     def _get_required_fields_for_intent(self, intent: IntentType) -> List[str]:
         """Get required fields for specific intent"""
         field_mapping = {
@@ -1284,10 +1293,6 @@ class ConversationFlowManager:
         logger.info("Handling LIST_TASKS intent")
         
         try:
-            from database.crud import get_tasks_by_project
-            from database.crud import get_project
-            from uuid import UUID
-            
             project_id = context.gathered_data.get("project_id")
             
             if not project_id:
@@ -1297,29 +1302,53 @@ class ConversationFlowManager:
                     "state": context.current_state.value
                 }
             
-            # Verify project exists
-            project = get_project(self.db_session, UUID(project_id))
-            if not project:
-                return {
-                    "type": "error",
-                    "message": f"Project with ID {project_id} not found.",
-                    "state": context.current_state.value
-                }
-            
-            # Fetch tasks
-            tasks = get_tasks_by_project(self.db_session, UUID(project_id))
+            # Use PM provider if configured
+            if self._should_use_pm_provider():
+                # Use external PM provider (OpenProject, JIRA, etc.)
+                from src.pm_providers.models import PMTask
+                
+                project = await self.pm_provider.get_project(project_id)
+                if not project:
+                    return {
+                        "type": "error",
+                        "message": f"Project with ID {project_id} not found.",
+                        "state": context.current_state.value
+                    }
+                
+                pm_tasks = await self.pm_provider.list_tasks(project_id=project_id)
+                
+                # Convert PM tasks to internal format for display
+                tasks = pm_tasks
+                project_name = project.name
+            else:
+                # Use internal database
+                from database.crud import get_tasks_by_project, get_project
+                from uuid import UUID
+                
+                project = get_project(self.db_session, UUID(project_id))
+                if not project:
+                    return {
+                        "type": "error",
+                        "message": f"Project with ID {project_id} not found.",
+                        "state": context.current_state.value
+                    }
+                
+                tasks = get_tasks_by_project(self.db_session, UUID(project_id))
+                project_name = project.name
             
             context.current_state = FlowState.COMPLETED
             
             # Format message with task list
-            message_parts = [f"Found **{len(tasks)}** tasks for project '{project.name}':\n"]
+            message_parts = [f"Found **{len(tasks)}** tasks for project '{project_name}':\n"]
             for i, task in enumerate(tasks, 1):
                 priority_emoji = "🔴" if task.priority == "high" else "🟡" if task.priority == "medium" else "🟢"
                 hours_text = f"{task.estimated_hours}h" if task.estimated_hours else "N/A"
+                status = task.status if hasattr(task, 'status') else None
+                title = task.title
                 message_parts.append(
-                    f"{i}. **{task.title}**\n"
-                    f"   - Status: {task.status}\n"
-                    f"   - Priority: {priority_emoji} {task.priority}\n"
+                    f"{i}. **{title}**\n"
+                    f"   - Status: {status or 'N/A'}\n"
+                    f"   - Priority: {priority_emoji} {task.priority or 'medium'}\n"
                     f"   - Estimated: {hours_text}\n"
                 )
             
@@ -1328,15 +1357,15 @@ class ConversationFlowManager:
                 "message": "\n".join(message_parts),
                 "state": context.current_state.value,
                 "data": {
-                    "project_name": project.name,
+                    "project_name": project_name,
                     "tasks_count": len(tasks),
                     "tasks": [
                         {
-                            "id": str(task.id),
+                            "id": str(task.id) if hasattr(task, 'id') else None,
                             "title": task.title,
-                            "status": task.status,
-                            "priority": task.priority,
-                            "estimated_hours": task.estimated_hours
+                            "status": task.status if hasattr(task, 'status') else None,
+                            "priority": task.priority if hasattr(task, 'priority') else None,
+                            "estimated_hours": task.estimated_hours if hasattr(task, 'estimated_hours') else None
                         }
                         for task in tasks
                     ]
@@ -1345,6 +1374,8 @@ class ConversationFlowManager:
         
         except Exception as e:
             logger.error(f"List tasks failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {
                 "type": "error",
                 "message": f"Failed to list tasks: {str(e)}",

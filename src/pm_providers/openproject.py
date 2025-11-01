@@ -106,10 +106,15 @@ class OpenProjectProvider(BasePMProvider):
         """List all work packages (tasks)"""
         url = f"{self.base_url}/api/v3/work_packages"
         
+        # Add filter for specific project if provided
         if project_id:
-            url += f"/projects/{project_id}"
+            import json as json_lib
+            filters = [{"project": {"operator": "=", "values": [project_id]}}]
+            params = {"filters": json_lib.dumps(filters)}
+        else:
+            params = {}
         
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self.headers, params=params)
         response.raise_for_status()
         
         tasks_data = response.json()["_embedded"]["elements"]
@@ -195,13 +200,18 @@ class OpenProjectProvider(BasePMProvider):
         """
         url = f"{self.base_url}/api/v3/versions"
         
-        if project_id:
-            url += f"/projects/{project_id}"
-        
         response = requests.get(url, headers=self.headers)
         response.raise_for_status()
         
         sprints_data = response.json()["_embedded"]["elements"]
+        
+        # Filter by project_id if provided (versions don't have project filter in API)
+        if project_id:
+            sprints_data = [
+                sprint for sprint in sprints_data
+                if sprint.get("_links", {}).get("definingProject", {}).get("href", "").endswith(f"/projects/{project_id}")
+            ]
+        
         return [self._parse_sprint(sprint) for sprint in sprints_data]
     
     async def get_sprint(self, sprint_id: str) -> Optional[PMSprint]:

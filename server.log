@@ -1,0 +1,9 @@
+2025-11-02 01:00:51,847 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
+2025-11-02 01:00:51,848 - __main__ - INFO - Log level: INFO
+2025-11-02 01:00:53,570 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
+2025-11-02 01:00:53,599 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
+2025-11-02 01:00:53,851 - src.server.app - INFO - ✅ Project Management API endpoints registered (including /api/pm/chat/stream)
+INFO:     Started server process [64944]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)

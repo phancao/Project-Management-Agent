@@ -1390,10 +1390,6 @@ class ConversationFlowManager:
         logger.info("Handling LIST_SPRINTS intent")
         
         try:
-            from database.orm_models import Sprint
-            from database.crud import get_project
-            from uuid import UUID
-            
             project_id = context.gathered_data.get("project_id")
             
             if not project_id:
@@ -1403,30 +1399,55 @@ class ConversationFlowManager:
                     "state": context.current_state.value
                 }
             
-            # Verify project exists
-            project = get_project(self.db_session, UUID(project_id))
-            if not project:
-                return {
-                    "type": "error",
-                    "message": f"Project with ID {project_id} not found.",
-                    "state": context.current_state.value
-                }
-            
-            # Fetch sprints
-            sprints = self.db_session.query(Sprint).filter(Sprint.project_id == UUID(project_id)).all()
+            # Use PM provider if configured
+            if self._should_use_pm_provider():
+                # Use external PM provider (OpenProject, JIRA, etc.)
+                project = await self.pm_provider.get_project(project_id)
+                if not project:
+                    return {
+                        "type": "error",
+                        "message": f"Project with ID {project_id} not found.",
+                        "state": context.current_state.value
+                    }
+                
+                pm_sprints = await self.pm_provider.list_sprints(project_id=project_id)
+                sprints = pm_sprints
+                project_name = project.name
+            else:
+                # Use internal database
+                from database.orm_models import Sprint
+                from database.crud import get_project
+                from uuid import UUID
+                
+                project = get_project(self.db_session, UUID(project_id))
+                if not project:
+                    return {
+                        "type": "error",
+                        "message": f"Project with ID {project_id} not found.",
+                        "state": context.current_state.value
+                    }
+                
+                sprints = self.db_session.query(Sprint).filter(Sprint.project_id == UUID(project_id)).all()
+                project_name = project.name
             
             context.current_state = FlowState.COMPLETED
             
             # Format message with sprint list
-            message_parts = [f"Found **{len(sprints)}** sprints for project '{project.name}':\n"]
+            message_parts = [f"Found **{len(sprints)}** sprints for project '{project_name}':\n"]
             for i, sprint in enumerate(sprints, 1):
-                utilization = sprint.utilization if sprint.utilization else 0
+                # Handle both DB and PM models
+                utilization = getattr(sprint, 'utilization', 0) or 0
                 utilization_emoji = "🟢" if utilization < 70 else "🟡" if utilization < 90 else "🔴"
+                status = getattr(sprint, 'status', 'unknown')
+                name = sprint.name if hasattr(sprint, 'name') else str(sprint.id)
+                capacity = getattr(sprint, 'capacity_hours', 0) or 0
+                planned = getattr(sprint, 'planned_hours', 0) or 0
+                
                 message_parts.append(
-                    f"{i}. **{sprint.name}**\n"
-                    f"   - Status: {sprint.status}\n"
-                    f"   - Capacity: {sprint.capacity_hours or 0:.0f}h\n"
-                    f"   - Planned: {sprint.planned_hours or 0:.0f}h\n"
+                    f"{i}. **{name}**\n"
+                    f"   - Status: {status}\n"
+                    f"   - Capacity: {capacity:.0f}h\n"
+                    f"   - Planned: {planned:.0f}h\n"
                     f"   - Utilization: {utilization_emoji} {utilization:.0f}%\n"
                 )
             
@@ -1435,24 +1456,26 @@ class ConversationFlowManager:
                 "message": "\n".join(message_parts),
                 "state": context.current_state.value,
                 "data": {
-                    "project_name": project.name,
+                    "project_name": project_name,
                     "sprints_count": len(sprints),
                     "sprints": [
                         {
-                            "id": str(sprint.id),
-                            "name": sprint.name,
-                            "status": sprint.status,
-                            "capacity_hours": sprint.capacity_hours,
-                            "planned_hours": sprint.planned_hours,
-                            "utilization": sprint.utilization
+                            "id": str(getattr(sprint, 'id', i)),
+                            "name": getattr(sprint, 'name', 'Unknown'),
+                            "status": getattr(sprint, 'status', 'unknown'),
+                            "capacity_hours": getattr(sprint, 'capacity_hours', 0),
+                            "planned_hours": getattr(sprint, 'planned_hours', 0),
+                            "utilization": getattr(sprint, 'utilization', 0)
                         }
-                        for sprint in sprints
+                        for i, sprint in enumerate(sprints)
                     ]
                 }
             }
         
         except Exception as e:
             logger.error(f"List sprints failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {
                 "type": "error",
                 "message": f"Failed to list sprints: {str(e)}",

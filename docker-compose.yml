@@ -86,9 +86,9 @@ services:
   openproject_db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: openproject
       POSTGRES_USER: openproject
       POSTGRES_PASSWORD: openproject
+      POSTGRES_DB: openproject
     volumes:
       - openproject_db_data:/var/lib/postgresql/data
     ports:
@@ -101,10 +101,14 @@ services:
 
   # OpenProject Application
   openproject:
-    image: openproject/community:latest
+    image: openproject/openproject:16
     environment:
-      DATABASE_URL: postgresql://openproject:openproject@openproject_db:5432/openproject?pool=5
-      SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY:-development-secret-key-change-in-production}
+      OPENPROJECT_DATABASE_HOST: openproject_db
+      OPENPROJECT_DATABASE_PORT: 5432
+      OPENPROJECT_DATABASE_USERNAME: openproject
+      OPENPROJECT_DATABASE_PASSWORD: openproject
+      OPENPROJECT_DATABASE_DB_NAME: openproject
+      OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY:-development-secret-key-change-in-production}
       OPENPROJECT_HOST__NAME: localhost:8080
       OPENPROJECT_HTTPS: "false"
     ports:
@@ -119,7 +123,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
-      start_period: 120s  # OpenProject takes time to start
+      start_period: 180s  # OpenProject takes time to start
 
 volumes:
   postgres_data:

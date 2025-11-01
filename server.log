@@ -7,3 +7,65 @@ INFO:     Started server process [64944]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)
+INFO:     ::1:51663 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     ::1:51663 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     ::1:51663 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     ::1:51663 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     ::1:51663 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     ::1:51663 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     ::1:51667 - "OPTIONS /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-02 05:44:25,396 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
+2025-11-02 05:44:25,396 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
+2025-11-02 05:44:25,399 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
+2025-11-02 05:44:25,399 - src.conversation.flow_manager - INFO - Self-learning system initialized
+INFO:     ::1:51667 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-02 05:44:25,475 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-02 05:44:25,475 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-02 05:44:28,665 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-02 05:44:28,675 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.19s
+2025-11-02 05:44:28,675 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "vi-VN",
+  "overall_thought": "Tôi sẽ truy xuất và hiển thị tất cả các dự án hiện tại.",
+  "steps": [
+    {
+      "step_type": "list_tasks",
+      "title": "Hiển thị tất cả các dự án hiện tại",
+      "description": "Truy xuất và hiển thị danh sách các dự án hiện tại",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-02 05:44:28,676 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 3.20s
+2025-11-02 05:44:28,676 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 3.20s
+2025-11-02 05:44:28,676 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 3.20s
+2025-11-02 05:44:28,676 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 3.20s
+2025-11-02 05:44:28,676 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 3.20s
+2025-11-02 05:44:29,917 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-02 05:44:29,921 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: null
+2025-11-02 05:44:29,921 - src.conversation.flow_manager - INFO - Extracted initial data: {}
+2025-11-02 05:44:29,921 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-02 05:44:33,134 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-02 05:44:33,137 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.21s
+2025-11-02 05:44:33,137 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "vi-VN",
+  "overall_thought": "Tôi sẽ lấy và hiển thị danh sách các dự án hiện tại.",
+  "steps": [
+    {
+      "step_type": "list_tasks",
+      "title": "Liệt kê Tất cả Dự án Hiện tại",
+      "description": "Lấy và hiển thị tất cả các dự án hiện tại.",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-02 05:44:33,137 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 3.22s
+2025-11-02 05:44:33,137 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
+2025-11-02 05:44:33,137 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-02 05:44:33,137 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-02 05:44:33,137 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
+2025-11-02 05:44:33,137 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: Liệt kê Tất cả Dự án Hiện tại - 0.00s
+2025-11-02 05:44:33,138 - src.conversation.flow_manager - INFO - Executing PM step: list_tasks
+2025-11-02 05:44:33,138 - src.conversation.flow_manager - INFO - Handling LIST_TASKS intent
+2025-11-02 05:44:33,138 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.00s - 0.00s total
+2025-11-02 05:44:33,138 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 4.46s
+2025-11-02 05:44:33,138 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 7.66s

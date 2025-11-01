@@ -1976,10 +1976,16 @@ class DataExtractor:
                                    gathered_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Extract project-related data from user message using LLM"""
         
-        if not self.llm:
-            return {}
-        
         gathered_data = gathered_data or {}
+        
+        # Quick extraction for explicit formats like "project_id: 2"
+        import re
+        project_id_match = re.search(r'project_id:\s*(\d+)', message, re.IGNORECASE)
+        if project_id_match:
+            gathered_data['project_id'] = project_id_match.group(1)
+        
+        if not self.llm:
+            return gathered_data
         
         try:
             # Build extraction prompt based on intent

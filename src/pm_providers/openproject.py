@@ -287,8 +287,10 @@ class OpenProjectProvider(BasePMProvider):
     async def health_check(self) -> bool:
         """Check if the OpenProject connection is healthy"""
         try:
-            response = requests.get(f"{self.base_url}/api/v3/status", headers=self.headers, timeout=5)
-            return response.status_code == 200
+            # Use /api/v3/projects endpoint as health check
+            response = requests.get(f"{self.base_url}/api/v3/projects", headers=self.headers, timeout=5)
+            # 200 OK or 403 Forbidden (authenticated but no projects) both indicate healthy connection
+            return response.status_code in (200, 403)
         except:
             return False
     

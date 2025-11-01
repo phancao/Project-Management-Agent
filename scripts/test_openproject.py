@@ -44,9 +44,13 @@ async def test_openproject():
             print("✅ Health check passed")
         else:
             print("❌ Health check failed - check credentials and URL")
+            import traceback
+            traceback.print_exc()
             return False
     except Exception as e:
         print(f"❌ Health check error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     
     # Test list projects

@@ -33,13 +33,11 @@ class PMStatus(str, Enum):
     
     # Task-specific
     TODO = "todo"
-    IN_PROGRESS = "in_progress"
     DONE = "done"
     BLOCKED = "blocked"
     
     # Sprint-specific
     PLANNED = "planned"
-    ACTIVE = "active"
     CLOSED = "closed"
 
 
@@ -56,8 +54,8 @@ class PMPriority(str, Enum):
 @dataclass
 class PMUser:
     """Unified user/member representation"""
-    id: str
-    name: str
+    id: Optional[str] = None
+    name: str = ""
     email: Optional[str] = None
     username: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -67,8 +65,8 @@ class PMUser:
 @dataclass
 class PMProject:
     """Unified project representation"""
-    id: str
-    name: str
+    id: Optional[str] = None
+    name: str = ""
     description: Optional[str] = None
     status: Optional[str] = None  # PMStatus
     priority: Optional[str] = None  # PMPriority
@@ -83,8 +81,8 @@ class PMProject:
 @dataclass
 class PMTask:
     """Unified task/issue/work package representation"""
-    id: str
-    title: str
+    id: Optional[str] = None
+    title: str = ""
     description: Optional[str] = None
     status: Optional[str] = None  # PMStatus
     priority: Optional[str] = None  # PMPriority
@@ -103,11 +101,11 @@ class PMTask:
 @dataclass
 class PMSprint:
     """Unified sprint/iteration representation"""
-    id: str
-    name: str
-    project_id: str
-    start_date: date
-    end_date: date
+    id: Optional[str] = None
+    name: str = ""
+    project_id: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
     status: Optional[str] = None  # PMStatus
     capacity_hours: Optional[float] = None
     planned_hours: Optional[float] = None

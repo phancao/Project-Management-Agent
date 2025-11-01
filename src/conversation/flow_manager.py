@@ -1575,9 +1575,6 @@ class ConversationFlowManager:
         logger.info("Handling UPDATE_TASK intent")
         
         try:
-            from database.crud import get_task, update_task
-            from uuid import UUID
-            
             task_id = context.gathered_data.get("task_id")
             task_title = context.gathered_data.get("task_title")
             
@@ -1585,35 +1582,6 @@ class ConversationFlowManager:
                 return {
                     "type": "error",
                     "message": "Task ID or title is required to update a task. Please specify which task.",
-                    "state": context.current_state.value
-                }
-            
-            # If only title provided, need to find task
-            task = None
-            if task_id:
-                task = get_task(self.db_session, UUID(task_id))
-            elif task_title:
-                # Search for task by title (exact match first, then partial)
-                from database.orm_models import Task
-                # Try exact match first
-                tasks = self.db_session.query(Task).filter(Task.title == task_title).all()
-                # If no exact match, try partial match
-                if not tasks:
-                    tasks = self.db_session.query(Task).filter(Task.title.ilike(f"%{task_title}%")).all()
-                
-                if len(tasks) == 1:
-                    task = tasks[0]
-                elif len(tasks) > 1:
-                    return {
-                        "type": "error",
-                        "message": f"Multiple tasks found with title '{task_title}'. Please specify task ID.",
-                        "state": context.current_state.value
-                    }
-            
-            if not task:
-                return {
-                    "type": "error",
-                    "message": f"Task not found. Please check the task ID or title.",
                     "state": context.current_state.value
                 }
             
@@ -1637,22 +1605,69 @@ class ConversationFlowManager:
                     "state": context.current_state.value
                 }
             
-            # Update task
-            updated_task = update_task(self.db_session, task.id, **update_fields)
+            # Use PM provider if configured and we have task_id
+            if self._should_use_pm_provider() and task_id:
+                # Use external PM provider
+                task = await self.pm_provider.get_task(task_id)
+                if not task:
+                    return {
+                        "type": "error",
+                        "message": f"Task not found. Please check the task ID.",
+                        "state": context.current_state.value
+                    }
+                
+                updated_task = await self.pm_provider.update_task(task_id, update_fields)
+                task_title_result = updated_task.title if hasattr(updated_task, 'title') else task_title
+            else:
+                # Use internal database
+                from database.crud import get_task, update_task
+                from uuid import UUID
+                
+                # If only title provided, need to find task
+                task = None
+                if task_id:
+                    task = get_task(self.db_session, UUID(task_id))
+                elif task_title:
+                    # Search for task by title (exact match first, then partial)
+                    from database.orm_models import Task
+                    # Try exact match first
+                    tasks = self.db_session.query(Task).filter(Task.title == task_title).all()
+                    # If no exact match, try partial match
+                    if not tasks:
+                        tasks = self.db_session.query(Task).filter(Task.title.ilike(f"%{task_title}%")).all()
+                    
+                    if len(tasks) == 1:
+                        task = tasks[0]
+                    elif len(tasks) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple tasks found with title '{task_title}'. Please specify task ID.",
+                            "state": context.current_state.value
+                        }
+                
+                if not task:
+                    return {
+                        "type": "error",
+                        "message": f"Task not found. Please check the task ID or title.",
+                        "state": context.current_state.value
+                    }
+                
+                updated_task = update_task(self.db_session, task.id, **update_fields)
+                task_title_result = updated_task.title if hasattr(updated_task, 'title') else task_title
             
             context.current_state = FlowState.COMPLETED
             
             # Format success message
             updates = ", ".join([f"{k.replace('_', ' ').title()}: {v}" for k, v in update_fields.items()])
-            message = f"✅ Task **{task.title}** updated successfully!\n\n**Changes:** {updates}"
+            message = f"✅ Task **{task_title_result}** updated successfully!\n\n**Changes:** {updates}"
             
             return {
                 "type": "execution_completed",
                 "message": message,
                 "state": context.current_state.value,
                 "data": {
-                    "task_id": str(updated_task.id),
-                    "task_title": updated_task.title,
+                    "task_id": str(getattr(updated_task, 'id', task_id)),
+                    "task_title": task_title_result,
                     "updates": update_fields
                 }
             }
@@ -1673,9 +1688,6 @@ class ConversationFlowManager:
         logger.info("Handling UPDATE_SPRINT intent")
         
         try:
-            from database.crud import get_sprint, update_sprint
-            from uuid import UUID
-            
             sprint_id = context.gathered_data.get("sprint_id")
             sprint_name = context.gathered_data.get("sprint_name")
             
@@ -1683,35 +1695,6 @@ class ConversationFlowManager:
                 return {
                     "type": "error",
                     "message": "Sprint ID or name is required to update a sprint. Please specify which sprint.",
-                    "state": context.current_state.value
-                }
-            
-            # If only name provided, need to find sprint
-            sprint = None
-            if sprint_id:
-                sprint = get_sprint(self.db_session, UUID(sprint_id))
-            elif sprint_name:
-                # Search for sprint by name (exact match first, then partial)
-                from database.orm_models import Sprint
-                # Try exact match first
-                sprints = self.db_session.query(Sprint).filter(Sprint.name == sprint_name).all()
-                # If no exact match, try partial match
-                if not sprints:
-                    sprints = self.db_session.query(Sprint).filter(Sprint.name.ilike(f"%{sprint_name}%")).all()
-                
-                if len(sprints) == 1:
-                    sprint = sprints[0]
-                elif len(sprints) > 1:
-                    return {
-                        "type": "error",
-                        "message": f"Multiple sprints found with name '{sprint_name}'. Please specify sprint ID.",
-                        "state": context.current_state.value
-                    }
-            
-            if not sprint:
-                return {
-                    "type": "error",
-                    "message": f"Sprint not found. Please check the sprint ID or name.",
                     "state": context.current_state.value
                 }
             
@@ -1751,22 +1734,69 @@ class ConversationFlowManager:
                     "state": context.current_state.value
                 }
             
-            # Update sprint
-            updated_sprint = update_sprint(self.db_session, sprint.id, **update_fields)
+            # Use PM provider if configured and we have sprint_id
+            if self._should_use_pm_provider() and sprint_id:
+                # Use external PM provider
+                sprint = await self.pm_provider.get_sprint(sprint_id)
+                if not sprint:
+                    return {
+                        "type": "error",
+                        "message": f"Sprint not found. Please check the sprint ID.",
+                        "state": context.current_state.value
+                    }
+                
+                updated_sprint = await self.pm_provider.update_sprint(sprint_id, update_fields)
+                sprint_name_result = updated_sprint.name if hasattr(updated_sprint, 'name') else sprint_name
+            else:
+                # Use internal database
+                from database.crud import get_sprint, update_sprint
+                from uuid import UUID
+                
+                # If only name provided, need to find sprint
+                sprint = None
+                if sprint_id:
+                    sprint = get_sprint(self.db_session, UUID(sprint_id))
+                elif sprint_name:
+                    # Search for sprint by name (exact match first, then partial)
+                    from database.orm_models import Sprint
+                    # Try exact match first
+                    sprints = self.db_session.query(Sprint).filter(Sprint.name == sprint_name).all()
+                    # If no exact match, try partial match
+                    if not sprints:
+                        sprints = self.db_session.query(Sprint).filter(Sprint.name.ilike(f"%{sprint_name}%")).all()
+                    
+                    if len(sprints) == 1:
+                        sprint = sprints[0]
+                    elif len(sprints) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple sprints found with name '{sprint_name}'. Please specify sprint ID.",
+                            "state": context.current_state.value
+                        }
+                
+                if not sprint:
+                    return {
+                        "type": "error",
+                        "message": f"Sprint not found. Please check the sprint ID or name.",
+                        "state": context.current_state.value
+                    }
+                
+                updated_sprint = update_sprint(self.db_session, sprint.id, **update_fields)
+                sprint_name_result = updated_sprint.name if hasattr(updated_sprint, 'name') else sprint_name
             
             context.current_state = FlowState.COMPLETED
             
             # Format success message
             updates = ", ".join([f"{k.replace('_', ' ').title()}: {v}" for k, v in update_fields.items()])
-            message = f"✅ Sprint **{sprint.name}** updated successfully!\n\n**Changes:** {updates}"
+            message = f"✅ Sprint **{sprint_name_result}** updated successfully!\n\n**Changes:** {updates}"
             
             return {
                 "type": "execution_completed",
                 "message": message,
                 "state": context.current_state.value,
                 "data": {
-                    "sprint_id": str(updated_sprint.id),
-                    "sprint_name": updated_sprint.name,
+                    "sprint_id": str(getattr(updated_sprint, 'id', sprint_id)),
+                    "sprint_name": sprint_name_result,
                     "updates": update_fields
                 }
             }

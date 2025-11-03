@@ -4,15 +4,35 @@
 "use client";
 
 import { Card } from "~/components/ui/card";
+import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
 
 export function BacklogView() {
+  const { tasks, loading, error } = useMyTasks();
+
+  const highPriority = tasks.filter(t => t.priority === "high");
+  const mediumPriority = tasks.filter(t => t.priority === "medium");
+  const lowPriority = tasks.filter(t => t.priority === "low");
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-500 dark:text-gray-400">Loading backlog...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-red-500">Error loading tasks: {error.message}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Backlog</h2>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          + Add Task
-        </button>
       </div>
 
       <Card className="p-6">
@@ -21,19 +41,83 @@ export function BacklogView() {
             Priority Legend: 🔴 High | 🟡 Medium | 🔵 Low
           </div>
           
-          <div className="space-y-2">
-            <div className="font-semibold text-gray-900 dark:text-white">🔴 HIGH PRIORITY (12 tasks)</div>
-            <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
-              <input type="checkbox" className="w-4 h-4" />
-              <div className="flex-1">
-                <div className="font-medium text-gray-900 dark:text-white">Setup CI/CD Pipeline</div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">👤 John Doe | ⏱️ 8h</div>
+          {highPriority.length > 0 && (
+            <div className="space-y-2">
+              <div className="font-semibold text-gray-900 dark:text-white">
+                🔴 HIGH PRIORITY ({highPriority.length} tasks)
               </div>
-              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
-                High
-              </span>
+              {highPriority.map((task) => (
+                <div key={task.id} className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+                  <input type="checkbox" className="w-4 h-4" />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 dark:text-white">{task.title}</div>
+                    {task.assigned_to && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        👤 {task.assigned_to} {task.estimated_hours && `| ⏱️ ${task.estimated_hours}h`}
+                      </div>
+                    )}
+                  </div>
+                  <span className="px-2 py-1 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded text-xs">
+                    High
+                  </span>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
+
+          {mediumPriority.length > 0 && (
+            <div className="space-y-2 pt-4">
+              <div className="font-semibold text-gray-900 dark:text-white">
+                🟡 MEDIUM PRIORITY ({mediumPriority.length} tasks)
+              </div>
+              {mediumPriority.map((task) => (
+                <div key={task.id} className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <input type="checkbox" className="w-4 h-4" />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 dark:text-white">{task.title}</div>
+                    {task.assigned_to && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        👤 {task.assigned_to} {task.estimated_hours && `| ⏱️ ${task.estimated_hours}h`}
+                      </div>
+                    )}
+                  </div>
+                  <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded text-xs">
+                    Medium
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {lowPriority.length > 0 && (
+            <div className="space-y-2 pt-4">
+              <div className="font-semibold text-gray-900 dark:text-white">
+                🔵 LOW PRIORITY ({lowPriority.length} tasks)
+              </div>
+              {lowPriority.map((task) => (
+                <div key={task.id} className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <input type="checkbox" className="w-4 h-4" />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 dark:text-white">{task.title}</div>
+                    {task.assigned_to && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        👤 {task.assigned_to} {task.estimated_hours && `| ⏱️ ${task.estimated_hours}h`}
+                      </div>
+                    )}
+                  </div>
+                  <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
+                    Low
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tasks.length === 0 && (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              No tasks in backlog
+            </div>
+          )}
         </div>
       </Card>
     </div>

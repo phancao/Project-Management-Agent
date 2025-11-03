@@ -902,6 +902,157 @@ async def config():
 # NOTE: Legacy PostgreSQL REST endpoints removed - all PM operations now go through /api/pm/chat/stream
 # This endpoint uses PM Providers (OpenProject, JIRA, etc.) instead of local database
 
+# PM REST endpoints for UI data fetching
+@app.get("/api/pm/projects")
+async def pm_list_projects(request: Request):
+    """List all projects from PM provider"""
+    try:
+        from src.conversation.flow_manager import ConversationFlowManager
+        from database.connection import get_db_session
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        # Use global flow manager to access PM provider
+        global flow_manager
+        if flow_manager is None:
+            flow_manager = ConversationFlowManager(db_session=db)
+        fm = flow_manager
+        
+        if not fm.pm_provider:
+            raise HTTPException(status_code=503, detail="PM Provider not configured")
+        
+        projects = await fm.pm_provider.list_projects()
+        
+        # Convert to dict format for JSON response
+        return [
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "description": p.description,
+                "status": p.status.value if hasattr(p.status, 'value') else str(p.status),
+            }
+            for p in projects
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list projects: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pm/projects/{project_id}/tasks")
+async def pm_list_tasks(request: Request, project_id: str):
+    """List all tasks for a project"""
+    try:
+        from src.conversation.flow_manager import ConversationFlowManager
+        from database.connection import get_db_session
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        global flow_manager
+        if flow_manager is None:
+            flow_manager = ConversationFlowManager(db_session=db)
+        fm = flow_manager
+        
+        if not fm.pm_provider:
+            raise HTTPException(status_code=503, detail="PM Provider not configured")
+        
+        tasks = await fm.pm_provider.list_tasks(project_id=project_id)
+        
+        return [
+            {
+                "id": str(t.id),
+                "title": t.title,
+                "description": t.description,
+                "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
+                "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
+                "estimated_hours": t.estimated_hours,
+                "assigned_to": t.assignee.name if t.assignee else None,
+            }
+            for t in tasks
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pm/tasks/my")
+async def pm_list_my_tasks(request: Request):
+    """List tasks assigned to current user"""
+    try:
+        from src.conversation.flow_manager import ConversationFlowManager
+        from database.connection import get_db_session
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        global flow_manager
+        if flow_manager is None:
+            flow_manager = ConversationFlowManager(db_session=db)
+        fm = flow_manager
+        
+        if not fm.pm_provider:
+            raise HTTPException(status_code=503, detail="PM Provider not configured")
+        
+        # Get current user
+        current_user = await fm.pm_provider.get_current_user()
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Cannot determine current user")
+        
+        tasks = await fm.pm_provider.list_tasks(assignee_id=str(current_user.id))
+        
+        return [
+            {
+                "id": str(t.id),
+                "title": t.title,
+                "description": t.description,
+                "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
+                "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
+                "estimated_hours": t.estimated_hours,
+                "project_name": t.project_name or "Unknown",
+            }
+            for t in tasks
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list my tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pm/projects/{project_id}/sprints")
+async def pm_list_sprints(request: Request, project_id: str):
+    """List all sprints for a project"""
+    try:
+        from src.conversation.flow_manager import ConversationFlowManager
+        from database.connection import get_db_session
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        global flow_manager
+        if flow_manager is None:
+            flow_manager = ConversationFlowManager(db_session=db)
+        fm = flow_manager
+        
+        if not fm.pm_provider:
+            raise HTTPException(status_code=503, detail="PM Provider not configured")
+        
+        sprints = await fm.pm_provider.list_sprints(project_id=project_id)
+        
+        return [
+            {
+                "id": str(s.id),
+                "name": s.name,
+                "start_date": s.start_date.isoformat() if s.start_date else None,
+                "end_date": s.end_date.isoformat() if s.end_date else None,
+                "status": s.status.value if hasattr(s.status, 'value') else str(s.status),
+            }
+            for s in sprints
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list sprints: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # PM Chat endpoint
 @app.post("/api/pm/chat/stream")
 async def pm_chat_stream(request: Request):

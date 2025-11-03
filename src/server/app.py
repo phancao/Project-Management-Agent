@@ -1128,6 +1128,7 @@ async def pm_chat_stream(request: Request):
                         "content": "",
                         "finish_reason": finish_reason
                     }
+                    logger.info(f"[PM-CHAT-TIMING] Sending finish event: finish_reason={finish_reason}, response_type={response_type if response else 'None'}")
                     yield "event: message_chunk\n"
                     yield f"data: {json.dumps(chunk_data)}\n\n"
                         

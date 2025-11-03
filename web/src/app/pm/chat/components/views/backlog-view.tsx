@@ -118,10 +118,84 @@ export function BacklogView() {
     );
   }
 
+  const hasActiveFilters = statusFilter !== "all" || priorityFilter !== "all" || projectFilter !== "all" || searchQuery;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Backlog</h2>
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Backlog</h2>
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2">
+              {searchQuery && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
+                  <Search className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {searchQuery}
+                  </span>
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Remove search filter"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {statusFilter !== "all" && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
+                  <Filter className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Status: {statusFilter === "todo" ? "To Do" : statusFilter === "in-progress" ? "In Progress" : statusFilter}
+                  </span>
+                  <button
+                    onClick={() => setStatusFilter("all")}
+                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Remove status filter"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {priorityFilter !== "all" && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+                    {priorityFilter}
+                  </span>
+                  <button
+                    onClick={() => setPriorityFilter("all")}
+                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Remove priority filter"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {projectFilter !== "all" && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {projectFilter}
+                  </span>
+                  <button
+                    onClick={() => setProjectFilter("all")}
+                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Remove project filter"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <div className="text-sm text-gray-500 dark:text-gray-400">
           {filteredTasks.length} of {tasks.length} tasks
         </div>

@@ -718,3 +718,14 @@ INFO:     127.0.0.1:51031 - "GET /api/projects/2 HTTP/1.1" 404 Not Found
 INFO:     127.0.0.1:51082 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
 2025-11-03 19:03:57,146 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
 INFO:     127.0.0.1:51088 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51277 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 19:04:31,099 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:51279 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51280 - "GET /api/pm/tasks/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51277 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51279 - "GET /api/pm/tasks/all HTTP/1.1" 200 OK
+2025-11-03 19:04:31,482 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:51283 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51318 - "GET /api/projects/2 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51318 - "GET /api/projects/1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51318 - "GET /api/projects/2 HTTP/1.1" 404 Not Found

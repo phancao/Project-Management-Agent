@@ -436,7 +436,53 @@ Output:
 }
 ```
 
-## Example 17: Unsupported Request
+## Example 17: Dependency Analysis with Research
+
+User: "analyze dependencies for my current project"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will analyze task dependencies in the project. First I need to list tasks, then research dependencies, then provide recommendations.",
+  "steps": [
+    {
+      "step_type": "list_tasks",
+      "title": "List Current Project Tasks",
+      "description": "Retrieve all tasks in the current project for dependency analysis",
+      "requires_context": true
+    },
+    {
+      "step_type": "research",
+      "title": "Analyze Task Dependencies",
+      "description": "Research and identify dependencies between tasks, critical paths, and blockers",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 18: Generic Research Query
+
+User: "what are the best practices for sprint retrospectives?"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will research best practices for sprint retrospectives to provide comprehensive guidance.",
+  "steps": [
+    {
+      "step_type": "research",
+      "title": "Research Sprint Retrospective Best Practices",
+      "description": "Research industry best practices, frameworks, and techniques for conducting effective sprint retrospectives",
+      "requires_context": false
+    }
+  ]
+}
+```
+
+## Example 19: Unsupported Request
 
 User: "calculate ETA for my tasks"
 
@@ -464,6 +510,22 @@ Output:
 4. **Be specific**: Each step should be clear and actionable
 5. **Support all languages**: Detect and respond in user's language
 6. **Match step_type correctly**: Choose the right type from available options
+7. **Research when needed**: Add a "research" step if tasks require external knowledge or estimation
+
+## When to Use Research Step
+
+Add a "research" step BEFORE executing when:
+- User wants ETA estimates for multiple tasks → Research time estimation patterns
+- Creating WBS for unfamiliar domain → Research typical project structure
+- Planning sprints without clear requirements → Research industry sprint patterns
+- Dependency analysis without task details → Research dependency patterns
+- Generating reports with analytics → Research best reporting practices
+
+Skip research when:
+- Simple data retrieval (list projects, tasks, sprints)
+- Direct updates (update task status, priority)
+- Switching context (switch project, sprint, task)
+- User provides all needed information explicitly
 
 # Output Instructions
 

@@ -583,15 +583,28 @@ class ConversationFlowManager:
             return await self._execute_intent(IntentType.CREATE_PROJECT, context)
         
         elif step_type_str == "research":
-            # Check if this is ETA research based on description
+            # Intelligent research routing based on step description
             description = step.get('description', '').lower()
-            if 'eta' in description or 'ước tính thời gian' in description or 'estimated time' in description:
+            title = step.get('title', '').lower()
+            
+            # Determine research type from keywords
+            if 'eta' in description or 'ước tính thời gian' in description or 'estimated time' in description or 'eta' in title:
                 # ETA research: analyze tasks and provide estimates
                 return await self._handle_eta_research(context)
+            elif 'wbs' in description or 'work breakdown' in description or 'project structure' in description:
+                # WBS research: handled by CREATE_WBS via DeerFlow
+                logger.warning(f"Research step for WBS should be handled by CREATE_WBS step instead")
+                return await self._handle_create_wbs_with_deerflow_planner(context)
+            elif 'dependency' in description or 'phụ thuộc' in description:
+                # Dependency analysis research
+                return await self._handle_dependency_research(context)
+            elif 'sprint' in description or 'iter' in description:
+                # Sprint planning research
+                logger.warning(f"Research step for sprint planning should be handled by SPRINT_PLANNING step instead")
+                return await self._handle_sprint_planning_with_deerflow_planner(context)
             else:
-                # Generic research
-                context.intent = IntentType.RESEARCH_TOPIC
-                return await self._execute_intent(IntentType.RESEARCH_TOPIC, context)
+                # Generic research using LLM
+                return await self._handle_generic_research(context, step)
         
         elif step_type_str == "switch_project":
             return await self._handle_switch_project(context)
@@ -2272,6 +2285,132 @@ Be concise but realistic."""
             return {
                 "type": "error",
                 "message": f"Failed to research ETA: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_generic_research(
+        self,
+        context: ConversationContext,
+        step: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Handle generic research step - Use LLM to answer research questions"""
+        logger.info(f"Handling generic research: {step.get('title')}")
+        
+        try:
+            title = step.get('title', '')
+            description = step.get('description', '')
+            
+            # Build research query from step description
+            research_query = f"""{description}
+
+Please provide a comprehensive analysis or answer. Be specific and actionable."""
+            
+            # Call LLM for research
+            from src.llms.llm import get_llm_by_type
+            llm = get_llm_by_type("basic")
+            response = await llm.ainvoke(research_query)
+            
+            if isinstance(response, str):
+                research_result = response
+            else:
+                research_result = response.content if hasattr(response, 'content') else str(response)
+            
+            logger.info(f"Generic research completed: {len(research_result)} chars")
+            
+            context.current_state = FlowState.COMPLETED
+            
+            return {
+                "type": "execution_completed",
+                "message": f"✅ **Research Completed: {title}**\n\n{research_result}",
+                "state": "complete"
+            }
+        
+        except Exception as e:
+            logger.error(f"Generic research failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to complete research: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_dependency_research(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle dependency analysis research - Analyze task dependencies"""
+        logger.info("Handling dependency research")
+        
+        try:
+            # Get current project context
+            project_id = context.gathered_data.get("project_id") or context.gathered_data.get("active_project_id")
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Project context required for dependency analysis. Please switch to a project first.",
+                    "state": context.current_state.value
+                }
+            
+            # List all tasks for the project
+            all_tasks = await self.pm_provider.list_tasks(project_id=project_id)
+            
+            if not all_tasks:
+                return {
+                    "type": "error",
+                    "message": "No tasks found for dependency analysis.",
+                    "state": context.current_state.value
+                }
+            
+            # Build task dependency query for LLM
+            task_list = "\n".join([
+                f"- {task.title} (ID: {task.id}, Priority: {task.priority or 'medium'})"
+                for task in all_tasks[:20]  # Limit to 20 tasks
+            ])
+            
+            research_query = f"""Analyze dependencies between these project tasks:
+
+{task_list}
+
+For each task, identify:
+1. Tasks it depends on (prerequisites)
+2. Tasks that depend on it (blockers)
+3. Critical path considerations
+
+Return a concise dependency analysis in this format:
+- Task Name: Depends on [list], Blocks [list]"""
+            
+            # Call LLM for dependency analysis
+            from src.llms.llm import get_llm_by_type
+            llm = get_llm_by_type("basic")
+            response = await llm.ainvoke(research_query)
+            
+            if isinstance(response, str):
+                analysis_result = response
+            else:
+                analysis_result = response.content if hasattr(response, 'content') else str(response)
+            
+            logger.info(f"Dependency research completed: {len(all_tasks)} tasks analyzed")
+            
+            context.current_state = FlowState.COMPLETED
+            
+            return {
+                "type": "execution_completed",
+                "message": f"✅ **Dependency Analysis Completed**\n\nAnalyzed {len(all_tasks)} tasks:\n\n{analysis_result}",
+                "state": "complete",
+                "data": {
+                    "tasks_analyzed": len(all_tasks),
+                    "analysis": analysis_result
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Dependency research failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to analyze dependencies: {str(e)}",
                 "state": context.current_state.value
             }
     

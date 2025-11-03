@@ -1,201 +1,450 @@
-2025-11-03 11:46:28,635 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
-2025-11-03 11:46:28,635 - __main__ - INFO - Log level: INFO
-2025-11-03 11:46:30,146 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
-2025-11-03 11:46:30,172 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
-INFO:     Started server process [19760]
+2025-11-03 12:00:21,349 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
+2025-11-03 12:00:21,349 - __main__ - INFO - Log level: INFO
+2025-11-03 12:00:23,054 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
+2025-11-03 12:00:23,080 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
+INFO:     Started server process [33024]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)
-2025-11-03 11:46:43,464 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
-2025-11-03 11:46:43,464 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
-2025-11-03 11:46:43,469 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
-2025-11-03 11:46:43,533 - src.conversation.flow_manager - INFO - Self-learning system initialized
-2025-11-03 11:46:43,533 - src.server.app - INFO - Created global ConversationFlowManager singleton
-INFO:     ::1:65135 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
-2025-11-03 11:46:43,537 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
-2025-11-03 11:46:43,537 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 11:46:46,998 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:46:47,015 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.47s
-2025-11-03 11:46:47,015 - src.conversation.flow_manager - INFO - PM plan LLM response: {
-  "locale": "vi-VN",
-  "overall_thought": "Người dùng muốn tính ETA cho các task chưa có ETA. Tôi sẽ liệt kê tasks, nghiên cứu để ước tính thời gian, sau đó cập nhật ETA cho từng task.",
+2025-11-03 12:00:26,681 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
+2025-11-03 12:00:26,681 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
+2025-11-03 12:00:26,686 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
+2025-11-03 12:00:26,750 - src.conversation.flow_manager - INFO - Self-learning system initialized
+2025-11-03 12:00:26,751 - src.server.app - INFO - Created global ConversationFlowManager singleton
+INFO:     ::1:49893 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 12:00:26,754 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 12:00:26,754 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:00:29,521 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:00:29,538 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.78s
+2025-11-03 12:00:29,538 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will switch the active project context to the demo project for focused work.",
   "steps": [
     {
-      "step_type": "list_my_tasks",
-      "title": "Liệt kê Tasks Được Assign",
-      "description": "Liệt kê tất cả task được giao cho user để xem task nào chưa có ETA",
+      "step_type": "switch_project",
+      "title": "Switch to Demo Project",
+      "description": "Set demo project as the active project for focused work",
       "requires_context": false
+    }
+  ]
+}
+2025-11-03 12:00:29,538 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.78s
+2025-11-03 12:00:29,538 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 2.78s
+2025-11-03 12:00:29,538 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 2.78s
+2025-11-03 12:00:29,538 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 2.78s
+2025-11-03 12:00:29,538 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 2.78s
+2025-11-03 12:00:30,179 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:00:30,183 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: null
+2025-11-03 12:00:30,183 - src.conversation.flow_manager - INFO - Extracted initial data: {}
+2025-11-03 12:00:30,183 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:00:32,677 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:00:32,682 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.50s
+2025-11-03 12:00:32,682 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will switch the active project context to the demo project for focused work.",
+  "steps": [
+    {
+      "step_type": "switch_project",
+      "title": "Switch to Demo Project",
+      "description": "Set demo project as the active project for focused work",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-03 12:00:32,683 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.50s
+2025-11-03 12:00:32,683 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
+2025-11-03 12:00:32,683 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 12:00:32,683 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 12:00:32,683 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
+2025-11-03 12:00:32,683 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: Switch to Demo Project - 0.00s
+2025-11-03 12:00:32,683 - src.conversation.flow_manager - INFO - Executing PM step: switch_project
+2025-11-03 12:00:32,683 - src.conversation.flow_manager - INFO - Handling SWITCH_PROJECT intent
+2025-11-03 12:00:32,683 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.00s - 0.00s total
+2025-11-03 12:00:32,683 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 3.15s
+2025-11-03 12:00:32,684 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 5.93s
+INFO:     ::1:49912 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 12:00:44,649 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 12:00:44,649 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:00:47,468 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:00:47,474 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.83s
+2025-11-03 12:00:47,474 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will switch the active project context to the Demo project for focused work.",
+  "steps": [
+    {
+      "step_type": "switch_project",
+      "title": "Switch to Demo Project",
+      "description": "Set Demo project as the active project for focused work",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-03 12:00:47,474 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.83s
+2025-11-03 12:00:47,474 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 2.83s
+2025-11-03 12:00:47,475 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 2.83s
+2025-11-03 12:00:47,475 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 2.83s
+2025-11-03 12:00:47,475 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 2.83s
+2025-11-03 12:00:47,475 - src.conversation.flow_manager - INFO - Final current_state: FlowState.COMPLETED, intent: IntentType.UNKNOWN
+2025-11-03 12:00:47,475 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 0.00s
+2025-11-03 12:00:47,475 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 2.83s
+INFO:     ::1:49960 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 12:00:59,463 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 12:00:59,463 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:01:03,126 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:01:03,128 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.67s
+2025-11-03 12:01:03,129 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will switch the active project context to the Demo project for focused work.",
+  "steps": [
+    {
+      "step_type": "switch_project",
+      "title": "Switch to Demo Project",
+      "description": "Set Demo project as the active project for focused work",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-03 12:01:03,129 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 3.67s
+2025-11-03 12:01:03,129 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 3.67s
+2025-11-03 12:01:03,129 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 3.67s
+2025-11-03 12:01:03,129 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 3.67s
+2025-11-03 12:01:03,129 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 3.67s
+2025-11-03 12:01:04,593 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:01:04,596 - src.conversation.flow_manager - INFO - Extracted data: {'project_name': 'Demo project', 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
+2025-11-03 12:01:04,596 - src.conversation.flow_manager - INFO - Extracted initial data: {'project_name': 'Demo project', 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
+2025-11-03 12:01:04,597 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:01:07,138 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:01:07,141 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.54s
+2025-11-03 12:01:07,141 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will switch the active project context to Demo project for focused work.",
+  "steps": [
+    {
+      "step_type": "switch_project",
+      "title": "Switch to Demo Project",
+      "description": "Set Demo project as the active project for focused work",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-03 12:01:07,141 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.54s
+2025-11-03 12:01:07,141 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
+2025-11-03 12:01:07,141 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 12:01:07,141 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 12:01:07,141 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
+2025-11-03 12:01:07,142 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: Switch to Demo Project - 0.00s
+2025-11-03 12:01:07,142 - src.conversation.flow_manager - INFO - Executing PM step: switch_project
+2025-11-03 12:01:07,142 - src.conversation.flow_manager - INFO - Handling SWITCH_PROJECT intent
+2025-11-03 12:01:07,215 - src.conversation.flow_manager - INFO - Found project 'Demo project' with ID: 1
+2025-11-03 12:01:07,216 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.07s - 0.07s total
+2025-11-03 12:01:07,216 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 4.09s
+2025-11-03 12:01:07,216 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 7.75s
+INFO:     ::1:51156 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 12:27:31,194 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 12:27:31,194 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:27:34,131 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:27:34,133 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.94s
+2025-11-03 12:27:34,133 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will analyze task dependencies in the project. First, I need to list tasks, then research dependencies, and provide recommendations.",
+  "steps": [
+    {
+      "step_type": "list_tasks",
+      "title": "List Current Project Tasks",
+      "description": "Retrieve all tasks in the current project for dependency analysis",
+      "requires_context": true
     },
     {
       "step_type": "research",
-      "title": "Nghiên cứu ước tính thời gian cho từng task",
-      "description": "Nghiên cứu và đưa ra ước tính thời gian hợp lý cho từng task dựa trên độ phức tạp và yêu cầu",
+      "title": "Analyze Task Dependencies",
+      "description": "Research and identify dependencies between tasks, critical paths, and blockers",
       "requires_context": true
     }
   ]
 }
-2025-11-03 11:46:47,015 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps in 3.48s
-2025-11-03 11:46:47,015 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 3.48s
-2025-11-03 11:46:47,016 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 3.48s
-2025-11-03 11:46:47,016 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 3.48s
-2025-11-03 11:46:47,016 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 3.48s
-2025-11-03 11:46:47,560 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:46:47,566 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: null
-2025-11-03 11:46:47,566 - src.conversation.flow_manager - INFO - Extracted initial data: {}
-2025-11-03 11:46:47,566 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 11:46:51,044 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:46:51,046 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.48s
-2025-11-03 11:46:51,046 - src.conversation.flow_manager - INFO - PM plan LLM response: {
-  "locale": "vi-VN",
-  "overall_thought": "Người dùng muốn tính ETA cho các task chưa có ETA. Tôi sẽ liệt kê tasks, nghiên cứu để ước tính thời gian, sau đó cập nhật ETA cho từng task.",
+2025-11-03 12:27:34,133 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps in 2.94s
+2025-11-03 12:27:34,133 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 2.94s
+2025-11-03 12:27:34,133 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 2.94s
+2025-11-03 12:27:34,133 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 2.94s
+2025-11-03 12:27:34,133 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 2.94s
+2025-11-03 12:27:35,581 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:27:35,588 - src.conversation.flow_manager - INFO - Extracted data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': None, 'tasks': None}
+2025-11-03 12:27:35,588 - src.conversation.flow_manager - INFO - Extracted initial data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': None, 'tasks': None}
+2025-11-03 12:27:35,589 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:27:38,982 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.40s
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will analyze task dependencies in the current project. First, I need to list tasks and then research dependencies to provide insights.",
   "steps": [
     {
-      "step_type": "list_my_tasks",
-      "title": "Liệt kê Tasks Được Assign",
-      "description": "Liệt kê tất cả task được giao cho user để xem task nào chưa có ETA",
-      "requires_context": false
+      "step_type": "list_tasks",
+      "title": "List Current Project Tasks",
+      "description": "Retrieve all tasks in the current project for dependency analysis",
+      "requires_context": true
     },
     {
       "step_type": "research",
-      "title": "Nghiên cứu ước tính thời gian cho từng task",
-      "description": "Nghiên cứu và đưa ra ước tính thời gian hợp lý cho từng task dựa trên độ phức tạp và yêu cầu",
+      "title": "Analyze Task Dependencies",
+      "description": "Research and identify dependencies between tasks, critical paths, and blockers",
       "requires_context": true
     }
   ]
 }
-2025-11-03 11:46:51,046 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps in 3.48s
-2025-11-03 11:46:51,046 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps
-2025-11-03 11:46:51,046 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
-2025-11-03 11:46:51,046 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
-2025-11-03 11:46:51,046 - src.conversation.flow_manager - INFO - [TIMING] Plan has 2 steps - 0.00s
-2025-11-03 11:46:51,046 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/2: Liệt kê Tasks Được Assign - 0.00s
-2025-11-03 11:46:51,046 - src.conversation.flow_manager - INFO - Executing PM step: list_my_tasks
-2025-11-03 11:46:52,071 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:46:52,073 - src.conversation.flow_manager - INFO - Extracted data: {'filter_week': None, 'filter_date': None, 'period': None}
-2025-11-03 11:46:52,073 - src.conversation.flow_manager - INFO - Extracted list_my_tasks data: {'filter_week': None, 'filter_date': None, 'period': None}
-2025-11-03 11:46:52,073 - src.conversation.flow_manager - INFO - Handling LIST_MY_TASKS intent
-2025-11-03 11:46:52,119 - src.conversation.flow_manager - INFO - Using current user from API key: OpenProject Admin (ID: 4)
-2025-11-03 11:46:52,119 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
-2025-11-03 11:46:52,260 - src.conversation.flow_manager - INFO - Calculated total hours: 8.0 from 20 tasks
-2025-11-03 11:46:52,289 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 1.24s - 1.24s total
-2025-11-03 11:46:52,289 - src.conversation.flow_manager - INFO - [TIMING] Executing step 2/2: Nghiên cứu ước tính thời gian cho từng task - 1.24s
-2025-11-03 11:46:52,289 - src.conversation.flow_manager - INFO - Executing PM step: research
-2025-11-03 11:46:52,290 - src.conversation.flow_manager - INFO - Handling ETA research
-2025-11-03 11:46:52,318 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
-2025-11-03 11:46:55,553 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:46:55,555 - src.conversation.flow_manager - INFO - LLM ETA response: - Start of project (ID: 1): 8 hours
-- Organize open source conference (ID: 2): 80 hours
-- Contact sponsoring partners (ID: 5): 20 hours
-- Create sponsorship brochure and hand-outs (ID: 6): 15 hours
-- Invite attendees to conference (ID: 7): 12 hours
-- Setup conference website (ID: 8): 25 hours
-- Conference (ID: 9): 40 hours
-- Follow-up tasks (ID: 10): 10 hours
-- Upload presentations to website (ID: 11): 5 hours
-- Party for conference supporters :-) (ID: 12): 10 hours
-2025-11-03 11:46:55,556 - src.conversation.flow_manager - INFO - Parsed ETA for Start of project: 8.0h
-2025-11-03 11:46:55,556 - src.conversation.flow_manager - INFO - Parsed ETA for Organize open source conference: 80.0h
-2025-11-03 11:46:55,557 - src.conversation.flow_manager - INFO - Parsed ETA for Contact sponsoring partners: 20.0h
-2025-11-03 11:46:55,557 - src.conversation.flow_manager - INFO - Parsed ETA for Create sponsorship brochure and hand-outs: 15.0h
-2025-11-03 11:46:55,557 - src.conversation.flow_manager - INFO - Parsed ETA for Invite attendees to conference: 12.0h
-2025-11-03 11:46:55,557 - src.conversation.flow_manager - INFO - Parsed ETA for Setup conference website: 25.0h
-2025-11-03 11:46:55,557 - src.conversation.flow_manager - INFO - Parsed ETA for Conference: 40.0h
-2025-11-03 11:46:55,558 - src.conversation.flow_manager - INFO - Parsed ETA for Follow-up tasks: 10.0h
-2025-11-03 11:46:55,558 - src.conversation.flow_manager - INFO - Parsed ETA for Upload presentations to website: 5.0h
-2025-11-03 11:46:55,558 - src.conversation.flow_manager - INFO - Parsed ETA for Party for conference supporters :-): 10.0h
-2025-11-03 11:46:57,329 - src.conversation.flow_manager - INFO - [TIMING] Step 2 completed in 5.04s - 6.28s total
-2025-11-03 11:46:57,330 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 10.31s
-2025-11-03 11:46:57,332 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 13.79s
-INFO:     ::1:65245 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
-2025-11-03 11:47:17,606 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
-2025-11-03 11:47:17,606 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 11:47:21,789 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:47:21,798 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 4.19s
-2025-11-03 11:47:21,798 - src.conversation.flow_manager - INFO - PM plan LLM response: {
-  "locale": "vi-VN",
-  "overall_thought": "Người dùng muốn tính ETA cho các task chưa có ETA. Tôi sẽ liệt kê tasks, nghiên cứu để ước tính thời gian, sau đó cập nhật ETA cho từng task.",
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps in 3.40s
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - [TIMING] Plan has 2 steps - 0.00s
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/2: List Current Project Tasks - 0.00s
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - Executing PM step: list_tasks
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - Handling LIST_TASKS intent
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.00s - 0.00s total
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - [TIMING] Executing step 2/2: Analyze Task Dependencies - 0.00s
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - Executing PM step: research
+2025-11-03 12:27:38,985 - src.conversation.flow_manager - INFO - Handling generic research: Analyze Task Dependencies
+2025-11-03 12:27:53,302 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:27:53,305 - src.conversation.flow_manager - INFO - Generic research completed: 5023 chars
+2025-11-03 12:27:53,305 - src.conversation.flow_manager - INFO - [TIMING] Step 2 completed in 14.32s - 14.32s total
+2025-11-03 12:27:53,305 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 19.17s
+2025-11-03 12:27:53,306 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 22.11s
+INFO:     ::1:51194 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 12:27:58,779 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 12:27:58,779 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:28:02,105 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:02,108 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.33s
+2025-11-03 12:28:02,108 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will first switch the active context to project 1, then analyze dependencies within that project.",
   "steps": [
     {
-      "step_type": "list_my_tasks",
-      "title": "Liệt kê Tasks Được Assign",
-      "description": "Liệt kê tất cả task được giao cho user để xem task nào chưa có ETA",
+      "step_type": "switch_project",
+      "title": "Switch to Project 1",
+      "description": "Activate project 1 as the current working context for further tasks.",
       "requires_context": false
     },
     {
+      "step_type": "list_tasks",
+      "title": "List Current Project Tasks for Dependency Analysis",
+      "description": "Retrieve all tasks in project 1 for understanding dependencies.",
+      "requires_context": true
+    },
+    {
       "step_type": "research",
-      "title": "Nghiên cứu ước tính thời gian cho từng task",
-      "description": "Nghiên cứu và đưa ra ước tính thời gian hợp lý cho từng task dựa trên độ phức tạp và yêu cầu",
+      "title": "Analyze Task Dependencies",
+      "description": "Research and identify dependencies between tasks, critical paths, and blockers within project 1.",
       "requires_context": true
     }
   ]
 }
-2025-11-03 11:47:21,798 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps in 4.19s
-2025-11-03 11:47:21,798 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 4.19s
-2025-11-03 11:47:21,798 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 4.19s
-2025-11-03 11:47:21,798 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 4.19s
-2025-11-03 11:47:21,798 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 4.19s
-2025-11-03 11:47:22,593 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:47:22,607 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: ```json
-null
+2025-11-03 12:28:02,108 - src.conversation.flow_manager - INFO - Generated PM plan with 3 steps in 3.33s
+2025-11-03 12:28:02,108 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 3.33s
+2025-11-03 12:28:02,108 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 3.33s
+2025-11-03 12:28:02,109 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 3.33s
+2025-11-03 12:28:02,109 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 3.33s
+2025-11-03 12:28:03,724 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:03,727 - src.conversation.flow_manager - INFO - Extracted data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': None, 'tasks': ['switch to project 1', 'analyze dependencies']}
+2025-11-03 12:28:03,727 - src.conversation.flow_manager - INFO - Extracted initial data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': None, 'tasks': ['switch to project 1', 'analyze dependencies']}
+2025-11-03 12:28:03,727 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:28:07,267 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:07,275 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.55s
+2025-11-03 12:28:07,275 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will switch to project 1 for focused work and then analyze the dependencies of tasks within it.",
+  "steps": [
+    {
+      "step_type": "switch_project",
+      "title": "Switch to Project 1",
+      "description": "Activate project 1 for focused work on tasks and analysis.",
+      "requires_context": false
+    },
+    {
+      "step_type": "list_tasks",
+      "title": "List Current Project Tasks",
+      "description": "Retrieve all tasks in project 1 for dependency analysis.",
+      "requires_context": true
+    },
+    {
+      "step_type": "research",
+      "title": "Analyze Task Dependencies",
+      "description": "Research and identify dependencies between tasks, critical paths, and blockers for project 1.",
+      "requires_context": true
+    }
+  ]
+}
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - Generated PM plan with 3 steps in 3.55s
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - Generated PM plan with 3 steps
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - [TIMING] Plan has 3 steps - 0.00s
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/3: Switch to Project 1 - 0.00s
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - Executing PM step: switch_project
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - Handling SWITCH_PROJECT intent
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.00s - 0.00s total
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - [TIMING] Executing step 2/3: List Current Project Tasks - 0.00s
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - Executing PM step: list_tasks
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - Handling LIST_TASKS intent
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - [TIMING] Step 2 completed in 0.00s - 0.00s total
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - [TIMING] Executing step 3/3: Analyze Task Dependencies - 0.00s
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - Executing PM step: research
+2025-11-03 12:28:07,276 - src.conversation.flow_manager - INFO - Handling generic research: Analyze Task Dependencies
+2025-11-03 12:28:22,071 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:22,077 - src.conversation.flow_manager - INFO - Generic research completed: 4165 chars
+2025-11-03 12:28:22,077 - src.conversation.flow_manager - INFO - [TIMING] Step 3 completed in 14.80s - 14.80s total
+2025-11-03 12:28:22,077 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 19.97s
+2025-11-03 12:28:22,077 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 23.30s
+INFO:     ::1:51247 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 12:28:32,747 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 12:28:32,747 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:28:34,982 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:34,984 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.24s
+2025-11-03 12:28:34,985 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will research best practices for sprint planning to provide comprehensive guidance.",
+  "steps": [
+    {
+      "step_type": "research",
+      "title": "Research Sprint Planning Best Practices",
+      "description": "Research industry best practices, frameworks, and techniques for effective sprint planning to enhance team efficiency and productivity.",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-03 12:28:34,985 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.24s
+2025-11-03 12:28:34,985 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 2.24s
+2025-11-03 12:28:34,985 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 2.24s
+2025-11-03 12:28:34,985 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 2.24s
+2025-11-03 12:28:34,985 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 2.24s
+2025-11-03 12:28:36,199 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:36,202 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: null
+2025-11-03 12:28:36,202 - src.conversation.flow_manager - INFO - Extracted initial data: {}
+2025-11-03 12:28:36,202 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:28:38,131 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 1.93s
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will research best practices for sprint planning to provide comprehensive guidance.",
+  "steps": [
+    {
+      "step_type": "research",
+      "title": "Research Sprint Planning Best Practices",
+      "description": "Research industry best practices, frameworks, and techniques for conducting effective sprint planning sessions.",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 1.94s
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: Research Sprint Planning Best Practices - 0.00s
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - INFO - Executing PM step: research
+2025-11-03 12:28:38,137 - src.conversation.flow_manager - WARNING - Research step for sprint planning should be handled by SPRINT_PLANNING step instead
+2025-11-03 12:28:40,859 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:40,878 - src.conversation.flow_manager - INFO - Thinking plan LLM response: ```json
+{
+  "thought": "I will assess project tasks, evaluate team capacity, and plan sprints with prioritized task assignments.",
+  "steps": [
+    "Review project backlog to identify available tasks for sprints",
+    "Calculate team capacity based on member availability and sprint duration",
+    "Prioritize and select tasks that align with team capacity for the sprint",
+    "Assign tasks to team members and document sprint plan"
+  ]
+}
 ```
-2025-11-03 11:47:22,607 - src.conversation.flow_manager - INFO - Extracted initial data: {}
-2025-11-03 11:47:22,607 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 11:47:26,511 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:47:26,513 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.91s
-2025-11-03 11:47:26,513 - src.conversation.flow_manager - INFO - PM plan LLM response: {
-  "locale": "vi-VN",
-  "overall_thought": "Người dùng muốn tính ETA cho các task chưa có ETA. Tôi sẽ liệt kê tasks, nghiên cứu để ước tính thời gian, sau đó cập nhật ETA cho từng task.",
+2025-11-03 12:28:40,878 - src.conversation.flow_manager - INFO - Extracted thinking plan: {'thought': 'I will assess project tasks, evaluate team capacity, and plan sprints with prioritized task assignments.', 'steps': ['Review project backlog to identify available tasks for sprints', 'Calculate team capacity based on member availability and sprint duration', 'Prioritize and select tasks that align with team capacity for the sprint', 'Assign tasks to team members and document sprint plan']}
+2025-11-03 12:28:40,878 - src.conversation.flow_manager - INFO - Handling SPRINT_PLANNING intent
+2025-11-03 12:28:40,887 - src.conversation.flow_manager - INFO - SPRINT_PLANNING - project_id: None
+2025-11-03 12:28:40,887 - src.conversation.flow_manager - INFO - SPRINT_PLANNING - gathered_data: {'_pm_plan': {'locale': 'en-US', 'overall_thought': 'I will research best practices for sprint planning to provide comprehensive guidance.', 'steps': [{'step_type': 'research', 'title': 'Research Sprint Planning Best Practices', 'description': 'Research industry best practices, frameworks, and techniques for conducting effective sprint planning sessions.', 'requires_context': False, 'execution_res': None}]}, '_current_step_index': 0}
+2025-11-03 12:28:40,887 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 2.75s - 2.75s total
+2025-11-03 12:28:40,887 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 5.90s
+2025-11-03 12:28:40,887 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 8.14s
+INFO:     ::1:51290 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 12:28:50,326 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 12:28:50,326 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:28:54,731 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:54,733 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 4.41s
+2025-11-03 12:28:54,733 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will provide a clear comparison of Agile and Waterfall methodologies, outlining their key features and differences.",
   "steps": [
     {
-      "step_type": "list_my_tasks",
-      "title": "Liệt kê Tasks Được Assign",
-      "description": "Liệt kê tất cả task được giao cho user để xem task nào chưa có ETA",
+      "step_type": "research",
+      "title": "Research Agile Methodology",
+      "description": "Gather information on Agile methodology, including its principles, frameworks, and benefits.",
       "requires_context": false
     },
     {
       "step_type": "research",
-      "title": "Nghiên cứu ước tính thời gian cho từng task",
-      "description": "Nghiên cứu và đưa ra ước tính thời gian hợp lý cho từng task dựa trên độ phức tạp và yêu cầu",
+      "title": "Research Waterfall Methodology",
+      "description": "Gather information on Waterfall methodology, including its phases, characteristics, and advantages.",
+      "requires_context": false
+    },
+    {
+      "step_type": "research",
+      "title": "Compare Agile and Waterfall Methodologies",
+      "description": "Analyze and compare the key features, pros and cons, and ideal use cases of Agile vs Waterfall.",
       "requires_context": true
     }
   ]
 }
-2025-11-03 11:47:26,513 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps in 3.91s
-2025-11-03 11:47:26,513 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps
-2025-11-03 11:47:26,513 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
-2025-11-03 11:47:26,513 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
-2025-11-03 11:47:26,513 - src.conversation.flow_manager - INFO - [TIMING] Plan has 2 steps - 0.00s
-2025-11-03 11:47:26,513 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/2: Liệt kê Tasks Được Assign - 0.00s
-2025-11-03 11:47:26,513 - src.conversation.flow_manager - INFO - Executing PM step: list_my_tasks
-2025-11-03 11:47:27,478 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:47:27,481 - src.conversation.flow_manager - INFO - Extracted data: {'filter_week': None, 'filter_date': None, 'period': None}
-2025-11-03 11:47:27,481 - src.conversation.flow_manager - INFO - Extracted list_my_tasks data: {'filter_week': None, 'filter_date': None, 'period': None}
-2025-11-03 11:47:27,481 - src.conversation.flow_manager - INFO - Handling LIST_MY_TASKS intent
-2025-11-03 11:47:27,510 - src.conversation.flow_manager - INFO - Using current user from API key: OpenProject Admin (ID: 4)
-2025-11-03 11:47:27,510 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
-2025-11-03 11:47:27,649 - src.conversation.flow_manager - INFO - Calculated total hours: 113.0 from 20 tasks
-2025-11-03 11:47:27,675 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 1.16s - 1.16s total
-2025-11-03 11:47:27,676 - src.conversation.flow_manager - INFO - [TIMING] Executing step 2/2: Nghiên cứu ước tính thời gian cho từng task - 1.16s
-2025-11-03 11:47:27,676 - src.conversation.flow_manager - INFO - Executing PM step: research
-2025-11-03 11:47:27,676 - src.conversation.flow_manager - INFO - Handling ETA research
-2025-11-03 11:47:27,684 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
-2025-11-03 11:47:30,333 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:47:30,376 - src.conversation.flow_manager - INFO - LLM ETA response: - End of project (ID: 13): 10 hours
-- New login screen (ID: 14): 20 hours
-- Password reset does not send email (ID: 15): 5 hours
-- New website (ID: 16): 80 hours
-- Newsletter registration form (ID: 17): 15 hours
-- Implement product tour (ID: 18): 25 hours
-- New landing page (ID: 19): 30 hours
-- Create wireframes for new landing page (ID: 20): 15 hours
-2025-11-03 11:47:30,377 - src.conversation.flow_manager - INFO - Parsed ETA for End of project: 10.0h
-2025-11-03 11:47:30,377 - src.conversation.flow_manager - INFO - Parsed ETA for New login screen: 20.0h
-2025-11-03 11:47:30,377 - src.conversation.flow_manager - INFO - Parsed ETA for Password reset does not send email: 5.0h
-2025-11-03 11:47:30,377 - src.conversation.flow_manager - INFO - Parsed ETA for New website: 80.0h
-2025-11-03 11:47:30,377 - src.conversation.flow_manager - INFO - Parsed ETA for Newsletter registration form: 15.0h
-2025-11-03 11:47:30,377 - src.conversation.flow_manager - INFO - Parsed ETA for Implement product tour: 25.0h
-2025-11-03 11:47:30,377 - src.conversation.flow_manager - INFO - Parsed ETA for New landing page: 30.0h
-2025-11-03 11:47:30,377 - src.conversation.flow_manager - INFO - Parsed ETA for Create wireframes for new landing page: 15.0h
-2025-11-03 11:47:31,806 - src.conversation.flow_manager - INFO - [TIMING] Step 2 completed in 4.13s - 5.29s total
-2025-11-03 11:47:31,806 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 10.01s
-2025-11-03 11:47:31,806 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 14.20s
+2025-11-03 12:28:54,733 - src.conversation.flow_manager - INFO - Generated PM plan with 3 steps in 4.41s
+2025-11-03 12:28:54,733 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 4.41s
+2025-11-03 12:28:54,733 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 4.41s
+2025-11-03 12:28:54,734 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 4.41s
+2025-11-03 12:28:54,734 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 4.41s
+2025-11-03 12:28:56,067 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:28:56,092 - src.conversation.flow_manager - INFO - Extracted data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': None, 'tasks': None}
+2025-11-03 12:28:56,092 - src.conversation.flow_manager - INFO - Extracted initial data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': None, 'tasks': None}
+2025-11-03 12:28:56,092 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 12:29:01,091 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:29:01,094 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 5.00s
+2025-11-03 12:29:01,094 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will clarify the differences between Agile and Waterfall project management methodologies, highlighting key features and use cases.",
+  "steps": [
+    {
+      "step_type": "research",
+      "title": "Research Agile Methodology",
+      "description": "Gather information on Agile methodology, including its principles, practices, and suitability for projects.",
+      "requires_context": false
+    },
+    {
+      "step_type": "research",
+      "title": "Research Waterfall Methodology",
+      "description": "Gather information on Waterfall methodology, including its stages, characteristics, and appropriate usage.",
+      "requires_context": false
+    },
+    {
+      "step_type": "research",
+      "title": "Compare Agile and Waterfall Methodologies",
+      "description": "Analyze the differences, advantages, and disadvantages between Agile and Waterfall methodologies to provide a clear comparison.",
+      "requires_context": true
+    }
+  ]
+}
+2025-11-03 12:29:01,095 - src.conversation.flow_manager - INFO - Generated PM plan with 3 steps in 5.00s
+2025-11-03 12:29:01,095 - src.conversation.flow_manager - INFO - Generated PM plan with 3 steps
+2025-11-03 12:29:01,095 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 12:29:01,095 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 12:29:01,095 - src.conversation.flow_manager - INFO - [TIMING] Plan has 3 steps - 0.00s
+2025-11-03 12:29:01,095 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/3: Research Agile Methodology - 0.00s
+2025-11-03 12:29:01,095 - src.conversation.flow_manager - INFO - Executing PM step: research
+2025-11-03 12:29:01,095 - src.conversation.flow_manager - INFO - Handling generic research: Research Agile Methodology
+2025-11-03 12:29:21,036 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:29:21,040 - src.conversation.flow_manager - INFO - Generic research completed: 5734 chars
+2025-11-03 12:29:21,040 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 19.95s - 19.95s total
+2025-11-03 12:29:21,040 - src.conversation.flow_manager - INFO - [TIMING] Executing step 2/3: Research Waterfall Methodology - 19.95s
+2025-11-03 12:29:21,040 - src.conversation.flow_manager - INFO - Executing PM step: research
+2025-11-03 12:29:21,041 - src.conversation.flow_manager - INFO - Handling generic research: Research Waterfall Methodology
+2025-11-03 12:29:37,742 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:29:37,747 - src.conversation.flow_manager - INFO - Generic research completed: 5156 chars
+2025-11-03 12:29:37,748 - src.conversation.flow_manager - INFO - [TIMING] Step 2 completed in 16.71s - 36.65s total
+2025-11-03 12:29:37,748 - src.conversation.flow_manager - INFO - [TIMING] Executing step 3/3: Compare Agile and Waterfall Methodologies - 36.65s
+2025-11-03 12:29:37,748 - src.conversation.flow_manager - INFO - Executing PM step: research
+2025-11-03 12:29:37,748 - src.conversation.flow_manager - INFO - Handling generic research: Compare Agile and Waterfall Methodologies
+2025-11-03 12:29:54,866 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 12:29:54,900 - src.conversation.flow_manager - INFO - Generic research completed: 5297 chars
+2025-11-03 12:29:54,900 - src.conversation.flow_manager - INFO - [TIMING] Step 3 completed in 17.15s - 53.81s total
+2025-11-03 12:29:54,900 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 60.17s

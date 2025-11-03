@@ -10,7 +10,6 @@ import { useMyTasks, useAllTasks } from "~/core/api/hooks/pm/use-tasks";
 import { TaskDetailsModal } from "../task-details-modal";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "~/components/ui/button";
 
 export function DashboardView() {
   const { projects, loading: projectsLoading } = useProjects();
@@ -71,15 +70,26 @@ export function DashboardView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {activeProject ? `${activeProject.name} Dashboard` : "Dashboard"}
-        </h2>
-        {activeProject && (
-          <Button variant="ghost" size="sm" onClick={() => router.push('/pm/chat')}>
-            Clear Filter
-          </Button>
-        )}
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Dashboard</h2>
+          {activeProject && (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {activeProject.name}
+              </span>
+              <button
+                onClick={() => router.push('/pm/chat')}
+                className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                aria-label="Remove filter"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats Cards */}

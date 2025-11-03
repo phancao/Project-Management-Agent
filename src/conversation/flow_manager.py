@@ -814,6 +814,15 @@ class ConversationFlowManager:
                 {"role": "system", "content": system_prompt}
             ]
             
+            # Add key facts summary if available (from gathered_data)
+            key_facts = self._extract_key_facts(context)
+            if key_facts:
+                messages.append({
+                    "role": "system",
+                    "content": f"**Key Context:**\n{key_facts}\n\nUse this context when planning steps."
+                })
+                logger.info(f"Added key facts to context: {key_facts[:100]}...")
+            
             # Add conversation history if available (optimized context selection)
             if context.conversation_history:
                 # Use semantic importance scoring to select most relevant messages
@@ -2764,6 +2773,57 @@ Return a concise dependency analysis in this format:
         except Exception as e:
             logger.error(f"Failed to record user feedback: {e}")
             return False
+    
+    def _extract_key_facts(self, context: ConversationContext) -> str:
+        """
+        Extract key facts from gathered_data to provide context to LLM
+        
+        Args:
+            context: Current conversation context
+            
+        Returns:
+            Formatted string of key facts
+        """
+        facts = []
+        
+        # Active contexts
+        if context.gathered_data.get("active_project_id"):
+            project_name = context.gathered_data.get("active_project_name", "Unknown")
+            facts.append(f"- Active Project: {project_name} (ID: {context.gathered_data['active_project_id']})")
+        
+        if context.gathered_data.get("active_sprint_id"):
+            sprint_name = context.gathered_data.get("active_sprint_name", "Unknown")
+            facts.append(f"- Active Sprint: {sprint_name} (ID: {context.gathered_data['active_sprint_id']})")
+        
+        if context.gathered_data.get("active_task_id"):
+            task_title = context.gathered_data.get("active_task_title", "Unknown")
+            facts.append(f"- Active Task: {task_title} (ID: {context.gathered_data['active_task_id']})")
+        
+        # Project context (from data extraction)
+        if context.gathered_data.get("project_name"):
+            facts.append(f"- Project Context: {context.gathered_data['project_name']}")
+        
+        # Recent actions (from pm_plan if exists)
+        if context.gathered_data.get("_pm_plan"):
+            pm_plan = context.gathered_data['_pm_plan']
+            if isinstance(pm_plan, dict) and pm_plan.get("overall_thought"):
+                facts.append(f"- Recent Plan: {pm_plan['overall_thought'][:100]}...")
+        
+        # User preferences/settings (if any)
+        if context.gathered_data.get("filter_week"):
+            facts.append("- Filter: Current week")
+        
+        if context.gathered_data.get("period"):
+            facts.append(f"- Time Period: {context.gathered_data['period']}")
+        
+        # Research context
+        if context.gathered_data.get("research_already_done"):
+            facts.append("- Research: Already completed in this session")
+        
+        if not facts:
+            return ""
+        
+        return "\n".join(facts)
     
     def _select_relevant_messages(
         self,

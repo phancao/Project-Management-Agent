@@ -126,3 +126,8 @@ INFO:     ::1:59789 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
 2025-11-03 13:50:26,177 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.28s - 0.28s total
 2025-11-03 13:50:26,177 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 4.49s
 2025-11-03 13:50:26,177 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 6.96s
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [38518]
+2025-11-03 14:01:14,553 - __main__ - INFO - Received shutdown signal. Starting graceful shutdown...

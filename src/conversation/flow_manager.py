@@ -679,6 +679,28 @@ class ConversationFlowManager:
             context.intent = IntentType.CREATE_REPORT
             return await self._handle_create_report(context)
         
+        elif step_type_str == "task_assignment":
+            # Extract assignment data from the last user message before execution
+            if context.conversation_history:
+                last_message = context.conversation_history[-1].get("content", "")
+                if last_message:
+                    assignment_data = await self.data_extractor.extract_project_data(
+                        message=last_message,
+                        intent=IntentType.ASSIGN_TASKS,
+                        gathered_data=context.gathered_data
+                    )
+                    context.gathered_data.update(assignment_data)
+                    logger.info(f"Extracted task_assignment data: {assignment_data}")
+            return await self._handle_task_assignment(context)
+        
+        elif step_type_str == "gantt_chart":
+            context.intent = IntentType.GET_STATUS  # Reuse status for now
+            return await self._handle_gantt_chart(context)
+        
+        elif step_type_str == "dependency_analysis":
+            context.intent = IntentType.DEPENDENCY_ANALYSIS
+            return await self._handle_dependency_research(context)
+        
         elif step_type_str == "unknown":
             logger.warning(f"Unsupported request: {step.get('title', step_type_str)}")
             description = step.get('description', 'This feature is not currently supported.')
@@ -1320,49 +1342,87 @@ class ConversationFlowManager:
         logger.info("Handling CREATE_REPORT intent")
         
         try:
-            from src.handlers import ReportGenerator
-            
             # Get report parameters
-            project_id = context.gathered_data.get("project_id")
+            project_id = context.gathered_data.get("project_id") or context.gathered_data.get("active_project_id")
             report_type = context.gathered_data.get("report_type", "status")
-            include_research = context.gathered_data.get("include_research", True)
-            format_type = context.gathered_data.get("format", "markdown")
             
             if not project_id:
                 return {
                     "type": "error",
-                    "message": "Project ID is required to generate a report. Please specify which project.",
+                    "message": "Project ID is required to generate a report. Please specify which project or switch to one.",
                     "state": context.current_state.value
                 }
             
-            # Initialize report generator
-            generator = ReportGenerator(db_session=self.db_session)
-            
-            # Generate report
-            report = await generator.generate_report(
-                project_id=project_id,
-                report_type=report_type,
-                include_research=include_research,
-                format=format_type
-            )
-            
-            if "error" in report:
+            # Get project data
+            project = await self.pm_provider.get_project(project_id)
+            if not project:
                 return {
                     "type": "error",
-                    "message": report["error"],
+                    "message": f"Project not found.",
                     "state": context.current_state.value
                 }
+            
+            # Get tasks
+            tasks = await self.pm_provider.list_tasks(project_id=project_id)
+            
+            # Calculate metrics
+            total_tasks = len(tasks)
+            completed_tasks = sum(1 for t in tasks if t.status == "completed")
+            in_progress_tasks = sum(1 for t in tasks if t.status == "in_progress")
+            total_hours = sum(t.estimated_hours for t in tasks if t.estimated_hours)
+            completed_hours = sum(
+                t.estimated_hours for t in tasks 
+                if t.estimated_hours and t.status == "completed"
+            )
+            
+            # Generate report based on type
+            if report_type == "progress":
+                # Detailed progress report
+                content = f"""# {project.name} - Progress Report
+
+## Executive Summary
+- **Status:** {project.status}
+- **Total Tasks:** {total_tasks}
+- **Completed:** {completed_tasks} ({(completed_tasks / total_tasks * 100) if total_tasks > 0 else 0:.1f}%)
+- **In Progress:** {in_progress_tasks}
+- **Overall Progress:** {(completed_hours / total_hours * 100) if total_hours > 0 else 0:.1f}% ({completed_hours:.1f}h / {total_hours:.1f}h)
+
+## Task Details
+
+### Completed Tasks ✅
+{chr(10).join(f"- {t.title} ({t.estimated_hours}h)" if t.estimated_hours else f"- {t.title}" for t in tasks if t.status == "completed")}
+
+### In Progress 🔄
+{chr(10).join(f"- {t.title} ({t.estimated_hours}h)" if t.estimated_hours else f"- {t.title}" for t in tasks if t.status == "in_progress")}
+
+### To Do ⏳
+{chr(10).join(f"- {t.title} ({t.estimated_hours}h)" if t.estimated_hours else f"- {t.title}" for t in tasks if t.status not in ["completed", "in_progress"])}
+"""
+            else:
+                # Status report (default)
+                content = f"""# {project.name} - Status Report
+
+## Current Status
+- **Status:** {project.status or "Active"}
+- **Total Tasks:** {total_tasks}
+- **Completed:** {completed_tasks} ({(completed_tasks / total_tasks * 100) if total_tasks > 0 else 0:.1f}%)
+- **In Progress:** {in_progress_tasks}
+- **Progress:** {(completed_hours / total_hours * 100) if total_hours > 0 else 0:.1f}%
+
+## Tasks
+{chr(10).join(f"- {t.status or 'todo'}: {t.title}" for t in tasks)}
+"""
             
             context.current_state = FlowState.COMPLETED
             return {
                 "type": "execution_completed",
-                "message": f"Report generated successfully for '{report.get('project_name', 'project')}'!",
+                "message": f"✅ **Report Generated Successfully**\n\nGenerated {report_type} report for '{project.name}':\n\n{content}",
                 "state": context.current_state.value,
                 "data": {
                     "report_type": report_type,
-                    "format": format_type,
-                    "content": report.get("content", "")[:1000],  # Preview
-                    "sections": report.get("sections", 0)
+                    "project_name": project.name,
+                    "total_tasks": total_tasks,
+                    "completed_tasks": completed_tasks
                 }
             }
         
@@ -1371,8 +1431,178 @@ class ConversationFlowManager:
             return {
                 "type": "error",
                 "message": f"Failed to generate report: {str(e)}",
-            "state": context.current_state.value
-        }
+                "state": context.current_state.value
+            }
+    
+    async def _handle_task_assignment(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle TASK_ASSIGNMENT intent - Assign tasks to team members"""
+        logger.info("Handling TASK_ASSIGNMENT intent")
+        
+        try:
+            # Get parameters
+            project_id = context.gathered_data.get("project_id") or context.gathered_data.get("active_project_id")
+            task_ids = context.gathered_data.get("task_ids", [])
+            assignee_id = context.gathered_data.get("assignee_id")
+            assignee_name = context.gathered_data.get("assignee_name")
+            
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Project context required. Please switch to a project first.",
+                    "state": context.current_state.value
+                }
+            
+            # Get assignee by name if provided
+            if assignee_name and not assignee_id:
+                users = await self.pm_provider.list_users(project_id=project_id)
+                matching_user = next((u for u in users if u.name.lower() == assignee_name.lower()), None)
+                if matching_user:
+                    assignee_id = matching_user.id
+                else:
+                    return {
+                        "type": "error",
+                        "message": f"User '{assignee_name}' not found in project.",
+                        "state": context.current_state.value
+                    }
+            
+            # Get task IDs from context if not provided
+            if not task_ids:
+                # If we have specific task titles/names, fetch them
+                task_titles = context.gathered_data.get("task_titles", [])
+                if task_titles:
+                    all_tasks = await self.pm_provider.list_tasks(project_id=project_id)
+                    task_ids = [
+                        t.id for t in all_tasks 
+                        if any(title.lower() in t.title.lower() for title in task_titles)
+                    ]
+                else:
+                    # Assign all unassigned tasks
+                    all_tasks = await self.pm_provider.list_tasks(project_id=project_id)
+                    task_ids = [t.id for t in all_tasks if not t.assignee_id]
+            
+            if not task_ids:
+                return {
+                    "type": "error",
+                    "message": "No tasks found to assign.",
+                    "state": context.current_state.value
+                }
+            
+            if not assignee_id:
+                return {
+                    "type": "error",
+                    "message": "Assignee is required. Please specify a user.",
+                    "state": context.current_state.value
+                }
+            
+            # Assign tasks
+            assigned_count = 0
+            for task_id in task_ids:
+                try:
+                    await self.pm_provider.update_task(task_id, {"assignee_id": assignee_id})
+                    assigned_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to assign task {task_id}: {e}")
+            
+            # Get assignee name
+            if assignee_name:
+                assignee_display = assignee_name
+            else:
+                assignee = await self.pm_provider.get_user(assignee_id)
+                assignee_display = assignee.name if assignee else assignee_id
+            
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "execution_completed",
+                "message": f"✅ **Tasks Assigned Successfully**\n\nAssigned {assigned_count} task(s) to {assignee_display}.",
+                "state": context.current_state.value,
+                "data": {
+                    "assigned_count": assigned_count,
+                    "assignee_id": assignee_id,
+                    "task_ids": task_ids
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Task assignment failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to assign tasks: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_gantt_chart(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle GANTT_CHART intent - Generate timeline/Gantt view"""
+        logger.info("Handling GANTT_CHART intent")
+        
+        try:
+            # Get project
+            project_id = context.gathered_data.get("project_id") or context.gathered_data.get("active_project_id")
+            if not project_id:
+                return {
+                    "type": "error",
+                    "message": "Project context required. Please switch to a project first.",
+                    "state": context.current_state.value
+                }
+            
+            # Get tasks
+            tasks = await self.pm_provider.list_tasks(project_id=project_id)
+            
+            # Build timeline view
+            if not tasks:
+                return {
+                    "type": "execution_completed",
+                    "message": "✅ **Timeline View**\n\nNo tasks found for this project.",
+                    "state": "complete"
+                }
+            
+            # Group tasks by status
+            completed = [t for t in tasks if t.status == "completed"]
+            in_progress = [t for t in tasks if t.status == "in_progress"]
+            todo = [t for t in tasks if t.status not in ["completed", "in_progress"]]
+            
+            # Build timeline content
+            content = f"""# Project Timeline
+
+## Tasks by Status
+
+### ✅ Completed ({len(completed)})
+{chr(10).join(f"- {t.title} {f'({t.estimated_hours}h)' if t.estimated_hours else ''}" for t in completed)}
+
+### 🔄 In Progress ({len(in_progress)})
+{chr(10).join(f"- {t.title} {f'({t.estimated_hours}h)' if t.estimated_hours else ''}" for t in in_progress)}
+
+### ⏳ To Do ({len(todo)})
+{chr(10).join(f"- {t.title} {f'({t.estimated_hours}h)' if t.estimated_hours else ''}" for t in todo)}
+"""
+            
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "execution_completed",
+                "message": f"✅ **Timeline View Generated**\n\n{content}",
+                "state": context.current_state.value,
+                "data": {
+                    "total_tasks": len(tasks),
+                    "completed": len(completed),
+                    "in_progress": len(in_progress),
+                    "todo": len(todo)
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Gantt chart generation failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to generate timeline view: {str(e)}",
+                "state": context.current_state.value
+            }
     
     async def _handle_switch_project(
         self,

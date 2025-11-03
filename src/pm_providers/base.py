@@ -117,6 +117,16 @@ class BasePMProvider(ABC):
         """Get a single user by ID"""
         pass
     
+    async def get_current_user(self) -> Optional[PMUser]:
+        """
+        Get the current user associated with the API key/token
+        This should be overridden by providers that support it
+        
+        Returns:
+            Current user or None if not supported
+        """
+        return None
+    
     # ==================== Health Check ====================
     
     @abstractmethod

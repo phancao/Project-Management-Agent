@@ -1728,30 +1728,35 @@ class ConversationFlowManager:
             # For now, try to get current user from OpenProject API
             openproject_user_id = None
             
-            # Try to get the current OpenProject user via API
+            # Try to get the current user from the PM provider
             try:
-                # Get list of users from OpenProject
-                users = await self.pm_provider.list_users()
-                if users:
-                    # For now, find a user that has assigned tasks (temporary solution)
-                    # In production, this should come from authentication/session
-                    all_tasks = await self.pm_provider.list_tasks()
-                    assignee_counts = {}
-                    for task in all_tasks:
-                        if task.assignee_id:
-                            assignee_counts[task.assignee_id] = assignee_counts.get(task.assignee_id, 0) + 1
-                    
-                    if assignee_counts:
-                        # Use the user with the most tasks
-                        most_active_user = max(assignee_counts.items(), key=lambda x: x[1])[0]
-                        openproject_user_id = str(most_active_user)
-                        logger.info(f"Using OpenProject user ID with most tasks: {openproject_user_id} ({assignee_counts[most_active_user]} tasks)")
-                    else:
-                        # Fallback to first user if no assignments
-                        openproject_user_id = str(users[0].id)
-                        logger.info(f"Using OpenProject user ID: {openproject_user_id} (no task assignments found)")
+                # First, try to get current user from API key/token
+                current_user = await self.pm_provider.get_current_user()
+                if current_user:
+                    openproject_user_id = str(current_user.id)
+                    logger.info(f"Using current user from API key: {current_user.name} (ID: {openproject_user_id})")
+                else:
+                    # Fallback: Get list of users and find one with most tasks
+                    logger.info("No get_current_user support, falling back to heuristic")
+                    users = await self.pm_provider.list_users()
+                    if users:
+                        all_tasks = await self.pm_provider.list_tasks()
+                        assignee_counts = {}
+                        for task in all_tasks:
+                            if task.assignee_id:
+                                assignee_counts[task.assignee_id] = assignee_counts.get(task.assignee_id, 0) + 1
+                        
+                        if assignee_counts:
+                            # Use the user with the most tasks
+                            most_active_user = max(assignee_counts.items(), key=lambda x: x[1])[0]
+                            openproject_user_id = str(most_active_user)
+                            logger.info(f"Using OpenProject user ID with most tasks: {openproject_user_id} ({assignee_counts[most_active_user]} tasks)")
+                        else:
+                            # Fallback to first user if no assignments
+                            openproject_user_id = str(users[0].id)
+                            logger.info(f"Using OpenProject user ID: {openproject_user_id} (no task assignments found)")
             except Exception as e:
-                logger.warning(f"Could not fetch users from PM provider: {e}")
+                logger.warning(f"Could not fetch current user from PM provider: {e}")
             
             # Query tasks filtered by assignee
             pm_tasks = await self.pm_provider.list_tasks(assignee_id=openproject_user_id)

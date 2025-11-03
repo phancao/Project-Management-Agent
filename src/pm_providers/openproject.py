@@ -312,6 +312,17 @@ class OpenProjectProvider(BasePMProvider):
         response.raise_for_status()
         return self._parse_user(response.json())
     
+    async def get_current_user(self) -> Optional[PMUser]:
+        """Get the current user associated with the API key"""
+        url = f"{self.base_url}/api/v3/users/me"
+        response = requests.get(url, headers=self.headers)
+        
+        if response.status_code == 404:
+            return None
+        
+        response.raise_for_status()
+        return self._parse_user(response.json())
+    
     # ==================== Health Check ====================
     
     async def health_check(self) -> bool:

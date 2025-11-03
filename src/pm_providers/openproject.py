@@ -102,19 +102,39 @@ class OpenProjectProvider(BasePMProvider):
     
     # ==================== Task (Work Package) Operations ====================
     
-    async def list_tasks(self, project_id: Optional[str] = None) -> List[PMTask]:
+    async def list_tasks(self, project_id: Optional[str] = None, assignee_id: Optional[str] = None) -> List[PMTask]:
         """List all work packages (tasks)"""
         url = f"{self.base_url}/api/v3/work_packages"
         
-        # Add filter for specific project if provided
+        # Build filters for project and/or assignee
+        import json as json_lib
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        filters = []
         if project_id:
-            import json as json_lib
-            filters = [{"project": {"operator": "=", "values": [project_id]}}]
+            filters.append({"project": {"operator": "=", "values": [project_id]}})
+        if assignee_id:
+            filters.append({"assignee": {"operator": "=", "values": [assignee_id]}})
+        
+        if filters:
             params = {"filters": json_lib.dumps(filters)}
+            logger.info(f"OpenProject list_tasks with filters: {params}")
         else:
             params = {}
         
         response = requests.get(url, headers=self.headers, params=params)
+        
+        # Log if filter returns no results
+        if assignee_id:
+            try:
+                result = response.json()
+                task_count = len(result.get("_embedded", {}).get("elements", []))
+                if task_count == 0:
+                    logger.warning(f"Assignee filter returned 0 tasks for user_id={assignee_id}. Response: {result.get('count', 'N/A')} total")
+            except:
+                pass
+        
         response.raise_for_status()
         
         tasks_data = response.json()["_embedded"]["elements"]

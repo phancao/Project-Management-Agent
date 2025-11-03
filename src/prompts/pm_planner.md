@@ -25,6 +25,7 @@ Available step types:
 - **task_assignment**: Assign tasks to team members
 - **list_projects**: List/show all projects
 - **list_tasks**: List/show all tasks for a project
+- **list_my_tasks**: List/show all tasks assigned to me/my user
 - **list_sprints**: List/show all sprints for a project
 - **get_project_status**: Get status and summary of a project
 - **switch_project**: Switch to/activate a project for focused work
@@ -324,6 +325,46 @@ Output:
       "title": "Switch to Login Screen Task",
       "description": "Activate login screen task for detailed discussion",
       "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 13: List My Tasks (User-specific)
+
+User: "list all outdated tasks in my assigned project"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will retrieve all tasks assigned to the current user.",
+  "steps": [
+    {
+      "step_type": "list_my_tasks",
+      "title": "List My Assigned Tasks",
+      "description": "Retrieve and display all tasks assigned to me",
+      "requires_context": false
+    }
+  ]
+}
+```
+
+## Example 14: List My Tasks Alternative
+
+User: "show me my tasks across all projects"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will retrieve all tasks assigned to me across all projects.",
+  "steps": [
+    {
+      "step_type": "list_my_tasks",
+      "title": "List All My Tasks",
+      "description": "Retrieve and display all tasks assigned to me from all projects",
+      "requires_context": false
     }
   ]
 }

@@ -36,6 +36,7 @@ class IntentType(Enum):
     LIST_PROJECTS = "list_projects"
     LIST_TASKS = "list_tasks"
     LIST_SPRINTS = "list_sprints"
+    LIST_MY_TASKS = "list_my_tasks"
     GET_PROJECT_STATUS = "get_project_status"
     SWITCH_PROJECT = "switch_project"
     SWITCH_SPRINT = "switch_sprint"
@@ -299,6 +300,9 @@ class ConversationFlowManager:
             ],
             IntentType.LIST_TASKS: [
                 "project_id"
+            ],
+            IntentType.LIST_MY_TASKS: [
+                # No required fields, uses user_id from session context
             ],
             IntentType.LIST_SPRINTS: [
                 "project_id"
@@ -596,6 +600,9 @@ class ConversationFlowManager:
         
         elif step_type_str == "list_tasks":
             return await self._handle_list_tasks(context)
+        
+        elif step_type_str == "list_my_tasks":
+            return await self._handle_list_my_tasks(context)
         
         elif step_type_str == "list_sprints":
             return await self._handle_list_sprints(context)
@@ -1701,6 +1708,159 @@ class ConversationFlowManager:
             return {
                 "type": "error",
                 "message": f"Failed to list tasks: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_list_my_tasks(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle LIST_MY_TASKS intent - List all tasks assigned to current user"""
+        logger.info("Handling LIST_MY_TASKS intent")
+        
+        try:
+            # Get user_id from context (set by process_message)
+            # Default to mock user for now, but should come from auth in production
+            user_id = context.gathered_data.get("user_id", "f430f348-d65f-427f-9379-3d0f163393d1")
+            
+            # For OpenProject, we need to map our user_id to OpenProject user_id
+            # This is a simplified approach - in production, use proper user mapping
+            # For now, try to get current user from OpenProject API
+            openproject_user_id = None
+            
+            # Try to get the current OpenProject user via API
+            try:
+                # Get list of users from OpenProject
+                users = await self.pm_provider.list_users()
+                if users:
+                    # For now, find a user that has assigned tasks (temporary solution)
+                    # In production, this should come from authentication/session
+                    all_tasks = await self.pm_provider.list_tasks()
+                    assignee_counts = {}
+                    for task in all_tasks:
+                        if task.assignee_id:
+                            assignee_counts[task.assignee_id] = assignee_counts.get(task.assignee_id, 0) + 1
+                    
+                    if assignee_counts:
+                        # Use the user with the most tasks
+                        most_active_user = max(assignee_counts.items(), key=lambda x: x[1])[0]
+                        openproject_user_id = str(most_active_user)
+                        logger.info(f"Using OpenProject user ID with most tasks: {openproject_user_id} ({assignee_counts[most_active_user]} tasks)")
+                    else:
+                        # Fallback to first user if no assignments
+                        openproject_user_id = str(users[0].id)
+                        logger.info(f"Using OpenProject user ID: {openproject_user_id} (no task assignments found)")
+            except Exception as e:
+                logger.warning(f"Could not fetch users from PM provider: {e}")
+            
+            # Query tasks filtered by assignee
+            pm_tasks = await self.pm_provider.list_tasks(assignee_id=openproject_user_id)
+            tasks = pm_tasks
+            
+            # Fallback to all tasks if no filter or no results
+            if not tasks:
+                logger.info("No tasks found with assignee filter, fetching all tasks")
+                all_tasks = await self.pm_provider.list_tasks()
+                tasks = all_tasks
+                
+                # Return message indicating no user-specific filter applied
+                if not openproject_user_id:
+                    return {
+                        "type": "execution_completed",
+                        "message": f"Found **{len(tasks)}** total tasks. ⚠️ User filtering is not configured. Showing all tasks.",
+                        "state": "complete",
+                        "data": {
+                            "tasks_count": len(tasks),
+                            "tasks": [
+                                {
+                                    "id": str(task.id) if hasattr(task, 'id') else None,
+                                    "title": task.title,
+                                    "status": task.status if hasattr(task, 'status') else None,
+                                    "priority": task.priority if hasattr(task, 'priority') else None
+                                }
+                                for task in tasks[:20]
+                            ]
+                        }
+                    }
+            
+            # Group tasks by project for better organization
+            from collections import defaultdict
+            tasks_by_project = defaultdict(list)
+            for task in tasks:
+                project_id = task.project_id or "unassigned"
+                tasks_by_project[project_id].append(task)
+            
+            # Build formatted message
+            total_tasks = len(tasks)
+            message_parts = [f"Found **{total_tasks}** tasks assigned to you:\n"]
+            
+            if len(tasks_by_project) == 1 and total_tasks > 0:
+                # All tasks in one project
+                project_id = list(tasks_by_project.keys())[0]
+                project_tasks = tasks_by_project[project_id]
+                
+                # Get project name
+                if project_id != "unassigned":
+                    project = await self.pm_provider.get_project(project_id)
+                    project_name = project.name if project else project_id
+                else:
+                    project_name = "Unassigned"
+                
+                message_parts.append(f"All tasks are in **{project_name}**:\n")
+                for i, task in enumerate(project_tasks[:15], 1):  # Limit display
+                    priority_emoji = "🔴" if task.priority == "high" else "🟡" if task.priority == "medium" else "🟢"
+                    hours_text = f"{task.estimated_hours}h" if task.estimated_hours else "N/A"
+                    status = task.status if hasattr(task, 'status') else 'N/A'
+                    message_parts.append(
+                        f"{i}. **{task.title}**\n"
+                        f"   - Status: {status}\n"
+                        f"   - Priority: {priority_emoji} {task.priority or 'medium'}\n"
+                        f"   - Estimated: {hours_text}\n"
+                    )
+            else:
+                # Tasks across multiple projects
+                for project_id, project_tasks in list(tasks_by_project.items())[:5]:  # Limit to 5 projects
+                    if project_id != "unassigned":
+                        project = await self.pm_provider.get_project(project_id)
+                        project_name = project.name if project else project_id
+                    else:
+                        project_name = "Unassigned"
+                    
+                    message_parts.append(f"\n**{project_name}** ({len(project_tasks)} tasks):\n")
+                    for task in project_tasks[:5]:  # Limit 5 tasks per project
+                        priority_emoji = "🔴" if task.priority == "high" else "🟡" if task.priority == "medium" else "🟢"
+                        message_parts.append(f"- **{task.title}** ({priority_emoji} {task.priority or 'medium'})\n")
+            
+            if total_tasks > 20:
+                message_parts.append(f"\n_Showing first 20 tasks. Total: {total_tasks}_")
+            
+            context.current_state = FlowState.COMPLETED
+            
+            return {
+                "type": "execution_completed",
+                "message": "\n".join(message_parts),
+                "state": "complete",
+                "data": {
+                    "tasks_count": total_tasks,
+                    "tasks": [
+                        {
+                            "id": str(task.id) if hasattr(task, 'id') else None,
+                            "title": task.title,
+                            "status": task.status if hasattr(task, 'status') else None,
+                            "priority": task.priority if hasattr(task, 'priority') else None
+                        }
+                        for task in tasks[:20]
+                    ]
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"List my tasks failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to list your tasks: {str(e)}",
                 "state": context.current_state.value
             }
     

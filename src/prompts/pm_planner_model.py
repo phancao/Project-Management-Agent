@@ -20,6 +20,7 @@ class PMStepType(str, Enum):
     LIST_PROJECTS = "list_projects"
     LIST_TASKS = "list_tasks"
     LIST_SPRINTS = "list_sprints"
+    LIST_MY_TASKS = "list_my_tasks"
     GET_PROJECT_STATUS = "get_project_status"
     SWITCH_PROJECT = "switch_project"
     SWITCH_SPRINT = "switch_sprint"

@@ -70,7 +70,7 @@ class InternalPMProvider(BasePMProvider):
     
     # ==================== Task Operations ====================
     
-    async def list_tasks(self, project_id: Optional[str] = None) -> List[PMTask]:
+    async def list_tasks(self, project_id: Optional[str] = None, assignee_id: Optional[str] = None) -> List[PMTask]:
         """List all tasks from internal database"""
         from uuid import UUID
         if project_id:
@@ -82,6 +82,11 @@ class InternalPMProvider(BasePMProvider):
             for project in projects:
                 all_tasks.extend(crud.get_tasks_by_project(self.db_session, project.id))
             tasks = all_tasks
+        
+        # Filter by assignee if provided
+        if assignee_id:
+            tasks = [t for t in tasks if str(t.assignee_id) == assignee_id if t.assignee_id]
+        
         return [self._task_to_pm(t) for t in tasks]
     
     async def get_task(self, task_id: str) -> Optional[PMTask]:

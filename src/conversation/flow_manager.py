@@ -654,6 +654,9 @@ class ConversationFlowManager:
         elif step_type_str == "list_sprints":
             return await self._handle_list_sprints(context)
         
+        elif step_type_str == "team_assignments":
+            return await self._handle_team_assignments(context)
+        
         elif step_type_str == "get_project_status":
             return await self._handle_get_project_status(context)
         
@@ -2322,6 +2325,151 @@ class ConversationFlowManager:
             return {
                 "type": "error",
                 "message": f"Failed to list sprints: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_team_assignments(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle TEAM_ASSIGNMENTS intent - Show task assignments grouped by team member"""
+        logger.info("Handling TEAM_ASSIGNMENTS intent")
+        
+        try:
+            project_id = context.gathered_data.get("project_id")
+            project_name = context.gathered_data.get("project_name")
+            
+            # If project_id not provided, try to find by project_name or use active project
+            if not project_id:
+                if project_name:
+                    # Search for project by name
+                    all_projects = await self.pm_provider.list_projects()
+                    matching_projects = [p for p in all_projects if p.name.lower() == project_name.lower()]
+                    
+                    if len(matching_projects) == 0:
+                        return {
+                            "type": "error",
+                            "message": f"Project '{project_name}' not found.",
+                            "state": context.current_state.value
+                        }
+                    elif len(matching_projects) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple projects found with name '{project_name}'. Please specify project ID.",
+                            "state": context.current_state.value
+                        }
+                    else:
+                        project_id = str(matching_projects[0].id)
+                        logger.info(f"Found project '{project_name}' with ID: {project_id}")
+                elif context.gathered_data.get("active_project_id"):
+                    # Use active project from context
+                    project_id = context.gathered_data.get("active_project_id")
+                    logger.info(f"Using active project ID: {project_id}")
+                else:
+                    return {
+                        "type": "error",
+                        "message": "Project context required. Please specify a project or switch to one first.",
+                        "state": context.current_state.value
+                    }
+            
+            # Get project info
+            project = await self.pm_provider.get_project(project_id)
+            if not project:
+                return {
+                    "type": "error",
+                    "message": f"Project with ID {project_id} not found.",
+                    "state": context.current_state.value
+                }
+            
+            project_name = project.name
+            
+            # Get all tasks for the project
+            tasks = await self.pm_provider.list_tasks(project_id=project_id)
+            
+            # Group tasks by assignee
+            from collections import defaultdict
+            tasks_by_assignee = defaultdict(list)
+            unassigned_tasks = []
+            
+            for task in tasks:
+                assignee_id = getattr(task, 'assignee_id', None)
+                if assignee_id:
+                    tasks_by_assignee[assignee_id].append(task)
+                else:
+                    unassigned_tasks.append(task)
+            
+            # Get user information for assignees
+            assignee_info = {}
+            for assignee_id in tasks_by_assignee.keys():
+                try:
+                    user = await self.pm_provider.get_user(assignee_id)
+                    assignee_info[assignee_id] = user.name if user else f"User {assignee_id}"
+                except Exception as e:
+                    logger.warning(f"Could not fetch user {assignee_id}: {e}")
+                    assignee_info[assignee_id] = f"User {assignee_id}"
+            
+            context.current_state = FlowState.COMPLETED
+            
+            # Build formatted message
+            message_parts = [f"📊 **Team Assignments for '{project_name}'**\n\n"]
+            message_parts.append(f"**Total Tasks:** {len(tasks)}\n\n")
+            
+            if tasks_by_assignee:
+                message_parts.append("## 👥 Assigned Tasks\n\n")
+                for assignee_id, assignee_tasks in sorted(tasks_by_assignee.items(), key=lambda x: -len(x[1])):
+                    assignee_name = assignee_info.get(assignee_id, f"User {assignee_id}")
+                    message_parts.append(f"### {assignee_name} ({len(assignee_tasks)} tasks)\n\n")
+                    
+                    # Calculate total hours
+                    total_hours = sum(t.estimated_hours for t in assignee_tasks if hasattr(t, 'estimated_hours') and t.estimated_hours)
+                    
+                    for i, task in enumerate(assignee_tasks, 1):
+                        priority_emoji = "🔴" if task.priority == "high" else "🟡" if task.priority == "medium" else "🟢"
+                        hours_text = f"{task.estimated_hours}h" if hasattr(task, 'estimated_hours') and task.estimated_hours else "N/A"
+                        status = getattr(task, 'status', 'N/A')
+                        message_parts.append(
+                            f"{i}. **{task.title}**\n"
+                            f"   - Status: {status}\n"
+                            f"   - Priority: {priority_emoji} {task.priority or 'medium'}\n"
+                            f"   - Estimated: {hours_text}\n"
+                        )
+                    
+                    if total_hours > 0:
+                        message_parts.append(f"\n**Total Estimated Hours:** {total_hours:.1f}h\n\n")
+            
+            if unassigned_tasks:
+                message_parts.append(f"\n## ⚠️ Unassigned Tasks ({len(unassigned_tasks)})\n\n")
+                for i, task in enumerate(unassigned_tasks, 1):
+                    priority_emoji = "🔴" if task.priority == "high" else "🟡" if task.priority == "medium" else "🟢"
+                    hours_text = f"{task.estimated_hours}h" if hasattr(task, 'estimated_hours') and task.estimated_hours else "N/A"
+                    status = getattr(task, 'status', 'N/A')
+                    message_parts.append(
+                        f"{i}. **{task.title}**\n"
+                        f"   - Status: {status}\n"
+                        f"   - Priority: {priority_emoji} {task.priority or 'medium'}\n"
+                        f"   - Estimated: {hours_text}\n"
+                    )
+            
+            return {
+                "type": "execution_completed",
+                "message": "\n".join(message_parts),
+                "state": context.current_state.value,
+                "data": {
+                    "project_name": project_name,
+                    "total_tasks": len(tasks),
+                    "assigned_tasks": sum(len(tasks) for tasks in tasks_by_assignee.values()),
+                    "unassigned_tasks": len(unassigned_tasks),
+                    "assignees_count": len(tasks_by_assignee)
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Team assignments failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to generate team assignments: {str(e)}",
                 "state": context.current_state.value
             }
     

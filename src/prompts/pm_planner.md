@@ -30,6 +30,7 @@ Available step types:
 - **list_my_tasks**: List/show all tasks assigned to me/my user
 - **list_sprints**: List/show all sprints for a project
 - **get_project_status**: Get status and summary of a project
+- **team_assignments**: Show task assignments by team member
 - **switch_project**: Switch to/activate a project for focused work
 - **switch_sprint**: Switch to/activate a sprint within current project
 - **switch_task**: Switch to/activate a task within current project for detailed discussion
@@ -547,6 +548,26 @@ Output:
       "title": "Unsupported Request: Gantt Visualization",
       "description": "Gantt chart visualization is not currently supported. The system will display an appropriate message to the user.",
       "requires_context": false
+    }
+  ]
+}
+```
+
+## Example 20: Team Assignments Summary
+
+User: "summarize assignment details in the demo project"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "The user wants to see task assignments grouped by team members in the demo project. I will list all tasks and organize them by assignee.",
+  "steps": [
+    {
+      "step_type": "team_assignments",
+      "title": "Summarize Team Assignments",
+      "description": "Group tasks by assignee to show who is responsible for what in the demo project",
+      "requires_context": true
     }
   ]
 }

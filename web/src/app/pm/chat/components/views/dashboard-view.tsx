@@ -5,14 +5,16 @@
 
 import { Card } from "~/components/ui/card";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
-import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
+import { useMyTasks, useAllTasks } from "~/core/api/hooks/pm/use-tasks";
 
 export function DashboardView() {
   const { projects, loading: projectsLoading } = useProjects();
-  const { tasks: myTasks, loading: tasksLoading } = useMyTasks();
+  const { tasks: myTasks, loading: myTasksLoading } = useMyTasks();
+  const { tasks: allTasks, loading: allTasksLoading } = useAllTasks();
 
   const activeProjects = projects.filter(p => p.status === "active" || p.status === "in_progress");
-  const openTasks = myTasks.filter(t => t.status !== "completed" && t.status !== "done");
+  const openTasks = allTasks.filter(t => t.status !== "completed" && t.status !== "done");
+  const tasksLoading = allTasksLoading || myTasksLoading;
 
   return (
     <div className="space-y-6">

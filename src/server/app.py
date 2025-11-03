@@ -1033,6 +1033,48 @@ async def pm_list_my_tasks(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/pm/tasks/all")
+async def pm_list_all_tasks(request: Request):
+    """List all tasks across all projects"""
+    try:
+        from src.conversation.flow_manager import ConversationFlowManager
+        from database.connection import get_db_session
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        global flow_manager
+        if flow_manager is None:
+            flow_manager = ConversationFlowManager(db_session=db)
+        fm = flow_manager
+        
+        if not fm.pm_provider:
+            raise HTTPException(status_code=503, detail="PM Provider not configured")
+        
+        # Get all tasks without filtering by assignee
+        tasks = await fm.pm_provider.list_tasks()
+        
+        # Fetch all projects for name mapping
+        all_projects = await fm.pm_provider.list_projects()
+        project_map = {p.id: p.name for p in all_projects}
+        
+        return [
+            {
+                "id": str(t.id),
+                "title": t.title,
+                "description": t.description,
+                "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
+                "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
+                "estimated_hours": t.estimated_hours,
+                "project_name": project_map.get(t.project_id, "Unknown") if t.project_id else "Unknown",
+            }
+            for t in tasks
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list all tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/pm/projects/{project_id}/sprints")
 async def pm_list_sprints(request: Request, project_id: str):
     """List all sprints for a project"""

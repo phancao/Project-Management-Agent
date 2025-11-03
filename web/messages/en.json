@@ -89,6 +89,18 @@
       "greeting": "👋 Hello, there!",
       "description": "Welcome to 🦌 DeerFlow, a deep research assistant built on cutting-edge language models, helps you search on web, browse information, and handle complex tasks."
     },
+    "pm": {
+      "welcome": {
+        "greeting": "👋 Hello!",
+        "description": "Project Management Assistant powered by AI. Manage tasks, sprints, and teams with ease."
+      },
+      "conversationStarters": [
+        "List all my tasks",
+        "Show me current sprint tasks",
+        "What's the burndown for Sprint 1?",
+        "Assign tasks to team members"
+      ]
+    },
     "conversationStarters": [
       "How many times taller is the Eiffel Tower than the tallest building in the world?",
       "How many years does an average Tesla battery last compared to a gasoline engine?",

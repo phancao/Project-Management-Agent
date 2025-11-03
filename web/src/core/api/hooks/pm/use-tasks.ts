@@ -51,3 +51,30 @@ export function useMyTasks() {
   return useTasks();
 }
 
+export function useAllTasks() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const fetchAllTasks = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/api/pm/tasks/all");
+        if (!response.ok) {
+          throw new Error("Failed to fetch all tasks");
+        }
+        const data = await response.json();
+        setTasks(data);
+        setLoading(false);
+      } catch (err) {
+        setError(err as Error);
+        setLoading(false);
+      }
+    };
+
+    fetchAllTasks();
+  }, []);
+
+  return { tasks, loading, error };
+}
+

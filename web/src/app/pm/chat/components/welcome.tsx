@@ -23,3 +23,22 @@ export function Welcome({ className }: { className?: string }) {
     </motion.div>
   );
 }
+
+// PM-specific Welcome component
+export function PMWelcome({ className }: { className?: string }) {
+  const t = useTranslations("chat.pm.welcome");
+
+  return (
+    <motion.div
+      className={cn("flex flex-col", className)}
+      style={{ transition: "all 0.2s ease-out" }}
+      initial={{ opacity: 0, scale: 0.85 }}
+      animate={{ opacity: 1, scale: 1 }}
+    >
+      <h3 className="mb-2 text-center text-3xl font-medium">{t("greeting")}</h3>
+      <div className="text-muted-foreground px-4 text-center text-lg">
+        {t("description")}
+      </div>
+    </motion.div>
+  );
+}

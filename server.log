@@ -76,3 +76,230 @@ INFO:     127.0.0.1:57171 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
 INFO:     127.0.0.1:57171 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
 2025-11-03 18:16:17,436 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
 INFO:     127.0.0.1:57357 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:17:18,978 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:57580 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:17:19,133 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:57580 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57585 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:17:28,606 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:57628 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57585 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:17:28,756 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:57631 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:17:44,577 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:57663 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:17:44,870 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:57663 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58140 - "GET /api/pm/projects/2/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58321 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:23:13,034 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:58322 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58321 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:23:13,197 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:58325 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58325 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58321 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:23:14,595 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:58322 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58325 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-03 18:23:14,747 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:58321 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58343 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58826 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58870 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58871 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:26:10,786 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:58872 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58870 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58871 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:26:10,972 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:58875 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:36,990 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59062 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:37,262 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59062 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:43,515 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59068 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:43,649 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59068 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:48,278 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59068 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:48,414 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59104 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:51,679 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59104 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:51,815 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59068 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59068 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:26:52,682 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59104 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59068 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:26:52,832 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59146 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:53,233 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59146 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:53,384 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59068 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:56,144 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59068 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:26:56,267 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59146 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59146 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:26:58,657 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59068 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59146 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:26:58,798 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59185 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:27:01,363 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59185 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:27:01,511 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59146 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:27:02,018 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59146 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:27:02,172 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59185 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59797 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59799 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:30:44,206 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59800 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59797 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-03 18:30:44,360 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59799 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59802 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59877 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59878 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:30:51,933 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59879 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59877 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-03 18:30:52,079 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:59878 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59881 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60062 - "OPTIONS /api/pm/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60062 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 18:31:15,721 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 18:31:15,721 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 18:31:18,660 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 18:31:18,667 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.94s
+2025-11-03 18:31:18,668 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "I will retrieve and display all tasks assigned to you.",
+  "steps": [
+    {
+      "step_type": "list_my_tasks",
+      "title": "List My Assigned Tasks",
+      "description": "Retrieve and display all tasks assigned to me across all projects",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-03 18:31:18,668 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.95s
+2025-11-03 18:31:18,668 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 2.95s
+2025-11-03 18:31:18,668 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 2.95s
+2025-11-03 18:31:18,668 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 2.95s
+2025-11-03 18:31:18,668 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 2.95s
+2025-11-03 18:31:19,620 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 18:31:19,626 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: null
+2025-11-03 18:31:19,626 - src.conversation.flow_manager - INFO - Extracted initial data: {}
+2025-11-03 18:31:19,626 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 18:31:19,627 - src.conversation.flow_manager - INFO - Selected 1/1 messages for context
+2025-11-03 18:31:21,977 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 18:31:21,978 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.35s
+2025-11-03 18:31:21,978 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "The user wants to see their tasks again after the previous operation. I will list all their assigned tasks.",
+  "steps": [
+    {
+      "step_type": "list_my_tasks",
+      "title": "List My Assigned Tasks",
+      "description": "Retrieve and display all tasks assigned to me across all projects",
+      "requires_context": false
+    }
+  ]
+}
+2025-11-03 18:31:21,978 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.35s
+2025-11-03 18:31:21,979 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
+2025-11-03 18:31:21,979 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 18:31:21,979 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 18:31:21,979 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
+2025-11-03 18:31:21,979 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: List My Assigned Tasks - 0.00s
+2025-11-03 18:31:21,979 - src.conversation.flow_manager - INFO - Executing PM step: list_my_tasks
+2025-11-03 18:31:23,622 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 18:31:23,626 - src.conversation.flow_manager - INFO - Extracted data: {'filter_week': None, 'filter_date': None, 'period': None}
+2025-11-03 18:31:23,626 - src.conversation.flow_manager - INFO - Extracted list_my_tasks data: {'filter_week': None, 'filter_date': None, 'period': None}
+2025-11-03 18:31:23,626 - src.conversation.flow_manager - INFO - Handling LIST_MY_TASKS intent
+2025-11-03 18:31:23,638 - src.conversation.flow_manager - INFO - Using current user from API key: OpenProject Admin (ID: 4)
+2025-11-03 18:31:23,638 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+2025-11-03 18:31:23,753 - src.conversation.flow_manager - INFO - Calculated total hours: 404.0 from 20 tasks
+2025-11-03 18:31:23,783 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 1.80s - 1.80s total
+2025-11-03 18:31:23,783 - src.conversation.flow_manager - INFO - [TIMING] Planning phase completed: 1 steps executed in 1.80s
+2025-11-03 18:31:23,783 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 5.12s
+2025-11-03 18:31:23,783 - src.server.app - INFO - [PM-CHAT-TIMING] Sending finish event: finish_reason=stop, response_type=execution_completed
+2025-11-03 18:31:23,783 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 8.06s
+2025-11-03 18:31:35,873 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60157 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:31:36,028 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60157 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60162 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60331 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:32:28,012 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60332 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60162 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-03 18:32:28,169 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60331 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60334 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:32:37,544 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60344 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:32:37,675 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60344 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60349 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60571 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:33:25,384 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60572 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60349 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-03 18:33:25,529 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60571 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60574 - "GET /api/pm/projects HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'src/server/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [90499]
+2025-11-03 18:34:09,543 - __mp_main__ - INFO - Received shutdown signal. Starting graceful shutdown...
+2025-11-03 18:34:12,808 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
+2025-11-03 18:34:12,839 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
+INFO:     Started server process [11215]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2025-11-03 18:34:37,894 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
+2025-11-03 18:34:37,894 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
+2025-11-03 18:34:37,899 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
+2025-11-03 18:34:37,899 - src.conversation.flow_manager - INFO - Self-learning system initialized
+INFO:     127.0.0.1:60794 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:34:37,943 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60795 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60796 - "GET /api/pm/tasks/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60861 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60863 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:34:46,960 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60865 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60866 - "GET /api/pm/tasks/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60861 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-03 18:34:47,275 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60863 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60865 - "GET /api/pm/tasks/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60868 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60948 - "GET /api/pm/tasks/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60990 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60992 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:35:04,821 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60993 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60994 - "GET /api/pm/tasks/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60990 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-03 18:35:05,141 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:60992 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60993 - "GET /api/pm/tasks/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60996 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:35:14,634 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:61047 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-03 18:35:14,787 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:61047 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK

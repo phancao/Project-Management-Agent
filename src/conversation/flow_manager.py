@@ -2470,10 +2470,16 @@ class ConversationFlowManager:
                     "state": "complete"
                 }
             
+            # Process tasks in batches to avoid LLM token limits
+            # Limit to 20 tasks per batch for reliable LLM responses
+            batch_size = 20
+            total_batches = (len(tasks_without_eta) + batch_size - 1) // batch_size
+            
             # Build research query for LLM
+            tasks_to_process = tasks_without_eta[:batch_size]
             task_list = "\n".join([
                 f"- {task.title} (ID: {task.id})"
-                for task in tasks_without_eta  # Process all tasks without ETA
+                for task in tasks_to_process
             ])
             
             research_query = f"""Please estimate the time needed for each of these tasks in hours:
@@ -2500,7 +2506,7 @@ Be concise but realistic."""
             # Parse estimates from LLM response
             import re
             estimates = {}
-            for task in tasks_without_eta:
+            for task in tasks_to_process:
                 # Try to match task ID or title in LLM response
                 pattern_id = rf".*\(ID:\s*{task.id}\)[:\s]*(\d+(?:\.\d+)?)\s*hours?"
                 pattern_title = rf".*{re.escape(task.title)}[:\s]*(\d+(?:\.\d+)?)\s*hours?"
@@ -2529,14 +2535,21 @@ Be concise but realistic."""
             
             message_parts = [
                 f"✅ **ETA Research Completed**\n",
-                f"Analyzed {len(tasks_without_eta)} tasks without ETA\n",
+                f"Processed batch 1 of {total_batches}\n",
+                f"Analyzed {len(tasks_to_process)} tasks in this batch\n",
                 f"Updated {updated_count} tasks with new estimates\n"
             ]
+            
+            # Show remaining tasks if there are more batches
+            remaining_tasks = len(tasks_without_eta) - batch_size
+            if remaining_tasks > 0:
+                message_parts.append(f"\n⏳ **Remaining Tasks:** {remaining_tasks} tasks still need ETA estimation")
+                message_parts.append(f"You can run the ETA command again to process the next batch.")
             
             if updated_count > 0:
                 message_parts.append("\n**Updated Tasks:**\n")
                 for task_id, hours in list(estimates.items()):
-                    task = next((t for t in tasks_without_eta if t.id == task_id), None)
+                    task = next((t for t in tasks_to_process if t.id == task_id), None)
                     if task:
                         message_parts.append(f"- {task.title}: **{hours}h**\n")
             

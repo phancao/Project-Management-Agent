@@ -1075,6 +1075,40 @@ async def pm_list_all_tasks(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.patch("/api/pm/tasks/{task_id}")
+async def pm_update_task(request: Request, task_id: str):
+    """Update a task"""
+    try:
+        from src.conversation.flow_manager import ConversationFlowManager
+        from database.connection import get_db_session
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        global flow_manager
+        if flow_manager is None:
+            flow_manager = ConversationFlowManager(db_session=db)
+        fm = flow_manager
+        
+        if not fm.pm_provider:
+            raise HTTPException(status_code=503, detail="PM Provider not configured")
+        
+        updates = await request.json()
+        updated_task = await fm.pm_provider.update_task(task_id, updates)
+        
+        return {
+            "id": str(updated_task.id),
+            "title": updated_task.title,
+            "description": updated_task.description,
+            "status": updated_task.status.value if hasattr(updated_task.status, 'value') else str(updated_task.status),
+            "priority": updated_task.priority.value if hasattr(updated_task.priority, 'value') else str(updated_task.priority),
+            "estimated_hours": updated_task.estimated_hours,
+        }
+    except Exception as e:
+        logger.error(f"Failed to update task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/pm/projects/{project_id}/sprints")
 async def pm_list_sprints(request: Request, project_id: str):
     """List all sprints for a project"""

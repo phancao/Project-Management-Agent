@@ -2556,26 +2556,30 @@ Be concise but realistic."""
             context.current_state = FlowState.COMPLETED
             
             message_parts = [
-                f"✅ **ETA Research Completed**\n",
-                f"Processed {total_batches} batch(es) automatically\n",
-                f"Analyzed {len(tasks_without_eta)} tasks in total\n",
-                f"Updated {total_updated} tasks with new estimates\n"
+                f"✅ **ETA Research Completed**\n\n",
+                f"📊 **Summary:**\n",
+                f"- Processed {total_batches} batch(es) automatically\n",
+                f"- Analyzed {len(tasks_without_eta)} tasks in total\n",
+                f"- ✅ **Updated {total_updated} tasks with new estimates**\n\n"
             ]
             
             if total_updated > 0:
-                message_parts.append("\n**Sample Updated Tasks:**\n")
-                # Show first 10 updated tasks as sample
-                sample_shown = 0
+                message_parts.append(f"**All Updated Tasks ({total_updated} tasks):**\n\n")
+                # Show all updated tasks (up to 30, then summarize)
+                max_display = 30
+                tasks_shown = 0
                 for task_id, hours in list(all_estimates.items()):
-                    if sample_shown >= 10:
+                    if tasks_shown >= max_display:
                         break
                     task = next((t for t in tasks_without_eta if t.id == task_id), None)
                     if task:
-                        message_parts.append(f"- {task.title}: **{hours}h**\n")
-                        sample_shown += 1
+                        message_parts.append(f"✅ {task.title}: **{hours}h**\n")
+                        tasks_shown += 1
                 
-                if total_updated > 10:
-                    message_parts.append(f"\n_... and {total_updated - 10} more tasks_\n")
+                if total_updated > max_display:
+                    message_parts.append(f"\n... and **{total_updated - max_display} more tasks** updated.\n")
+                
+                message_parts.append(f"\n🎉 **All {total_updated} tasks have been updated with ETA estimates!**\n")
             
             return {
                 "type": "execution_completed",

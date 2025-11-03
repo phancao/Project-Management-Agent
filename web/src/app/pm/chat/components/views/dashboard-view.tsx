@@ -3,23 +3,83 @@
 
 "use client";
 
+import { useState, useMemo } from "react";
 import { Card } from "~/components/ui/card";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { useMyTasks, useAllTasks } from "~/core/api/hooks/pm/use-tasks";
+import { TaskDetailsModal } from "../task-details-modal";
+import type { Task } from "~/core/api/hooks/pm/use-tasks";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "~/components/ui/button";
 
 export function DashboardView() {
   const { projects, loading: projectsLoading } = useProjects();
   const { tasks: myTasks, loading: myTasksLoading } = useMyTasks();
   const { tasks: allTasks, loading: allTasksLoading } = useAllTasks();
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeProjectId = searchParams.get('project');
+  
+  // Filter tasks if viewing a specific project
+  const filteredMyTasks = useMemo(() => {
+    if (!activeProjectId) return myTasks;
+    return myTasks.filter(t => t.project_name && projects.find(p => p.id === activeProjectId && p.name === t.project_name));
+  }, [myTasks, activeProjectId, projects]);
+  
+  const filteredAllTasks = useMemo(() => {
+    if (!activeProjectId) return allTasks;
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    return activeProject ? allTasks.filter(t => t.project_name === activeProject.name) : [];
+  }, [allTasks, activeProjectId, projects]);
+  
+  const activeProject = useMemo(() => {
+    return activeProjectId ? projects.find(p => p.id === activeProjectId) : null;
+  }, [projects, activeProjectId]);
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setIsModalOpen(true);
+  };
+
+  const handleProjectClick = (projectId: string) => {
+    router.push(`/pm/chat?project=${projectId}`);
+  };
+
+  const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/pm/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) throw new Error('Failed to update task');
+      
+      window.dispatchEvent(new CustomEvent("pm_refresh", { 
+        detail: { type: "pm_refresh" } 
+      }));
+    } catch (error) {
+      console.error("Failed to update task:", error);
+      throw error;
+    }
+  };
 
   const activeProjects = projects.filter(p => p.status === "active" || p.status === "in_progress");
-  const openTasks = allTasks.filter(t => t.status !== "completed" && t.status !== "done");
+  const openTasks = filteredAllTasks.filter(t => t.status !== "completed" && t.status !== "done");
   const tasksLoading = allTasksLoading || myTasksLoading;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {activeProject ? `${activeProject.name} Dashboard` : "Dashboard"}
+        </h2>
+        {activeProject && (
+          <Button variant="ghost" size="sm" onClick={() => router.push('/pm/chat')}>
+            Clear Filter
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -45,7 +105,7 @@ export function DashboardView() {
         <Card className="p-4 bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800">
           <div className="text-sm text-orange-600 dark:text-orange-400 font-medium">My Tasks</div>
           <div className="text-3xl font-bold text-orange-900 dark:text-orange-100 mt-2">
-            {tasksLoading ? "..." : myTasks.length}
+            {tasksLoading ? "..." : filteredMyTasks.length}
           </div>
         </Card>
       </div>
@@ -55,12 +115,18 @@ export function DashboardView() {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">My Work</h3>
         {tasksLoading ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading tasks...</div>
-        ) : myTasks.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">No tasks assigned</div>
+        ) : filteredMyTasks.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            {activeProject ? "No tasks in this project" : "No tasks assigned"}
+          </div>
         ) : (
           <div className="space-y-3">
-            {myTasks.slice(0, 10).map((task) => (
-              <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            {filteredMyTasks.slice(0, 10).map((task) => (
+              <div 
+                key={task.id} 
+                onClick={() => handleTaskClick(task)}
+                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+              >
                 <div className="flex-1">
                   <div className="font-medium text-gray-900 dark:text-white">{task.title}</div>
                   {task.project_name && (
@@ -97,7 +163,11 @@ export function DashboardView() {
         ) : (
           <div className="space-y-2">
             {projects.map((project) => (
-              <div key={project.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div 
+                key={project.id} 
+                onClick={() => handleProjectClick(project.id)}
+                className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-medium text-gray-900 dark:text-white">{project.name}</div>
@@ -114,6 +184,16 @@ export function DashboardView() {
           </div>
         )}
       </Card>
+
+      <TaskDetailsModal
+        task={selectedTask}
+        open={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedTask(null);
+        }}
+        onUpdate={handleUpdateTask}
+      />
     </div>
   );
 }

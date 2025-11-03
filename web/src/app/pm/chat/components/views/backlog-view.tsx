@@ -19,6 +19,7 @@ export function BacklogView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [projectFilter, setProjectFilter] = useState<string>("all");
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -88,8 +89,13 @@ export function BacklogView() {
       });
     }
 
+    // Project filter
+    if (projectFilter !== "all") {
+      filtered = filtered.filter(t => t.project_name === projectFilter);
+    }
+
     return filtered;
-  }, [tasks, searchQuery, statusFilter, priorityFilter]);
+  }, [tasks, searchQuery, statusFilter, priorityFilter, projectFilter]);
 
   const highPriority = filteredTasks.filter(t => t.priority === "high" || t.priority === "highest" || t.priority === "critical");
   const mediumPriority = filteredTasks.filter(t => t.priority === "medium");
@@ -158,6 +164,17 @@ export function BacklogView() {
                 <SelectItem value="high">High</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={projectFilter} onValueChange={setProjectFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Projects</SelectItem>
+                {[...new Set(tasks.map(t => t.project_name).filter(Boolean))].map(projectName => (
+                  <SelectItem key={projectName} value={projectName}>{projectName}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

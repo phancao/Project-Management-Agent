@@ -941,14 +941,8 @@ async def pm_chat_stream(request: Request):
                     
                 try:
                     # First, generate PM plan to check if CREATE_WBS is needed
-                    # Add message to conversation history for context
                     plan_start = time.time()
                     temp_context = fm._get_or_create_context(thread_id)
-                    temp_context.conversation_history.append({
-                        "role": "user",
-                        "content": user_message,
-                        "timestamp": datetime.now().isoformat()
-                    })
                     pm_plan = await fm.generate_pm_plan(user_message, temp_context)
                     logger.info(f"[PM-CHAT-TIMING] PM plan generated: {time.time() - plan_start:.2f}s")
                         

@@ -814,11 +814,11 @@ class ConversationFlowManager:
                 {"role": "system", "content": system_prompt}
             ]
             
-            # Add conversation history if available (limit to last 3 exchanges to avoid token bloat)
+            # Add conversation history if available (optimized context selection)
             if context.conversation_history:
-                # Get last 6 messages (3 user + 3 assistant pairs)
-                recent_history = context.conversation_history[-6:]
-                for msg in recent_history:
+                # Use semantic importance scoring to select most relevant messages
+                relevant_history = self._select_relevant_messages(context.conversation_history, context)
+                for msg in relevant_history:
                     # Only include assistant messages that are actual responses (not system messages)
                     if msg.get("role") in ["user", "assistant"] and msg.get("content"):
                         messages.append({
@@ -2764,6 +2764,122 @@ Return a concise dependency analysis in this format:
         except Exception as e:
             logger.error(f"Failed to record user feedback: {e}")
             return False
+    
+    def _select_relevant_messages(
+        self,
+        conversation_history: List[Dict[str, str]],
+        context: ConversationContext
+    ) -> List[Dict[str, str]]:
+        """
+        Select most relevant messages using semantic importance scoring
+        
+        Prioritizes:
+        - Recent messages (higher score)
+        - Context switches (switch project/task/sprint)
+        - Important actions (create WBS, list tasks)
+        - Messages with extracted data
+        
+        Args:
+            conversation_history: Full conversation history
+            context: Current conversation context
+            
+        Returns:
+            List of most relevant messages (sorted by importance)
+        """
+        if not conversation_history:
+            return []
+        
+        # Score each message for importance
+        scored_messages = []
+        for i, msg in enumerate(conversation_history):
+            score = self._score_message_importance(msg, context, i)
+            scored_messages.append((score, msg))
+        
+        # Sort by score (descending) and take top messages
+        scored_messages.sort(reverse=True, key=lambda x: x[0])
+        
+        # Take top 8 messages (4 user + 4 assistant pairs) to balance context and token usage
+        max_messages = 8
+        top_messages = [msg for _, msg in scored_messages[:max_messages]]
+        
+        # Also include recent messages (last 2) to ensure continuity
+        recent_messages = conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
+        
+        # Combine and deduplicate while preserving order
+        combined = []
+        seen = set()
+        for msg in top_messages + recent_messages:
+            msg_id = id(msg)  # Use object id as hash since messages are dicts
+            if msg_id not in seen:
+                combined.append(msg)
+                seen.add(msg_id)
+        
+        logger.info(f"Selected {len(combined)}/{len(conversation_history)} messages for context")
+        return combined
+    
+    def _score_message_importance(
+        self,
+        msg: Dict[str, str],
+        context: ConversationContext,
+        index: int
+    ) -> float:
+        """
+        Score message importance based on semantic content and recency
+        
+        Args:
+            msg: Message to score
+            context: Current conversation context
+            index: Message index in history
+            
+        Returns:
+            Importance score (higher = more important)
+        """
+        score = 0.0
+        content = msg.get("content", "").lower()
+        role = msg.get("role", "")
+        
+        # Recency boost (more recent = higher score)
+        total_messages = len(context.conversation_history)
+        if total_messages > 0:
+            recency_factor = (total_messages - index) / total_messages
+            score += recency_factor * 5
+        
+        # High importance keywords (context switches and important actions)
+        high_importance_keywords = [
+            "switch", "change to", "activate", "create wbs", "plan sprint",
+            "clean all", "delete all", "update task", "update sprint"
+        ]
+        for keyword in high_importance_keywords:
+            if keyword in content:
+                score += 20
+                break
+        
+        # Medium importance keywords (listings and queries)
+        medium_importance_keywords = [
+            "list", "show", "display", "get", "fetch", "retrieve",
+            "assign", "eta", "estimated time", "my tasks", "my workload"
+        ]
+        for keyword in medium_importance_keywords:
+            if keyword in content:
+                score += 10
+                break
+        
+        # Assistant messages with structured content (plan execution results)
+        if role == "assistant":
+            if "✅" in msg.get("content", "") or "❌" in msg.get("content", ""):
+                score += 8
+            if "steps" in content or "completed" in content:
+                score += 5
+        
+        # Messages that triggered context updates
+        if any(keyword in content for keyword in ["successful", "created", "updated", "switched"]):
+            score += 7
+        
+        # Boost user messages slightly (they drive the conversation)
+        if role == "user":
+            score += 3
+        
+        return score
 
 
 class IntentClassifier:

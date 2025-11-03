@@ -1,69 +1,67 @@
-2025-11-03 09:09:56,442 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
-2025-11-03 09:09:56,442 - __main__ - INFO - Log level: INFO
-2025-11-03 09:09:58,032 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
-2025-11-03 09:09:58,059 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
-2025-11-03 09:09:58,329 - src.server.app - INFO - ✅ Project Management API endpoints registered (including /api/pm/chat/stream)
-INFO:     Started server process [70130]
+2025-11-03 09:20:09,728 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
+2025-11-03 09:20:09,729 - __main__ - INFO - Log level: INFO
+2025-11-03 09:20:11,307 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
+2025-11-03 09:20:11,333 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
+2025-11-03 09:20:11,580 - src.server.app - INFO - ✅ Project Management API endpoints registered (including /api/pm/chat/stream)
+INFO:     Started server process [80203]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)
-2025-11-03 09:10:11,552 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
-2025-11-03 09:10:11,553 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
-2025-11-03 09:10:11,562 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
-2025-11-03 09:10:11,562 - src.conversation.flow_manager - INFO - Self-learning system initialized
-2025-11-03 09:10:11,562 - src.server.app - INFO - Created global ConversationFlowManager singleton
-INFO:     ::1:52692 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
-2025-11-03 09:10:11,631 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
-2025-11-03 09:10:11,631 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 09:10:14,346 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 09:10:14,359 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.72s
-2025-11-03 09:10:14,359 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+2025-11-03 09:20:24,407 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
+2025-11-03 09:20:24,407 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
+2025-11-03 09:20:24,411 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
+2025-11-03 09:20:24,412 - src.conversation.flow_manager - INFO - Self-learning system initialized
+2025-11-03 09:20:24,412 - src.server.app - INFO - Created global ConversationFlowManager singleton
+INFO:     ::1:54434 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 09:20:24,482 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 09:20:24,482 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 09:20:26,383 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 09:20:26,399 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 1.91s
+2025-11-03 09:20:26,399 - src.conversation.flow_manager - INFO - PM plan LLM response: {
   "locale": "en-US",
   "overall_thought": "I will retrieve all tasks assigned to the current user.",
   "steps": [
     {
       "step_type": "list_my_tasks",
       "title": "List My Assigned Tasks",
-      "description": "Retrieve and display all tasks assigned to me",
+      "description": "Retrieve and display all tasks assigned to me in my current project, specifically focusing on outdated tasks.",
       "requires_context": false
     }
   ]
 }
-2025-11-03 09:10:14,359 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.73s
-2025-11-03 09:10:14,359 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 2.73s
-2025-11-03 09:10:14,359 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 2.73s
-2025-11-03 09:10:14,359 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 2.73s
-2025-11-03 09:10:14,359 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 2.73s
-2025-11-03 09:10:15,203 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 09:10:15,206 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: ```json
-null
-```
-2025-11-03 09:10:15,206 - src.conversation.flow_manager - INFO - Extracted initial data: {}
-2025-11-03 09:10:15,206 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 09:10:17,256 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 09:10:17,257 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.05s
-2025-11-03 09:10:17,257 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+2025-11-03 09:20:26,400 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 1.92s
+2025-11-03 09:20:26,400 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 1.92s
+2025-11-03 09:20:26,400 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 1.92s
+2025-11-03 09:20:26,400 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 1.92s
+2025-11-03 09:20:26,400 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 1.92s
+2025-11-03 09:20:26,993 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 09:20:26,995 - src.conversation.flow_manager - INFO - Extracted data: {}
+2025-11-03 09:20:26,996 - src.conversation.flow_manager - INFO - Extracted initial data: {}
+2025-11-03 09:20:26,996 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 09:20:28,638 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 09:20:28,641 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 1.64s
+2025-11-03 09:20:28,641 - src.conversation.flow_manager - INFO - PM plan LLM response: {
   "locale": "en-US",
   "overall_thought": "I will retrieve all tasks assigned to the current user.",
   "steps": [
     {
       "step_type": "list_my_tasks",
       "title": "List My Assigned Tasks",
-      "description": "Retrieve and display all tasks assigned to me",
+      "description": "Retrieve and display all tasks assigned to me from my assigned project",
       "requires_context": false
     }
   ]
 }
-2025-11-03 09:10:17,257 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.05s
-2025-11-03 09:10:17,257 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
-2025-11-03 09:10:17,257 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
-2025-11-03 09:10:17,257 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
-2025-11-03 09:10:17,257 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
-2025-11-03 09:10:17,257 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: List My Assigned Tasks - 0.00s
-2025-11-03 09:10:17,257 - src.conversation.flow_manager - INFO - Executing PM step: list_my_tasks
-2025-11-03 09:10:17,258 - src.conversation.flow_manager - INFO - Handling LIST_MY_TASKS intent
-2025-11-03 09:10:17,314 - src.conversation.flow_manager - INFO - Using current user from API key: OpenProject Admin (ID: 4)
-2025-11-03 09:10:17,314 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
-2025-11-03 09:10:17,555 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.30s - 0.30s total
-2025-11-03 09:10:17,555 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 3.20s
-2025-11-03 09:10:17,555 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 5.92s
+2025-11-03 09:20:28,641 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 1.65s
+2025-11-03 09:20:28,641 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
+2025-11-03 09:20:28,641 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 09:20:28,641 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 09:20:28,641 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
+2025-11-03 09:20:28,642 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: List My Assigned Tasks - 0.00s
+2025-11-03 09:20:28,642 - src.conversation.flow_manager - INFO - Executing PM step: list_my_tasks
+2025-11-03 09:20:28,642 - src.conversation.flow_manager - INFO - Handling LIST_MY_TASKS intent
+2025-11-03 09:20:28,688 - src.conversation.flow_manager - INFO - Using current user from API key: OpenProject Admin (ID: 4)
+2025-11-03 09:20:28,689 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+2025-11-03 09:20:28,916 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.27s - 0.27s total
+2025-11-03 09:20:28,916 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 2.52s
+2025-11-03 09:20:28,917 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 4.44s

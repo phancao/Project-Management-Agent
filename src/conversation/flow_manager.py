@@ -1728,65 +1728,41 @@ class ConversationFlowManager:
             # For now, try to get current user from OpenProject API
             openproject_user_id = None
             
-            # Try to get the current user from the PM provider
+            # Get the current user from the PM provider (must succeed for user-specific queries)
             try:
-                # First, try to get current user from API key/token
                 current_user = await self.pm_provider.get_current_user()
-                if current_user:
-                    openproject_user_id = str(current_user.id)
-                    logger.info(f"Using current user from API key: {current_user.name} (ID: {openproject_user_id})")
-                else:
-                    # Fallback: Get list of users and find one with most tasks
-                    logger.info("No get_current_user support, falling back to heuristic")
-                    users = await self.pm_provider.list_users()
-                    if users:
-                        all_tasks = await self.pm_provider.list_tasks()
-                        assignee_counts = {}
-                        for task in all_tasks:
-                            if task.assignee_id:
-                                assignee_counts[task.assignee_id] = assignee_counts.get(task.assignee_id, 0) + 1
-                        
-                        if assignee_counts:
-                            # Use the user with the most tasks
-                            most_active_user = max(assignee_counts.items(), key=lambda x: x[1])[0]
-                            openproject_user_id = str(most_active_user)
-                            logger.info(f"Using OpenProject user ID with most tasks: {openproject_user_id} ({assignee_counts[most_active_user]} tasks)")
-                        else:
-                            # Fallback to first user if no assignments
-                            openproject_user_id = str(users[0].id)
-                            logger.info(f"Using OpenProject user ID: {openproject_user_id} (no task assignments found)")
+                if not current_user:
+                    return {
+                        "type": "error",
+                        "message": "Cannot determine the current user. Please ensure you are properly authenticated with a valid API key.",
+                        "state": context.current_state.value
+                    }
+                
+                openproject_user_id = str(current_user.id)
+                logger.info(f"Using current user from API key: {current_user.name} (ID: {openproject_user_id})")
             except Exception as e:
-                logger.warning(f"Could not fetch current user from PM provider: {e}")
+                logger.error(f"Could not fetch current user from PM provider: {e}")
+                return {
+                    "type": "error",
+                    "message": f"Authentication error: Could not identify the current user. {str(e)}",
+                    "state": context.current_state.value
+                }
             
             # Query tasks filtered by assignee
             pm_tasks = await self.pm_provider.list_tasks(assignee_id=openproject_user_id)
             tasks = pm_tasks
             
-            # Fallback to all tasks if no filter or no results
+            # If no tasks found, return empty result (don't show all tasks)
             if not tasks:
-                logger.info("No tasks found with assignee filter, fetching all tasks")
-                all_tasks = await self.pm_provider.list_tasks()
-                tasks = all_tasks
-                
-                # Return message indicating no user-specific filter applied
-                if not openproject_user_id:
-                    return {
-                        "type": "execution_completed",
-                        "message": f"Found **{len(tasks)}** total tasks. ⚠️ User filtering is not configured. Showing all tasks.",
-                        "state": "complete",
-                        "data": {
-                            "tasks_count": len(tasks),
-                            "tasks": [
-                                {
-                                    "id": str(task.id) if hasattr(task, 'id') else None,
-                                    "title": task.title,
-                                    "status": task.status if hasattr(task, 'status') else None,
-                                    "priority": task.priority if hasattr(task, 'priority') else None
-                                }
-                                for task in tasks[:20]
-                            ]
-                        }
+                return {
+                    "type": "execution_completed",
+                    "message": "Found **0** tasks assigned to you.",
+                    "state": "complete",
+                    "data": {
+                        "tasks_count": 0,
+                        "tasks": []
                     }
+                }
             
             # Group tasks by project for better organization
             from collections import defaultdict

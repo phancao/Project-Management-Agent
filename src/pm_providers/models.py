@@ -91,6 +91,7 @@ class PMTask:
     assignee_id: Optional[str] = None
     estimated_hours: Optional[float] = None
     actual_hours: Optional[float] = None
+    start_date: Optional[date] = None
     due_date: Optional[date] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

@@ -361,6 +361,7 @@ class OpenProjectProvider(BasePMProvider):
             status=embedded.get("status", {}).get("name") if embedded.get("status") else None,
             project_id=self._extract_id_from_href(links.get("project", {}).get("href")),
             assignee_id=self._extract_id_from_href(links.get("assignee", {}).get("href")),
+            start_date=self._parse_date(data.get("startDate")),
             due_date=self._parse_date(data.get("dueDate")),
             created_at=self._parse_datetime(data.get("createdAt")),
             updated_at=self._parse_datetime(data.get("updatedAt")),

@@ -602,6 +602,17 @@ class ConversationFlowManager:
             return await self._handle_list_tasks(context)
         
         elif step_type_str == "list_my_tasks":
+            # Extract date/week filters from user message
+            if context.conversation_history:
+                last_message = context.conversation_history[-1].get("content", "")
+                if last_message:
+                    filter_data = await self.data_extractor.extract_project_data(
+                        message=last_message,
+                        intent=IntentType.LIST_MY_TASKS,
+                        gathered_data=context.gathered_data
+                    )
+                    context.gathered_data.update(filter_data)
+                    logger.info(f"Extracted list_my_tasks data: {filter_data}")
             return await self._handle_list_my_tasks(context)
         
         elif step_type_str == "list_sprints":
@@ -1752,6 +1763,49 @@ class ConversationFlowManager:
             pm_tasks = await self.pm_provider.list_tasks(assignee_id=openproject_user_id)
             tasks = pm_tasks
             
+            # Filter by date if requested (week, month, etc.)
+            # Check if context has date filters from user message
+            filter_by_week = context.gathered_data.get("filter_week")
+            filter_by_date = context.gathered_data.get("filter_date")
+            period = context.gathered_data.get("period", "")
+            
+            # Convert period text to filter_week if needed
+            if not filter_by_week and period:
+                period_lower = period.lower()
+                if "tuần này" in period_lower or "this week" in period_lower or "current week" in period_lower:
+                    filter_by_week = True
+                    logger.info(f"Detected week filter from period: {period}")
+            
+            if filter_by_week or filter_by_date:
+                from datetime import datetime, timedelta, date
+                
+                if filter_by_week:
+                    # Get current week start (Monday) and end (Sunday)
+                    today = datetime.now().date()
+                    start_of_week = today - timedelta(days=today.weekday())
+                    end_of_week = start_of_week + timedelta(days=6)
+                    logger.info(f"Filtering by current week: {start_of_week} to {end_of_week}")
+                else:
+                    # Use provided date range
+                    start_of_week = filter_by_date.get("start")
+                    end_of_week = filter_by_date.get("end")
+                    logger.info(f"Filtering by date range: {start_of_week} to {end_of_week}")
+                
+                if start_of_week and end_of_week:
+                    filtered_tasks = []
+                    for task in tasks:
+                        # Task falls within week if start_date <= week_end OR due_date >= week_start
+                        task_start = task.start_date if hasattr(task, 'start_date') else None
+                        task_due = task.due_date if hasattr(task, 'due_date') else None
+                        
+                        if task_start and task_start <= end_of_week:
+                            filtered_tasks.append(task)
+                        elif task_due and task_due >= start_of_week:
+                            filtered_tasks.append(task)
+                    
+                    tasks = filtered_tasks
+                    logger.info(f"Filtered to {len(tasks)} tasks in week {start_of_week} to {end_of_week}")
+            
             # If no tasks found, return empty result (don't show all tasks)
             if not tasks:
                 return {
@@ -2627,7 +2681,11 @@ Return only valid JSON:"""
             
             IntentType.RESEARCH_TOPIC: """- topic: Research topic
 - depth: Research depth level
-- focus_areas: Areas to focus on"""
+- focus_areas: Areas to focus on""",
+            
+            IntentType.LIST_MY_TASKS: """- filter_week: Boolean indicating if user wants tasks filtered by current week
+- filter_date: Object with "start" and "end" dates in YYYY-MM-DD format
+- period: Text description of time period (e.g., "this week", "next month", "today")"""
         }
         
         return descriptions.get(intent, "- No specific fields defined")

@@ -1,78 +1,118 @@
-2025-11-03 13:02:56,341 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
-2025-11-03 13:02:56,342 - __main__ - INFO - Log level: INFO
-2025-11-03 13:02:57,716 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
-2025-11-03 13:02:57,740 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
-INFO:     Started server process [93270]
+2025-11-03 13:06:16,704 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
+2025-11-03 13:06:16,704 - __main__ - INFO - Log level: INFO
+2025-11-03 13:06:18,117 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
+2025-11-03 13:06:18,141 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
+INFO:     Started server process [96571]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)
-2025-11-03 13:03:01,623 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
-2025-11-03 13:03:01,623 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
-2025-11-03 13:03:01,627 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
-2025-11-03 13:03:01,692 - src.conversation.flow_manager - INFO - Self-learning system initialized
-2025-11-03 13:03:01,692 - src.server.app - INFO - Created global ConversationFlowManager singleton
-INFO:     ::1:55980 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
-2025-11-03 13:03:01,694 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
-2025-11-03 13:03:01,695 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 13:03:04,367 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:03:04,381 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.68s
-2025-11-03 13:03:04,381 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+2025-11-03 13:06:22,033 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
+2025-11-03 13:06:22,033 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
+2025-11-03 13:06:22,106 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
+2025-11-03 13:06:22,106 - src.conversation.flow_manager - INFO - Self-learning system initialized
+2025-11-03 13:06:22,106 - src.server.app - INFO - Created global ConversationFlowManager singleton
+INFO:     ::1:56500 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 13:06:22,108 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 13:06:22,109 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 13:06:25,114 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 13:06:25,131 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.02s
+2025-11-03 13:06:25,132 - src.conversation.flow_manager - INFO - PM plan LLM response: {
   "locale": "en-US",
-  "overall_thought": "I will remove all ETA information from tasks as requested.",
+  "overall_thought": "I will clear all estimated times for assigned tasks, ensuring they are reset for further updates.",
   "steps": [
     {
       "step_type": "update_task",
-      "title": "Clear ETA from Tasks",
-      "description": "Remove ETA information from all tasks assigned to the user.",
+      "title": "Clear ETA for Assigned Tasks",
+      "description": "Remove estimated times for all tasks assigned to me.",
       "requires_context": false
     }
   ]
 }
-2025-11-03 13:03:04,382 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.69s
-2025-11-03 13:03:04,382 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 2.69s
-2025-11-03 13:03:04,382 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 2.69s
-2025-11-03 13:03:04,382 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 2.69s
-2025-11-03 13:03:04,382 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 2.69s
-2025-11-03 13:03:04,964 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:03:04,965 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: null
-2025-11-03 13:03:04,965 - src.conversation.flow_manager - INFO - Extracted initial data: {}
-2025-11-03 13:03:04,965 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 13:03:07,066 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:03:07,076 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.11s
-2025-11-03 13:03:07,076 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+2025-11-03 13:06:25,132 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 3.02s
+2025-11-03 13:06:25,132 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 3.02s
+2025-11-03 13:06:25,132 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 3.02s
+2025-11-03 13:06:25,132 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 3.02s
+2025-11-03 13:06:25,132 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 3.02s
+2025-11-03 13:06:25,919 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 13:06:25,922 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: null
+2025-11-03 13:06:25,922 - src.conversation.flow_manager - INFO - Extracted initial data: {}
+2025-11-03 13:06:25,922 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 13:06:32,782 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 13:06:32,786 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 6.86s
+2025-11-03 13:06:32,786 - src.conversation.flow_manager - INFO - PM plan LLM response: {
   "locale": "en-US",
-  "overall_thought": "I will proceed to remove all ETA estimates from the user's tasks.",
+  "overall_thought": "The user wants to remove the ETA values from their tasks. I will create a plan to clear all ETA information.",
   "steps": [
     {
+      "step_type": "list_my_tasks",
+      "title": "List All My Tasks",
+      "description": "Retrieve and display all tasks assigned to the user to identify those with ETA values",
+      "requires_context": false
+    },
+    {
       "step_type": "update_task",
-      "title": "Clear ETA for All Tasks",
-      "description": "Remove ETA estimates from all tasks assigned to the user.",
+      "title": "Clear ETA for Each Task",
+      "description": "Update each identified task to remove the ETA values",
+      "requires_context": true
+    }
+  ]
+}
+2025-11-03 13:06:32,786 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps in 6.86s
+2025-11-03 13:06:32,786 - src.conversation.flow_manager - INFO - Generated PM plan with 2 steps
+2025-11-03 13:06:32,786 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 13:06:32,786 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 13:06:32,786 - src.conversation.flow_manager - INFO - [TIMING] Plan has 2 steps - 0.00s
+2025-11-03 13:06:32,786 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/2: List All My Tasks - 0.00s
+2025-11-03 13:06:32,786 - src.conversation.flow_manager - INFO - Executing PM step: list_my_tasks
+2025-11-03 13:06:34,196 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 13:06:34,200 - src.conversation.flow_manager - INFO - Extracted data: {'filter_week': None, 'filter_date': None, 'period': None}
+2025-11-03 13:06:34,200 - src.conversation.flow_manager - INFO - Extracted list_my_tasks data: {'filter_week': None, 'filter_date': None, 'period': None}
+2025-11-03 13:06:34,200 - src.conversation.flow_manager - INFO - Handling LIST_MY_TASKS intent
+2025-11-03 13:06:34,231 - src.conversation.flow_manager - INFO - Using current user from API key: OpenProject Admin (ID: 4)
+2025-11-03 13:06:34,231 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+2025-11-03 13:06:34,362 - src.conversation.flow_manager - INFO - Calculated total hours: 0.0 from 20 tasks
+2025-11-03 13:06:34,386 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 1.60s - 1.60s total
+2025-11-03 13:06:34,386 - src.conversation.flow_manager - INFO - [TIMING] Executing step 2/2: Clear ETA for Each Task - 1.60s
+2025-11-03 13:06:34,386 - src.conversation.flow_manager - INFO - Executing PM step: update_task
+2025-11-03 13:06:36,172 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 13:06:36,365 - src.conversation.flow_manager - INFO - Extracted data: {'task_id': None, 'task_title': None, 'new_title': None, 'new_status': None, 'new_priority': None, 'new_estimated_hours': 0, 'new_description': None}
+2025-11-03 13:06:36,365 - src.conversation.flow_manager - INFO - Extracted update_task data: {'task_id': None, 'task_title': None, 'new_title': None, 'new_status': None, 'new_priority': None, 'new_estimated_hours': 0, 'new_description': None}
+2025-11-03 13:06:36,365 - src.conversation.flow_manager - INFO - Handling UPDATE_TASK intent
+2025-11-03 13:06:36,365 - src.conversation.flow_manager - INFO - Handling bulk ETA deletion
+2025-11-03 13:06:36,390 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+2025-11-03 13:06:36,520 - src.conversation.flow_manager - INFO - [TIMING] Step 2 completed in 2.13s - 3.73s total
+2025-11-03 13:06:36,520 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 11.39s
+2025-11-03 13:06:36,521 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 14.41s
+INFO:     ::1:56518 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 13:06:46,322 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 13:06:46,322 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 13:06:50,049 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 13:06:50,051 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.73s
+2025-11-03 13:06:50,051 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+  "locale": "en-US",
+  "overall_thought": "The user wants to see their tasks again after a previous operation. I will list all their assigned tasks.",
+  "steps": [
+    {
+      "step_type": "list_my_tasks",
+      "title": "List My Assigned Tasks",
+      "description": "Retrieve and display all tasks assigned to me across all projects",
       "requires_context": false
     }
   ]
 }
-2025-11-03 13:03:07,076 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.11s
-2025-11-03 13:03:07,076 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
-2025-11-03 13:03:07,076 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
-2025-11-03 13:03:07,076 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
-2025-11-03 13:03:07,076 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
-2025-11-03 13:03:07,076 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: Clear ETA for All Tasks - 0.00s
-2025-11-03 13:03:07,076 - src.conversation.flow_manager - INFO - Executing PM step: update_task
-2025-11-03 13:03:10,668 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:03:10,683 - src.conversation.flow_manager - INFO - Extracted data: {'task_id': None, 'task_title': None, 'new_title': None, 'new_status': None, 'new_priority': None, 'new_estimated_hours': 0, 'new_description': None}
-2025-11-03 13:03:10,683 - src.conversation.flow_manager - INFO - Extracted update_task data: {'task_id': None, 'task_title': None, 'new_title': None, 'new_status': None, 'new_priority': None, 'new_estimated_hours': 0, 'new_description': None}
-2025-11-03 13:03:10,683 - src.conversation.flow_manager - INFO - Handling UPDATE_TASK intent
-2025-11-03 13:03:10,683 - src.conversation.flow_manager - INFO - Handling bulk ETA deletion
-2025-11-03 13:03:10,698 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
-2025-11-03 13:03:10,823 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 3.75s - 3.75s total
-2025-11-03 13:03:10,824 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 6.44s
-2025-11-03 13:03:10,824 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 9.13s
-INFO:     ::1:56029 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
-2025-11-03 13:03:21,026 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
-2025-11-03 13:03:21,026 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 13:03:24,306 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:03:24,309 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.28s
-2025-11-03 13:03:24,309 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+2025-11-03 13:06:50,051 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 3.73s
+2025-11-03 13:06:50,051 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 3.73s
+2025-11-03 13:06:50,051 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 3.73s
+2025-11-03 13:06:50,051 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 3.73s
+2025-11-03 13:06:50,052 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 3.73s
+2025-11-03 13:06:50,052 - src.conversation.flow_manager - INFO - Reset state to INTENT_DETECTION for new message (previous state was COMPLETED)
+2025-11-03 13:06:50,906 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 13:06:50,911 - src.conversation.flow_manager - INFO - Extracted data: {}
+2025-11-03 13:06:50,911 - src.conversation.flow_manager - INFO - Extracted initial data: {}
+2025-11-03 13:06:50,911 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 13:06:54,985 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 13:06:54,988 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 4.08s
+2025-11-03 13:06:54,988 - src.conversation.flow_manager - INFO - PM plan LLM response: {
   "locale": "en-US",
   "overall_thought": "The user wants to see their tasks again after previous operation. I will list all their assigned tasks.",
   "steps": [
@@ -84,44 +124,20 @@ INFO:     ::1:56029 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
     }
   ]
 }
-2025-11-03 13:03:24,309 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 3.28s
-2025-11-03 13:03:24,309 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 3.28s
-2025-11-03 13:03:24,309 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 3.28s
-2025-11-03 13:03:24,309 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 3.28s
-2025-11-03 13:03:24,310 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 3.28s
-2025-11-03 13:03:24,310 - src.conversation.flow_manager - INFO - Reset state to INTENT_DETECTION for new message (previous state was COMPLETED)
-2025-11-03 13:03:26,088 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:03:26,089 - src.conversation.flow_manager - INFO - Extracted data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
-2025-11-03 13:03:26,089 - src.conversation.flow_manager - INFO - Extracted initial data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
-2025-11-03 13:03:26,090 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 13:03:28,838 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:03:28,841 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.75s
-2025-11-03 13:03:28,841 - src.conversation.flow_manager - INFO - PM plan LLM response: {
-  "locale": "en-US",
-  "overall_thought": "The user wants to see their tasks again after previous operation. I will list all their assigned tasks.",
-  "steps": [
-    {
-      "step_type": "list_my_tasks",
-      "title": "List My Assigned Tasks",
-      "description": "Retrieve and display all tasks assigned to me across all projects",
-      "requires_context": false
-    }
-  ]
-}
-2025-11-03 13:03:28,841 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.75s
-2025-11-03 13:03:28,841 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
-2025-11-03 13:03:28,842 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
-2025-11-03 13:03:28,842 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
-2025-11-03 13:03:28,842 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
-2025-11-03 13:03:28,842 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: List My Assigned Tasks - 0.00s
-2025-11-03 13:03:28,842 - src.conversation.flow_manager - INFO - Executing PM step: list_my_tasks
-2025-11-03 13:03:29,775 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:03:29,778 - src.conversation.flow_manager - INFO - Extracted data: {'filter_week': None, 'filter_date': None, 'period': None}
-2025-11-03 13:03:29,778 - src.conversation.flow_manager - INFO - Extracted list_my_tasks data: {'filter_week': None, 'filter_date': None, 'period': None}
-2025-11-03 13:03:29,778 - src.conversation.flow_manager - INFO - Handling LIST_MY_TASKS intent
-2025-11-03 13:03:29,806 - src.conversation.flow_manager - INFO - Using current user from API key: OpenProject Admin (ID: 4)
-2025-11-03 13:03:29,806 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
-2025-11-03 13:03:29,950 - src.conversation.flow_manager - INFO - Calculated total hours: 0.0 from 20 tasks
-2025-11-03 13:03:29,979 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 1.14s - 1.14s total
-2025-11-03 13:03:29,979 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 5.67s
-2025-11-03 13:03:29,980 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 8.95s
+2025-11-03 13:06:54,988 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 4.08s
+2025-11-03 13:06:54,988 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
+2025-11-03 13:06:54,988 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 13:06:54,988 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 13:06:54,988 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
+2025-11-03 13:06:54,988 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: List My Assigned Tasks - 0.00s
+2025-11-03 13:06:54,988 - src.conversation.flow_manager - INFO - Executing PM step: list_my_tasks
+2025-11-03 13:06:55,910 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 13:06:55,914 - src.conversation.flow_manager - INFO - Extracted data: {'filter_week': None, 'filter_date': None, 'period': None}
+2025-11-03 13:06:55,914 - src.conversation.flow_manager - INFO - Extracted list_my_tasks data: {'filter_week': None, 'filter_date': None, 'period': None}
+2025-11-03 13:06:55,914 - src.conversation.flow_manager - INFO - Handling LIST_MY_TASKS intent
+2025-11-03 13:06:55,944 - src.conversation.flow_manager - INFO - Using current user from API key: OpenProject Admin (ID: 4)
+2025-11-03 13:06:55,944 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+2025-11-03 13:06:56,071 - src.conversation.flow_manager - INFO - Calculated total hours: 0.0 from 20 tasks
+2025-11-03 13:06:56,102 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 1.11s - 1.11s total
+2025-11-03 13:06:56,103 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 6.05s
+2025-11-03 13:06:56,103 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 9.78s

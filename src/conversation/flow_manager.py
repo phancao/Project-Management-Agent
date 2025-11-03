@@ -796,7 +796,7 @@ class ConversationFlowManager:
         user_message: str,
         context: ConversationContext
     ) -> Optional[Dict[str, Any]]:
-        """Generate a PM execution plan from user message"""
+        """Generate a PM execution plan from user message with conversation history"""
         import time
         plan_start = time.time()
         logger.info("[TIMING] generate_pm_plan started")
@@ -809,11 +809,25 @@ class ConversationFlowManager:
             # Load the PM planner prompt template
             system_prompt = get_prompt_template("pm_planner", locale="en-US")
             
-            # Create messages with system prompt + user message
+            # Create messages with system prompt + conversation history + current message
             messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
+                {"role": "system", "content": system_prompt}
             ]
+            
+            # Add conversation history if available (limit to last 3 exchanges to avoid token bloat)
+            if context.conversation_history:
+                # Get last 6 messages (3 user + 3 assistant pairs)
+                recent_history = context.conversation_history[-6:]
+                for msg in recent_history:
+                    # Only include assistant messages that are actual responses (not system messages)
+                    if msg.get("role") in ["user", "assistant"] and msg.get("content"):
+                        messages.append({
+                            "role": msg["role"],
+                            "content": msg["content"]
+                        })
+            
+            # Add current user message
+            messages.append({"role": "user", "content": user_message})
             
             llm_start = time.time()
             llm = get_llm_by_type("basic")

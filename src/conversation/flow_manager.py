@@ -594,7 +594,7 @@ class ConversationFlowManager:
             title = step.get('title', '').lower()
             
             # Determine research type from keywords
-            if 'eta' in description or 'ước tính thời gian' in description or 'estimated time' in description or 'eta' in title:
+            if 'eta' in description or 'ước tính thời gian' in description or 'estimated time' in description or 'time estimation' in description or 'eta' in title or 'time estimate' in description:
                 # ETA research: analyze tasks and provide estimates
                 return await self._handle_eta_research(context)
             elif 'wbs' in description or 'work breakdown' in description or 'project structure' in description:
@@ -2506,10 +2506,14 @@ Be concise but realistic."""
             updated_count = 0
             for task_id, hours in estimates.items():
                 try:
+                    logger.info(f"Updating task {task_id} with {hours}h")
                     await self.pm_provider.update_task(task_id, {"estimated_hours": hours})
                     updated_count += 1
+                    logger.info(f"Successfully updated task {task_id}")
                 except Exception as e:
                     logger.error(f"Failed to update task {task_id}: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
             
             context.current_state = FlowState.COMPLETED
             

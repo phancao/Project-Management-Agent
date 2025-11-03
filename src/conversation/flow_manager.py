@@ -583,8 +583,15 @@ class ConversationFlowManager:
             return await self._execute_intent(IntentType.CREATE_PROJECT, context)
         
         elif step_type_str == "research":
-            context.intent = IntentType.RESEARCH_TOPIC
-            return await self._execute_intent(IntentType.RESEARCH_TOPIC, context)
+            # Check if this is ETA research based on description
+            description = step.get('description', '').lower()
+            if 'eta' in description or 'ước tính thời gian' in description or 'estimated time' in description:
+                # ETA research: analyze tasks and provide estimates
+                return await self._handle_eta_research(context)
+            else:
+                # Generic research
+                context.intent = IntentType.RESEARCH_TOPIC
+                return await self._execute_intent(IntentType.RESEARCH_TOPIC, context)
         
         elif step_type_str == "switch_project":
             return await self._handle_switch_project(context)
@@ -2144,6 +2151,127 @@ class ConversationFlowManager:
             return {
                 "type": "error",
                 "message": f"Failed to get project status: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_eta_research(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle ETA research - Research and estimate time for tasks without ETA"""
+        logger.info("Handling ETA research")
+        
+        try:
+            # Get current user's tasks
+            current_user = await self.pm_provider.get_current_user()
+            if not current_user:
+                return {
+                    "type": "error",
+                    "message": "Cannot determine current user for ETA research.",
+                    "state": context.current_state.value
+                }
+            
+            # List all user's tasks
+            all_tasks = await self.pm_provider.list_tasks(assignee_id=str(current_user.id))
+            
+            # Filter tasks without ETA
+            tasks_without_eta = [
+                task for task in all_tasks
+                if not task.estimated_hours or task.estimated_hours == 0
+            ]
+            
+            if not tasks_without_eta:
+                context.current_state = FlowState.COMPLETED
+                return {
+                    "type": "execution_completed",
+                    "message": "✅ All your tasks already have ETA estimates!",
+                    "state": "complete"
+                }
+            
+            # Build research query for LLM
+            task_list = "\n".join([
+                f"- {task.title} (ID: {task.id})"
+                for task in tasks_without_eta[:10]  # Limit to 10 tasks
+            ])
+            
+            research_query = f"""Please estimate the time needed for each of these tasks in hours:
+
+{task_list}
+
+For each task, provide your estimate in hours based on typical effort for similar tasks. Consider complexity, dependencies, and typical industry standards. Respond in a format like:
+- Task Title (ID: x): Y hours
+
+Be concise but realistic."""
+            
+            # Call LLM for estimates
+            from src.llms.llm import get_llm_by_type
+            llm = get_llm_by_type("basic")
+            response = await llm.ainvoke(research_query)
+            
+            if isinstance(response, str):
+                llm_response = response
+            else:
+                llm_response = response.content if hasattr(response, 'content') else str(response)
+            
+            logger.info(f"LLM ETA response: {llm_response}")
+            
+            # Parse estimates from LLM response
+            import re
+            estimates = {}
+            for task in tasks_without_eta:
+                # Try to match task ID or title in LLM response
+                pattern_id = rf".*\(ID:\s*{task.id}\)[:\s]*(\d+(?:\.\d+)?)\s*hours?"
+                pattern_title = rf".*{re.escape(task.title)}[:\s]*(\d+(?:\.\d+)?)\s*hours?"
+                
+                match = re.search(pattern_id, llm_response, re.IGNORECASE) or \
+                       re.search(pattern_title, llm_response, re.IGNORECASE)
+                if match:
+                    hours = float(match.group(1))
+                    estimates[task.id] = hours
+                    logger.info(f"Parsed ETA for {task.title}: {hours}h")
+            
+            # Update tasks with estimates
+            updated_count = 0
+            for task_id, hours in estimates.items():
+                try:
+                    await self.pm_provider.update_task(task_id, {"estimated_hours": hours})
+                    updated_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to update task {task_id}: {e}")
+            
+            context.current_state = FlowState.COMPLETED
+            
+            message_parts = [
+                f"✅ **ETA Research Completed**\n",
+                f"Analyzed {len(tasks_without_eta)} tasks without ETA\n",
+                f"Updated {updated_count} tasks with new estimates\n"
+            ]
+            
+            if updated_count > 0:
+                message_parts.append("\n**Updated Tasks:**\n")
+                for task_id, hours in list(estimates.items())[:10]:
+                    task = next((t for t in tasks_without_eta if t.id == task_id), None)
+                    if task:
+                        message_parts.append(f"- {task.title}: **{hours}h**\n")
+            
+            return {
+                "type": "execution_completed",
+                "message": "".join(message_parts),
+                "state": "complete",
+                "data": {
+                    "analyzed_tasks": len(tasks_without_eta),
+                    "updated_tasks": updated_count,
+                    "estimates": estimates
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"ETA research failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to research ETA: {str(e)}",
                 "state": context.current_state.value
             }
     

@@ -410,7 +410,33 @@ Output:
 }
 ```
 
-## Example 16: Unsupported Request
+## Example 16: Calculate ETA with Research
+
+User: "hãy eta các task tôi được assign"
+
+Output:
+```json
+{
+  "locale": "vi-VN",
+  "overall_thought": "Người dùng muốn tính ETA cho các task chưa có ETA. Tôi sẽ liệt kê tasks, nghiên cứu để ước tính thời gian, sau đó cập nhật ETA cho từng task.",
+  "steps": [
+    {
+      "step_type": "list_my_tasks",
+      "title": "Liệt kê Tasks Được Assign",
+      "description": "Liệt kê tất cả task được giao cho user để xem task nào chưa có ETA",
+      "requires_context": false
+    },
+    {
+      "step_type": "research",
+      "title": "Nghiên cứu ước tính thời gian cho từng task",
+      "description": "Nghiên cứu và đưa ra ước tính thời gian hợp lý cho từng task dựa trên độ phức tạp và yêu cầu",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 17: Unsupported Request
 
 User: "calculate ETA for my tasks"
 

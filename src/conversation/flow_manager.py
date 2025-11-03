@@ -1827,7 +1827,25 @@ class ConversationFlowManager:
             
             # Build formatted message
             total_tasks = len(tasks)
-            message_parts = [f"Found **{total_tasks}** tasks assigned to you:\n"]
+            
+            # Calculate total hours for workload
+            total_hours = 0.0
+            for task in tasks:
+                if hasattr(task, 'estimated_hours') and task.estimated_hours:
+                    total_hours += float(task.estimated_hours)
+            
+            logger.info(f"Calculated total hours: {total_hours} from {total_tasks} tasks")
+            
+            if filter_by_week or filter_by_date:
+                message_parts = [f"📊 **Your workload for this period:**\n"]
+                message_parts.append(f"- **{total_tasks}** tasks\n")
+                if total_hours > 0:
+                    message_parts.append(f"- **{total_hours:.1f}** hours total\n")
+                else:
+                    message_parts.append(f"- **No time estimates** available\n")
+                message_parts.append("\n**Tasks:**\n")
+            else:
+                message_parts = [f"Found **{total_tasks}** tasks assigned to you:\n"]
             
             if len(tasks_by_project) == 1 and total_tasks > 0:
                 # All tasks in one project

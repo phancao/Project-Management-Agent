@@ -361,6 +361,8 @@ class OpenProjectProvider(BasePMProvider):
             status=embedded.get("status", {}).get("name") if embedded.get("status") else None,
             project_id=self._extract_id_from_href(links.get("project", {}).get("href")),
             assignee_id=self._extract_id_from_href(links.get("assignee", {}).get("href")),
+            estimated_hours=self._parse_duration_to_hours(data.get("estimatedTime")),
+            actual_hours=self._parse_duration_to_hours(data.get("derivedRemainingTime")),
             start_date=self._parse_date(data.get("startDate")),
             due_date=self._parse_date(data.get("dueDate")),
             created_at=self._parse_datetime(data.get("createdAt")),
@@ -422,6 +424,28 @@ class OpenProjectProvider(BasePMProvider):
             return None
         try:
             return href.split("/")[-1]
+        except:
+            return None
+    
+    @staticmethod
+    def _parse_duration_to_hours(duration_str: Optional[str]) -> Optional[float]:
+        """Parse OpenProject ISO 8601 duration string to hours"""
+        if not duration_str:
+            return None
+        try:
+            # OpenProject uses ISO 8601 duration format like "PT1H30M" or "P1DT2H"
+            import re
+            # Parse hours and minutes from duration string
+            hours_match = re.search(r'(\d+)H', duration_str)
+            minutes_match = re.search(r'(\d+)M', duration_str)
+            
+            total_hours = 0.0
+            if hours_match:
+                total_hours += float(hours_match.group(1))
+            if minutes_match:
+                total_hours += float(minutes_match.group(1)) / 60.0
+            
+            return total_hours if total_hours > 0 else None
         except:
             return None
 

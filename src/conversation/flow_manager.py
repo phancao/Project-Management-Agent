@@ -653,11 +653,20 @@ class ConversationFlowManager:
             context.intent = IntentType.CREATE_REPORT
             return await self._handle_create_report(context)
         
+        elif step_type_str == "unknown":
+            logger.warning(f"Unsupported request: {step.get('title', step_type_str)}")
+            description = step.get('description', 'This feature is not currently supported.')
+            return {
+                "type": "execution_completed",
+                "message": f"❌ **Feature Not Supported**\n\n{description}\n\n_Please use supported commands like listing tasks, creating WBS, planning sprints, etc._",
+                "state": "complete"
+            }
         else:
             logger.warning(f"Unknown or unsupported PM step type: {step_type_str}")
             return {
                 "type": "error",
-                "message": f"Unsupported step type: {step_type_str}"
+                "message": f"❌ **Unsupported Request**\n\nI don't know how to handle '{step.get('title', step_type_str)}'. Please try a supported command like:\n- List my tasks\n- Create WBS\n- Plan sprints\n- Get project status",
+                "state": "error"
             }
     
     async def _handle_execution_phase(

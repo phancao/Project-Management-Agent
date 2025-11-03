@@ -370,6 +370,26 @@ Output:
 }
 ```
 
+## Example 15: Unsupported Request
+
+User: "calculate ETA for my tasks"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "The user is asking for ETA calculation which is not a supported feature. I will use 'unknown' step type to indicate this cannot be performed.",
+  "steps": [
+    {
+      "step_type": "unknown",
+      "title": "Unsupported Request: ETA Calculation",
+      "description": "ETA calculation is not currently supported. The system will display an appropriate message to the user.",
+      "requires_context": false
+    }
+  ]
+}
+```
+
 # Guidelines
 
 1. **Identify all tasks**: If user says "Create WBS AND plan sprints", create multiple steps

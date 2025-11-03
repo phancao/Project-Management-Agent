@@ -553,9 +553,17 @@ class ConversationFlowManager:
         if context.current_state != FlowState.INTENT_DETECTION:
             context.current_state = FlowState.COMPLETED
         
+        # Build final message from all steps
+        final_message = "\n".join(response_parts)
+        
+        # Individual step messages were already sent during execution via stream_callback
+        # The server will handle sending the finish_reason when process_message completes
+        
+        logger.info(f"[TIMING] Planning phase completed: {len(steps)} steps executed in {time.time() - start_time:.2f}s")
+        
         return {
             "type": "execution_completed",
-            "message": "\n".join(response_parts),
+            "message": final_message,
             "state": context.current_state.value
         }
     

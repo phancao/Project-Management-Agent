@@ -9,9 +9,10 @@ import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
 export function BacklogView() {
   const { tasks, loading, error } = useMyTasks();
 
-  const highPriority = tasks.filter(t => t.priority === "high");
+  const highPriority = tasks.filter(t => t.priority === "high" || t.priority === "highest" || t.priority === "critical");
   const mediumPriority = tasks.filter(t => t.priority === "medium");
-  const lowPriority = tasks.filter(t => t.priority === "low");
+  const lowPriority = tasks.filter(t => t.priority === "low" || t.priority === "lowest");
+  const noPriority = tasks.filter(t => !t.priority || t.priority === "None");
 
   if (loading) {
     return (
@@ -107,6 +108,30 @@ export function BacklogView() {
                   </div>
                   <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
                     Low
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {noPriority.length > 0 && (
+            <div className="space-y-2 pt-4">
+              <div className="font-semibold text-gray-900 dark:text-white">
+                📋 NO PRIORITY ({noPriority.length} tasks)
+              </div>
+              {noPriority.map((task) => (
+                <div key={task.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-950 rounded-lg border border-gray-200 dark:border-gray-800">
+                  <input type="checkbox" className="w-4 h-4" />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 dark:text-white">{task.title}</div>
+                    {task.estimated_hours && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        ⏱️ {task.estimated_hours}h
+                      </div>
+                    )}
+                  </div>
+                  <span className="px-2 py-1 bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 rounded text-xs">
+                    {task.status}
                   </span>
                 </div>
               ))}

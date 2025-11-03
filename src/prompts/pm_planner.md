@@ -390,6 +390,28 @@ Output:
 }
 ```
 
+## Example 14c: Follow-up List My Tasks
+
+User: "ok now list all task again"
+
+Context: Previous conversation listed user's tasks
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "The user wants to see their tasks again after previous operation. I will list all their assigned tasks.",
+  "steps": [
+    {
+      "step_type": "list_my_tasks",
+      "title": "List My Assigned Tasks",
+      "description": "Retrieve and display all tasks assigned to me across all projects",
+      "requires_context": false
+    }
+  ]
+}
+```
+
 ## Example 15: Update Task with ETA
 
 User: "set ETA 5 hours for task Set date and location of conference"

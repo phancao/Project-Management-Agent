@@ -6,10 +6,16 @@ A sophisticated AI-powered project management system that combines deep research
 
 ### Core Capabilities
 - **Intelligent Project Planning**: AI-driven project creation with research-backed estimates
+- **Work Breakdown Structure (WBS)**: Automated task decomposition with LLM-generated hierarchies
+- **Sprint Planning**: Intelligent sprint allocation based on capacity and priorities
+- **Time Tracking**: Log actual hours worked with OpenProject integration
+- **Burndown Charts**: Track sprint progress and velocity metrics
+- **Team Assignments**: Manage task distribution and workload across team members
 - **Adaptive Conversation System**: Context-aware conversations that guide users to provide complete information
 - **Deep Research Integration**: Leverages DeerFlow for comprehensive topic research and knowledge gathering
 - **Real-time Collaboration**: Live chat interface with WebSocket support
 - **Knowledge Management**: Vector-based knowledge base with semantic search
+- **Multi-Provider Support**: Integrates with OpenProject, JIRA, and ClickUp
 - **Self-Learning System**: Adapts conversation flows based on user interactions
 
 ### Technical Features
@@ -176,27 +182,25 @@ psql -h localhost -U pm_user -d project_management -f database/schema.sql
 ### Core Endpoints
 
 #### Chat & Conversation
-- `POST /api/chat` - Send message to conversation flow manager
+- `POST /api/chat` - Send message to DeerFlow research agent
+- `POST /api/pm/chat/stream` - Send message to Project Management agent (SSE)
 - `GET /api/chat/history/{session_id}` - Get chat history
 - `WebSocket /ws/chat/{session_id}` - Real-time chat
 
-#### Project Management
-- `POST /api/projects` - Create new project
-- `GET /api/projects` - List projects
-- `GET /api/projects/{id}` - Get project details
-- `PUT /api/projects/{id}` - Update project
-- `DELETE /api/projects/{id}` - Delete project
+#### Project Management (via PM Providers)
+- **OpenProject Integration**: Full support for projects, tasks, sprints, time entries
+- **JIRA Integration**: Coming soon
+- **ClickUp Integration**: Coming soon
+- All PM operations accessible through conversation interface
 
-#### Task Management
-- `POST /api/projects/{id}/tasks` - Create task
-- `GET /api/projects/{id}/tasks` - List tasks
-- `PUT /api/tasks/{id}` - Update task
-- `DELETE /api/tasks/{id}` - Delete task
-
-#### Research & Knowledge
-- `POST /api/research` - Start research session
-- `GET /api/research/{id}` - Get research results
-- `POST /api/knowledge/search` - Search knowledge base
+**PM Capabilities via Chat:**
+- Create WBS and plan sprints
+- Time tracking and logging
+- Burndown charts and velocity
+- Team assignment summaries
+- Task assignment and updates
+- Sprint progress tracking
+- Context switching (projects/sprints/tasks)
 
 ## 🤖 Agent System
 
@@ -265,6 +269,9 @@ SEARCH_ENGINE:
 # Backend tests
 uv run pytest
 
+# PM feature tests
+python tests/test_pm_features.py
+
 # Frontend tests
 cd frontend && npm test
 
@@ -276,6 +283,9 @@ docker-compose -f docker-compose.test.yml up --abort-on-container-exit
 ```bash
 # Backend coverage
 uv run pytest --cov=src --cov-report=html
+
+# PM feature coverage
+python tests/test_pm_features.py
 
 # Frontend coverage
 cd frontend && npm run test:coverage

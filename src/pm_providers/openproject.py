@@ -588,7 +588,8 @@ class OpenProjectProvider(BasePMProvider):
             if minutes_match:
                 total_hours += float(minutes_match.group(1)) / 60.0
             
-            return total_hours if total_hours > 0 else None
+            # Return 0.0 for PT0H, None only if parsing failed or no duration provided
+            return total_hours if total_hours >= 0 else None
         except:
             return None
 

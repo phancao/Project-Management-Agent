@@ -118,7 +118,7 @@ class ConversationFlowManager:
             logger.warning("DeerFlow workflow not available")
             self.run_deerflow_workflow = None
             self.run_deerflow_workflow_stream = None
-        
+    
     async def process_message(
         self, 
         message: str, 

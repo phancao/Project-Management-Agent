@@ -959,6 +959,17 @@ async def pm_list_tasks(request: Request, project_id: str):
         
         tasks = await fm.pm_provider.list_tasks(project_id=project_id)
         
+        # Build assignee map if needed
+        assignee_map = {}
+        for task in tasks:
+            if task.assignee_id and task.assignee_id not in assignee_map:
+                try:
+                    user = await fm.pm_provider.get_user(task.assignee_id)
+                    if user:
+                        assignee_map[task.assignee_id] = user.name
+                except:
+                    pass
+        
         return [
             {
                 "id": str(t.id),
@@ -967,7 +978,7 @@ async def pm_list_tasks(request: Request, project_id: str):
                 "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
                 "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
                 "estimated_hours": t.estimated_hours,
-                "assigned_to": t.assignee.name if t.assignee else None,
+                "assigned_to": assignee_map.get(t.assignee_id) if t.assignee_id else None,
             }
             for t in tasks
         ]
@@ -1001,6 +1012,10 @@ async def pm_list_my_tasks(request: Request):
         
         tasks = await fm.pm_provider.list_tasks(assignee_id=str(current_user.id))
         
+        # Fetch all projects for name mapping
+        all_projects = await fm.pm_provider.list_projects()
+        project_map = {p.id: p.name for p in all_projects}
+        
         return [
             {
                 "id": str(t.id),
@@ -1009,7 +1024,7 @@ async def pm_list_my_tasks(request: Request):
                 "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
                 "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
                 "estimated_hours": t.estimated_hours,
-                "project_name": t.project_name or "Unknown",
+                "project_name": project_map.get(t.project_id, "Unknown") if t.project_id else "Unknown",
             }
             for t in tasks
         ]

@@ -1,133 +1,54 @@
-2025-11-03 13:49:53,228 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
-2025-11-03 13:49:53,228 - __main__ - INFO - Log level: INFO
-2025-11-03 13:49:54,921 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
-2025-11-03 13:49:54,949 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
-INFO:     Started server process [38518]
+2025-11-03 18:10:59,009 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
+2025-11-03 18:10:59,009 - __main__ - INFO - Log level: INFO
+INFO:     Will watch for changes in these directories: ['/Volumes/Data 1/Project/Project-Management-Agent']
+INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [88077] using StatReload
+2025-11-03 18:11:00,980 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
+2025-11-03 18:11:01,018 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
+INFO:     Started server process [88079]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)
-2025-11-03 13:49:58,560 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
-2025-11-03 13:49:58,560 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
-2025-11-03 13:49:58,565 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
-2025-11-03 13:49:58,631 - src.conversation.flow_manager - INFO - Self-learning system initialized
-2025-11-03 13:49:58,631 - src.server.app - INFO - Created global ConversationFlowManager singleton
-INFO:     ::1:59758 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
-2025-11-03 13:49:58,635 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
-2025-11-03 13:49:58,635 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 13:50:03,241 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:50:03,280 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 4.64s
-2025-11-03 13:50:03,280 - src.conversation.flow_manager - INFO - PM plan LLM response: {
-  "locale": "en-US",
-  "overall_thought": "I will switch the active project context to Scrum project for focused work.",
-  "steps": [
-    {
-      "step_type": "switch_project",
-      "title": "Switch to Scrum Project",
-      "description": "Set Scrum project as the active project for focused work.",
-      "requires_context": false
-    }
-  ]
-}
-2025-11-03 13:50:03,281 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 4.65s
-2025-11-03 13:50:03,281 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 4.65s
-2025-11-03 13:50:03,281 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 4.65s
-2025-11-03 13:50:03,281 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 4.65s
-2025-11-03 13:50:03,282 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 4.65s
-2025-11-03 13:50:04,511 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:50:04,514 - src.conversation.flow_manager - INFO - Extracted data: {'project_name': 'Scrum project', 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
-2025-11-03 13:50:04,515 - src.conversation.flow_manager - INFO - Extracted initial data: {'project_name': 'Scrum project', 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
-2025-11-03 13:50:04,515 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 13:50:04,515 - src.conversation.flow_manager - INFO - Added key facts to context: - Project Context: Scrum project...
-2025-11-03 13:50:04,515 - src.conversation.flow_manager - INFO - Selected 1/1 messages for context
-2025-11-03 13:50:07,150 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.64s
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - PM plan LLM response: {
-  "locale": "en-US",
-  "overall_thought": "The user wants to switch the active project context to the Scrum project for focused work.",
-  "steps": [
-    {
-      "step_type": "switch_project",
-      "title": "Switch to Scrum Project",
-      "description": "Set the Scrum project as the active project for focused work on this project.",
-      "requires_context": false
-    }
-  ]
-}
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.64s
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: Switch to Scrum Project - 0.00s
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - Executing PM step: switch_project
-2025-11-03 13:50:07,151 - src.conversation.flow_manager - INFO - Handling SWITCH_PROJECT intent
-2025-11-03 13:50:07,173 - src.conversation.flow_manager - INFO - Found project 'Scrum project' with ID: 2
-2025-11-03 13:50:07,173 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.02s - 0.02s total
-2025-11-03 13:50:07,173 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 3.89s
-2025-11-03 13:50:07,174 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 8.54s
-INFO:     ::1:59789 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
-2025-11-03 13:50:19,221 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
-2025-11-03 13:50:19,221 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 13:50:19,221 - src.conversation.flow_manager - INFO - Added key facts to context: - Active Project: Scrum project (ID: 2)
-- Project Context: Scrum project
-- Recent Plan: The user wan...
-2025-11-03 13:50:19,221 - src.conversation.flow_manager - INFO - Selected 1/1 messages for context
-2025-11-03 13:50:21,681 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:50:21,689 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.47s
-2025-11-03 13:50:21,689 - src.conversation.flow_manager - INFO - PM plan LLM response: {
-  "locale": "en-US",
-  "overall_thought": "I will retrieve and display all tasks for the Scrum project.",
-  "steps": [
-    {
-      "step_type": "list_tasks",
-      "title": "List All Tasks for Scrum Project",
-      "description": "Retrieve and display all tasks associated with the Scrum project",
-      "requires_context": true
-    }
-  ]
-}
-2025-11-03 13:50:21,689 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.47s
-2025-11-03 13:50:21,689 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 2.47s
-2025-11-03 13:50:21,689 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 2.47s
-2025-11-03 13:50:21,689 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 2.47s
-2025-11-03 13:50:21,689 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 2.47s
-2025-11-03 13:50:23,203 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:50:23,204 - src.conversation.flow_manager - INFO - Extracted data: {'project_name': 'Scrum project', 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
-2025-11-03 13:50:23,204 - src.conversation.flow_manager - INFO - Extracted initial data: {'project_name': 'Scrum project', 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
-2025-11-03 13:50:23,204 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 13:50:23,204 - src.conversation.flow_manager - INFO - Added key facts to context: - Active Project: Scrum project (ID: 2)
-- Project Context: Scrum project
-- Recent Plan: The user wan...
-2025-11-03 13:50:23,204 - src.conversation.flow_manager - INFO - Selected 2/2 messages for context
-2025-11-03 13:50:25,887 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.69s
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - PM plan LLM response: {
-  "locale": "en-US",
-  "overall_thought": "The user wants to see their tasks again after previous operation. I will list all tasks assigned to them in the Scrum project.",
-  "steps": [
-    {
-      "step_type": "list_tasks",
-      "title": "List All Tasks in Scrum Project",
-      "description": "Retrieve and display all tasks assigned to the user in the active Scrum project",
-      "requires_context": true
-    }
-  ]
-}
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.69s
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: List All Tasks in Scrum Project - 0.00s
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - Executing PM step: list_tasks
-2025-11-03 13:50:25,892 - src.conversation.flow_manager - INFO - Handling LIST_TASKS intent
-2025-11-03 13:50:25,923 - src.conversation.flow_manager - INFO - Found project 'Scrum project' with ID: 2
-2025-11-03 13:50:25,936 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"project": {"operator": "=", "values": ["2"]}}]'}
-2025-11-03 13:50:26,177 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.28s - 0.28s total
-2025-11-03 13:50:26,177 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 4.49s
-2025-11-03 13:50:26,177 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 6.96s
+2025-11-03 18:11:02,220 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
+2025-11-03 18:11:02,220 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
+2025-11-03 18:11:02,224 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
+2025-11-03 18:11:02,225 - src.conversation.flow_manager - INFO - Self-learning system initialized
+INFO:     127.0.0.1:56454 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:11:20,327 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+2025-11-03 18:11:20,518 - src.server.app - ERROR - Failed to list my tasks: 'PMTask' object has no attribute 'project_name'
+INFO:     127.0.0.1:56595 - "GET /api/pm/tasks/my HTTP/1.1" 500 Internal Server Error
+WARNING:  StatReload detected changes in 'src/server/app.py'. Reloading...
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [38518]
-2025-11-03 14:01:14,553 - __main__ - INFO - Received shutdown signal. Starting graceful shutdown...
+INFO:     Finished server process [88079]
+2025-11-03 18:12:12,973 - __mp_main__ - INFO - Received shutdown signal. Starting graceful shutdown...
+2025-11-03 18:12:15,548 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
+2025-11-03 18:12:15,578 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
+INFO:     Started server process [89336]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2025-11-03 18:12:51,208 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
+2025-11-03 18:12:51,208 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
+2025-11-03 18:12:51,212 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
+2025-11-03 18:12:51,212 - src.conversation.flow_manager - INFO - Self-learning system initialized
+2025-11-03 18:12:51,223 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"project": {"operator": "=", "values": ["2"]}}]'}
+2025-11-03 18:12:51,342 - src.server.app - ERROR - Failed to list tasks: 'PMTask' object has no attribute 'assignee'
+INFO:     127.0.0.1:56763 - "GET /api/pm/projects/2/tasks HTTP/1.1" 500 Internal Server Error
+WARNING:  StatReload detected changes in 'src/server/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [89336]
+2025-11-03 18:13:25,196 - __mp_main__ - INFO - Received shutdown signal. Starting graceful shutdown...
+2025-11-03 18:13:27,348 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
+2025-11-03 18:13:27,375 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
+INFO:     Started server process [90499]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2025-11-03 18:13:39,287 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
+2025-11-03 18:13:39,287 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
+2025-11-03 18:13:39,290 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
+2025-11-03 18:13:39,290 - src.conversation.flow_manager - INFO - Self-learning system initialized
+INFO:     127.0.0.1:56882 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-03 18:13:53,057 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     127.0.0.1:56902 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK

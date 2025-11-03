@@ -2473,7 +2473,7 @@ class ConversationFlowManager:
             # Build research query for LLM
             task_list = "\n".join([
                 f"- {task.title} (ID: {task.id})"
-                for task in tasks_without_eta[:10]  # Limit to 10 tasks
+                for task in tasks_without_eta  # Process all tasks without ETA
             ])
             
             research_query = f"""Please estimate the time needed for each of these tasks in hours:
@@ -2535,7 +2535,7 @@ Be concise but realistic."""
             
             if updated_count > 0:
                 message_parts.append("\n**Updated Tasks:**\n")
-                for task_id, hours in list(estimates.items())[:10]:
+                for task_id, hours in list(estimates.items()):
                     task = next((t for t in tasks_without_eta if t.id == task_id), None)
                     if task:
                         message_parts.append(f"- {task.title}: **{hours}h**\n")

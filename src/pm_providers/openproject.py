@@ -185,6 +185,14 @@ class OpenProjectProvider(BasePMProvider):
         url = f"{self.base_url}/api/v3/work_packages/{task_id}"
         payload = {}
         
+        # Get lockVersion from form to prevent conflicts
+        form_url = f"{self.base_url}/api/v3/work_packages/{task_id}/form"
+        form_response = requests.post(form_url, headers=self.headers)
+        form_response.raise_for_status()
+        lock_version = form_response.json().get("_embedded", {}).get("payload", {}).get("lockVersion")
+        if lock_version is not None:
+            payload["lockVersion"] = lock_version
+        
         if "title" in updates or "subject" in updates:
             payload["subject"] = updates.get("title") or updates.get("subject")
         if "description" in updates:
@@ -199,6 +207,18 @@ class OpenProjectProvider(BasePMProvider):
                 **payload.get("_links", {}),
                 "assignee": {"href": f"/api/v3/users/{updates['assignee_id']}"}
             }
+        if "estimated_hours" in updates:
+            # Convert hours to ISO 8601 duration (e.g., 2.5 -> PT2H30M, 2.0 -> PT2H)
+            hours = updates["estimated_hours"]
+            if hours:
+                hours_float = float(hours)
+                hours_int = int(hours_float)
+                minutes_int = int((hours_float - hours_int) * 60)
+                
+                if minutes_int > 0:
+                    payload["estimatedTime"] = f"PT{hours_int}H{minutes_int}M"
+                else:
+                    payload["estimatedTime"] = f"PT{hours_int}H"
         
         response = requests.patch(url, headers=self.headers, json=payload)
         response.raise_for_status()

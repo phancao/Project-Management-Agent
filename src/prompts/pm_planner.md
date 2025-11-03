@@ -370,7 +370,47 @@ Output:
 }
 ```
 
-## Example 15: Unsupported Request
+## Example 14b: Show ETA of My Tasks
+
+User: "show me ETA of my tasks"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "The user wants to see estimated times for their tasks. I will list all their tasks which includes ETA information.",
+  "steps": [
+    {
+      "step_type": "list_my_tasks",
+      "title": "List My Tasks with ETA",
+      "description": "Retrieve and display all tasks assigned to me with estimated time information",
+      "requires_context": false
+    }
+  ]
+}
+```
+
+## Example 15: Update Task with ETA
+
+User: "set ETA 5 hours for task Set date and location of conference"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will update the estimated time for the specified task.",
+  "steps": [
+    {
+      "step_type": "update_task",
+      "title": "Update ETA for Task",
+      "description": "Set estimated time to 5 hours for task 'Set date and location of conference'",
+      "requires_context": false
+    }
+  ]
+}
+```
+
+## Example 16: Unsupported Request
 
 User: "calculate ETA for my tasks"
 

@@ -1,64 +1,70 @@
-2025-11-03 11:26:08,662 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
-2025-11-03 11:26:08,662 - __main__ - INFO - Log level: INFO
-2025-11-03 11:26:10,146 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
-2025-11-03 11:26:10,174 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
-INFO:     Started server process [99029]
+2025-11-03 11:38:20,961 - __main__ - INFO - Starting DeerFlow API server on localhost:8000
+2025-11-03 11:38:20,961 - __main__ - INFO - Log level: INFO
+2025-11-03 11:38:22,427 - src.graph.checkpoint - WARNING - Checkpoint saver is disabled
+2025-11-03 11:38:22,453 - src.server.app - INFO - Allowed origins: ['http://localhost:3000']
+INFO:     Started server process [11933]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)
-2025-11-03 11:26:12,009 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
-2025-11-03 11:26:12,009 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
-2025-11-03 11:26:12,083 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
-2025-11-03 11:26:12,084 - src.conversation.flow_manager - INFO - Self-learning system initialized
-2025-11-03 11:26:12,084 - src.server.app - INFO - Created global ConversationFlowManager singleton
-INFO:     ::1:62374 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
-2025-11-03 11:26:12,087 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
-2025-11-03 11:26:12,087 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 11:26:15,219 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:26:15,230 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 3.14s
-2025-11-03 11:26:15,230 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+2025-11-03 11:38:26,273 - src.conversation.flow_manager - INFO - LLM-based intent classifier initialized
+2025-11-03 11:38:26,273 - src.conversation.flow_manager - INFO - LLM-based data extractor initialized
+2025-11-03 11:38:26,340 - src.conversation.flow_manager - INFO - PM Provider initialized: OpenProjectProvider
+2025-11-03 11:38:26,340 - src.conversation.flow_manager - INFO - Self-learning system initialized
+2025-11-03 11:38:26,340 - src.server.app - INFO - Created global ConversationFlowManager singleton
+INFO:     ::1:63980 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-11-03 11:38:26,342 - src.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-11-03 11:38:26,342 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 11:38:28,878 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 11:38:28,901 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.55s
+2025-11-03 11:38:28,901 - src.conversation.flow_manager - INFO - PM plan LLM response: {
   "locale": "vi-VN",
-  "overall_thought": "Người dùng yêu cầu tính toán ETA cho các task, nhưng tính năng này không được hỗ trợ. Tôi sẽ sử dụng loại bước 'unknown' để chỉ ra điều này.",
+  "overall_thought": "Người dùng muốn xem thời gian ước tính cho các task của họ. Tôi sẽ liệt kê tất cả các task của họ có thông tin về ETA.",
   "steps": [
     {
-      "step_type": "unknown",
-      "title": "Yêu cầu không được hỗ trợ: Tính toán ETA",
-      "description": "Tính toán ETA không được hỗ trợ hiện tại. Hệ thống sẽ hiển thị một thông điệp phù hợp cho người dùng.",
+      "step_type": "list_my_tasks",
+      "title": "Liệt kê Các Task Của Tôi Với ETA",
+      "description": "Lấy và hiển thị tất cả các task được giao cho tôi kèm theo thông tin về thời gian ước tính",
       "requires_context": false
     }
   ]
 }
-2025-11-03 11:26:15,230 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 3.14s
-2025-11-03 11:26:15,231 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 3.14s
-2025-11-03 11:26:15,231 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 3.14s
-2025-11-03 11:26:15,231 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 3.14s
-2025-11-03 11:26:15,231 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 3.14s
-2025-11-03 11:26:16,987 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:26:16,989 - src.conversation.flow_manager - INFO - Extracted data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
-2025-11-03 11:26:16,989 - src.conversation.flow_manager - INFO - Extracted initial data: {'project_name': None, 'project_id': None, 'project_description': None, 'domain': None, 'breakdown_levels': 3, 'tasks': None}
-2025-11-03 11:26:16,989 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
-2025-11-03 11:26:19,897 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.92s
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - PM plan LLM response: {
+2025-11-03 11:38:28,902 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.56s
+2025-11-03 11:38:28,902 - src.server.app - INFO - [PM-CHAT-TIMING] PM plan generated: 2.56s
+2025-11-03 11:38:28,902 - src.server.app - INFO - [PM-CHAT-TIMING] Needs research: False - 2.56s
+2025-11-03 11:38:28,902 - src.server.app - INFO - [PM-CHAT-TIMING] process_task started: 2.56s
+2025-11-03 11:38:28,902 - src.server.app - INFO - [PM-CHAT-TIMING] process_with_streaming started: 2.56s
+2025-11-03 11:38:29,482 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 11:38:29,485 - src.conversation.flow_manager - WARNING - Could not find JSON in LLM response: null
+2025-11-03 11:38:29,485 - src.conversation.flow_manager - INFO - Extracted initial data: {}
+2025-11-03 11:38:29,485 - src.conversation.flow_manager - INFO - [TIMING] generate_pm_plan started
+2025-11-03 11:38:31,999 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 11:38:32,007 - src.conversation.flow_manager - INFO - [TIMING] LLM invoke completed: 2.52s
+2025-11-03 11:38:32,008 - src.conversation.flow_manager - INFO - PM plan LLM response: {
   "locale": "vi-VN",
-  "overall_thought": "Yêu cầu của người dùng là tính toán ETA cho các task, nhưng tính năng này không được hỗ trợ. Tôi sẽ đánh dấu yêu cầu này là không khả thi.",
+  "overall_thought": "Người dùng muốn xem thời gian ước tính cho các tác vụ của mình. Tôi sẽ liệt kê tất cả các tác vụ của họ có thông tin ETA.",
   "steps": [
     {
-      "step_type": "unknown",
-      "title": "Yêu cầu không hỗ trợ: Tính toán ETA",
-      "description": "Tính toán ETA không được hỗ trợ hiện tại. Hệ thống sẽ hiển thị thông báo phù hợp cho người dùng.",
+      "step_type": "list_my_tasks",
+      "title": "Liệt kê các tác vụ của tôi với ETA",
+      "description": "Lấy và hiển thị tất cả các tác vụ được giao cho tôi với thông tin thời gian ước tính",
       "requires_context": false
     }
   ]
 }
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.92s
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: Yêu cầu không hỗ trợ: Tính toán ETA - 0.00s
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - Executing PM step: unknown
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - WARNING - Unsupported request: Yêu cầu không hỗ trợ: Tính toán ETA
-2025-11-03 11:26:19,905 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 0.00s - 0.00s total
-2025-11-03 11:26:19,905 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 4.67s
-2025-11-03 11:26:19,906 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 7.82s
+2025-11-03 11:38:32,008 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps in 2.52s
+2025-11-03 11:38:32,009 - src.conversation.flow_manager - INFO - Generated PM plan with 1 steps
+2025-11-03 11:38:32,009 - src.conversation.flow_manager - INFO - Final current_state: FlowState.PLANNING_PHASE, intent: IntentType.UNKNOWN
+2025-11-03 11:38:32,009 - src.conversation.flow_manager - INFO - [TIMING] _handle_planning_phase started
+2025-11-03 11:38:32,009 - src.conversation.flow_manager - INFO - [TIMING] Plan has 1 steps - 0.00s
+2025-11-03 11:38:32,009 - src.conversation.flow_manager - INFO - [TIMING] Executing step 1/1: Liệt kê các tác vụ của tôi với ETA - 0.00s
+2025-11-03 11:38:32,009 - src.conversation.flow_manager - INFO - Executing PM step: list_my_tasks
+2025-11-03 11:38:33,113 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-03 11:38:33,116 - src.conversation.flow_manager - INFO - Extracted data: {'filter_week': None, 'filter_date': None, 'period': None}
+2025-11-03 11:38:33,116 - src.conversation.flow_manager - INFO - Extracted list_my_tasks data: {'filter_week': None, 'filter_date': None, 'period': None}
+2025-11-03 11:38:33,116 - src.conversation.flow_manager - INFO - Handling LIST_MY_TASKS intent
+2025-11-03 11:38:33,135 - src.conversation.flow_manager - INFO - Using current user from API key: OpenProject Admin (ID: 4)
+2025-11-03 11:38:33,136 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+2025-11-03 11:38:33,258 - src.conversation.flow_manager - INFO - Calculated total hours: 8.0 from 20 tasks
+2025-11-03 11:38:33,299 - src.conversation.flow_manager - INFO - [TIMING] Step 1 completed in 1.29s - 1.29s total
+2025-11-03 11:38:33,299 - src.server.app - INFO - [PM-CHAT-TIMING] process_message completed: 4.40s
+2025-11-03 11:38:33,300 - src.server.app - INFO - [PM-CHAT-TIMING] Total response time: 6.96s

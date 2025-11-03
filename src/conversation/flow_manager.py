@@ -1891,7 +1891,8 @@ class ConversationFlowManager:
                     message_parts.append(f"\n**{project_name}** ({len(project_tasks)} tasks):\n")
                     for task in project_tasks[:5]:  # Limit 5 tasks per project
                         priority_emoji = "🔴" if task.priority == "high" else "🟡" if task.priority == "medium" else "🟢"
-                        message_parts.append(f"- **{task.title}** ({priority_emoji} {task.priority or 'medium'})\n")
+                        hours_text = f"{task.estimated_hours}h" if task.estimated_hours else "No ETA"
+                        message_parts.append(f"- **{task.title}** ({priority_emoji} {task.priority or 'medium'}) - ETA: {hours_text}\n")
             
             if total_tasks > 20:
                 message_parts.append(f"\n_Showing first 20 tasks. Total: {total_tasks}_")
@@ -2197,12 +2198,31 @@ class ConversationFlowManager:
                 updated_task = await self.pm_provider.update_task(task_id, update_fields)
                 task_title_result = updated_task.title if hasattr(updated_task, 'title') else task_title
             else:
-                # Title lookup not supported with PM providers
-                return {
-                    "type": "error",
-                    "message": f"Please specify task ID to update. Title lookup is not supported.",
-                    "state": context.current_state.value
-                }
+                # Try title lookup by searching tasks
+                logger.info(f"Attempting to find task by title: {task_title}")
+                all_tasks = await self.pm_provider.list_tasks()
+                
+                # Try exact match first
+                matching_tasks = [t for t in all_tasks if t.title.lower() == task_title.lower()]
+                if len(matching_tasks) == 0:
+                    return {
+                        "type": "error",
+                        "message": f"Task '{task_title}' not found. Please specify the exact task title or use task ID.",
+                        "state": context.current_state.value
+                    }
+                elif len(matching_tasks) > 1:
+                    return {
+                        "type": "error",
+                        "message": f"Multiple tasks found with title '{task_title}'. Please specify task ID instead.",
+                        "state": context.current_state.value
+                    }
+                else:
+                    found_task = matching_tasks[0]
+                    task_id = str(found_task.id)
+                    logger.info(f"Found task '{task_title}' with ID: {task_id}")
+                
+                updated_task = await self.pm_provider.update_task(task_id, update_fields)
+                task_title_result = updated_task.title if hasattr(updated_task, 'title') else task_title
             
             context.current_state = FlowState.COMPLETED
             

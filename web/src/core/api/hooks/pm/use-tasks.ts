@@ -1,7 +1,8 @@
 // Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { usePMRefresh } from "./use-pm-refresh";
 
 export interface Task {
   id: string;
@@ -10,11 +11,13 @@ export interface Task {
   status: string;
   priority: string;
   estimated_hours?: number;
+  start_date?: string;
+  due_date?: string;
   assigned_to?: string;
   project_name?: string;
 }
 
-const fetchTasks = async (projectId?: string, assigneeId?: string): Promise<Task[]> => {
+const fetchTasksFn = async (projectId?: string) => {
   let url = "http://localhost:8000/api/pm/tasks/my";
   if (projectId) {
     url = `http://localhost:8000/api/pm/projects/${projectId}/tasks`;
@@ -32,8 +35,9 @@ export function useTasks(projectId?: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    fetchTasks(projectId)
+  const refresh = useCallback(() => {
+    setLoading(true);
+    fetchTasksFn(projectId)
       .then((data) => {
         setTasks(data);
         setLoading(false);
@@ -44,37 +48,51 @@ export function useTasks(projectId?: string) {
       });
   }, [projectId]);
 
-  return { tasks, loading, error };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  usePMRefresh(refresh);
+
+  return { tasks, loading, error, refresh };
 }
 
 export function useMyTasks() {
   return useTasks();
 }
 
+const fetchAllTasksFn = async () => {
+  const response = await fetch("http://localhost:8000/api/pm/tasks/all");
+  if (!response.ok) {
+    throw new Error("Failed to fetch all tasks");
+  }
+  return response.json();
+};
+
 export function useAllTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    const fetchAllTasks = async () => {
-      try {
-        const response = await fetch("http://localhost:8000/api/pm/tasks/all");
-        if (!response.ok) {
-          throw new Error("Failed to fetch all tasks");
-        }
-        const data = await response.json();
+  const refresh = useCallback(() => {
+    setLoading(true);
+    fetchAllTasksFn()
+      .then((data) => {
         setTasks(data);
         setLoading(false);
-      } catch (err) {
+      })
+      .catch((err) => {
         setError(err as Error);
         setLoading(false);
-      }
-    };
-
-    fetchAllTasks();
+      });
   }, []);
 
-  return { tasks, loading, error };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  usePMRefresh(refresh);
+
+  return { tasks, loading, error, refresh };
 }
 

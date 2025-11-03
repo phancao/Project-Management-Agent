@@ -1,7 +1,8 @@
 // Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { usePMRefresh } from "./use-pm-refresh";
 
 export interface Project {
   id: string;
@@ -23,7 +24,8 @@ export function useProjects() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
+    setLoading(true);
     fetchProjects()
       .then((data) => {
         setProjects(data);
@@ -35,6 +37,12 @@ export function useProjects() {
       });
   }, []);
 
-  return { projects, loading, error };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  usePMRefresh(refresh);
+
+  return { projects, loading, error, refresh };
 }
 

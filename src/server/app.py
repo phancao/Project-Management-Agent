@@ -978,6 +978,8 @@ async def pm_list_tasks(request: Request, project_id: str):
                 "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
                 "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
                 "estimated_hours": t.estimated_hours,
+                "start_date": t.start_date.isoformat() if t.start_date else None,
+                "due_date": t.due_date.isoformat() if t.due_date else None,
                 "assigned_to": assignee_map.get(t.assignee_id) if t.assignee_id else None,
             }
             for t in tasks
@@ -1024,6 +1026,8 @@ async def pm_list_my_tasks(request: Request):
                 "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
                 "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
                 "estimated_hours": t.estimated_hours,
+                "start_date": t.start_date.isoformat() if t.start_date else None,
+                "due_date": t.due_date.isoformat() if t.due_date else None,
                 "project_name": project_map.get(t.project_id, "Unknown") if t.project_id else "Unknown",
             }
             for t in tasks
@@ -1066,6 +1070,8 @@ async def pm_list_all_tasks(request: Request):
                 "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
                 "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
                 "estimated_hours": t.estimated_hours,
+                "start_date": t.start_date.isoformat() if t.start_date else None,
+                "due_date": t.due_date.isoformat() if t.due_date else None,
                 "project_name": project_map.get(t.project_id, "Unknown") if t.project_id else "Unknown",
             }
             for t in tasks
@@ -1373,6 +1379,20 @@ async def pm_chat_stream(request: Request):
                     logger.info(f"[PM-CHAT-TIMING] Sending finish event: finish_reason={finish_reason}, response_type={response_type if response else 'None'}")
                     yield "event: message_chunk\n"
                     yield f"data: {json.dumps(chunk_data)}\n\n"
+                    
+                    # Emit refresh event if operation succeeded to update PM views
+                    if finish_reason == "stop" and response_type == "execution_completed":
+                        refresh_event = {
+                            "id": str(uuid.uuid4()),
+                            "thread_id": thread_id,
+                            "type": "pm_refresh",
+                            "data": {
+                                "updated_entities": response.get("data", {}).get("updated_entities", []),
+                                "action": response_type
+                            }
+                        }
+                        yield "event: pm_refresh\n"
+                        yield f"data: {json.dumps(refresh_event)}\n\n"
                         
                     logger.info(f"[PM-CHAT-TIMING] Total response time: {time.time() - api_start:.2f}s")
                     

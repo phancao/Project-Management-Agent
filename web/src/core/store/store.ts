@@ -143,6 +143,17 @@ export async function sendMessage(
   try {
     for await (const event of stream) {
       const { type, data } = event;
+      
+      // Handle PM refresh events to update PM views
+      if (type === "pm_refresh") {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("pm_refresh", { 
+            detail: { type: "pm_refresh", data } 
+          }));
+        }
+        continue;
+      }
+      
       let message: Message | undefined;
       
       // Handle tool_call_result specially: use the message that contains the tool call

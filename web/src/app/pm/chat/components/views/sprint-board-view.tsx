@@ -8,8 +8,10 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState } from "react";
 import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
+import { TaskDetailsModal } from "../task-details-modal";
+import type { Task } from "~/core/api/hooks/pm/use-tasks";
 
-function TaskCard({ task }: { task: any }) {
+function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
   });
@@ -26,7 +28,8 @@ function TaskCard({ task }: { task: any }) {
       style={style}
       {...attributes}
       {...listeners}
-      className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-move"
+      onClick={onClick}
+      className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer"
     >
       <div className="font-medium text-sm text-gray-900 dark:text-white mb-2">
         {task.title}
@@ -51,7 +54,7 @@ function TaskCard({ task }: { task: any }) {
   );
 }
 
-function Column({ column, tasks }: { column: { id: string; title: string }; tasks: any[] }) {
+function Column({ column, tasks, onTaskClick }: { column: { id: string; title: string }; tasks: any[]; onTaskClick: (task: any) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   
   return (
@@ -71,11 +74,11 @@ function Column({ column, tasks }: { column: { id: string; title: string }; task
             No tasks
           </div>
         ) : (
-          <div className="space-y-2">
-            {tasks.map((task) => (
-              <TaskCard key={task.id} task={task} />
-            ))}
-          </div>
+            <div className="space-y-2">
+              {tasks.map((task) => (
+                <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
+              ))}
+            </div>
         )}
       </div>
     </div>
@@ -85,6 +88,8 @@ function Column({ column, tasks }: { column: { id: string; title: string }; task
 export function SprintBoardView() {
   const { tasks, loading, error } = useMyTasks();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -128,6 +133,30 @@ export function SprintBoardView() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     }).catch(err => console.error('Failed to update task:', err));
+  };
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setIsModalOpen(true);
+  };
+
+  const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/pm/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) throw new Error('Failed to update task');
+      
+      // Refresh tasks
+      window.dispatchEvent(new CustomEvent("pm_refresh", { 
+        detail: { type: "pm_refresh" } 
+      }));
+    } catch (error) {
+      console.error("Failed to update task:", error);
+      throw error;
+    }
   };
 
   // Group tasks by status
@@ -189,14 +218,24 @@ export function SprintBoardView() {
         {/* Kanban Board */}
         <div className="grid grid-cols-4 gap-4">
           {columns.map((column) => (
-            <Column key={column.id} column={{ id: column.id, title: column.title }} tasks={column.tasks} />
+            <Column key={column.id} column={{ id: column.id, title: column.title }} tasks={column.tasks} onTaskClick={handleTaskClick} />
           ))}
         </div>
       </div>
 
       <DragOverlay>
-        {activeTask ? <TaskCard task={activeTask} /> : null}
+        {activeTask ? <TaskCard task={activeTask} onClick={() => {}} /> : null}
       </DragOverlay>
+
+      <TaskDetailsModal
+        task={selectedTask}
+        open={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedTask(null);
+        }}
+        onUpdate={handleUpdateTask}
+      />
     </DndContext>
   );
 }

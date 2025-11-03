@@ -2425,13 +2425,6 @@ Return a concise dependency analysis in this format:
             task_id = context.gathered_data.get("task_id")
             task_title = context.gathered_data.get("task_title")
             
-            if not task_id and not task_title:
-                return {
-                    "type": "error",
-                    "message": "Task ID or title is required to update a task. Please specify which task.",
-                    "state": context.current_state.value
-                }
-            
             # Extract update fields
             update_fields = {}
             if "new_title" in context.gathered_data:
@@ -2444,6 +2437,22 @@ Return a concise dependency analysis in this format:
                 update_fields["estimated_hours"] = context.gathered_data["new_estimated_hours"]
             if "new_description" in context.gathered_data:
                 update_fields["description"] = context.gathered_data["new_description"]
+            
+            # Special case: bulk update for "delete all ETAs"
+            # Check if we need to bulk update without task_id
+            if not task_id and not task_title and "new_estimated_hours" in context.gathered_data:
+                # Check if this is a deletion request (ETA set to 0 or None)
+                eta_value = context.gathered_data["new_estimated_hours"]
+                if eta_value == 0 or eta_value is None:
+                    # Bulk update all user tasks
+                    return await self._handle_bulk_eta_deletion(context)
+            
+            if not task_id and not task_title:
+                return {
+                    "type": "error",
+                    "message": "Task ID or title is required to update a task. Please specify which task.",
+                    "state": context.current_state.value
+                }
             
             if not update_fields:
                 return {
@@ -2513,6 +2522,91 @@ Return a concise dependency analysis in this format:
             return {
                 "type": "error",
                 "message": f"Failed to update task: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_bulk_eta_deletion(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle bulk ETA deletion for all user tasks"""
+        logger.info("Handling bulk ETA deletion")
+        
+        try:
+            # Get current user's tasks
+            current_user = await self.pm_provider.get_current_user()
+            if not current_user:
+                return {
+                    "type": "error",
+                    "message": "Cannot determine current user for bulk ETA deletion.",
+                    "state": context.current_state.value
+                }
+            
+            # List all user's tasks
+            all_tasks = await self.pm_provider.list_tasks(assignee_id=str(current_user.id))
+            
+            # Filter tasks with ETA
+            tasks_with_eta = [
+                task for task in all_tasks
+                if task.estimated_hours and task.estimated_hours > 0
+            ]
+            
+            if not tasks_with_eta:
+                context.current_state = FlowState.COMPLETED
+                return {
+                    "type": "execution_completed",
+                    "message": "✅ All your tasks already have no ETA!",
+                    "state": "complete"
+                }
+            
+            # Update all tasks with ETA = 0
+            updated_count = 0
+            failed_count = 0
+            for task in tasks_with_eta:
+                try:
+                    await self.pm_provider.update_task(str(task.id), {"estimated_hours": 0})
+                    updated_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to delete ETA for task {task.id}: {e}")
+                    failed_count += 1
+            
+            context.current_state = FlowState.COMPLETED
+            
+            message_parts = [
+                f"✅ **Bulk ETA Deletion Completed**\n",
+                f"Found {len(tasks_with_eta)} tasks with ETA\n",
+                f"Successfully deleted ETA from {updated_count} tasks\n"
+            ]
+            
+            if failed_count > 0:
+                message_parts.append(f"Failed to update {failed_count} tasks\n")
+            
+            if updated_count > 0:
+                message_parts.append("\n**Updated Tasks:**\n")
+                for task in tasks_with_eta[:10]:  # Show first 10
+                    message_parts.append(f"- {task.title}\n")
+            
+            if len(tasks_with_eta) > 10:
+                message_parts.append(f"\n_... and {len(tasks_with_eta) - 10} more tasks_")
+            
+            return {
+                "type": "execution_completed",
+                "message": "".join(message_parts),
+                "state": "complete",
+                "data": {
+                    "total_tasks": len(tasks_with_eta),
+                    "updated_count": updated_count,
+                    "failed_count": failed_count
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Bulk ETA deletion failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to delete ETAs: {str(e)}",
                 "state": context.current_state.value
             }
     
@@ -2963,7 +3057,7 @@ Return only valid JSON:"""
 - new_title: New title for the task
 - new_status: New status ("todo", "in_progress", "completed", "blocked")
 - new_priority: New priority ("low", "medium", "high", "urgent")
-- new_estimated_hours: New estimated hours (number)
+- new_estimated_hours: New estimated hours (number, use 0 or null to delete/clear ETA)
 - new_description: New description for the task""",
             
             IntentType.UPDATE_SPRINT: """- sprint_id: UUID of the sprint (preferred)

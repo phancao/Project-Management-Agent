@@ -209,8 +209,11 @@ class OpenProjectProvider(BasePMProvider):
             }
         if "estimated_hours" in updates:
             # Convert hours to ISO 8601 duration (e.g., 2.5 -> PT2H30M, 2.0 -> PT2H)
+            # Use null/None to delete ETA (set estimated_hours to 0 or None)
             hours = updates["estimated_hours"]
-            if hours:
+            if hours is None or hours == 0:
+                payload["estimatedTime"] = None
+            elif hours:
                 hours_float = float(hours)
                 hours_int = int(hours_float)
                 minutes_int = int((hours_float - hours_int) * 60)

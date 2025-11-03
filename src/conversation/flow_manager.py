@@ -2170,7 +2170,7 @@ class ConversationFlowManager:
                     )
             else:
                 # Tasks across multiple projects
-                for project_id, project_tasks in list(tasks_by_project.items())[:5]:  # Limit to 5 projects
+                for project_id, project_tasks in list(tasks_by_project.items()):  # Show all projects
                     if project_id != "unassigned":
                         project = await self.pm_provider.get_project(project_id)
                         project_name = project.name if project else project_id
@@ -2185,6 +2185,9 @@ class ConversationFlowManager:
             
             context.current_state = FlowState.COMPLETED
             
+            # Limit returned data to prevent large responses
+            # Message already shows all tasks, but data payload limited for API efficiency
+            max_api_tasks = 100
             return {
                 "type": "execution_completed",
                 "message": "\n".join(message_parts),
@@ -2198,7 +2201,7 @@ class ConversationFlowManager:
                             "status": task.status if hasattr(task, 'status') else None,
                             "priority": task.priority if hasattr(task, 'priority') else None
                         }
-                        for task in tasks[:20]
+                        for task in tasks[:max_api_tasks]
                     ]
                 }
             }

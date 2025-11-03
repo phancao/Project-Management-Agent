@@ -456,13 +456,16 @@ class OpenProjectProvider(BasePMProvider):
         if not duration_str:
             return None
         try:
-            # OpenProject uses ISO 8601 duration format like "PT1H30M" or "P1DT2H"
+            # OpenProject uses ISO 8601 duration format like "PT1H30M", "P1DT2H", or "P2DT2H" (2 days + 2 hours)
             import re
-            # Parse hours and minutes from duration string
+            # Parse days, hours, and minutes from duration string
+            days_match = re.search(r'(\d+)D', duration_str)
             hours_match = re.search(r'(\d+)H', duration_str)
             minutes_match = re.search(r'(\d+)M', duration_str)
             
             total_hours = 0.0
+            if days_match:
+                total_hours += float(days_match.group(1)) * 24.0
             if hours_match:
                 total_hours += float(hours_match.group(1))
             if minutes_match:

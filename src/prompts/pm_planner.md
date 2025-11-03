@@ -506,20 +506,46 @@ Output:
 }
 ```
 
-## Example 19: Unsupported Request
+## Example 19: English ETA Research
 
-User: "calculate ETA for my tasks"
+User: "help me to eta these tasks"
 
 Output:
 ```json
 {
   "locale": "en-US",
-  "overall_thought": "The user is asking for ETA calculation which is not a supported feature. I will use 'unknown' step type to indicate this cannot be performed.",
+  "overall_thought": "The user wants to estimate time for their tasks. I will first list their assigned tasks and then research to provide estimated times.",
+  "steps": [
+    {
+      "step_type": "list_my_tasks",
+      "title": "List My Assigned Tasks",
+      "description": "Retrieve and display all tasks assigned to me",
+      "requires_context": false
+    },
+    {
+      "step_type": "research",
+      "title": "Research ETA Estimation for Tasks",
+      "description": "Estimate time for each task based on complexity and requirements",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 19b: Unsupported Request
+
+User: "create a Gantt chart visualization"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "The user is asking for Gantt chart visualization which is not a supported feature. I will use 'unknown' step type to indicate this cannot be performed.",
   "steps": [
     {
       "step_type": "unknown",
-      "title": "Unsupported Request: ETA Calculation",
-      "description": "ETA calculation is not currently supported. The system will display an appropriate message to the user.",
+      "title": "Unsupported Request: Gantt Visualization",
+      "description": "Gantt chart visualization is not currently supported. The system will display an appropriate message to the user.",
       "requires_context": false
     }
   ]

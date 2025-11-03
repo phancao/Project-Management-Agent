@@ -594,7 +594,9 @@ class ConversationFlowManager:
             title = step.get('title', '').lower()
             
             # Determine research type from keywords
-            if 'eta' in description or 'ước tính thời gian' in description or 'estimated time' in description or 'time estimation' in description or 'eta' in title or 'time estimate' in description:
+            # Support both English and Vietnamese keywords for ETA
+            eta_keywords = ['eta', 'estimated time', 'time estimation', 'time estimate', 'ước tính thời gian', 'ước tính', 'estimate']
+            if any(keyword in description.lower() for keyword in eta_keywords) or any(keyword in title.lower() for keyword in eta_keywords):
                 # ETA research: analyze tasks and provide estimates
                 return await self._handle_eta_research(context)
             elif 'wbs' in description or 'work breakdown' in description or 'project structure' in description:

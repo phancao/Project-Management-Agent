@@ -623,9 +623,31 @@ class ConversationFlowManager:
                 return await self._handle_generic_research(context, step)
         
         elif step_type_str == "switch_project":
+            # Extract project info from the last user message before execution
+            if context.conversation_history:
+                last_message = context.conversation_history[-1].get("content", "")
+                if last_message:
+                    project_data = await self.data_extractor.extract_project_data(
+                        message=last_message,
+                        intent=IntentType.SWITCH_PROJECT,
+                        gathered_data=context.gathered_data
+                    )
+                    context.gathered_data.update(project_data)
+                    logger.info(f"Extracted switch_project data: {project_data}")
             return await self._handle_switch_project(context)
         
         elif step_type_str == "switch_sprint":
+            # Extract sprint info from the last user message before execution
+            if context.conversation_history:
+                last_message = context.conversation_history[-1].get("content", "")
+                if last_message:
+                    sprint_data = await self.data_extractor.extract_project_data(
+                        message=last_message,
+                        intent=IntentType.SWITCH_SPRINT,
+                        gathered_data=context.gathered_data
+                    )
+                    context.gathered_data.update(sprint_data)
+                    logger.info(f"Extracted switch_sprint data: {sprint_data}")
             return await self._handle_switch_sprint(context)
         
         elif step_type_str == "switch_task":
@@ -656,6 +678,9 @@ class ConversationFlowManager:
         
         elif step_type_str == "team_assignments":
             return await self._handle_team_assignments(context)
+        
+        elif step_type_str == "time_tracking":
+            return await self._handle_time_tracking(context)
         
         elif step_type_str == "get_project_status":
             return await self._handle_get_project_status(context)
@@ -709,6 +734,22 @@ class ConversationFlowManager:
         elif step_type_str == "gantt_chart":
             context.intent = IntentType.GET_STATUS  # Reuse status for now
             return await self._handle_gantt_chart(context)
+        
+        elif step_type_str == "burndown_chart":
+            # Extract sprint context from the last user message before execution
+            if context.conversation_history:
+                last_message = context.conversation_history[-1].get("content", "")
+                if last_message:
+                    # Try to extract sprint info - create a synthetic intent for extraction
+                    # We'll use SWITCH_SPRINT as it has similar field requirements
+                    sprint_data = await self.data_extractor.extract_project_data(
+                        message=last_message,
+                        intent=IntentType.SWITCH_SPRINT,
+                        gathered_data=context.gathered_data
+                    )
+                    context.gathered_data.update(sprint_data)
+                    logger.info(f"Extracted burndown_chart data: {sprint_data}")
+            return await self._handle_burndown_chart(context)
         
         elif step_type_str == "dependency_analysis":
             context.intent = IntentType.DEPENDENCY_ANALYSIS
@@ -1617,6 +1658,197 @@ class ConversationFlowManager:
                 "state": context.current_state.value
             }
     
+    async def _handle_burndown_chart(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle BURNDOWN_CHART intent - Generate burndown chart and velocity data"""
+        logger.info("Handling BURNDOWN_CHART intent")
+        
+        try:
+            from datetime import datetime, timedelta
+            
+            # Get sprint context
+            sprint_id = context.gathered_data.get("sprint_id") or context.gathered_data.get("active_sprint_id")
+            sprint_name = context.gathered_data.get("sprint_name") or context.gathered_data.get("active_sprint_name")
+            project_id = context.gathered_data.get("project_id") or context.gathered_data.get("active_project_id")
+            
+            # If sprint_id not provided, try to find by sprint_name
+            if not sprint_id:
+                if sprint_name:
+                    sprints = await self.pm_provider.list_sprints(project_id=project_id)
+                    matching_sprints = [s for s in sprints if s.name and s.name.lower() == sprint_name.lower()]
+                    
+                    if len(matching_sprints) == 0:
+                        return {
+                            "type": "error",
+                            "message": f"Sprint '{sprint_name}' not found in this project.",
+                            "state": context.current_state.value
+                        }
+                    elif len(matching_sprints) > 1:
+                        return {
+                            "type": "error",
+                            "message": f"Multiple sprints found with name '{sprint_name}'. Please specify sprint ID.",
+                            "state": context.current_state.value
+                        }
+                    else:
+                        sprint_id = str(matching_sprints[0].id)
+                        sprint_name = matching_sprints[0].name
+                else:
+                    return {
+                        "type": "error",
+                        "message": "Sprint context required. Please specify a sprint or switch to one first.",
+                        "state": context.current_state.value
+                    }
+            
+            # Get sprint details
+            sprint = await self.pm_provider.get_sprint(sprint_id)
+            if not sprint:
+                return {
+                    "type": "error",
+                    "message": f"Sprint not found.",
+                    "state": context.current_state.value
+                }
+            
+            # Get all tasks for the project
+            if not project_id:
+                project_id = sprint.project_id
+            
+            all_tasks = await self.pm_provider.list_tasks(project_id=project_id)
+            
+            # Calculate burndown metrics
+            # For now, we'll calculate based on estimated hours
+            total_planned_hours = sum(
+                t.estimated_hours for t in all_tasks 
+                if t.estimated_hours and t.status != "completed"
+            )
+            
+            completed_hours = sum(
+                t.estimated_hours for t in all_tasks 
+                if t.estimated_hours and t.status == "completed"
+            )
+            
+            # Count tasks by status
+            total_tasks = len(all_tasks)
+            completed_tasks = sum(1 for t in all_tasks if t.status == "completed")
+            in_progress_tasks = sum(1 for t in all_tasks if t.status == "in_progress")
+            todo_tasks = total_tasks - completed_tasks - in_progress_tasks
+            
+            # Calculate progress percentage
+            if total_planned_hours + completed_hours > 0:
+                progress_pct = (completed_hours / (total_planned_hours + completed_hours)) * 100
+            else:
+                progress_pct = 0
+            
+            # Calculate remaining work
+            remaining_hours = total_planned_hours
+            
+            # Get sprint dates for timeline calculation
+            if sprint.start_date and sprint.end_date:
+                today = datetime.now().date()
+                total_days = (sprint.end_date - sprint.start_date).days + 1
+                elapsed_days = (today - sprint.start_date).days + 1 if today >= sprint.start_date else 0
+                days_remaining = max(0, (sprint.end_date - today).days)
+                
+                if total_days > 0:
+                    sprint_progress = (elapsed_days / total_days) * 100
+                    ideal_burndown_rate = (total_planned_hours + completed_hours) / total_days if total_days > 0 else 0
+                else:
+                    sprint_progress = 0
+                    ideal_burndown_rate = 0
+            else:
+                today = None
+                total_days = 0
+                elapsed_days = 0
+                days_remaining = 0
+                sprint_progress = 0
+                ideal_burndown_rate = 0
+            
+            # Build burndown content
+            content = f"""# 📊 Burndown Chart: {sprint.name}
+
+## Sprint Overview
+- **Status:** {sprint.status or 'Active'}
+- **Progress:** {progress_pct:.1f}% complete
+"""
+            
+            if sprint.start_date and sprint.end_date:
+                content += f"- **Duration:** {sprint.start_date.strftime('%Y-%m-%d')} to {sprint.end_date.strftime('%Y-%m-%d')}\n"
+                content += f"- **Elapsed:** {elapsed_days} / {total_days} days ({sprint_progress:.1f}%)\n"
+                content += f"- **Remaining:** {days_remaining} days\n"
+            
+            content += f"""
+## Work Breakdown
+- **Total Tasks:** {total_tasks}
+- **Completed:** {completed_tasks} ✅
+- **In Progress:** {in_progress_tasks} 🔄
+- **To Do:** {todo_tasks} ⏳
+
+## Burndown Metrics
+- **Total Planned:** {total_planned_hours + completed_hours:.1f}h
+- **Completed:** {completed_hours:.1f}h
+- **Remaining:** {remaining_hours:.1f}h
+"""
+            
+            if ideal_burndown_rate > 0:
+                content += f"- **Ideal Daily Rate:** {ideal_burndown_rate:.1f}h/day\n"
+                if days_remaining > 0:
+                    actual_rate_needed = remaining_hours / days_remaining if days_remaining > 0 else 0
+                    content += f"- **Actual Rate Needed:** {actual_rate_needed:.1f}h/day\n"
+                    if actual_rate_needed > ideal_burndown_rate * 1.2:
+                        content += f"- **Status:** ⚠️ Behind schedule\n"
+                    elif actual_rate_needed < ideal_burndown_rate * 0.8:
+                        content += f"- **Status:** ✅ Ahead of schedule\n"
+                    else:
+                        content += f"- **Status:** 🎯 On track\n"
+            
+            content += "\n## Tasks Summary\n\n"
+            
+            # Show completed tasks
+            if completed_tasks > 0:
+                content += "### ✅ Completed\n"
+                for task in all_tasks[:10]:  # Show first 10
+                    if task.status == "completed":
+                        hours_str = f" ({task.estimated_hours}h)" if task.estimated_hours else ""
+                        content += f"- {task.title}{hours_str}\n"
+            
+            # Show in progress
+            if in_progress_tasks > 0:
+                content += "\n### 🔄 In Progress\n"
+                for task in all_tasks[:10]:
+                    if task.status == "in_progress":
+                        hours_str = f" ({task.estimated_hours}h)" if task.estimated_hours else ""
+                        content += f"- {task.title}{hours_str}\n"
+            
+            context.current_state = FlowState.COMPLETED
+            return {
+                "type": "execution_completed",
+                "message": content,
+                "state": context.current_state.value,
+                "data": {
+                    "sprint_id": sprint_id,
+                    "sprint_name": sprint.name,
+                    "total_tasks": total_tasks,
+                    "completed_tasks": completed_tasks,
+                    "in_progress_tasks": in_progress_tasks,
+                    "todo_tasks": todo_tasks,
+                    "completed_hours": completed_hours,
+                    "remaining_hours": remaining_hours,
+                    "progress_pct": progress_pct,
+                    "days_remaining": days_remaining
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Burndown chart generation failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to generate burndown chart: {str(e)}",
+                "state": context.current_state.value
+            }
+    
     async def _handle_switch_project(
         self,
         context: ConversationContext
@@ -1703,37 +1935,30 @@ class ConversationFlowManager:
         logger.info("Handling SWITCH_SPRINT intent")
         
         try:
-            # Get active project first
+            # Get active project first (optional - we can search across all projects)
             project_id = context.gathered_data.get("active_project_id")
-            if not project_id:
-                return {
-                    "type": "error",
-                    "message": "Please switch to a project first before selecting a sprint.",
-                    "state": context.current_state.value
-                }
-            
             sprint_id = context.gathered_data.get("sprint_id")
             sprint_name = context.gathered_data.get("sprint_name")
             
             # If sprint_id not provided, try to find by sprint_name
             if not sprint_id:
                 if sprint_name:
-                    # Search for sprint by name within the project
+                    # Search for sprint by name (within project or across all projects)
                     all_sprints = await self.pm_provider.list_sprints(project_id=project_id)
                     matching_sprints = [s for s in all_sprints if s.name and s.name.lower() == sprint_name.lower()]
                     
                     if len(matching_sprints) == 0:
                         return {
                             "type": "error",
-                            "message": f"Sprint '{sprint_name}' not found in this project.",
+                            "message": f"Sprint '{sprint_name}' not found{f' in this project' if project_id else ''}.",
                             "state": context.current_state.value
                         }
                     elif len(matching_sprints) > 1:
-                        return {
-                            "type": "error",
-                            "message": f"Multiple sprints found with name '{sprint_name}'. Please specify sprint ID.",
-                            "state": context.current_state.value
-                        }
+                        # If multiple matches, show them or pick the first one
+                        # For now, we'll pick the first one since sprint names should be unique
+                        logger.warning(f"Multiple sprints found with name '{sprint_name}', using first match")
+                        sprint_id = str(matching_sprints[0].id)
+                        sprint_name = matching_sprints[0].name
                     else:
                         sprint_id = str(matching_sprints[0].id)
                         sprint_name = matching_sprints[0].name
@@ -1745,6 +1970,24 @@ class ConversationFlowManager:
                         "state": context.current_state.value
                     }
             
+            # Get sprint details to determine project
+            sprint = await self.pm_provider.get_sprint(sprint_id)
+            if not sprint:
+                return {
+                    "type": "error",
+                    "message": f"Sprint with ID {sprint_id} not found.",
+                    "state": context.current_state.value
+                }
+            
+            # Auto-set project context if not already set
+            if not project_id:
+                project_id = sprint.project_id
+                context.gathered_data['active_project_id'] = project_id
+                # Get project name for context
+                project = await self.pm_provider.get_project(project_id)
+                if project:
+                    context.gathered_data['active_project_name'] = project.name
+            
             # Store active sprint in context for future commands
             context.gathered_data['active_sprint_id'] = sprint_id
             context.gathered_data['active_sprint_name'] = sprint_name
@@ -1752,13 +1995,16 @@ class ConversationFlowManager:
             # Reset state to INTENT_DETECTION so next message can process normally
             context.current_state = FlowState.INTENT_DETECTION
             
+            project_info = f" (Project: {context.gathered_data.get('active_project_name', project_id)})" if project_id else ""
+            
             return {
                 "type": "execution_completed",
-                "message": f"✅ Switched to sprint: **{sprint_name}** (ID: `{sprint_id}`)\n\nNow I'll use this sprint as the default for all your commands. You can ask me to:\n- List tasks in sprint: 'show tasks'\n- Check sprint status: 'what's the sprint status?'\n- Update sprint: 'extend sprint by 3 days'",
+                "message": f"✅ Switched to sprint: **{sprint_name}** (ID: `{sprint_id}`){project_info}\n\nNow I'll use this sprint as the default for all your commands. You can ask me to:\n- List tasks in sprint: 'show tasks'\n- Check sprint status: 'what's the sprint status?'\n- Update sprint: 'extend sprint by 3 days'",
                 "state": "complete",
                 "data": {
                     "sprint_id": sprint_id,
-                    "sprint_name": sprint_name
+                    "sprint_name": sprint_name,
+                    "project_id": project_id
                 }
             }
         
@@ -2470,6 +2716,140 @@ class ConversationFlowManager:
             return {
                 "type": "error",
                 "message": f"Failed to generate team assignments: {str(e)}",
+                "state": context.current_state.value
+            }
+    
+    async def _handle_time_tracking(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Handle TIME_TRACKING intent - Log time entries for tasks"""
+        logger.info("Handling TIME_TRACKING intent")
+        
+        try:
+            # Extract time tracking data from step description or conversation
+            task_title = context.gathered_data.get("task_title")
+            hours = context.gathered_data.get("hours")
+            comment = context.gathered_data.get("comment")
+            
+            # Try to parse from step description if not directly provided
+            step = context.gathered_data.get("current_step")
+            if step and not (task_title and hours):
+                import re
+                desc = step.get("description", "")
+                
+                # Try to extract hours from description (e.g., "log 4 hours", "4h", "4.5 hours")
+                hours_match = re.search(r'(\d+(?:\.\d+)?)\s*h(?:ours?)?', desc, re.IGNORECASE)
+                if hours_match and not hours:
+                    hours = float(hours_match.group(1))
+                    logger.info(f"Extracted hours from description: {hours}")
+                
+                # Try to extract task title (e.g., "log 4 hours for task 'Set up database'")
+                task_match = re.search(r"(?:for|on|task)\s+['\"]([^'\"]+)['\"]", desc, re.IGNORECASE)
+                if task_match and not task_title:
+                    task_title = task_match.group(1)
+                    logger.info(f"Extracted task title from description: {task_title}")
+            
+            # Validate required fields
+            if not task_title:
+                return {
+                    "type": "error",
+                    "message": "Task title is required. Please specify which task to log time for.",
+                    "state": context.current_state.value
+                }
+            
+            if not hours:
+                return {
+                    "type": "error",
+                    "message": "Hours are required. Please specify how many hours to log.",
+                    "state": context.current_state.value
+                }
+            
+            # Find the task by title
+            # Try to use active project/sprint context
+            project_id = context.gathered_data.get("active_project_id")
+            if not project_id and context.gathered_data.get("project_id"):
+                project_id = context.gathered_data.get("project_id")
+            
+            # Get all tasks
+            if project_id:
+                tasks = await self.pm_provider.list_tasks(project_id=project_id)
+            else:
+                # Search across all projects if no project context
+                all_projects = await self.pm_provider.list_projects()
+                tasks = []
+                for proj in all_projects:
+                    try:
+                        tasks.extend(await self.pm_provider.list_tasks(project_id=str(proj.id)))
+                    except:
+                        pass
+            
+            # Find matching task
+            matching_tasks = [
+                t for t in tasks 
+                if task_title.lower() in t.title.lower()
+            ]
+            
+            if len(matching_tasks) == 0:
+                return {
+                    "type": "error",
+                    "message": f"Task '{task_title}' not found. Please check the task name.",
+                    "state": context.current_state.value
+                }
+            elif len(matching_tasks) > 1:
+                # Multiple matches - show options
+                task_list = "\n".join([f"- {i+1}. {t.title} (Project: {t.project_id})" 
+                                       for i, t in enumerate(matching_tasks)])
+                return {
+                    "type": "error",
+                    "message": f"Multiple tasks found matching '{task_title}':\n{task_list}\n\nPlease be more specific.",
+                    "state": context.current_state.value
+                }
+            
+            task = matching_tasks[0]
+            
+            # Get current user
+            current_user = await self.pm_provider.get_current_user()
+            user_id = current_user.id if current_user else None
+            
+            # Log the time entry
+            time_entry = await self.pm_provider.log_time_entry(
+                task_id=task.id,
+                hours=hours,
+                comment=comment,
+                user_id=user_id
+            )
+            
+            context.current_state = FlowState.COMPLETED
+            
+            # Build response message
+            message = f"✅ **Time logged successfully!**\n\n"
+            message += f"**Task:** {task.title}\n"
+            message += f"**Hours:** {hours}h\n"
+            if comment:
+                message += f"**Comment:** {comment}\n"
+            if current_user:
+                message += f"**Logged by:** {current_user.name}\n"
+            
+            return {
+                "type": "execution_completed",
+                "message": message,
+                "state": context.current_state.value,
+                "data": {
+                    "task_id": task.id,
+                    "task_title": task.title,
+                    "hours": hours,
+                    "comment": comment
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Time tracking failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "type": "error",
+                "message": f"Failed to log time: {str(e)}",
                 "state": context.current_state.value
             }
     
@@ -3723,8 +4103,25 @@ Return only valid JSON:"""
             
             IntentType.LIST_MY_TASKS: """- filter_week: Boolean indicating if user wants tasks filtered by current week
 - filter_date: Object with "start" and "end" dates in YYYY-MM-DD format
-- period: Text description of time period (e.g., "this week", "next month", "today")"""
+- period: Text description of time period (e.g., "this week", "next month", "today")""",
+            
+            IntentType.SWITCH_SPRINT: """- sprint_id: UUID of the sprint (preferred)
+- sprint_name: Name or number of the sprint (e.g., "Sprint 1", "Sprint One")""",
+            
+            IntentType.SWITCH_PROJECT: """- project_id: UUID of the project (preferred)
+- project_name: Name of the project""",
+            
+            IntentType.SWITCH_TASK: """- task_id: UUID of the task (preferred)
+- task_title: Title of the task"""
         }
+        
+        # Add description for burndown_chart and other step-based intents
+        if intent not in descriptions:
+            # For burndown and other queries, extract sprint context
+            if intent.value in ['burndown_chart'] or 'chart' in intent.value.lower() or 'burndown' in intent.value.lower():
+                return """- sprint_id: UUID of the sprint (preferred)
+- sprint_name: Name or number of the sprint (e.g., "Sprint 1", "Sprint One")
+- project_id: UUID of the project"""
         
         return descriptions.get(intent, "- No specific fields defined")
     

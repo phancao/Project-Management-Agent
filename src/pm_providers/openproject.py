@@ -450,6 +450,123 @@ class OpenProjectProvider(BasePMProvider):
         except:
             return None
     
+    # ==================== Time Entry Operations ====================
+    
+    def _format_hours_to_duration(self, hours: float) -> str:
+        """Convert hours to ISO 8601 duration string"""
+        hours_int = int(hours)
+        minutes_int = int((hours - hours_int) * 60)
+        
+        if hours_int == 0 and minutes_int == 0:
+            return "PT0H"
+        elif minutes_int > 0:
+            return f"PT{hours_int}H{minutes_int}M"
+        else:
+            return f"PT{hours_int}H"
+    
+    async def log_time_entry(
+        self, 
+        task_id: str, 
+        hours: float, 
+        comment: Optional[str] = None,
+        activity_id: Optional[str] = None,
+        user_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Create a time entry for logging hours worked on a task
+        
+        Args:
+            task_id: The work package (task) ID
+            hours: Number of hours to log
+            comment: Optional comment describing the work
+            activity_id: Optional activity type ID (defaults to first available)
+            user_id: Optional user ID (defaults to current user)
+            
+        Returns:
+            Created time entry data
+        """
+        url = f"{self.base_url}/api/v3/time_entries"
+        payload = {
+            "hours": self._format_hours_to_duration(hours),
+            "_links": {
+                "workPackage": {"href": f"/api/v3/work_packages/{task_id}"}
+            }
+        }
+        
+        if comment:
+            payload["comment"] = {"raw": comment, "format": "plain"}
+        
+        if activity_id:
+            payload["_links"]["activity"] = {"href": f"/api/v3/time_entries/activities/{activity_id}"}
+        
+        if user_id:
+            payload["_links"]["user"] = {"href": f"/api/v3/users/{user_id}"}
+        
+        response = requests.post(url, headers=self.headers, json=payload)
+        response.raise_for_status()
+        return response.json()
+    
+    async def get_time_entries(
+        self, 
+        task_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        project_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get time entries, optionally filtered by task, user, or project
+        
+        Args:
+            task_id: Filter by work package (task) ID
+            user_id: Filter by user ID
+            project_id: Filter by project ID
+            
+        Returns:
+            List of time entries
+        """
+        url = f"{self.base_url}/api/v3/time_entries"
+        filters = []
+        
+        if task_id:
+            filters.append({"workPackage": {"operator": "=", "values": [task_id]}})
+        if user_id:
+            filters.append({"user": {"operator": "=", "values": [user_id]}})
+        if project_id:
+            filters.append({"project": {"operator": "=", "values": [project_id]}})
+        
+        if filters:
+            import json as json_lib
+            params = {"filters": json_lib.dumps(filters)}
+        else:
+            params = {}
+        
+        response = requests.get(url, headers=self.headers, params=params)
+        response.raise_for_status()
+        
+        data = response.json()
+        return data.get("_embedded", {}).get("elements", [])
+    
+    async def get_total_hours_for_task(self, task_id: str) -> float:
+        """
+        Get total logged hours for a task by summing all time entries
+        
+        Args:
+            task_id: The work package (task) ID
+            
+        Returns:
+            Total logged hours
+        """
+        time_entries = await self.get_time_entries(task_id=task_id)
+        total_hours = 0.0
+        
+        for entry in time_entries:
+            hours_str = entry.get("hours")
+            if hours_str:
+                hours = self._parse_duration_to_hours(hours_str)
+                if hours:
+                    total_hours += hours
+        
+        return total_hours
+    
     @staticmethod
     def _parse_duration_to_hours(duration_str: Optional[str]) -> Optional[float]:
         """Parse OpenProject ISO 8601 duration string to hours"""

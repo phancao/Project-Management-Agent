@@ -28,6 +28,8 @@ class PMStepType(str, Enum):
     SWITCH_TASK = "switch_task"
     UPDATE_TASK = "update_task"
     UPDATE_SPRINT = "update_sprint"
+    TIME_TRACKING = "time_tracking"
+    BURNDOWN_CHART = "burndown_chart"
     UNKNOWN = "unknown"
 
 

@@ -36,6 +36,8 @@ Available step types:
 - **switch_task**: Switch to/activate a task within current project for detailed discussion
 - **update_task**: Update a task's properties
 - **update_sprint**: Update a sprint's properties
+- **time_tracking**: Log time entries for tasks
+- **burndown_chart**: Show burndown chart and velocity for sprints
 - **research**: Research a topic using DeerFlow
 - **create_report**: Generate project reports
 - **gantt_chart**: Create timeline/Gantt chart
@@ -567,6 +569,46 @@ Output:
       "step_type": "team_assignments",
       "title": "Summarize Team Assignments",
       "description": "Group tasks by assignee to show who is responsible for what in the demo project",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 21: Time Tracking
+
+User: "log 4 hours for task 'Set up database'"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "The user wants to log time for a specific task. I will create a time entry to track the hours worked.",
+  "steps": [
+    {
+      "step_type": "time_tracking",
+      "title": "Log Time Entry",
+      "description": "Log 4 hours for the task 'Set up database'",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 22: Burndown Chart
+
+User: "show me the burndown for Sprint 1"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "The user wants to see burndown chart data for Sprint 1, showing remaining work and velocity.",
+  "steps": [
+    {
+      "step_type": "burndown_chart",
+      "title": "Show Burndown Chart",
+      "description": "Generate burndown chart data for Sprint 1 showing remaining work and velocity",
       "requires_context": true
     }
   ]

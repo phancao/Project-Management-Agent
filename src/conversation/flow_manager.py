@@ -2475,14 +2475,30 @@ class ConversationFlowManager:
             batch_size = 20
             total_batches = (len(tasks_without_eta) + batch_size - 1) // batch_size
             
-            # Build research query for LLM
-            tasks_to_process = tasks_without_eta[:batch_size]
-            task_list = "\n".join([
-                f"- {task.title} (ID: {task.id})"
-                for task in tasks_to_process
-            ])
+            # Process all batches automatically
+            all_estimates = {}
+            total_updated = 0
+            batch_results = []
             
-            research_query = f"""Please estimate the time needed for each of these tasks in hours:
+            from src.llms.llm import get_llm_by_type
+            llm = get_llm_by_type("basic")
+            import re
+            
+            for batch_num in range(total_batches):
+                # Get tasks for this batch
+                start_idx = batch_num * batch_size
+                end_idx = start_idx + batch_size
+                tasks_batch = tasks_without_eta[start_idx:end_idx]
+                
+                logger.info(f"Processing batch {batch_num + 1}/{total_batches} with {len(tasks_batch)} tasks")
+                
+                # Build research query for LLM
+                task_list = "\n".join([
+                    f"- {task.title} (ID: {task.id})"
+                    for task in tasks_batch
+                ])
+                
+                research_query = f"""Please estimate the time needed for each of these tasks in hours:
 
 {task_list}
 
@@ -2490,68 +2506,76 @@ For each task, provide your estimate in hours based on typical effort for simila
 - Task Title (ID: x): Y hours
 
 Be concise but realistic."""
-            
-            # Call LLM for estimates
-            from src.llms.llm import get_llm_by_type
-            llm = get_llm_by_type("basic")
-            response = await llm.ainvoke(research_query)
-            
-            if isinstance(response, str):
-                llm_response = response
-            else:
-                llm_response = response.content if hasattr(response, 'content') else str(response)
-            
-            logger.info(f"LLM ETA response: {llm_response}")
-            
-            # Parse estimates from LLM response
-            import re
-            estimates = {}
-            for task in tasks_to_process:
-                # Try to match task ID or title in LLM response
-                pattern_id = rf".*\(ID:\s*{task.id}\)[:\s]*(\d+(?:\.\d+)?)\s*hours?"
-                pattern_title = rf".*{re.escape(task.title)}[:\s]*(\d+(?:\.\d+)?)\s*hours?"
                 
-                match = re.search(pattern_id, llm_response, re.IGNORECASE) or \
-                       re.search(pattern_title, llm_response, re.IGNORECASE)
-                if match:
-                    hours = float(match.group(1))
-                    estimates[task.id] = hours
-                    logger.info(f"Parsed ETA for {task.title}: {hours}h")
-            
-            # Update tasks with estimates
-            updated_count = 0
-            for task_id, hours in estimates.items():
-                try:
-                    logger.info(f"Updating task {task_id} with {hours}h")
-                    await self.pm_provider.update_task(task_id, {"estimated_hours": hours})
-                    updated_count += 1
-                    logger.info(f"Successfully updated task {task_id}")
-                except Exception as e:
-                    logger.error(f"Failed to update task {task_id}: {e}")
-                    import traceback
-                    logger.error(traceback.format_exc())
+                # Call LLM for estimates
+                response = await llm.ainvoke(research_query)
+                
+                if isinstance(response, str):
+                    llm_response = response
+                else:
+                    llm_response = response.content if hasattr(response, 'content') else str(response)
+                
+                logger.info(f"LLM ETA response batch {batch_num + 1}: {llm_response[:200]}...")
+                
+                # Parse estimates from LLM response
+                batch_estimates = {}
+                for task in tasks_batch:
+                    pattern_id = rf".*\(ID:\s*{task.id}\)[:\s]*(\d+(?:\.\d+)?)\s*hours?"
+                    pattern_title = rf".*{re.escape(task.title)}[:\s]*(\d+(?:\.\d+)?)\s*hours?"
+                    
+                    match = re.search(pattern_id, llm_response, re.IGNORECASE) or \
+                           re.search(pattern_title, llm_response, re.IGNORECASE)
+                    if match:
+                        hours = float(match.group(1))
+                        batch_estimates[task.id] = hours
+                        logger.info(f"Parsed ETA for {task.title}: {hours}h")
+                
+                all_estimates.update(batch_estimates)
+                
+                # Update tasks with estimates
+                batch_updated = 0
+                for task_id, hours in batch_estimates.items():
+                    try:
+                        logger.info(f"Updating task {task_id} with {hours}h")
+                        await self.pm_provider.update_task(task_id, {"estimated_hours": hours})
+                        batch_updated += 1
+                        logger.info(f"Successfully updated task {task_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to update task {task_id}: {e}")
+                        import traceback
+                        logger.error(traceback.format_exc())
+                
+                total_updated += batch_updated
+                batch_results.append({
+                    "batch": batch_num + 1,
+                    "total_batches": total_batches,
+                    "tasks_processed": len(tasks_batch),
+                    "updated": batch_updated
+                })
             
             context.current_state = FlowState.COMPLETED
             
             message_parts = [
                 f"✅ **ETA Research Completed**\n",
-                f"Processed batch 1 of {total_batches}\n",
-                f"Analyzed {len(tasks_to_process)} tasks in this batch\n",
-                f"Updated {updated_count} tasks with new estimates\n"
+                f"Processed {total_batches} batch(es) automatically\n",
+                f"Analyzed {len(tasks_without_eta)} tasks in total\n",
+                f"Updated {total_updated} tasks with new estimates\n"
             ]
             
-            # Show remaining tasks if there are more batches
-            remaining_tasks = len(tasks_without_eta) - batch_size
-            if remaining_tasks > 0:
-                message_parts.append(f"\n⏳ **Remaining Tasks:** {remaining_tasks} tasks still need ETA estimation")
-                message_parts.append(f"You can run the ETA command again to process the next batch.")
-            
-            if updated_count > 0:
-                message_parts.append("\n**Updated Tasks:**\n")
-                for task_id, hours in list(estimates.items()):
-                    task = next((t for t in tasks_to_process if t.id == task_id), None)
+            if total_updated > 0:
+                message_parts.append("\n**Sample Updated Tasks:**\n")
+                # Show first 10 updated tasks as sample
+                sample_shown = 0
+                for task_id, hours in list(all_estimates.items()):
+                    if sample_shown >= 10:
+                        break
+                    task = next((t for t in tasks_without_eta if t.id == task_id), None)
                     if task:
                         message_parts.append(f"- {task.title}: **{hours}h**\n")
+                        sample_shown += 1
+                
+                if total_updated > 10:
+                    message_parts.append(f"\n_... and {total_updated - 10} more tasks_\n")
             
             return {
                 "type": "execution_completed",
@@ -2559,8 +2583,9 @@ Be concise but realistic."""
                 "state": "complete",
                 "data": {
                     "analyzed_tasks": len(tasks_without_eta),
-                    "updated_tasks": updated_count,
-                    "estimates": estimates
+                    "updated_tasks": total_updated,
+                    "estimates": all_estimates,
+                    "batches": batch_results
                 }
             }
         

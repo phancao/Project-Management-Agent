@@ -47,10 +47,12 @@ The Project Management Agent follows a **Plan-Based Multi-Step Execution** archi
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 4. NEEDS RESEARCH CHECK (app.py:949)                                │
-│    - If plan contains "create_wbs" steps                            │
-│    - Pre-run DeerFlow research with streaming                       │
-│    - Store results in context.gathered_data                         │
+│ 4. DEERFLOW PRE-RESEARCH (app.py:949) - OPTIONAL                   │
+│    - Only for "create_wbs" steps                                    │
+│    - Runs full DeerFlow research with streaming                     │
+│    - Stores results in context.gathered_data                        │
+│    - Note: Other research (ETA, sprint planning) happens later       │
+│    - Note: LLM decides if research step is needed in the plan       │
 └─────────────────────┬───────────────────────────────────────────────┘
                       │
                       ▼
@@ -287,6 +289,44 @@ To add new features:
 3. **Key Facts**: Summarized context instead of full history
 4. **Streaming**: Incremental results, not waiting for completion
 5. **Singleton Pattern**: Single ConversationFlowManager instance
+
+---
+
+## Research Routing
+
+The system uses **intelligent research routing** based on step descriptions:
+
+### Pre-Research Phase (app.py)
+- **Trigger**: Only for `create_wbs` steps
+- **Method**: Full DeerFlow research with web search
+- **Purpose**: Gather industry knowledge for WBS generation
+- **Streaming**: Real-time DeerFlow progress shown to user
+
+### Dynamic Research During Execution (flow_manager.py)
+When the LLM generates a plan with `research` step type, `_execute_pm_step` routes based on keywords:
+
+```python
+if step_type == "research":
+    if "eta" in description or "estimate" in description:
+        → _handle_eta_research()  # LLM estimates task durations
+    elif "wbs" in description:
+        → _handle_create_wbs_with_deerflow_planner()
+    elif "dependency" in description:
+        → _handle_dependency_research()  # LLM analyzes dependencies
+    elif "sprint" in description:
+        → _handle_sprint_planning_with_deerflow_planner()  # LLM planning
+    else:
+        → _handle_generic_research()  # Generic LLM research
+```
+
+### Research Handler Types
+- **ETA Research**: Uses LLM to estimate task durations, updates via PM provider
+- **Dependency Research**: Uses LLM to identify task dependencies
+- **Sprint Planning**: Uses LLM thinking + internal sprint creation
+- **WBS Generation**: Can use DeerFlow or LLM-based generation
+- **Generic Research**: Flexible LLM-based research for any topic
+
+**Key Insight**: The LLM decides **when** research is needed, and the system routes **how** to execute it.
 
 ---
 

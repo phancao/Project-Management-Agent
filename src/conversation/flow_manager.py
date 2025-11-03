@@ -148,6 +148,12 @@ class ConversationFlowManager:
             "timestamp": datetime.now().isoformat()
         })
         
+        # Reset state for new messages unless explicitly set to INTENT_DETECTION
+        # This allows follow-up messages to be processed properly
+        if context.current_state == FlowState.COMPLETED:
+            context.current_state = FlowState.INTENT_DETECTION
+            logger.info(f"Reset state to INTENT_DETECTION for new message (previous state was COMPLETED)")
+        
         # Generate PM plan or use existing plan
         if context.current_state == FlowState.INTENT_DETECTION:
             # Extract basic info from message first (project name, etc.)

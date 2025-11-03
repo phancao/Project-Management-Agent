@@ -6,10 +6,16 @@
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors, closestCenter, useDroppable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
 import { TaskDetailsModal } from "../task-details-modal";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
+import { Card } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Search, Filter } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { useProjects } from "~/core/api/hooks/pm/use-projects";
+import { useSearchParams, useRouter } from "next/navigation";
 
 function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -87,9 +93,46 @@ function Column({ column, tasks, onTaskClick }: { column: { id: string; title: s
 
 export function SprintBoardView() {
   const { tasks, loading, error } = useMyTasks();
+  const { projects } = useProjects();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  
+  // Get project filter from URL, fallback to local state
+  const activeProjectId = searchParams.get('project');
+  const initialProjectFilter = useMemo(() => {
+    if (activeProjectId) {
+      const project = projects.find(p => p.id === activeProjectId);
+      return project ? project.name : "all";
+    }
+    return "all";
+  }, [activeProjectId, projects]);
+  
+  const [projectFilter, setProjectFilter] = useState<string>(initialProjectFilter);
+  
+  // Sync project filter with URL when it changes
+  useEffect(() => {
+    if (initialProjectFilter !== "all") {
+      setProjectFilter(initialProjectFilter);
+    }
+  }, [initialProjectFilter]);
+  
+  // Handle project filter changes to update URL
+  const handleProjectFilterChange = (value: string) => {
+    setProjectFilter(value);
+    if (value === "all") {
+      router.push('/pm/chat');
+    } else {
+      const project = projects.find(p => p.name === value);
+      if (project) {
+        router.push(`/pm/chat?project=${project.id}`);
+      }
+    }
+  };
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -98,6 +141,44 @@ export function SprintBoardView() {
       },
     })
   );
+  
+  // Filter tasks
+  const filteredTasks = useMemo(() => {
+    let filtered = tasks;
+
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(t => 
+        t.title.toLowerCase().includes(query) ||
+        (t.description && t.description.toLowerCase().includes(query)) ||
+        (t.project_name && t.project_name.toLowerCase().includes(query))
+      );
+    }
+
+    // Priority filter
+    if (priorityFilter !== "all") {
+      filtered = filtered.filter(t => {
+        const priority = t.priority?.toLowerCase() || "";
+        if (priorityFilter === "high") {
+          return priority === "high" || priority === "highest" || priority === "critical";
+        }
+        if (priorityFilter === "low") {
+          return priority === "low" || priority === "lowest";
+        }
+        return priority === priorityFilter;
+      });
+    }
+
+    // Project filter
+    if (projectFilter !== "all") {
+      filtered = filtered.filter(t => t.project_name === projectFilter);
+    }
+
+    return filtered;
+  }, [tasks, searchQuery, priorityFilter, projectFilter]);
+  
+  const hasActiveFilters = priorityFilter !== "all" || projectFilter !== "all" || searchQuery;
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -160,16 +241,16 @@ export function SprintBoardView() {
   };
 
   // Group tasks by status
-  const todoTasks = tasks.filter(t => 
+  const todoTasks = filteredTasks.filter(t => 
     !t.status || t.status === "None" || t.status.toLowerCase().includes("todo") || t.status.toLowerCase().includes("new")
   );
-  const inProgressTasks = tasks.filter(t => 
+  const inProgressTasks = filteredTasks.filter(t => 
     t.status && (t.status.toLowerCase().includes("progress") || t.status.toLowerCase().includes("in_progress"))
   );
-  const reviewTasks = tasks.filter(t => 
+  const reviewTasks = filteredTasks.filter(t => 
     t.status && (t.status.toLowerCase().includes("review") || t.status.toLowerCase().includes("pending"))
   );
-  const doneTasks = tasks.filter(t => 
+  const doneTasks = filteredTasks.filter(t => 
     t.status && (t.status.toLowerCase().includes("done") || t.status.toLowerCase().includes("completed") || t.status.toLowerCase().includes("closed"))
   );
 
@@ -180,7 +261,7 @@ export function SprintBoardView() {
     { id: "done", title: "Done", tasks: doneTasks },
   ];
 
-  const activeTask = activeId ? tasks.find(t => t.id === activeId) : null;
+  const activeTask = activeId ? filteredTasks.find(t => t.id === activeId) : null;
 
   if (loading) {
     return (
@@ -199,33 +280,128 @@ export function SprintBoardView() {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sprint Board</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              My Tasks - {tasks.length} total
-            </p>
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Sprint Board</h2>
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2">
+              {searchQuery && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
+                  <Search className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {searchQuery}
+                  </span>
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Remove search filter"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {priorityFilter !== "all" && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+                    {priorityFilter}
+                  </span>
+                  <button
+                    onClick={() => setPriorityFilter("all")}
+                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Remove priority filter"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {projectFilter !== "all" && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {projectFilter}
+                  </span>
+                  <button
+                    onClick={() => setProjectFilter("all")}
+                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Remove project filter"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          {filteredTasks.length} of {tasks.length} tasks
+        </div>
+      </div>
+
+      {/* Filters */}
+      <Card className="p-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priority</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={projectFilter} onValueChange={handleProjectFilterChange}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Projects</SelectItem>
+                {[...new Set(tasks.map(t => t.project_name).filter(Boolean))].map(projectName => (
+                  <SelectItem key={projectName} value={projectName}>{projectName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
+      </Card>
 
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
         {/* Kanban Board */}
         <div className="grid grid-cols-4 gap-4">
           {columns.map((column) => (
             <Column key={column.id} column={{ id: column.id, title: column.title }} tasks={column.tasks} onTaskClick={handleTaskClick} />
           ))}
         </div>
-      </div>
 
-      <DragOverlay>
-        {activeTask ? <TaskCard task={activeTask} onClick={() => {}} /> : null}
-      </DragOverlay>
+        <DragOverlay>
+          {activeTask ? <TaskCard task={activeTask} onClick={() => {}} /> : null}
+        </DragOverlay>
+      </DndContext>
 
       <TaskDetailsModal
         task={selectedTask}
@@ -236,6 +412,6 @@ export function SprintBoardView() {
         }}
         onUpdate={handleUpdateTask}
       />
-    </DndContext>
+    </div>
   );
 }

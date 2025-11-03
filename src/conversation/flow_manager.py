@@ -2158,7 +2158,7 @@ class ConversationFlowManager:
                     project_name = "Unassigned"
                 
                 message_parts.append(f"All tasks are in **{project_name}**:\n")
-                for i, task in enumerate(project_tasks[:15], 1):  # Limit display
+                for i, task in enumerate(project_tasks, 1):  # Show all tasks
                     priority_emoji = "🔴" if task.priority == "high" else "🟡" if task.priority == "medium" else "🟢"
                     hours_text = f"{task.estimated_hours}h" if task.estimated_hours else "N/A"
                     status = task.status if hasattr(task, 'status') else 'N/A'
@@ -2178,13 +2178,10 @@ class ConversationFlowManager:
                         project_name = "Unassigned"
                     
                     message_parts.append(f"\n**{project_name}** ({len(project_tasks)} tasks):\n")
-                    for task in project_tasks[:5]:  # Limit 5 tasks per project
+                    for task in project_tasks:  # Show all tasks per project
                         priority_emoji = "🔴" if task.priority == "high" else "🟡" if task.priority == "medium" else "🟢"
                         hours_text = f"{task.estimated_hours}h" if task.estimated_hours else "No ETA"
                         message_parts.append(f"- **{task.title}** ({priority_emoji} {task.priority or 'medium'}) - ETA: {hours_text}\n")
-            
-            if total_tasks > 20:
-                message_parts.append(f"\n_Showing first 20 tasks. Total: {total_tasks}_")
             
             context.current_state = FlowState.COMPLETED
             

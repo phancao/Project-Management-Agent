@@ -41,7 +41,7 @@ function ChatPageContent() {
 
   return (
     <>
-      <div className="flex h-screen w-screen justify-center overscroll-none bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800">
+      <div className="flex h-screen w-screen justify-center overscroll-none bg-gray-50 dark:bg-gray-900">
         <header className="fixed top-0 left-0 flex h-16 w-full items-center justify-between px-6 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 z-50">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">

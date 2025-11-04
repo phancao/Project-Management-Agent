@@ -1519,31 +1519,17 @@ async def pm_chat_stream(request: Request):
                 logger.info("[PM-CHAT-TIMING] generate_stream started")
                     
                 try:
-                    # First, generate PM plan to check if CREATE_WBS is needed
-                    plan_start = time.time()
-                    temp_context = fm._get_or_create_context(thread_id)
-                    pm_plan = await fm.generate_pm_plan(
-                        user_message, temp_context
-                    )
+                    # Option 2: Route everything to DeerFlow (skip PM plan generation)
+                    # This avoids project ID errors for research queries
+                    # All queries go through DeerFlow agents which decide what tools to use
+                    needs_research = True  # Always route to DeerFlow with Option 2
+                    
                     logger.info(
-                        f"[PM-CHAT-TIMING] PM plan generated: "
-                        f"{time.time() - plan_start:.2f}s"
-                    )
-                        
-                    # Check if plan has CREATE_WBS steps that need research
-                    needs_research = False
-                    if pm_plan and pm_plan.get('steps'):
-                        for step in pm_plan.get('steps', []):
-                            if step.get('step_type') == 'create_wbs':
-                                needs_research = True
-                                break
-                        
-                    logger.info(
-                        f"[PM-CHAT-TIMING] Needs research: {needs_research} - "
+                        f"[PM-CHAT-TIMING] Routing to DeerFlow (Option 2) - "
                         f"{time.time() - api_start:.2f}s"
                     )
                         
-                    # For research queries, stream DeerFlow updates
+                    # Route all queries to DeerFlow
                     if needs_research:
                         initial_chunk = {
                             "id": str(uuid.uuid4()),
@@ -1559,13 +1545,17 @@ async def pm_chat_stream(request: Request):
                         yield f"data: {json.dumps(initial_chunk)}\n\n"
                             
                         try:
-                            # Let LLM extract project name from full context
-                            research_query = (
-                                f"Research typical phases, deliverables, "
-                                f"and tasks based on the user's request: "
-                                f"{user_message}. Focus on project structure "
-                                f"and common components."
-                            )
+                            # Ensure PM handler is set for tools before agents run
+                            if fm.pm_handler:
+                                from src.tools.pm_tools import set_pm_handler
+                                set_pm_handler(fm.pm_handler)
+                                logger.info(
+                                    "[PM-CHAT-TIMING] PM handler set for "
+                                    "DeerFlow agents"
+                                )
+                            
+                            # Use original message for research query (Option 2: agents decide what to do)
+                            research_query = user_message
                                 
                             research_start = time.time()
                             logger.info(
@@ -1656,154 +1646,13 @@ async def pm_chat_stream(request: Request):
                             import traceback
                             logger.error(traceback.format_exc())
                         
-                    # Create queue to collect streaming chunks
-                    stream_queue: asyncio.Queue[str] = asyncio.Queue()
-                        
-                    async def stream_callback(content: str):
-                        """Callback to capture streaming chunks"""
-                        await stream_queue.put(content)
-                        
-                    async def process_with_streaming():
-                        try:
-                            process_start = time.time()
-                            logger.info(
-                                f"[PM-CHAT-TIMING] process_with_streaming "
-                                f"started: {time.time() - api_start:.2f}s"
-                            )
-                            response = await fm.process_message(
-                                message=user_message,
-                                session_id=thread_id,
-                                user_id="f430f348-d65f-427f-9379-3d0f163393d1",
-                                stream_callback=stream_callback
-                            )
-                            logger.info(
-                                f"[PM-CHAT-TIMING] process_message completed: "
-                                f"{time.time() - process_start:.2f}s"
-                            )
-                            await stream_queue.put(None)
-                            return response
-                        except Exception as e:
-                            logger.error(f"Error in process_message: {e}")
-                            import traceback
-                            logger.error(traceback.format_exc())
-                            error_msg = f"❌ Error processing request: {str(e)}"
-                            await stream_callback(error_msg)
-                            await stream_queue.put(None)
-                            return {
-                                "type": "error",
-                                "message": error_msg,
-                                "state": "error"
-                            }
-                        
-                    process_task = asyncio.create_task(
-                        process_with_streaming()
-                    )
-                    logger.info(
-                        f"[PM-CHAT-TIMING] process_task started: "
-                        f"{time.time() - api_start:.2f}s"
-                    )
-                        
-                    while True:
-                        try:
-                            chunk = await asyncio.wait_for(
-                                stream_queue.get(), timeout=1.0
-                            )
-                            if chunk is None:
-                                break
-                                
-                            chunk_data = {
-                                "id": str(uuid.uuid4()),
-                                "thread_id": thread_id,
-                                "agent": "coordinator",
-                                "role": "assistant",
-                                "content": chunk,
-                                "finish_reason": None
-                            }
-                            yield "event: message_chunk\n"
-                            yield f"data: {json.dumps(chunk_data)}\n\n"
-                        except asyncio.TimeoutError:
-                            if process_task.done():
-                                break
-                            continue
-                        
-                    try:
-                        response = await process_task
-                    except Exception as task_error:
-                        logger.error(
-                            f"Task execution failed: {task_error}"
+                        # Option 2: All queries handled by DeerFlow, skip process_message
+                        # This avoids project ID errors for research queries
+                        logger.info(
+                            "[PM-CHAT-TIMING] Skipping process_message - "
+                            "DeerFlow handled the query"
                         )
-                        import traceback
-                        logger.error(traceback.format_exc())
-                        response = {
-                            "type": "error",
-                            "message": (
-                                f"❌ Task execution failed: {str(task_error)}"
-                            ),
-                            "state": "error"
-                        }
-                        
-                    if response:
-                        response_message = response.get('message', '')
-                        response_state = response.get('state', 'complete')
-                        response_type = response.get(
-                            'type', 'execution_completed'
-                        )
-                        finish_reason = None
-                        if response_type == 'error':
-                            finish_reason = "error"
-                        elif (
-                            response_state == 'complete'
-                            or response_state == 'completed'
-                        ):
-                            finish_reason = "stop"
-                        elif (
-                            '?' in response_message
-                            or 'specify' in response_message.lower()
-                        ):
-                            finish_reason = "interrupt"
-                        else:
-                            finish_reason = "stop"
-                    else:
-                        finish_reason = "error"
-                        response_message = (
-                            "❌ No response received from processing"
-                        )
-                        
-                    chunk_data = {
-                        "id": str(uuid.uuid4()),
-                        "thread_id": thread_id,
-                        "agent": "coordinator",
-                        "role": "assistant",
-                        "content": "",
-                        "finish_reason": finish_reason
-                    }
-                    logger.info(
-                        f"[PM-CHAT-TIMING] Sending finish event: "
-                        f"finish_reason={finish_reason}, "
-                        f"response_type={response_type if response else 'None'}"  # noqa: E501
-                    )
-                    yield "event: message_chunk\n"
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
-                    
-                    # Emit refresh event if operation succeeded
-                    # to update PM views
-                    if (
-                        finish_reason == "stop"
-                        and response_type == "execution_completed"
-                    ):
-                        refresh_event = {
-                            "id": str(uuid.uuid4()),
-                            "thread_id": thread_id,
-                            "type": "pm_refresh",
-                            "data": {
-                                "updated_entities": response.get(
-                                    "data", {}
-                                ).get("updated_entities", []),
-                                "action": response_type
-                            }
-                        }
-                        yield "event: pm_refresh\n"
-                        yield f"data: {json.dumps(refresh_event)}\n\n"
+                        # DeerFlow already streamed all responses, so we're done
                         
                     logger.info(
                         f"[PM-CHAT-TIMING] Total response time: "

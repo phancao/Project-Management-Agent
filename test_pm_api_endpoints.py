@@ -321,8 +321,8 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
                     print_info(f"Sample statuses: {status_names}")
                 elif isinstance(data, dict):
                     print_info(f"Response structure: {list(data.keys())[:5]}")
-                results["workflows"]["status"] = "working"
-                results["workflows"]["endpoint"] = endpoint['url']
+                results["statuses"]["status"] = "working"
+                results["statuses"]["endpoint"] = endpoint['url']
                 break
             elif response.status_code == 410:
                 print_error("Endpoint is deprecated (410 Gone)")

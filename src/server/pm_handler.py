@@ -663,6 +663,209 @@ class PMHandler:
             for s in sprints
         ]
     
+    async def list_project_epics(self, project_id: str) -> List[Dict[str, Any]]:
+        """
+        List epics for a specific project.
+        
+        Args:
+            project_id: Project ID in format "provider_id:actual_project_id"
+            
+        Returns:
+            List of epics for the project
+        """
+        if ":" not in project_id:
+            raise ValueError(f"Invalid project_id format: {project_id}")
+        
+        parts = project_id.split(":", 1)
+        provider_id_str = parts[0]
+        actual_project_id = parts[1]
+        
+        from uuid import UUID
+        try:
+            provider_uuid = UUID(provider_id_str)
+        except ValueError:
+            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
+        
+        provider = self.db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == provider_uuid,
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        provider_instance = self._create_provider_instance(provider)
+        
+        try:
+            epics = await provider_instance.list_epics(project_id=actual_project_id)
+        except NotImplementedError:
+            raise ValueError(f"Epics not yet implemented for {provider.provider_type}")
+        except Exception as e:
+            raise ValueError(str(e))
+        
+        return [
+            {
+                "id": str(e.id),
+                "name": e.name,
+                "description": e.description,
+                "status": (
+                    e.status.value
+                    if e.status and hasattr(e.status, 'value')
+                    else str(e.status) if e.status else None
+                ),
+                "priority": (
+                    e.priority.value
+                    if e.priority and hasattr(e.priority, 'value')
+                    else str(e.priority) if e.priority else None
+                ),
+                "start_date": e.start_date.isoformat() if e.start_date else None,
+                "end_date": e.end_date.isoformat() if e.end_date else None,
+            }
+            for e in epics
+        ]
+    
+    async def list_project_components(self, project_id: str) -> List[Dict[str, Any]]:
+        """List components for a specific project"""
+        if ":" not in project_id:
+            raise ValueError(f"Invalid project_id format: {project_id}")
+        
+        parts = project_id.split(":", 1)
+        provider_id_str = parts[0]
+        actual_project_id = parts[1]
+        
+        from uuid import UUID
+        try:
+            provider_uuid = UUID(provider_id_str)
+        except ValueError:
+            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
+        
+        provider = self.db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == provider_uuid,
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        provider_instance = self._create_provider_instance(provider)
+        
+        try:
+            components = await provider_instance.list_components(project_id=actual_project_id)
+        except NotImplementedError:
+            raise ValueError(f"Components not yet implemented for {provider.provider_type}")
+        except Exception as e:
+            raise ValueError(str(e))
+        
+        return [
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "description": c.description,
+                "lead_id": c.lead_id,
+            }
+            for c in components
+        ]
+    
+    async def list_project_labels(self, project_id: str) -> List[Dict[str, Any]]:
+        """List labels for a specific project"""
+        if ":" not in project_id:
+            raise ValueError(f"Invalid project_id format: {project_id}")
+        
+        parts = project_id.split(":", 1)
+        provider_id_str = parts[0]
+        actual_project_id = parts[1]
+        
+        from uuid import UUID
+        try:
+            provider_uuid = UUID(provider_id_str)
+        except ValueError:
+            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
+        
+        provider = self.db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == provider_uuid,
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        provider_instance = self._create_provider_instance(provider)
+        
+        try:
+            labels = await provider_instance.list_labels(project_id=actual_project_id)
+        except NotImplementedError:
+            raise ValueError(f"Labels not yet implemented for {provider.provider_type}")
+        except Exception as e:
+            raise ValueError(str(e))
+        
+        return [
+            {
+                "id": str(l.id),
+                "name": l.name,
+                "color": l.color,
+                "description": l.description,
+            }
+            for l in labels
+        ]
+    
+    async def get_project_workflow(
+        self,
+        project_id: str,
+        entity_type: str = "task"
+    ) -> Optional[Dict[str, Any]]:
+        """Get workflow for a project"""
+        if ":" not in project_id:
+            raise ValueError(f"Invalid project_id format: {project_id}")
+        
+        parts = project_id.split(":", 1)
+        provider_id_str = parts[0]
+        actual_project_id = parts[1]
+        
+        from uuid import UUID
+        try:
+            provider_uuid = UUID(provider_id_str)
+        except ValueError:
+            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
+        
+        provider = self.db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == provider_uuid,
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        provider_instance = self._create_provider_instance(provider)
+        
+        try:
+            workflow = await provider_instance.get_workflow(
+                entity_type=entity_type,
+                project_id=actual_project_id
+            )
+        except NotImplementedError:
+            raise ValueError(f"Workflows not yet implemented for {provider.provider_type}")
+        except Exception as e:
+            raise ValueError(str(e))
+        
+        if not workflow:
+            return None
+        
+        return {
+            "id": str(workflow.id) if workflow.id else None,
+            "name": workflow.name,
+            "entity_type": workflow.entity_type,
+            "statuses": workflow.statuses,
+            "transitions": [
+                {
+                    "from_status": t.from_status,
+                    "to_status": t.to_status,
+                    "name": t.name,
+                    "requires_fields": t.requires_fields,
+                }
+                for t in workflow.transitions
+            ],
+        }
+    
     def _task_to_dict(self, task: PMTask, project_name: str) -> Dict[str, Any]:
         """Convert PMTask to dictionary with project_name"""
         return {
@@ -687,5 +890,9 @@ class PMHandler:
                 task.due_date.isoformat() if task.due_date else None
             ),
             "project_name": project_name,
+            "epic_id": str(task.epic_id) if task.epic_id else None,
+            "component_ids": [str(cid) for cid in task.component_ids] if task.component_ids else None,
+            "label_ids": [str(lid) for lid in task.label_ids] if task.label_ids else None,
+            "sprint_id": str(task.sprint_id) if task.sprint_id else None,
         }
 

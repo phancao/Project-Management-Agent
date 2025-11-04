@@ -12,7 +12,7 @@ from datetime import datetime, date
 from .base import BasePMProvider
 from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
-    PMProviderConfig, PMStatusTransition, PMWorkflow
+    PMProviderConfig
 )
 
 

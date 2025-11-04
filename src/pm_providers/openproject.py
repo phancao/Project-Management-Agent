@@ -699,13 +699,88 @@ class OpenProjectProvider(BasePMProvider):
         """
         List all epics, optionally filtered by project.
         
-        TESTED: ❌ Returns 400 error - Type filter has invalid values
-        Leaving as NotImplementedError until correct filter format is found
+        TESTED: ✅ Works - Uses type ID from /api/v3/types endpoint
+        OpenProject requires numeric type ID, not string name
         """
-        raise NotImplementedError(
-            "Epics not yet implemented for OpenProject. "
-            "Type filter returns 400 error. Need to find correct filter format."
-        )
+        import logging
+        import json as json_lib
+        logger = logging.getLogger(__name__)
+        
+        # First, get Epic type ID from types endpoint
+        types_url = f"{self.base_url}/api/v3/types"
+        epic_type_id = None
+        
+        try:
+            types_response = requests.get(types_url, headers=self.headers, timeout=10)
+            if types_response.status_code == 200:
+                types_data = types_response.json()
+                elements = types_data.get('_embedded', {}).get('elements', [])
+                for t in elements:
+                    if 'epic' in t.get('name', '').lower():
+                        epic_type_id = str(t.get('id'))
+                        logger.info(f"Found Epic type ID: {epic_type_id}")
+                        break
+        except Exception as e:
+            logger.warning(f"Could not fetch types to find Epic ID: {e}")
+        
+        if not epic_type_id:
+            logger.warning("Epic type not found in OpenProject types")
+            return []
+        
+        # Build filters with Epic type ID
+        url = f"{self.base_url}/api/v3/work_packages"
+        filters = [{
+            "type": {"operator": "=", "values": [epic_type_id]}
+        }]
+        
+        if project_id:
+            filters.append({
+                "project": {"operator": "=", "values": [project_id]}
+            })
+        
+        params = {
+            "filters": json_lib.dumps(filters),
+            "pageSize": 100
+        }
+        
+        try:
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
+                work_packages = data.get('_embedded', {}).get('elements', [])
+                
+                epics = []
+                for wp in work_packages:
+                    epic = PMEpic(
+                        id=str(wp.get('id')),
+                        name=wp.get('subject', ''),
+                        description=wp.get('description', {}).get('raw') if isinstance(wp.get('description'), dict) else wp.get('description'),
+                        project_id=str(wp.get('_links', {}).get('project', {}).get('href', '').split('/')[-1]) if wp.get('_links', {}).get('project') else None,
+                        status=wp.get('_links', {}).get('status', {}).get('title') if wp.get('_links', {}).get('status') else None,
+                        priority=wp.get('_links', {}).get('priority', {}).get('title') if wp.get('_links', {}).get('priority') else None,
+                        start_date=self._parse_date(wp.get('startDate')),
+                        end_date=self._parse_date(wp.get('dueDate')),
+                        created_at=self._parse_datetime(wp.get('createdAt')),
+                        updated_at=self._parse_datetime(wp.get('updatedAt')),
+                        raw_data=wp
+                    )
+                    epics.append(epic)
+                
+                logger.info(f"Found {len(epics)} epics from OpenProject")
+                return epics
+            else:
+                logger.error(
+                    f"Failed to list epics: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to list epics: ({response.status_code}) "
+                    f"{response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing epics: {e}", exc_info=True)
+            raise ValueError(f"Failed to list epics: {str(e)}")
     
     async def get_epic(self, epic_id: str) -> Optional[PMEpic]:
         """Get a single epic by ID"""

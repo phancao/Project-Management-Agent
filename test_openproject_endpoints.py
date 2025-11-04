@@ -86,30 +86,50 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
     # Test 1: Epics (Work Packages with type Epic)
     print_header("1. Testing EPICS Endpoints")
     
-    epic_endpoints = [
-        {
-            "name": "List Work Packages (type filter)",
+    # First, get Epic type ID from /api/v3/types
+    types_url = f"{base_url}/api/v3/types"
+    epic_type_id = None
+    try:
+        types_response = requests.get(types_url, headers=headers, timeout=10)
+        if types_response.status_code == 200:
+            types_data = types_response.json()
+            elements = types_data.get('_embedded', {}).get('elements', [])
+            for t in elements:
+                if 'epic' in t.get('name', '').lower():
+                    epic_type_id = str(t.get('id'))
+                    print_info(f"Found Epic type ID: {epic_type_id}")
+                    break
+    except Exception as e:
+        print_warning(f"Could not fetch types: {e}")
+    
+    epic_endpoints = []
+    
+    # Try with type ID if we found it
+    if epic_type_id:
+        epic_endpoints.append({
+            "name": "List Work Packages (type ID filter)",
             "method": "GET",
             "url": f"{base_url}/api/v3/work_packages",
             "params": {
                 "filters": json.dumps([{
-                    "type": {"operator": "=", "values": ["Epic"]}
+                    "type": {"operator": "=", "values": [epic_type_id]}
                 }]),
                 "pageSize": 5
             }
-        },
-        {
-            "name": "List Work Packages by Project (type filter)",
-            "method": "GET",
-            "url": f"{base_url}/api/v3/projects/{project_id}/work_packages" if project_id else None,
-            "params": {
-                "filters": json.dumps([{
-                    "type": {"operator": "=", "values": ["Epic"]}
-                }]),
-                "pageSize": 5
-            }
-        }
-    ]
+        })
+        if project_id:
+            epic_endpoints.append({
+                "name": "List Work Packages by Project (type ID filter)",
+                "method": "GET",
+                "url": f"{base_url}/api/v3/projects/{project_id}/work_packages",
+                "params": {
+                    "filters": json.dumps([{
+                        "project": {"operator": "=", "values": [project_id]},
+                        "type": {"operator": "=", "values": [epic_type_id]}
+                    }]),
+                    "pageSize": 5
+                }
+            })
     
     for endpoint in epic_endpoints:
         if not endpoint.get('url'):

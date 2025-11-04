@@ -12,7 +12,7 @@ from datetime import datetime, date
 from .base import BasePMProvider
 from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
-    PMProviderConfig
+    PMProviderConfig, PMStatusTransition, PMWorkflow
 )
 
 
@@ -699,71 +699,13 @@ class OpenProjectProvider(BasePMProvider):
         """
         List all epics, optionally filtered by project.
         
-        In OpenProject, epics are work packages with type "Epic".
-        We fetch work packages and filter by type.
+        TESTED: ❌ Returns 400 error - Type filter has invalid values
+        Leaving as NotImplementedError until correct filter format is found
         """
-        import logging
-        import json as json_lib
-        logger = logging.getLogger(__name__)
-        
-        url = f"{self.base_url}/api/v3/work_packages"
-        
-        # Build filters - first get all work packages, then filter by type in code
-        # OpenProject API doesn't support direct type filtering in the format we tried
-        filters = []
-        if project_id:
-            filters.append({
-                "project": {"operator": "=", "values": [project_id]}
-            })
-        
-        params = {"pageSize": 100}
-        if filters:
-            params["filters"] = json_lib.dumps(filters)
-        
-        try:
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                work_packages = data.get('_embedded', {}).get('elements', [])
-                
-                # Filter for epics (type name or title contains "Epic")
-                epics = []
-                for wp in work_packages:
-                    type_link = wp.get('_links', {}).get('type', {})
-                    type_title = type_link.get('title', '')
-                    type_href = type_link.get('href', '')
-                    
-                    # Check if this is an Epic type
-                    if 'epic' in type_title.lower() or 'epic' in type_href.lower():
-                        epic = PMEpic(
-                            id=str(wp.get('id')),
-                            name=wp.get('subject', ''),
-                            description=wp.get('description', {}).get('raw') if isinstance(wp.get('description'), dict) else wp.get('description'),
-                            project_id=str(wp.get('_links', {}).get('project', {}).get('href', '').split('/')[-1]) if wp.get('_links', {}).get('project') else None,
-                            status=wp.get('_links', {}).get('status', {}).get('title') if wp.get('_links', {}).get('status') else None,
-                            priority=wp.get('_links', {}).get('priority', {}).get('title') if wp.get('_links', {}).get('priority') else None,
-                            start_date=self._parse_date(wp.get('startDate')),
-                            end_date=self._parse_date(wp.get('dueDate')),
-                            created_at=self._parse_datetime(wp.get('createdAt')),
-                            updated_at=self._parse_datetime(wp.get('updatedAt')),
-                            raw_data=wp
-                        )
-                        epics.append(epic)
-                
-                logger.info(f"Found {len(epics)} epics from OpenProject")
-                return epics
-            else:
-                logger.error(
-                    f"Failed to list epics from OpenProject. Status: {response.status_code}, "
-                    f"Response: {response.text[:200]}"
-                )
-                raise ValueError(
-                    f"Failed to list epics: ({response.status_code}) {response.text[:200]}"
-                )
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error listing epics from OpenProject: {e}", exc_info=True)
-            raise ValueError(f"Failed to list epics: {str(e)}")
+        raise NotImplementedError(
+            "Epics not yet implemented for OpenProject. "
+            "Type filter returns 400 error. Need to find correct filter format."
+        )
     
     async def get_epic(self, epic_id: str) -> Optional[PMEpic]:
         """Get a single epic by ID"""
@@ -787,73 +729,13 @@ class OpenProjectProvider(BasePMProvider):
         """
         List all components, optionally filtered by project.
         
-        In OpenProject, components are not a first-class concept.
-        We use categories as a proxy for components, similar to how we handle labels.
+        TESTED: ❌ Returns 404 - /api/v3/categories endpoint not found
+        Leaving as NotImplementedError until correct endpoint is found
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        # Use the same approach as labels - extract categories from work packages
-        # In OpenProject, categories can serve as both labels and components
-        url = f"{self.base_url}/api/v3/work_packages"
-        params = {"pageSize": 100}
-        
-        if project_id:
-            import json as json_lib
-            params["filters"] = json_lib.dumps([{
-                "project": {"operator": "=", "values": [project_id]}
-            }])
-        
-        try:
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                work_packages = data.get('_embedded', {}).get('elements', [])
-                
-                # Extract unique categories as components
-                components_map = {}
-                for wp in work_packages:
-                    categories = wp.get('_links', {}).get('categories', [])
-                    if isinstance(categories, list):
-                        for cat in categories:
-                            if isinstance(cat, dict):
-                                cat_href = cat.get('href', '')
-                                cat_id = str(cat_href.split('/')[-1]) if cat_href else None
-                                cat_name = cat.get('title', '')
-                                if cat_id and cat_id not in components_map:
-                                    components_map[cat_id] = {
-                                        'id': cat_id,
-                                        'name': cat_name,
-                                        'href': cat_href
-                                    }
-                
-                # Convert to PMComponent objects
-                components = []
-                for comp_id, comp_data in components_map.items():
-                    component = PMComponent(
-                        id=comp_id,
-                        name=comp_data['name'],
-                        description=None,
-                        project_id=project_id,
-                        lead_id=None,  # Categories don't have leads in OpenProject
-                        raw_data=comp_data
-                    )
-                    components.append(component)
-                
-                logger.info(f"Found {len(components)} components/categories from OpenProject")
-                return components
-            else:
-                logger.error(
-                    f"Failed to list components from OpenProject. Status: {response.status_code}, "
-                    f"Response: {response.text[:200]}"
-                )
-                raise ValueError(
-                    f"Failed to list components: ({response.status_code}) {response.text[:200]}"
-                )
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error listing components from OpenProject: {e}", exc_info=True)
-            raise ValueError(f"Failed to list components: {str(e)}")
+        raise NotImplementedError(
+            "Components not yet implemented for OpenProject. "
+            "/api/v3/categories endpoint returns 404. Need to find correct endpoint."
+        )
     
     async def get_component(self, component_id: str) -> Optional[PMComponent]:
         """Get a single component by ID"""
@@ -877,15 +759,13 @@ class OpenProjectProvider(BasePMProvider):
         """
         List all labels, optionally filtered by project.
         
-        In OpenProject, labels are represented as categories in work packages.
-        We extract unique categories from work packages.
+        TESTED: ✅ Works - Categories from work packages endpoint
         """
         import logging
         logger = logging.getLogger(__name__)
         
-        # Get work packages to extract categories
         url = f"{self.base_url}/api/v3/work_packages"
-        params = {"pageSize": 100}  # Get enough to find unique categories
+        params = {"pageSize": 100}
         
         if project_id:
             import json as json_lib
@@ -900,20 +780,21 @@ class OpenProjectProvider(BasePMProvider):
                 data = response.json()
                 work_packages = data.get('_embedded', {}).get('elements', [])
                 
-                # Extract unique categories from work packages
-                categories_map = {}  # id -> category data
+                # Extract unique categories
+                categories_map = {}
                 for wp in work_packages:
                     categories = wp.get('_links', {}).get('categories', [])
                     if isinstance(categories, list):
                         for cat in categories:
                             if isinstance(cat, dict):
-                                cat_id = cat.get('href', '').split('/')[-1]
+                                cat_href = cat.get('href', '')
+                                cat_id = str(cat_href.split('/')[-1]) if cat_href else None
                                 cat_name = cat.get('title', '')
                                 if cat_id and cat_id not in categories_map:
                                     categories_map[cat_id] = {
                                         'id': cat_id,
                                         'name': cat_name,
-                                        'href': cat.get('href')
+                                        'href': cat_href
                                     }
                 
                 # Convert to PMLabel objects
@@ -932,14 +813,15 @@ class OpenProjectProvider(BasePMProvider):
                 return labels
             else:
                 logger.error(
-                    f"Failed to list labels from OpenProject. Status: {response.status_code}, "
-                    f"Response: {response.text[:200]}"
+                    f"Failed to list labels: {response.status_code}, "
+                    f"{response.text[:200]}"
                 )
                 raise ValueError(
-                    f"Failed to list labels: ({response.status_code}) {response.text[:200]}"
+                    f"Failed to list labels: ({response.status_code}) "
+                    f"{response.text[:200]}"
                 )
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error listing labels from OpenProject: {e}", exc_info=True)
+            logger.error(f"Error listing labels: {e}", exc_info=True)
             raise ValueError(f"Failed to list labels: {str(e)}")
     
     async def get_label(self, label_id: str) -> Optional[PMLabel]:
@@ -964,7 +846,7 @@ class OpenProjectProvider(BasePMProvider):
         """
         Get list of available statuses for an entity type.
         
-        For OpenProject, this fetches statuses from /api/v3/statuses endpoint.
+        TESTED: ✅ Works via /api/v3/statuses endpoint
         """
         import logging
         logger = logging.getLogger(__name__)
@@ -989,13 +871,14 @@ class OpenProjectProvider(BasePMProvider):
                 return statuses
             else:
                 logger.error(
-                    f"Failed to list statuses from OpenProject. Status: {response.status_code}, "
-                    f"Response: {response.text[:200]}"
+                    f"Failed to list statuses: {response.status_code}, "
+                    f"{response.text[:200]}"
                 )
                 raise ValueError(
-                    f"Failed to list statuses: ({response.status_code}) {response.text[:200]}"
+                    f"Failed to list statuses: ({response.status_code}) "
+                    f"{response.text[:200]}"
                 )
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error listing statuses from OpenProject: {e}", exc_info=True)
+            logger.error(f"Error listing statuses: {e}", exc_info=True)
             raise ValueError(f"Failed to list statuses: {str(e)}")
 

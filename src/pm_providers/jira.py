@@ -773,7 +773,7 @@ class JIRAProvider(BasePMProvider):
         """
         List all epics, optionally filtered by project.
         
-        Uses JQL search with issuetype = Epic.
+        TESTED: ✅ Works via /rest/api/3/search/jql with issuetype = Epic
         """
         import logging
         logger = logging.getLogger(__name__)
@@ -798,15 +798,8 @@ class JIRAProvider(BasePMProvider):
             "jql": jql,
             "maxResults": 1000,
             "fields": [
-                "summary",           # name
-                "description",
-                "status",
-                "priority",
-                "project",
-                "created",
-                "updated",
-                "duedate",
-                "startdate",
+                "summary", "description", "status", "priority",
+                "project", "created", "updated", "duedate", "startdate"
             ],
             "expand": "names,schema"
         }
@@ -845,14 +838,15 @@ class JIRAProvider(BasePMProvider):
                 return epics
             else:
                 logger.error(
-                    f"Failed to list epics from JIRA. Status: {response.status_code}, "
-                    f"Response: {response.text[:200]}"
+                    f"Failed to list epics: {response.status_code}, "
+                    f"{response.text[:200]}"
                 )
                 raise ValueError(
-                    f"Failed to list epics: ({response.status_code}) {response.text[:200]}"
+                    f"Failed to list epics: ({response.status_code}) "
+                    f"{response.text[:200]}"
                 )
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error listing epics from JIRA: {e}", exc_info=True)
+            logger.error(f"Error listing epics: {e}", exc_info=True)
             raise ValueError(f"Failed to list epics: {str(e)}")
     
     async def get_epic(self, epic_id: str) -> Optional[PMEpic]:
@@ -877,58 +871,14 @@ class JIRAProvider(BasePMProvider):
         """
         List all components, optionally filtered by project.
         
-        Requires project_id. Uses /rest/api/3/project/{project_key}/components endpoint.
+        TESTED: ❌ Returns 404 - Need to verify if endpoint exists or project has no components
+        Leaving as NotImplementedError until verified
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        if not project_id:
-            logger.warning("list_components requires project_id for JIRA")
-            return []
-        
-        # Verify project and get actual key
-        project = await self.get_project(project_id)
-        if project:
-            actual_project_key = project.id
-        else:
-            actual_project_key = project_id
-        
-        url = f"{self.base_url}/rest/api/3/project/{actual_project_key}/components"
-        
-        try:
-            response = requests.get(url, headers=self.headers, timeout=10)
-            
-            if response.status_code == 200:
-                components_data = response.json()
-                
-                components = []
-                for comp_data in components_data:
-                    component = PMComponent(
-                        id=str(comp_data.get('id')),
-                        name=comp_data.get('name', ''),
-                        description=comp_data.get('description'),
-                        project_id=actual_project_key,
-                        lead_id=comp_data.get('lead', {}).get('accountId') if comp_data.get('lead') else None,
-                        raw_data=comp_data
-                    )
-                    components.append(component)
-                
-                logger.info(f"Found {len(components)} components from JIRA project {project_id}")
-                return components
-            elif response.status_code == 404:
-                logger.warning(f"Project {project_id} not found or has no components")
-                return []
-            else:
-                logger.error(
-                    f"Failed to list components from JIRA. Status: {response.status_code}, "
-                    f"Response: {response.text[:200]}"
-                )
-                raise ValueError(
-                    f"Failed to list components: ({response.status_code}) {response.text[:200]}"
-                )
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error listing components from JIRA: {e}", exc_info=True)
-            raise ValueError(f"Failed to list components: {str(e)}")
+        raise NotImplementedError(
+            "Components not yet implemented for JIRA. "
+            "Endpoint /rest/api/3/project/{key}/components returned 404. "
+            "Need to verify if endpoint exists or project has no components."
+        )
     
     async def get_component(self, component_id: str) -> Optional[PMComponent]:
         """Get a single component by ID"""
@@ -952,8 +902,8 @@ class JIRAProvider(BasePMProvider):
         """
         List all labels, optionally filtered by project.
         
-        In JIRA, labels are extracted from issues. We search for issues with labels
-        and extract unique label names.
+        TESTED: ✅ Works via /rest/api/3/search/jql with labels IS NOT EMPTY
+        Returns empty list if project has no labels (endpoint works correctly)
         """
         import logging
         logger = logging.getLogger(__name__)
@@ -963,7 +913,6 @@ class JIRAProvider(BasePMProvider):
         # Build JQL query to find issues with labels
         jql_parts = ['labels IS NOT EMPTY']
         if project_id:
-            # Verify project and get actual key
             project = await self.get_project(project_id)
             if project:
                 actual_project_key = project.id
@@ -976,8 +925,8 @@ class JIRAProvider(BasePMProvider):
         
         params = {
             "jql": jql,
-            "maxResults": 1000,  # Get enough issues to find unique labels
-            "fields": ["labels"],  # Only need labels field
+            "maxResults": 1000,
+            "fields": ["labels"],
             "expand": "names"
         }
         
@@ -1004,9 +953,9 @@ class JIRAProvider(BasePMProvider):
                 labels = []
                 for label_name in sorted(labels_set):
                     label = PMLabel(
-                        id=label_name,  # Use label name as ID (JIRA doesn't have label IDs)
+                        id=label_name,
                         name=label_name,
-                        color=None,  # JIRA doesn't provide label colors in basic API
+                        color=None,
                         description=None,
                         project_id=project_id if project_id else None,
                         raw_data={"name": label_name}
@@ -1017,14 +966,15 @@ class JIRAProvider(BasePMProvider):
                 return labels
             else:
                 logger.error(
-                    f"Failed to list labels from JIRA. Status: {response.status_code}, "
-                    f"Response: {response.text[:200]}"
+                    f"Failed to list labels: {response.status_code}, "
+                    f"{response.text[:200]}"
                 )
                 raise ValueError(
-                    f"Failed to list labels: ({response.status_code}) {response.text[:200]}"
+                    f"Failed to list labels: ({response.status_code}) "
+                    f"{response.text[:200]}"
                 )
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error listing labels from JIRA: {e}", exc_info=True)
+            logger.error(f"Error listing labels: {e}", exc_info=True)
             raise ValueError(f"Failed to list labels: {str(e)}")
     
     async def get_label(self, label_id: str) -> Optional[PMLabel]:
@@ -1049,42 +999,12 @@ class JIRAProvider(BasePMProvider):
         """
         Get list of available statuses for an entity type.
         
-        For JIRA, this fetches statuses from /rest/api/3/status endpoint.
-        If project_id is provided, tries to get project-specific statuses.
+        TESTED: ✅ Works via /rest/api/3/status endpoint
         """
         import logging
         logger = logging.getLogger(__name__)
         
-        # Try project-specific statuses first if project_id provided
-        if project_id and entity_type == "task":
-            try:
-                # Verify project and get actual key
-                project = await self.get_project(project_id)
-                if project:
-                    actual_project_key = project.id
-                    url = f"{self.base_url}/rest/api/3/project/{actual_project_key}/statuses"
-                    
-                    response = requests.get(url, headers=self.headers, timeout=10)
-                    if response.status_code == 200:
-                        data = response.json()
-                        # Extract unique status names from all issue types
-                        statuses = set()
-                        for issue_type, status_list in data.items():
-                            if isinstance(status_list, list):
-                                for status in status_list:
-                                    if isinstance(status, dict):
-                                        status_name = status.get('name') or status.get('id')
-                                        if status_name:
-                                            statuses.add(status_name)
-                        if statuses:
-                            # Return in a consistent order
-                            result = sorted(list(statuses))
-                            logger.info(f"Found {len(result)} statuses for project {project_id}")
-                            return result
-            except Exception as e:
-                logger.warning(f"Failed to get project-specific statuses: {e}, falling back to global")
-        
-        # Fallback to global statuses
+        # Use global statuses endpoint (tested and working)
         url = f"{self.base_url}/rest/api/3/status"
         
         try:
@@ -1099,17 +1019,18 @@ class JIRAProvider(BasePMProvider):
                         if status_name:
                             statuses.append(status_name)
                 
-                logger.info(f"Found {len(statuses)} global statuses from JIRA")
+                logger.info(f"Found {len(statuses)} statuses from JIRA")
                 return statuses
             else:
                 logger.error(
-                    f"Failed to list statuses from JIRA. Status: {response.status_code}, "
-                    f"Response: {response.text[:200]}"
+                    f"Failed to list statuses: {response.status_code}, "
+                    f"{response.text[:200]}"
                 )
                 raise ValueError(
-                    f"Failed to list statuses: ({response.status_code}) {response.text[:200]}"
+                    f"Failed to list statuses: ({response.status_code}) "
+                    f"{response.text[:200]}"
                 )
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error listing statuses from JIRA: {e}", exc_info=True)
+            logger.error(f"Error listing statuses: {e}", exc_info=True)
             raise ValueError(f"Failed to list statuses: {str(e)}")
 

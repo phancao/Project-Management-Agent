@@ -89,15 +89,26 @@ class ConversationFlowManager:
         self.data_extractor = DataExtractor()
         self.db_session = db_session
         
-        # Initialize PM provider (OpenProject, JIRA, etc.)
-        self.pm_provider = None
+        # Initialize PM handler (unified abstraction layer)
+        self.pm_handler = None
         try:
             from src.pm_providers import build_pm_provider
-            self.pm_provider = build_pm_provider(db_session=db_session)
-            if self.pm_provider:
-                logger.info(f"PM Provider initialized: {self.pm_provider.__class__.__name__}")
+            from src.server.pm_handler import PMHandler
+            
+            # Build single provider for conversation context
+            pm_provider = build_pm_provider(db_session=db_session)
+            if pm_provider:
+                # Wrap in PMHandler for unified interface
+                self.pm_handler = PMHandler.from_single_provider(pm_provider)
+                logger.info(
+                    f"PM Handler initialized with provider: "
+                    f"{pm_provider.__class__.__name__}"
+                )
         except Exception as e:
-            logger.warning(f"Could not initialize PM provider: {e}")
+            logger.warning(f"Could not initialize PM handler: {e}")
+        
+        # Keep backward compatibility - expose pm_provider directly
+        self.pm_provider = self.pm_handler.single_provider if self.pm_handler else None
         
         # Initialize self-learning system
         self.self_learning = None

@@ -5,7 +5,10 @@ Connects to ClickUp API to manage spaces, lists, tasks, and members.
 TODO: Full implementation needed
 """
 from .base import BasePMProvider
-from .models import PMUser, PMProject, PMTask, PMSprint, PMProviderConfig
+from .models import (
+    PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
+    PMProviderConfig, PMStatusTransition, PMWorkflow
+)
 from typing import List, Optional, Dict
 
 
@@ -84,4 +87,63 @@ class ClickUpProvider(BasePMProvider):
     
     async def health_check(self) -> bool:
         raise NotImplementedError("ClickUp provider not yet implemented")
+    
+    # ==================== Epic Operations ====================
+    
+    async def list_epics(self, project_id: Optional[str] = None) -> List[PMEpic]:
+        raise NotImplementedError("Epics not yet implemented for ClickUp")
+    
+    async def get_epic(self, epic_id: str) -> Optional[PMEpic]:
+        raise NotImplementedError("Epics not yet implemented for ClickUp")
+    
+    async def create_epic(self, epic: PMEpic) -> PMEpic:
+        raise NotImplementedError("Epics not yet implemented for ClickUp")
+    
+    async def update_epic(self, epic_id: str, updates: Dict) -> PMEpic:
+        raise NotImplementedError("Epics not yet implemented for ClickUp")
+    
+    async def delete_epic(self, epic_id: str) -> bool:
+        raise NotImplementedError("Epics not yet implemented for ClickUp")
+    
+    # ==================== Component Operations ====================
+    
+    async def list_components(self, project_id: Optional[str] = None) -> List[PMComponent]:
+        raise NotImplementedError("Components not yet implemented for ClickUp")
+    
+    async def get_component(self, component_id: str) -> Optional[PMComponent]:
+        raise NotImplementedError("Components not yet implemented for ClickUp")
+    
+    async def create_component(self, component: PMComponent) -> PMComponent:
+        raise NotImplementedError("Components not yet implemented for ClickUp")
+    
+    async def update_component(self, component_id: str, updates: Dict) -> PMComponent:
+        raise NotImplementedError("Components not yet implemented for ClickUp")
+    
+    async def delete_component(self, component_id: str) -> bool:
+        raise NotImplementedError("Components not yet implemented for ClickUp")
+    
+    # ==================== Label Operations ====================
+    
+    async def list_labels(self, project_id: Optional[str] = None) -> List[PMLabel]:
+        raise NotImplementedError("Labels not yet implemented for ClickUp")
+    
+    async def get_label(self, label_id: str) -> Optional[PMLabel]:
+        raise NotImplementedError("Labels not yet implemented for ClickUp")
+    
+    async def create_label(self, label: PMLabel) -> PMLabel:
+        raise NotImplementedError("Labels not yet implemented for ClickUp")
+    
+    async def update_label(self, label_id: str, updates: Dict) -> PMLabel:
+        raise NotImplementedError("Labels not yet implemented for ClickUp")
+    
+    async def delete_label(self, label_id: str) -> bool:
+        raise NotImplementedError("Labels not yet implemented for ClickUp")
+    
+    # ==================== Status Workflow Operations ====================
+    
+    async def get_workflow(self, entity_type: str, project_id: Optional[str] = None) -> Optional[PMWorkflow]:
+        raise NotImplementedError("Workflows not yet implemented for ClickUp")
+    
+    async def list_workflows(self, project_id: Optional[str] = None) -> List[PMWorkflow]:
+        raise NotImplementedError("Workflows not yet implemented for ClickUp")
 

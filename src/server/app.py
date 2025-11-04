@@ -1073,87 +1073,14 @@ async def pm_list_projects(request: Request):
     """List all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
-        from database.orm_models import PMProviderConnection
-        from src.pm_providers.factory import create_pm_provider
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
         
         try:
-            # Get all active providers
-            providers = db.query(PMProviderConnection).filter(
-                PMProviderConnection.is_active.is_(True)
-            ).all()
-            
-            if not providers:
-                return []
-            
-            all_projects = []
-            
-            # Fetch projects from each provider
-            for provider in providers:
-                try:
-                    # Prepare API key - handle empty strings and None
-                    api_key_value = None
-                    if provider.api_key:
-                        api_key_str = str(provider.api_key).strip()
-                        api_key_value = api_key_str if api_key_str else None
-                    
-                    api_token_value = None
-                    if provider.api_token:
-                        api_token_str = str(provider.api_token).strip()
-                        api_token_value = (
-                            api_token_str if api_token_str else None
-                        )
-                    
-                    # Create provider instance
-                    provider_instance = create_pm_provider(
-                        provider_type=str(provider.provider_type),
-                        base_url=str(provider.base_url),
-                        api_key=api_key_value,
-                        api_token=api_token_value,
-                        username=(
-                            str(provider.username).strip()
-                            if provider.username
-                            else None
-                        ),
-                        organization_id=(
-                            str(provider.organization_id)
-                            if provider.organization_id
-                            else None
-                        ),
-                        workspace_id=(
-                            str(provider.workspace_id)
-                            if provider.workspace_id
-                            else None
-                        ),
-                    )
-                    
-                    # Fetch projects
-                    projects = await provider_instance.list_projects()
-                    
-                    # Prefix project ID with provider_id to ensure uniqueness
-                    for p in projects:
-                        all_projects.append({
-                            "id": f"{provider.id}:{p.id}",
-                            "name": p.name,
-                            "description": p.description or "",
-                            "status": (
-                                p.status.value
-                                if p.status and hasattr(p.status, 'value')
-                                else str(p.status) if p.status else "None"
-                            ),
-                        })
-                except Exception as provider_error:
-                    # Log error but continue with other providers
-                    logger.warning(
-                        f"Failed to fetch projects from provider "
-                        f"{provider.id} ({provider.provider_type}): "
-                        f"{provider_error}"
-                    )
-                    continue
-            
-            return all_projects
+            handler = PMHandler.from_db_session(db)
+            return await handler.list_all_projects()
         finally:
             db.close()
     except Exception as e:
@@ -1168,20 +1095,14 @@ async def pm_list_tasks(request: Request, project_id: str):
     """List all tasks for a project"""
     try:
         from database.connection import get_db_session
-        from database.orm_models import PMProviderConnection
-        from src.pm_providers.factory import create_pm_provider
-        from uuid import UUID
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
         
         try:
-            # Parse project_id format: provider_id:actual_project_id
-            if ":" in project_id:
-                parts = project_id.split(":", 1)
-                provider_id_str = parts[0]
-                actual_project_id = parts[1]
-            else:
+            # Check if project_id has provider prefix
+            if ":" not in project_id:
                 # Fallback: use global flow_manager if no provider_id prefix
                 from src.conversation.flow_manager import (
                     ConversationFlowManager
@@ -1244,221 +1165,32 @@ async def pm_list_tasks(request: Request, project_id: str):
                     for t in tasks
                 ]
             
-            # Parse provider_id as UUID
-            try:
-                provider_uuid = UUID(provider_id_str)
-            except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid provider ID format: {provider_id_str}"
-                )
-            
-            # Get provider from database
-            provider = db.query(PMProviderConnection).filter(
-                PMProviderConnection.id == provider_uuid,
-                PMProviderConnection.is_active.is_(True)
-            ).first()
-            
-            if not provider:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Provider not found: {provider_id_str}"
-                )
-            
-            # Log provider details for debugging
-            logger.info(
-                f"Using provider: id={provider.id}, "
-                f"type={provider.provider_type}, "
-                f"base_url={provider.base_url}, "
-                f"project_id={actual_project_id}"
-            )
-            
-            # Prepare API key - handle empty strings and None
-            api_key_value = None
-            if provider.api_key:
-                api_key_str = str(provider.api_key).strip()
-                api_key_value = api_key_str if api_key_str else None
-            
-            api_token_value = None
-            if provider.api_token:
-                api_token_str = str(provider.api_token).strip()
-                api_token_value = api_token_str if api_token_str else None
-            
-            # Create provider instance
-            provider_instance = create_pm_provider(
-                provider_type=str(provider.provider_type),
-                base_url=str(provider.base_url),
-                api_key=api_key_value,
-                api_token=api_token_value,
-                username=(
-                    str(provider.username).strip()
-                    if provider.username
-                    else None
-                ),
-                organization_id=(
-                    str(provider.organization_id)
-                    if provider.organization_id
-                    else None
-                ),
-                workspace_id=(
-                    str(provider.workspace_id)
-                    if provider.workspace_id
-                    else None
-                ),
-            )
-            
-            # Fetch tasks using actual project ID
-            try:
-                logger.info(
-                    "=" * 80
-                )
-                logger.info(
-                    "CALLING PROVIDER list_tasks: "
-                    "provider=%s, project_id=%s, actual_project_id=%s",
-                    provider.provider_type, project_id, actual_project_id
-                )
-                logger.info("=" * 80)
-                
-                tasks = await provider_instance.list_tasks(
-                    project_id=actual_project_id
-                )
-                
-                logger.info(
-                    "Provider returned %d tasks successfully",
-                    len(tasks) if tasks else 0
-                )
-                logger.info("=" * 80)
-            except NotImplementedError:
-                logger.warning(
-                    f"list_tasks not implemented for provider "
-                    f"{provider.provider_type}"
-                )
-                raise HTTPException(
-                    status_code=501,
-                    detail=(
-                        f"list_tasks is not yet implemented for "
-                        f"{provider.provider_type} provider"
-                    )
-                )
-            except Exception as list_error:
-                error_msg = str(list_error)
-                logger.error(
-                    f"Failed to list tasks for project {actual_project_id} "
-                    f"from provider {provider_id_str} "
-                    f"(type: {provider.provider_type}): {error_msg}"
-                )
-                import traceback
-                logger.error(traceback.format_exc())
-                
-                # Extract HTTP status code from error message if present
-                # Check for common patterns: "410 Gone", "(410 Gone)", etc.
-                import re
-                status_code = None
-                status_patterns = [
-                    r'\((\d{3})\s+(?:Gone|Not Found|Unauthorized|Forbidden|'
-                    r'Bad Request|Client Error)\)',
-                    r'\((\d{3})\)',  # Check for status code like "(410)"
-                    r'\b(\d{3})\s+(?:Gone|Not Found|Unauthorized|Forbidden|'
-                    r'Bad Request|Client Error)',
-                    r'\b(?:status code|HTTP|status)\s*:?\s*(\d{3})\b',
-                ]
-                for pattern in status_patterns:
-                    match = re.search(pattern, error_msg, re.IGNORECASE)
-                    if match:
-                        try:
-                            status_code = int(match.group(1))
-                            break
-                        except (ValueError, IndexError):
-                            continue
-                
-                # Map status codes from provider errors to HTTP status codes
-                # Only use extracted status code if it's a valid HTTP error
-                # code (4xx or 5xx)
-                if status_code and 400 <= status_code < 600:
-                    http_status = status_code
-                else:
-                    # Default to 500 if no valid status code found
-                    http_status = 500
-                
-                # Provide more helpful error message if wrong provider type
-                if ("jira" in error_msg.lower() and
-                        provider.provider_type.lower() != "jira"):
-                    raise HTTPException(
-                        status_code=http_status,
-                        detail=(
-                            f"Provider mismatch: The provider with ID "
-                            f"{provider_id_str} is configured as "
-                            f"'{provider.provider_type}' but the error "
-                            f"suggests it's using Jira. Please check your "
-                            f"provider configuration. Original error: "
-                            f"{error_msg}"
-                        )
-                    )
-                elif ("openproject" in error_msg.lower() and
-                      provider.provider_type.lower() != "openproject"):
-                    raise HTTPException(
-                        status_code=http_status,
-                        detail=(
-                            f"Provider mismatch: The provider with ID "
-                            f"{provider_id_str} is configured as "
-                            f"'{provider.provider_type}' but the error "
-                            f"suggests it's using OpenProject. Please check "
-                            f"your provider configuration. Original error: "
-                            f"{error_msg}"
-                        )
-                    )
-                else:
-                    raise HTTPException(
-                        status_code=http_status,
-                        detail=error_msg
-                    )
-            
-            # Build assignee map if needed
-            assignee_map = {}
-            for task in tasks:
-                if (task.assignee_id and
-                        task.assignee_id not in assignee_map):
-                    try:
-                        user = await provider_instance.get_user(
-                            task.assignee_id
-                        )
-                        if user:
-                            assignee_map[task.assignee_id] = user.name
-                    except Exception:
-                        pass
+            # Use PMHandler for provider-prefixed project IDs
+            handler = PMHandler.from_db_session(db)
+            tasks = await handler.list_project_tasks(project_id)
+            return tasks
         finally:
             db.close()
-        
-        return [
-            {
-                "id": str(t.id),
-                "title": t.title,
-                "description": t.description,
-                "status": (
-                    t.status.value
-                    if hasattr(t.status, 'value')
-                    else str(t.status)
-                ),
-                "priority": (
-                    t.priority.value
-                    if hasattr(t.priority, 'value')
-                    else str(t.priority)
-                ),
-                "estimated_hours": t.estimated_hours,
-                "start_date": (
-                    t.start_date.isoformat() if t.start_date else None
-                ),
-                "due_date": (
-                    t.due_date.isoformat() if t.due_date else None
-                ),
-                "assigned_to": (
-                    assignee_map.get(t.assignee_id)
-                    if t.assignee_id
-                    else None
-                ),
-            }
-            for t in tasks
-        ]
+    except ValueError as ve:
+        # Handle ValueError from PMHandler and convert to HTTPException
+        error_msg = str(ve)
+        # Extract status code if present in format "(410) message"
+        import re
+        status_match = re.match(r'\((\d{3})\)\s*(.+)', error_msg)
+        if status_match:
+            status_code = int(status_match.group(1))
+            detail = status_match.group(2)
+            raise HTTPException(status_code=status_code, detail=detail)
+        else:
+            # Check for specific error patterns
+            if "Invalid provider ID format" in error_msg:
+                raise HTTPException(status_code=400, detail=error_msg)
+            elif "Provider not found" in error_msg:
+                raise HTTPException(status_code=404, detail=error_msg)
+            elif "not yet implemented" in error_msg:
+                raise HTTPException(status_code=501, detail=error_msg)
+            else:
+                raise HTTPException(status_code=500, detail=error_msg)
     except HTTPException:
         # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
@@ -1474,185 +1206,14 @@ async def pm_list_my_tasks(request: Request):
     """List tasks assigned to current user across all active PM providers"""
     try:
         from database.connection import get_db_session
-        from database.orm_models import PMProviderConnection
-        from src.pm_providers.factory import create_pm_provider
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
         
         try:
-            # Get all active providers
-            providers = db.query(PMProviderConnection).filter(
-                PMProviderConnection.is_active.is_(True)
-            ).all()
-            
-            if not providers:
-                return []
-            
-            all_tasks = []
-            all_projects_map = {}  # Map project_id to project_name across all providers
-            
-            # Fetch tasks from each provider
-            for provider in providers:
-                try:
-                    # Prepare API key - handle empty strings and None
-                    api_key_value = None
-                    if provider.api_key:
-                        api_key_str = str(provider.api_key).strip()
-                        api_key_value = api_key_str if api_key_str else None
-                    
-                    api_token_value = None
-                    if provider.api_token:
-                        api_token_str = str(provider.api_token).strip()
-                        api_token_value = (
-                            api_token_str if api_token_str else None
-                        )
-                    
-                    # Create provider instance
-                    provider_instance = create_pm_provider(
-                        provider_type=str(provider.provider_type),
-                        base_url=str(provider.base_url),
-                        api_key=api_key_value,
-                        api_token=api_token_value,
-                        username=(
-                            str(provider.username).strip()
-                            if provider.username
-                            else None
-                        ),
-                        organization_id=(
-                            str(provider.organization_id)
-                            if provider.organization_id
-                            else None
-                        ),
-                        workspace_id=(
-                            str(provider.workspace_id)
-                            if provider.workspace_id
-                            else None
-                        ),
-                    )
-                    
-                    # Get current user for this provider
-                    try:
-                        logger.info(
-                            f"Attempting to get current user for provider "
-                            f"{provider.id} ({provider.provider_type})..."
-                        )
-                        current_user = await provider_instance.get_current_user()
-                        if not current_user:
-                            # If can't get current user, skip this provider
-                            logger.warning(
-                                f"Cannot determine current user for provider "
-                                f"{provider.id} ({provider.provider_type}). "
-                                f"get_current_user() returned None. "
-                                f"Skipping my tasks for this provider."
-                            )
-                            continue
-                        else:
-                            logger.info(
-                                f"Successfully retrieved current user for provider "
-                                f"{provider.id} ({provider.provider_type}): "
-                                f"id={current_user.id}, name={current_user.name}"
-                            )
-                    except Exception as user_error:
-                        logger.warning(
-                            f"Failed to get current user for provider "
-                            f"{provider.id} ({provider.provider_type}): {user_error}",
-                            exc_info=True
-                        )
-                        continue
-                    
-                    # Fetch projects for this provider to build name mapping
-                    projects = await provider_instance.list_projects()
-                    for p in projects:
-                        # Store with provider_id prefix to ensure uniqueness
-                        prefixed_id = f"{provider.id}:{p.id}"
-                        all_projects_map[prefixed_id] = p.name
-                        # Also store without prefix for backward compatibility
-                        all_projects_map[p.id] = p.name
-                    
-                    # Fetch tasks assigned to current user
-                    # Try fetching with assignee filter first
-                    all_provider_tasks = []
-                    try:
-                        tasks = await provider_instance.list_tasks(
-                            assignee_id=current_user.id
-                        )
-                        all_provider_tasks = tasks
-                    except Exception as e:
-                        error_msg = str(e).lower()
-                        # If JIRA requires project-specific queries, fetch per project
-                        if "unbounded" in error_msg or "search restriction" in error_msg:
-                            logger.info(
-                                f"Provider {provider.provider_type} requires project-specific queries. "
-                                f"Fetching my tasks per project..."
-                            )
-                            # Fetch tasks for each project with assignee filter
-                            for project in projects:
-                                try:
-                                    project_tasks = await provider_instance.list_tasks(
-                                        project_id=project.id,
-                                        assignee_id=current_user.id
-                                    )
-                                    all_provider_tasks.extend(project_tasks)
-                                except Exception as project_error:
-                                    logger.warning(
-                                        f"Failed to fetch my tasks for project {project.id} "
-                                        f"from provider {provider.id}: {project_error}"
-                                    )
-                                    continue
-                        else:
-                            # Re-raise if it's a different error
-                            raise
-                    
-                    tasks = all_provider_tasks
-                    
-                    # Add tasks with project_name mapping
-                    for task in tasks:
-                        task_project_id = task.project_id
-                        project_name = "Unknown"
-                        
-                        if task_project_id:
-                            # Try with provider prefix first
-                            prefixed_id = f"{provider.id}:{task_project_id}"
-                            if prefixed_id in all_projects_map:
-                                project_name = all_projects_map[prefixed_id]
-                            elif task_project_id in all_projects_map:
-                                project_name = all_projects_map[task_project_id]
-                        
-                        all_tasks.append({
-                            "id": str(task.id),
-                            "title": task.title,
-                            "description": task.description,
-                            "status": (
-                                task.status.value
-                                if hasattr(task.status, 'value')
-                                else str(task.status)
-                            ),
-                            "priority": (
-                                task.priority.value
-                                if hasattr(task.priority, 'value')
-                                else str(task.priority)
-                            ),
-                            "estimated_hours": task.estimated_hours,
-                            "start_date": (
-                                task.start_date.isoformat() if task.start_date else None
-                            ),
-                            "due_date": (
-                                task.due_date.isoformat() if task.due_date else None
-                            ),
-                            "project_name": project_name,
-                        })
-                        
-                except Exception as provider_error:
-                    # Log error but continue with other providers
-                    logger.warning(
-                        f"Failed to fetch my tasks from provider "
-                        f"{provider.id} ({provider.provider_type}): "
-                        f"{provider_error}"
-                    )
-                    continue
-            
-            return all_tasks
+            handler = PMHandler.from_db_session(db)
+            return await handler.list_my_tasks()
         finally:
             db.close()
     except HTTPException:
@@ -1670,153 +1231,14 @@ async def pm_list_all_tasks(request: Request):
     """List all tasks across all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
-        from database.orm_models import PMProviderConnection
-        from src.pm_providers.factory import create_pm_provider
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
         
         try:
-            # Get all active providers
-            providers = db.query(PMProviderConnection).filter(
-                PMProviderConnection.is_active.is_(True)
-            ).all()
-            
-            if not providers:
-                return []
-            
-            all_tasks = []
-            all_projects_map = {}  # Map project_id to project_name across all providers
-            
-            # Fetch tasks from each provider
-            for provider in providers:
-                try:
-                    # Prepare API key - handle empty strings and None
-                    api_key_value = None
-                    if provider.api_key:
-                        api_key_str = str(provider.api_key).strip()
-                        api_key_value = api_key_str if api_key_str else None
-                    
-                    api_token_value = None
-                    if provider.api_token:
-                        api_token_str = str(provider.api_token).strip()
-                        api_token_value = (
-                            api_token_str if api_token_str else None
-                        )
-                    
-                    # Create provider instance
-                    provider_instance = create_pm_provider(
-                        provider_type=str(provider.provider_type),
-                        base_url=str(provider.base_url),
-                        api_key=api_key_value,
-                        api_token=api_token_value,
-                        username=(
-                            str(provider.username).strip()
-                            if provider.username
-                            else None
-                        ),
-                        organization_id=(
-                            str(provider.organization_id)
-                            if provider.organization_id
-                            else None
-                        ),
-                        workspace_id=(
-                            str(provider.workspace_id)
-                            if provider.workspace_id
-                            else None
-                        ),
-                    )
-                    
-                    # Fetch projects for this provider to build name mapping
-                    projects = await provider_instance.list_projects()
-                    for p in projects:
-                        # Store with provider_id prefix to ensure uniqueness
-                        prefixed_id = f"{provider.id}:{p.id}"
-                        all_projects_map[prefixed_id] = p.name
-                        # Also store without prefix for backward compatibility
-                        all_projects_map[p.id] = p.name
-                    
-                    # JIRA doesn't allow unbounded queries, so fetch tasks per project
-                    # For other providers, try to fetch all at once first
-                    all_provider_tasks = []
-                    try:
-                        # Try fetching all tasks without project filter (works for OpenProject)
-                        tasks = await provider_instance.list_tasks()
-                        all_provider_tasks = tasks
-                    except Exception as e:
-                        error_msg = str(e).lower()
-                        # If it's a JIRA unbounded query error, fetch per project
-                        if "unbounded" in error_msg or "search restriction" in error_msg:
-                            logger.info(
-                                f"Provider {provider.provider_type} requires project-specific queries. "
-                                f"Fetching tasks per project..."
-                            )
-                            # Fetch tasks for each project
-                            for project in projects:
-                                try:
-                                    project_tasks = await provider_instance.list_tasks(
-                                        project_id=project.id
-                                    )
-                                    all_provider_tasks.extend(project_tasks)
-                                except Exception as project_error:
-                                    logger.warning(
-                                        f"Failed to fetch tasks for project {project.id} "
-                                        f"from provider {provider.id}: {project_error}"
-                                    )
-                                    continue
-                        else:
-                            # Re-raise if it's a different error
-                            raise
-                    
-                    tasks = all_provider_tasks
-                    
-                    # Add tasks with project_name mapping
-                    for task in tasks:
-                        task_project_id = task.project_id
-                        project_name = "Unknown"
-                        
-                        if task_project_id:
-                            # Try with provider prefix first
-                            prefixed_id = f"{provider.id}:{task_project_id}"
-                            if prefixed_id in all_projects_map:
-                                project_name = all_projects_map[prefixed_id]
-                            elif task_project_id in all_projects_map:
-                                project_name = all_projects_map[task_project_id]
-                        
-                        all_tasks.append({
-                            "id": str(task.id),
-                            "title": task.title,
-                            "description": task.description,
-                            "status": (
-                                task.status.value
-                                if hasattr(task.status, 'value')
-                                else str(task.status)
-                            ),
-                            "priority": (
-                                task.priority.value
-                                if hasattr(task.priority, 'value')
-                                else str(task.priority)
-                            ),
-                            "estimated_hours": task.estimated_hours,
-                            "start_date": (
-                                task.start_date.isoformat() if task.start_date else None
-                            ),
-                            "due_date": (
-                                task.due_date.isoformat() if task.due_date else None
-                            ),
-                            "project_name": project_name,
-                        })
-                        
-                except Exception as provider_error:
-                    # Log error but continue with other providers
-                    logger.warning(
-                        f"Failed to fetch tasks from provider "
-                        f"{provider.id} ({provider.provider_type}): "
-                        f"{provider_error}"
-                    )
-                    continue
-            
-            return all_tasks
+            handler = PMHandler.from_db_session(db)
+            return await handler.list_all_tasks()
         finally:
             db.close()
     except HTTPException:
@@ -1882,42 +1304,63 @@ async def pm_update_task(request: Request, task_id: str):
 async def pm_list_sprints(request: Request, project_id: str):
     """List all sprints for a project"""
     try:
-        from src.conversation.flow_manager import ConversationFlowManager
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
         
-        global flow_manager
-        if flow_manager is None:
-            flow_manager = ConversationFlowManager(db_session=db)
-        fm = flow_manager
-        
-        if not fm.pm_provider:
-            raise HTTPException(
-                status_code=503, detail="PM Provider not configured"
-            )
-        
-        sprints = await fm.pm_provider.list_sprints(project_id=project_id)
-        
-        return [
-            {
-                "id": str(s.id),
-                "name": s.name,
-                "start_date": (
-                    s.start_date.isoformat() if s.start_date else None
-                ),
-                "end_date": (
-                    s.end_date.isoformat() if s.end_date else None
-                ),
-                "status": (
-                    s.status.value
-                    if hasattr(s.status, 'value')
-                    else str(s.status)
-                ),
-            }
-            for s in sprints
-        ]
+        try:
+            # Check if project_id has provider prefix
+            if ":" not in project_id:
+                # Fallback: use global flow_manager if no provider_id prefix
+                from src.conversation.flow_manager import ConversationFlowManager
+                
+                global flow_manager
+                if flow_manager is None:
+                    flow_manager = ConversationFlowManager(db_session=db)
+                fm = flow_manager
+                
+                if not fm.pm_provider:
+                    raise HTTPException(
+                        status_code=503, detail="PM Provider not configured"
+                    )
+                
+                sprints = await fm.pm_provider.list_sprints(project_id=project_id)
+                
+                return [
+                    {
+                        "id": str(s.id),
+                        "name": s.name,
+                        "start_date": (
+                            s.start_date.isoformat() if s.start_date else None
+                        ),
+                        "end_date": (
+                            s.end_date.isoformat() if s.end_date else None
+                        ),
+                        "status": (
+                            s.status.value
+                            if hasattr(s.status, 'value')
+                            else str(s.status)
+                        ),
+                    }
+                    for s in sprints
+                ]
+            
+            # Use PMHandler for provider-prefixed project IDs
+            handler = PMHandler.from_db_session(db)
+            return await handler.list_project_sprints(project_id)
+        finally:
+            db.close()
+    except ValueError as ve:
+        # Handle ValueError from PMHandler and convert to HTTPException
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=500, detail=error_msg)
     except HTTPException:
         # Re-raise HTTPExceptions as-is (preserve status codes)
         raise

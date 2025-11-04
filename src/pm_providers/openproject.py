@@ -11,8 +11,8 @@ from datetime import datetime, date
 
 from .base import BasePMProvider
 from .models import (
-    PMUser, PMProject, PMTask, PMSprint,
-    PMProviderConfig
+    PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
+    PMProviderConfig, PMStatusTransition, PMWorkflow
 )
 
 
@@ -692,4 +692,84 @@ class OpenProjectProvider(BasePMProvider):
             return total_hours if total_hours >= 0 else None
         except Exception:
             return None
+    
+    # ==================== Epic Operations ====================
+    
+    async def list_epics(self, project_id: Optional[str] = None) -> List[PMEpic]:
+        """List all epics, optionally filtered by project"""
+        # TODO: Implement after API validation
+        raise NotImplementedError("Epics not yet implemented for OpenProject")
+    
+    async def get_epic(self, epic_id: str) -> Optional[PMEpic]:
+        """Get a single epic by ID"""
+        raise NotImplementedError("Epics not yet implemented for OpenProject")
+    
+    async def create_epic(self, epic: PMEpic) -> PMEpic:
+        """Create a new epic"""
+        raise NotImplementedError("Epics not yet implemented for OpenProject")
+    
+    async def update_epic(self, epic_id: str, updates: Dict[str, Any]) -> PMEpic:
+        """Update an existing epic"""
+        raise NotImplementedError("Epics not yet implemented for OpenProject")
+    
+    async def delete_epic(self, epic_id: str) -> bool:
+        """Delete an epic"""
+        raise NotImplementedError("Epics not yet implemented for OpenProject")
+    
+    # ==================== Component Operations ====================
+    
+    async def list_components(self, project_id: Optional[str] = None) -> List[PMComponent]:
+        """List all components, optionally filtered by project"""
+        # TODO: Implement after API validation
+        raise NotImplementedError("Components not yet implemented for OpenProject")
+    
+    async def get_component(self, component_id: str) -> Optional[PMComponent]:
+        """Get a single component by ID"""
+        raise NotImplementedError("Components not yet implemented for OpenProject")
+    
+    async def create_component(self, component: PMComponent) -> PMComponent:
+        """Create a new component"""
+        raise NotImplementedError("Components not yet implemented for OpenProject")
+    
+    async def update_component(self, component_id: str, updates: Dict[str, Any]) -> PMComponent:
+        """Update an existing component"""
+        raise NotImplementedError("Components not yet implemented for OpenProject")
+    
+    async def delete_component(self, component_id: str) -> bool:
+        """Delete a component"""
+        raise NotImplementedError("Components not yet implemented for OpenProject")
+    
+    # ==================== Label Operations ====================
+    
+    async def list_labels(self, project_id: Optional[str] = None) -> List[PMLabel]:
+        """List all labels, optionally filtered by project"""
+        # TODO: Implement after API validation
+        raise NotImplementedError("Labels not yet implemented for OpenProject")
+    
+    async def get_label(self, label_id: str) -> Optional[PMLabel]:
+        """Get a single label by ID"""
+        raise NotImplementedError("Labels not yet implemented for OpenProject")
+    
+    async def create_label(self, label: PMLabel) -> PMLabel:
+        """Create a new label"""
+        raise NotImplementedError("Labels not yet implemented for OpenProject")
+    
+    async def update_label(self, label_id: str, updates: Dict[str, Any]) -> PMLabel:
+        """Update an existing label"""
+        raise NotImplementedError("Labels not yet implemented for OpenProject")
+    
+    async def delete_label(self, label_id: str) -> bool:
+        """Delete a label"""
+        raise NotImplementedError("Labels not yet implemented for OpenProject")
+    
+    # ==================== Status Workflow Operations ====================
+    
+    async def get_workflow(self, entity_type: str, project_id: Optional[str] = None) -> Optional[PMWorkflow]:
+        """Get the workflow for an entity type"""
+        # TODO: Implement after API validation
+        raise NotImplementedError("Workflows not yet implemented for OpenProject")
+    
+    async def list_workflows(self, project_id: Optional[str] = None) -> List[PMWorkflow]:
+        """List all workflows"""
+        raise NotImplementedError("Workflows not yet implemented for OpenProject")
 

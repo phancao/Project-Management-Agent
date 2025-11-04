@@ -32,7 +32,9 @@ from src.graph.utils import (
 from src.llms.llm import get_configured_llm_models
 from src.podcast.graph.builder import build_graph as build_podcast_graph
 from src.ppt.graph.builder import build_graph as build_ppt_graph
-from src.prompt_enhancer.graph.builder import build_graph as build_prompt_enhancer_graph
+from src.prompt_enhancer.graph.builder import (
+    build_graph as build_prompt_enhancer_graph
+)
 from src.prose.graph.builder import build_graph as build_prose_graph
 from src.rag.builder import build_retriever
 from src.rag.milvus import load_examples
@@ -46,7 +48,10 @@ from src.server.chat_request import (
     TTSRequest,
 )
 from src.server.config_request import ConfigResponse
-from src.server.mcp_request import MCPServerMetadataRequest, MCPServerMetadataResponse
+from src.server.mcp_request import (
+    MCPServerMetadataRequest,
+    MCPServerMetadataResponse,
+)
 from src.server.mcp_utils import load_mcp_tools
 from src.server.rag_request import (
     RAGConfigResponse,
@@ -70,9 +75,13 @@ from src.utils.log_sanitizer import (
 logger = logging.getLogger(__name__)
 
 # Configure Windows event loop policy for PostgreSQL compatibility
-# On Windows, psycopg requires a selector-based event loop, not the default ProactorEventLoop
+# On Windows, psycopg requires a selector-based event loop,
+# not the default ProactorEventLoop
 if os.name == "nt":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    # WindowsSelectorEventLoopPolicy is available on Windows
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()  # type: ignore
+    )
 
 INTERNAL_SERVER_ERROR_DETAIL = "Internal Server Error"
 
@@ -117,10 +126,14 @@ async def chat_stream(request: ChatRequest):
     if request.mcp_settings and not mcp_enabled:
         raise HTTPException(
             status_code=403,
-            detail="MCP server configuration is disabled. Set ENABLE_MCP_SERVER_CONFIGURATION=true to enable MCP features.",
+            detail=(
+                "MCP server configuration is disabled. "
+                "Set ENABLE_MCP_SERVER_CONFIGURATION=true to enable "
+                "MCP features."
+            ),
         )
 
-    thread_id = request.thread_id
+    thread_id = request.thread_id or "__default__"
     if thread_id == "__default__":
         thread_id = str(uuid4())
 
@@ -128,20 +141,20 @@ async def chat_stream(request: ChatRequest):
         _astream_workflow_generator(
             request.model_dump()["messages"],
             thread_id,
-            request.resources,
-            request.max_plan_iterations,
-            request.max_step_num,
-            request.max_search_results,
-            request.auto_accepted_plan,
-            request.interrupt_feedback,
-            request.mcp_settings if mcp_enabled else {},
-            request.enable_background_investigation,
-            request.report_style,
-            request.enable_deep_thinking,
-            request.enable_clarification,
-            request.max_clarification_rounds,
-            request.locale,
-            request.interrupt_before_tools,
+            request.resources or [],
+            request.max_plan_iterations or 1,
+            request.max_step_num or 3,
+            request.max_search_results or 3,
+            request.auto_accepted_plan or False,
+            request.interrupt_feedback or "",
+            (request.mcp_settings if mcp_enabled else {}) or {},
+            request.enable_background_investigation or True,
+            request.report_style or ReportStyle.ACADEMIC,
+            request.enable_deep_thinking or False,
+            request.enable_clarification or False,
+            request.max_clarification_rounds or 3,
+            request.locale or "en-US",
+            request.interrupt_before_tools or [],
         ),
         media_type="text/event-stream",
     )
@@ -201,7 +214,8 @@ def _process_tool_call_chunks(tool_call_chunks):
     _validate_tool_call_chunks(tool_call_chunks)
     
     chunks = []
-    chunk_by_index = {}  # Group chunks by index to handle streaming accumulation
+    # Group chunks by index to handle streaming accumulation
+    chunk_by_index = {}
     
     for chunk in tool_call_chunks:
         index = chunk.get("index")
@@ -228,8 +242,9 @@ def _process_tool_call_chunks(tool_call_chunks):
                     logger.warning(
                         f"Tool name mismatch detected at index {index}: "
                         f"'{stored_name}' != '{chunk_name}'. "
-                        f"This may indicate a streaming artifact or consecutive tool calls "
-                        f"with the same index assignment."
+                        f"This may indicate a streaming artifact or "
+                        f"consecutive tool calls with the same "
+                        f"index assignment."
                     )
                     # Keep the first name to prevent concatenation
                 else:
@@ -298,13 +313,13 @@ def _create_event_stream_message(
 
     # Add optional fields
     if message_chunk.additional_kwargs.get("reasoning_content"):
-        event_stream_message["reasoning_content"] = message_chunk.additional_kwargs[
-            "reasoning_content"
-        ]
+        event_stream_message["reasoning_content"] = (
+            message_chunk.additional_kwargs["reasoning_content"]
+        )
 
     if message_chunk.response_metadata.get("finish_reason"):
-        event_stream_message["finish_reason"] = message_chunk.response_metadata.get(
-            "finish_reason"
+        event_stream_message["finish_reason"] = (
+            message_chunk.response_metadata.get("finish_reason")
         )
 
     return event_stream_message
@@ -341,18 +356,24 @@ def _process_initial_messages(message, thread_id):
         separators=(",", ":"),
     )
     chat_stream_message(
-        thread_id, f"event: message_chunk\ndata: {json_data}\n\n", "none"
+        thread_id,
+        f"event: message_chunk\ndata: {json_data}\n\n",
+        "none"
     )
 
 
-async def _process_message_chunk(message_chunk, message_metadata, thread_id, agent):
+async def _process_message_chunk(
+    message_chunk, message_metadata, thread_id, agent
+):
     """Process a single message chunk and yield appropriate events."""
 
     agent_name = _get_agent_name(agent, message_metadata)
     safe_agent_name = sanitize_agent_name(agent_name)
     safe_thread_id = sanitize_thread_id(thread_id)
-    safe_agent = sanitize_agent_name(agent)
-    logger.debug(f"[{safe_thread_id}] _process_message_chunk started for agent={safe_agent_name}")
+    logger.debug(
+        f"[{safe_thread_id}] _process_message_chunk started for "
+        f"agent={safe_agent_name}"
+    )
     logger.debug(f"[{safe_thread_id}] Extracted agent_name: {safe_agent_name}")
     
     event_stream_message = _create_event_stream_message(
@@ -368,9 +389,14 @@ async def _process_message_chunk(message_chunk, message_metadata, thread_id, age
         # Validate tool_call_id for debugging
         if tool_call_id:
             safe_tool_id = sanitize_log_input(tool_call_id, max_length=100)
-            logger.debug(f"[{safe_thread_id}] ToolMessage with tool_call_id: {safe_tool_id}")
+            logger.debug(
+                f"[{safe_thread_id}] ToolMessage with tool_call_id: "
+                f"{safe_tool_id}"
+            )
         else:
-            logger.warning(f"[{safe_thread_id}] ToolMessage received without tool_call_id")
+            logger.warning(
+                f"[{safe_thread_id}] ToolMessage received without tool_call_id"
+            )
         
         logger.debug(f"[{safe_thread_id}] Yielding tool_call_result event")
         yield _make_event("tool_call_result", event_stream_message)
@@ -378,12 +404,21 @@ async def _process_message_chunk(message_chunk, message_metadata, thread_id, age
         # AI Message - Raw message tokens
         has_tool_calls = bool(message_chunk.tool_calls)
         has_chunks = bool(message_chunk.tool_call_chunks)
-        logger.debug(f"[{safe_thread_id}] Processing AIMessageChunk, tool_calls={has_tool_calls}, tool_call_chunks={has_chunks}")
-        
+        logger.debug(
+            f"[{safe_thread_id}] Processing AIMessageChunk, "
+            f"tool_calls={has_tool_calls}, tool_call_chunks={has_chunks}"
+        )
+
         if message_chunk.tool_calls:
             # AI Message - Tool Call (complete tool calls)
-            safe_tool_names = [sanitize_tool_name(tc.get('name', 'unknown')) for tc in message_chunk.tool_calls]
-            logger.debug(f"[{safe_thread_id}] AIMessageChunk has complete tool_calls: {safe_tool_names}")
+            safe_tool_names = [
+                sanitize_tool_name(tc.get('name', 'unknown'))
+                for tc in message_chunk.tool_calls
+            ]
+            logger.debug(
+                f"[{safe_thread_id}] AIMessageChunk has complete tool_calls: "
+                f"{safe_tool_names}"
+            )
             event_stream_message["tool_calls"] = message_chunk.tool_calls
             
             # Process tool_call_chunks with proper index-based grouping
@@ -392,7 +427,10 @@ async def _process_message_chunk(message_chunk, message_metadata, thread_id, age
             )
             if processed_chunks:
                 event_stream_message["tool_call_chunks"] = processed_chunks
-                safe_chunk_names = [sanitize_tool_name(c.get('name')) for c in processed_chunks]
+                safe_chunk_names = [
+                    sanitize_tool_name(c.get('name'))
+                    for c in processed_chunks
+                ]
                 logger.debug(
                     f"[{safe_thread_id}] Tool calls: {safe_tool_names}, "
                     f"Processed chunks: {len(processed_chunks)}"
@@ -403,43 +441,59 @@ async def _process_message_chunk(message_chunk, message_metadata, thread_id, age
         elif message_chunk.tool_call_chunks:
             # AI Message - Tool Call Chunks (streaming)
             chunks_count = len(message_chunk.tool_call_chunks)
-            logger.debug(f"[{safe_thread_id}] AIMessageChunk has streaming tool_call_chunks: {chunks_count} chunks")
+            logger.debug(
+                f"[{safe_thread_id}] AIMessageChunk has streaming "
+                f"tool_call_chunks: {chunks_count} chunks"
+            )
             processed_chunks = _process_tool_call_chunks(
                 message_chunk.tool_call_chunks
             )
             
-            # Emit separate events for chunks with different indices (tool call boundaries)
+            # Emit separate events for chunks with different indices
+            # (tool call boundaries)
             if processed_chunks:
                 prev_chunk = None
                 for chunk in processed_chunks:
                     current_index = chunk.get("index")
                     
                     # Log index transitions to detect tool call boundaries
-                    if prev_chunk is not None and current_index != prev_chunk.get("index"):
+                    if prev_chunk is not None and (
+                        current_index != prev_chunk.get("index")
+                    ):
                         prev_name = sanitize_tool_name(prev_chunk.get('name'))
                         curr_name = sanitize_tool_name(chunk.get('name'))
                         logger.debug(
                             f"[{safe_thread_id}] Tool call boundary detected: "
-                            f"index {prev_chunk.get('index')} ({prev_name}) -> "
-                            f"{current_index} ({curr_name})"
+                            f"index {prev_chunk.get('index')} "
+                            f"({prev_name}) -> {current_index} ({curr_name})"
                         )
                     
                     prev_chunk = chunk
                 
                 # Include all processed chunks in the event
                 event_stream_message["tool_call_chunks"] = processed_chunks
-                safe_chunk_names = [sanitize_tool_name(c.get('name')) for c in processed_chunks]
+                safe_chunk_names = [
+                    sanitize_tool_name(c.get('name'))
+                    for c in processed_chunks
+                ]
                 logger.debug(
-                    f"[{safe_thread_id}] Streamed {len(processed_chunks)} tool call chunk(s): "
-                    f"{safe_chunk_names}"
+                    f"[{safe_thread_id}] Streamed {len(processed_chunks)} "
+                    f"tool call chunk(s): {safe_chunk_names}"
                 )
             
             logger.debug(f"[{safe_thread_id}] Yielding tool_call_chunks event")
             yield _make_event("tool_call_chunks", event_stream_message)
         else:
             # AI Message - Raw message tokens
-            content_len = len(message_chunk.content) if isinstance(message_chunk.content, str) else 0
-            logger.debug(f"[{safe_thread_id}] AIMessageChunk is raw message tokens, content_len={content_len}")
+            content_len = (
+                len(message_chunk.content)
+                if isinstance(message_chunk.content, str)
+                else 0
+            )
+            logger.debug(
+                f"[{safe_thread_id}] AIMessageChunk is raw message tokens, "
+                f"content_len={content_len}"
+            )
             yield _make_event("message_chunk", event_stream_message)
 
 
@@ -448,7 +502,9 @@ async def _stream_graph_events(
 ):
     """Stream events from the graph and process them."""
     safe_thread_id = sanitize_thread_id(thread_id)
-    logger.debug(f"[{safe_thread_id}] Starting graph event stream with agent nodes")
+    logger.debug(
+        f"[{safe_thread_id}] Starting graph event stream with agent nodes"
+    )
     try:
         event_count = 0
         async for agent, _, event_data in graph_instance.astream(
@@ -459,25 +515,49 @@ async def _stream_graph_events(
         ):
             event_count += 1
             safe_agent = sanitize_agent_name(agent)
-            logger.debug(f"[{safe_thread_id}] Graph event #{event_count} received from agent: {safe_agent}")
+            logger.debug(
+                f"[{safe_thread_id}] Graph event #{event_count} received "
+                f"from agent: {safe_agent}"
+            )
             
             if isinstance(event_data, dict):
                 if "__interrupt__" in event_data:
+                    interrupt_data = event_data['__interrupt__']
+                    ns_value = (
+                        getattr(interrupt_data[0], 'ns', 'unknown')
+                        if isinstance(interrupt_data, (list, tuple))
+                        and len(interrupt_data) > 0
+                        else 'unknown'
+                    )
+                    value_len = (
+                        len(getattr(interrupt_data[0], 'value', ''))
+                        if isinstance(interrupt_data, (list, tuple))
+                        and len(interrupt_data) > 0
+                        and hasattr(interrupt_data[0], 'value')
+                        and hasattr(interrupt_data[0].value, '__len__')
+                        else 'unknown'
+                    )
                     logger.debug(
                         f"[{safe_thread_id}] Processing interrupt event: "
-                        f"ns={getattr(event_data['__interrupt__'][0], 'ns', 'unknown') if isinstance(event_data['__interrupt__'], (list, tuple)) and len(event_data['__interrupt__']) > 0 else 'unknown'}, "
-                        f"value_len={len(getattr(event_data['__interrupt__'][0], 'value', '')) if isinstance(event_data['__interrupt__'], (list, tuple)) and len(event_data['__interrupt__']) > 0 and hasattr(event_data['__interrupt__'][0], 'value') and hasattr(event_data['__interrupt__'][0].value, '__len__') else 'unknown'}"
+                        f"ns={ns_value}, value_len={value_len}"
                     )
                     yield _create_interrupt_event(thread_id, event_data)
-                logger.debug(f"[{safe_thread_id}] Dict event without interrupt, skipping")
+                logger.debug(
+                    f"[{safe_thread_id}] Dict event without interrupt, "
+                    f"skipping"
+                )
                 continue
 
             message_chunk, message_metadata = cast(
                 tuple[BaseMessage, dict[str, Any]], event_data
             )
             
-            safe_node = sanitize_agent_name(message_metadata.get('langgraph_node', 'unknown'))
-            safe_step = sanitize_log_input(message_metadata.get('langgraph_step', 'unknown'))
+            safe_node = sanitize_agent_name(
+                message_metadata.get('langgraph_node', 'unknown')
+            )
+            safe_step = sanitize_log_input(
+                message_metadata.get('langgraph_step', 'unknown')
+            )
             logger.debug(
                 f"[{safe_thread_id}] Processing message chunk: "
                 f"type={type(message_chunk).__name__}, "
@@ -490,8 +570,11 @@ async def _stream_graph_events(
             ):
                 yield event
         
-        logger.debug(f"[{safe_thread_id}] Graph event stream completed. Total events: {event_count}")
-    except Exception as e:
+        logger.debug(
+            f"[{safe_thread_id}] Graph event stream completed. "
+            f"Total events: {event_count}"
+        )
+    except Exception:
         logger.exception(f"[{safe_thread_id}] Error during graph execution")
         yield _make_event(
             "error",
@@ -521,7 +604,9 @@ async def _astream_workflow_generator(
     interrupt_before_tools: Optional[List[str]] = None,
 ):
     safe_thread_id = sanitize_thread_id(thread_id)
-    safe_feedback = sanitize_log_input(interrupt_feedback) if interrupt_feedback else ""
+    safe_feedback = (
+        sanitize_log_input(interrupt_feedback) if interrupt_feedback else ""
+    )
     logger.debug(
         f"[{safe_thread_id}] _astream_workflow_generator starting: "
         f"messages_count={len(messages)}, "
@@ -529,21 +614,30 @@ async def _astream_workflow_generator(
         f"interrupt_feedback={safe_feedback}, "
         f"interrupt_before_tools={interrupt_before_tools}"
     )
-    
+
     # Process initial messages
-    logger.debug(f"[{safe_thread_id}] Processing {len(messages)} initial messages")
+    logger.debug(
+        f"[{safe_thread_id}] Processing {len(messages)} initial messages"
+    )
     for message in messages:
         if isinstance(message, dict) and "content" in message:
             safe_content = sanitize_user_content(message.get('content', ''))
-            logger.debug(f"[{safe_thread_id}] Sending initial message to client: {safe_content}")
+            logger.debug(
+                f"[{safe_thread_id}] Sending initial message to client: "
+                f"{safe_content}"
+            )
             _process_initial_messages(message, thread_id)
 
-    logger.debug(f"[{safe_thread_id}] Reconstructing clarification history")
+    logger.debug(
+        f"[{safe_thread_id}] Reconstructing clarification history"
+    )
     clarification_history = reconstruct_clarification_history(messages)
 
-    logger.debug(f"[{safe_thread_id}] Building clarified topic from history")
-    clarified_topic, clarification_history = build_clarified_topic_from_history(
-        clarification_history
+    logger.debug(
+        f"[{safe_thread_id}] Building clarified topic from history"
+    )
+    clarified_topic, clarification_history = (
+        build_clarified_topic_from_history(clarification_history)
     )
     latest_message_content = messages[-1]["content"] if messages else ""
     clarified_research_topic = clarified_topic or latest_message_content
@@ -569,11 +663,14 @@ async def _astream_workflow_generator(
     }
 
     if not auto_accepted_plan and interrupt_feedback:
-        logger.debug(f"[{safe_thread_id}] Creating resume command with interrupt_feedback: {safe_feedback}")
+        logger.debug(
+            f"[{safe_thread_id}] Creating resume command with "
+            f"interrupt_feedback: {safe_feedback}"
+        )
         resume_msg = f"[{interrupt_feedback}]"
         if messages:
             resume_msg += f" {messages[-1]['content']}"
-        workflow_input = Command(resume=resume_msg)
+        workflow_input = Command(resume=resume_msg)  # type: ignore
 
     # Prepare workflow config
     logger.debug(
@@ -613,43 +710,75 @@ async def _astream_workflow_generator(
     }
     if checkpoint_saver and checkpoint_url != "":
         if checkpoint_url.startswith("postgresql://"):
-            logger.info(f"[{safe_thread_id}] Starting async postgres checkpointer")
-            logger.debug(f"[{safe_thread_id}] Setting up PostgreSQL connection pool")
+            logger.info(
+                f"[{safe_thread_id}] Starting async postgres checkpointer"
+            )
+            logger.debug(
+                f"[{safe_thread_id}] Setting up PostgreSQL connection pool"
+            )
             async with AsyncConnectionPool(
                 checkpoint_url, kwargs=connection_kwargs
             ) as conn:
-                logger.debug(f"[{safe_thread_id}] Initializing AsyncPostgresSaver")
-                checkpointer = AsyncPostgresSaver(conn)
+                logger.debug(
+                    f"[{safe_thread_id}] Initializing AsyncPostgresSaver"
+                )
+                checkpointer = AsyncPostgresSaver(conn)  # type: ignore
                 await checkpointer.setup()
-                logger.debug(f"[{safe_thread_id}] Attaching checkpointer to graph")
+                logger.debug(
+                    f"[{safe_thread_id}] Attaching checkpointer to graph"
+                )
                 graph.checkpointer = checkpointer
                 graph.store = in_memory_store
-                logger.debug(f"[{safe_thread_id}] Starting to stream graph events")
+                logger.debug(
+                    f"[{safe_thread_id}] Starting to stream graph events"
+                )
                 async for event in _stream_graph_events(
                     graph, workflow_input, workflow_config, thread_id
                 ):
                     yield event
-                logger.debug(f"[{safe_thread_id}] Graph event streaming completed")
+                logger.debug(
+                    f"[{safe_thread_id}] Graph event streaming completed"
+                )
 
         if checkpoint_url.startswith("mongodb://"):
-            logger.info(f"[{safe_thread_id}] Starting async mongodb checkpointer")
-            logger.debug(f"[{safe_thread_id}] Setting up MongoDB connection")
+            logger.info(
+                f"[{safe_thread_id}] Starting async mongodb checkpointer"
+            )
+            logger.debug(
+                f"[{safe_thread_id}] Setting up MongoDB connection"
+            )
             async with AsyncMongoDBSaver.from_conn_string(
                 checkpoint_url
-            ) as checkpointer:
-                logger.debug(f"[{safe_thread_id}] Attaching MongoDB checkpointer to graph")
-                graph.checkpointer = checkpointer
+            ) as mongo_checkpointer:  # type: ignore[assignment]
+                # Type ignore: MongoDB checkpointer is compatible
+                # with graph.checkpointer interface
+                logger.debug(
+                    f"[{safe_thread_id}] Attaching MongoDB checkpointer "
+                    f"to graph"
+                )
+                # Type ignore: MongoDB checkpointer compatible interface
+                # type: ignore[assignment]
+                graph.checkpointer = mongo_checkpointer
                 graph.store = in_memory_store
-                logger.debug(f"[{safe_thread_id}] Starting to stream graph events")
+                logger.debug(
+                    f"[{safe_thread_id}] Starting to stream graph events"
+                )
                 async for event in _stream_graph_events(
                     graph, workflow_input, workflow_config, thread_id
                 ):
                     yield event
-                logger.debug(f"[{safe_thread_id}] Graph event streaming completed")
+                logger.debug(
+                    f"[{safe_thread_id}] Graph event streaming completed"
+                )
     else:
-        logger.debug(f"[{safe_thread_id}] No checkpointer configured, using in-memory graph")
+        logger.debug(
+            f"[{safe_thread_id}] No checkpointer configured, "
+            f"using in-memory graph"
+        )
         # Use graph without MongoDB checkpointer
-        logger.debug(f"[{safe_thread_id}] Starting to stream graph events")
+        logger.debug(
+            f"[{safe_thread_id}] Starting to stream graph events"
+        )
         async for event in _stream_graph_events(
             graph, workflow_input, workflow_config, thread_id
         ):
@@ -657,7 +786,7 @@ async def _astream_workflow_generator(
         logger.debug(f"[{safe_thread_id}] Graph event streaming completed")
 
 
-def _make_event(event_type: str, data: dict[str, any]):
+def _make_event(event_type: str, data: dict[str, Any]):
     if data.get("content") == "":
         data.pop("content")
     # Ensure JSON serialization with proper encoding
@@ -675,7 +804,9 @@ def _make_event(event_type: str, data: dict[str, any]):
     except (TypeError, ValueError) as e:
         logger.error(f"Error serializing event data: {e}")
         # Return a safe error event
-        error_data = json.dumps({"error": "Serialization failed"}, ensure_ascii=False)
+        error_data = json.dumps(
+            {"error": "Serialization failed"}, ensure_ascii=False
+        )
         return f"event: error\ndata: {error_data}\n\n"
 
 
@@ -684,7 +815,9 @@ async def text_to_speech(request: TTSRequest):
     """Convert text to speech using volcengine TTS API."""
     app_id = get_str_env("VOLCENGINE_TTS_APPID", "")
     if not app_id:
-        raise HTTPException(status_code=400, detail="VOLCENGINE_TTS_APPID is not set")
+        raise HTTPException(
+            status_code=400, detail="VOLCENGINE_TTS_APPID is not set"
+        )
     access_token = get_str_env("VOLCENGINE_TTS_ACCESS_TOKEN", "")
     if not access_token:
         raise HTTPException(
@@ -693,7 +826,9 @@ async def text_to_speech(request: TTSRequest):
 
     try:
         cluster = get_str_env("VOLCENGINE_TTS_CLUSTER", "volcano_tts")
-        voice_type = get_str_env("VOLCENGINE_TTS_VOICE_TYPE", "BV700_V2_streaming")
+        voice_type = get_str_env(
+            "VOLCENGINE_TTS_VOICE_TYPE", "BV700_V2_streaming"
+        )
 
         tts_client = VolcengineTTS(
             appid=app_id,
@@ -701,16 +836,16 @@ async def text_to_speech(request: TTSRequest):
             cluster=cluster,
             voice_type=voice_type,
         )
-        # Call the TTS API
+        # Call the TTS API with defaults for optional parameters
         result = tts_client.text_to_speech(
             text=request.text[:1024],
-            encoding=request.encoding,
-            speed_ratio=request.speed_ratio,
-            volume_ratio=request.volume_ratio,
-            pitch_ratio=request.pitch_ratio,
-            text_type=request.text_type,
-            with_frontend=request.with_frontend,
-            frontend_type=request.frontend_type,
+            encoding=request.encoding or "mp3",
+            speed_ratio=request.speed_ratio or 1.0,
+            volume_ratio=request.volume_ratio or 1.0,
+            pitch_ratio=request.pitch_ratio or 1.0,
+            text_type=request.text_type or "plain",
+            with_frontend=request.with_frontend or 1,
+            frontend_type=request.frontend_type or "unitTson",
         )
 
         if not result["success"]:
@@ -732,7 +867,9 @@ async def text_to_speech(request: TTSRequest):
 
     except Exception as e:
         logger.exception(f"Error in TTS endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL)
+        raise HTTPException(
+            status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL
+        )
 
 
 @app.post("/api/podcast/generate")
@@ -746,7 +883,9 @@ async def generate_podcast(request: GeneratePodcastRequest):
         return Response(content=audio_bytes, media_type="audio/mp3")
     except Exception as e:
         logger.exception(f"Error occurred during podcast generation: {str(e)}")
-        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL)
+        raise HTTPException(
+            status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL
+        )
 
 
 @app.post("/api/ppt/generate")
@@ -761,11 +900,16 @@ async def generate_ppt(request: GeneratePPTRequest):
             ppt_bytes = f.read()
         return Response(
             content=ppt_bytes,
-            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            media_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "presentationml.presentation"
+            ),
         )
     except Exception as e:
         logger.exception(f"Error occurred during ppt generation: {str(e)}")
-        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL)
+        raise HTTPException(
+            status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL
+        )
 
 
 @app.post("/api/prose/generate")
@@ -789,7 +933,9 @@ async def generate_prose(request: GenerateProseRequest):
         )
     except Exception as e:
         logger.exception(f"Error occurred during prose generation: {str(e)}")
-        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL)
+        raise HTTPException(
+            status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL
+        )
 
 
 @app.post("/api/prompt/enhance")
@@ -830,17 +976,25 @@ async def enhance_prompt(request: EnhancePromptRequest):
         return {"result": final_state["output"]}
     except Exception as e:
         logger.exception(f"Error occurred during prompt enhancement: {str(e)}")
-        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL)
+        raise HTTPException(
+            status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL
+        )
 
 
-@app.post("/api/mcp/server/metadata", response_model=MCPServerMetadataResponse)
+@app.post(
+    "/api/mcp/server/metadata", response_model=MCPServerMetadataResponse
+)
 async def mcp_server_metadata(request: MCPServerMetadataRequest):
     """Get information about an MCP server."""
     # Check if MCP server configuration is enabled
     if not get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False):
         raise HTTPException(
             status_code=403,
-            detail="MCP server configuration is disabled. Set ENABLE_MCP_SERVER_CONFIGURATION=true to enable MCP features.",
+            detail=(
+                "MCP server configuration is disabled. "
+                "Set ENABLE_MCP_SERVER_CONFIGURATION=true to enable "
+                "MCP features."
+            ),
         )
 
     try:
@@ -876,7 +1030,9 @@ async def mcp_server_metadata(request: MCPServerMetadataRequest):
         return response
     except Exception as e:
         logger.exception(f"Error in MCP server metadata endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL)
+        raise HTTPException(
+            status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL
+        )
 
 
 @app.get("/api/rag/config", response_model=RAGConfigResponse)
@@ -890,7 +1046,9 @@ async def rag_resources(request: Annotated[RAGResourceRequest, Query()]):
     """Get the resources of the RAG."""
     retriever = build_retriever()
     if retriever:
-        return RAGResourcesResponse(resources=retriever.list_resources(request.query))
+        return RAGResourcesResponse(
+            resources=retriever.list_resources(request.query)
+        )
     return RAGResourcesResponse(resources=[])
 
 
@@ -903,8 +1061,11 @@ async def config():
     )
 
 # Project Management Agent API endpoints
-# NOTE: Legacy PostgreSQL REST endpoints removed - all PM operations now go through /api/pm/chat/stream
-# This endpoint uses PM Providers (OpenProject, JIRA, etc.) instead of local database
+# NOTE: Legacy PostgreSQL REST endpoints removed - all PM operations
+# now go through /api/pm/chat/stream
+# This endpoint uses PM Providers (OpenProject, JIRA, etc.)
+# instead of local database
+
 
 # PM REST endpoints for UI data fetching
 @app.get("/api/pm/projects")
@@ -921,7 +1082,7 @@ async def pm_list_projects(request: Request):
         try:
             # Get all active providers
             providers = db.query(PMProviderConnection).filter(
-                PMProviderConnection.is_active == True
+                PMProviderConnection.is_active.is_(True)
             ).all()
             
             if not providers:
@@ -932,15 +1093,40 @@ async def pm_list_projects(request: Request):
             # Fetch projects from each provider
             for provider in providers:
                 try:
+                    # Prepare API key - handle empty strings and None
+                    api_key_value = None
+                    if provider.api_key:
+                        api_key_str = str(provider.api_key).strip()
+                        api_key_value = api_key_str if api_key_str else None
+                    
+                    api_token_value = None
+                    if provider.api_token:
+                        api_token_str = str(provider.api_token).strip()
+                        api_token_value = (
+                            api_token_str if api_token_str else None
+                        )
+                    
                     # Create provider instance
                     provider_instance = create_pm_provider(
-                        provider_type=provider.provider_type,
-                        base_url=provider.base_url,
-                        api_key=provider.api_key,
-                        api_token=provider.api_token,
-                        username=provider.username,
-                        organization_id=provider.organization_id,
-                        workspace_id=provider.workspace_id,
+                        provider_type=str(provider.provider_type),
+                        base_url=str(provider.base_url),
+                        api_key=api_key_value,
+                        api_token=api_token_value,
+                        username=(
+                            str(provider.username).strip()
+                            if provider.username
+                            else None
+                        ),
+                        organization_id=(
+                            str(provider.organization_id)
+                            if provider.organization_id
+                            else None
+                        ),
+                        workspace_id=(
+                            str(provider.workspace_id)
+                            if provider.workspace_id
+                            else None
+                        ),
                     )
                     
                     # Fetch projects
@@ -953,8 +1139,8 @@ async def pm_list_projects(request: Request):
                             "name": p.name,
                             "description": p.description or "",
                             "status": (
-                                p.status.value 
-                                if hasattr(p.status, 'value') 
+                                p.status.value
+                                if p.status and hasattr(p.status, 'value')
                                 else str(p.status) if p.status else "None"
                             ),
                         })
@@ -962,7 +1148,8 @@ async def pm_list_projects(request: Request):
                     # Log error but continue with other providers
                     logger.warning(
                         f"Failed to fetch projects from provider "
-                        f"{provider.id} ({provider.provider_type}): {provider_error}"
+                        f"{provider.id} ({provider.provider_type}): "
+                        f"{provider_error}"
                     )
                     continue
             
@@ -980,49 +1167,305 @@ async def pm_list_projects(request: Request):
 async def pm_list_tasks(request: Request, project_id: str):
     """List all tasks for a project"""
     try:
-        from src.conversation.flow_manager import ConversationFlowManager
         from database.connection import get_db_session
+        from database.orm_models import PMProviderConnection
+        from src.pm_providers.factory import create_pm_provider
+        from uuid import UUID
         
         db_gen = get_db_session()
         db = next(db_gen)
         
-        global flow_manager
-        if flow_manager is None:
-            flow_manager = ConversationFlowManager(db_session=db)
-        fm = flow_manager
-        
-        if not fm.pm_provider:
-            raise HTTPException(status_code=503, detail="PM Provider not configured")
-        
-        tasks = await fm.pm_provider.list_tasks(project_id=project_id)
-        
-        # Build assignee map if needed
-        assignee_map = {}
-        for task in tasks:
-            if task.assignee_id and task.assignee_id not in assignee_map:
-                try:
-                    user = await fm.pm_provider.get_user(task.assignee_id)
-                    if user:
-                        assignee_map[task.assignee_id] = user.name
-                except:
-                    pass
+        try:
+            # Parse project_id format: provider_id:actual_project_id
+            if ":" in project_id:
+                parts = project_id.split(":", 1)
+                provider_id_str = parts[0]
+                actual_project_id = parts[1]
+            else:
+                # Fallback: use global flow_manager if no provider_id prefix
+                from src.conversation.flow_manager import (
+                    ConversationFlowManager
+                )
+                global flow_manager
+                if flow_manager is None:
+                    flow_manager = ConversationFlowManager(db_session=db)
+                fm = flow_manager
+                
+                if not fm.pm_provider:
+                    raise HTTPException(
+                        status_code=503, detail="PM Provider not configured"
+                    )
+                
+                tasks = await fm.pm_provider.list_tasks(
+                    project_id=project_id
+                )
+                # Continue with assignee map logic below
+                assignee_map = {}
+                for task in tasks:
+                    if (task.assignee_id and
+                            task.assignee_id not in assignee_map):
+                        try:
+                            user = await fm.pm_provider.get_user(
+                                task.assignee_id
+                            )
+                            if user:
+                                assignee_map[task.assignee_id] = user.name
+                        except Exception:
+                            pass
+                
+                return [
+                    {
+                        "id": str(t.id),
+                        "title": t.title,
+                        "description": t.description,
+                        "status": (
+                            t.status.value
+                            if hasattr(t.status, 'value')
+                            else str(t.status)
+                        ),
+                        "priority": (
+                            t.priority.value
+                            if hasattr(t.priority, 'value')
+                            else str(t.priority)
+                        ),
+                        "estimated_hours": t.estimated_hours,
+                        "start_date": (
+                            t.start_date.isoformat() if t.start_date else None
+                        ),
+                        "due_date": (
+                            t.due_date.isoformat() if t.due_date else None
+                        ),
+                        "assigned_to": (
+                            assignee_map.get(t.assignee_id)
+                            if t.assignee_id
+                            else None
+                        ),
+                    }
+                    for t in tasks
+                ]
+            
+            # Parse provider_id as UUID
+            try:
+                provider_uuid = UUID(provider_id_str)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid provider ID format: {provider_id_str}"
+                )
+            
+            # Get provider from database
+            provider = db.query(PMProviderConnection).filter(
+                PMProviderConnection.id == provider_uuid,
+                PMProviderConnection.is_active.is_(True)
+            ).first()
+            
+            if not provider:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Provider not found: {provider_id_str}"
+                )
+            
+            # Log provider details for debugging
+            logger.info(
+                f"Using provider: id={provider.id}, "
+                f"type={provider.provider_type}, "
+                f"base_url={provider.base_url}, "
+                f"project_id={actual_project_id}"
+            )
+            
+            # Prepare API key - handle empty strings and None
+            api_key_value = None
+            if provider.api_key:
+                api_key_str = str(provider.api_key).strip()
+                api_key_value = api_key_str if api_key_str else None
+            
+            api_token_value = None
+            if provider.api_token:
+                api_token_str = str(provider.api_token).strip()
+                api_token_value = api_token_str if api_token_str else None
+            
+            # Create provider instance
+            provider_instance = create_pm_provider(
+                provider_type=str(provider.provider_type),
+                base_url=str(provider.base_url),
+                api_key=api_key_value,
+                api_token=api_token_value,
+                username=(
+                    str(provider.username).strip()
+                    if provider.username
+                    else None
+                ),
+                organization_id=(
+                    str(provider.organization_id)
+                    if provider.organization_id
+                    else None
+                ),
+                workspace_id=(
+                    str(provider.workspace_id)
+                    if provider.workspace_id
+                    else None
+                ),
+            )
+            
+            # Fetch tasks using actual project ID
+            try:
+                logger.info(
+                    "=" * 80
+                )
+                logger.info(
+                    "CALLING PROVIDER list_tasks: "
+                    "provider=%s, project_id=%s, actual_project_id=%s",
+                    provider.provider_type, project_id, actual_project_id
+                )
+                logger.info("=" * 80)
+                
+                tasks = await provider_instance.list_tasks(
+                    project_id=actual_project_id
+                )
+                
+                logger.info(
+                    "Provider returned %d tasks successfully",
+                    len(tasks) if tasks else 0
+                )
+                logger.info("=" * 80)
+            except NotImplementedError:
+                logger.warning(
+                    f"list_tasks not implemented for provider "
+                    f"{provider.provider_type}"
+                )
+                raise HTTPException(
+                    status_code=501,
+                    detail=(
+                        f"list_tasks is not yet implemented for "
+                        f"{provider.provider_type} provider"
+                    )
+                )
+            except Exception as list_error:
+                error_msg = str(list_error)
+                logger.error(
+                    f"Failed to list tasks for project {actual_project_id} "
+                    f"from provider {provider_id_str} "
+                    f"(type: {provider.provider_type}): {error_msg}"
+                )
+                import traceback
+                logger.error(traceback.format_exc())
+                
+                # Extract HTTP status code from error message if present
+                # Check for common patterns: "410 Gone", "(410 Gone)", etc.
+                import re
+                status_code = None
+                status_patterns = [
+                    r'\((\d{3})\s+(?:Gone|Not Found|Unauthorized|Forbidden|'
+                    r'Bad Request|Client Error)\)',
+                    r'\((\d{3})\)',  # Check for status code like "(410)"
+                    r'\b(\d{3})\s+(?:Gone|Not Found|Unauthorized|Forbidden|'
+                    r'Bad Request|Client Error)',
+                    r'\b(?:status code|HTTP|status)\s*:?\s*(\d{3})\b',
+                ]
+                for pattern in status_patterns:
+                    match = re.search(pattern, error_msg, re.IGNORECASE)
+                    if match:
+                        try:
+                            status_code = int(match.group(1))
+                            break
+                        except (ValueError, IndexError):
+                            continue
+                
+                # Map status codes from provider errors to HTTP status codes
+                # Only use extracted status code if it's a valid HTTP error
+                # code (4xx or 5xx)
+                if status_code and 400 <= status_code < 600:
+                    http_status = status_code
+                else:
+                    # Default to 500 if no valid status code found
+                    http_status = 500
+                
+                # Provide more helpful error message if wrong provider type
+                if ("jira" in error_msg.lower() and
+                        provider.provider_type.lower() != "jira"):
+                    raise HTTPException(
+                        status_code=http_status,
+                        detail=(
+                            f"Provider mismatch: The provider with ID "
+                            f"{provider_id_str} is configured as "
+                            f"'{provider.provider_type}' but the error "
+                            f"suggests it's using Jira. Please check your "
+                            f"provider configuration. Original error: "
+                            f"{error_msg}"
+                        )
+                    )
+                elif ("openproject" in error_msg.lower() and
+                      provider.provider_type.lower() != "openproject"):
+                    raise HTTPException(
+                        status_code=http_status,
+                        detail=(
+                            f"Provider mismatch: The provider with ID "
+                            f"{provider_id_str} is configured as "
+                            f"'{provider.provider_type}' but the error "
+                            f"suggests it's using OpenProject. Please check "
+                            f"your provider configuration. Original error: "
+                            f"{error_msg}"
+                        )
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=http_status,
+                        detail=error_msg
+                    )
+            
+            # Build assignee map if needed
+            assignee_map = {}
+            for task in tasks:
+                if (task.assignee_id and
+                        task.assignee_id not in assignee_map):
+                    try:
+                        user = await provider_instance.get_user(
+                            task.assignee_id
+                        )
+                        if user:
+                            assignee_map[task.assignee_id] = user.name
+                    except Exception:
+                        pass
+        finally:
+            db.close()
         
         return [
             {
                 "id": str(t.id),
                 "title": t.title,
                 "description": t.description,
-                "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
-                "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
+                "status": (
+                    t.status.value
+                    if hasattr(t.status, 'value')
+                    else str(t.status)
+                ),
+                "priority": (
+                    t.priority.value
+                    if hasattr(t.priority, 'value')
+                    else str(t.priority)
+                ),
                 "estimated_hours": t.estimated_hours,
-                "start_date": t.start_date.isoformat() if t.start_date else None,
-                "due_date": t.due_date.isoformat() if t.due_date else None,
-                "assigned_to": assignee_map.get(t.assignee_id) if t.assignee_id else None,
+                "start_date": (
+                    t.start_date.isoformat() if t.start_date else None
+                ),
+                "due_date": (
+                    t.due_date.isoformat() if t.due_date else None
+                ),
+                "assigned_to": (
+                    assignee_map.get(t.assignee_id)
+                    if t.assignee_id
+                    else None
+                ),
             }
             for t in tasks
         ]
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (preserve status codes)
+        raise
     except Exception as e:
         logger.error(f"Failed to list tasks: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1040,64 +1483,181 @@ async def pm_list_my_tasks(request: Request):
         try:
             # Get all active providers
             providers = db.query(PMProviderConnection).filter(
-                PMProviderConnection.is_active == True
+                PMProviderConnection.is_active.is_(True)
             ).all()
             
             if not providers:
                 return []
             
             all_tasks = []
+            all_projects_map = {}  # Map project_id to project_name across all providers
             
             # Fetch tasks from each provider
             for provider in providers:
                 try:
+                    # Prepare API key - handle empty strings and None
+                    api_key_value = None
+                    if provider.api_key:
+                        api_key_str = str(provider.api_key).strip()
+                        api_key_value = api_key_str if api_key_str else None
+                    
+                    api_token_value = None
+                    if provider.api_token:
+                        api_token_str = str(provider.api_token).strip()
+                        api_token_value = (
+                            api_token_str if api_token_str else None
+                        )
+                    
                     # Create provider instance
                     provider_instance = create_pm_provider(
-                        provider_type=provider.provider_type,
-                        base_url=provider.base_url,
-                        api_key=provider.api_key,
-                        api_token=provider.api_token,
-                        username=provider.username,
-                        organization_id=provider.organization_id,
-                        workspace_id=provider.workspace_id,
+                        provider_type=str(provider.provider_type),
+                        base_url=str(provider.base_url),
+                        api_key=api_key_value,
+                        api_token=api_token_value,
+                        username=(
+                            str(provider.username).strip()
+                            if provider.username
+                            else None
+                        ),
+                        organization_id=(
+                            str(provider.organization_id)
+                            if provider.organization_id
+                            else None
+                        ),
+                        workspace_id=(
+                            str(provider.workspace_id)
+                            if provider.workspace_id
+                            else None
+                        ),
                     )
                     
                     # Get current user for this provider
-                    current_user = await provider_instance.get_current_user()
-                    if not current_user:
+                    try:
+                        logger.info(
+                            f"Attempting to get current user for provider "
+                            f"{provider.id} ({provider.provider_type})..."
+                        )
+                        current_user = await provider_instance.get_current_user()
+                        if not current_user:
+                            # If can't get current user, skip this provider
+                            logger.warning(
+                                f"Cannot determine current user for provider "
+                                f"{provider.id} ({provider.provider_type}). "
+                                f"get_current_user() returned None. "
+                                f"Skipping my tasks for this provider."
+                            )
+                            continue
+                        else:
+                            logger.info(
+                                f"Successfully retrieved current user for provider "
+                                f"{provider.id} ({provider.provider_type}): "
+                                f"id={current_user.id}, name={current_user.name}"
+                            )
+                    except Exception as user_error:
+                        logger.warning(
+                            f"Failed to get current user for provider "
+                            f"{provider.id} ({provider.provider_type}): {user_error}",
+                            exc_info=True
+                        )
                         continue
                     
-                    # Fetch tasks assigned to current user
-                    tasks = await provider_instance.list_tasks(assignee_id=str(current_user.id))
-                    
-                    # Fetch projects for name mapping
+                    # Fetch projects for this provider to build name mapping
                     projects = await provider_instance.list_projects()
-                    project_map = {p.id: p.name for p in projects}
+                    for p in projects:
+                        # Store with provider_id prefix to ensure uniqueness
+                        prefixed_id = f"{provider.id}:{p.id}"
+                        all_projects_map[prefixed_id] = p.name
+                        # Also store without prefix for backward compatibility
+                        all_projects_map[p.id] = p.name
                     
-                    # Prefix task ID with provider_id to ensure uniqueness
-                    for t in tasks:
+                    # Fetch tasks assigned to current user
+                    # Try fetching with assignee filter first
+                    all_provider_tasks = []
+                    try:
+                        tasks = await provider_instance.list_tasks(
+                            assignee_id=current_user.id
+                        )
+                        all_provider_tasks = tasks
+                    except Exception as e:
+                        error_msg = str(e).lower()
+                        # If JIRA requires project-specific queries, fetch per project
+                        if "unbounded" in error_msg or "search restriction" in error_msg:
+                            logger.info(
+                                f"Provider {provider.provider_type} requires project-specific queries. "
+                                f"Fetching my tasks per project..."
+                            )
+                            # Fetch tasks for each project with assignee filter
+                            for project in projects:
+                                try:
+                                    project_tasks = await provider_instance.list_tasks(
+                                        project_id=project.id,
+                                        assignee_id=current_user.id
+                                    )
+                                    all_provider_tasks.extend(project_tasks)
+                                except Exception as project_error:
+                                    logger.warning(
+                                        f"Failed to fetch my tasks for project {project.id} "
+                                        f"from provider {provider.id}: {project_error}"
+                                    )
+                                    continue
+                        else:
+                            # Re-raise if it's a different error
+                            raise
+                    
+                    tasks = all_provider_tasks
+                    
+                    # Add tasks with project_name mapping
+                    for task in tasks:
+                        task_project_id = task.project_id
+                        project_name = "Unknown"
+                        
+                        if task_project_id:
+                            # Try with provider prefix first
+                            prefixed_id = f"{provider.id}:{task_project_id}"
+                            if prefixed_id in all_projects_map:
+                                project_name = all_projects_map[prefixed_id]
+                            elif task_project_id in all_projects_map:
+                                project_name = all_projects_map[task_project_id]
+                        
                         all_tasks.append({
-                            "id": f"{provider.id}:{t.id}",
-                            "title": t.title,
-                            "description": t.description,
-                            "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
-                            "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
-                            "estimated_hours": t.estimated_hours,
-                            "start_date": t.start_date.isoformat() if t.start_date else None,
-                            "due_date": t.due_date.isoformat() if t.due_date else None,
-                            "project_name": project_map.get(t.project_id, "Unknown") if t.project_id else "Unknown",
+                            "id": str(task.id),
+                            "title": task.title,
+                            "description": task.description,
+                            "status": (
+                                task.status.value
+                                if hasattr(task.status, 'value')
+                                else str(task.status)
+                            ),
+                            "priority": (
+                                task.priority.value
+                                if hasattr(task.priority, 'value')
+                                else str(task.priority)
+                            ),
+                            "estimated_hours": task.estimated_hours,
+                            "start_date": (
+                                task.start_date.isoformat() if task.start_date else None
+                            ),
+                            "due_date": (
+                                task.due_date.isoformat() if task.due_date else None
+                            ),
+                            "project_name": project_name,
                         })
+                        
                 except Exception as provider_error:
                     # Log error but continue with other providers
                     logger.warning(
-                        f"Failed to fetch tasks from provider "
-                        f"{provider.id} ({provider.provider_type}): {provider_error}"
+                        f"Failed to fetch my tasks from provider "
+                        f"{provider.id} ({provider.provider_type}): "
+                        f"{provider_error}"
                     )
                     continue
             
             return all_tasks
         finally:
             db.close()
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (preserve status codes)
+        raise
     except Exception as e:
         logger.error(f"Failed to list my tasks: {e}")
         import traceback
@@ -1107,7 +1667,7 @@ async def pm_list_my_tasks(request: Request):
 
 @app.get("/api/pm/tasks/all")
 async def pm_list_all_tasks(request: Request):
-    """List all tasks across all projects and all active PM providers"""
+    """List all tasks across all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
@@ -1119,59 +1679,149 @@ async def pm_list_all_tasks(request: Request):
         try:
             # Get all active providers
             providers = db.query(PMProviderConnection).filter(
-                PMProviderConnection.is_active == True
+                PMProviderConnection.is_active.is_(True)
             ).all()
             
             if not providers:
                 return []
             
             all_tasks = []
+            all_projects_map = {}  # Map project_id to project_name across all providers
             
             # Fetch tasks from each provider
             for provider in providers:
                 try:
+                    # Prepare API key - handle empty strings and None
+                    api_key_value = None
+                    if provider.api_key:
+                        api_key_str = str(provider.api_key).strip()
+                        api_key_value = api_key_str if api_key_str else None
+                    
+                    api_token_value = None
+                    if provider.api_token:
+                        api_token_str = str(provider.api_token).strip()
+                        api_token_value = (
+                            api_token_str if api_token_str else None
+                        )
+                    
                     # Create provider instance
                     provider_instance = create_pm_provider(
-                        provider_type=provider.provider_type,
-                        base_url=provider.base_url,
-                        api_key=provider.api_key,
-                        api_token=provider.api_token,
-                        username=provider.username,
-                        organization_id=provider.organization_id,
-                        workspace_id=provider.workspace_id,
+                        provider_type=str(provider.provider_type),
+                        base_url=str(provider.base_url),
+                        api_key=api_key_value,
+                        api_token=api_token_value,
+                        username=(
+                            str(provider.username).strip()
+                            if provider.username
+                            else None
+                        ),
+                        organization_id=(
+                            str(provider.organization_id)
+                            if provider.organization_id
+                            else None
+                        ),
+                        workspace_id=(
+                            str(provider.workspace_id)
+                            if provider.workspace_id
+                            else None
+                        ),
                     )
                     
-                    # Get all tasks without filtering by assignee
-                    tasks = await provider_instance.list_tasks()
-                    
-                    # Fetch projects for name mapping
+                    # Fetch projects for this provider to build name mapping
                     projects = await provider_instance.list_projects()
-                    project_map = {p.id: p.name for p in projects}
+                    for p in projects:
+                        # Store with provider_id prefix to ensure uniqueness
+                        prefixed_id = f"{provider.id}:{p.id}"
+                        all_projects_map[prefixed_id] = p.name
+                        # Also store without prefix for backward compatibility
+                        all_projects_map[p.id] = p.name
                     
-                    # Prefix task ID with provider_id to ensure uniqueness
-                    for t in tasks:
+                    # JIRA doesn't allow unbounded queries, so fetch tasks per project
+                    # For other providers, try to fetch all at once first
+                    all_provider_tasks = []
+                    try:
+                        # Try fetching all tasks without project filter (works for OpenProject)
+                        tasks = await provider_instance.list_tasks()
+                        all_provider_tasks = tasks
+                    except Exception as e:
+                        error_msg = str(e).lower()
+                        # If it's a JIRA unbounded query error, fetch per project
+                        if "unbounded" in error_msg or "search restriction" in error_msg:
+                            logger.info(
+                                f"Provider {provider.provider_type} requires project-specific queries. "
+                                f"Fetching tasks per project..."
+                            )
+                            # Fetch tasks for each project
+                            for project in projects:
+                                try:
+                                    project_tasks = await provider_instance.list_tasks(
+                                        project_id=project.id
+                                    )
+                                    all_provider_tasks.extend(project_tasks)
+                                except Exception as project_error:
+                                    logger.warning(
+                                        f"Failed to fetch tasks for project {project.id} "
+                                        f"from provider {provider.id}: {project_error}"
+                                    )
+                                    continue
+                        else:
+                            # Re-raise if it's a different error
+                            raise
+                    
+                    tasks = all_provider_tasks
+                    
+                    # Add tasks with project_name mapping
+                    for task in tasks:
+                        task_project_id = task.project_id
+                        project_name = "Unknown"
+                        
+                        if task_project_id:
+                            # Try with provider prefix first
+                            prefixed_id = f"{provider.id}:{task_project_id}"
+                            if prefixed_id in all_projects_map:
+                                project_name = all_projects_map[prefixed_id]
+                            elif task_project_id in all_projects_map:
+                                project_name = all_projects_map[task_project_id]
+                        
                         all_tasks.append({
-                            "id": f"{provider.id}:{t.id}",
-                            "title": t.title,
-                            "description": t.description,
-                            "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
-                            "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
-                            "estimated_hours": t.estimated_hours,
-                            "start_date": t.start_date.isoformat() if t.start_date else None,
-                            "due_date": t.due_date.isoformat() if t.due_date else None,
-                            "project_name": project_map.get(t.project_id, "Unknown") if t.project_id else "Unknown",
+                            "id": str(task.id),
+                            "title": task.title,
+                            "description": task.description,
+                            "status": (
+                                task.status.value
+                                if hasattr(task.status, 'value')
+                                else str(task.status)
+                            ),
+                            "priority": (
+                                task.priority.value
+                                if hasattr(task.priority, 'value')
+                                else str(task.priority)
+                            ),
+                            "estimated_hours": task.estimated_hours,
+                            "start_date": (
+                                task.start_date.isoformat() if task.start_date else None
+                            ),
+                            "due_date": (
+                                task.due_date.isoformat() if task.due_date else None
+                            ),
+                            "project_name": project_name,
                         })
+                        
                 except Exception as provider_error:
                     # Log error but continue with other providers
                     logger.warning(
                         f"Failed to fetch tasks from provider "
-                        f"{provider.id} ({provider.provider_type}): {provider_error}"
+                        f"{provider.id} ({provider.provider_type}): "
+                        f"{provider_error}"
                     )
                     continue
             
             return all_tasks
         finally:
             db.close()
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (preserve status codes)
+        raise
     except Exception as e:
         logger.error(f"Failed to list all tasks: {e}")
         import traceback
@@ -1195,7 +1845,9 @@ async def pm_update_task(request: Request, task_id: str):
         fm = flow_manager
         
         if not fm.pm_provider:
-            raise HTTPException(status_code=503, detail="PM Provider not configured")
+            raise HTTPException(
+                status_code=503, detail="PM Provider not configured"
+            )
         
         updates = await request.json()
         updated_task = await fm.pm_provider.update_task(task_id, updates)
@@ -1204,12 +1856,25 @@ async def pm_update_task(request: Request, task_id: str):
             "id": str(updated_task.id),
             "title": updated_task.title,
             "description": updated_task.description,
-            "status": updated_task.status.value if hasattr(updated_task.status, 'value') else str(updated_task.status),
-            "priority": updated_task.priority.value if hasattr(updated_task.priority, 'value') else str(updated_task.priority),
+            "status": (
+                updated_task.status.value
+                if hasattr(updated_task.status, 'value')
+                else str(updated_task.status)
+            ),
+            "priority": (
+                updated_task.priority.value
+                if hasattr(updated_task.priority, 'value')
+                else str(updated_task.priority)
+            ),
             "estimated_hours": updated_task.estimated_hours,
         }
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (preserve status codes)
+        raise
     except Exception as e:
         logger.error(f"Failed to update task: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1217,67 +1882,44 @@ async def pm_update_task(request: Request, task_id: str):
 async def pm_list_sprints(request: Request, project_id: str):
     """List all sprints for a project"""
     try:
+        from src.conversation.flow_manager import ConversationFlowManager
         from database.connection import get_db_session
-        from database.orm_models import PMProviderConnection
-        from src.pm_providers.factory import create_pm_provider
-        
-        # Extract provider_id and actual project_id from the project_id parameter
-        # Format: provider_id:project_id
-        if ':' in project_id:
-            provider_id_str, actual_project_id = project_id.split(':', 1)
-        else:
-            # Fallback: try to find the provider by checking all providers
-            # This is less efficient but handles backward compatibility
-            actual_project_id = project_id
-            provider_id_str = None
         
         db_gen = get_db_session()
         db = next(db_gen)
         
-        try:
-            # Find the correct provider
-            if provider_id_str:
-                provider = db.query(PMProviderConnection).filter(
-                    PMProviderConnection.id == provider_id_str,
-                    PMProviderConnection.is_active == True
-                ).first()
-            else:
-                # If no provider_id in project_id, get the first active provider
-                # (for backward compatibility)
-                provider = db.query(PMProviderConnection).filter(
-                    PMProviderConnection.is_active == True
-                ).first()
-            
-            if not provider:
-                raise HTTPException(status_code=404, detail="PM Provider not found")
-            
-            # Create provider instance
-            provider_instance = create_pm_provider(
-                provider_type=provider.provider_type,
-                base_url=provider.base_url,
-                api_key=provider.api_key,
-                api_token=provider.api_token,
-                username=provider.username,
-                organization_id=provider.organization_id,
-                workspace_id=provider.workspace_id,
+        global flow_manager
+        if flow_manager is None:
+            flow_manager = ConversationFlowManager(db_session=db)
+        fm = flow_manager
+        
+        if not fm.pm_provider:
+            raise HTTPException(
+                status_code=503, detail="PM Provider not configured"
             )
-            
-            # Fetch sprints for the project
-            sprints = await provider_instance.list_sprints(project_id=actual_project_id)
-            
-            return [
-                {
-                    "id": str(s.id),
-                    "name": s.name,
-                    "start_date": s.start_date.isoformat() if s.start_date else None,
-                    "end_date": s.end_date.isoformat() if s.end_date else None,
-                    "status": s.status.value if hasattr(s.status, 'value') else str(s.status),
-                }
-                for s in sprints
-            ]
-        finally:
-            db.close()
+        
+        sprints = await fm.pm_provider.list_sprints(project_id=project_id)
+        
+        return [
+            {
+                "id": str(s.id),
+                "name": s.name,
+                "start_date": (
+                    s.start_date.isoformat() if s.start_date else None
+                ),
+                "end_date": (
+                    s.end_date.isoformat() if s.end_date else None
+                ),
+                "status": (
+                    s.status.value
+                    if hasattr(s.status, 'value')
+                    else str(s.status)
+                ),
+            }
+            for s in sprints
+        ]
     except HTTPException:
+        # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
     except Exception as e:
         logger.error(f"Failed to list sprints: {e}")
@@ -1292,10 +1934,7 @@ async def pm_chat_stream(request: Request):
     """Stream chat responses for Project Management tasks"""
     try:
         from src.conversation.flow_manager import ConversationFlowManager
-        from src.workflow import run_agent_workflow_stream
         from database.connection import get_db_session
-        from sqlalchemy.orm import Session
-        from fastapi import Depends
         from fastapi.responses import StreamingResponse
         import asyncio
         import json
@@ -1315,20 +1954,27 @@ async def pm_chat_stream(request: Request):
             global flow_manager
             if flow_manager is None:
                 flow_manager = ConversationFlowManager(db_session=db)
-                logger.info("Created global ConversationFlowManager singleton")
+                logger.info(
+                    "Created global ConversationFlowManager singleton"
+                )
             fm = flow_manager
                 
             async def generate_stream() -> AsyncIterator[str]:
-                """Generate SSE stream of chat responses with progress updates"""
+                """Generate SSE stream of chat responses with progress."""
                 api_start = time.time()
-                logger.info(f"[PM-CHAT-TIMING] generate_stream started")
+                logger.info("[PM-CHAT-TIMING] generate_stream started")
                     
                 try:
                     # First, generate PM plan to check if CREATE_WBS is needed
                     plan_start = time.time()
                     temp_context = fm._get_or_create_context(thread_id)
-                    pm_plan = await fm.generate_pm_plan(user_message, temp_context)
-                    logger.info(f"[PM-CHAT-TIMING] PM plan generated: {time.time() - plan_start:.2f}s")
+                    pm_plan = await fm.generate_pm_plan(
+                        user_message, temp_context
+                    )
+                    logger.info(
+                        f"[PM-CHAT-TIMING] PM plan generated: "
+                        f"{time.time() - plan_start:.2f}s"
+                    )
                         
                     # Check if plan has CREATE_WBS steps that need research
                     needs_research = False
@@ -1338,7 +1984,10 @@ async def pm_chat_stream(request: Request):
                                 needs_research = True
                                 break
                         
-                    logger.info(f"[PM-CHAT-TIMING] Needs research: {needs_research} - {time.time() - api_start:.2f}s")
+                    logger.info(
+                        f"[PM-CHAT-TIMING] Needs research: {needs_research} - "
+                        f"{time.time() - api_start:.2f}s"
+                    )
                         
                     # For research queries, stream DeerFlow updates
                     if needs_research:
@@ -1347,7 +1996,9 @@ async def pm_chat_stream(request: Request):
                             "thread_id": thread_id,
                             "agent": "coordinator",
                             "role": "assistant",
-                            "content": "🦌 **Starting DeerFlow research...**\n\n",
+                            "content": (
+                                "🦌 **Starting DeerFlow research...**\n\n"
+                            ),
                             "finish_reason": None
                         }
                         yield "event: message_chunk\n"
@@ -1355,17 +2006,28 @@ async def pm_chat_stream(request: Request):
                             
                         try:
                             # Let LLM extract project name from full context
-                            research_query = f"Research typical phases, deliverables, and tasks based on the user's request: {user_message}. Focus on project structure and common components."
+                            research_query = (
+                                f"Research typical phases, deliverables, "
+                                f"and tasks based on the user's request: "
+                                f"{user_message}. Focus on project structure "
+                                f"and common components."
+                            )
                                 
                             research_start = time.time()
-                            logger.info(f"[PM-CHAT-TIMING] Starting DeerFlow research: {time.time() - api_start:.2f}s")
+                            logger.info(
+                                f"[PM-CHAT-TIMING] Starting DeerFlow "
+                                f"research: {time.time() - api_start:.2f}s"
+                            )
                             final_research_state = None
                                 
-                            # Use _astream_workflow_generator to get properly formatted research events
+                            # Use _astream_workflow_generator to get properly
+                            # formatted research events
                             from src.config.report_style import ReportStyle
                                 
                             async for event in _astream_workflow_generator(
-                                messages=[{"role": "user", "content": research_query}],
+                                messages=[
+                                    {"role": "user", "content": research_query}
+                                ],
                                 thread_id=thread_id,
                                 resources=[],
                                 max_plan_iterations=1,
@@ -1386,40 +2048,62 @@ async def pm_chat_stream(request: Request):
                                 yield event
                                 
                             # Collect final state for storing research context
-                            final_research_state = {"final_report": "Research completed"}
+                            final_research_state = {
+                                "final_report": "Research completed"
+                            }
                                 
                             # Store research result
                             if final_research_state:
-                                from src.conversation.flow_manager import ConversationContext, FlowState, IntentType
+                                from src.conversation.flow_manager import (
+                                    ConversationContext,
+                                    FlowState,
+                                    IntentType,
+                                )
                                 from datetime import datetime
                                     
                                 if thread_id not in fm.contexts:
-                                    fm.contexts[thread_id] = ConversationContext(
-                                        session_id=thread_id,
-                                        current_state=FlowState.INTENT_DETECTION,
-                                        intent=IntentType.UNKNOWN,
-                                        gathered_data={},
-                                        required_fields=[],
-                                        conversation_history=[],
-                                        created_at=datetime.now(),
-                                        updated_at=datetime.now()
+                                    fm.contexts[thread_id] = (
+                                        ConversationContext(
+                                            session_id=thread_id,
+                                            current_state=(
+                                                FlowState.INTENT_DETECTION
+                                            ),
+                                            intent=IntentType.UNKNOWN,
+                                            gathered_data={},
+                                            required_fields=[],
+                                            conversation_history=[],
+                                            created_at=datetime.now(),
+                                            updated_at=datetime.now()
+                                        )
                                     )
                                     
                                 context = fm.contexts[thread_id]
-                                context.gathered_data['research_context'] = "Research completed"
-                                context.gathered_data['research_already_done'] = True
-                                logger.info(f"Stored research result in context for session {thread_id}")
-                                
+                                context.gathered_data['research_context'] = (
+                                    "Research completed"
+                                )
+                                context.gathered_data[
+                                    'research_already_done'
+                                ] = True
+                                logger.info(
+                                    f"Stored research result in context for "
+                                    f"session {thread_id}"
+                                )
+
                             research_duration = time.time() - research_start
-                            logger.info(f"[PM-CHAT-TIMING] DeerFlow research completed: {research_duration:.2f}s")
+                            logger.info(
+                                f"[PM-CHAT-TIMING] DeerFlow research "
+                                f"completed: {research_duration:.2f}s"
+                            )
                             
                         except Exception as research_error:
-                            logger.error(f"DeerFlow streaming failed: {research_error}")
+                            logger.error(
+                                f"DeerFlow streaming failed: {research_error}"
+                            )
                             import traceback
                             logger.error(traceback.format_exc())
                         
                     # Create queue to collect streaming chunks
-                    stream_queue = asyncio.Queue()
+                    stream_queue: asyncio.Queue[str] = asyncio.Queue()
                         
                     async def stream_callback(content: str):
                         """Callback to capture streaming chunks"""
@@ -1428,14 +2112,20 @@ async def pm_chat_stream(request: Request):
                     async def process_with_streaming():
                         try:
                             process_start = time.time()
-                            logger.info(f"[PM-CHAT-TIMING] process_with_streaming started: {time.time() - api_start:.2f}s")
+                            logger.info(
+                                f"[PM-CHAT-TIMING] process_with_streaming "
+                                f"started: {time.time() - api_start:.2f}s"
+                            )
                             response = await fm.process_message(
                                 message=user_message,
                                 session_id=thread_id,
                                 user_id="f430f348-d65f-427f-9379-3d0f163393d1",
                                 stream_callback=stream_callback
                             )
-                            logger.info(f"[PM-CHAT-TIMING] process_message completed: {time.time() - process_start:.2f}s")
+                            logger.info(
+                                f"[PM-CHAT-TIMING] process_message completed: "
+                                f"{time.time() - process_start:.2f}s"
+                            )
                             await stream_queue.put(None)
                             return response
                         except Exception as e:
@@ -1451,12 +2141,19 @@ async def pm_chat_stream(request: Request):
                                 "state": "error"
                             }
                         
-                    process_task = asyncio.create_task(process_with_streaming())
-                    logger.info(f"[PM-CHAT-TIMING] process_task started: {time.time() - api_start:.2f}s")
+                    process_task = asyncio.create_task(
+                        process_with_streaming()
+                    )
+                    logger.info(
+                        f"[PM-CHAT-TIMING] process_task started: "
+                        f"{time.time() - api_start:.2f}s"
+                    )
                         
                     while True:
                         try:
-                            chunk = await asyncio.wait_for(stream_queue.get(), timeout=1.0)
+                            chunk = await asyncio.wait_for(
+                                stream_queue.get(), timeout=1.0
+                            )
                             if chunk is None:
                                 break
                                 
@@ -1478,31 +2175,45 @@ async def pm_chat_stream(request: Request):
                     try:
                         response = await process_task
                     except Exception as task_error:
-                        logger.error(f"Task execution failed: {task_error}")
+                        logger.error(
+                            f"Task execution failed: {task_error}"
+                        )
                         import traceback
                         logger.error(traceback.format_exc())
                         response = {
                             "type": "error",
-                            "message": f"❌ Task execution failed: {str(task_error)}",
+                            "message": (
+                                f"❌ Task execution failed: {str(task_error)}"
+                            ),
                             "state": "error"
                         }
                         
                     if response:
                         response_message = response.get('message', '')
                         response_state = response.get('state', 'complete')
-                        response_type = response.get('type', 'execution_completed')
+                        response_type = response.get(
+                            'type', 'execution_completed'
+                        )
                         finish_reason = None
                         if response_type == 'error':
                             finish_reason = "error"
-                        elif response_state == 'complete' or response_state == 'completed':
+                        elif (
+                            response_state == 'complete'
+                            or response_state == 'completed'
+                        ):
                             finish_reason = "stop"
-                        elif '?' in response_message or 'specify' in response_message.lower():
+                        elif (
+                            '?' in response_message
+                            or 'specify' in response_message.lower()
+                        ):
                             finish_reason = "interrupt"
                         else:
                             finish_reason = "stop"
                     else:
                         finish_reason = "error"
-                        response_message = "❌ No response received from processing"
+                        response_message = (
+                            "❌ No response received from processing"
+                        )
                         
                     chunk_data = {
                         "id": str(uuid.uuid4()),
@@ -1512,25 +2223,38 @@ async def pm_chat_stream(request: Request):
                         "content": "",
                         "finish_reason": finish_reason
                     }
-                    logger.info(f"[PM-CHAT-TIMING] Sending finish event: finish_reason={finish_reason}, response_type={response_type if response else 'None'}")
+                    logger.info(
+                        f"[PM-CHAT-TIMING] Sending finish event: "
+                        f"finish_reason={finish_reason}, "
+                        f"response_type={response_type if response else 'None'}"  # noqa: E501
+                    )
                     yield "event: message_chunk\n"
                     yield f"data: {json.dumps(chunk_data)}\n\n"
                     
-                    # Emit refresh event if operation succeeded to update PM views
-                    if finish_reason == "stop" and response_type == "execution_completed":
+                    # Emit refresh event if operation succeeded
+                    # to update PM views
+                    if (
+                        finish_reason == "stop"
+                        and response_type == "execution_completed"
+                    ):
                         refresh_event = {
                             "id": str(uuid.uuid4()),
                             "thread_id": thread_id,
                             "type": "pm_refresh",
                             "data": {
-                                "updated_entities": response.get("data", {}).get("updated_entities", []),
+                                "updated_entities": response.get(
+                                    "data", {}
+                                ).get("updated_entities", []),
                                 "action": response_type
                             }
                         }
                         yield "event: pm_refresh\n"
                         yield f"data: {json.dumps(refresh_event)}\n\n"
                         
-                    logger.info(f"[PM-CHAT-TIMING] Total response time: {time.time() - api_start:.2f}s")
+                    logger.info(
+                        f"[PM-CHAT-TIMING] Total response time: "
+                        f"{time.time() - api_start:.2f}s"
+                    )
                     
                 except Exception as e:
                     error_message = f"Error: {str(e)}"
@@ -1575,7 +2299,7 @@ async def pm_list_providers():
         
         try:
             providers = db.query(PMProviderConnection).filter(
-                PMProviderConnection.is_active == True
+                PMProviderConnection.is_active.is_(True)
             ).all()
             return [
                 {
@@ -1645,17 +2369,29 @@ async def pm_import_projects(request: ProjectImportRequest):
                 if "401" in error_msg or "Unauthorized" in error_msg:
                     raise HTTPException(
                         status_code=401,
-                        detail="Authentication failed. Please check your API key/token."
+                        detail=(
+                            "Authentication failed. "
+                            "Please check your API key/token."
+                        )
                     )
                 elif "404" in error_msg or "Not Found" in error_msg:
                     raise HTTPException(
                         status_code=404,
-                        detail="Provider API endpoint not found. Please check the base URL."
+                        detail=(
+                            "Provider API endpoint not found. "
+                            "Please check the base URL."
+                        )
                     )
-                elif "Connection" in error_msg or "refused" in error_msg.lower():
+                elif (
+                    "Connection" in error_msg
+                    or "refused" in error_msg.lower()
+                ):
                     raise HTTPException(
                         status_code=503,
-                        detail="Cannot connect to provider. Please check if the service is running."
+                        detail=(
+                            "Cannot connect to provider. "
+                            "Please check if the service is running."
+                        )
                     )
                 else:
                     raise HTTPException(
@@ -1672,7 +2408,9 @@ async def pm_import_projects(request: ProjectImportRequest):
                         "id": str(p.id),
                         "name": p.name,
                         "description": p.description or "",
-                        "status": str(p.status) if hasattr(p, 'status') else None,
+                        "status": (
+                            str(p.status) if hasattr(p, 'status') else None
+                        ),
                     }
                     for p in projects
                 ],
@@ -1719,21 +2457,57 @@ async def pm_get_provider_projects(provider_id: str):
             
             provider = db.query(PMProviderConnection).filter(
                 PMProviderConnection.id == provider_uuid,
-                PMProviderConnection.is_active == True
+                PMProviderConnection.is_active.is_(True)
             ).first()
             
             if not provider:
-                raise HTTPException(status_code=404, detail="Provider not found")
+                raise HTTPException(
+                    status_code=404, detail="Provider not found"
+                )
+            
+            # Prepare API key - handle empty strings and None
+            api_key_value = None
+            if provider.api_key:
+                api_key_str = str(provider.api_key).strip()
+                api_key_value = api_key_str if api_key_str else None
+            
+            api_token_value = None
+            if provider.api_token:
+                api_token_str = str(provider.api_token).strip()
+                api_token_value = api_token_str if api_token_str else None
+            
+            # Log API key status (masked for security)
+            has_api_key = bool(api_key_value)
+            has_api_token = bool(api_token_value)
+            logger.info(
+                f"Creating provider instance: type={provider.provider_type}, "
+                f"base_url={provider.base_url}, "
+                f"has_api_key={has_api_key}, "
+                f"has_api_token={has_api_token}, "
+                f"username={provider.username}"
+            )
             
             # Create provider instance
             provider_instance = create_pm_provider(
-                provider_type=provider.provider_type,
-                base_url=provider.base_url,
-                api_key=provider.api_key,
-                api_token=provider.api_token,
-                username=provider.username,
-                organization_id=provider.organization_id,
-                workspace_id=provider.workspace_id,
+                provider_type=str(provider.provider_type),
+                base_url=str(provider.base_url),
+                api_key=api_key_value,
+                api_token=api_token_value,
+                username=(
+                    str(provider.username).strip()
+                    if provider.username
+                    else None
+                ),
+                organization_id=(
+                    str(provider.organization_id)
+                    if provider.organization_id
+                    else None
+                ),
+                workspace_id=(
+                    str(provider.workspace_id)
+                    if provider.workspace_id
+                    else None
+                ),
             )
             
             try:
@@ -1744,17 +2518,29 @@ async def pm_get_provider_projects(provider_id: str):
                 if "401" in error_msg or "Unauthorized" in error_msg:
                     raise HTTPException(
                         status_code=401,
-                        detail="Authentication failed. Please check your API key/token."
+                        detail=(
+                            "Authentication failed. "
+                            "Please check your API key/token."
+                        )
                     )
                 elif "404" in error_msg or "Not Found" in error_msg:
                     raise HTTPException(
                         status_code=404,
-                        detail="Provider API endpoint not found. Please check the base URL."
+                        detail=(
+                            "Provider API endpoint not found. "
+                            "Please check the base URL."
+                        )
                     )
-                elif "Connection" in error_msg or "refused" in error_msg.lower():
+                elif (
+                    "Connection" in error_msg
+                    or "refused" in error_msg.lower()
+                ):
                     raise HTTPException(
                         status_code=503,
-                        detail="Cannot connect to provider. Please check if the service is running."
+                        detail=(
+                            "Cannot connect to provider. "
+                            "Please check if the service is running."
+                        )
                     )
                 else:
                     raise HTTPException(
@@ -1806,13 +2592,24 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
             ).first()
             
             if not provider:
-                raise HTTPException(status_code=404, detail="Provider not found")
+                raise HTTPException(
+                    status_code=404, detail="Provider not found"
+                )
             
             # Update fields if provided
             update_data = request.model_dump(exclude_unset=True)
             for key, value in update_data.items():
-                if hasattr(provider, key) and value is not None:
-                    setattr(provider, key, value)
+                if hasattr(provider, key):
+                    # Handle None values - allow setting to None to clear
+                    # But skip empty strings (they should be treated as None)
+                    if value is not None:
+                        # Strip strings and convert empty strings to None
+                        if isinstance(value, str):
+                            value = value.strip() or None
+                        setattr(provider, key, value)
+                    elif value is None and key in ['api_key', 'api_token']:
+                        # Explicitly allow None for API keys to clear them
+                        setattr(provider, key, None)
             
             db.commit()
             db.refresh(provider)
@@ -1859,7 +2656,10 @@ async def pm_test_connection(request: ProjectImportRequest):
         
         return {
             "success": True,
-            "message": f"Connection successful. Found {len(projects)} project(s)."
+            "message": (
+                f"Connection successful. "
+                f"Found {len(projects)} project(s)."
+            ),
         }
     except Exception as e:
         logger.error(f"Connection test failed: {e}")
@@ -1893,10 +2693,12 @@ async def pm_delete_provider(provider_id: str):
             ).first()
             
             if not provider:
-                raise HTTPException(status_code=404, detail="Provider not found")
+                raise HTTPException(
+                    status_code=404, detail="Provider not found"
+                )
             
             # Soft delete by deactivating
-            provider.is_active = False
+            provider.is_active = False  # type: ignore
             db.commit()
             
             return {"success": True, "message": "Provider deactivated"}

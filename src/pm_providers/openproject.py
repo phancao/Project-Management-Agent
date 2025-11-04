@@ -5,8 +5,6 @@ Connects to OpenProject (https://www.openproject.org/) API
 to manage projects, work packages (tasks), and sprints.
 """
 import base64
-import json
-import logging
 import requests
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
@@ -31,8 +29,14 @@ class OpenProjectProvider(BasePMProvider):
         self.base_url = config.base_url.rstrip('/')
         self.api_key = config.api_key or config.api_token
         
-        if not self.api_key:
-            raise ValueError("OpenProject requires api_key or api_token")
+        # Validate API key is present and not just whitespace
+        if not self.api_key or not self.api_key.strip():
+            raise ValueError(
+                "OpenProject requires a non-empty api_key or api_token"
+            )
+        
+        # Strip whitespace from API key
+        self.api_key = self.api_key.strip()
         
         # OpenProject uses Basic auth with "apikey" as username and API key
         auth_string = f"apikey:{self.api_key}"
@@ -81,12 +85,15 @@ class OpenProjectProvider(BasePMProvider):
         response = requests.post(url, headers=self.headers, json=payload)
         response.raise_for_status()
         return self._parse_project(response.json())
-    
-    async def update_project(self, project_id: str, updates: Dict[str, Any]) -> PMProject:
+
+    async def update_project(
+        self,
+        project_id: str,
+        updates: Dict[str, Any],
+    ) -> PMProject:
         """Update an existing project"""
         url = f"{self.base_url}/api/v3/projects/{project_id}"
         payload = {}
-        
         if "name" in updates:
             payload["name"] = updates["name"]
         if "description" in updates:
@@ -109,7 +116,11 @@ class OpenProjectProvider(BasePMProvider):
     
     # ==================== Task (Work Package) Operations ====================
     
-    async def list_tasks(self, project_id: Optional[str] = None, assignee_id: Optional[str] = None) -> List[PMTask]:
+    async def list_tasks(
+        self,
+        project_id: Optional[str] = None,
+        assignee_id: Optional[str] = None
+    ) -> List[PMTask]:
         """List all work packages (tasks)"""
         url = f"{self.base_url}/api/v3/work_packages"
         
@@ -120,9 +131,13 @@ class OpenProjectProvider(BasePMProvider):
         
         filters = []
         if project_id:
-            filters.append({"project": {"operator": "=", "values": [project_id]}})
+            filters.append({
+                "project": {"operator": "=", "values": [project_id]}
+            })
         if assignee_id:
-            filters.append({"assignee": {"operator": "=", "values": [assignee_id]}})
+            filters.append({
+                "assignee": {"operator": "=", "values": [assignee_id]}
+            })
         
         if filters:
             params = {"filters": json_lib.dumps(filters)}
@@ -136,10 +151,16 @@ class OpenProjectProvider(BasePMProvider):
         if assignee_id:
             try:
                 result = response.json()
-                task_count = len(result.get("_embedded", {}).get("elements", []))
+                task_count = len(
+                    result.get("_embedded", {}).get("elements", [])
+                )
                 if task_count == 0:
-                    logger.warning(f"Assignee filter returned 0 tasks for user_id={assignee_id}. Response: {result.get('count', 'N/A')} total")
-            except:
+                    logger.warning(
+                        f"Assignee filter returned 0 tasks for "
+                        f"user_id={assignee_id}. Response: "
+                        f"{result.get('count', 'N/A')} total"
+                    )
+            except Exception:
                 pass
         
         response.raise_for_status()
@@ -161,16 +182,19 @@ class OpenProjectProvider(BasePMProvider):
     async def create_task(self, task: PMTask) -> PMTask:
         """Create a new work package"""
         url = f"{self.base_url}/api/v3/work_packages"
-        payload = {
+        payload: Dict[str, Any] = {
             "_links": {
                 "type": {
-                    "href": "/api/v3/types/1"  # Task type - may need to be configurable
+                    # Task type - may need to be configurable
+                    "href": "/api/v3/types/1"
                 }
             }
         }
         
         if task.project_id:
-            payload["_links"]["project"] = {"href": f"/api/v3/projects/{task.project_id}"}
+            payload["_links"]["project"] = {
+                "href": f"/api/v3/projects/{task.project_id}"
+            }
         if task.title:
             payload["subject"] = task.title
         if task.description:
@@ -179,24 +203,35 @@ class OpenProjectProvider(BasePMProvider):
                 "format": "plain"
             }
         if task.assignee_id:
-            payload["_links"]["assignee"] = {"href": f"/api/v3/users/{task.assignee_id}"}
+            payload["_links"]["assignee"] = {
+                "href": f"/api/v3/users/{task.assignee_id}"
+            }
         if task.status:
-            payload["_links"]["status"] = {"href": f"/api/v3/statuses/{task.status}"}
+            payload["_links"]["status"] = {
+                "href": f"/api/v3/statuses/{task.status}"
+            }
         
         response = requests.post(url, headers=self.headers, json=payload)
         response.raise_for_status()
         return self._parse_task(response.json())
     
-    async def update_task(self, task_id: str, updates: Dict[str, Any]) -> PMTask:
+    async def update_task(
+        self, task_id: str, updates: Dict[str, Any]
+    ) -> PMTask:
         """Update an existing work package"""
         url = f"{self.base_url}/api/v3/work_packages/{task_id}"
-        payload = {}
+        payload: Dict[str, Any] = {}
         
         # Get lockVersion from form to prevent conflicts
         form_url = f"{self.base_url}/api/v3/work_packages/{task_id}/form"
         form_response = requests.post(form_url, headers=self.headers)
         form_response.raise_for_status()
-        lock_version = form_response.json().get("_embedded", {}).get("payload", {}).get("lockVersion")
+        lock_version = (
+            form_response.json()
+            .get("_embedded", {})
+            .get("payload", {})
+            .get("lockVersion")
+        )
         if lock_version is not None:
             payload["lockVersion"] = lock_version
         
@@ -208,14 +243,21 @@ class OpenProjectProvider(BasePMProvider):
                 "format": "plain"
             }
         if "status" in updates:
-            payload["_links"] = {"status": {"href": f"/api/v3/statuses/{updates['status']}"}}
+            payload["_links"] = {
+                "status": {
+                    "href": f"/api/v3/statuses/{updates['status']}"
+                }
+            }
         if "assignee_id" in updates:
             payload["_links"] = {
                 **payload.get("_links", {}),
-                "assignee": {"href": f"/api/v3/users/{updates['assignee_id']}"}
+                "assignee": {
+                    "href": f"/api/v3/users/{updates['assignee_id']}"
+                }
             }
         if "estimated_hours" in updates:
-            # Convert hours to ISO 8601 duration (e.g., 2.5 -> PT2H30M, 2.0 -> PT2H)
+            # Convert hours to ISO 8601 duration
+            # (e.g., 2.5 -> PT2H30M, 2.0 -> PT2H)
             # Use null/None to delete ETA (set estimated_hours to 0 or None)
             hours = updates["estimated_hours"]
             if hours is None or hours == 0:
@@ -242,43 +284,31 @@ class OpenProjectProvider(BasePMProvider):
     
     # ==================== Sprint Operations ====================
     
-    async def list_sprints(self, project_id: Optional[str] = None) -> List[PMSprint]:
+    async def list_sprints(
+        self, project_id: Optional[str] = None
+    ) -> List[PMSprint]:
         """
         List sprints (iterations) from OpenProject
         
-        Note: OpenProject uses "versions" for sprints/iterations.
-        When project_id is provided, filters versions by that project.
+        Note: OpenProject uses "versions" for sprints/iterations
         """
-        logger = logging.getLogger(__name__)
-        
         url = f"{self.base_url}/api/v3/versions"
         
-        # Use OpenProject filters API to filter by project if provided
-        params = {}
-        if project_id:
-            filters = [{
-                "definingProject": {
-                    "operator": "=",
-                    "values": [project_id]
-                }
-            }]
-            params["filters"] = json.dumps(filters)
-            logger.debug(f"Filtering sprints by project_id={project_id}")
-        
-        response = requests.get(url, headers=self.headers, params=params if params else None)
+        response = requests.get(url, headers=self.headers)
         response.raise_for_status()
         
         sprints_data = response.json()["_embedded"]["elements"]
         
-        logger.debug(f"Found {len(sprints_data)} total versions from OpenProject")
-        
-        # Log all version names for debugging
-        if logger.isEnabledFor(logging.DEBUG):
-            for v in sprints_data:
-                version_name = v.get("name", "N/A")
-                version_id = v.get("id", "N/A")
-                defining_project_href = v.get("_links", {}).get("definingProject", {}).get("href", "N/A")
-                logger.debug(f"  Version: {version_name} (ID: {version_id}, Project: {defining_project_href})")
+        # Filter by project_id if provided
+        # (versions don't have project filter in API)
+        if project_id:
+            sprints_data = [
+                sprint for sprint in sprints_data
+                if sprint.get("_links", {})
+                .get("definingProject", {})
+                .get("href", "")
+                .endswith(f"/projects/{project_id}")
+            ]
         
         return [self._parse_sprint(sprint) for sprint in sprints_data]
     
@@ -314,7 +344,9 @@ class OpenProjectProvider(BasePMProvider):
         response.raise_for_status()
         return self._parse_sprint(response.json())
     
-    async def update_sprint(self, sprint_id: str, updates: Dict[str, Any]) -> PMSprint:
+    async def update_sprint(
+        self, sprint_id: str, updates: Dict[str, Any]
+    ) -> PMSprint:
         """Update an existing version"""
         url = f"{self.base_url}/api/v3/versions/{sprint_id}"
         payload = {}
@@ -340,7 +372,9 @@ class OpenProjectProvider(BasePMProvider):
     
     # ==================== User Operations ====================
     
-    async def list_users(self, project_id: Optional[str] = None) -> List[PMUser]:
+    async def list_users(
+        self, project_id: Optional[str] = None
+    ) -> List[PMUser]:
         """List all users"""
         url = f"{self.base_url}/api/v3/users"
         response = requests.get(url, headers=self.headers)
@@ -377,10 +411,15 @@ class OpenProjectProvider(BasePMProvider):
         """Check if the OpenProject connection is healthy"""
         try:
             # Use /api/v3/projects endpoint as health check
-            response = requests.get(f"{self.base_url}/api/v3/projects", headers=self.headers, timeout=5)
-            # 200 OK or 403 Forbidden (authenticated but no projects) both indicate healthy connection
+            response = requests.get(
+                f"{self.base_url}/api/v3/projects",
+                headers=self.headers,
+                timeout=5
+            )
+            # 200 OK or 403 Forbidden (authenticated but no projects)
+            # both indicate healthy connection
             return response.status_code in (200, 403)
-        except:
+        except Exception:
             return False
     
     # ==================== Parser Methods ====================
@@ -390,7 +429,11 @@ class OpenProjectProvider(BasePMProvider):
         return PMProject(
             id=str(data["id"]),
             name=data.get("name", ""),
-            description=data.get("description", {}).get("raw") if isinstance(data.get("description"), dict) else data.get("description"),
+            description=(
+                data.get("description", {}).get("raw")
+                if isinstance(data.get("description"), dict)
+                else data.get("description")
+            ),
             status=data.get("status"),
             created_at=self._parse_datetime(data.get("createdAt")),
             updated_at=self._parse_datetime(data.get("updatedAt")),
@@ -405,12 +448,27 @@ class OpenProjectProvider(BasePMProvider):
         return PMTask(
             id=str(data["id"]),
             title=data.get("subject", ""),
-            description=data.get("description", {}).get("raw") if isinstance(data.get("description"), dict) else data.get("description"),
-            status=embedded.get("status", {}).get("name") if embedded.get("status") else None,
-            project_id=self._extract_id_from_href(links.get("project", {}).get("href")),
-            assignee_id=self._extract_id_from_href(links.get("assignee", {}).get("href")),
-            estimated_hours=self._parse_duration_to_hours(data.get("estimatedTime")),
-            actual_hours=self._parse_duration_to_hours(data.get("derivedRemainingTime")),
+            description=(
+                data.get("description", {}).get("raw")
+                if isinstance(data.get("description"), dict)
+                else data.get("description")
+            ),
+            status=(
+                embedded.get("status", {}).get("name")
+                if embedded.get("status") else None
+            ),
+            project_id=self._extract_id_from_href(
+                links.get("project", {}).get("href")
+            ),
+            assignee_id=self._extract_id_from_href(
+                links.get("assignee", {}).get("href")
+            ),
+            estimated_hours=self._parse_duration_to_hours(
+                data.get("estimatedTime")
+            ),
+            actual_hours=self._parse_duration_to_hours(
+                data.get("derivedRemainingTime")
+            ),
             start_date=self._parse_date(data.get("startDate")),
             due_date=self._parse_date(data.get("dueDate")),
             created_at=self._parse_datetime(data.get("createdAt")),
@@ -425,7 +483,9 @@ class OpenProjectProvider(BasePMProvider):
         return PMSprint(
             id=str(data["id"]),
             name=data.get("name", ""),
-            project_id=self._extract_id_from_href(links.get("definingProject", {}).get("href")),
+            project_id=self._extract_id_from_href(
+                links.get("definingProject", {}).get("href")
+            ),
             start_date=self._parse_date(data.get("startDate")),
             end_date=self._parse_date(data.get("endDate")),
             status=data.get("status"),
@@ -452,7 +512,7 @@ class OpenProjectProvider(BasePMProvider):
         try:
             # OpenProject returns ISO 8601 format
             return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-        except:
+        except Exception:
             return None
     
     @staticmethod
@@ -462,7 +522,7 @@ class OpenProjectProvider(BasePMProvider):
             return None
         try:
             return datetime.fromisoformat(date_str).date()
-        except:
+        except Exception:
             return None
     
     @staticmethod
@@ -472,7 +532,7 @@ class OpenProjectProvider(BasePMProvider):
             return None
         try:
             return href.split("/")[-1]
-        except:
+        except Exception:
             return None
     
     # ==================== Time Entry Operations ====================
@@ -504,14 +564,15 @@ class OpenProjectProvider(BasePMProvider):
             task_id: The work package (task) ID
             hours: Number of hours to log
             comment: Optional comment describing the work
-            activity_id: Optional activity type ID (defaults to first available)
+            activity_id: Optional activity type ID
+                (defaults to first available)
             user_id: Optional user ID (defaults to current user)
             
         Returns:
             Created time entry data
         """
         url = f"{self.base_url}/api/v3/time_entries"
-        payload = {
+        payload: Dict[str, Any] = {
             "hours": self._format_hours_to_duration(hours),
             "_links": {
                 "workPackage": {"href": f"/api/v3/work_packages/{task_id}"}
@@ -521,11 +582,15 @@ class OpenProjectProvider(BasePMProvider):
         if comment:
             payload["comment"] = {"raw": comment, "format": "plain"}
         
+        links: Dict[str, Any] = payload["_links"]
+        
         if activity_id:
-            payload["_links"]["activity"] = {"href": f"/api/v3/time_entries/activities/{activity_id}"}
+            links["activity"] = {
+                "href": f"/api/v3/time_entries/activities/{activity_id}"
+            }
         
         if user_id:
-            payload["_links"]["user"] = {"href": f"/api/v3/users/{user_id}"}
+            links["user"] = {"href": f"/api/v3/users/{user_id}"}
         
         response = requests.post(url, headers=self.headers, json=payload)
         response.raise_for_status()
@@ -552,11 +617,17 @@ class OpenProjectProvider(BasePMProvider):
         filters = []
         
         if task_id:
-            filters.append({"workPackage": {"operator": "=", "values": [task_id]}})
+            filters.append({
+                "workPackage": {"operator": "=", "values": [task_id]}
+            })
         if user_id:
-            filters.append({"user": {"operator": "=", "values": [user_id]}})
+            filters.append({
+                "user": {"operator": "=", "values": [user_id]}
+            })
         if project_id:
-            filters.append({"project": {"operator": "=", "values": [project_id]}})
+            filters.append({
+                "project": {"operator": "=", "values": [project_id]}
+            })
         
         if filters:
             import json as json_lib
@@ -593,12 +664,15 @@ class OpenProjectProvider(BasePMProvider):
         return total_hours
     
     @staticmethod
-    def _parse_duration_to_hours(duration_str: Optional[str]) -> Optional[float]:
+    def _parse_duration_to_hours(
+        duration_str: Optional[str]
+    ) -> Optional[float]:
         """Parse OpenProject ISO 8601 duration string to hours"""
         if not duration_str:
             return None
         try:
-            # OpenProject uses ISO 8601 duration format like "PT1H30M", "P1DT2H", or "P2DT2H" (2 days + 2 hours)
+            # OpenProject uses ISO 8601 duration format like
+            # "PT1H30M", "P1DT2H", or "P2DT2H" (2 days + 2 hours)
             import re
             # Parse days, hours, and minutes from duration string
             days_match = re.search(r'(\d+)D', duration_str)
@@ -613,8 +687,9 @@ class OpenProjectProvider(BasePMProvider):
             if minutes_match:
                 total_hours += float(minutes_match.group(1)) / 60.0
             
-            # Return 0.0 for PT0H, None only if parsing failed or no duration provided
+            # Return 0.0 for PT0H, None only if parsing failed
+            # or no duration provided
             return total_hours if total_hours >= 0 else None
-        except:
+        except Exception:
             return None
 

@@ -3,22 +3,25 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { Card } from "~/components/ui/card";
-import { Input } from "~/components/ui/input";
-import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
-import { useSprints } from "~/core/api/hooks/pm/use-sprints";
-import { useProjects } from "~/core/api/hooks/pm/use-projects";
-import { TaskDetailsModal } from "../task-details-modal";
-import type { Task } from "~/core/api/hooks/pm/use-tasks";
-import { Search, Filter, GripVertical, ChevronRight, ChevronDown, X } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { Button } from "~/components/ui/button";
-import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter, useDroppable } from "@dnd-kit/core";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, closestCenter, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { ChevronDown, ChevronRight, Filter, GripVertical, Search, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
+
+import { Button } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { resolveServiceURL } from "~/core/api/resolve-service-url";
+import { useProjects } from "~/core/api/hooks/pm/use-projects";
+import { useSprints } from "~/core/api/hooks/pm/use-sprints";
+import type { Task } from "~/core/api/hooks/pm/use-tasks";
+import { useTasks } from "~/core/api/hooks/pm/use-tasks";
+
+import { TaskDetailsModal } from "../task-details-modal";
 
 // Task card component with drag handle
 function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
@@ -41,7 +44,7 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
     >
       <div
         {...listeners}
-        className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+        className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
       >
         <GripVertical className="w-4 h-4" />
       </div>
@@ -56,7 +59,7 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
         )}
       </div>
       {task.priority && (
-        <span className={`px-1.5 py-0.5 text-xs rounded flex-shrink-0 ${
+        <span className={`px-1.5 py-0.5 text-xs rounded shrink-0 ${
           task.priority === "high" || task.priority === "highest" || task.priority === "critical"
             ? "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
             : task.priority === "medium"
@@ -74,7 +77,7 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
 function EpicSidebar({ 
   onEpicSelect, 
   tasks,
-  onTaskUpdate 
+  onTaskUpdate: _onTaskUpdate 
 }: { 
   onEpicSelect: (epicId: string | null) => void;
   tasks: Task[];
@@ -320,7 +323,6 @@ function BacklogSection({ tasks, onTaskClick }: { tasks: Task[]; onTaskClick: (t
 }
 
 export function BacklogView() {
-  const { tasks, loading, error } = useMyTasks();
   const { projects } = useProjects();
   const searchParams = useSearchParams();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -351,7 +353,9 @@ export function BacklogView() {
     return activeProject.id;
   }, [activeProject]);
   
-  const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints || "");
+  // Fetch tasks for the active project - use full project ID (with provider_id)
+  const { tasks, loading, error } = useTasks(projectIdForSprints ?? undefined);
+  const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "");
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -368,7 +372,7 @@ export function BacklogView() {
 
   const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/pm/tasks/${taskId}`, {
+      const response = await fetch(resolveServiceURL(`pm/tasks/${taskId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -393,8 +397,8 @@ export function BacklogView() {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(t => 
         t.title.toLowerCase().includes(query) ||
-        (t.description && t.description.toLowerCase().includes(query)) ||
-        (t.project_name && t.project_name.toLowerCase().includes(query))
+        (t.description?.toLowerCase().includes(query)) ||
+        (t.project_name?.toLowerCase().includes(query))
       );
     }
 
@@ -468,7 +472,7 @@ export function BacklogView() {
     // Check if dropped on backlog (remove from sprint)
     if (overId === "backlog") {
       try {
-        await handleUpdateTask(taskId, { sprint_id: null } as any);
+        await handleUpdateTask(taskId, { sprint_id: undefined });
       } catch (error) {
         console.error("Failed to remove task from sprint:", error);
       }
@@ -483,14 +487,14 @@ export function BacklogView() {
       if (epicId === "all" || epicId === "none") {
         // Remove from epic
         try {
-          await handleUpdateTask(taskId, { epic_id: null } as any);
+          await handleUpdateTask(taskId, { epic_id: undefined });
         } catch (error) {
           console.error("Failed to remove task from epic:", error);
         }
       } else {
         // Assign to epic
         try {
-          await handleUpdateTask(taskId, { epic_id: epicId } as any);
+          await handleUpdateTask(taskId, { epic_id: epicId });
         } catch (error) {
           console.error("Failed to assign task to epic:", error);
         }
@@ -503,7 +507,7 @@ export function BacklogView() {
       const sprintId = overId.replace("sprint-", "");
       
       try {
-        await handleUpdateTask(taskId, { sprint_id: sprintId } as any);
+        await handleUpdateTask(taskId, { sprint_id: sprintId });
       } catch (error) {
         console.error("Failed to assign task to sprint:", error);
       }
@@ -528,9 +532,48 @@ export function BacklogView() {
   }
 
   if (error) {
+    const isProjectUnavailable = error.message.includes("no longer available") || error.message.includes("410");
+    const isNotFound = error.message.includes("not found") || error.message.includes("404");
+    const isAuthError = error.message.includes("Authentication") || error.message.includes("401") || error.message.includes("403");
+    
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-red-500">Error loading tasks: {error.message}</div>
+      <div className="flex flex-col items-center justify-center py-20 px-4">
+        <div className="text-red-500 font-semibold mb-2">
+          {isProjectUnavailable ? "Project No Longer Available" : 
+           isNotFound ? "Project Not Found" :
+           isAuthError ? "Authentication Error" :
+           "Error Loading Tasks"}
+        </div>
+        <div className="text-red-400 text-sm text-center max-w-2xl mb-4">
+          {error.message}
+        </div>
+        <div className="mt-4 text-xs text-muted-foreground text-center max-w-xl">
+          {isProjectUnavailable ? (
+            <>
+              This project may have been deleted, archived, or is no longer accessible in your PM provider.
+              <br />
+              Please verify the project exists or select a different project.
+            </>
+          ) : isNotFound ? (
+            <>
+              The requested project could not be found.
+              <br />
+              Please check the project ID or select a different project.
+            </>
+          ) : isAuthError ? (
+            <>
+              Unable to authenticate with your PM provider.
+              <br />
+              Please check your PM provider configuration and credentials.
+            </>
+          ) : (
+            <>
+              Check your PM provider configuration and verify the project exists.
+              <br />
+              If the problem persists, try refreshing the page or selecting a different project.
+            </>
+          )}
+        </div>
       </div>
     );
   }
@@ -625,7 +668,7 @@ export function BacklogView() {
                   <SprintSection
                     key={sprint.id}
                     sprint={sprint}
-                    tasks={tasksInSprints[sprint.id] || []}
+                    tasks={tasksInSprints[sprint.id] ?? []}
                     onTaskClick={handleTaskClick}
                   />
                 ))}

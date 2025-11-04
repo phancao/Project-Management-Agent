@@ -4,6 +4,7 @@
 "use client";
 
 import { Suspense } from "react";
+
 import { DashboardView } from "../chat/components/views/dashboard-view";
 import { PMHeader } from "../components/pm-header";
 

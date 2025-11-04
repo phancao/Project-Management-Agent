@@ -3,12 +3,13 @@
 
 "use client";
 
+import { Edit2, Save } from "lucide-react";
 import { useState } from "react";
-import { X, Edit2, Save } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+
 import { Button } from "~/components/ui/button";
-import { Textarea } from "~/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Textarea } from "~/components/ui/textarea";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
 
 interface TaskDetailsModalProps {
@@ -46,7 +47,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
     setEditedTask(null);
   };
 
-  const displayTask = isEditing && editedTask ? editedTask : task;
+
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -80,7 +81,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
             {isEditing ? (
               <input
                 type="text"
-                value={editedTask?.title || ""}
+                value={editedTask?.title ?? ""}
                 onChange={(e) => setEditedTask({ ...editedTask, title: e.target.value })}
                 className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               />
@@ -106,13 +107,13 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
             {isEditing ? (
               <Textarea
-                value={editedTask?.description || ""}
+                value={editedTask?.description ?? ""}
                 onChange={(e) => setEditedTask({ ...editedTask, description: e.target.value })}
                 className="mt-1 min-h-[100px]"
               />
             ) : (
               <div className="mt-1 text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                {task.description || "No description"}
+                {task.description ?? "No description"}
               </div>
             )}
           </div>
@@ -123,7 +124,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
               {isEditing ? (
                 <Select
-                  value={editedTask?.status || task.status}
+                  value={editedTask?.status ?? task.status}
                   onValueChange={(value) => setEditedTask({ ...editedTask, status: value })}
                 >
                   <SelectTrigger className="mt-1">
@@ -153,7 +154,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Priority</label>
               {isEditing ? (
                 <Select
-                  value={editedTask?.priority || task.priority}
+                  value={editedTask?.priority ?? task.priority}
                   onValueChange={(value) => setEditedTask({ ...editedTask, priority: value })}
                 >
                   <SelectTrigger className="mt-1">

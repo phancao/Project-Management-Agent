@@ -3,18 +3,19 @@
 
 "use client";
 
+import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
 import { Card } from "~/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
 
 export function BurndownView() {
   const { tasks, loading, error } = useMyTasks();
 
   // Calculate burndown data from tasks
-  const totalHours = tasks.reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
+  const totalHours = tasks.reduce((sum, t) => sum + (t.estimated_hours ?? 0), 0);
   const completedHours = tasks
     .filter(t => t.status && (t.status.toLowerCase().includes("done") || t.status.toLowerCase().includes("completed")))
-    .reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
+    .reduce((sum, t) => sum + (t.estimated_hours ?? 0), 0);
   const remainingHours = totalHours - completedHours;
 
   // Generate dummy burndown data for visualization
@@ -140,7 +141,7 @@ export function BurndownView() {
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">In Progress</div>
             <div className="text-3xl font-bold text-orange-600">
-              {tasks.filter(t => t.status && t.status.toLowerCase().includes("progress")).length}
+              {tasks.filter(t => t.status?.toLowerCase().includes("progress")).length}
             </div>
           </div>
           <div>

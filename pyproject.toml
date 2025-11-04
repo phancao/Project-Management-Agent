@@ -46,6 +46,8 @@ dependencies = [
     "sqlalchemy>=2.0.38",
     "alembic>=1.17.1",
     "psycopg2-binary>=2.9.11",
+    "requests>=2.31.0",
+    "types-requests>=2.31.0",
 ]
 
 [project.optional-dependencies]

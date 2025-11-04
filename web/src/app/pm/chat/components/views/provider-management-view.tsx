@@ -3,7 +3,6 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
 import {
   Plus,
   Server,
@@ -15,6 +14,8 @@ import {
   Edit,
   AlertCircle,
 } from "lucide-react";
+import { useState, useEffect } from "react";
+
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -33,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { cn } from "~/lib/utils";
 import {
   importProjectsFromProvider,
   listProviders,
@@ -44,6 +44,7 @@ import {
   type ProjectImportRequest,
   type ProjectInfo,
 } from "~/core/api/pm/providers";
+import { cn } from "~/lib/utils";
 
 export function ProviderManagementView() {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
@@ -204,7 +205,7 @@ export function ProviderManagementView() {
         request.workspace_id = formData.workspace_id;
       }
 
-      if (editingProvider && editingProvider.id) {
+      if (editingProvider?.id) {
         // Update existing provider
         await updateProvider(editingProvider.id, request);
         setSuccessMessage("Provider updated successfully!");
@@ -378,7 +379,7 @@ export function ProviderManagementView() {
                         </div>
                       ) : providerProjects?.error ? (
                         <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
-                          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
                           <div className="flex-1">
                             <p className="text-sm font-medium text-red-800 dark:text-red-200">
                               Failed to load projects

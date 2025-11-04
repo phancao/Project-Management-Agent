@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useState, useCallback } from "react";
+
+import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMRefresh } from "./use-pm-refresh";
 
 export interface Sprint {
@@ -13,7 +15,7 @@ export interface Sprint {
 }
 
 const fetchSprints = async (projectId: string): Promise<Sprint[]> => {
-  const response = await fetch(`http://localhost:8000/api/pm/projects/${projectId}/sprints`);
+  const response = await fetch(resolveServiceURL(`pm/projects/${projectId}/sprints`));
   if (!response.ok) {
     throw new Error("Failed to fetch sprints");
   }

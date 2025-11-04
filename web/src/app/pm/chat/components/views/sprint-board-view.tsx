@@ -7,16 +7,19 @@ import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestC
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Search, Filter } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useMemo, useEffect } from "react";
-import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
-import { TaskDetailsModal } from "../task-details-modal";
-import type { Task } from "~/core/api/hooks/pm/use-tasks";
+
 import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Search, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
-import { useSearchParams, useRouter } from "next/navigation";
+import type { Task } from "~/core/api/hooks/pm/use-tasks";
+import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
+
+import { TaskDetailsModal } from "../task-details-modal";
 
 function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -152,8 +155,8 @@ export function SprintBoardView() {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(t => 
         t.title.toLowerCase().includes(query) ||
-        (t.description && t.description.toLowerCase().includes(query)) ||
-        (t.project_name && t.project_name.toLowerCase().includes(query))
+        (t.description?.toLowerCase().includes(query)) ||
+        (t.project_name?.toLowerCase().includes(query))
       );
     }
 
@@ -210,7 +213,7 @@ export function SprintBoardView() {
     if (!newStatus || newStatus === task.status) return;
 
     // Update task status via API
-    fetch(`http://localhost:8000/api/pm/tasks/${task.id}`, {
+    fetch(resolveServiceURL(`pm/tasks/${task.id}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
@@ -224,7 +227,7 @@ export function SprintBoardView() {
 
   const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/pm/tasks/${taskId}`, {
+      const response = await fetch(resolveServiceURL(`pm/tasks/${taskId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -274,8 +277,14 @@ export function SprintBoardView() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-red-500">Error loading tasks: {error.message}</div>
+      <div className="flex flex-col items-center justify-center py-20 px-4">
+        <div className="text-red-500 font-semibold mb-2">Error loading tasks</div>
+        <div className="text-red-400 text-sm text-center max-w-2xl">
+          {error.message}
+        </div>
+        <div className="mt-4 text-xs text-muted-foreground">
+          Tip: Check your PM provider configuration and verify the project exists.
+        </div>
       </div>
     );
   }

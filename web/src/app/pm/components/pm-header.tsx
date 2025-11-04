@@ -3,19 +3,20 @@
 
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useMemo, useEffect, useState } from "react";
+import { Suspense } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { listProviders } from "~/core/api/pm/providers";
+
 import { ThemeToggle } from "../../../components/deer-flow/theme-toggle";
 import { Tooltip } from "../../../components/deer-flow/tooltip";
 import { SettingsDialog } from "../../settings/dialogs/settings-dialog";
-import { Suspense } from "react";
-import dynamic from "next/dynamic";
 
 const ProviderManagementDialog = dynamic(() => import("../chat/components/provider-management-dialog").then(mod => ({ default: mod.ProviderManagementDialog })), {
   ssr: false,

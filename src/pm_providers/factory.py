@@ -39,7 +39,8 @@ def create_pm_provider(
         Configured PM provider instance
         
     Raises:
-        ValueError: If provider_type is unsupported or required parameters are missing
+        ValueError: If provider_type is unsupported or required parameters
+            are missing
     """
     config = PMProviderConfig(
         provider_type=provider_type,
@@ -51,11 +52,17 @@ def create_pm_provider(
         workspace_id=workspace_id,
     )
     
-    if provider_type == "openproject":
+    # Normalize provider type to lowercase for case-insensitive matching
+    provider_type_lower = provider_type.lower().strip()
+    
+    if provider_type_lower == "openproject":
         return OpenProjectProvider(config)
-    elif provider_type == "jira":
+    elif provider_type_lower == "jira":
         return JIRAProvider(config)
-    elif provider_type == "clickup":
+    elif provider_type_lower == "clickup":
         return ClickUpProvider(config)
     else:
-        raise ValueError(f"Unsupported provider type: {provider_type}")
+        raise ValueError(
+            f"Unsupported provider type: {provider_type} "
+            f"(supported: openproject, jira, clickup)"
+        )

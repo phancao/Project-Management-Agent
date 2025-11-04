@@ -7,15 +7,24 @@ from pydantic import BaseModel, Field
 
 class ProjectImportRequest(BaseModel):
     """Request model for importing projects from a provider"""
-    provider_type: str = Field(..., description="Provider type: openproject, jira, clickup")
+    provider_type: str = Field(
+        ..., description="Provider type: openproject, jira, clickup"
+    )
     base_url: str = Field(..., description="Provider base URL/IP")
-    api_key: Optional[str] = Field(None, description="API key (for OpenProject, ClickUp)")
+    api_key: Optional[str] = Field(
+        None, description="API key (for OpenProject, ClickUp)"
+    )
     api_token: Optional[str] = Field(None, description="API token (for JIRA)")
     username: Optional[str] = Field(
         None,
-        description="Username. For JIRA Cloud, use your email address (e.g., user@example.com)"
+        description=(
+            "Username. For JIRA Cloud, use your email address "
+            "(e.g., user@example.com)"
+        ),
     )
-    organization_id: Optional[str] = Field(None, description="Organization/Team ID")
+    organization_id: Optional[str] = Field(
+        None, description="Organization/Team ID"
+    )
     workspace_id: Optional[str] = Field(None, description="Workspace ID")
     import_options: Optional[dict] = Field(None, description="Import options")
 

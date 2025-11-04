@@ -3,10 +3,11 @@
 
 "use client";
 
-import { Card } from "~/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
-import { useAllTasks } from "~/core/api/hooks/pm/use-tasks";
 import { useMemo } from "react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
+
+import { Card } from "~/components/ui/card";
+import { useAllTasks } from "~/core/api/hooks/pm/use-tasks";
 
 export function TimelineView() {
   const { tasks, loading, error } = useAllTasks();
@@ -140,7 +141,7 @@ export function TimelineView() {
                 return [value, name];
               }}
               labelFormatter={(label, payload) => {
-                if (payload && payload[0]) {
+                if (payload?.[0]) {
                   return payload[0].payload.fullName;
                 }
                 return label;

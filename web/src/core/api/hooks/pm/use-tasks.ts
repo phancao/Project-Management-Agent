@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
+
+import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMRefresh } from "./use-pm-refresh";
 
 export interface Task {
@@ -20,14 +23,95 @@ export interface Task {
 }
 
 const fetchTasksFn = async (projectId?: string) => {
-  let url = "http://localhost:8000/api/pm/tasks/my";
+  let url = "pm/tasks/my";
   if (projectId) {
-    url = `http://localhost:8000/api/pm/projects/${projectId}/tasks`;
+    url = `pm/projects/${projectId}/tasks`;
   }
   
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("Failed to fetch tasks");
+  const fullUrl = resolveServiceURL(url);
+  console.log(`[useTasks] Fetching tasks from: ${fullUrl}`);
+  let response: Response;
+  try {
+    response = await fetch(fullUrl);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[useTasks] Network error fetching tasks from ${fullUrl}:`, errorMessage);
+    const userFriendlyError = new Error(`Network error: Unable to connect to the server. Please check your connection and try again.`);
+    toast.error("Connection Error", {
+      description: "Unable to connect to the server. Please check your connection.",
+    });
+    throw userFriendlyError;
+  }
+  
+    if (!response.ok) {
+    let errorDetail = `HTTP ${response.status}`;
+    let userFriendlyMessage = "Failed to load tasks";
+    const isClientError = response.status >= 400 && response.status < 500;
+    
+    try {
+      const errorData = await response.json();
+      errorDetail = errorData.detail || errorData.message || errorDetail;
+      
+      // Provide user-friendly messages for specific status codes
+      if (response.status === 410) {
+        userFriendlyMessage = "Project no longer available";
+        const description = errorDetail.includes("410") || errorDetail.includes("Gone")
+          ? "This project may have been deleted, archived, or is no longer accessible. Please verify the project exists in your PM provider."
+          : errorDetail;
+        toast.error(userFriendlyMessage, {
+          description,
+          duration: 8000,
+        });
+      } else if (response.status === 404) {
+        userFriendlyMessage = "Project not found";
+        toast.error(userFriendlyMessage, {
+          description: "The requested project could not be found. Please check the project ID.",
+          duration: 6000,
+        });
+      } else if (response.status === 401 || response.status === 403) {
+        userFriendlyMessage = "Authentication failed";
+        toast.error(userFriendlyMessage, {
+          description: "Please check your PM provider credentials and try again.",
+          duration: 6000,
+        });
+      } else if (response.status >= 500) {
+        userFriendlyMessage = "Server error";
+        toast.error(userFriendlyMessage, {
+          description: "The server encountered an error. Please try again later.",
+          duration: 6000,
+        });
+      } else {
+        toast.error(userFriendlyMessage, {
+          description: errorDetail,
+          duration: 5000,
+        });
+      }
+    } catch {
+      // If response is not JSON, use status text
+      errorDetail = response.statusText || errorDetail;
+      
+      if (response.status === 410) {
+        userFriendlyMessage = "Project no longer available";
+        toast.error(userFriendlyMessage, {
+          description: "This project may have been deleted or archived.",
+          duration: 8000,
+        });
+      } else {
+        toast.error("Failed to load tasks", {
+          description: errorDetail,
+          duration: 5000,
+        });
+      }
+    }
+    
+    // Log client errors (4xx) as warnings since they're expected business conditions
+    // Log server errors (5xx) as errors since they're unexpected
+    if (isClientError) {
+      console.warn(`Failed to fetch tasks from ${fullUrl}: ${errorDetail}`);
+    } else {
+      console.error(`Failed to fetch tasks from ${fullUrl}: ${errorDetail}`);
+    }
+    throw new Error(userFriendlyMessage + (errorDetail !== userFriendlyMessage ? `: ${errorDetail}` : ""));
   }
   return response.json();
 };
@@ -64,9 +148,64 @@ export function useMyTasks() {
 }
 
 const fetchAllTasksFn = async () => {
-  const response = await fetch("http://localhost:8000/api/pm/tasks/all");
+  const fullUrl = resolveServiceURL("pm/tasks/all");
+  console.log(`[useAllTasks] Fetching all tasks from: ${fullUrl}`);
+  let response: Response;
+  try {
+    response = await fetch(fullUrl);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[useAllTasks] Network error fetching all tasks from ${fullUrl}:`, errorMessage);
+    const userFriendlyError = new Error(`Network error: Unable to connect to the server. Please check your connection and try again.`);
+    toast.error("Connection Error", {
+      description: "Unable to connect to the server. Please check your connection.",
+    });
+    throw userFriendlyError;
+  }
+  
   if (!response.ok) {
-    throw new Error("Failed to fetch all tasks");
+    let errorDetail = `HTTP ${response.status}`;
+    let userFriendlyMessage = "Failed to load tasks";
+    const isClientError = response.status >= 400 && response.status < 500;
+    
+    try {
+      const errorData = await response.json();
+      errorDetail = errorData.detail || errorData.message || errorDetail;
+      
+      if (response.status === 401 || response.status === 403) {
+        userFriendlyMessage = "Authentication failed";
+        toast.error(userFriendlyMessage, {
+          description: "Please check your PM provider credentials and try again.",
+          duration: 6000,
+        });
+      } else if (response.status >= 500) {
+        userFriendlyMessage = "Server error";
+        toast.error(userFriendlyMessage, {
+          description: "The server encountered an error. Please try again later.",
+          duration: 6000,
+        });
+      } else {
+        toast.error(userFriendlyMessage, {
+          description: errorDetail,
+          duration: 5000,
+        });
+      }
+    } catch {
+      errorDetail = response.statusText || errorDetail;
+      toast.error("Failed to load tasks", {
+        description: errorDetail,
+        duration: 5000,
+      });
+    }
+    
+    // Log client errors (4xx) as warnings since they're expected business conditions
+    // Log server errors (5xx) as errors since they're unexpected
+    if (isClientError) {
+      console.warn(`Failed to fetch all tasks from ${fullUrl}: ${errorDetail}`);
+    } else {
+      console.error(`Failed to fetch all tasks from ${fullUrl}: ${errorDetail}`);
+    }
+    throw new Error(userFriendlyMessage + (errorDetail !== userFriendlyMessage ? `: ${errorDetail}` : ""));
   }
   return response.json();
 };

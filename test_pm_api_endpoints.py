@@ -326,7 +326,7 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
                 break
             elif response.status_code == 410:
                 print_error("Endpoint is deprecated (410 Gone)")
-                results["workflows"]["deprecated"] = True
+                results["statuses"]["deprecated"] = True
                 error_data = response.json() if response.text else {}
                 print_error(f"Error: {error_data.get('errorMessages', ['Unknown error'])}")
             elif response.status_code == 404:

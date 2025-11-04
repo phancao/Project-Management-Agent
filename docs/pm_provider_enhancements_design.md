@@ -168,42 +168,26 @@ async def get_label_tasks(self, label_id: str) -> List[PMTask]:
     return [t for t in all_tasks if label_id in (t.label_ids or [])]
 ```
 
-### 2.4 Status Workflow Operations
+### 2.4 Status Operations
 ```python
 @abstractmethod
-async def get_workflow(self, entity_type: str, project_id: Optional[str] = None) -> Optional[PMWorkflow]:
-    """Get the workflow for an entity type (task, epic, etc.)"""
+async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[str]:
+    """
+    Get list of available statuses for an entity type.
+    
+    This is primarily used for UI/UX to create status columns in Kanban boards.
+    Returns ordered list of status names (e.g., ["todo", "in_progress", "done"]).
+    """
     pass
 
-@abstractmethod
-async def list_workflows(self, project_id: Optional[str] = None) -> List[PMWorkflow]:
-    """List all workflows"""
-    pass
-
-async def get_valid_transitions(self, entity_id: str, entity_type: str) -> List[PMStatusTransition]:
-    """Get valid status transitions for an entity (optional)"""
-    workflow = await self.get_workflow(entity_type)
-    if not workflow:
-        return []
+async def get_valid_transitions(self, entity_id: str, entity_type: str) -> List[str]:
+    """
+    Get valid status transitions for an entity (optional)
     
-    # Get current entity status
-    if entity_type == "task":
-        entity = await self.get_task(entity_id)
-    elif entity_type == "epic":
-        entity = await self.get_epic(entity_id)
-    elif entity_type == "project":
-        entity = await self.get_project(entity_id)
-    else:
-        return []
-    
-    if not entity or not entity.status:
-        return []
-    
-    current_status = entity.status
-    return [
-        t for t in workflow.transitions
-        if t.from_status == current_status
-    ]
+    Returns list of status names that the entity can transition to.
+    Default implementation returns all available statuses.
+    """
+    return await self.list_statuses(entity_type)
 
 async def transition_status(
     self,
@@ -212,11 +196,20 @@ async def transition_status(
     to_status: str,
     comment: Optional[str] = None
 ) -> bool:
-    """Transition an entity to a new status (optional)"""
-    # Validate transition
+    """
+    Transition an entity to a new status (optional)
+    
+    Validates that target status exists and optionally validates transition rules.
+    """
+    # Validate that target status exists
+    valid_statuses = await self.list_statuses(entity_type)
+    if to_status not in valid_statuses:
+        raise ValueError(f"Invalid status '{to_status}'. Valid: {valid_statuses}")
+    
+    # Optionally validate transition rules
     valid_transitions = await self.get_valid_transitions(entity_id, entity_type)
-    if not any(t.to_status == to_status for t in valid_transitions):
-        raise ValueError(f"Invalid status transition to {to_status}")
+    if valid_transitions and to_status not in valid_transitions:
+        raise ValueError(f"Invalid transition to '{to_status}'. Valid: {valid_transitions}")
     
     # Perform transition
     if entity_type == "task":

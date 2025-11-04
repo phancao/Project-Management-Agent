@@ -89,6 +89,18 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
             )}
           </div>
 
+          {/* Project */}
+          {task.project_name && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Project</label>
+              <div className="mt-1">
+                <span className="inline-flex items-center px-3 py-1.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-lg text-sm font-medium">
+                  {task.project_name}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Description */}
           <div>
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
@@ -192,12 +204,6 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Estimated Hours</label>
               <div className="mt-1 text-gray-700 dark:text-gray-300">
                 {task.estimated_hours ? `${task.estimated_hours}h` : "Not set"}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Project</label>
-              <div className="mt-1 text-gray-700 dark:text-gray-300">
-                {task.project_name || "Unknown"}
               </div>
             </div>
           </div>

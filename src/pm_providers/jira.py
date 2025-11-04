@@ -874,9 +874,61 @@ class JIRAProvider(BasePMProvider):
     # ==================== Component Operations ====================
     
     async def list_components(self, project_id: Optional[str] = None) -> List[PMComponent]:
-        """List all components, optionally filtered by project"""
-        # TODO: Implement after API validation
-        raise NotImplementedError("Components not yet implemented for JIRA")
+        """
+        List all components, optionally filtered by project.
+        
+        Requires project_id. Uses /rest/api/3/project/{project_key}/components endpoint.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not project_id:
+            logger.warning("list_components requires project_id for JIRA")
+            return []
+        
+        # Verify project and get actual key
+        project = await self.get_project(project_id)
+        if project:
+            actual_project_key = project.id
+        else:
+            actual_project_key = project_id
+        
+        url = f"{self.base_url}/rest/api/3/project/{actual_project_key}/components"
+        
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 200:
+                components_data = response.json()
+                
+                components = []
+                for comp_data in components_data:
+                    component = PMComponent(
+                        id=str(comp_data.get('id')),
+                        name=comp_data.get('name', ''),
+                        description=comp_data.get('description'),
+                        project_id=actual_project_key,
+                        lead_id=comp_data.get('lead', {}).get('accountId') if comp_data.get('lead') else None,
+                        raw_data=comp_data
+                    )
+                    components.append(component)
+                
+                logger.info(f"Found {len(components)} components from JIRA project {project_id}")
+                return components
+            elif response.status_code == 404:
+                logger.warning(f"Project {project_id} not found or has no components")
+                return []
+            else:
+                logger.error(
+                    f"Failed to list components from JIRA. Status: {response.status_code}, "
+                    f"Response: {response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to list components: ({response.status_code}) {response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing components from JIRA: {e}", exc_info=True)
+            raise ValueError(f"Failed to list components: {str(e)}")
     
     async def get_component(self, component_id: str) -> Optional[PMComponent]:
         """Get a single component by ID"""
@@ -897,9 +949,83 @@ class JIRAProvider(BasePMProvider):
     # ==================== Label Operations ====================
     
     async def list_labels(self, project_id: Optional[str] = None) -> List[PMLabel]:
-        """List all labels, optionally filtered by project"""
-        # TODO: Implement after API validation
-        raise NotImplementedError("Labels not yet implemented for JIRA")
+        """
+        List all labels, optionally filtered by project.
+        
+        In JIRA, labels are extracted from issues. We search for issues with labels
+        and extract unique label names.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/rest/api/3/search/jql"
+        
+        # Build JQL query to find issues with labels
+        jql_parts = ['labels IS NOT EMPTY']
+        if project_id:
+            # Verify project and get actual key
+            project = await self.get_project(project_id)
+            if project:
+                actual_project_key = project.id
+            else:
+                actual_project_key = project_id
+            
+            jql_parts.append(f'project = "{actual_project_key}"')
+        
+        jql = " AND ".join(jql_parts)
+        
+        params = {
+            "jql": jql,
+            "maxResults": 1000,  # Get enough issues to find unique labels
+            "fields": ["labels"],  # Only need labels field
+            "expand": "names"
+        }
+        
+        try:
+            response = requests.post(
+                url, headers=self.headers, json=params, timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                issues = data.get('issues', [])
+                
+                # Extract unique labels
+                labels_set = set()
+                for issue in issues:
+                    fields = issue.get('fields', {})
+                    labels = fields.get('labels', [])
+                    if isinstance(labels, list):
+                        for label_name in labels:
+                            if label_name:
+                                labels_set.add(label_name)
+                
+                # Convert to PMLabel objects
+                labels = []
+                for label_name in sorted(labels_set):
+                    label = PMLabel(
+                        id=label_name,  # Use label name as ID (JIRA doesn't have label IDs)
+                        name=label_name,
+                        color=None,  # JIRA doesn't provide label colors in basic API
+                        description=None,
+                        project_id=project_id if project_id else None,
+                        raw_data={"name": label_name}
+                    )
+                    labels.append(label)
+                
+                logger.info(f"Found {len(labels)} unique labels from JIRA")
+                return labels
+            else:
+                logger.error(
+                    f"Failed to list labels from JIRA. Status: {response.status_code}, "
+                    f"Response: {response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to list labels: ({response.status_code}) {response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing labels from JIRA: {e}", exc_info=True)
+            raise ValueError(f"Failed to list labels: {str(e)}")
     
     async def get_label(self, label_id: str) -> Optional[PMLabel]:
         """Get a single label by ID"""

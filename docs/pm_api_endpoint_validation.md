@@ -9,19 +9,28 @@ Before implementing new features (Epics, Components, Labels, Workflows) in PM pr
 ### Test JIRA Endpoints
 
 ```bash
-python test_pm_api_endpoints.py jira <base_url> <email> <api_token> [project_key]
+python test_jira_endpoints.py <base_url> <email> <api_token> [project_key]
 
 # Example:
-python test_pm_api_endpoints.py jira https://your-domain.atlassian.net email@example.com your_token SCRUM
+python test_jira_endpoints.py https://your-domain.atlassian.net email@example.com your_token SCRUM
 ```
 
 ### Test OpenProject Endpoints
 
 ```bash
-python test_pm_api_endpoints.py openproject <base_url> <api_key> [project_id]
+python test_openproject_endpoints.py <base_url> <api_key> [project_id]
 
 # Example:
-python test_pm_api_endpoints.py openproject https://your-openproject.com apikey123 123
+python test_openproject_endpoints.py https://your-openproject.com apikey123 123
+```
+
+### Test ClickUp Endpoints
+
+```bash
+python test_clickup_endpoints.py <api_token> [space_id] [folder_id] [list_id]
+
+# Example:
+python test_clickup_endpoints.py pk_xxxxx 123456 789012 345678
 ```
 
 ## What the Script Tests
@@ -38,9 +47,10 @@ python test_pm_api_endpoints.py openproject https://your-openproject.com apikey1
 - **JIRA**: Labels field in issue search results
 - **OpenProject**: Categories field in work packages
 
-### 4. Workflows
-- **JIRA**: `/rest/api/3/workflowscheme` and `/rest/api/3/issue/{key}/transitions`
+### 4. Statuses (for UI Kanban columns)
+- **JIRA**: `/rest/api/3/status` and `/rest/api/3/project/{projectKey}/statuses`
 - **OpenProject**: `/api/v3/statuses` and `/api/v3/types`
+- **ClickUp**: Statuses embedded in list/space configurations
 
 ## Expected Results
 

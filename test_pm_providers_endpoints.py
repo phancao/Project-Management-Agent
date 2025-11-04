@@ -19,7 +19,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database.orm_models import PMProviderConnection
 from src.config.loader import get_str_env
-from test_pm_api_endpoints import test_jira_endpoints, test_openproject_endpoints
+from test_jira_endpoints import test_jira_endpoints
+from test_openproject_endpoints import test_openproject_endpoints
+from test_clickup_endpoints import test_clickup_endpoints
 
 
 def test_all_providers():
@@ -75,6 +77,18 @@ def test_all_providers():
                         base_url=provider.base_url,
                         api_key=provider.api_key,
                         project_id=None  # Will test general endpoints
+                    )
+                
+                elif provider.provider_type.lower() == 'clickup':
+                    if not provider.api_token:
+                        print("⚠️  Skipping: Missing API token")
+                        continue
+                    
+                    test_clickup_endpoints(
+                        api_token=provider.api_token,
+                        space_id=None,  # Will test general endpoints
+                        folder_id=None,
+                        list_id=None
                     )
                 
                 else:

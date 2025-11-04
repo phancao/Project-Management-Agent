@@ -59,7 +59,8 @@ class JIRAProvider(BasePMProvider):
         # JIRA API v3: Use 'recent' parameter to get accessible projects
         params = {
             "recent": 50,  # Get up to 50 recent projects
-            "expand": "description,lead,url,projectKeys"  # Get more details
+            # Get more details
+            "expand": "description,lead,url,projectKeys"
         }
         
         response = requests.get(
@@ -102,17 +103,18 @@ class JIRAProvider(BasePMProvider):
         """Parse JIRA project data to PMProject"""
         # For Next-Gen projects, try different ID fields
         project_id = (
-            proj_data.get("key") or 
-            proj_data.get("id") or 
+            proj_data.get("key") or
+            proj_data.get("id") or
             proj_data.get("simplifiedId") or
             str(proj_data.get("id", ""))
         )
         
+        # JIRA projects don't have a simple status field
         return PMProject(
             id=project_id,
             name=proj_data.get("name", ""),
             description=proj_data.get("description", ""),
-            status=None,  # JIRA projects don't have a simple status field
+            status=None,
             priority=None,
             created_at=self._parse_datetime(proj_data.get("created")),
             updated_at=self._parse_datetime(proj_data.get("updated")),
@@ -126,7 +128,10 @@ class JIRAProvider(BasePMProvider):
             return None
         try:
             # JIRA format: "2023-01-15T10:30:00.000+0000"
-            dt_str = dt_str.replace("+0000", "+00:00").replace("Z", "+00:00")
+            dt_str = (
+                dt_str.replace("+0000", "+00:00")
+                .replace("Z", "+00:00")
+            )
             return datetime.fromisoformat(dt_str)
         except (ValueError, AttributeError):
             return None

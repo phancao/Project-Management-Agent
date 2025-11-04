@@ -3,7 +3,8 @@
 
 "use client";
 
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors, closestCenter, useDroppable } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter, useDroppable } from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState, useMemo, useEffect } from "react";
@@ -376,7 +377,7 @@ export function SprintBoardView() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Projects</SelectItem>
-                {[...new Set(tasks.map(t => t.project_name).filter(Boolean))].map(projectName => (
+                {[...new Set(tasks.map(t => t.project_name).filter((n): n is string => !!n))].map(projectName => (
                   <SelectItem key={projectName} value={projectName}>{projectName}</SelectItem>
                 ))}
               </SelectContent>

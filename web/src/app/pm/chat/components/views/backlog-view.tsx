@@ -246,7 +246,7 @@ export function BacklogView() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Projects</SelectItem>
-                {[...new Set(tasks.map(t => t.project_name).filter(Boolean))].map(projectName => (
+                {[...new Set(tasks.map(t => t.project_name).filter((n): n is string => !!n))].map(projectName => (
                   <SelectItem key={projectName} value={projectName}>{projectName}</SelectItem>
                 ))}
               </SelectContent>

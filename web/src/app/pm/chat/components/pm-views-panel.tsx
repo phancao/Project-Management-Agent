@@ -3,7 +3,7 @@
 
 "use client";
 
-import { BarChart3, CheckSquare, FolderKanban, LineChart, Calendar, Users, Server } from "lucide-react";
+import { CheckSquare, FolderKanban, LineChart, Calendar, Users } from "lucide-react";
 import { useState } from "react";
 
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -11,20 +11,18 @@ import { cn } from "~/lib/utils";
 
 import { BacklogView } from "./views/backlog-view";
 import { BurndownView } from "./views/burndown-view";
-import { DashboardView } from "./views/dashboard-view";
 import { SprintBoardView } from "./views/sprint-board-view";
 import { TeamAssignmentsView } from "./views/team-assignments-view";
 import { TimelineView } from "./views/timeline-view";
-import { ProviderManagementView } from "./views/provider-management-view";
 
-type PMView = "dashboard" | "board" | "backlog" | "burndown" | "timeline" | "team" | "providers";
+type PMView = "backlog" | "board" | "charts" | "timeline" | "team";
 
 interface PMViewsPanelProps {
   className?: string;
 }
 
 export function PMViewsPanel({ className }: PMViewsPanelProps) {
-  const [activeView, setActiveView] = useState<PMView>("dashboard");
+  const [activeView, setActiveView] = useState<PMView>("backlog");
 
   return (
     <div className={cn("flex flex-col h-full bg-gray-50 dark:bg-gray-900", className)}>
@@ -33,11 +31,11 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
         <Tabs value={activeView} onValueChange={(v) => setActiveView(v as PMView)}>
           <TabsList className="w-full justify-start h-auto bg-transparent p-2 gap-1">
             <TabsTrigger 
-              value="dashboard" 
+              value="backlog"
               className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
             >
-              <BarChart3 className="w-4 h-4" />
-              Dashboard
+              <CheckSquare className="w-4 h-4" />
+              Backlog
             </TabsTrigger>
             <TabsTrigger 
               value="board"
@@ -47,18 +45,11 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
               Board
             </TabsTrigger>
             <TabsTrigger 
-              value="backlog"
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
-            >
-              <CheckSquare className="w-4 h-4" />
-              Backlog
-            </TabsTrigger>
-            <TabsTrigger 
-              value="burndown"
+              value="charts"
               className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
             >
               <LineChart className="w-4 h-4" />
-              Burndown
+              Charts
             </TabsTrigger>
             <TabsTrigger 
               value="timeline"
@@ -74,26 +65,17 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
               <Users className="w-4 h-4" />
               Team
             </TabsTrigger>
-            <TabsTrigger 
-              value="providers"
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
-            >
-              <Server className="w-4 h-4" />
-              Providers
-            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
       {/* View Content */}
       <div className="flex-1 overflow-auto p-4">
-        {activeView === "dashboard" && <DashboardView />}
-        {activeView === "board" && <SprintBoardView />}
         {activeView === "backlog" && <BacklogView />}
-        {activeView === "burndown" && <BurndownView />}
+        {activeView === "board" && <SprintBoardView />}
+        {activeView === "charts" && <BurndownView />}
         {activeView === "timeline" && <TimelineView />}
         {activeView === "team" && <TeamAssignmentsView />}
-        {activeView === "providers" && <ProviderManagementView />}
       </div>
     </div>
   );

@@ -16,11 +16,13 @@ export function TeamAssignmentsView() {
     const unassigned: any[] = [];
 
     tasks.forEach(task => {
-      if (task.assignee_id) {
-        if (!byAssignee[task.assignee_id]) {
-          byAssignee[task.assignee_id] = [];
+      if (task.assigned_to) {
+        const assignee = task.assigned_to;
+        if (!byAssignee[assignee]) {
+          byAssignee[assignee] = [];
         }
-        byAssignee[task.assignee_id].push(task);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        byAssignee[assignee]!.push(task);
       } else {
         unassigned.push(task);
       }

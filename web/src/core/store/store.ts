@@ -145,7 +145,8 @@ export async function sendMessage(
       const { type, data } = event;
       
       // Handle PM refresh events to update PM views
-      if (type === "pm_refresh") {
+      // Type assertion needed because ChatEvent type doesn't include pm_refresh
+      if ((type as string) === "pm_refresh") {
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("pm_refresh", { 
             detail: { type: "pm_refresh", data } 

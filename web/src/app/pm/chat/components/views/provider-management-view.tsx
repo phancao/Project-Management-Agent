@@ -71,7 +71,7 @@ export function ProviderManagementView() {
   });
 
   const [projects, setProjects] = useState<
-    Record<string, { projects: ProjectInfo[]; loading: boolean }>
+    Record<string, { projects: ProjectInfo[]; loading: boolean; error?: string }>
   >({});
 
   // Load providers on mount
@@ -123,13 +123,19 @@ export function ProviderManagementView() {
         [providerKey]: {
           projects: response.projects,
           loading: false,
+          error: undefined,
         },
       }));
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to load projects";
       console.error(`Failed to load projects for provider ${providerKey}:`, err);
       setProjects((prev) => ({
         ...prev,
-        [providerKey]: { projects: [], loading: false },
+        [providerKey]: { 
+          projects: [], 
+          loading: false,
+          error: errorMessage,
+        },
       }));
     }
   };
@@ -370,13 +376,26 @@ export function ProviderManagementView() {
                         <div className="flex items-center justify-center py-4">
                           <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />
                         </div>
-                      ) : providerProjects.projects.length > 0 ? (
+                      ) : providerProjects?.error ? (
+                        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                              Failed to load projects
+                            </p>
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              {providerProjects?.error || "Unknown error"}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (providerProjects?.projects?.length || 0) > 0 ? (
                         <div className="space-y-2">
                           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Projects ({providerProjects.projects.length}):
+                            Projects (
+                            {providerProjects?.projects?.length || 0}):
                           </p>
                           <div className="space-y-1">
-                            {providerProjects.projects.map((project) => (
+                            {providerProjects?.projects?.map((project) => (
                               <div
                                 key={project.id}
                                 className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded"

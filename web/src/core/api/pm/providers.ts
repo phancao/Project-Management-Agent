@@ -10,7 +10,6 @@ export interface ProviderConfig {
   api_key?: string;
   api_token?: string;
   username?: string;
-  email?: string;
   organization_id?: string;
   workspace_id?: string;
 }
@@ -21,7 +20,6 @@ export interface ProjectImportRequest {
   api_key?: string;
   api_token?: string;
   username?: string;
-  email?: string;
   organization_id?: string;
   workspace_id?: string;
   import_options?: {
@@ -132,11 +130,25 @@ export async function getProviderProjects(
   );
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || "Failed to fetch projects");
+    let errorMessage = "Failed to fetch projects";
+    try {
+      const error = await response.json();
+      errorMessage = error.detail || error.message || errorMessage;
+    } catch {
+      errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
   }
 
-  return response.json();
+  const data = await response.json();
+  
+  // Backend returns an array, wrap it in the expected format
+  const projectsArray = Array.isArray(data) ? data : [];
+  return {
+    success: true,
+    total_projects: projectsArray.length,
+    projects: projectsArray,
+  };
 }
 
 export async function updateProvider(

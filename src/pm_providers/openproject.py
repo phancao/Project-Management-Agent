@@ -32,15 +32,15 @@ class OpenProjectProvider(BasePMProvider):
         if not self.api_key:
             raise ValueError("OpenProject requires api_key or api_token")
         
-        # OpenProject requires Basic auth with base64(apikey:API_KEY)
+        # OpenProject uses Basic auth with "apikey" as username and API key
         import base64
         auth_string = f"apikey:{self.api_key}"
-        auth_bytes = auth_string.encode('utf-8')
-        auth_b64 = base64.b64encode(auth_bytes).decode('utf-8')
-        
+        credentials = base64.b64encode(
+            auth_string.encode()
+        ).decode()
         self.headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Basic {auth_b64}"
+            "Authorization": f"Basic {credentials}"
         }
     
     # ==================== Project Operations ====================

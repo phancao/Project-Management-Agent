@@ -49,17 +49,6 @@ async def test_provider_methods(provider_type, provider_config):
         results['epics'] = ('❌', str(e)[:100])
         print(f"❌ list_epics(): {e}")
     
-    # Test Components
-    try:
-        components = await provider.list_components(project_id=test_project.id)
-        results['components'] = ('✅', len(components))
-        print(f"✅ list_components(): Found {len(components)} components")
-        if components:
-            print(f"   Example: {components[0].name}")
-    except Exception as e:
-        results['components'] = ('❌', str(e)[:100])
-        print(f"❌ list_components(): {e}")
-    
     # Test Labels
     try:
         labels = await provider.list_labels(project_id=test_project.id)

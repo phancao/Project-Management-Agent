@@ -3,9 +3,10 @@
 
 "use client";
 
+import { useMemo } from "react";
+
 import { Card } from "~/components/ui/card";
 import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
-import { useMemo } from "react";
 
 export function TeamAssignmentsView() {
   const { tasks, loading, error } = useMyTasks();
@@ -21,8 +22,8 @@ export function TeamAssignmentsView() {
         if (!byAssignee[assignee]) {
           byAssignee[assignee] = [];
         }
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        byAssignee[assignee]!.push(task);
+        const assigneeTasks = byAssignee[assignee]!;
+        assigneeTasks.push(task);
       } else {
         unassigned.push(task);
       }

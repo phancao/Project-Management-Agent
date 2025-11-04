@@ -770,9 +770,90 @@ class JIRAProvider(BasePMProvider):
     # ==================== Epic Operations ====================
     
     async def list_epics(self, project_id: Optional[str] = None) -> List[PMEpic]:
-        """List all epics, optionally filtered by project"""
-        # TODO: Implement after API validation
-        raise NotImplementedError("Epics not yet implemented for JIRA")
+        """
+        List all epics, optionally filtered by project.
+        
+        Uses JQL search with issuetype = Epic.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/rest/api/3/search/jql"
+        
+        # Build JQL query for epics
+        jql_parts = ['issuetype = Epic']
+        if project_id:
+            # Verify project and get actual key
+            project = await self.get_project(project_id)
+            if project:
+                actual_project_key = project.id
+            else:
+                actual_project_key = project_id
+            
+            jql_parts.append(f'project = "{actual_project_key}"')
+        
+        jql = " AND ".join(jql_parts)
+        
+        params = {
+            "jql": jql,
+            "maxResults": 1000,
+            "fields": [
+                "summary",           # name
+                "description",
+                "status",
+                "priority",
+                "project",
+                "created",
+                "updated",
+                "duedate",
+                "startdate",
+            ],
+            "expand": "names,schema"
+        }
+        
+        try:
+            response = requests.post(
+                url, headers=self.headers, json=params, timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                issues = data.get('issues', [])
+                
+                epics = []
+                for issue in issues:
+                    fields = issue.get('fields', {})
+                    status_obj = fields.get('status', {})
+                    priority_obj = fields.get('priority', {})
+                    
+                    epic = PMEpic(
+                        id=issue.get('key'),
+                        name=fields.get('summary', ''),
+                        description=fields.get('description'),
+                        project_id=fields.get('project', {}).get('key'),
+                        status=status_obj.get('name') if status_obj else None,
+                        priority=priority_obj.get('name') if priority_obj else None,
+                        start_date=self._parse_date(fields.get('startdate')),
+                        end_date=self._parse_date(fields.get('duedate')),
+                        created_at=self._parse_datetime(fields.get('created')),
+                        updated_at=self._parse_datetime(fields.get('updated')),
+                        raw_data=issue
+                    )
+                    epics.append(epic)
+                
+                logger.info(f"Found {len(epics)} epics from JIRA")
+                return epics
+            else:
+                logger.error(
+                    f"Failed to list epics from JIRA. Status: {response.status_code}, "
+                    f"Response: {response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to list epics: ({response.status_code}) {response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing epics from JIRA: {e}", exc_info=True)
+            raise ValueError(f"Failed to list epics: {str(e)}")
     
     async def get_epic(self, epic_id: str) -> Optional[PMEpic]:
         """Get a single epic by ID"""
@@ -842,9 +923,67 @@ class JIRAProvider(BasePMProvider):
         """
         Get list of available statuses for an entity type.
         
-        For JIRA, this fetches statuses from the issue type or project workflow.
+        For JIRA, this fetches statuses from /rest/api/3/status endpoint.
+        If project_id is provided, tries to get project-specific statuses.
         """
-        # TODO: Implement after API validation
-        # Should fetch from /rest/api/3/status or project-specific workflow
-        raise NotImplementedError("Status list not yet implemented for JIRA")
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Try project-specific statuses first if project_id provided
+        if project_id and entity_type == "task":
+            try:
+                # Verify project and get actual key
+                project = await self.get_project(project_id)
+                if project:
+                    actual_project_key = project.id
+                    url = f"{self.base_url}/rest/api/3/project/{actual_project_key}/statuses"
+                    
+                    response = requests.get(url, headers=self.headers, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        # Extract unique status names from all issue types
+                        statuses = set()
+                        for issue_type, status_list in data.items():
+                            if isinstance(status_list, list):
+                                for status in status_list:
+                                    if isinstance(status, dict):
+                                        status_name = status.get('name') or status.get('id')
+                                        if status_name:
+                                            statuses.add(status_name)
+                        if statuses:
+                            # Return in a consistent order
+                            result = sorted(list(statuses))
+                            logger.info(f"Found {len(result)} statuses for project {project_id}")
+                            return result
+            except Exception as e:
+                logger.warning(f"Failed to get project-specific statuses: {e}, falling back to global")
+        
+        # Fallback to global statuses
+        url = f"{self.base_url}/rest/api/3/status"
+        
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                statuses = []
+                for status in data:
+                    if isinstance(status, dict):
+                        status_name = status.get('name') or status.get('id')
+                        if status_name:
+                            statuses.append(status_name)
+                
+                logger.info(f"Found {len(statuses)} global statuses from JIRA")
+                return statuses
+            else:
+                logger.error(
+                    f"Failed to list statuses from JIRA. Status: {response.status_code}, "
+                    f"Response: {response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to list statuses: ({response.status_code}) {response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing statuses from JIRA: {e}", exc_info=True)
+            raise ValueError(f"Failed to list statuses: {str(e)}")
 

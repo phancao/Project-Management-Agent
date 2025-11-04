@@ -742,9 +742,73 @@ class OpenProjectProvider(BasePMProvider):
     # ==================== Label Operations ====================
     
     async def list_labels(self, project_id: Optional[str] = None) -> List[PMLabel]:
-        """List all labels, optionally filtered by project"""
-        # TODO: Implement after API validation
-        raise NotImplementedError("Labels not yet implemented for OpenProject")
+        """
+        List all labels, optionally filtered by project.
+        
+        In OpenProject, labels are represented as categories in work packages.
+        We extract unique categories from work packages.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Get work packages to extract categories
+        url = f"{self.base_url}/api/v3/work_packages"
+        params = {"pageSize": 100}  # Get enough to find unique categories
+        
+        if project_id:
+            import json as json_lib
+            params["filters"] = json_lib.dumps([{
+                "project": {"operator": "=", "values": [project_id]}
+            }])
+        
+        try:
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
+                work_packages = data.get('_embedded', {}).get('elements', [])
+                
+                # Extract unique categories from work packages
+                categories_map = {}  # id -> category data
+                for wp in work_packages:
+                    categories = wp.get('_links', {}).get('categories', [])
+                    if isinstance(categories, list):
+                        for cat in categories:
+                            if isinstance(cat, dict):
+                                cat_id = cat.get('href', '').split('/')[-1]
+                                cat_name = cat.get('title', '')
+                                if cat_id and cat_id not in categories_map:
+                                    categories_map[cat_id] = {
+                                        'id': cat_id,
+                                        'name': cat_name,
+                                        'href': cat.get('href')
+                                    }
+                
+                # Convert to PMLabel objects
+                labels = []
+                for cat_id, cat_data in categories_map.items():
+                    label = PMLabel(
+                        id=cat_id,
+                        name=cat_data['name'],
+                        description=None,
+                        project_id=project_id,
+                        raw_data=cat_data
+                    )
+                    labels.append(label)
+                
+                logger.info(f"Found {len(labels)} labels/categories from OpenProject")
+                return labels
+            else:
+                logger.error(
+                    f"Failed to list labels from OpenProject. Status: {response.status_code}, "
+                    f"Response: {response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to list labels: ({response.status_code}) {response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing labels from OpenProject: {e}", exc_info=True)
+            raise ValueError(f"Failed to list labels: {str(e)}")
     
     async def get_label(self, label_id: str) -> Optional[PMLabel]:
         """Get a single label by ID"""
@@ -768,9 +832,38 @@ class OpenProjectProvider(BasePMProvider):
         """
         Get list of available statuses for an entity type.
         
-        For OpenProject, this fetches statuses from /api/v3/statuses.
+        For OpenProject, this fetches statuses from /api/v3/statuses endpoint.
         """
-        # TODO: Implement after API validation
-        # Should fetch from /api/v3/statuses endpoint
-        raise NotImplementedError("Status list not yet implemented for OpenProject")
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/api/v3/statuses"
+        
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                elements = data.get('_embedded', {}).get('elements', [])
+                
+                statuses = []
+                for status in elements:
+                    if isinstance(status, dict):
+                        status_name = status.get('name')
+                        if status_name:
+                            statuses.append(status_name)
+                
+                logger.info(f"Found {len(statuses)} statuses from OpenProject")
+                return statuses
+            else:
+                logger.error(
+                    f"Failed to list statuses from OpenProject. Status: {response.status_code}, "
+                    f"Response: {response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to list statuses: ({response.status_code}) {response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing statuses from OpenProject: {e}", exc_info=True)
+            raise ValueError(f"Failed to list statuses: {str(e)}")
 

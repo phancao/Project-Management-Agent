@@ -4,7 +4,9 @@ OpenProject Provider
 Connects to OpenProject (https://www.openproject.org/) API
 to manage projects, work packages (tasks), and sprints.
 """
-import os
+import base64
+import json
+import logging
 import requests
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
@@ -33,7 +35,6 @@ class OpenProjectProvider(BasePMProvider):
             raise ValueError("OpenProject requires api_key or api_token")
         
         # OpenProject uses Basic auth with "apikey" as username and API key
-        import base64
         auth_string = f"apikey:{self.api_key}"
         credentials = base64.b64encode(
             auth_string.encode()
@@ -245,21 +246,39 @@ class OpenProjectProvider(BasePMProvider):
         """
         List sprints (iterations) from OpenProject
         
-        Note: OpenProject uses "versions" for sprints/iterations
+        Note: OpenProject uses "versions" for sprints/iterations.
+        When project_id is provided, filters versions by that project.
         """
+        logger = logging.getLogger(__name__)
+        
         url = f"{self.base_url}/api/v3/versions"
         
-        response = requests.get(url, headers=self.headers)
+        # Use OpenProject filters API to filter by project if provided
+        params = {}
+        if project_id:
+            filters = [{
+                "definingProject": {
+                    "operator": "=",
+                    "values": [project_id]
+                }
+            }]
+            params["filters"] = json.dumps(filters)
+            logger.debug(f"Filtering sprints by project_id={project_id}")
+        
+        response = requests.get(url, headers=self.headers, params=params if params else None)
         response.raise_for_status()
         
         sprints_data = response.json()["_embedded"]["elements"]
         
-        # Filter by project_id if provided (versions don't have project filter in API)
-        if project_id:
-            sprints_data = [
-                sprint for sprint in sprints_data
-                if sprint.get("_links", {}).get("definingProject", {}).get("href", "").endswith(f"/projects/{project_id}")
-            ]
+        logger.debug(f"Found {len(sprints_data)} total versions from OpenProject")
+        
+        # Log all version names for debugging
+        if logger.isEnabledFor(logging.DEBUG):
+            for v in sprints_data:
+                version_name = v.get("name", "N/A")
+                version_id = v.get("id", "N/A")
+                defining_project_href = v.get("_links", {}).get("definingProject", {}).get("href", "N/A")
+                logger.debug(f"  Version: {version_name} (ID: {version_id}, Project: {defining_project_href})")
         
         return [self._parse_sprint(sprint) for sprint in sprints_data]
     

@@ -15,6 +15,8 @@ export interface Task {
   due_date?: string;
   assigned_to?: string;
   project_name?: string;
+  sprint_id?: string;
+  epic_id?: string;
 }
 
 const fetchTasksFn = async (projectId?: string) => {

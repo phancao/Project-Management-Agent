@@ -1,7 +1,8 @@
 // Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { usePMRefresh } from "./use-pm-refresh";
 
 export interface Sprint {
   id: string;
@@ -24,12 +25,13 @@ export function useSprints(projectId: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     if (!projectId) {
       setLoading(false);
       return;
     }
     
+    setLoading(true);
     fetchSprints(projectId)
       .then((data) => {
         setSprints(data);
@@ -41,6 +43,12 @@ export function useSprints(projectId: string) {
       });
   }, [projectId]);
 
-  return { sprints, loading, error };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  usePMRefresh(refresh);
+
+  return { sprints, loading, error, refresh };
 }
 

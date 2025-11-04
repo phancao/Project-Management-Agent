@@ -1217,34 +1217,72 @@ async def pm_update_task(request: Request, task_id: str):
 async def pm_list_sprints(request: Request, project_id: str):
     """List all sprints for a project"""
     try:
-        from src.conversation.flow_manager import ConversationFlowManager
         from database.connection import get_db_session
+        from database.orm_models import PMProviderConnection
+        from src.pm_providers.factory import create_pm_provider
+        
+        # Extract provider_id and actual project_id from the project_id parameter
+        # Format: provider_id:project_id
+        if ':' in project_id:
+            provider_id_str, actual_project_id = project_id.split(':', 1)
+        else:
+            # Fallback: try to find the provider by checking all providers
+            # This is less efficient but handles backward compatibility
+            actual_project_id = project_id
+            provider_id_str = None
         
         db_gen = get_db_session()
         db = next(db_gen)
         
-        global flow_manager
-        if flow_manager is None:
-            flow_manager = ConversationFlowManager(db_session=db)
-        fm = flow_manager
-        
-        if not fm.pm_provider:
-            raise HTTPException(status_code=503, detail="PM Provider not configured")
-        
-        sprints = await fm.pm_provider.list_sprints(project_id=project_id)
-        
-        return [
-            {
-                "id": str(s.id),
-                "name": s.name,
-                "start_date": s.start_date.isoformat() if s.start_date else None,
-                "end_date": s.end_date.isoformat() if s.end_date else None,
-                "status": s.status.value if hasattr(s.status, 'value') else str(s.status),
-            }
-            for s in sprints
-        ]
+        try:
+            # Find the correct provider
+            if provider_id_str:
+                provider = db.query(PMProviderConnection).filter(
+                    PMProviderConnection.id == provider_id_str,
+                    PMProviderConnection.is_active == True
+                ).first()
+            else:
+                # If no provider_id in project_id, get the first active provider
+                # (for backward compatibility)
+                provider = db.query(PMProviderConnection).filter(
+                    PMProviderConnection.is_active == True
+                ).first()
+            
+            if not provider:
+                raise HTTPException(status_code=404, detail="PM Provider not found")
+            
+            # Create provider instance
+            provider_instance = create_pm_provider(
+                provider_type=provider.provider_type,
+                base_url=provider.base_url,
+                api_key=provider.api_key,
+                api_token=provider.api_token,
+                username=provider.username,
+                organization_id=provider.organization_id,
+                workspace_id=provider.workspace_id,
+            )
+            
+            # Fetch sprints for the project
+            sprints = await provider_instance.list_sprints(project_id=actual_project_id)
+            
+            return [
+                {
+                    "id": str(s.id),
+                    "name": s.name,
+                    "start_date": s.start_date.isoformat() if s.start_date else None,
+                    "end_date": s.end_date.isoformat() if s.end_date else None,
+                    "status": s.status.value if hasattr(s.status, 'value') else str(s.status),
+                }
+                for s in sprints
+            ]
+        finally:
+            db.close()
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to list sprints: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 

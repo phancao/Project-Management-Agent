@@ -146,7 +146,7 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
             print_error(f"Error testing epics: {e}")
     
     # Test 2: Labels (Categories or Custom Fields)
-    print_header("3. Testing LABELS Endpoints")
+    print_header("2. Testing LABELS Endpoints")
     
     label_endpoints = [
         {
@@ -191,7 +191,7 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
             print_error(f"Error testing labels: {e}")
     
     # Test 3: Statuses
-    print_header("4. Testing STATUSES Endpoints")
+    print_header("3. Testing STATUSES Endpoints")
     
     status_endpoints = [
         {

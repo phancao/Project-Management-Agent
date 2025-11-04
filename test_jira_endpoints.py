@@ -154,7 +154,7 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
             print_error(f"Error testing epics: {e}")
     
     # Test 2: Labels
-    print_header("3. Testing LABELS Endpoints")
+    print_header("2. Testing LABELS Endpoints")
     
     label_endpoints = [
         {
@@ -224,7 +224,7 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
             print_error(f"Error testing labels: {e}")
     
     # Test 3: Statuses (for UI columns)
-    print_header("4. Testing STATUSES Endpoints")
+    print_header("3. Testing STATUSES Endpoints")
     
     status_endpoints = [
         {

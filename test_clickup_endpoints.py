@@ -129,7 +129,7 @@ def test_clickup_endpoints(api_token: str, space_id: Optional[str] = None,
             print_error(f"Error testing epics: {e}")
     
     # Test 2: Labels
-    print_header("3. Testing LABELS Endpoints")
+    print_header("2. Testing LABELS Endpoints")
     
     label_endpoints = [
         {
@@ -172,7 +172,7 @@ def test_clickup_endpoints(api_token: str, space_id: Optional[str] = None,
             print_error(f"Error testing labels: {e}")
     
     # Test 3: Statuses
-    print_header("4. Testing STATUSES Endpoints")
+    print_header("3. Testing STATUSES Endpoints")
     
     status_endpoints = [
         {

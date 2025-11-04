@@ -90,7 +90,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,  # Restrict to specific origins
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],  # Use the configured list of methods
+    # Use the configured list of methods
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],  # Now allow all headers, but can be restricted further
 )
 
@@ -937,6 +938,437 @@ async def pm_list_projects(request: Request):
     except Exception as e:
         logger.error(f"Failed to list projects: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pm/providers")
+async def pm_list_providers():
+    """List all PM provider configurations."""
+    try:
+        from database.connection import get_db_session
+        from database import crud
+        from database.orm_models import PMProviderConnection
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Get current user (mock for now - should be from auth)
+            users = crud.get_users(db, limit=1)
+            if not users:
+                return []
+            user_id = users[0].id
+            
+            connections = db.query(PMProviderConnection).filter(
+                PMProviderConnection.created_by == user_id,
+                PMProviderConnection.is_active == True
+            ).all()
+            
+            return [
+                {
+                    "id": str(c.id),
+                    "provider_type": c.provider_type,
+                    "base_url": c.base_url,
+                    "name": c.name,
+                    "username": c.username,
+                    "organization_id": c.organization_id,
+                    "workspace_id": c.workspace_id,
+                    "last_sync_at": c.last_sync_at.isoformat() if c.last_sync_at else None,
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
+                    "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+                }
+                for c in connections
+            ]
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to list providers: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pm/providers/{provider_id}/projects")
+async def get_provider_projects(provider_id: str):
+    """
+    Get projects from a specific provider using stored credentials.
+    
+    This endpoint fetches projects from the provider using the stored API keys/tokens.
+    Projects are loaded dynamically and not saved to the database.
+    """
+    try:
+        from src.pm_providers.models import PMProviderConfig
+        from src.pm_providers.builder import build_pm_provider_from_config
+        from database.connection import get_db_session
+        from database import crud
+        from database.orm_models import PMProviderConnection
+        import uuid
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Get current user (mock for now - should be from auth)
+            users = crud.get_users(db, limit=1)
+            if not users:
+                raise HTTPException(status_code=401, detail="No user found")
+            user_id = users[0].id
+            
+            # Get provider connection
+            connection = db.query(PMProviderConnection).filter(
+                PMProviderConnection.id == uuid.UUID(provider_id),
+                PMProviderConnection.created_by == user_id,
+                PMProviderConnection.is_active == True
+            ).first()
+            
+            if not connection:
+                raise HTTPException(status_code=404, detail="Provider not found")
+            
+            # Build provider config from stored connection
+            provider_config = PMProviderConfig(
+                provider_type=connection.provider_type,
+                base_url=connection.base_url,
+                api_key=connection.api_key,
+                api_token=connection.api_token,
+                username=connection.username,
+                organization_id=connection.organization_id,
+                workspace_id=connection.workspace_id,
+                additional_config=connection.additional_config or {}
+            )
+            
+            # Build provider and fetch projects
+            try:
+                provider = build_pm_provider_from_config(provider_config)
+                if not provider:
+                    raise HTTPException(
+                        status_code=500, detail="Failed to build provider"
+                    )
+                
+                pm_projects = await provider.list_projects()
+            except Exception as e:
+                logger.error(
+                    f"Error building provider or listing projects: {e}",
+                    exc_info=True
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to list projects: {str(e)}"
+                )
+            
+            # Convert to response format
+            projects_list = [
+                {
+                    "id": str(p.id),
+                    "name": p.name,
+                    "description": p.description,
+                    "status": p.status
+                }
+                for p in pm_projects
+            ]
+            
+            return {
+                "success": True,
+                "total_projects": len(projects_list),
+                "projects": projects_list
+            }
+            
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get provider projects: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get provider projects: {str(e)}"
+        )
+
+
+@app.put("/api/pm/providers/{provider_id}")
+async def update_provider(provider_id: str, request: Request):
+    """
+    Update an existing PM provider configuration.
+    
+    Updates the provider's credentials and tests the connection.
+    """
+    try:
+        from src.server.project_import_request import (
+            ProjectImportRequest,
+        )
+        from src.pm_providers.models import PMProviderConfig
+        from src.pm_providers.builder import build_pm_provider_from_config
+        from database.connection import get_db_session
+        from database import crud
+        from database.orm_models import PMProviderConnection
+        from datetime import datetime
+        import uuid
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Get current user (mock for now - should be from auth)
+            users = crud.get_users(db, limit=1)
+            if not users:
+                raise HTTPException(status_code=401, detail="No user found")
+            user_id = users[0].id
+            
+            # Get provider connection
+            connection = db.query(PMProviderConnection).filter(
+                PMProviderConnection.id == uuid.UUID(provider_id),
+                PMProviderConnection.created_by == user_id,
+                PMProviderConnection.is_active == True
+            ).first()
+            
+            if not connection:
+                raise HTTPException(status_code=404, detail="Provider not found")
+            
+            # Parse request body
+            body = await request.json()
+            request_data = ProjectImportRequest(**body)
+            
+            # Build provider config from request
+            # For updates, use existing credentials if new ones are not provided
+            # For JIRA: username should be the email address
+            username = request_data.username if request_data.username else connection.username
+            
+            api_key = request_data.api_key if request_data.api_key else connection.api_key
+            api_token = request_data.api_token if request_data.api_token else connection.api_token
+            
+            provider_config = PMProviderConfig(
+                provider_type=request_data.provider_type.lower(),
+                base_url=request_data.base_url.rstrip('/'),
+                api_key=api_key,
+                api_token=api_token,
+                username=username,
+                organization_id=request_data.organization_id or connection.organization_id,
+                workspace_id=request_data.workspace_id or connection.workspace_id,
+                additional_config=request_data.additional_config or connection.additional_config or {}
+            )
+            
+            # Test connection
+            try:
+                provider = build_pm_provider_from_config(provider_config)
+                if not provider:
+                    raise ValueError(f"Failed to build provider")
+                await provider.list_projects()  # Test connection
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to connect to provider: {str(e)}"
+                )
+            
+            # Update connection
+            connection.provider_type = provider_config.provider_type
+            connection.base_url = provider_config.base_url
+            if request_data.api_key:  # Only update if provided
+                connection.api_key = provider_config.api_key
+            if request_data.api_token:  # Only update if provided
+                connection.api_token = provider_config.api_token
+            connection.username = provider_config.username
+            connection.organization_id = provider_config.organization_id
+            connection.workspace_id = provider_config.workspace_id
+            connection.additional_config = provider_config.additional_config or {}
+            connection.last_sync_at = datetime.utcnow()
+            connection.name = f"{provider_config.provider_type} - {provider_config.base_url}"
+            
+            db.commit()
+            db.refresh(connection)
+            
+            return {
+                "id": str(connection.id),
+                "provider_type": connection.provider_type,
+                "base_url": connection.base_url,
+                "name": connection.name,
+                "username": connection.username,
+                "organization_id": connection.organization_id,
+                "workspace_id": connection.workspace_id,
+                "updated_at": connection.updated_at.isoformat() if connection.updated_at else None,
+            }
+            
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update provider: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update provider: {str(e)}"
+        )
+
+
+@app.post("/api/pm/providers/import-projects")
+async def save_provider_config(request: Request):
+    """
+    Save PM provider configuration (URL/IP + API Key) and verify connection.
+    
+    This endpoint allows users to add a provider URL/IP + API Key.
+    It tests the connection and lists available projects (for verification),
+    but does NOT save projects to the database. Projects are loaded
+    dynamically from the provider when needed.
+    """
+    try:
+        from src.server.project_import_request import (
+            ProjectImportRequest,
+            ProjectImportResponse,
+        )
+        from src.pm_providers.models import PMProviderConfig
+        from src.pm_providers.builder import build_pm_provider_from_config
+        from database.connection import get_db_session
+        from database import crud
+        from database.orm_models import PMProviderConnection
+        from datetime import datetime
+        
+        # Parse request body
+        body = await request.json()
+        request_data = ProjectImportRequest(**body)
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Get current user (mock for now - should be from auth)
+            users = crud.get_users(db, limit=1)
+            if not users:
+                raise HTTPException(
+                    status_code=401,
+                    detail="No user found. Please ensure at least one user exists."
+                )
+            user_id = users[0].id
+            
+            # Build provider config from request
+            # For JIRA: username should be the email address (e.g., user@example.com)
+            username = request_data.username
+            provider_config = PMProviderConfig(
+                provider_type=request_data.provider_type.lower(),
+                base_url=request_data.base_url.rstrip('/'),
+                api_key=request_data.api_key,
+                api_token=request_data.api_token,
+                username=username,
+                organization_id=request_data.organization_id,
+                workspace_id=request_data.workspace_id,
+                additional_config=request_data.additional_config
+            )
+            
+            # Test connection by building provider and listing projects
+            errors = []
+            projects_list = []
+            total_projects = 0
+            
+            try:
+                provider = build_pm_provider_from_config(provider_config)
+                if not provider:
+                    raise ValueError(f"Failed to build provider for type: {provider_config.provider_type}")
+                
+                # Test connection by listing projects (for verification only)
+                pm_projects = await provider.list_projects()
+                total_projects = len(pm_projects)
+                
+                # Convert to simple dict for response (don't save to DB)
+                projects_list = [
+                    {
+                        "id": str(p.id),
+                        "name": p.name,
+                        "description": p.description,
+                        "status": p.status
+                    }
+                    for p in pm_projects
+                ]
+                
+            except Exception as e:
+                error_msg = f"Failed to connect to provider: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                errors.append({
+                    "error": error_msg,
+                    "type": "connection_error"
+                })
+                # Don't save config if connection fails
+                return ProjectImportResponse(
+                    success=False,
+                    total_projects=0,
+                    projects=[],
+                    errors=errors,
+                    message=f"Failed to connect to provider: {str(e)}"
+                )
+            
+            # Save provider configuration to database
+            try:
+                # Check if connection already exists
+                existing = db.query(PMProviderConnection).filter(
+                    PMProviderConnection.provider_type == provider_config.provider_type,
+                    PMProviderConnection.base_url == provider_config.base_url,
+                    PMProviderConnection.created_by == user_id
+                ).first()
+                
+                if existing:
+                    # Update existing connection
+                    existing.api_key = provider_config.api_key
+                    existing.api_token = provider_config.api_token
+                    existing.username = provider_config.username
+                    existing.organization_id = provider_config.organization_id
+                    existing.workspace_id = provider_config.workspace_id
+                    existing.additional_config = provider_config.additional_config or {}
+                    existing.last_sync_at = datetime.utcnow()
+                    existing.is_active = True
+                    config_id = str(existing.id)
+                    db.commit()
+                else:
+                    # Create new connection
+                    connection = PMProviderConnection(
+                        name=f"{provider_config.provider_type} - {provider_config.base_url}",
+                        provider_type=provider_config.provider_type,
+                        base_url=provider_config.base_url,
+                        api_key=provider_config.api_key,
+                        api_token=provider_config.api_token,
+                        username=provider_config.username,
+                        organization_id=provider_config.organization_id,
+                        workspace_id=provider_config.workspace_id,
+                        additional_config=provider_config.additional_config or {},
+                        is_active=True,
+                        created_by=user_id,
+                        last_sync_at=datetime.utcnow()
+                    )
+                    db.add(connection)
+                    db.commit()
+                    db.refresh(connection)
+                    config_id = str(connection.id)
+                
+                return ProjectImportResponse(
+                    success=True,
+                    provider_config_id=config_id,
+                    total_projects=total_projects,
+                    projects=projects_list,
+                    errors=[],
+                    message=f"Provider configuration saved successfully. Found {total_projects} projects (not saved - loaded dynamically)."
+                )
+                
+            except Exception as e:
+                db.rollback()
+                error_msg = f"Failed to save provider configuration: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                errors.append({
+                    "error": error_msg,
+                    "type": "save_error"
+                })
+                return ProjectImportResponse(
+                    success=False,
+                    total_projects=total_projects,
+                    projects=projects_list,
+                    errors=errors,
+                    message=error_msg
+                )
+            
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to save provider config: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save provider configuration: {str(e)}"
+        )
 
 
 @app.get("/api/pm/projects/{project_id}/tasks")

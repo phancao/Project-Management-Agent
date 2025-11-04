@@ -3,7 +3,7 @@
 
 "use client";
 
-import { BarChart3, CheckSquare, FolderKanban, LineChart, Calendar, Users } from "lucide-react";
+import { BarChart3, CheckSquare, FolderKanban, LineChart, Calendar, Users, Server } from "lucide-react";
 import { useState } from "react";
 
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -15,8 +15,9 @@ import { DashboardView } from "./views/dashboard-view";
 import { SprintBoardView } from "./views/sprint-board-view";
 import { TeamAssignmentsView } from "./views/team-assignments-view";
 import { TimelineView } from "./views/timeline-view";
+import { ProviderManagementView } from "./views/provider-management-view";
 
-type PMView = "dashboard" | "board" | "backlog" | "burndown" | "timeline" | "team";
+type PMView = "dashboard" | "board" | "backlog" | "burndown" | "timeline" | "team" | "providers";
 
 interface PMViewsPanelProps {
   className?: string;
@@ -73,6 +74,13 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
               <Users className="w-4 h-4" />
               Team
             </TabsTrigger>
+            <TabsTrigger 
+              value="providers"
+              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+            >
+              <Server className="w-4 h-4" />
+              Providers
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -85,6 +93,7 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
         {activeView === "burndown" && <BurndownView />}
         {activeView === "timeline" && <TimelineView />}
         {activeView === "team" && <TeamAssignmentsView />}
+        {activeView === "providers" && <ProviderManagementView />}
       </div>
     </div>
   );

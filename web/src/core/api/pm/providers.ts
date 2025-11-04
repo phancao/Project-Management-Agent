@@ -1,0 +1,185 @@
+// Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
+// SPDX-License-Identifier: MIT
+
+import { resolveServiceURL } from "../resolve-service-url";
+
+export interface ProviderConfig {
+  id?: string;
+  provider_type: "openproject" | "jira" | "clickup";
+  base_url: string;
+  api_key?: string;
+  api_token?: string;
+  username?: string;
+  email?: string;
+  organization_id?: string;
+  workspace_id?: string;
+}
+
+export interface ProjectImportRequest {
+  provider_type: string;
+  base_url: string;
+  api_key?: string;
+  api_token?: string;
+  username?: string;
+  email?: string;
+  organization_id?: string;
+  workspace_id?: string;
+  import_options?: {
+    skip_existing?: boolean;
+    auto_sync?: boolean;
+  };
+}
+
+export interface ProjectInfo {
+  id: string;
+  name: string;
+  description?: string;
+  status?: string;
+}
+
+export interface ProjectImportResponse {
+  success: boolean;
+  provider_config_id?: string;
+  total_projects: number;
+  projects: ProjectInfo[];
+  errors: Array<{ error: string; type?: string }>;
+  message?: string;
+}
+
+export async function importProjectsFromProvider(
+  request: ProjectImportRequest,
+): Promise<ProjectImportResponse> {
+  const response = await fetch(
+    resolveServiceURL("pm/providers/import-projects"),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to save provider configuration");
+  }
+
+  return response.json();
+}
+
+export async function listProviders(): Promise<ProviderConfig[]> {
+  const response = await fetch(resolveServiceURL("pm/providers"), {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      // No providers endpoint yet, return empty array
+      return [];
+    }
+    throw new Error("Failed to fetch providers");
+  }
+
+  const data = await response.json();
+  
+  // Map database response to ProviderConfig format
+  // Note: API keys/tokens are not returned for security
+  // When loading projects, we'll need to use the saved provider's credentials
+  return data.map((p: any) => ({
+    id: p.id,
+    provider_type: p.provider_type,
+    base_url: p.base_url,
+    username: p.username,
+    organization_id: p.organization_id,
+    workspace_id: p.workspace_id,
+    // api_key and api_token are not returned from list endpoint for security
+    // They will be retrieved when needed for project loading
+  }));
+}
+
+export async function getProviderTypes(): Promise<
+  Array<{ type: string; display_name: string }>
+> {
+  const response = await fetch(resolveServiceURL("pm/providers/types"), {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch provider types");
+  }
+
+  return response.json();
+}
+
+export async function getProviderProjects(
+  providerId: string,
+): Promise<{ success: boolean; total_projects: number; projects: ProjectInfo[] }> {
+  const response = await fetch(
+    resolveServiceURL(`pm/providers/${providerId}/projects`),
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to fetch projects");
+  }
+
+  return response.json();
+}
+
+export async function updateProvider(
+  providerId: string,
+  request: ProjectImportRequest,
+): Promise<ProviderConfig> {
+  const response = await fetch(
+    resolveServiceURL(`pm/providers/${providerId}`),
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to update provider");
+  }
+
+  return response.json();
+}
+
+export async function testProviderConnection(
+  request: ProjectImportRequest,
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(
+    resolveServiceURL("pm/providers/test-connection"),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Connection test failed");
+  }
+
+  return response.json();
+}

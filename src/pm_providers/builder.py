@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 
-def build_pm_provider(db_session: Optional[Session] = None) -> Optional[BasePMProvider]:
+def build_pm_provider(
+    db_session: Optional[Session] = None
+) -> Optional[BasePMProvider]:
     """
     Build a PM provider instance based on configuration
     
@@ -64,6 +66,39 @@ def build_pm_provider(db_session: Optional[Session] = None) -> Optional[BasePMPr
     
     else:
         raise ValueError(f"Unsupported PM provider: {provider_type}")
+
+
+def build_pm_provider_from_config(
+    config: PMProviderConfig, db_session: Optional[Session] = None
+) -> Optional[BasePMProvider]:
+    """
+    Build a PM provider instance from a PMProviderConfig object.
+    
+    Args:
+        config: PMProviderConfig with provider settings
+        db_session: Database session for internal provider
+        
+    Returns:
+        Configured PM provider instance or None if not configured
+    """
+    provider_type = config.provider_type.lower()
+    
+    if provider_type == "internal":
+        if not db_session:
+            return None
+        return InternalPMProvider(config, db_session)
+    
+    elif provider_type == "openproject":
+        return OpenProjectProvider(config)
+    
+    elif provider_type == "jira":
+        return JIRAProvider(config)
+    
+    elif provider_type == "clickup":
+        return ClickUpProvider(config)
+    
+    else:
+        raise ValueError(f"Unsupported PM provider type: {provider_type}")
 
 
 def _get_env(key: str) -> str:

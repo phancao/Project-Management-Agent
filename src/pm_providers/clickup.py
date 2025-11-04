@@ -139,11 +139,8 @@ class ClickUpProvider(BasePMProvider):
     async def delete_label(self, label_id: str) -> bool:
         raise NotImplementedError("Labels not yet implemented for ClickUp")
     
-    # ==================== Status Workflow Operations ====================
+    # ==================== Status Operations ====================
     
-    async def get_workflow(self, entity_type: str, project_id: Optional[str] = None) -> Optional[PMWorkflow]:
-        raise NotImplementedError("Workflows not yet implemented for ClickUp")
-    
-    async def list_workflows(self, project_id: Optional[str] = None) -> List[PMWorkflow]:
-        raise NotImplementedError("Workflows not yet implemented for ClickUp")
+    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[str]:
+        raise NotImplementedError("Status list not yet implemented for ClickUp")
 

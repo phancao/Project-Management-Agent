@@ -7,7 +7,7 @@ from .base import BasePMProvider
 from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
     PMProviderConfig, PMEntityType, PMStatus, PMPriority,
-    PMStatusTransition, PMWorkflow
+    PMStatusTransition
 )
 from .internal import InternalPMProvider
 from .openproject import OpenProjectProvider
@@ -26,7 +26,6 @@ __all__ = [
     "PMComponent",
     "PMLabel",
     "PMStatusTransition",
-    "PMWorkflow",
     "PMEntityType",
     "PMStatus",
     "PMPriority",

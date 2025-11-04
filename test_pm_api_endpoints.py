@@ -272,30 +272,29 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
         except Exception as e:
             print_error(f"Error testing labels: {e}")
     
-    # Test 4: Workflows
-    print_header("4. Testing WORKFLOWS Endpoints")
+    # Test 4: Statuses (for UI columns)
+    print_header("4. Testing STATUSES Endpoints")
     
-    workflow_endpoints = [
+    status_endpoints = [
         {
-            "name": "Get Workflow Schemes",
+            "name": "Get All Statuses",
             "method": "GET",
-            "url": f"{base_url}/rest/api/3/workflowscheme"
+            "url": f"{base_url}/rest/api/3/status"
         },
         {
-            "name": "Get Workflow for Project",
+            "name": "Get Statuses for Project",
             "method": "GET",
-            "url": f"{base_url}/rest/api/3/workflowscheme/project" if project_key else None,
-            "params": {"projectId": project_key} if project_key else {}
+            "url": f"{base_url}/rest/api/3/project/{project_key}/statuses" if project_key else None
         },
         {
-            "name": "Get Workflow Transitions",
+            "name": "Get Issue Type Statuses",
             "method": "GET",
-            "url": f"{base_url}/rest/api/3/issue/{project_key}-1/transitions" if project_key else None,
-            "note": "Requires existing issue"
+            "url": f"{base_url}/rest/api/3/project/{project_key}/statuses" if project_key else None,
+            "params": {"expand": "statuses"} if project_key else {}
         }
     ]
     
-    for endpoint in workflow_endpoints:
+    for endpoint in status_endpoints:
         if not endpoint.get('url'):
             continue
             
@@ -315,8 +314,13 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
             
             if response.status_code == 200:
                 data = response.json()
-                print_success(f"Workflow endpoint works!")
-                print_info(f"Response structure: {list(data.keys())[:5]}")
+                print_success(f"Statuses endpoint works!")
+                # Try to extract status names
+                if isinstance(data, list):
+                    status_names = [s.get('name', s.get('id', '')) for s in data[:5]]
+                    print_info(f"Sample statuses: {status_names}")
+                elif isinstance(data, dict):
+                    print_info(f"Response structure: {list(data.keys())[:5]}")
                 results["workflows"]["status"] = "working"
                 results["workflows"]["endpoint"] = endpoint['url']
                 break
@@ -326,23 +330,30 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
                 error_data = response.json() if response.text else {}
                 print_error(f"Error: {error_data.get('errorMessages', ['Unknown error'])}")
             elif response.status_code == 404:
-                print_warning("Not found (may need existing issue/project)")
+                print_warning("Not found (may need existing project)")
             else:
                 print_warning(f"Status: {response.status_code}")
                 print_info(f"Response: {response.text[:200]}")
         except Exception as e:
-            print_error(f"Error testing workflows: {e}")
+            print_error(f"Error testing statuses: {e}")
     
     # Summary
     print_header("JIRA API Test Summary")
+    feature_names = {
+        "epics": "EPICS",
+        "components": "COMPONENTS",
+        "labels": "LABELS",
+        "statuses": "STATUSES"
+    }
     for feature, result in results.items():
         status = result['status']
+        feature_display = feature_names.get(feature, feature.upper())
         if status == "working":
-            print_success(f"{feature.upper()}: ✅ Working - {result.get('endpoint', 'N/A')}")
+            print_success(f"{feature_display}: ✅ Working - {result.get('endpoint', 'N/A')}")
         elif result.get('deprecated'):
-            print_error(f"{feature.upper()}: ❌ Deprecated")
+            print_error(f"{feature_display}: ❌ Deprecated")
         else:
-            print_warning(f"{feature.upper()}: ⚠️  Not tested or failed")
+            print_warning(f"{feature_display}: ⚠️  Not tested or failed")
     
     return results
 
@@ -522,10 +533,10 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
         except Exception as e:
             print_error(f"Error testing labels: {e}")
     
-    # Test 4: Workflows (Statuses)
-    print_header("4. Testing WORKFLOWS Endpoints")
+    # Test 4: Statuses
+    print_header("4. Testing STATUSES Endpoints")
     
-    workflow_endpoints = [
+    status_endpoints = [
         {
             "name": "Get Statuses",
             "method": "GET",
@@ -538,7 +549,7 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
         }
     ]
     
-    for endpoint in workflow_endpoints:
+    for endpoint in status_endpoints:
         try:
             print_info(f"Testing: {endpoint['name']}")
             print_info(f"URL: {endpoint['url']}")
@@ -549,29 +560,38 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
             if response.status_code == 200:
                 data = response.json()
                 elements = data.get('_embedded', {}).get('elements', [])
-                print_success(f"Workflow endpoint works! Found {len(elements)} statuses/types")
-                results["workflows"]["status"] = "working"
-                results["workflows"]["endpoint"] = endpoint['url']
+                print_success(f"Statuses endpoint works! Found {len(elements)} statuses/types")
+                if elements:
+                    print_info(f"Sample status: {elements[0].get('name', 'N/A')}")
+                results["statuses"]["status"] = "working"
+                results["statuses"]["endpoint"] = endpoint['url']
                 break
             elif response.status_code == 410:
                 print_error("Endpoint is deprecated (410 Gone)")
-                results["workflows"]["deprecated"] = True
+                results["statuses"]["deprecated"] = True
             else:
                 print_warning(f"Status: {response.status_code}")
                 print_info(f"Response: {response.text[:200]}")
         except Exception as e:
-            print_error(f"Error testing workflows: {e}")
+            print_error(f"Error testing statuses: {e}")
     
     # Summary
     print_header("OpenProject API Test Summary")
+    feature_names = {
+        "epics": "EPICS",
+        "components": "COMPONENTS",
+        "labels": "LABELS",
+        "statuses": "STATUSES"
+    }
     for feature, result in results.items():
         status = result['status']
+        feature_display = feature_names.get(feature, feature.upper())
         if status == "working":
-            print_success(f"{feature.upper()}: ✅ Working - {result.get('endpoint', 'N/A')}")
+            print_success(f"{feature_display}: ✅ Working - {result.get('endpoint', 'N/A')}")
         elif result.get('deprecated'):
-            print_error(f"{feature.upper()}: ❌ Deprecated")
+            print_error(f"{feature_display}: ❌ Deprecated")
         else:
-            print_warning(f"{feature.upper()}: ⚠️  Not tested or failed")
+            print_warning(f"{feature_display}: ⚠️  Not tested or failed")
     
     return results
 

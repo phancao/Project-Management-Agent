@@ -1473,13 +1473,17 @@ async def pm_list_labels(request: Request, project_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/pm/projects/{project_id}/workflow")
-async def pm_get_workflow(
+@app.get("/api/pm/projects/{project_id}/statuses")
+async def pm_list_statuses(
     request: Request,
     project_id: str,
     entity_type: str = "task"
 ):
-    """Get workflow for a project"""
+    """
+    Get list of available statuses for an entity type in a project.
+    
+    This is used by UI/UX to create status columns in Kanban boards.
+    """
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
@@ -1489,10 +1493,8 @@ async def pm_get_workflow(
         
         try:
             handler = PMHandler.from_db_session(db)
-            workflow = await handler.get_project_workflow(project_id, entity_type)
-            if not workflow:
-                raise HTTPException(status_code=404, detail="Workflow not found")
-            return workflow
+            statuses = await handler.list_project_statuses(project_id, entity_type)
+            return {"statuses": statuses, "entity_type": entity_type}
         finally:
             db.close()
     except ValueError as ve:
@@ -1508,7 +1510,7 @@ async def pm_get_workflow(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get workflow: {e}")
+        logger.error(f"Failed to list statuses: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))

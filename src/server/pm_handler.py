@@ -808,12 +808,23 @@ class PMHandler:
             for l in labels
         ]
     
-    async def get_project_workflow(
+    async def list_project_statuses(
         self,
         project_id: str,
         entity_type: str = "task"
-    ) -> Optional[Dict[str, Any]]:
-        """Get workflow for a project"""
+    ) -> List[str]:
+        """
+        Get list of available statuses for an entity type in a project.
+        
+        This is used by UI/UX to create status columns in Kanban boards.
+        
+        Args:
+            project_id: Project ID in format "provider_id:actual_project_id"
+            entity_type: Type of entity ("task", "epic", "project", etc.)
+            
+        Returns:
+            Ordered list of status names
+        """
         if ":" not in project_id:
             raise ValueError(f"Invalid project_id format: {project_id}")
         
@@ -838,33 +849,18 @@ class PMHandler:
         provider_instance = self._create_provider_instance(provider)
         
         try:
-            workflow = await provider_instance.get_workflow(
+            statuses = await provider_instance.list_statuses(
                 entity_type=entity_type,
                 project_id=actual_project_id
             )
         except NotImplementedError:
-            raise ValueError(f"Workflows not yet implemented for {provider.provider_type}")
+            raise ValueError(
+                f"Status list not yet implemented for {provider.provider_type}"
+            )
         except Exception as e:
             raise ValueError(str(e))
         
-        if not workflow:
-            return None
-        
-        return {
-            "id": str(workflow.id) if workflow.id else None,
-            "name": workflow.name,
-            "entity_type": workflow.entity_type,
-            "statuses": workflow.statuses,
-            "transitions": [
-                {
-                    "from_status": t.from_status,
-                    "to_status": t.to_status,
-                    "name": t.name,
-                    "requires_fields": t.requires_fields,
-                }
-                for t in workflow.transitions
-            ],
-        }
+        return statuses
     
     def _task_to_dict(self, task: PMTask, project_name: str) -> Dict[str, Any]:
         """Convert PMTask to dictionary with project_name"""

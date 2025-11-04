@@ -836,14 +836,15 @@ class JIRAProvider(BasePMProvider):
         """Delete a label"""
         raise NotImplementedError("Labels not yet implemented for JIRA")
     
-    # ==================== Status Workflow Operations ====================
+    # ==================== Status Operations ====================
     
-    async def get_workflow(self, entity_type: str, project_id: Optional[str] = None) -> Optional[PMWorkflow]:
-        """Get the workflow for an entity type"""
+    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[str]:
+        """
+        Get list of available statuses for an entity type.
+        
+        For JIRA, this fetches statuses from the issue type or project workflow.
+        """
         # TODO: Implement after API validation
-        raise NotImplementedError("Workflows not yet implemented for JIRA")
-    
-    async def list_workflows(self, project_id: Optional[str] = None) -> List[PMWorkflow]:
-        """List all workflows"""
-        raise NotImplementedError("Workflows not yet implemented for JIRA")
+        # Should fetch from /rest/api/3/status or project-specific workflow
+        raise NotImplementedError("Status list not yet implemented for JIRA")
 

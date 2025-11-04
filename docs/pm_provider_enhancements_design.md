@@ -53,28 +53,18 @@ class PMLabel:
     raw_data: Optional[Dict[str, Any]] = None
 ```
 
-### 1.4 Status Transition/Workflow
+### 1.4 Status Operations
 ```python
+# Status list is the primary need for UI/UX (Kanban columns)
+# Transitions are optional for validation
 @dataclass
 class PMStatusTransition:
-    """Represents a valid status transition"""
+    """Represents a valid status transition (optional, for advanced workflows)"""
     from_status: str
     to_status: str
     name: Optional[str] = None  # User-friendly transition name
     requires_fields: Optional[List[str]] = None  # Fields required for transition
     conditions: Optional[Dict[str, Any]] = None  # Conditions that must be met
-
-@dataclass
-class PMWorkflow:
-    """Represents a workflow/status board"""
-    id: Optional[str] = None
-    name: str = ""
-    entity_type: str  # "task", "epic", "project", etc.
-    project_id: Optional[str] = None
-    statuses: List[str] = field(default_factory=list)  # Ordered list of statuses
-    transitions: List[PMStatusTransition] = field(default_factory=list)
-    created_at: Optional[datetime] = None
-    raw_data: Optional[Dict[str, Any]] = None
 ```
 
 ## 2. BasePMProvider Interface Extensions

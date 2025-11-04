@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Any
 from datetime import date
 from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
-    PMProviderConfig, PMStatus, PMPriority, PMStatusTransition, PMWorkflow
+    PMProviderConfig, PMStatus, PMPriority, PMStatusTransition
 )
 
 
@@ -292,65 +292,45 @@ class BasePMProvider(ABC):
             if t.label_ids and label_id in t.label_ids
         ]
     
-    # ==================== Status Workflow Operations ====================
+    # ==================== Status Operations ====================
     
     @abstractmethod
-    async def get_workflow(self, entity_type: str, project_id: Optional[str] = None) -> Optional[PMWorkflow]:
+    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[str]:
         """
-        Get the workflow for an entity type (task, epic, project, etc.)
+        Get list of available statuses for an entity type.
+        
+        This is primarily used for UI/UX to create status columns in Kanban boards.
         
         Args:
-            entity_type: Type of entity ("task", "epic", "project", etc.)
-            project_id: Optional project ID for project-specific workflows
+            entity_type: Type of entity ("task", "epic", "project", "sprint", etc.)
+            project_id: Optional project ID for project-specific statuses
             
         Returns:
-            Workflow definition or None if not found
+            Ordered list of status names (e.g., ["todo", "in_progress", "done"])
         """
-        pass
-    
-    @abstractmethod
-    async def list_workflows(self, project_id: Optional[str] = None) -> List[PMWorkflow]:
-        """List all workflows, optionally filtered by project"""
         pass
     
     async def get_valid_transitions(
         self,
         entity_id: str,
         entity_type: str
-    ) -> List[PMStatusTransition]:
+    ) -> List[str]:
         """
         Get valid status transitions for an entity (optional)
+        
+        Returns list of status names that the entity can transition to.
+        If not implemented, returns all available statuses.
         
         Args:
             entity_id: ID of the entity
             entity_type: Type of entity ("task", "epic", "project", etc.)
             
         Returns:
-            List of valid transitions from current status
+            List of valid target status names
         """
-        workflow = await self.get_workflow(entity_type)
-        if not workflow:
-            return []
-        
-        # Get current entity status
-        entity = None
-        if entity_type == "task":
-            entity = await self.get_task(entity_id)
-        elif entity_type == "epic":
-            entity = await self.get_epic(entity_id)
-        elif entity_type == "project":
-            entity = await self.get_project(entity_id)
-        else:
-            return []
-        
-        if not entity or not entity.status:
-            return []
-        
-        current_status = entity.status
-        return [
-            t for t in workflow.transitions
-            if t.from_status == current_status
-        ]
+        # Default implementation: return all statuses
+        # Specific providers can override to return only valid transitions
+        return await self.list_statuses(entity_type)
     
     async def transition_status(
         self,
@@ -374,12 +354,20 @@ class BasePMProvider(ABC):
         Raises:
             ValueError: If transition is invalid
         """
-        # Validate transition
-        valid_transitions = await self.get_valid_transitions(entity_id, entity_type)
-        if not any(t.to_status == to_status for t in valid_transitions):
+        # Validate that target status exists
+        valid_statuses = await self.list_statuses(entity_type)
+        if to_status not in valid_statuses:
             raise ValueError(
-                f"Invalid status transition to {to_status}. "
-                f"Valid transitions: {[t.to_status for t in valid_transitions]}"
+                f"Invalid status '{to_status}'. "
+                f"Valid statuses: {valid_statuses}"
+            )
+        
+        # Optionally validate transition rules
+        valid_transitions = await self.get_valid_transitions(entity_id, entity_type)
+        if valid_transitions and to_status not in valid_transitions:
+            raise ValueError(
+                f"Invalid status transition to '{to_status}'. "
+                f"Valid transitions: {valid_transitions}"
             )
         
         # Perform transition

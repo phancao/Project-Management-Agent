@@ -762,14 +762,15 @@ class OpenProjectProvider(BasePMProvider):
         """Delete a label"""
         raise NotImplementedError("Labels not yet implemented for OpenProject")
     
-    # ==================== Status Workflow Operations ====================
+    # ==================== Status Operations ====================
     
-    async def get_workflow(self, entity_type: str, project_id: Optional[str] = None) -> Optional[PMWorkflow]:
-        """Get the workflow for an entity type"""
+    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[str]:
+        """
+        Get list of available statuses for an entity type.
+        
+        For OpenProject, this fetches statuses from /api/v3/statuses.
+        """
         # TODO: Implement after API validation
-        raise NotImplementedError("Workflows not yet implemented for OpenProject")
-    
-    async def list_workflows(self, project_id: Optional[str] = None) -> List[PMWorkflow]:
-        """List all workflows"""
-        raise NotImplementedError("Workflows not yet implemented for OpenProject")
+        # Should fetch from /api/v3/statuses endpoint
+        raise NotImplementedError("Status list not yet implemented for OpenProject")
 

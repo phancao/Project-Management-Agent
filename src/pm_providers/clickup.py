@@ -6,8 +6,8 @@ TODO: Full implementation needed
 """
 from .base import BasePMProvider
 from .models import (
-    PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
-    PMProviderConfig, PMStatusTransition, PMWorkflow
+    PMUser, PMProject, PMTask, PMSprint, PMEpic, PMLabel,
+    PMProviderConfig
 )
 from typing import List, Optional, Dict
 
@@ -104,23 +104,6 @@ class ClickUpProvider(BasePMProvider):
     
     async def delete_epic(self, epic_id: str) -> bool:
         raise NotImplementedError("Epics not yet implemented for ClickUp")
-    
-    # ==================== Component Operations ====================
-    
-    async def list_components(self, project_id: Optional[str] = None) -> List[PMComponent]:
-        raise NotImplementedError("Components not yet implemented for ClickUp")
-    
-    async def get_component(self, component_id: str) -> Optional[PMComponent]:
-        raise NotImplementedError("Components not yet implemented for ClickUp")
-    
-    async def create_component(self, component: PMComponent) -> PMComponent:
-        raise NotImplementedError("Components not yet implemented for ClickUp")
-    
-    async def update_component(self, component_id: str, updates: Dict) -> PMComponent:
-        raise NotImplementedError("Components not yet implemented for ClickUp")
-    
-    async def delete_component(self, component_id: str) -> bool:
-        raise NotImplementedError("Components not yet implemented for ClickUp")
     
     # ==================== Label Operations ====================
     

@@ -216,44 +216,6 @@ class BasePMProvider(ABC):
         all_tasks = await self.list_tasks()
         return [t for t in all_tasks if t.epic_id == epic_id]
     
-    # ==================== Component Operations ====================
-    
-    @abstractmethod
-    async def list_components(self, project_id: Optional[str] = None) -> List[PMComponent]:
-        """List all components, optionally filtered by project"""
-        pass
-    
-    @abstractmethod
-    async def get_component(self, component_id: str) -> Optional[PMComponent]:
-        """Get a single component by ID"""
-        pass
-    
-    @abstractmethod
-    async def create_component(self, component: PMComponent) -> PMComponent:
-        """Create a new component"""
-        pass
-    
-    @abstractmethod
-    async def update_component(self, component_id: str, updates: Dict[str, Any]) -> PMComponent:
-        """Update an existing component"""
-        pass
-    
-    @abstractmethod
-    async def delete_component(self, component_id: str) -> bool:
-        """Delete a component"""
-        pass
-    
-    async def get_component_tasks(self, component_id: str) -> List[PMTask]:
-        """
-        Get all tasks associated with a component (optional)
-        Default implementation filters tasks by component_ids
-        """
-        all_tasks = await self.list_tasks()
-        return [
-            t for t in all_tasks
-            if t.component_ids and component_id in t.component_ids
-        ]
-    
     # ==================== Label Operations ====================
     
     @abstractmethod

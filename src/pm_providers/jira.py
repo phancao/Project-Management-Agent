@@ -10,8 +10,8 @@ from datetime import datetime, date
 
 from .base import BasePMProvider
 from .models import (
-    PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
-    PMProviderConfig, PMStatusTransition, PMWorkflow
+    PMUser, PMProject, PMTask, PMSprint, PMEpic, PMLabel,
+    PMProviderConfig
 )
 
 
@@ -864,37 +864,6 @@ class JIRAProvider(BasePMProvider):
     async def delete_epic(self, epic_id: str) -> bool:
         """Delete an epic"""
         raise NotImplementedError("Epics not yet implemented for JIRA")
-    
-    # ==================== Component Operations ====================
-    
-    async def list_components(self, project_id: Optional[str] = None) -> List[PMComponent]:
-        """
-        List all components, optionally filtered by project.
-        
-        TESTED: ❌ Returns 404 - Need to verify if endpoint exists or project has no components
-        Leaving as NotImplementedError until verified
-        """
-        raise NotImplementedError(
-            "Components not yet implemented for JIRA. "
-            "Endpoint /rest/api/3/project/{key}/components returned 404. "
-            "Need to verify if endpoint exists or project has no components."
-        )
-    
-    async def get_component(self, component_id: str) -> Optional[PMComponent]:
-        """Get a single component by ID"""
-        raise NotImplementedError("Components not yet implemented for JIRA")
-    
-    async def create_component(self, component: PMComponent) -> PMComponent:
-        """Create a new component"""
-        raise NotImplementedError("Components not yet implemented for JIRA")
-    
-    async def update_component(self, component_id: str, updates: Dict[str, Any]) -> PMComponent:
-        """Update an existing component"""
-        raise NotImplementedError("Components not yet implemented for JIRA")
-    
-    async def delete_component(self, component_id: str) -> bool:
-        """Delete a component"""
-        raise NotImplementedError("Components not yet implemented for JIRA")
     
     # ==================== Label Operations ====================
     

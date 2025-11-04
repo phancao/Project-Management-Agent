@@ -724,48 +724,6 @@ class PMHandler:
             for e in epics
         ]
     
-    async def list_project_components(self, project_id: str) -> List[Dict[str, Any]]:
-        """List components for a specific project"""
-        if ":" not in project_id:
-            raise ValueError(f"Invalid project_id format: {project_id}")
-        
-        parts = project_id.split(":", 1)
-        provider_id_str = parts[0]
-        actual_project_id = parts[1]
-        
-        from uuid import UUID
-        try:
-            provider_uuid = UUID(provider_id_str)
-        except ValueError:
-            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
-        
-        provider = self.db.query(PMProviderConnection).filter(
-            PMProviderConnection.id == provider_uuid,
-            PMProviderConnection.is_active.is_(True)
-        ).first()
-        
-        if not provider:
-            raise ValueError(f"Provider not found: {provider_id_str}")
-        
-        provider_instance = self._create_provider_instance(provider)
-        
-        try:
-            components = await provider_instance.list_components(project_id=actual_project_id)
-        except NotImplementedError:
-            raise ValueError(f"Components not yet implemented for {provider.provider_type}")
-        except Exception as e:
-            raise ValueError(str(e))
-        
-        return [
-            {
-                "id": str(c.id),
-                "name": c.name,
-                "description": c.description,
-                "lead_id": c.lead_id,
-            }
-            for c in components
-        ]
-    
     async def list_project_labels(self, project_id: str) -> List[Dict[str, Any]]:
         """List labels for a specific project"""
         if ":" not in project_id:
@@ -887,7 +845,6 @@ class PMHandler:
             ),
             "project_name": project_name,
             "epic_id": str(task.epic_id) if task.epic_id else None,
-            "component_ids": [str(cid) for cid in task.component_ids] if task.component_ids else None,
             "label_ids": [str(lid) for lid in task.label_ids] if task.label_ids else None,
             "sprint_id": str(task.sprint_id) if task.sprint_id else None,
         }

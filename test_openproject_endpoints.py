@@ -2,7 +2,7 @@
 """
 Test OpenProject API Endpoints
 
-This script validates API endpoints for Epics, Components, Labels, and Statuses
+This script validates API endpoints for Epics, Labels, and Statuses
 before implementing them in the OpenProject provider. It checks:
 1. If endpoints exist and are accessible
 2. If endpoints are deprecated
@@ -62,7 +62,7 @@ def print_info(text: str):
 
 
 def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional[str] = None):
-    """Test OpenProject API endpoints for Epics, Components, Labels, and Statuses"""
+    """Test OpenProject API endpoints for Epics, Labels, and Statuses"""
     
     print_header("Testing OpenProject API Endpoints")
     
@@ -79,7 +79,6 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
     
     results = {
         "epics": {"status": "unknown", "endpoint": None, "deprecated": False},
-        "components": {"status": "unknown", "endpoint": None, "deprecated": False},
         "labels": {"status": "unknown", "endpoint": None, "deprecated": False},
         "statuses": {"status": "unknown", "endpoint": None, "deprecated": False},
     }
@@ -146,52 +145,7 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
         except Exception as e:
             print_error(f"Error testing epics: {e}")
     
-    # Test 2: Components (Categories or Custom Fields)
-    print_header("2. Testing COMPONENTS Endpoints")
-    
-    component_endpoints = [
-        {
-            "name": "Get Project Categories",
-            "method": "GET",
-            "url": f"{base_url}/api/v3/projects/{project_id}/categories" if project_id else None
-        },
-        {
-            "name": "List All Categories",
-            "method": "GET",
-            "url": f"{base_url}/api/v3/categories"
-        }
-    ]
-    
-    for endpoint in component_endpoints:
-        if not endpoint.get('url'):
-            continue
-            
-        try:
-            print_info(f"Testing: {endpoint['name']}")
-            print_info(f"URL: {endpoint['url']}")
-            
-            response = requests.get(endpoint['url'], headers=headers, timeout=10)
-            print(f"Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                categories = data.get('_embedded', {}).get('elements', [])
-                print_success(f"Components/Categories endpoint works! Found {len(categories)} categories")
-                if categories:
-                    print_info(f"Sample category: {categories[0].get('name', 'N/A')}")
-                results["components"]["status"] = "working"
-                results["components"]["endpoint"] = endpoint['url']
-                break
-            elif response.status_code == 410:
-                print_error("Endpoint is deprecated (410 Gone)")
-                results["components"]["deprecated"] = True
-            else:
-                print_warning(f"Status: {response.status_code}")
-                print_info(f"Response: {response.text[:200]}")
-        except Exception as e:
-            print_error(f"Error testing components: {e}")
-    
-    # Test 3: Labels (Categories or Custom Fields)
+    # Test 2: Labels (Categories or Custom Fields)
     print_header("3. Testing LABELS Endpoints")
     
     label_endpoints = [
@@ -236,7 +190,7 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
         except Exception as e:
             print_error(f"Error testing labels: {e}")
     
-    # Test 4: Statuses
+    # Test 3: Statuses
     print_header("4. Testing STATUSES Endpoints")
     
     status_endpoints = [
@@ -282,7 +236,6 @@ def test_openproject_endpoints(base_url: str, api_key: str, project_id: Optional
     print_header("OpenProject API Test Summary")
     feature_names = {
         "epics": "EPICS",
-        "components": "COMPONENTS",
         "labels": "LABELS",
         "statuses": "STATUSES"
     }

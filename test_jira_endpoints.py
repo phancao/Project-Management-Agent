@@ -2,7 +2,7 @@
 """
 Test JIRA API Endpoints
 
-This script validates API endpoints for Epics, Components, Labels, and Statuses
+This script validates API endpoints for Epics, Labels, and Statuses
 before implementing them in the JIRA provider. It checks:
 1. If endpoints exist and are accessible
 2. If endpoints are deprecated
@@ -62,7 +62,7 @@ def print_info(text: str):
 
 
 def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: Optional[str] = None):
-    """Test JIRA API endpoints for Epics, Components, Labels, and Statuses"""
+    """Test JIRA API endpoints for Epics, Labels, and Statuses"""
     
     print_header("Testing JIRA API Endpoints")
     
@@ -80,7 +80,6 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
     
     results = {
         "epics": {"status": "unknown", "endpoint": None, "deprecated": False},
-        "components": {"status": "unknown", "endpoint": None, "deprecated": False},
         "labels": {"status": "unknown", "endpoint": None, "deprecated": False},
         "statuses": {"status": "unknown", "endpoint": None, "deprecated": False},
     }
@@ -154,53 +153,7 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
         except Exception as e:
             print_error(f"Error testing epics: {e}")
     
-    # Test 2: Components
-    print_header("2. Testing COMPONENTS Endpoints")
-    
-    if project_key:
-        component_endpoints = [
-            {
-                "name": "Get Project Components",
-                "method": "GET",
-                "url": f"{base_url}/rest/api/3/project/{project_key}/components"
-            },
-            {
-                "name": "List All Components",
-                "method": "GET",
-                "url": f"{base_url}/rest/api/3/project/{project_key}/components"
-            }
-        ]
-        
-        for endpoint in component_endpoints:
-            try:
-                print_info(f"Testing: {endpoint['name']}")
-                print_info(f"URL: {endpoint['url']}")
-                
-                response = requests.get(endpoint['url'], headers=headers, timeout=10)
-                print(f"Status: {response.status_code}")
-                
-                if response.status_code == 200:
-                    components = response.json()
-                    print_success(f"Components endpoint works! Found {len(components)} components")
-                    if components:
-                        print_info(f"Sample component: {components[0].get('name', 'N/A')}")
-                    results["components"]["status"] = "working"
-                    results["components"]["endpoint"] = endpoint['url']
-                    break
-                elif response.status_code == 410:
-                    print_error("Endpoint is deprecated (410 Gone)")
-                    results["components"]["deprecated"] = True
-                elif response.status_code == 404:
-                    print_warning("Project not found or no components")
-                else:
-                    print_warning(f"Status: {response.status_code}")
-                    print_info(f"Response: {response.text[:200]}")
-            except Exception as e:
-                print_error(f"Error testing components: {e}")
-    else:
-        print_warning("Project key not provided, skipping component test")
-    
-    # Test 3: Labels
+    # Test 2: Labels
     print_header("3. Testing LABELS Endpoints")
     
     label_endpoints = [
@@ -270,7 +223,7 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
         except Exception as e:
             print_error(f"Error testing labels: {e}")
     
-    # Test 4: Statuses (for UI columns)
+    # Test 3: Statuses (for UI columns)
     print_header("4. Testing STATUSES Endpoints")
     
     status_endpoints = [
@@ -339,7 +292,6 @@ def test_jira_endpoints(base_url: str, email: str, api_token: str, project_key: 
     print_header("JIRA API Test Summary")
     feature_names = {
         "epics": "EPICS",
-        "components": "COMPONENTS",
         "labels": "LABELS",
         "statuses": "STATUSES"
     }

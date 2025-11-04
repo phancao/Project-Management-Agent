@@ -5,7 +5,7 @@ Unified interface for connecting to different Project Management systems.
 """
 from .base import BasePMProvider
 from .models import (
-    PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
+    PMUser, PMProject, PMTask, PMSprint, PMEpic, PMLabel,
     PMProviderConfig, PMEntityType, PMStatus, PMPriority,
     PMStatusTransition
 )
@@ -23,7 +23,6 @@ __all__ = [
     "PMTask",
     "PMSprint",
     "PMEpic",
-    "PMComponent",
     "PMLabel",
     "PMStatusTransition",
     "PMEntityType",

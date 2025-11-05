@@ -34,17 +34,12 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
   const { priorities, loading: prioritiesLoading, error: prioritiesError } = usePriorities(projectId ?? undefined);
   const { epics } = useEpics(projectId ?? undefined);
   
-  // Log priorities loading state for debugging
+  // Log errors only
   useEffect(() => {
     if (prioritiesError) {
       console.error("[TaskDetailsModal] Error loading priorities:", prioritiesError);
     }
-    if (priorities.length > 0) {
-      console.log("[TaskDetailsModal] Loaded priorities:", priorities.map(p => p.name));
-    } else if (!prioritiesLoading) {
-      console.warn("[TaskDetailsModal] No priorities loaded. ProjectId:", projectId);
-    }
-  }, [priorities, prioritiesLoading, prioritiesError, projectId]);
+  }, [prioritiesError]);
 
   // Sync editedTask when task prop changes (if not editing)
   useEffect(() => {
@@ -89,14 +84,6 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
     return value;
   };
 
-  // Debug logging for priority matching (must be before early return to follow Rules of Hooks)
-  useEffect(() => {
-    if (task?.priority && priorities.length > 0) {
-      const matched = findMatchingName(task.priority, priorities);
-      console.log(`[TaskDetailsModal] Task priority: '${task.priority}' -> Matched to: '${matched}'`);
-      console.log(`[TaskDetailsModal] Available priorities:`, priorities.map(p => p.name));
-    }
-  }, [task?.priority, priorities]);
 
   // Early return if task is null
   if (!task) return null;
@@ -139,7 +126,6 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
         updates.status = editedTask.status;
       }
       if (editedTask.priority !== undefined && editedTask.priority !== task.priority) {
-        console.log(`[TaskDetailsModal] Sending priority update: '${editedTask.priority}' (was: '${task.priority}')`);
         updates.priority = editedTask.priority;
       }
       
@@ -335,8 +321,6 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
                 <Select
                   value={currentPriorityValue}
                   onValueChange={(value) => {
-                    console.log(`[TaskDetailsModal] Priority selected from dropdown: '${value}'`);
-                    console.log(`[TaskDetailsModal] Available priorities:`, priorities.map(p => p.name));
                     setEditedTask({ ...editedTask, priority: value });
                   }}
                 >

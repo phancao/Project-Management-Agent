@@ -421,6 +421,7 @@ export function SprintBoardView() {
           setSelectedTask(null);
         }}
         onUpdate={handleUpdateTask}
+        projectId={undefined}
       />
     </div>
   );

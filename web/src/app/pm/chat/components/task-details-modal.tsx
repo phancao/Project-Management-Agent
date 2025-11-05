@@ -11,21 +11,75 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
+import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
+import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
+import { useEpics } from "~/core/api/hooks/pm/use-epics";
 
 interface TaskDetailsModalProps {
   task: Task | null;
   open: boolean;
   onClose: () => void;
   onUpdate?: (taskId: string, updates: Partial<Task>) => Promise<void>;
+  projectId?: string | null;
 }
 
-export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsModalProps) {
+export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: TaskDetailsModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTask, setEditedTask] = useState<Partial<Task> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Fetch statuses, priorities, and epics for the project (hooks must be called before early return)
+  const { statuses } = useStatuses(projectId ?? undefined, "task");
+  const { priorities } = usePriorities(projectId ?? undefined);
+  const { epics } = useEpics(projectId ?? undefined);
 
+  // Early return if task is null
   if (!task) return null;
+
+  // Helper function to find matching status/priority name (case-insensitive)
+  const findMatchingName = (value: string | undefined, options: Array<{ id: string; name: string }>): string | undefined => {
+    if (!value) return undefined;
+    
+    // First try exact match
+    const exactMatch = options.find(opt => opt.name === value);
+    if (exactMatch) return exactMatch.name;
+    
+    // Then try case-insensitive match
+    const caseInsensitiveMatch = options.find(opt => opt.name.toLowerCase() === value.toLowerCase());
+    if (caseInsensitiveMatch) return caseInsensitiveMatch.name;
+    
+    // Finally try partial match
+    const partialMatch = options.find(opt => 
+      opt.name.toLowerCase().includes(value.toLowerCase()) || 
+      value.toLowerCase().includes(opt.name.toLowerCase())
+    );
+    if (partialMatch) return partialMatch.name;
+    
+    // If no match found, return the original value (will show as-is but may not be selectable)
+    return value;
+  };
+
+  // Get the matching status and priority names for the Select values (task is guaranteed to be non-null here)
+  const currentStatusValue = findMatchingName(editedTask?.status ?? task?.status, statuses) ?? editedTask?.status ?? task?.status ?? "";
+  const currentPriorityValue = findMatchingName(editedTask?.priority ?? task?.priority, priorities) ?? editedTask?.priority ?? task?.priority ?? "";
+  
+  // Find the epic for this task (handle both string and number ID comparisons)
+  const currentEpic = task.epic_id 
+    ? epics.find(epic => {
+        // Compare as strings to handle type mismatches
+        const epicIdStr = String(epic.id);
+        const taskEpicIdStr = String(task.epic_id);
+        return epicIdStr === taskEpicIdStr;
+      })
+    : null;
+  
+  // Debug logging
+  if (task.epic_id) {
+    console.log('[TaskDetailsModal] Task epic_id:', task.epic_id);
+    console.log('[TaskDetailsModal] Available epics:', epics.map(e => ({ id: e.id, name: e.name })));
+    console.log('[TaskDetailsModal] Found epic:', currentEpic);
+  }
 
   const handleEdit = () => {
     setEditedTask({ ...task });
@@ -128,17 +182,41 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
             )}
           </div>
 
-          {/* Project */}
-          {task.project_name && (
+          {/* Project and Epic */}
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Project</label>
               <div className="mt-1">
-                <span className="inline-flex items-center px-3 py-1.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-lg text-sm font-medium">
-                  {task.project_name}
-                </span>
+                {task.project_name ? (
+                  <span className="inline-flex items-center px-3 py-1.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-lg text-sm font-medium">
+                    {task.project_name}
+                  </span>
+                ) : (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Not set</span>
+                )}
               </div>
             </div>
-          )}
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Epic</label>
+              <div className="mt-1">
+                {currentEpic ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-600">
+                    {currentEpic.color && (
+                      <div 
+                        className={`w-2 h-2 rounded-full shrink-0 ${currentEpic.color}`}
+                      >
+                      </div>
+                    )}
+                    {currentEpic.name}
+                  </span>
+                ) : (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {task.epic_id ? `Epic ID: ${task.epic_id} (not found)` : "Not set"}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
 
           {/* Description */}
           <div>
@@ -162,17 +240,42 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
               {isEditing ? (
                 <Select
-                  value={editedTask?.status ?? task.status}
+                  value={currentStatusValue}
                   onValueChange={(value) => setEditedTask({ ...editedTask, status: value })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todo">To Do</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="review">Review</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
+                    {statuses.length > 0 ? (
+                      <>
+                        {statuses.map((status) => (
+                          <SelectItem key={status.id} value={status.name}>
+                            {status.name}
+                          </SelectItem>
+                        ))}
+                        {/* Add current value if it's not in the list */}
+                        {currentStatusValue && !statuses.find(s => s.name === currentStatusValue) && (
+                          <SelectItem value={currentStatusValue}>
+                            {currentStatusValue}
+                          </SelectItem>
+                        )}
+                      </>
+                    ) : (
+                      // Fallback to default values if no statuses loaded
+                      <>
+                        <SelectItem value="todo">To Do</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="review">Review</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        {/* Add current value if it's not in the defaults */}
+                        {currentStatusValue && !["todo", "in_progress", "review", "completed"].includes(currentStatusValue) && (
+                          <SelectItem value={currentStatusValue}>
+                            {currentStatusValue}
+                          </SelectItem>
+                        )}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               ) : (
@@ -192,19 +295,44 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Priority</label>
               {isEditing ? (
                 <Select
-                  value={editedTask?.priority ?? task.priority}
+                  value={currentPriorityValue}
                   onValueChange={(value) => setEditedTask({ ...editedTask, priority: value })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="lowest">Lowest</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="highest">Highest</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
+                    {priorities.length > 0 ? (
+                      <>
+                        {priorities.map((priority) => (
+                          <SelectItem key={priority.id} value={priority.name}>
+                            {priority.name}
+                          </SelectItem>
+                        ))}
+                        {/* Add current value if it's not in the list */}
+                        {currentPriorityValue && !priorities.find(p => p.name === currentPriorityValue) && (
+                          <SelectItem value={currentPriorityValue}>
+                            {currentPriorityValue}
+                          </SelectItem>
+                        )}
+                      </>
+                    ) : (
+                      // Fallback to default values if no priorities loaded
+                      <>
+                        <SelectItem value="lowest">Lowest</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="highest">Highest</SelectItem>
+                        <SelectItem value="critical">Critical</SelectItem>
+                        {/* Add current value if it's not in the defaults */}
+                        {currentPriorityValue && !["lowest", "low", "medium", "high", "highest", "critical"].includes(currentPriorityValue) && (
+                          <SelectItem value={currentPriorityValue}>
+                            {currentPriorityValue}
+                          </SelectItem>
+                        )}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               ) : (

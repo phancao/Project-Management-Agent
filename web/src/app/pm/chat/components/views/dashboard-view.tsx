@@ -326,6 +326,7 @@ export function DashboardView() {
           setSelectedTask(null);
         }}
         onUpdate={handleUpdateTask}
+        projectId={undefined}
       />
     </div>
   );

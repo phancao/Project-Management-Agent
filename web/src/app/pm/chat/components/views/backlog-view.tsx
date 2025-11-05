@@ -1099,6 +1099,7 @@ export function BacklogView() {
           setSelectedTask(null);
         }}
         onUpdate={handleUpdateTask}
+        projectId={projectIdForSprints}
       />
     </DndContext>
   );

@@ -1933,6 +1933,50 @@ async def pm_list_statuses(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/pm/projects/{project_id}/priorities")
+async def pm_list_priorities(
+    request: Request,
+    project_id: str
+):
+    """
+    Get list of available priorities for a project.
+    
+    This is used by UI/UX to populate priority dropdowns/selectors.
+    
+    Returns priority objects with id, name, color, etc.
+    """
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            priorities = await handler.list_project_priorities(project_id)
+            return {"priorities": priorities}
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        elif "not yet implemented" in error_msg:
+            raise HTTPException(status_code=501, detail=error_msg)
+        else:
+            raise HTTPException(status_code=500, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list priorities: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # PM Chat endpoint
 @app.post("/api/pm/chat/stream")
 async def pm_chat_stream(request: Request):

@@ -193,10 +193,42 @@ export async function sendMessage(
       
       message ??= getMessage(messageId);
       if (message) {
+        const previousIsStreaming = message.isStreaming;
+        const previousContentLength = message.content?.length ?? 0;
         message = mergeMessage(message, event);
-        // Collect pending messages for update, instead of updating immediately.
-        pendingUpdates.set(message.id, message);
-        scheduleUpdate();
+        const newContentLength = message.content?.length ?? 0;
+        
+        // Debug logging for reporter messages
+        if (message.agent === "reporter") {
+          if (event.type === "message_chunk" && event.data.content) {
+            console.log(
+              `[DEBUG] Reporter message chunk: id=${message.id}, ` +
+              `content_length=${newContentLength}, ` +
+              `chunk_length=${event.data.content.length}`
+            );
+          }
+          if (event.data.finish_reason) {
+            console.log(
+              `[DEBUG] Reporter finished: id=${message.id}, ` +
+              `content_length=${newContentLength}, ` +
+              `isStreaming=${message.isStreaming}, ` +
+              `finish_reason=${event.data.finish_reason}`
+            );
+          }
+        }
+        
+        // If finish_reason is present, apply update immediately to ensure UI updates quickly
+        // This is especially important for reporter messages to show the final report
+        if (event.data.finish_reason && previousIsStreaming) {
+          // Immediately update using helper function to trigger UI re-render and run reporter logic
+          updateMessage(message);
+          // Remove from pending updates to avoid duplicate update
+          pendingUpdates.delete(message.id);
+        } else {
+          // Collect pending messages for update, instead of updating immediately.
+          pendingUpdates.set(message.id, message);
+          scheduleUpdate();
+        }
       }
     }
   } catch {
@@ -262,12 +294,70 @@ function appendMessage(message: Message) {
 }
 
 function updateMessage(message: Message) {
-  if (
-    getOngoingResearchId() &&
-    message.agent === "reporter" &&
-    !message.isStreaming
-  ) {
-    useStore.getState().setOngoingResearch(null);
+  if (message.agent === "reporter" && !message.isStreaming) {
+    // Find researchId - either from ongoingResearchId or by looking up which research has this reporter message
+    let researchId = getOngoingResearchId();
+    
+    // If ongoingResearchId is null, find the research that has this reporter message as its report
+    if (!researchId) {
+      const state = useStore.getState();
+      for (const [rId, reportId] of state.researchReportIds.entries()) {
+        if (reportId === message.id) {
+          researchId = rId;
+          break;
+        }
+      }
+      // If still not found, try finding by checking researchActivityIds
+      if (!researchId) {
+        for (const [rId, activityIds] of state.researchActivityIds.entries()) {
+          if (activityIds.includes(message.id)) {
+            researchId = rId;
+            break;
+          }
+        }
+      }
+    }
+    
+    if (researchId) {
+      const currentReportId = useStore.getState().researchReportIds.get(researchId);
+      const contentLength = message.content?.length ?? 0;
+      const contentChunksLength = message.contentChunks?.length ?? 0;
+      
+      console.log(
+        `[DEBUG] Reporter message update: ` +
+        `researchId=${researchId}, ` +
+        `messageId=${message.id}, ` +
+        `content_length=${contentLength}, ` +
+        `contentChunks_length=${contentChunksLength}, ` +
+        `currentReportId=${currentReportId}`
+      );
+      
+      if (!currentReportId || currentReportId !== message.id) {
+        useStore.setState({
+          researchReportIds: new Map(useStore.getState().researchReportIds).set(
+            researchId,
+            message.id,
+          ),
+        });
+        console.log(`[DEBUG] Set researchReportIds[${researchId}] = ${message.id}`);
+      }
+      // Always auto-open the research when report finishes so user can see the results immediately
+      // This ensures the report content is visible without requiring user to click "Open"
+      const currentOpenResearchId = useStore.getState().openResearchId;
+      useStore.getState().openResearch(researchId);
+      console.log(
+        `[DEBUG] Auto-opened research: ` +
+        `previousOpenResearchId=${currentOpenResearchId}, ` +
+        `newOpenResearchId=${researchId}`
+      );
+      // Clear ongoingResearchId to stop the loading indicator
+      useStore.getState().setOngoingResearch(null);
+      console.log(`[DEBUG] Cleared ongoingResearchId`);
+    } else {
+      console.warn(
+        `[DEBUG] Reporter message update: Could not find researchId for reporter message ${message.id}`
+      );
+    }
   }
   useStore.getState().updateMessage(message);
 }
@@ -444,6 +534,7 @@ export function useRenderableMessageIds() {
           message.agent === "coordinator" ||
           message.agent === "planner" ||
           message.agent === "podcast" ||
+          message.agent === "reporter" ||
           state.researchIds.includes(messageId) // startOfResearch condition
         );
       });

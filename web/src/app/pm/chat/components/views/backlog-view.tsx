@@ -23,9 +23,10 @@ import { useTasks } from "~/core/api/hooks/pm/use-tasks";
 import { useEpics, type Epic } from "~/core/api/hooks/pm/use-epics";
 
 import { TaskDetailsModal } from "../task-details-modal";
+import { CreateEpicDialog } from "../create-epic-dialog";
 
 // Task card component with drag handle
-function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
+function TaskCard({ task, onClick, epic }: { task: Task; onClick: () => void; epic?: Epic }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
   });
@@ -50,8 +51,16 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
         <GripVertical className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0" onClick={onClick}>
-        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-          {task.title}
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-medium text-gray-900 dark:text-white truncate flex-1">
+            {task.title}
+          </div>
+          {epic && (
+            <span className="px-2 py-0.5 text-xs font-medium rounded shrink-0 flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+              {epic.color && <div className={`w-2 h-2 rounded-full ${epic.color}`}></div>}
+              <span className="truncate max-w-[120px]">{epic.name}</span>
+            </span>
+          )}
         </div>
         {task.assigned_to && (
           <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -79,12 +88,14 @@ function EpicSidebar({
   onEpicSelect, 
   tasks,
   onTaskUpdate: _onTaskUpdate,
-  projectId
+  projectId,
+  onEpicCreate
 }: { 
   onEpicSelect: (epicId: string | null) => void;
   tasks: Task[];
   onTaskUpdate: (taskId: string, updates: Partial<Task>) => Promise<void>;
   projectId: string | null | undefined;
+  onEpicCreate?: () => void;
 }) {
   const [selectedEpic, setSelectedEpic] = useState<string | null>("all");
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(new Set());
@@ -109,13 +120,8 @@ function EpicSidebar({
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-gray-900 dark:text-white">EPICS</h3>
-          <Button variant="ghost" size="sm" className="h-6 px-2">
-            <X className="w-4 h-4" />
-          </Button>
         </div>
-        <Button variant="outline" size="sm" className="w-full">
-          Create epic
-        </Button>
+        <CreateEpicDialog projectId={projectId} onEpicCreated={onEpicCreate} />
       </div>
       
       <div className="flex-1 overflow-y-auto p-2">
@@ -233,7 +239,7 @@ function EpicDropZone({
 }
 
 // Sprint section component (vertical list)
-function SprintSection({ sprint, tasks, onTaskClick }: { sprint: { id: string; name: string; start_date?: string; end_date?: string; status: string }; tasks: Task[]; onTaskClick: (task: Task) => void }) {
+function SprintSection({ sprint, tasks, onTaskClick, epicsMap }: { sprint: { id: string; name: string; start_date?: string; end_date?: string; status: string }; tasks: Task[]; onTaskClick: (task: Task) => void; epicsMap?: Map<string, Epic> }) {
   const { setNodeRef, isOver } = useDroppable({ id: `sprint-${sprint.id}` });
   
   // Map sprint status to determine if it's active, closed, or future
@@ -311,7 +317,12 @@ function SprintSection({ sprint, tasks, onTaskClick }: { sprint: { id: string; n
         ) : (
           <div className="space-y-2">
             {tasks.map((task) => (
-              <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
+              <TaskCard 
+                key={task.id} 
+                task={task} 
+                onClick={() => onTaskClick(task)} 
+                epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
+              />
             ))}
           </div>
         )}
@@ -321,7 +332,7 @@ function SprintSection({ sprint, tasks, onTaskClick }: { sprint: { id: string; n
 }
 
 // Backlog section component
-function BacklogSection({ tasks, onTaskClick }: { tasks: Task[]; onTaskClick: (task: Task) => void }) {
+function BacklogSection({ tasks, onTaskClick, epicsMap }: { tasks: Task[]; onTaskClick: (task: Task) => void; epicsMap?: Map<string, Epic> }) {
   const { setNodeRef, isOver } = useDroppable({ id: "backlog" });
   
   return (
@@ -349,7 +360,12 @@ function BacklogSection({ tasks, onTaskClick }: { tasks: Task[]; onTaskClick: (t
         ) : (
           <div className="space-y-2">
             {tasks.map((task) => (
-              <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
+              <TaskCard 
+                key={task.id} 
+                task={task} 
+                onClick={() => onTaskClick(task)} 
+                epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
+              />
             ))}
           </div>
         )}
@@ -393,6 +409,17 @@ export function BacklogView() {
   const { tasks, loading, error } = useTasks(projectIdForSprints ?? undefined);
   // Fetch all sprints (active, closed, future) - no state filter to show all
   const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
+  // Fetch epics for the active project
+  const { epics } = useEpics(projectIdForSprints ?? undefined);
+  
+  // Create a map of epic_id -> epic for quick lookup
+  const epicsMap = useMemo(() => {
+    const map = new Map<string, Epic>();
+    epics.forEach(epic => {
+      map.set(epic.id, epic);
+    });
+    return map;
+  }, [epics]);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -421,6 +448,93 @@ export function BacklogView() {
       }));
     } catch (error) {
       console.error("Failed to update task:", error);
+      throw error;
+    }
+  };
+
+  const handleAssignTaskToEpic = async (taskId: string, epicId: string) => {
+    if (!projectIdForSprints) {
+      throw new Error('No project selected');
+    }
+    try {
+      // Match exact pattern from use-tasks.ts - resolveServiceURL handles it correctly
+      const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/assign-epic`);
+      
+      console.log(`[handleAssignTaskToEpic] Assigning task ${taskId} to epic ${epicId} in project ${projectIdForSprints}`);
+      console.log(`[handleAssignTaskToEpic] URL: ${url}`);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ epic_id: epicId }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Failed to assign task to epic: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorMessage;
+        } catch {
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+        console.error(`[handleAssignTaskToEpic] Error: ${errorMessage}`);
+        console.error(`[handleAssignTaskToEpic] Response status: ${response.status}`);
+        console.error(`[handleAssignTaskToEpic] Response text: ${errorText}`);
+        console.error(`[handleAssignTaskToEpic] Full URL attempted: ${url}`);
+        throw new Error(errorMessage);
+      }
+      
+      window.dispatchEvent(new CustomEvent("pm_refresh", { 
+        detail: { type: "pm_refresh" } 
+      }));
+    } catch (error) {
+      console.error("Failed to assign task to epic:", error);
+      throw error;
+    }
+  };
+
+  const handleRemoveTaskFromEpic = async (taskId: string) => {
+    if (!projectIdForSprints) {
+      throw new Error('No project selected');
+    }
+    try {
+      // Match exact pattern from use-tasks.ts - resolveServiceURL handles it correctly
+      const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/remove-epic`);
+      
+      console.log(`[handleRemoveTaskFromEpic] Removing task ${taskId} from epic in project ${projectIdForSprints}`);
+      console.log(`[handleRemoveTaskFromEpic] URL: ${url}`);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Failed to remove task from epic: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorMessage;
+        } catch {
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+        console.error(`[handleRemoveTaskFromEpic] Error: ${errorMessage}`);
+        console.error(`[handleRemoveTaskFromEpic] Response status: ${response.status}`);
+        console.error(`[handleRemoveTaskFromEpic] Response text: ${errorText}`);
+        console.error(`[handleRemoveTaskFromEpic] Full URL attempted: ${url}`);
+        throw new Error(errorMessage);
+      }
+      
+      window.dispatchEvent(new CustomEvent("pm_refresh", { 
+        detail: { type: "pm_refresh" } 
+      }));
+    } catch (error) {
+      console.error("Failed to remove task from epic:", error);
       throw error;
     }
   };
@@ -520,18 +634,17 @@ export function BacklogView() {
     if (typeof overId === "string" && overId.startsWith("epic-")) {
       const epicId = overId.replace("epic-", "");
       
-      // Handle "all" or "none" epic drops
+      // Handle "all" or "none" epic drops - remove from epic
       if (epicId === "all" || epicId === "none") {
-        // Remove from epic
         try {
-          await handleUpdateTask(taskId, { epic_id: undefined });
+          await handleRemoveTaskFromEpic(taskId);
         } catch (error) {
           console.error("Failed to remove task from epic:", error);
         }
       } else {
-        // Assign to epic
+        // Assign to epic using dedicated API endpoint
         try {
-          await handleUpdateTask(taskId, { epic_id: epicId });
+          await handleAssignTaskToEpic(taskId, epicId);
         } catch (error) {
           console.error("Failed to assign task to epic:", error);
         }
@@ -629,6 +742,11 @@ export function BacklogView() {
           tasks={tasks}
           onTaskUpdate={handleUpdateTask}
           projectId={projectIdForSprints}
+          onEpicCreate={() => {
+            window.dispatchEvent(new CustomEvent("pm_refresh", { 
+              detail: { type: "pm_refresh" } 
+            }));
+          }}
         />
 
         {/* Main Content Area */}
@@ -716,6 +834,7 @@ export function BacklogView() {
                           sprint={sprint}
                           tasks={tasksInSprints[sprint.id] ?? []}
                           onTaskClick={handleTaskClick}
+                          epicsMap={epicsMap}
                         />
                       ))}
                   </div>
@@ -735,6 +854,7 @@ export function BacklogView() {
                           sprint={sprint}
                           tasks={tasksInSprints[sprint.id] ?? []}
                           onTaskClick={handleTaskClick}
+                          epicsMap={epicsMap}
                         />
                       ))}
                   </div>
@@ -754,6 +874,7 @@ export function BacklogView() {
                           sprint={sprint}
                           tasks={tasksInSprints[sprint.id] ?? []}
                           onTaskClick={handleTaskClick}
+                          epicsMap={epicsMap}
                         />
                       ))}
                   </div>
@@ -763,6 +884,7 @@ export function BacklogView() {
                 <BacklogSection
                   tasks={backlogTasks}
                   onTaskClick={handleTaskClick}
+                  epicsMap={epicsMap}
                 />
               </div>
             )}

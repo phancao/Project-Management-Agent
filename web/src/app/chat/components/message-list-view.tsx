@@ -12,7 +12,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LoadingAnimation } from "~/components/deer-flow/loading-animation";
 import { Markdown } from "~/components/deer-flow/markdown";
@@ -65,6 +65,25 @@ export function MessageListView({
   const scrollContainerRef = useRef<ScrollContainerRef>(null);
   // Use renderable message IDs to avoid React key warnings from duplicate or non-rendering messages
   const messageIds = useRenderableMessageIds();
+  
+  // Debug logging
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      const store = useStore.getState();
+      const reporterMessages = Array.from(store.messages.values()).filter(
+        (m) => m.agent === "reporter"
+      );
+      console.log(
+        `[DEBUG] MessageListView render: ` +
+        `renderableMessageIds=${messageIds.length}, ` +
+        `allMessageIds=${store.messageIds.length}, ` +
+        `reporterMessages=${reporterMessages.length}, ` +
+        `reporterIds=${reporterMessages.map((m) => m.id).join(",")}, ` +
+        `reporterInRenderable=${reporterMessages.some((m) => messageIds.includes(m.id))}, ` +
+        `renderableIds=${messageIds.slice(-5).join(",")}`
+      );
+    }
+  }, [messageIds]);
   const interruptMessage = useLastInterruptMessage();
   const waitingForFeedbackMessageId = useLastFeedbackMessageId();
   const responding = useStore((state) => state.responding);
@@ -147,8 +166,20 @@ function MessageListItem({
       message.agent === "coordinator" ||
       message.agent === "planner" ||
       message.agent === "podcast" ||
+      message.agent === "reporter" ||
       startOfResearch
     ) {
+      // Debug logging for reporter messages
+      if (process.env.NODE_ENV === "development" && message.agent === "reporter") {
+        console.log(
+          `[DEBUG] MessageListItem rendering reporter: ` +
+          `id=${messageId}, ` +
+          `content_length=${message.content?.length ?? 0}, ` +
+          `contentChunks_length=${message.contentChunks?.length ?? 0}, ` +
+          `isStreaming=${message.isStreaming}, ` +
+          `hasContent=${!!message.content}`
+        );
+      }
       let content: React.ReactNode;
       if (message.agent === "planner") {
         content = (
@@ -178,7 +209,8 @@ function MessageListItem({
           </div>
         );
       } else {
-        content = message.content ? (
+        // Render if there's content OR if it's streaming (content may be accumulating)
+        content = (message.content || message.isStreaming) ? (
           <div
             className={cn(
               "flex w-full px-4",

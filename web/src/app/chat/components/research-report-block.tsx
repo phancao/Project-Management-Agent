@@ -1,7 +1,7 @@
 // Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { LoadingAnimation } from "~/components/deer-flow/loading-animation";
 import { Markdown } from "~/components/deer-flow/markdown";
@@ -22,6 +22,20 @@ export function ResearchReportBlock({
 }) {
   const message = useMessage(messageId);
   const { isReplay } = useReplay();
+  
+  // Debug logging - use useEffect to ensure it runs on every render
+  useEffect(() => {
+    if (messageId && process.env.NODE_ENV === "development") {
+      console.log(
+        `[DEBUG] ResearchReportBlock render: ` +
+        `messageId=${messageId}, ` +
+        `message exists=${!!message}, ` +
+        `content_length=${message?.content?.length ?? 0}, ` +
+        `contentChunks_length=${message?.contentChunks?.length ?? 0}, ` +
+        `isStreaming=${message?.isStreaming}`
+      );
+    }
+  });
   const handleMarkdownChange = useCallback(
     (markdown: string) => {
       if (message) {
@@ -38,6 +52,28 @@ export function ResearchReportBlock({
   );
   const contentRef = useRef<HTMLDivElement>(null);
   const isCompleted = message?.isStreaming === false && message?.content !== "";
+  // Reconstruct content from chunks if main content is empty but chunks exist
+  const displayContent = useMemo(() => {
+    if (message?.content) {
+      if (process.env.NODE_ENV === "development" && message.content.length > 0) {
+        console.log(`[DEBUG] ResearchReportBlock: Using message.content, length=${message.content.length}`);
+      }
+      return message.content;
+    }
+    // Fallback: reconstruct from contentChunks if content is empty
+    if (message?.contentChunks && message.contentChunks.length > 0) {
+      const reconstructed = message.contentChunks.join("");
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[DEBUG] ResearchReportBlock: Reconstructing from chunks, length=${reconstructed.length}, chunks=${message.contentChunks.length}`);
+      }
+      return reconstructed;
+    }
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[DEBUG] ResearchReportBlock: No content available, content exists=${!!message?.content}, chunks=${message?.contentChunks?.length ?? 0}`);
+    }
+    return "";
+  }, [message?.content, message?.contentChunks]);
+  
   // TODO: scroll to top when completed, but it's not working
   // useEffect(() => {
   //   if (isCompleted && contentRef.current) {
@@ -52,19 +88,43 @@ export function ResearchReportBlock({
   //   }
   // }, [isCompleted]);
 
+  // Debug: Log what we're about to render
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `[DEBUG] ResearchReportBlock render output: ` +
+        `displayContent length=${displayContent.length}, ` +
+        `isCompleted=${isCompleted}, ` +
+        `isStreaming=${message?.isStreaming}, ` +
+        `editing=${editing}, ` +
+        `isReplay=${isReplay}`
+      );
+    }
+  });
+
   return (
     <div ref={contentRef} className={cn("w-full pt-4 pb-8", className)}>
-      {!isReplay && isCompleted && editing ? (
+      {displayContent.length === 0 && !message?.isStreaming ? (
+        <div className="text-muted-foreground py-8 text-center text-sm">
+          No content available. Content length: {message?.content?.length ?? 0}, Chunks: {message?.contentChunks?.length ?? 0}
+        </div>
+      ) : !isReplay && isCompleted && editing ? (
         <ReportEditor
-          content={message?.content}
+          content={displayContent}
           onMarkdownChange={handleMarkdownChange}
         />
       ) : (
         <>
-          <Markdown animated checkLinkCredibility>
-            {message?.content}
-          </Markdown>
-          {message?.isStreaming && <LoadingAnimation className="my-12" />}
+          {displayContent ? (
+            <Markdown animated checkLinkCredibility>
+              {displayContent}
+            </Markdown>
+          ) : (
+            message?.isStreaming && <LoadingAnimation className="my-12" />
+          )}
+          {message?.isStreaming && displayContent && (
+            <LoadingAnimation className="my-12" />
+          )}
         </>
       )}
     </div>

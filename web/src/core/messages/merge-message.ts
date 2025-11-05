@@ -40,7 +40,10 @@ export function mergeMessage(message: Message, event: ChatEvent) {
 
 function mergeTextMessage(message: Message, event: MessageChunkEvent) {
   if (event.data.content) {
-    message.content += event.data.content;
+    // Ensure content is initialized as string (not undefined/null)
+    message.content = (message.content ?? "") + event.data.content;
+    // Ensure contentChunks is initialized
+    message.contentChunks = message.contentChunks ?? [];
     message.contentChunks.push(event.data.content);
   }
   if (event.data.reasoning_content) {

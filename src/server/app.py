@@ -1746,6 +1746,73 @@ async def pm_remove_task_from_epic(request: Request, project_id: str, task_id: s
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/pm/projects/{project_id}/tasks/{task_id}/assign-sprint")
+async def pm_assign_task_to_sprint(request: Request, project_id: str, task_id: str):
+    """Assign a task to a sprint"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        sprint_data = await request.json()
+        sprint_id = sprint_data.get("sprint_id")
+        if not sprint_id:
+            raise HTTPException(status_code=400, detail="sprint_id is required")
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            return await handler.assign_task_to_sprint(project_id, task_id, sprint_id)
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to assign task to sprint: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/pm/projects/{project_id}/tasks/{task_id}/move-to-backlog")
+async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: str):
+    """Move a task to the backlog"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            return await handler.move_task_to_backlog(project_id, task_id)
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to move task to backlog: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/pm/projects/{project_id}/epics/{epic_id}")
 async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
     """Delete an epic for a project"""

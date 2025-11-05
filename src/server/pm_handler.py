@@ -148,6 +148,41 @@ class PMHandler:
             ),
         )
     
+    def _get_provider_for_project(self, project_id: str):
+        """
+        Get provider instance for a project_id.
+        
+        Args:
+            project_id: Project ID in format "provider_id:actual_project_id"
+            
+        Returns:
+            PM provider instance
+            
+        Raises:
+            ValueError: If provider_id format is invalid or provider not found
+        """
+        if ":" not in project_id:
+            raise ValueError(f"Invalid project_id format: {project_id}")
+        
+        parts = project_id.split(":", 1)
+        provider_id_str = parts[0]
+        
+        from uuid import UUID
+        try:
+            provider_uuid = UUID(provider_id_str)
+        except ValueError:
+            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
+        
+        provider = self.db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == provider_uuid,
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        return self._create_provider_instance(provider)
+    
     async def list_all_projects(self) -> List[Dict[str, Any]]:
         """
         List all projects.
@@ -1064,6 +1099,47 @@ class PMHandler:
         """
         provider = self._get_provider_for_project(project_id)
         updated_task = await provider.remove_task_from_epic(task_id)
+        
+        # Get project name for _task_to_dict
+        project = await provider.get_project(project_id.split(":")[-1])
+        project_name = project.name if project else "Unknown"
+        
+        return self._task_to_dict(updated_task, project_name)
+    
+    async def assign_task_to_sprint(self, project_id: str, task_id: str, sprint_id: str) -> Dict[str, Any]:
+        """
+        Assign a task to a sprint within a project.
+        
+        Args:
+            project_id: Project ID in format "provider_id:project_key"
+            task_id: Task ID to assign
+            sprint_id: Sprint ID to assign to
+            
+        Returns:
+            Updated task dictionary
+        """
+        provider = self._get_provider_for_project(project_id)
+        updated_task = await provider.assign_task_to_sprint(task_id, sprint_id)
+        
+        # Get project name for _task_to_dict
+        project = await provider.get_project(project_id.split(":")[-1])
+        project_name = project.name if project else "Unknown"
+        
+        return self._task_to_dict(updated_task, project_name)
+    
+    async def move_task_to_backlog(self, project_id: str, task_id: str) -> Dict[str, Any]:
+        """
+        Move a task to the backlog (remove from sprint).
+        
+        Args:
+            project_id: Project ID in format "provider_id:project_key"
+            task_id: Task ID to move to backlog
+            
+        Returns:
+            Updated task dictionary
+        """
+        provider = self._get_provider_for_project(project_id)
+        updated_task = await provider.move_task_to_backlog(task_id)
         
         # Get project name for _task_to_dict
         project = await provider.get_project(project_id.split(":")[-1])

@@ -595,6 +595,19 @@ class JIRAProvider(BasePMProvider):
                 # Parent is a regular task/subtask, set parent_task_id
                 parent_task_id = parent_key or parent_id
         
+        # Parse sprint (customfield_10020)
+        sprint_field = fields.get("customfield_10020")  # Sprint field
+        sprint_id = None
+        if sprint_field:
+            # Sprint field is an array of sprint objects
+            if isinstance(sprint_field, list) and len(sprint_field) > 0:
+                # Take the first sprint (most recent)
+                sprint_obj = sprint_field[0]
+                sprint_id = str(sprint_obj.get("id")) if sprint_obj.get("id") else None
+            elif isinstance(sprint_field, dict):
+                # Single sprint object
+                sprint_id = str(sprint_field.get("id")) if sprint_field.get("id") else None
+        
         # Parse time estimates (JIRA stores in seconds)
         time_original_estimate = fields.get("timeoriginalestimate")
         estimated_hours = None
@@ -649,6 +662,7 @@ class JIRAProvider(BasePMProvider):
             project_id=project_id,
             parent_task_id=parent_task_id,
             epic_id=epic_id,  # Set epic_id if parent is an epic
+            sprint_id=sprint_id,  # Set sprint_id from customfield_10020
             assignee_id=assignee_id,
             estimated_hours=estimated_hours,
             actual_hours=actual_hours,
@@ -764,6 +778,55 @@ class JIRAProvider(BasePMProvider):
                 fields["parent"] = {"key": epic_id}
             else:
                 fields["parent"] = None
+        if "sprint_id" in updates:
+            # Sprint assignment uses Agile API, not direct field update
+            # We'll handle this separately after the standard update
+            sprint_id = updates["sprint_id"]
+            sprint_updates_applied = False
+            if sprint_id:
+                # Assign to sprint using Agile API
+                try:
+                    sprint_url = f"{self.base_url}/rest/agile/1.0/sprint/{sprint_id}/issue"
+                    sprint_payload = {"issues": [task_id]}
+                    sprint_resp = requests.post(
+                        sprint_url, headers=self.headers, json=sprint_payload, timeout=10
+                    )
+                    if sprint_resp.status_code == 204:
+                        sprint_updates_applied = True
+                        logger.info(f"Assigned task {task_id} to sprint {sprint_id}")
+                    else:
+                        logger.warning(
+                            f"Failed to assign to sprint via Agile API: "
+                            f"{sprint_resp.status_code}, {sprint_resp.text[:200]}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Error assigning to sprint: {e}")
+            else:
+                # Move to backlog using Agile API
+                try:
+                    backlog_url = f"{self.base_url}/rest/agile/1.0/backlog/issue"
+                    backlog_payload = {"issues": [task_id]}
+                    backlog_resp = requests.post(
+                        backlog_url, headers=self.headers, json=backlog_payload, timeout=10
+                    )
+                    if backlog_resp.status_code == 204:
+                        sprint_updates_applied = True
+                        logger.info(f"Moved task {task_id} to backlog")
+                    else:
+                        logger.warning(
+                            f"Failed to move to backlog: "
+                            f"{backlog_resp.status_code}, {backlog_resp.text[:200]}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Error moving to backlog: {e}")
+            
+            if sprint_updates_applied:
+                # If sprint update was successful, fetch updated task
+                updated_task = await self.get_task(task_id)
+                if updated_task:
+                    return updated_task
+                else:
+                    raise ValueError("Failed to retrieve updated task after sprint assignment")
         
         if not fields:
             # No updates to apply, just return the current task

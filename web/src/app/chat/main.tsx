@@ -17,6 +17,15 @@ export default function Main() {
     () => openResearchId !== null,
     [openResearchId],
   );
+  
+  // Debug logging
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      `[DEBUG] Main: ` +
+      `openResearchId=${openResearchId}, ` +
+      `doubleColumnMode=${doubleColumnMode}`
+    );
+  }
   return (
     <div
       className={cn(

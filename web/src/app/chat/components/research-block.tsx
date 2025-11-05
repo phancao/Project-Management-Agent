@@ -25,22 +25,46 @@ export function ResearchBlock({
   researchId: string | null;
 }) {
   const t = useTranslations("chat.research");
-  const reportId = useStore((state) =>
-    researchId ? state.researchReportIds.get(researchId) : undefined,
-  );
+  // Subscribe to the entire researchReportIds Map to ensure reactivity
+  const researchReportIds = useStore((state) => state.researchReportIds);
+  const reportId = researchId ? researchReportIds.get(researchId) : undefined;
   const [activeTab, setActiveTab] = useState("activities");
-  const hasReport = useStore((state) =>
-    researchId ? state.researchReportIds.has(researchId) : false,
-  );
+  const hasReport = researchId ? researchReportIds.has(researchId) : false;
   // Use useMessage hook to properly subscribe to message updates
   const reportMessage = useMessage(reportId);
   const reportStreaming = reportMessage?.isStreaming ?? false;
+  const openResearchId = useStore((state) => state.openResearchId);
   const { isReplay } = useReplay();
+  
+  // Debug logging - use useEffect to ensure it runs on every render
   useEffect(() => {
-    if (hasReport) {
-      setActiveTab("report");
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `[DEBUG] ResearchBlock render: ` +
+        `researchId=${researchId}, ` +
+        `reportId=${reportId}, ` +
+        `hasReport=${hasReport}, ` +
+        `openResearchId=${openResearchId}, ` +
+        `reportStreaming=${reportStreaming}, ` +
+        `activeTab=${activeTab}, ` +
+        `reportMessage exists=${!!reportMessage}, ` +
+        `reportContent length=${reportMessage?.content?.length ?? 0}`
+      );
     }
-  }, [hasReport]);
+  });
+  useEffect(() => {
+    // Auto-switch to report tab when report is generated and not streaming
+    // Also switch if we have a reportId even if hasReport check fails (defensive)
+    if ((hasReport || reportId) && !reportStreaming && reportId) {
+      setActiveTab("report");
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `[DEBUG] ResearchBlock: Auto-switching to report tab, ` +
+          `hasReport=${hasReport}, reportId=${reportId}, reportStreaming=${reportStreaming}`
+        );
+      }
+    }
+  }, [hasReport, reportId, reportStreaming]);
 
   const handleGeneratePodcast = useCallback(async () => {
     if (!researchId) {

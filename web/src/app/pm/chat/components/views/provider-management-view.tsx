@@ -193,7 +193,8 @@ export function ProviderManagementView() {
       }
 
       // For JIRA, username should be the email address
-      if (formData.username) {
+      // OpenProject doesn't require username
+      if (formData.username && formData.provider_type !== "openproject") {
         request.username = formData.username;
       }
 
@@ -555,7 +556,7 @@ export function ProviderManagementView() {
               </>
             )}
 
-            {formData.provider_type !== "jira" && (
+            {formData.provider_type !== "jira" && formData.provider_type !== "openproject" && (
               <div className="space-y-2">
                 <Label htmlFor="username">Username (Optional)</Label>
                 <Input

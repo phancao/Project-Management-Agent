@@ -250,6 +250,33 @@ class BasePMProvider(ABC):
         updates = {"epic_id": None}
         return await self.update_task(task_id, updates)
     
+    async def assign_task_to_sprint(self, task_id: str, sprint_id: str) -> PMTask:
+        """
+        Assign a task to a sprint.
+        
+        Args:
+            task_id: ID of the task to assign
+            sprint_id: ID of the sprint to assign to
+            
+        Returns:
+            Updated task with sprint_id set
+        """
+        updates = {"sprint_id": sprint_id}
+        return await self.update_task(task_id, updates)
+    
+    async def move_task_to_backlog(self, task_id: str) -> PMTask:
+        """
+        Move a task to the backlog (remove from sprint).
+        
+        Args:
+            task_id: ID of the task to move to backlog
+            
+        Returns:
+            Updated task with sprint_id cleared
+        """
+        updates = {"sprint_id": None}
+        return await self.update_task(task_id, updates)
+    
     # ==================== Label Operations ====================
     
     @abstractmethod

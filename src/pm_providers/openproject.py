@@ -299,6 +299,31 @@ class OpenProjectProvider(BasePMProvider):
                     )
                 # Fallback: try setting parent to empty dict
                 payload["_links"]["parent"] = {}
+        if "sprint_id" in updates:
+            # Sprint assignment via version link
+            payload["_links"] = payload.get("_links", {})
+            sprint_id = updates["sprint_id"]
+            if sprint_id:
+                payload["_links"]["version"] = {
+                    "href": f"/api/v3/versions/{sprint_id}"
+                }
+            else:
+                # Remove from sprint (move to backlog)
+                # OpenProject accepts empty dict to remove version link
+                # We need to ensure lockVersion is included
+                try:
+                    # Get current work package to ensure we have lockVersion
+                    current_wp = requests.get(url, headers=self.headers, timeout=10)
+                    if current_wp.status_code == 200:
+                        current_data = current_wp.json()
+                        current_lock_version = current_data.get('lockVersion')
+                        if current_lock_version is not None:
+                            payload["lockVersion"] = current_lock_version
+                        payload["_links"]["version"] = {}
+                except Exception as e:
+                    logger.warning(f"Could not get lockVersion for version removal: {e}")
+                    # Try anyway with empty dict
+                    payload["_links"]["version"] = {}
         if "estimated_hours" in updates:
             # Convert hours to ISO 8601 duration
             # (e.g., 2.5 -> PT2H30M, 2.0 -> PT2H)
@@ -589,6 +614,9 @@ class OpenProjectProvider(BasePMProvider):
             epic_id=self._extract_id_from_href(
                 links.get("parent", {}).get("href")
             ) if links.get("parent", {}).get("href") else None,
+            sprint_id=self._extract_id_from_href(
+                links.get("version", {}).get("href")
+            ) if links.get("version", {}).get("href") else None,
             estimated_hours=self._parse_duration_to_hours(
                 data.get("estimatedTime")
             ),

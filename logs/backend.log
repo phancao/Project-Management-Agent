@@ -319,3 +319,580 @@ INFO:     ::1:59962 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc
 INFO:     ::1:59961 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
 2025-11-05 16:57:25,934 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
 INFO:     ::1:59960 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     ::1:61041 - "GET /docs HTTP/1.1" 200 OK
+INFO:     ::1:61162 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     ::1:61163 - "OPTIONS /api/pm/providers HTTP/1.1" 200 OK
+INFO:     ::1:61165 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-05 17:06:04,781 - src.server.pm_handler - INFO - Attempting to get current user for provider fc9e2adf-476e-4432-907a-4a5818f90bbc (jira)...
+2025-11-05 17:06:04,781 - src.pm_providers.jira - INFO - Fetching current user from JIRA: https://phancao1984.atlassian.net/rest/api/3/myself
+2025-11-05 17:06:05,201 - src.pm_providers.jira - INFO - JIRA get_current_user response: status=200
+2025-11-05 17:06:05,201 - src.pm_providers.jira - INFO - JIRA user data: {'self': 'https://phancao1984.atlassian.net/rest/api/3/user?accountId=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'accountId': '557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'accountType': 'atlassia
+2025-11-05 17:06:05,202 - src.pm_providers.jira - INFO - JIRA current user: id=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505, name=Phan Cao, email=phancao1984@gmail.com
+2025-11-05 17:06:05,202 - src.server.pm_handler - INFO - Successfully retrieved current user for provider fc9e2adf-476e-4432-907a-4a5818f90bbc (jira): id=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505, name=Phan Cao
+2025-11-05 17:06:05,787 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:05,788 - src.pm_providers.jira - INFO - JIRA API REQUEST TRACE
+2025-11-05 17:06:05,788 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:05,788 - src.pm_providers.jira - INFO - Project ID provided: None
+2025-11-05 17:06:05,788 - src.pm_providers.jira - INFO - Actual project key used: None
+2025-11-05 17:06:05,788 - src.pm_providers.jira - INFO - Project numeric ID: None
+2025-11-05 17:06:05,788 - src.pm_providers.jira - INFO - JQL Query: assignee = "557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505" ORDER BY created DESC
+2025-11-05 17:06:05,788 - src.pm_providers.jira - INFO - Request URL: https://phancao1984.atlassian.net/rest/api/3/search/jql
+2025-11-05 17:06:05,788 - src.pm_providers.jira - INFO - Request params: {'jql': 'assignee = "557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505" ORDER BY created DESC', 'maxResults': 1000, 'fields': ['summary', 'description', 'status', 'priority', 'assignee', 'project', 'parent', 'customfield_10020', 'timeoriginalestimate', 'timespent', 'created', 'updated', 'resolutiondate', 'duedate', 'startdate'], 'expand': 'names,schema'}
+2025-11-05 17:06:05,788 - src.pm_providers.jira - INFO - Request headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+2025-11-05 17:06:06,228 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:06,229 - src.pm_providers.jira - INFO - JIRA API RESPONSE TRACE
+2025-11-05 17:06:06,229 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:06,229 - src.pm_providers.jira - INFO - Response status code: 200
+2025-11-05 17:06:06,229 - src.pm_providers.jira - INFO - Response headers: {'Content-Type': 'application/json;charset=UTF-8', 'Transfer-Encoding': 'chunked', 'Connection': 'keep-alive', 'Date': 'Wed, 05 Nov 2025 10:06:06 GMT', 'Server': 'AtlassianEdge', 'Timing-Allow-Origin': '*', 'X-Arequestid': '4ba359a40ae3481a309235022bbb4c18', 'Set-Cookie': 'atlassian.xsrf.token=ba9a3001511b6c03f62b2dce79cd94d54971bba8_lin; Path=/; SameSite=None; Secure', 'X-Aaccountid': '557058%3Aca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'Cache-Control': 'no-cache, no-store, no-transform', 'X-Ratelimit-Limit': '200', 'X-Ratelimit-Remaining': '199', 'Vary': 'Accept-Encoding', 'Content-Encoding': 'gzip', 'X-Content-Type-Options': 'nosniff', 'X-Xss-Protection': '1; mode=block', 'Atl-Traceid': '8f093248c7634f59bff872b2b0e43186', 'Atl-Request-Id': '8f093248-c763-4f59-bff8-72b2b0e43186', 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload', 'Report-To': '{"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}', 'Nel': '{"failure_fraction": 0.001, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}', 'X-Cache': 'Miss from cloudfront', 'Via': '1.1 0ad8fd57a8360042531af664f971c84a.cloudfront.net (CloudFront)', 'X-Amz-Cf-Pop': 'HAN50-P2', 'X-Amz-Cf-Id': 'MS24SkjH3hB9UETFBaA5GWSwKpgfKYH6VaYuIJy2_qMPiovLeNqPqA==', 'Server-Timing': 'cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=0,cdn-upstream-fbl;dur=336,atl-edge;dur=284,atl-edge-internal;dur=18,atl-edge-upstream;dur=267,atl-edge-pop;desc="aws-ap-southeast-1",cdn-cache-miss,cdn-pop;desc="HAN50-P2",cdn-rid;desc="MS24SkjH3hB9UETFBaA5GWSwKpgfKYH6VaYuIJy2_qMPiovLeNqPqA==",cdn-downstream-fbl;dur=342'}
+2025-11-05 17:06:06,229 - src.pm_providers.jira - INFO - Response text (first 1000 chars): {"issues":[{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"10010","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10010","key":"TS-7","fields":{"summary":"Test Epic 1","timespent":null,"created":"2025-11-04T23:19:23.888+0700","timeoriginalestimate":null,"description":null,"project":{"self":"https://phancao1984.atlassian.net/rest/api/3/project/10001","id":"10001","key":"TS","name":"Test SCRUM","projectTypeKey":"software","simplified":true,"avatarUrls":{"48x48":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411","24x24":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=small","16x16":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=xsmall","32x32":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=medium"}},"priority":{"self":"https://pha
+2025-11-05 17:06:06,230 - src.pm_providers.jira - INFO - Response JSON keys: ['issues', 'names', 'schema', 'isLast']
+2025-11-05 17:06:06,230 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:06,230 - src.pm_providers.jira - INFO - Parsed response JSON successfully
+2025-11-05 17:06:06,231 - src.pm_providers.jira - INFO - Number of issues in response: 3
+2025-11-05 17:06:06,231 - src.pm_providers.jira - INFO - Parsing 3 issues...
+2025-11-05 17:06:06,231 - src.pm_providers.jira - DEBUG - Parsed issue 0: id=TS-7, title=Test Epic 1
+2025-11-05 17:06:06,231 - src.pm_providers.jira - DEBUG - Parsed issue 1: id=TS-4, title=backlog 1
+2025-11-05 17:06:06,231 - src.pm_providers.jira - DEBUG - Parsed issue 2: id=TS-1, title=issue 1
+2025-11-05 17:06:06,231 - src.pm_providers.jira - INFO - Successfully parsed 3 tasks
+2025-11-05 17:06:06,232 - src.server.pm_handler - INFO - Attempting to get current user for provider a4a1f985-f386-40e0-9576-8aa0d80e3747 (openproject)...
+2025-11-05 17:06:06,291 - src.server.pm_handler - INFO - Successfully retrieved current user for provider a4a1f985-f386-40e0-9576-8aa0d80e3747 (openproject): id=4, name=OpenProject Admin
+2025-11-05 17:06:06,310 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     ::1:61166 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     ::1:61168 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     ::1:61163 - "GET /api/pm/providers HTTP/1.1" 200 OK
+INFO:     ::1:61162 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-05 17:06:06,789 - src.server.pm_handler - INFO - Attempting to get current user for provider fc9e2adf-476e-4432-907a-4a5818f90bbc (jira)...
+2025-11-05 17:06:06,789 - src.pm_providers.jira - INFO - Fetching current user from JIRA: https://phancao1984.atlassian.net/rest/api/3/myself
+2025-11-05 17:06:07,191 - src.pm_providers.jira - INFO - JIRA get_current_user response: status=200
+2025-11-05 17:06:07,192 - src.pm_providers.jira - INFO - JIRA user data: {'self': 'https://phancao1984.atlassian.net/rest/api/3/user?accountId=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'accountId': '557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'accountType': 'atlassia
+2025-11-05 17:06:07,192 - src.pm_providers.jira - INFO - JIRA current user: id=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505, name=Phan Cao, email=phancao1984@gmail.com
+2025-11-05 17:06:07,193 - src.server.pm_handler - INFO - Successfully retrieved current user for provider fc9e2adf-476e-4432-907a-4a5818f90bbc (jira): id=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505, name=Phan Cao
+2025-11-05 17:06:07,585 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:07,585 - src.pm_providers.jira - INFO - JIRA API REQUEST TRACE
+2025-11-05 17:06:07,585 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:07,585 - src.pm_providers.jira - INFO - Project ID provided: None
+2025-11-05 17:06:07,586 - src.pm_providers.jira - INFO - Actual project key used: None
+2025-11-05 17:06:07,586 - src.pm_providers.jira - INFO - Project numeric ID: None
+2025-11-05 17:06:07,586 - src.pm_providers.jira - INFO - JQL Query: assignee = "557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505" ORDER BY created DESC
+2025-11-05 17:06:07,586 - src.pm_providers.jira - INFO - Request URL: https://phancao1984.atlassian.net/rest/api/3/search/jql
+2025-11-05 17:06:07,586 - src.pm_providers.jira - INFO - Request params: {'jql': 'assignee = "557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505" ORDER BY created DESC', 'maxResults': 1000, 'fields': ['summary', 'description', 'status', 'priority', 'assignee', 'project', 'parent', 'customfield_10020', 'timeoriginalestimate', 'timespent', 'created', 'updated', 'resolutiondate', 'duedate', 'startdate'], 'expand': 'names,schema'}
+2025-11-05 17:06:07,586 - src.pm_providers.jira - INFO - Request headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+2025-11-05 17:06:08,018 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - JIRA API RESPONSE TRACE
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - Response status code: 200
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - Response headers: {'Content-Type': 'application/json;charset=UTF-8', 'Transfer-Encoding': 'chunked', 'Connection': 'keep-alive', 'Date': 'Wed, 05 Nov 2025 10:06:08 GMT', 'Server': 'AtlassianEdge', 'Timing-Allow-Origin': '*', 'X-Arequestid': '273e67f06b6af6320de8d0a941bcbef3', 'Set-Cookie': 'atlassian.xsrf.token=a56766c3c6247f7e216c31662e7df67ac7cb58c4_lin; Path=/; SameSite=None; Secure', 'X-Aaccountid': '557058%3Aca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'Cache-Control': 'no-cache, no-store, no-transform', 'X-Ratelimit-Limit': '200', 'X-Ratelimit-Remaining': '199', 'Vary': 'Accept-Encoding', 'Content-Encoding': 'gzip', 'X-Content-Type-Options': 'nosniff', 'X-Xss-Protection': '1; mode=block', 'Atl-Traceid': '5348a91e96974ed8bdc5379b68f3f153', 'Atl-Request-Id': '5348a91e-9697-4ed8-bdc5-379b68f3f153', 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload', 'Report-To': '{"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}', 'Nel': '{"failure_fraction": 0.001, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}', 'X-Cache': 'Miss from cloudfront', 'Via': '1.1 0db5fbf9c3c7b25bd0d465e5edd1cf98.cloudfront.net (CloudFront)', 'X-Amz-Cf-Pop': 'HAN50-P2', 'X-Amz-Cf-Id': 'XirXztQacbX_ZmlodHxP9HXxGuAqe_6bFOSN3ib3O-tpoRDcBW6Wow==', 'Server-Timing': 'cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=0,cdn-upstream-fbl;dur=294,atl-edge;dur=247,atl-edge-internal;dur=14,atl-edge-upstream;dur=234,atl-edge-pop;desc="aws-ap-southeast-1",cdn-cache-miss,cdn-pop;desc="HAN50-P2",cdn-rid;desc="XirXztQacbX_ZmlodHxP9HXxGuAqe_6bFOSN3ib3O-tpoRDcBW6Wow==",cdn-downstream-fbl;dur=298'}
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - Response text (first 1000 chars): {"issues":[{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"10010","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10010","key":"TS-7","fields":{"summary":"Test Epic 1","timespent":null,"created":"2025-11-04T23:19:23.888+0700","timeoriginalestimate":null,"description":null,"project":{"self":"https://phancao1984.atlassian.net/rest/api/3/project/10001","id":"10001","key":"TS","name":"Test SCRUM","projectTypeKey":"software","simplified":true,"avatarUrls":{"48x48":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411","24x24":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=small","16x16":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=xsmall","32x32":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=medium"}},"priority":{"self":"https://pha
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - Response JSON keys: ['issues', 'names', 'schema', 'isLast']
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - Parsed response JSON successfully
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - Number of issues in response: 3
+2025-11-05 17:06:08,019 - src.pm_providers.jira - INFO - Parsing 3 issues...
+2025-11-05 17:06:08,020 - src.pm_providers.jira - DEBUG - Parsed issue 0: id=TS-7, title=Test Epic 1
+2025-11-05 17:06:08,020 - src.pm_providers.jira - DEBUG - Parsed issue 1: id=TS-4, title=backlog 1
+2025-11-05 17:06:08,020 - src.pm_providers.jira - DEBUG - Parsed issue 2: id=TS-1, title=issue 1
+2025-11-05 17:06:08,020 - src.pm_providers.jira - INFO - Successfully parsed 3 tasks
+2025-11-05 17:06:08,020 - src.server.pm_handler - INFO - Attempting to get current user for provider a4a1f985-f386-40e0-9576-8aa0d80e3747 (openproject)...
+2025-11-05 17:06:08,032 - src.server.pm_handler - INFO - Successfully retrieved current user for provider a4a1f985-f386-40e0-9576-8aa0d80e3747 (openproject): id=4, name=OpenProject Admin
+2025-11-05 17:06:08,046 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     ::1:61165 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     ::1:61168 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-05 17:06:09,664 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61162 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:06:10,119 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61163 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:06:10,128 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:06:10,433 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:06:10,434 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61166 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:06:11,113 - src.pm_providers.jira - INFO - Found 1 sprints from board 2 (state=all)
+2025-11-05 17:06:11,113 - src.pm_providers.jira - INFO - Returning 1 sprints (state=all)
+INFO:     ::1:61165 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+2025-11-05 17:06:11,939 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61168 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:06:12,289 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61162 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:06:12,292 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:06:12,660 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:06:12,661 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61163 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:06:12,674 - src.server.pm_handler - INFO - Using provider: id=fc9e2adf-476e-4432-907a-4a5818f90bbc, type=jira, base_url=https://phancao1984.atlassian.net, project_id=TS
+2025-11-05 17:06:12,977 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:06:12,977 - src.server.pm_handler - INFO - CALLING PROVIDER list_tasks: provider=jira, project_id=fc9e2adf-476e-4432-907a-4a5818f90bbc:TS, actual_project_id=TS
+2025-11-05 17:06:12,978 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:06:13,304 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:13,304 - src.pm_providers.jira - INFO - JIRA API REQUEST TRACE
+2025-11-05 17:06:13,305 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:13,306 - src.pm_providers.jira - INFO - Project ID provided: TS
+2025-11-05 17:06:13,306 - src.pm_providers.jira - INFO - Actual project key used: TS
+2025-11-05 17:06:13,306 - src.pm_providers.jira - INFO - Project numeric ID: 10001
+2025-11-05 17:06:13,306 - src.pm_providers.jira - INFO - JQL Query: project = "TS" ORDER BY created DESC
+2025-11-05 17:06:13,306 - src.pm_providers.jira - INFO - Request URL: https://phancao1984.atlassian.net/rest/api/3/search/jql
+2025-11-05 17:06:13,306 - src.pm_providers.jira - INFO - Request params: {'jql': 'project = "TS" ORDER BY created DESC', 'maxResults': 1000, 'fields': ['summary', 'description', 'status', 'priority', 'assignee', 'project', 'parent', 'customfield_10020', 'timeoriginalestimate', 'timespent', 'created', 'updated', 'resolutiondate', 'duedate', 'startdate'], 'expand': 'names,schema'}
+2025-11-05 17:06:13,306 - src.pm_providers.jira - INFO - Request headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+2025-11-05 17:06:13,705 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:13,705 - src.pm_providers.jira - INFO - JIRA API RESPONSE TRACE
+2025-11-05 17:06:13,705 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:13,705 - src.pm_providers.jira - INFO - Response status code: 200
+2025-11-05 17:06:13,705 - src.pm_providers.jira - INFO - Response headers: {'Content-Type': 'application/json;charset=UTF-8', 'Transfer-Encoding': 'chunked', 'Connection': 'keep-alive', 'Date': 'Wed, 05 Nov 2025 10:06:13 GMT', 'Server': 'AtlassianEdge', 'Timing-Allow-Origin': '*', 'X-Arequestid': 'd00ed79daf9f8cc50126dec3cb39d1d9', 'Set-Cookie': 'atlassian.xsrf.token=b4149750143a9a5fd0b6bfd2af2ce5a1d2b3707d_lin; Path=/; SameSite=None; Secure', 'X-Aaccountid': '557058%3Aca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'Cache-Control': 'no-cache, no-store, no-transform', 'X-Ratelimit-Limit': '200', 'X-Ratelimit-Remaining': '199', 'Vary': 'Accept-Encoding', 'Content-Encoding': 'gzip', 'X-Content-Type-Options': 'nosniff', 'X-Xss-Protection': '1; mode=block', 'Atl-Traceid': '07350c326795419d826cae231d9b8ce5', 'Atl-Request-Id': '07350c32-6795-419d-826c-ae231d9b8ce5', 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload', 'Report-To': '{"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}', 'Nel': '{"failure_fraction": 0.001, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}', 'X-Cache': 'Miss from cloudfront', 'Via': '1.1 c3b724e19ded79253f5ac204950abfb4.cloudfront.net (CloudFront)', 'X-Amz-Cf-Pop': 'HAN50-P1', 'X-Amz-Cf-Id': 'ZlNcUqVt_9ASAlpJb1n2jbZZxM6O-ft46FS5R368xBmretCJtEDeUw==', 'Server-Timing': 'cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=0,cdn-upstream-fbl;dur=290,atl-edge;dur=238,atl-edge-internal;dur=22,atl-edge-upstream;dur=214,atl-edge-pop;desc="aws-ap-southeast-1",cdn-cache-miss,cdn-pop;desc="HAN50-P1",cdn-rid;desc="ZlNcUqVt_9ASAlpJb1n2jbZZxM6O-ft46FS5R368xBmretCJtEDeUw==",cdn-downstream-fbl;dur=294'}
+2025-11-05 17:06:13,706 - src.pm_providers.jira - INFO - Response text (first 1000 chars): {"issues":[{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"10012","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10012","key":"TS-8","fields":{"summary":"test 4","parent":{"id":"10010","key":"TS-7","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10010","fields":{"summary":"Test Epic 1","status":{"self":"https://phancao1984.atlassian.net/rest/api/3/status/10004","description":"","iconUrl":"https://phancao1984.atlassian.net/","name":"To Do","id":"10004","statusCategory":{"self":"https://phancao1984.atlassian.net/rest/api/3/statuscategory/2","id":2,"key":"new","colorName":"blue-gray","name":"To Do"}},"priority":{"self":"https://phancao1984.atlassian.net/rest/api/3/priority/3","iconUrl":"https://phancao1984.atlassian.net/images/icons/priorities/medium_new.svg","name":"Medium","id":"3"},"issuetype":{"self":"https://phancao1984.atlassian.net/rest/api/3/issuetype/10011","id":"10011","description":"Epics track collecti
+2025-11-05 17:06:13,706 - src.pm_providers.jira - INFO - Response JSON keys: ['issues', 'names', 'schema', 'isLast']
+2025-11-05 17:06:13,706 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:13,706 - src.pm_providers.jira - INFO - Parsed response JSON successfully
+2025-11-05 17:06:13,706 - src.pm_providers.jira - INFO - Number of issues in response: 8
+2025-11-05 17:06:13,706 - src.pm_providers.jira - INFO - Parsing 8 issues...
+2025-11-05 17:06:13,706 - src.pm_providers.jira - DEBUG - Parsed issue 0: id=TS-8, title=test 4
+2025-11-05 17:06:13,706 - src.pm_providers.jira - DEBUG - Parsed issue 1: id=TS-7, title=Test Epic 1
+2025-11-05 17:06:13,706 - src.pm_providers.jira - DEBUG - Parsed issue 2: id=TS-6, title=backlog 3
+2025-11-05 17:06:13,706 - src.pm_providers.jira - INFO - Successfully parsed 8 tasks
+2025-11-05 17:06:13,706 - src.server.pm_handler - INFO - Provider returned 8 tasks successfully
+2025-11-05 17:06:13,706 - src.server.pm_handler - INFO - ================================================================================
+INFO:     ::1:61178 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+2025-11-05 17:06:14,566 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61165 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:06:14,876 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61168 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:06:14,892 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:06:15,179 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:06:15,180 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61162 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:06:15,926 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61178 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:06:16,957 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61162 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:06:17,774 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61178 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:06:18,607 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61162 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     ::1:61263 - "OPTIONS /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks/TS-3/assign-epic HTTP/1.1" 200 OK
+2025-11-05 17:06:56,343 - src.pm_providers.jira - INFO - [JIRA update_task] Sending payload with fields: ['parent']
+2025-11-05 17:06:57,417 - src.pm_providers.jira - INFO - Retrieved task TS-3 from JIRA
+2025-11-05 17:06:57,418 - src.pm_providers.jira - INFO - Updated task TS-3 in JIRA. Priority after update: 'highest'
+INFO:     ::1:61263 - "POST /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks/TS-3/assign-epic HTTP/1.1" 200 OK
+INFO:     ::1:61263 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-05 17:06:58,048 - src.server.pm_handler - INFO - Using provider: id=fc9e2adf-476e-4432-907a-4a5818f90bbc, type=jira, base_url=https://phancao1984.atlassian.net, project_id=TS
+2025-11-05 17:06:58,313 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:06:58,313 - src.server.pm_handler - INFO - CALLING PROVIDER list_tasks: provider=jira, project_id=fc9e2adf-476e-4432-907a-4a5818f90bbc:TS, actual_project_id=TS
+2025-11-05 17:06:58,313 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:06:58,674 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:58,675 - src.pm_providers.jira - INFO - JIRA API REQUEST TRACE
+2025-11-05 17:06:58,675 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:58,675 - src.pm_providers.jira - INFO - Project ID provided: TS
+2025-11-05 17:06:58,676 - src.pm_providers.jira - INFO - Actual project key used: TS
+2025-11-05 17:06:58,676 - src.pm_providers.jira - INFO - Project numeric ID: 10001
+2025-11-05 17:06:58,676 - src.pm_providers.jira - INFO - JQL Query: project = "TS" ORDER BY created DESC
+2025-11-05 17:06:58,676 - src.pm_providers.jira - INFO - Request URL: https://phancao1984.atlassian.net/rest/api/3/search/jql
+2025-11-05 17:06:58,676 - src.pm_providers.jira - INFO - Request params: {'jql': 'project = "TS" ORDER BY created DESC', 'maxResults': 1000, 'fields': ['summary', 'description', 'status', 'priority', 'assignee', 'project', 'parent', 'customfield_10020', 'timeoriginalestimate', 'timespent', 'created', 'updated', 'resolutiondate', 'duedate', 'startdate'], 'expand': 'names,schema'}
+2025-11-05 17:06:58,676 - src.pm_providers.jira - INFO - Request headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+2025-11-05 17:06:59,058 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:59,058 - src.pm_providers.jira - INFO - JIRA API RESPONSE TRACE
+2025-11-05 17:06:59,058 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:59,059 - src.pm_providers.jira - INFO - Response status code: 200
+2025-11-05 17:06:59,059 - src.pm_providers.jira - INFO - Response headers: {'Content-Type': 'application/json;charset=UTF-8', 'Transfer-Encoding': 'chunked', 'Connection': 'keep-alive', 'Date': 'Wed, 05 Nov 2025 10:06:59 GMT', 'Server': 'AtlassianEdge', 'Timing-Allow-Origin': '*', 'X-Arequestid': 'e200ca5084590dc493449918ddcbc1bc', 'Set-Cookie': 'atlassian.xsrf.token=a7885e8a6b95d3faa12bbdfd13024c35d8be1d33_lin; Path=/; SameSite=None; Secure', 'X-Aaccountid': '557058%3Aca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'Cache-Control': 'no-cache, no-store, no-transform', 'X-Ratelimit-Limit': '200', 'X-Ratelimit-Remaining': '199', 'Vary': 'Accept-Encoding', 'Content-Encoding': 'gzip', 'X-Content-Type-Options': 'nosniff', 'X-Xss-Protection': '1; mode=block', 'Atl-Traceid': '2d4a525349534914bbf6ed5ddf87d742', 'Atl-Request-Id': '2d4a5253-4953-4914-bbf6-ed5ddf87d742', 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload', 'Report-To': '{"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}', 'Nel': '{"failure_fraction": 0.001, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}', 'X-Cache': 'Miss from cloudfront', 'Via': '1.1 5170ad6ed5e832f744b03a777e9f13c2.cloudfront.net (CloudFront)', 'X-Amz-Cf-Pop': 'HAN50-P2', 'X-Amz-Cf-Id': 'CDGMd15xjmuACADzRqUlpTVCngt4aw5-g-Pt37iEts2sJFXZYuE39w==', 'Server-Timing': 'cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=0,cdn-upstream-fbl;dur=279,atl-edge;dur=230,atl-edge-internal;dur=17,atl-edge-upstream;dur=214,atl-edge-pop;desc="aws-ap-southeast-1",cdn-cache-miss,cdn-pop;desc="HAN50-P2",cdn-rid;desc="CDGMd15xjmuACADzRqUlpTVCngt4aw5-g-Pt37iEts2sJFXZYuE39w==",cdn-downstream-fbl;dur=282'}
+2025-11-05 17:06:59,059 - src.pm_providers.jira - INFO - Response text (first 1000 chars): {"issues":[{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"10012","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10012","key":"TS-8","fields":{"summary":"test 4","parent":{"id":"10010","key":"TS-7","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10010","fields":{"summary":"Test Epic 1","status":{"self":"https://phancao1984.atlassian.net/rest/api/3/status/10004","description":"","iconUrl":"https://phancao1984.atlassian.net/","name":"To Do","id":"10004","statusCategory":{"self":"https://phancao1984.atlassian.net/rest/api/3/statuscategory/2","id":2,"key":"new","colorName":"blue-gray","name":"To Do"}},"priority":{"self":"https://phancao1984.atlassian.net/rest/api/3/priority/3","iconUrl":"https://phancao1984.atlassian.net/images/icons/priorities/medium_new.svg","name":"Medium","id":"3"},"issuetype":{"self":"https://phancao1984.atlassian.net/rest/api/3/issuetype/10011","id":"10011","description":"Epics track collecti
+2025-11-05 17:06:59,060 - src.pm_providers.jira - INFO - Response JSON keys: ['issues', 'names', 'schema', 'isLast']
+2025-11-05 17:06:59,060 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:06:59,060 - src.pm_providers.jira - INFO - Parsed response JSON successfully
+2025-11-05 17:06:59,060 - src.pm_providers.jira - INFO - Number of issues in response: 8
+2025-11-05 17:06:59,061 - src.pm_providers.jira - INFO - Parsing 8 issues...
+2025-11-05 17:06:59,061 - src.pm_providers.jira - DEBUG - Parsed issue 0: id=TS-8, title=test 4
+2025-11-05 17:06:59,061 - src.pm_providers.jira - DEBUG - Parsed issue 1: id=TS-7, title=Test Epic 1
+2025-11-05 17:06:59,061 - src.pm_providers.jira - DEBUG - Parsed issue 2: id=TS-6, title=backlog 3
+2025-11-05 17:06:59,061 - src.pm_providers.jira - INFO - Successfully parsed 8 tasks
+2025-11-05 17:06:59,061 - src.server.pm_handler - INFO - Provider returned 8 tasks successfully
+2025-11-05 17:06:59,062 - src.server.pm_handler - INFO - ================================================================================
+INFO:     ::1:61267 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+2025-11-05 17:06:59,681 - src.pm_providers.jira - INFO - Found 1 sprints from board 2 (state=all)
+2025-11-05 17:06:59,681 - src.pm_providers.jira - INFO - Returning 1 sprints (state=all)
+INFO:     ::1:61268 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+2025-11-05 17:07:00,583 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61269 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     ::1:61272 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-05 17:07:01,250 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61267 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:01,260 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:07:01,564 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:07:01,565 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61263 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:02,313 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61268 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:02,619 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61272 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:02,625 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:07:02,901 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:07:02,902 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61267 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:03,845 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61263 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:04,547 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61267 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:05,345 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61263 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:06,212 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61267 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:06,978 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61263 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     ::1:61305 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     ::1:61306 - "GET /api/pm/providers HTTP/1.1" 200 OK
+INFO:     ::1:61306 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     ::1:61305 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-05 17:07:18,882 - src.server.pm_handler - INFO - Attempting to get current user for provider fc9e2adf-476e-4432-907a-4a5818f90bbc (jira)...
+2025-11-05 17:07:18,882 - src.pm_providers.jira - INFO - Fetching current user from JIRA: https://phancao1984.atlassian.net/rest/api/3/myself
+2025-11-05 17:07:19,147 - src.pm_providers.jira - INFO - JIRA get_current_user response: status=200
+2025-11-05 17:07:19,148 - src.pm_providers.jira - INFO - JIRA user data: {'self': 'https://phancao1984.atlassian.net/rest/api/3/user?accountId=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'accountId': '557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'accountType': 'atlassia
+2025-11-05 17:07:19,148 - src.pm_providers.jira - INFO - JIRA current user: id=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505, name=Phan Cao, email=phancao1984@gmail.com
+2025-11-05 17:07:19,148 - src.server.pm_handler - INFO - Successfully retrieved current user for provider fc9e2adf-476e-4432-907a-4a5818f90bbc (jira): id=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505, name=Phan Cao
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - JIRA API REQUEST TRACE
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - Project ID provided: None
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - Actual project key used: None
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - Project numeric ID: None
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - JQL Query: assignee = "557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505" ORDER BY created DESC
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - Request URL: https://phancao1984.atlassian.net/rest/api/3/search/jql
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - Request params: {'jql': 'assignee = "557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505" ORDER BY created DESC', 'maxResults': 1000, 'fields': ['summary', 'description', 'status', 'priority', 'assignee', 'project', 'parent', 'customfield_10020', 'timeoriginalestimate', 'timespent', 'created', 'updated', 'resolutiondate', 'duedate', 'startdate'], 'expand': 'names,schema'}
+2025-11-05 17:07:19,465 - src.pm_providers.jira - INFO - Request headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+2025-11-05 17:07:19,860 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:19,861 - src.pm_providers.jira - INFO - JIRA API RESPONSE TRACE
+2025-11-05 17:07:19,861 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:19,861 - src.pm_providers.jira - INFO - Response status code: 200
+2025-11-05 17:07:19,861 - src.pm_providers.jira - INFO - Response headers: {'Content-Type': 'application/json;charset=UTF-8', 'Transfer-Encoding': 'chunked', 'Connection': 'keep-alive', 'Date': 'Wed, 05 Nov 2025 10:07:19 GMT', 'Server': 'AtlassianEdge', 'Timing-Allow-Origin': '*', 'X-Arequestid': 'e2c4fded47040b80a6746927abfc2f33', 'Set-Cookie': 'atlassian.xsrf.token=07ca9a0a239d10fd2be20d5f27282b83583280a0_lin; Path=/; SameSite=None; Secure', 'X-Aaccountid': '557058%3Aca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'Cache-Control': 'no-cache, no-store, no-transform', 'X-Ratelimit-Limit': '200', 'X-Ratelimit-Remaining': '199', 'Vary': 'Accept-Encoding', 'Content-Encoding': 'gzip', 'X-Content-Type-Options': 'nosniff', 'X-Xss-Protection': '1; mode=block', 'Atl-Traceid': '3dd05569def3418a864f5554e154436c', 'Atl-Request-Id': '3dd05569-def3-418a-864f-5554e154436c', 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload', 'Report-To': '{"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}', 'Nel': '{"failure_fraction": 0.001, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}', 'X-Cache': 'Miss from cloudfront', 'Via': '1.1 dfbabcea92d8aa6a84dbb30026958ae2.cloudfront.net (CloudFront)', 'X-Amz-Cf-Pop': 'HAN50-P2', 'X-Amz-Cf-Id': '_f-NpRFqaFaUpg3pI3c8rOe6UwWYvSRSMj2iMJSM7juERUPz4KxWKA==', 'Server-Timing': 'cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=0,cdn-upstream-fbl;dur=293,atl-edge;dur=250,atl-edge-internal;dur=14,atl-edge-upstream;dur=236,atl-edge-pop;desc="aws-ap-southeast-1",cdn-cache-miss,cdn-pop;desc="HAN50-P2",cdn-rid;desc="_f-NpRFqaFaUpg3pI3c8rOe6UwWYvSRSMj2iMJSM7juERUPz4KxWKA==",cdn-downstream-fbl;dur=297'}
+2025-11-05 17:07:19,861 - src.pm_providers.jira - INFO - Response text (first 1000 chars): {"issues":[{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"10010","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10010","key":"TS-7","fields":{"summary":"Test Epic 1","timespent":null,"created":"2025-11-04T23:19:23.888+0700","timeoriginalestimate":null,"description":null,"project":{"self":"https://phancao1984.atlassian.net/rest/api/3/project/10001","id":"10001","key":"TS","name":"Test SCRUM","projectTypeKey":"software","simplified":true,"avatarUrls":{"48x48":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411","24x24":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=small","16x16":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=xsmall","32x32":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=medium"}},"priority":{"self":"https://pha
+2025-11-05 17:07:19,862 - src.pm_providers.jira - INFO - Response JSON keys: ['issues', 'names', 'schema', 'isLast']
+2025-11-05 17:07:19,862 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:19,862 - src.pm_providers.jira - INFO - Parsed response JSON successfully
+2025-11-05 17:07:19,862 - src.pm_providers.jira - INFO - Number of issues in response: 3
+2025-11-05 17:07:19,862 - src.pm_providers.jira - INFO - Parsing 3 issues...
+2025-11-05 17:07:19,863 - src.pm_providers.jira - DEBUG - Parsed issue 0: id=TS-7, title=Test Epic 1
+2025-11-05 17:07:19,863 - src.pm_providers.jira - DEBUG - Parsed issue 1: id=TS-4, title=backlog 1
+2025-11-05 17:07:19,864 - src.pm_providers.jira - DEBUG - Parsed issue 2: id=TS-1, title=issue 1
+2025-11-05 17:07:19,864 - src.pm_providers.jira - INFO - Successfully parsed 3 tasks
+2025-11-05 17:07:19,866 - src.server.pm_handler - INFO - Attempting to get current user for provider a4a1f985-f386-40e0-9576-8aa0d80e3747 (openproject)...
+2025-11-05 17:07:19,894 - src.server.pm_handler - INFO - Successfully retrieved current user for provider a4a1f985-f386-40e0-9576-8aa0d80e3747 (openproject): id=4, name=OpenProject Admin
+2025-11-05 17:07:19,917 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     ::1:61309 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+INFO:     ::1:61306 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     ::1:61310 - "GET /api/config HTTP/1.1" 200 OK
+2025-11-05 17:07:20,540 - src.server.pm_handler - INFO - Using provider: id=fc9e2adf-476e-4432-907a-4a5818f90bbc, type=jira, base_url=https://phancao1984.atlassian.net, project_id=TS
+2025-11-05 17:07:20,860 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:07:20,861 - src.server.pm_handler - INFO - CALLING PROVIDER list_tasks: provider=jira, project_id=fc9e2adf-476e-4432-907a-4a5818f90bbc:TS, actual_project_id=TS
+2025-11-05 17:07:20,861 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:07:21,342 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:21,342 - src.pm_providers.jira - INFO - JIRA API REQUEST TRACE
+2025-11-05 17:07:21,342 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:21,342 - src.pm_providers.jira - INFO - Project ID provided: TS
+2025-11-05 17:07:21,342 - src.pm_providers.jira - INFO - Actual project key used: TS
+2025-11-05 17:07:21,342 - src.pm_providers.jira - INFO - Project numeric ID: 10001
+2025-11-05 17:07:21,343 - src.pm_providers.jira - INFO - JQL Query: project = "TS" ORDER BY created DESC
+2025-11-05 17:07:21,343 - src.pm_providers.jira - INFO - Request URL: https://phancao1984.atlassian.net/rest/api/3/search/jql
+2025-11-05 17:07:21,343 - src.pm_providers.jira - INFO - Request params: {'jql': 'project = "TS" ORDER BY created DESC', 'maxResults': 1000, 'fields': ['summary', 'description', 'status', 'priority', 'assignee', 'project', 'parent', 'customfield_10020', 'timeoriginalestimate', 'timespent', 'created', 'updated', 'resolutiondate', 'duedate', 'startdate'], 'expand': 'names,schema'}
+2025-11-05 17:07:21,343 - src.pm_providers.jira - INFO - Request headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+2025-11-05 17:07:21,862 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:21,862 - src.pm_providers.jira - INFO - JIRA API RESPONSE TRACE
+2025-11-05 17:07:21,862 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:21,862 - src.pm_providers.jira - INFO - Response status code: 200
+2025-11-05 17:07:21,862 - src.pm_providers.jira - INFO - Response headers: {'Content-Type': 'application/json;charset=UTF-8', 'Transfer-Encoding': 'chunked', 'Connection': 'keep-alive', 'Date': 'Wed, 05 Nov 2025 10:07:21 GMT', 'Server': 'AtlassianEdge', 'Timing-Allow-Origin': '*', 'X-Arequestid': '21613d797bbac6615b5006784dffb92a', 'Set-Cookie': 'atlassian.xsrf.token=0a27f5e75bf5b617abcf33f6132baac69dd02419_lin; Path=/; SameSite=None; Secure', 'X-Aaccountid': '557058%3Aca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'Cache-Control': 'no-cache, no-store, no-transform', 'X-Ratelimit-Limit': '200', 'X-Ratelimit-Remaining': '199', 'Vary': 'Accept-Encoding', 'Content-Encoding': 'gzip', 'X-Content-Type-Options': 'nosniff', 'X-Xss-Protection': '1; mode=block', 'Atl-Traceid': 'e90fb4c8676b42f1aaa9de4ba4f2a632', 'Atl-Request-Id': 'e90fb4c8-676b-42f1-aaa9-de4ba4f2a632', 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload', 'Report-To': '{"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}', 'Nel': '{"failure_fraction": 0.001, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}', 'X-Cache': 'Miss from cloudfront', 'Via': '1.1 1ad8a04a793ca10c69a85a924ef62bbe.cloudfront.net (CloudFront)', 'X-Amz-Cf-Pop': 'HAN50-P2', 'X-Amz-Cf-Id': 'W1B2MbTdasnTBzdI9DRofRrqnJwVCpwMuThpzLGWJltnIo4sM8539w==', 'Server-Timing': 'cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=49,cdn-upstream-fbl;dur=413,atl-edge;dur=215,atl-edge-internal;dur=15,atl-edge-upstream;dur=201,atl-edge-pop;desc="aws-ap-southeast-1",cdn-cache-miss,cdn-pop;desc="HAN50-P2",cdn-rid;desc="W1B2MbTdasnTBzdI9DRofRrqnJwVCpwMuThpzLGWJltnIo4sM8539w==",cdn-downstream-fbl;dur=417'}
+2025-11-05 17:07:21,863 - src.pm_providers.jira - INFO - Response text (first 1000 chars): {"issues":[{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"10012","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10012","key":"TS-8","fields":{"summary":"test 4","parent":{"id":"10010","key":"TS-7","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10010","fields":{"summary":"Test Epic 1","status":{"self":"https://phancao1984.atlassian.net/rest/api/3/status/10004","description":"","iconUrl":"https://phancao1984.atlassian.net/","name":"To Do","id":"10004","statusCategory":{"self":"https://phancao1984.atlassian.net/rest/api/3/statuscategory/2","id":2,"key":"new","colorName":"blue-gray","name":"To Do"}},"priority":{"self":"https://phancao1984.atlassian.net/rest/api/3/priority/3","iconUrl":"https://phancao1984.atlassian.net/images/icons/priorities/medium_new.svg","name":"Medium","id":"3"},"issuetype":{"self":"https://phancao1984.atlassian.net/rest/api/3/issuetype/10011","id":"10011","description":"Epics track collecti
+2025-11-05 17:07:21,863 - src.pm_providers.jira - INFO - Response JSON keys: ['issues', 'names', 'schema', 'isLast']
+2025-11-05 17:07:21,863 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:21,864 - src.pm_providers.jira - INFO - Parsed response JSON successfully
+2025-11-05 17:07:21,864 - src.pm_providers.jira - INFO - Number of issues in response: 8
+2025-11-05 17:07:21,864 - src.pm_providers.jira - INFO - Parsing 8 issues...
+2025-11-05 17:07:21,864 - src.pm_providers.jira - DEBUG - Parsed issue 0: id=TS-8, title=test 4
+2025-11-05 17:07:21,864 - src.pm_providers.jira - DEBUG - Parsed issue 1: id=TS-7, title=Test Epic 1
+2025-11-05 17:07:21,864 - src.pm_providers.jira - DEBUG - Parsed issue 2: id=TS-6, title=backlog 3
+2025-11-05 17:07:21,864 - src.pm_providers.jira - INFO - Successfully parsed 8 tasks
+2025-11-05 17:07:21,865 - src.server.pm_handler - INFO - Provider returned 8 tasks successfully
+2025-11-05 17:07:21,865 - src.server.pm_handler - INFO - ================================================================================
+INFO:     ::1:61305 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+2025-11-05 17:07:21,876 - src.server.pm_handler - INFO - Attempting to get current user for provider fc9e2adf-476e-4432-907a-4a5818f90bbc (jira)...
+2025-11-05 17:07:21,876 - src.pm_providers.jira - INFO - Fetching current user from JIRA: https://phancao1984.atlassian.net/rest/api/3/myself
+2025-11-05 17:07:22,138 - src.pm_providers.jira - INFO - JIRA get_current_user response: status=200
+2025-11-05 17:07:22,140 - src.pm_providers.jira - INFO - JIRA user data: {'self': 'https://phancao1984.atlassian.net/rest/api/3/user?accountId=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'accountId': '557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'accountType': 'atlassia
+2025-11-05 17:07:22,140 - src.pm_providers.jira - INFO - JIRA current user: id=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505, name=Phan Cao, email=phancao1984@gmail.com
+2025-11-05 17:07:22,141 - src.server.pm_handler - INFO - Successfully retrieved current user for provider fc9e2adf-476e-4432-907a-4a5818f90bbc (jira): id=557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505, name=Phan Cao
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - JIRA API REQUEST TRACE
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - Project ID provided: None
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - Actual project key used: None
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - Project numeric ID: None
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - JQL Query: assignee = "557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505" ORDER BY created DESC
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - Request URL: https://phancao1984.atlassian.net/rest/api/3/search/jql
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - Request params: {'jql': 'assignee = "557058:ca4283e6-d1a0-484d-b90b-6aa1aa1c0505" ORDER BY created DESC', 'maxResults': 1000, 'fields': ['summary', 'description', 'status', 'priority', 'assignee', 'project', 'parent', 'customfield_10020', 'timeoriginalestimate', 'timespent', 'created', 'updated', 'resolutiondate', 'duedate', 'startdate'], 'expand': 'names,schema'}
+2025-11-05 17:07:22,412 - src.pm_providers.jira - INFO - Request headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+2025-11-05 17:07:22,809 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - JIRA API RESPONSE TRACE
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - Response status code: 200
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - Response headers: {'Content-Type': 'application/json;charset=UTF-8', 'Transfer-Encoding': 'chunked', 'Connection': 'keep-alive', 'Date': 'Wed, 05 Nov 2025 10:07:22 GMT', 'Server': 'AtlassianEdge', 'Timing-Allow-Origin': '*', 'X-Arequestid': 'bb8d86d510e0b9984737c16a742c769c', 'Set-Cookie': 'atlassian.xsrf.token=07ff6d5c1b96c10379296315d0cf65ab3c5151f1_lin; Path=/; SameSite=None; Secure', 'X-Aaccountid': '557058%3Aca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'Cache-Control': 'no-cache, no-store, no-transform', 'X-Ratelimit-Limit': '200', 'X-Ratelimit-Remaining': '198', 'Vary': 'Accept-Encoding', 'Content-Encoding': 'gzip', 'X-Content-Type-Options': 'nosniff', 'X-Xss-Protection': '1; mode=block', 'Atl-Traceid': '2a51a603d4db4253be47cbc08ebd2cfb', 'Atl-Request-Id': '2a51a603-d4db-4253-be47-cbc08ebd2cfb', 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload', 'Report-To': '{"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}', 'Nel': '{"failure_fraction": 0.001, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}', 'X-Cache': 'Miss from cloudfront', 'Via': '1.1 3f186278298be02e268fbd624a9ab820.cloudfront.net (CloudFront)', 'X-Amz-Cf-Pop': 'HAN50-P2', 'X-Amz-Cf-Id': 'jmg1zmlOS2haqQnCLWiQsO-zJ8ADdOA3MMce0jaUotpjiEk_TzcmqQ==', 'Server-Timing': 'cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=0,cdn-upstream-fbl;dur=292,atl-edge;dur=241,atl-edge-internal;dur=19,atl-edge-upstream;dur=223,atl-edge-pop;desc="aws-ap-southeast-1",cdn-cache-miss,cdn-pop;desc="HAN50-P2",cdn-rid;desc="jmg1zmlOS2haqQnCLWiQsO-zJ8ADdOA3MMce0jaUotpjiEk_TzcmqQ==",cdn-downstream-fbl;dur=300'}
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - Response text (first 1000 chars): {"issues":[{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"10010","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10010","key":"TS-7","fields":{"summary":"Test Epic 1","timespent":null,"created":"2025-11-04T23:19:23.888+0700","timeoriginalestimate":null,"description":null,"project":{"self":"https://phancao1984.atlassian.net/rest/api/3/project/10001","id":"10001","key":"TS","name":"Test SCRUM","projectTypeKey":"software","simplified":true,"avatarUrls":{"48x48":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411","24x24":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=small","16x16":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=xsmall","32x32":"https://phancao1984.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10411?size=medium"}},"priority":{"self":"https://pha
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - Response JSON keys: ['issues', 'names', 'schema', 'isLast']
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - Parsed response JSON successfully
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - Number of issues in response: 3
+2025-11-05 17:07:22,810 - src.pm_providers.jira - INFO - Parsing 3 issues...
+2025-11-05 17:07:22,811 - src.pm_providers.jira - DEBUG - Parsed issue 0: id=TS-7, title=Test Epic 1
+2025-11-05 17:07:22,811 - src.pm_providers.jira - DEBUG - Parsed issue 1: id=TS-4, title=backlog 1
+2025-11-05 17:07:22,811 - src.pm_providers.jira - DEBUG - Parsed issue 2: id=TS-1, title=issue 1
+2025-11-05 17:07:22,811 - src.pm_providers.jira - INFO - Successfully parsed 3 tasks
+2025-11-05 17:07:22,811 - src.server.pm_handler - INFO - Attempting to get current user for provider a4a1f985-f386-40e0-9576-8aa0d80e3747 (openproject)...
+2025-11-05 17:07:22,840 - src.server.pm_handler - INFO - Successfully retrieved current user for provider a4a1f985-f386-40e0-9576-8aa0d80e3747 (openproject): id=4, name=OpenProject Admin
+2025-11-05 17:07:22,862 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"assignee": {"operator": "=", "values": ["4"]}}]'}
+INFO:     ::1:61309 - "GET /api/pm/tasks/my HTTP/1.1" 200 OK
+2025-11-05 17:07:23,448 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61306 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:23,456 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:07:23,750 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:07:23,752 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61310 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:24,437 - src.pm_providers.jira - INFO - Found 1 sprints from board 2 (state=all)
+2025-11-05 17:07:24,437 - src.pm_providers.jira - INFO - Returning 1 sprints (state=all)
+INFO:     ::1:61313 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+2025-11-05 17:07:25,137 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61314 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:25,554 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61309 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:25,565 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:07:25,867 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:07:25,869 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61306 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:26,643 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61313 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:27,348 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61313 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:28,027 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61306 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:28,739 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61313 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:38,871 - src.pm_providers.openproject - INFO - Found Epic type ID: 5
+2025-11-05 17:07:38,946 - src.pm_providers.openproject - INFO - Found 1 epics from OpenProject
+INFO:     ::1:61513 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:38,963 - src.pm_providers.openproject - INFO - Found 14 statuses from OpenProject
+INFO:     ::1:61514 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:38,964 - src.server.app - INFO - Listing priorities for project_id: a4a1f985-f386-40e0-9576-8aa0d80e3747:2
+2025-11-05 17:07:38,977 - src.pm_providers.openproject - INFO - Found 4 priorities from OpenProject
+2025-11-05 17:07:38,977 - src.server.app - INFO - Found 4 priorities for project a4a1f985-f386-40e0-9576-8aa0d80e3747:2
+INFO:     ::1:61515 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:38,980 - src.server.pm_handler - INFO - Using provider: id=a4a1f985-f386-40e0-9576-8aa0d80e3747, type=openproject, base_url=http://localhost:8080, project_id=2
+2025-11-05 17:07:38,993 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:07:38,993 - src.server.pm_handler - INFO - CALLING PROVIDER list_tasks: provider=openproject, project_id=a4a1f985-f386-40e0-9576-8aa0d80e3747:2, actual_project_id=2
+2025-11-05 17:07:38,993 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:07:38,993 - src.pm_providers.openproject - INFO - OpenProject list_tasks with filters: {'filters': '[{"project": {"operator": "=", "values": ["2"]}}]'}
+2025-11-05 17:07:39,113 - src.server.pm_handler - INFO - Provider returned 20 tasks successfully
+2025-11-05 17:07:39,113 - src.server.pm_handler - INFO - ================================================================================
+INFO:     ::1:61516 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/tasks HTTP/1.1" 200 OK
+INFO:     ::1:61517 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/sprints HTTP/1.1" 200 OK
+2025-11-05 17:07:39,158 - src.pm_providers.openproject - INFO - Found 14 statuses from OpenProject
+INFO:     ::1:61516 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:39,159 - src.server.app - INFO - Listing priorities for project_id: a4a1f985-f386-40e0-9576-8aa0d80e3747:2
+2025-11-05 17:07:39,172 - src.pm_providers.openproject - INFO - Found 4 priorities from OpenProject
+2025-11-05 17:07:39,173 - src.server.app - INFO - Found 4 priorities for project a4a1f985-f386-40e0-9576-8aa0d80e3747:2
+INFO:     ::1:61515 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:39,189 - src.pm_providers.openproject - INFO - Found Epic type ID: 5
+2025-11-05 17:07:39,245 - src.pm_providers.openproject - INFO - Found 1 epics from OpenProject
+INFO:     ::1:61520 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:39,267 - src.pm_providers.openproject - INFO - Found 14 statuses from OpenProject
+INFO:     ::1:61517 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:39,269 - src.server.app - INFO - Listing priorities for project_id: a4a1f985-f386-40e0-9576-8aa0d80e3747:2
+2025-11-05 17:07:39,283 - src.pm_providers.openproject - INFO - Found 4 priorities from OpenProject
+2025-11-05 17:07:39,283 - src.server.app - INFO - Found 4 priorities for project a4a1f985-f386-40e0-9576-8aa0d80e3747:2
+INFO:     ::1:61516 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:39,299 - src.pm_providers.openproject - INFO - Found Epic type ID: 5
+2025-11-05 17:07:39,367 - src.pm_providers.openproject - INFO - Found 1 epics from OpenProject
+INFO:     ::1:61515 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:39,383 - src.pm_providers.openproject - INFO - Found Epic type ID: 5
+2025-11-05 17:07:39,471 - src.pm_providers.openproject - INFO - Found 1 epics from OpenProject
+INFO:     ::1:61516 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:39,485 - src.pm_providers.openproject - INFO - Found Epic type ID: 5
+2025-11-05 17:07:39,543 - src.pm_providers.openproject - INFO - Found 1 epics from OpenProject
+INFO:     ::1:61515 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:39,557 - src.pm_providers.openproject - INFO - Found Epic type ID: 5
+2025-11-05 17:07:39,600 - src.pm_providers.openproject - INFO - Found 1 epics from OpenProject
+INFO:     ::1:61515 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:39,614 - src.pm_providers.openproject - INFO - Found Epic type ID: 5
+2025-11-05 17:07:39,657 - src.pm_providers.openproject - INFO - Found 1 epics from OpenProject
+INFO:     ::1:61516 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:42,212 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61516 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:42,577 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61515 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:42,585 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:07:42,880 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:07:42,881 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61517 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:42,896 - src.server.pm_handler - INFO - Using provider: id=fc9e2adf-476e-4432-907a-4a5818f90bbc, type=jira, base_url=https://phancao1984.atlassian.net, project_id=TS
+2025-11-05 17:07:43,318 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:07:43,318 - src.server.pm_handler - INFO - CALLING PROVIDER list_tasks: provider=jira, project_id=fc9e2adf-476e-4432-907a-4a5818f90bbc:TS, actual_project_id=TS
+2025-11-05 17:07:43,318 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:07:43,746 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:43,747 - src.pm_providers.jira - INFO - JIRA API REQUEST TRACE
+2025-11-05 17:07:43,747 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:43,747 - src.pm_providers.jira - INFO - Project ID provided: TS
+2025-11-05 17:07:43,747 - src.pm_providers.jira - INFO - Actual project key used: TS
+2025-11-05 17:07:43,747 - src.pm_providers.jira - INFO - Project numeric ID: 10001
+2025-11-05 17:07:43,747 - src.pm_providers.jira - INFO - JQL Query: project = "TS" ORDER BY created DESC
+2025-11-05 17:07:43,747 - src.pm_providers.jira - INFO - Request URL: https://phancao1984.atlassian.net/rest/api/3/search/jql
+2025-11-05 17:07:43,747 - src.pm_providers.jira - INFO - Request params: {'jql': 'project = "TS" ORDER BY created DESC', 'maxResults': 1000, 'fields': ['summary', 'description', 'status', 'priority', 'assignee', 'project', 'parent', 'customfield_10020', 'timeoriginalestimate', 'timespent', 'created', 'updated', 'resolutiondate', 'duedate', 'startdate'], 'expand': 'names,schema'}
+2025-11-05 17:07:43,747 - src.pm_providers.jira - INFO - Request headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+2025-11-05 17:07:44,262 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:44,262 - src.pm_providers.jira - INFO - JIRA API RESPONSE TRACE
+2025-11-05 17:07:44,262 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:44,262 - src.pm_providers.jira - INFO - Response status code: 200
+2025-11-05 17:07:44,262 - src.pm_providers.jira - INFO - Response headers: {'Content-Type': 'application/json;charset=UTF-8', 'Transfer-Encoding': 'chunked', 'Connection': 'keep-alive', 'Date': 'Wed, 05 Nov 2025 10:07:44 GMT', 'Server': 'AtlassianEdge', 'Timing-Allow-Origin': '*', 'X-Arequestid': 'f0d6a7b1eac97b8c371bc13ca41ee956', 'Set-Cookie': 'atlassian.xsrf.token=6d38ed8902227f7eb8cc9f3daa03656c94e9e323_lin; Path=/; SameSite=None; Secure', 'X-Aaccountid': '557058%3Aca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'Cache-Control': 'no-cache, no-store, no-transform', 'X-Ratelimit-Limit': '200', 'X-Ratelimit-Remaining': '199', 'Vary': 'Accept-Encoding', 'Content-Encoding': 'gzip', 'X-Content-Type-Options': 'nosniff', 'X-Xss-Protection': '1; mode=block', 'Atl-Traceid': '9a7a016aa6d640bf81e55c83d16add0c', 'Atl-Request-Id': '9a7a016a-a6d6-40bf-81e5-5c83d16add0c', 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload', 'Report-To': '{"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}', 'Nel': '{"failure_fraction": 0.001, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}', 'X-Cache': 'Miss from cloudfront', 'Via': '1.1 76bc427b0df4511a3805a53ad5840726.cloudfront.net (CloudFront)', 'X-Amz-Cf-Pop': 'HAN50-P2', 'X-Amz-Cf-Id': 'qNuG1CN9n3uVUJ8HpuBQPiA1jnYPpndoiRpPTDA0yoK8ChMKt2MY2A==', 'Server-Timing': 'cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=0,cdn-upstream-fbl;dur=398,atl-edge;dur=346,atl-edge-internal;dur=21,atl-edge-upstream;dur=326,atl-edge-pop;desc="aws-ap-southeast-1",cdn-cache-miss,cdn-pop;desc="HAN50-P2",cdn-rid;desc="qNuG1CN9n3uVUJ8HpuBQPiA1jnYPpndoiRpPTDA0yoK8ChMKt2MY2A==",cdn-downstream-fbl;dur=402'}
+2025-11-05 17:07:44,262 - src.pm_providers.jira - INFO - Response text (first 1000 chars): {"issues":[{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"10012","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10012","key":"TS-8","fields":{"summary":"test 4","parent":{"id":"10010","key":"TS-7","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10010","fields":{"summary":"Test Epic 1","status":{"self":"https://phancao1984.atlassian.net/rest/api/3/status/10004","description":"","iconUrl":"https://phancao1984.atlassian.net/","name":"To Do","id":"10004","statusCategory":{"self":"https://phancao1984.atlassian.net/rest/api/3/statuscategory/2","id":2,"key":"new","colorName":"blue-gray","name":"To Do"}},"priority":{"self":"https://phancao1984.atlassian.net/rest/api/3/priority/3","iconUrl":"https://phancao1984.atlassian.net/images/icons/priorities/medium_new.svg","name":"Medium","id":"3"},"issuetype":{"self":"https://phancao1984.atlassian.net/rest/api/3/issuetype/10011","id":"10011","description":"Epics track collecti
+2025-11-05 17:07:44,263 - src.pm_providers.jira - INFO - Response JSON keys: ['issues', 'names', 'schema', 'isLast']
+2025-11-05 17:07:44,263 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:07:44,263 - src.pm_providers.jira - INFO - Parsed response JSON successfully
+2025-11-05 17:07:44,263 - src.pm_providers.jira - INFO - Number of issues in response: 8
+2025-11-05 17:07:44,263 - src.pm_providers.jira - INFO - Parsing 8 issues...
+2025-11-05 17:07:44,263 - src.pm_providers.jira - DEBUG - Parsed issue 0: id=TS-8, title=test 4
+2025-11-05 17:07:44,263 - src.pm_providers.jira - DEBUG - Parsed issue 1: id=TS-7, title=Test Epic 1
+2025-11-05 17:07:44,263 - src.pm_providers.jira - DEBUG - Parsed issue 2: id=TS-6, title=backlog 3
+2025-11-05 17:07:44,263 - src.pm_providers.jira - INFO - Successfully parsed 8 tasks
+2025-11-05 17:07:44,264 - src.server.pm_handler - INFO - Provider returned 8 tasks successfully
+2025-11-05 17:07:44,264 - src.server.pm_handler - INFO - ================================================================================
+INFO:     ::1:61520 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+2025-11-05 17:07:44,860 - src.pm_providers.jira - INFO - Found 1 sprints from board 2 (state=all)
+2025-11-05 17:07:44,860 - src.pm_providers.jira - INFO - Returning 1 sprints (state=all)
+INFO:     ::1:61514 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+2025-11-05 17:07:45,697 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61513 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:45,983 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61520 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:45,989 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:07:46,260 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:07:46,261 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61517 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:46,951 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61513 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:47,275 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61514 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:07:47,281 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:07:47,530 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:07:47,530 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61520 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:07:48,457 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61517 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:49,338 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61520 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:50,034 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61517 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:07:50,757 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61520 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:12:04,973 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61879 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:12:04,975 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:12:05,282 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:12:05,283 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61880 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:12:06,171 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61881 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:12:06,518 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61880 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:12:06,520 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:12:06,917 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:12:06,917 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61879 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:12:07,698 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61895 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:12:16,477 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61916 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:12:16,480 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:12:16,904 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:12:16,905 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61917 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:12:17,820 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61918 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:12:18,170 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:61917 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:12:18,174 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:12:18,445 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:12:18,445 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:61916 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:12:19,217 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:61935 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:12:32,509 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:62075 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     ::1:62076 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-05 17:12:33,521 - src.pm_providers.jira - INFO - Found 1 sprints from board 2 (state=all)
+2025-11-05 17:12:33,521 - src.pm_providers.jira - INFO - Returning 1 sprints (state=all)
+INFO:     ::1:62077 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+2025-11-05 17:12:34,217 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:62089 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:12:45,889 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:62128 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     ::1:62129 - "GET /api/pm/projects HTTP/1.1" 200 OK
+2025-11-05 17:12:46,999 - src.pm_providers.jira - INFO - Found 1 sprints from board 2 (state=all)
+2025-11-05 17:12:46,999 - src.pm_providers.jira - INFO - Returning 1 sprints (state=all)
+INFO:     ::1:62130 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+2025-11-05 17:12:47,715 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:62136 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     ::1:62200 - "OPTIONS /api/pm/tasks/TS-8?project_id=fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS HTTP/1.1" 200 OK
+2025-11-05 17:13:21,521 - src.server.app - INFO - Updating task TS-8 in project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS with updates: {'title': 'test 5', 'priority': 'Highest'}
+2025-11-05 17:13:21,521 - src.pm_providers.jira - INFO - [JIRA update_task] Received priority update: 'Highest' (type: str)
+2025-11-05 17:13:21,916 - src.pm_providers.jira - INFO - [JIRA update_task] Fetched 5 priorities from JIRA: ['Highest', 'High', 'Medium', 'Low', 'Lowest']
+2025-11-05 17:13:21,917 - src.pm_providers.jira - INFO - [JIRA update_task] Looking for priority: 'Highest' (lowercase: 'highest')
+2025-11-05 17:13:21,917 - src.pm_providers.jira - INFO - [JIRA update_task] Checking exact match (sorted by length): ['Highest', 'Medium', 'Lowest', 'High', 'Low']
+2025-11-05 17:13:21,917 - src.pm_providers.jira - DEBUG - [JIRA update_task] Comparing 'highest' with 'highest' (from 'Highest')
+2025-11-05 17:13:21,917 - src.pm_providers.jira - INFO - [JIRA update_task] Exact match found for priority 'Highest': 'Highest' (ID: 1)
+2025-11-05 17:13:21,917 - src.pm_providers.jira - INFO - Setting priority to: Highest (ID: 1)
+2025-11-05 17:13:21,917 - src.pm_providers.jira - INFO - [JIRA update_task] Sending payload with fields: ['summary', 'priority']
+2025-11-05 17:13:21,918 - src.pm_providers.jira - INFO - [JIRA update_task] Priority field being sent: {'id': '1'}
+2025-11-05 17:13:23,084 - src.pm_providers.jira - INFO - Retrieved task TS-8 from JIRA
+2025-11-05 17:13:23,084 - src.pm_providers.jira - INFO - Updated task TS-8 in JIRA. Priority after update: 'highest'
+2025-11-05 17:13:23,084 - src.server.app - INFO - Task TS-8 updated successfully: test 5
+2025-11-05 17:13:23,416 - src.server.app - INFO - Returning updated task data: {'id': 'TS-8', 'title': 'test 5', 'description': 'description from cao tool', 'status': 'todo', 'priority': 'highest', 'estimated_hours': None, 'start_date': None, 'due_date': None, 'project_name': 'Test SCRUM', 'epic_id': 'TS-7', 'label_ids': ['testlabel'], 'sprint_id': '3'}
+INFO:     ::1:62200 - "PATCH /api/pm/tasks/TS-8?project_id=fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS HTTP/1.1" 200 OK
+2025-11-05 17:13:23,432 - src.server.pm_handler - INFO - Using provider: id=fc9e2adf-476e-4432-907a-4a5818f90bbc, type=jira, base_url=https://phancao1984.atlassian.net, project_id=TS
+2025-11-05 17:13:23,732 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:13:23,732 - src.server.pm_handler - INFO - CALLING PROVIDER list_tasks: provider=jira, project_id=fc9e2adf-476e-4432-907a-4a5818f90bbc:TS, actual_project_id=TS
+2025-11-05 17:13:23,732 - src.server.pm_handler - INFO - ================================================================================
+2025-11-05 17:13:24,185 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:13:24,186 - src.pm_providers.jira - INFO - JIRA API REQUEST TRACE
+2025-11-05 17:13:24,186 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:13:24,186 - src.pm_providers.jira - INFO - Project ID provided: TS
+2025-11-05 17:13:24,186 - src.pm_providers.jira - INFO - Actual project key used: TS
+2025-11-05 17:13:24,186 - src.pm_providers.jira - INFO - Project numeric ID: 10001
+2025-11-05 17:13:24,186 - src.pm_providers.jira - INFO - JQL Query: project = "TS" ORDER BY created DESC
+2025-11-05 17:13:24,186 - src.pm_providers.jira - INFO - Request URL: https://phancao1984.atlassian.net/rest/api/3/search/jql
+2025-11-05 17:13:24,186 - src.pm_providers.jira - INFO - Request params: {'jql': 'project = "TS" ORDER BY created DESC', 'maxResults': 1000, 'fields': ['summary', 'description', 'status', 'priority', 'assignee', 'project', 'parent', 'customfield_10020', 'timeoriginalestimate', 'timespent', 'created', 'updated', 'resolutiondate', 'duedate', 'startdate'], 'expand': 'names,schema'}
+2025-11-05 17:13:24,186 - src.pm_providers.jira - INFO - Request headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+2025-11-05 17:13:24,561 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:13:24,561 - src.pm_providers.jira - INFO - JIRA API RESPONSE TRACE
+2025-11-05 17:13:24,561 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:13:24,561 - src.pm_providers.jira - INFO - Response status code: 200
+2025-11-05 17:13:24,561 - src.pm_providers.jira - INFO - Response headers: {'Content-Type': 'application/json;charset=UTF-8', 'Transfer-Encoding': 'chunked', 'Connection': 'keep-alive', 'Date': 'Wed, 05 Nov 2025 10:13:24 GMT', 'Server': 'AtlassianEdge', 'Timing-Allow-Origin': '*', 'X-Arequestid': 'dc14ae9c5c4d49a65142e456cd9ecd8a', 'Set-Cookie': 'atlassian.xsrf.token=6fbfa2c3a0a2625c4d25077736a004b3378cdf73_lin; Path=/; SameSite=None; Secure', 'X-Aaccountid': '557058%3Aca4283e6-d1a0-484d-b90b-6aa1aa1c0505', 'Cache-Control': 'no-cache, no-store, no-transform', 'X-Ratelimit-Limit': '200', 'X-Ratelimit-Remaining': '199', 'Vary': 'Accept-Encoding', 'Content-Encoding': 'gzip', 'X-Content-Type-Options': 'nosniff', 'X-Xss-Protection': '1; mode=block', 'Atl-Traceid': '93502773921d44fb98f97040d2a4625c', 'Atl-Request-Id': '93502773-921d-44fb-98f9-7040d2a4625c', 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload', 'Report-To': '{"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}', 'Nel': '{"failure_fraction": 0.001, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}', 'X-Cache': 'Miss from cloudfront', 'Via': '1.1 353b60942ecfc2c4ac05cb71047e1050.cloudfront.net (CloudFront)', 'X-Amz-Cf-Pop': 'HAN50-P1', 'X-Amz-Cf-Id': '6VPNBLHDACnGAJrIDA3I6z6SWEHrcN7MxgCytMMfzdFXybBLfCCnSA==', 'Server-Timing': 'cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=0,cdn-upstream-fbl;dur=269,atl-edge;dur=221,atl-edge-internal;dur=15,atl-edge-upstream;dur=207,atl-edge-pop;desc="aws-ap-southeast-1",cdn-cache-miss,cdn-pop;desc="HAN50-P1",cdn-rid;desc="6VPNBLHDACnGAJrIDA3I6z6SWEHrcN7MxgCytMMfzdFXybBLfCCnSA==",cdn-downstream-fbl;dur=272'}
+2025-11-05 17:13:24,562 - src.pm_providers.jira - INFO - Response text (first 1000 chars): {"issues":[{"expand":"renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations","id":"10012","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10012","key":"TS-8","fields":{"summary":"test 5","parent":{"id":"10010","key":"TS-7","self":"https://phancao1984.atlassian.net/rest/api/3/issue/10010","fields":{"summary":"Test Epic 1","status":{"self":"https://phancao1984.atlassian.net/rest/api/3/status/10004","description":"","iconUrl":"https://phancao1984.atlassian.net/","name":"To Do","id":"10004","statusCategory":{"self":"https://phancao1984.atlassian.net/rest/api/3/statuscategory/2","id":2,"key":"new","colorName":"blue-gray","name":"To Do"}},"priority":{"self":"https://phancao1984.atlassian.net/rest/api/3/priority/3","iconUrl":"https://phancao1984.atlassian.net/images/icons/priorities/medium_new.svg","name":"Medium","id":"3"},"issuetype":{"self":"https://phancao1984.atlassian.net/rest/api/3/issuetype/10011","id":"10011","description":"Epics track collecti
+2025-11-05 17:13:24,562 - src.pm_providers.jira - INFO - Response JSON keys: ['issues', 'names', 'schema', 'isLast']
+2025-11-05 17:13:24,562 - src.pm_providers.jira - INFO - ================================================================================
+2025-11-05 17:13:24,563 - src.pm_providers.jira - INFO - Parsed response JSON successfully
+2025-11-05 17:13:24,563 - src.pm_providers.jira - INFO - Number of issues in response: 8
+2025-11-05 17:13:24,563 - src.pm_providers.jira - INFO - Parsing 8 issues...
+2025-11-05 17:13:24,563 - src.pm_providers.jira - DEBUG - Parsed issue 0: id=TS-8, title=test 5
+2025-11-05 17:13:24,563 - src.pm_providers.jira - DEBUG - Parsed issue 1: id=TS-7, title=Test Epic 1
+2025-11-05 17:13:24,563 - src.pm_providers.jira - DEBUG - Parsed issue 2: id=TS-6, title=backlog 3
+2025-11-05 17:13:24,564 - src.pm_providers.jira - INFO - Successfully parsed 8 tasks
+2025-11-05 17:13:24,564 - src.server.pm_handler - INFO - Provider returned 8 tasks successfully
+2025-11-05 17:13:24,564 - src.server.pm_handler - INFO - ================================================================================
+INFO:     ::1:62200 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+2025-11-05 17:13:25,309 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:62200 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:13:25,615 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:62210 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:13:25,619 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:13:25,910 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:13:25,911 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:62211 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:13:26,626 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:62217 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:13:26,939 - src.pm_providers.jira - INFO - Found 3 statuses from JIRA
+INFO:     ::1:62210 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+2025-11-05 17:13:26,949 - src.server.app - INFO - Listing priorities for project_id: fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+2025-11-05 17:13:27,265 - src.pm_providers.jira - INFO - Found 5 priorities from JIRA
+2025-11-05 17:13:27,266 - src.server.app - INFO - Found 5 priorities for project fc9e2adf-476e-4432-907a-4a5818f90bbc:TS
+INFO:     ::1:62200 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+2025-11-05 17:13:28,188 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:62211 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+2025-11-05 17:13:28,908 - src.pm_providers.jira - INFO - Found 1 epics from JIRA
+INFO:     ::1:62200 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK

@@ -26,6 +26,7 @@ interface TaskDetailsModalProps {
 export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: TaskDetailsModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTask, setEditedTask] = useState<Partial<Task> | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null); // Store the task ID being edited
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -41,13 +42,34 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
     }
   }, [prioritiesError]);
 
-  // Sync editedTask when task prop changes (if not editing)
+  // Reset state when modal closes or task changes significantly
   useEffect(() => {
+    if (!open) {
+      // Reset everything when modal closes
+      setIsEditing(false);
+      setEditedTask(null);
+      setEditingTaskId(null);
+      setError(null);
+      return;
+    }
+    
+    // If task ID changes while we're editing, cancel editing to prevent data corruption
+    if (isEditing && task && editingTaskId && task.id !== editingTaskId) {
+      console.warn(`[TaskDetailsModal] Task ID changed from ${editingTaskId} to ${task.id} while editing. Canceling edit to prevent data corruption.`);
+      setIsEditing(false);
+      setEditedTask(null);
+      setEditingTaskId(null);
+      setError(null);
+      return;
+    }
+    
+    // Sync editedTask when task prop changes (if not editing)
     if (!isEditing && task) {
       setEditedTask(null);
+      setEditingTaskId(null);
       setError(null);
     }
-  }, [task, isEditing]);
+  }, [task, isEditing, open, editingTaskId]);
 
   // Helper function to find matching status/priority name (case-insensitive)
   // IMPORTANT: Check longer names first to avoid "high" matching "highest"
@@ -103,12 +125,29 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
     : null;
 
   const handleEdit = () => {
+    if (!task) return;
+    // Store the task ID when editing starts to prevent updating wrong task
+    setEditingTaskId(task.id);
     setEditedTask({ ...task });
     setIsEditing(true);
   };
 
   const handleSave = async () => {
-    if (!editedTask || !onUpdate) return;
+    if (!editedTask || !onUpdate || !task) return;
+    
+    // Use the stored task ID instead of the current task.id to prevent updating wrong task
+    const taskIdToUpdate = editingTaskId || task.id;
+    
+    // Verify we're still editing the same task
+    if (taskIdToUpdate !== task.id) {
+      const errorMessage = "Task changed while editing. Please close and reopen the modal to edit the current task.";
+      setError(errorMessage);
+      console.error(`[TaskDetailsModal] Task ID mismatch: editing ${taskIdToUpdate} but current task is ${task.id}`);
+      setIsEditing(false);
+      setEditedTask(null);
+      setEditingTaskId(null);
+      return;
+    }
     
     setError(null);
     setIsSaving(true);
@@ -131,9 +170,11 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
       
       // Only call update if there are actual changes
       if (Object.keys(updates).length > 0) {
-        await onUpdate(task.id, updates);
+        // Use the stored task ID to ensure we update the correct task
+        await onUpdate(taskIdToUpdate, updates);
         // Update the local task state with the changes
         setEditedTask(null);
+        setEditingTaskId(null);
         setIsEditing(false);
         // The parent component should update the task, but we'll also update locally
         // to reflect changes immediately in the modal
@@ -141,6 +182,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
         // No changes, just close editing mode
         setIsEditing(false);
         setEditedTask(null);
+        setEditingTaskId(null);
       }
     } catch (error) {
       console.error("Failed to update task:", error);
@@ -155,6 +197,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
   const handleCancel = () => {
     setIsEditing(false);
     setEditedTask(null);
+    setEditingTaskId(null);
   };
 
 

@@ -430,6 +430,7 @@ export function BacklogView() {
   );
 
   const handleTaskClick = (task: Task) => {
+    // Always set the task before opening modal to ensure correct task is shown
     setSelectedTask(task);
     setIsModalOpen(true);
   };

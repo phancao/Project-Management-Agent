@@ -1897,7 +1897,9 @@ async def pm_list_statuses(
     """
     Get list of available statuses for an entity type in a project.
     
-    This is used by UI/UX to create status columns in Kanban boards.
+    This is used by UI/UX to create status columns in Kanban boards and combo boxes.
+    
+    Returns status objects with id, name, color, etc.
     """
     try:
         from database.connection import get_db_session

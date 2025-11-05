@@ -1015,7 +1015,7 @@ class PMHandler:
         self,
         project_id: str,
         entity_type: str = "task"
-    ) -> List[str]:
+    ) -> List[Dict[str, Any]]:
         """
         Get list of available statuses for an entity type in a project.
         
@@ -1026,7 +1026,7 @@ class PMHandler:
             entity_type: Type of entity ("task", "epic", "project", etc.)
             
         Returns:
-            Ordered list of status names
+            List of status objects with id, name, color, etc.
         """
         if ":" not in project_id:
             raise ValueError(f"Invalid project_id format: {project_id}")
@@ -1064,6 +1064,57 @@ class PMHandler:
             raise ValueError(str(e))
         
         return statuses
+    
+    async def list_project_priorities(
+        self,
+        project_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Get list of available priorities for a project.
+        
+        This is used by UI/UX to populate priority dropdowns/selectors.
+        
+        Args:
+            project_id: Project ID in format "provider_id:actual_project_id"
+            
+        Returns:
+            List of priority objects with id, name, color, etc.
+        """
+        if ":" not in project_id:
+            raise ValueError(f"Invalid project_id format: {project_id}")
+        
+        parts = project_id.split(":", 1)
+        provider_id_str = parts[0]
+        actual_project_id = parts[1]
+        
+        from uuid import UUID
+        try:
+            provider_uuid = UUID(provider_id_str)
+        except ValueError:
+            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
+        
+        provider = self.db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == provider_uuid,
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        provider_instance = self._create_provider_instance(provider)
+        
+        try:
+            priorities = await provider_instance.list_priorities(
+                project_id=actual_project_id
+            )
+        except NotImplementedError:
+            raise ValueError(
+                f"Priority list not yet implemented for {provider.provider_type}"
+            )
+        except Exception as e:
+            raise ValueError(str(e))
+        
+        return priorities
     
     async def assign_task_to_epic(self, project_id: str, task_id: str, epic_id: str) -> Dict[str, Any]:
         """

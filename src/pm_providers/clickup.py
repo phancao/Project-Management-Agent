@@ -9,7 +9,7 @@ from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMLabel,
     PMProviderConfig
 )
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any, Dict
 
 
 class ClickUpProvider(BasePMProvider):
@@ -126,6 +126,6 @@ class ClickUpProvider(BasePMProvider):
     
     # ==================== Status Operations ====================
     
-    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[str]:
+    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         raise NotImplementedError("Status list not yet implemented for ClickUp")
 

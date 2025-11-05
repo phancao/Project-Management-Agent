@@ -1704,7 +1704,7 @@ class JIRAProvider(BasePMProvider):
     
     # ==================== Status Operations ====================
     
-    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[str]:
+    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get list of available statuses for an entity type.
         
@@ -1724,9 +1724,29 @@ class JIRAProvider(BasePMProvider):
                 statuses = []
                 for status in data:
                     if isinstance(status, dict):
-                        status_name = status.get('name') or status.get('id')
-                        if status_name:
-                            statuses.append(status_name)
+                        status_id = str(status.get('id', ''))
+                        status_name = status.get('name', '')
+                        # Get color from statusCategory
+                        status_category = status.get('statusCategory', {})
+                        color_name = status_category.get('colorName', '')
+                        # Map color names to hex codes
+                        color_map = {
+                            'blue-gray': '#6b778c',
+                            'yellow': '#f4c430',
+                            'green': '#00b894',
+                            'red': '#d04437',
+                            'medium-gray': '#97a0af'
+                        }
+                        color = color_map.get(color_name.lower(), '')
+                        
+                        if status_id and status_name:
+                            statuses.append({
+                                "id": status_id,
+                                "name": status_name,
+                                "color": color,
+                                "description": status.get('description', ''),
+                                "category": status_category.get('name', ''),
+                            })
                 
                 logger.info(f"Found {len(statuses)} statuses from JIRA")
                 return statuses
@@ -1742,4 +1762,50 @@ class JIRAProvider(BasePMProvider):
         except requests.exceptions.RequestException as e:
             logger.error(f"Error listing statuses: {e}", exc_info=True)
             raise ValueError(f"Failed to list statuses: {str(e)}")
+    
+    async def list_priorities(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get list of available priorities.
+        
+        TESTED: ✅ Works via /rest/api/3/priority endpoint
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/rest/api/3/priority"
+        
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                priorities = []
+                for priority in data:
+                    if isinstance(priority, dict):
+                        priority_id = str(priority.get('id', ''))
+                        priority_name = priority.get('name', '')
+                        color = priority.get('statusColor', '')
+                        
+                        if priority_id and priority_name:
+                            priorities.append({
+                                "id": priority_id,
+                                "name": priority_name,
+                                "color": color,
+                                "description": priority.get('description', ''),
+                            })
+                
+                logger.info(f"Found {len(priorities)} priorities from JIRA")
+                return priorities
+            else:
+                logger.error(
+                    f"Failed to list priorities: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to list priorities: ({response.status_code}) "
+                    f"{response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing priorities: {e}", exc_info=True)
+            raise ValueError(f"Failed to list priorities: {str(e)}")
 

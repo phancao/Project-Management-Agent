@@ -1560,7 +1560,7 @@ class OpenProjectProvider(BasePMProvider):
     
     # ==================== Status Operations ====================
     
-    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[str]:
+    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get list of available statuses for an entity type.
         
@@ -1581,9 +1581,18 @@ class OpenProjectProvider(BasePMProvider):
                 statuses = []
                 for status in elements:
                     if isinstance(status, dict):
-                        status_name = status.get('name')
-                        if status_name:
-                            statuses.append(status_name)
+                        status_id = str(status.get('id', ''))
+                        status_name = status.get('name', '')
+                        color = status.get('color', '')
+                        
+                        if status_id and status_name:
+                            statuses.append({
+                                "id": status_id,
+                                "name": status_name,
+                                "color": color,
+                                "is_closed": status.get('isClosed', False),
+                                "is_default": status.get('isDefault', False),
+                            })
                 
                 logger.info(f"Found {len(statuses)} statuses from OpenProject")
                 return statuses
@@ -1599,4 +1608,53 @@ class OpenProjectProvider(BasePMProvider):
         except requests.exceptions.RequestException as e:
             logger.error(f"Error listing statuses: {e}", exc_info=True)
             raise ValueError(f"Failed to list statuses: {str(e)}")
+    
+    async def list_priorities(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get list of available priorities.
+        
+        TESTED: ✅ Works via /api/v3/priorities endpoint
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/api/v3/priorities"
+        
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                elements = data.get('_embedded', {}).get('elements', [])
+                
+                priorities = []
+                for priority in elements:
+                    if isinstance(priority, dict):
+                        priority_id = str(priority.get('id', ''))
+                        priority_name = priority.get('name', '')
+                        color = priority.get('color', '')
+                        
+                        if priority_id and priority_name:
+                            priorities.append({
+                                "id": priority_id,
+                                "name": priority_name,
+                                "color": color,
+                                "is_default": priority.get('isDefault', False),
+                                "position": priority.get('position', 0),
+                            })
+                
+                logger.info(f"Found {len(priorities)} priorities from OpenProject")
+                return priorities
+            else:
+                logger.error(
+                    f"Failed to list priorities: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to list priorities: ({response.status_code}) "
+                    f"{response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing priorities: {e}", exc_info=True)
+            raise ValueError(f"Failed to list priorities: {str(e)}")
 

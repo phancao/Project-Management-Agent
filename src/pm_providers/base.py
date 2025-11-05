@@ -318,7 +318,7 @@ class BasePMProvider(ABC):
     # ==================== Status Operations ====================
     
     @abstractmethod
-    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[str]:
+    async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get list of available statuses for an entity type.
         
@@ -329,7 +329,7 @@ class BasePMProvider(ABC):
             project_id: Optional project ID for project-specific statuses
             
         Returns:
-            Ordered list of status names (e.g., ["todo", "in_progress", "done"])
+            List of status objects with at least: {"id": str, "name": str, "color": Optional[str]}
         """
         pass
     
@@ -379,7 +379,8 @@ class BasePMProvider(ABC):
         """
         # Validate that target status exists
         valid_statuses = await self.list_statuses(entity_type)
-        if to_status not in valid_statuses:
+        valid_status_names = [s.get("name") if isinstance(s, dict) else s for s in valid_statuses]
+        if to_status not in valid_status_names:
             raise ValueError(
                 f"Invalid status '{to_status}'. "
                 f"Valid statuses: {valid_statuses}"

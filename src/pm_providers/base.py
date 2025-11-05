@@ -409,3 +409,24 @@ class BasePMProvider(ABC):
             raise ValueError(f"Unsupported entity type: {entity_type}")
         
         return True
+    
+    # ==================== Priority Operations ====================
+    
+    async def list_priorities(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get list of available priorities (optional).
+        
+        This is primarily used for UI/UX to populate priority dropdowns/selectors.
+        
+        Args:
+            project_id: Optional project ID for project-specific priorities
+            
+        Returns:
+            List of priority objects with at least: {"id": str, "name": str, "color": Optional[str]}
+            
+        Raises:
+            NotImplementedError: If not implemented by the provider
+        """
+        raise NotImplementedError(
+            f"list_priorities not implemented for {self.__class__.__name__}"
+        )

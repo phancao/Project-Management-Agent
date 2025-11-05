@@ -4,7 +4,7 @@
 "use client";
 
 import { Edit2, Save } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -31,8 +31,28 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
   
   // Fetch statuses, priorities, and epics for the project (hooks must be called before early return)
   const { statuses } = useStatuses(projectId ?? undefined, "task");
-  const { priorities } = usePriorities(projectId ?? undefined);
+  const { priorities, loading: prioritiesLoading, error: prioritiesError } = usePriorities(projectId ?? undefined);
   const { epics } = useEpics(projectId ?? undefined);
+  
+  // Log priorities loading state for debugging
+  useEffect(() => {
+    if (prioritiesError) {
+      console.error("[TaskDetailsModal] Error loading priorities:", prioritiesError);
+    }
+    if (priorities.length > 0) {
+      console.log("[TaskDetailsModal] Loaded priorities:", priorities.map(p => p.name));
+    } else if (!prioritiesLoading) {
+      console.warn("[TaskDetailsModal] No priorities loaded. ProjectId:", projectId);
+    }
+  }, [priorities, prioritiesLoading, prioritiesError, projectId]);
+
+  // Sync editedTask when task prop changes (if not editing)
+  useEffect(() => {
+    if (!isEditing && task) {
+      setEditedTask(null);
+      setError(null);
+    }
+  }, [task, isEditing]);
 
   // Early return if task is null
   if (!task) return null;
@@ -73,13 +93,6 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
         return epicIdStr === taskEpicIdStr;
       })
     : null;
-  
-  // Debug logging
-  if (task.epic_id) {
-    console.log('[TaskDetailsModal] Task epic_id:', task.epic_id);
-    console.log('[TaskDetailsModal] Available epics:', epics.map(e => ({ id: e.id, name: e.name })));
-    console.log('[TaskDetailsModal] Found epic:', currentEpic);
-  }
 
   const handleEdit = () => {
     setEditedTask({ ...task });
@@ -111,8 +124,11 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
       // Only call update if there are actual changes
       if (Object.keys(updates).length > 0) {
         await onUpdate(task.id, updates);
-        setIsEditing(false);
+        // Update the local task state with the changes
         setEditedTask(null);
+        setIsEditing(false);
+        // The parent component should update the task, but we'll also update locally
+        // to reflect changes immediately in the modal
       } else {
         // No changes, just close editing mode
         setIsEditing(false);
@@ -316,20 +332,18 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
                           </SelectItem>
                         )}
                       </>
+                    ) : prioritiesLoading ? (
+                      // Show loading state
+                      <SelectItem value="" disabled>Loading priorities...</SelectItem>
                     ) : (
-                      // Fallback to default values if no priorities loaded
+                      // Fallback: Show current value if available, or generic message
                       <>
-                        <SelectItem value="lowest">Lowest</SelectItem>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="highest">Highest</SelectItem>
-                        <SelectItem value="critical">Critical</SelectItem>
-                        {/* Add current value if it's not in the defaults */}
-                        {currentPriorityValue && !["lowest", "low", "medium", "high", "highest", "critical"].includes(currentPriorityValue) && (
+                        {currentPriorityValue ? (
                           <SelectItem value={currentPriorityValue}>
                             {currentPriorityValue}
                           </SelectItem>
+                        ) : (
+                          <SelectItem value="" disabled>No priorities available</SelectItem>
                         )}
                       </>
                     )}

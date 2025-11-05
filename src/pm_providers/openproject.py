@@ -145,6 +145,9 @@ class OpenProjectProvider(BasePMProvider):
         else:
             params = {}
         
+        # Include priority in embedded data for better parsing
+        params["include"] = "priority,status,assignee,project,version,parent"
+        
         response = requests.get(url, headers=self.headers, params=params)
         
         # Log if filter returns no results
@@ -171,7 +174,9 @@ class OpenProjectProvider(BasePMProvider):
     async def get_task(self, task_id: str) -> Optional[PMTask]:
         """Get a single work package by ID"""
         url = f"{self.base_url}/api/v3/work_packages/{task_id}"
-        response = requests.get(url, headers=self.headers)
+        # Include priority in embedded data
+        params = {"include": "priority,status,assignee,project,version,parent"}
+        response = requests.get(url, headers=self.headers, params=params)
         
         if response.status_code == 404:
             return None
@@ -340,10 +345,13 @@ class OpenProjectProvider(BasePMProvider):
                             }
                         else:
                             available_priorities = [p.get("name") for p in priorities]
-                            logger.warning(
+                            logger.error(
                                 f"Priority '{priority_value}' not found. "
-                                f"Available priorities: {available_priorities}. Skipping priority update."
+                                f"Available priorities: {available_priorities}. "
+                                f"Priority update will be skipped."
                             )
+                            # Log all priorities with their IDs for debugging
+                            logger.debug(f"All available priorities: {[(p.get('id'), p.get('name')) for p in priorities]}")
                     else:
                         logger.warning(f"Failed to fetch priorities: {priorities_resp.status_code}")
                 except Exception as e:
@@ -806,6 +814,13 @@ class OpenProjectProvider(BasePMProvider):
         links = data.get("_links", {})
         embedded = data.get("_embedded", {})
         
+        # Extract priority from embedded data or links
+        priority = None
+        if embedded.get("priority"):
+            priority = embedded.get("priority", {}).get("name")
+        elif links.get("priority", {}).get("title"):
+            priority = links.get("priority", {}).get("title")
+        
         return PMTask(
             id=str(data["id"]),
             title=data.get("subject", ""),
@@ -818,6 +833,7 @@ class OpenProjectProvider(BasePMProvider):
                 embedded.get("status", {}).get("name")
                 if embedded.get("status") else None
             ),
+            priority=priority,
             project_id=self._extract_id_from_href(
                 links.get("project", {}).get("href")
             ),

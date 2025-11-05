@@ -40,13 +40,14 @@ const fetchPrioritiesFn = async (projectId?: string) => {
 
 export function usePriorities(projectId?: string) {
   const [priorities, setPriorities] = useState<Priority[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start as true to show loading state initially
   const [error, setError] = useState<Error | null>(null);
 
   const refresh = useCallback(() => {
     if (!projectId) {
       setPriorities([]);
       setLoading(false);
+      setError(null);
       return;
     }
     
@@ -54,13 +55,15 @@ export function usePriorities(projectId?: string) {
     setError(null);
     fetchPrioritiesFn(projectId)
       .then((data) => {
+        console.log(`[usePriorities] Loaded ${data.length} priorities for project ${projectId}:`, data);
         setPriorities(data);
         setLoading(false);
       })
       .catch((err) => {
+        console.error(`[usePriorities] Failed to fetch priorities for project ${projectId}:`, err);
         setError(err as Error);
+        setPriorities([]); // Clear priorities on error
         setLoading(false);
-        // Don't set priorities to empty on error, keep previous values
       });
   }, [projectId]);
 

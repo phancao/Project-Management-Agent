@@ -118,11 +118,18 @@ const fetchTasksFn = async (projectId?: string) => {
 
 export function useTasks(projectId?: string) {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Start as true to show loading state initially
   const [error, setError] = useState<Error | null>(null);
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback((clearTasks: boolean = true) => {
+    // Optionally clear tasks to avoid showing stale data
+    // Don't clear if we're just refreshing after an update (to prevent flash)
+    if (clearTasks) {
+      setTasks([]);
+    }
     setLoading(true);
+    setError(null);
+    
     fetchTasksFn(projectId)
       .then((data) => {
         setTasks(data);
@@ -130,13 +137,29 @@ export function useTasks(projectId?: string) {
       })
       .catch((err) => {
         setError(err as Error);
+        setTasks([]); // Clear tasks on error
         setLoading(false);
       });
   }, [projectId]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    // Clear tasks immediately when projectId changes
+    setTasks([]);
+    setLoading(true);
+    setError(null);
+    
+    // Fetch new data
+    fetchTasksFn(projectId)
+      .then((data) => {
+        setTasks(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err as Error);
+        setTasks([]);
+        setLoading(false);
+      });
+  }, [projectId]);
 
   usePMRefresh(refresh);
 

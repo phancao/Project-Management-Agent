@@ -53,7 +53,7 @@ function TaskCard({ task, onClick, epic }: { task: Task; onClick: () => void; ep
       <div className="flex-1 min-w-0" onClick={onClick}>
         <div className="flex items-center gap-2">
           <div className="text-sm font-medium text-gray-900 dark:text-white truncate flex-1">
-            {task.title}
+          {task.title}
           </div>
           {epic && (
             <span className="px-2 py-0.5 text-xs font-medium rounded shrink-0 flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
@@ -141,20 +141,20 @@ function EpicSidebar({
           </div>
         ) : epics.length > 0 ? (
           epics.map((epic) => (
-            <EpicDropZone
-              key={epic.id}
-              id={`epic-${epic.id}`}
-              label={epic.name}
-              color={epic.color}
-              issueCount={tasks.filter(t => t.epic_id === epic.id).length}
-              isSelected={selectedEpic === epic.id}
-              isExpanded={expandedEpics.has(epic.id)}
-              onClick={() => {
-                toggleEpic(epic.id);
-                setSelectedEpic(epic.id);
-                onEpicSelect(epic.id);
-              }}
-            />
+          <EpicDropZone
+            key={epic.id}
+            id={`epic-${epic.id}`}
+            label={epic.name}
+            color={epic.color}
+            issueCount={tasks.filter(t => t.epic_id === epic.id).length}
+            isSelected={selectedEpic === epic.id}
+            isExpanded={expandedEpics.has(epic.id)}
+            onClick={() => {
+              toggleEpic(epic.id);
+              setSelectedEpic(epic.id);
+              onEpicSelect(epic.id);
+            }}
+          />
           ))
         ) : (
           <div className="p-2 text-sm text-gray-500 dark:text-gray-400">
@@ -406,7 +406,7 @@ export function BacklogView() {
   }, [activeProject]);
   
   // Fetch tasks for the active project - use full project ID (with provider_id)
-  const { tasks, loading, error } = useTasks(projectIdForSprints ?? undefined);
+  const { tasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
   // Fetch all sprints (active, closed, future) - no state filter to show all
   const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
   // Fetch epics for the active project
@@ -476,9 +476,16 @@ export function BacklogView() {
       const result = await response.json();
       console.log(`[handleUpdateTask] Success:`, result);
       
-      window.dispatchEvent(new CustomEvent("pm_refresh", { 
-        detail: { type: "pm_refresh" } 
-      }));
+      // Update the selected task in the modal if it's the same task
+      if (selectedTask && selectedTask.id === taskId) {
+        setSelectedTask({
+          ...selectedTask,
+          ...result
+        });
+      }
+      
+      // Refresh the task list without clearing (to prevent flash) and update selectedTask
+      refreshTasks(false);
     } catch (error) {
       console.error("[handleUpdateTask] Failed to update task:", error);
       if (error instanceof TypeError && error.message === "Failed to fetch") {
@@ -672,6 +679,9 @@ export function BacklogView() {
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
+    // Return empty array if loading to prevent flash of stale data
+    if (loading) return [];
+    if (!tasks) return [];
     let filtered = tasks;
 
     // Search filter
@@ -701,7 +711,7 @@ export function BacklogView() {
     }
 
     return filtered;
-  }, [tasks, searchQuery, statusFilter, priorityFilter]);
+  }, [tasks, searchQuery, statusFilter, priorityFilter, loading]);
 
   // Extract unique statuses and priorities from tasks
   const availableStatuses = useMemo(() => {
@@ -726,11 +736,13 @@ export function BacklogView() {
 
   // Filter tasks by selected epic
   const epicFilteredTasks = useMemo(() => {
+    // Return empty array if loading to prevent flash of stale data
+    if (loading) return [];
     if (!selectedEpic) return filteredTasks;
     if (selectedEpic === "all") return filteredTasks;
     // Filter by epic_id
     return filteredTasks.filter(task => task.epic_id === selectedEpic);
-  }, [filteredTasks, selectedEpic]);
+  }, [filteredTasks, selectedEpic, loading]);
 
   // Group tasks by sprint
   const tasksInSprints = useMemo(() => {
@@ -955,39 +967,39 @@ export function BacklogView() {
                 </div>
               </div>
               {availableStatuses.length > 0 || availablePriorities.length > 0 ? (
-                <div className="flex gap-2">
+              <div className="flex gap-2">
                   {availableStatuses.length > 0 && (
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-[140px]">
-                        <Filter className="w-4 h-4 mr-2" />
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                   <SelectTrigger className="w-[140px]">
+                     <Filter className="w-4 h-4 mr-2" />
+                     <SelectValue placeholder="Status" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="all">All Status</SelectItem>
                         {availableStatuses.map(status => (
                           <SelectItem key={status} value={status.toLowerCase()}>
                             {status}
                           </SelectItem>
                         ))}
-                      </SelectContent>
-                    </Select>
+                   </SelectContent>
+                 </Select>
                   )}
                   {availablePriorities.length > 0 && (
-                    <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Priority" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Priority</SelectItem>
+                 <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                   <SelectTrigger className="w-[140px]">
+                     <SelectValue placeholder="Priority" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="all">All Priority</SelectItem>
                         {availablePriorities.map(priority => (
                           <SelectItem key={priority} value={priority.toLowerCase()}>
                             {priority}
                           </SelectItem>
                         ))}
-                      </SelectContent>
-                    </Select>
+                   </SelectContent>
+                 </Select>
                   )}
-                </div>
+              </div>
               ) : null}
             </div>
           </div>

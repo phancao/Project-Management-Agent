@@ -1954,12 +1954,15 @@ async def pm_list_priorities(
         
         try:
             handler = PMHandler.from_db_session(db)
+            logger.info(f"Listing priorities for project_id: {project_id}")
             priorities = await handler.list_project_priorities(project_id)
+            logger.info(f"Found {len(priorities)} priorities for project {project_id}")
             return {"priorities": priorities}
         finally:
             db.close()
     except ValueError as ve:
         error_msg = str(ve)
+        logger.error(f"ValueError listing priorities for {project_id}: {error_msg}")
         if "Invalid provider ID format" in error_msg:
             raise HTTPException(status_code=400, detail=error_msg)
         elif "Provider not found" in error_msg:
@@ -1971,7 +1974,7 @@ async def pm_list_priorities(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to list priorities: {e}")
+        logger.error(f"Failed to list priorities for {project_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))

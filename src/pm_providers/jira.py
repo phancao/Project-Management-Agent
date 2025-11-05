@@ -260,6 +260,7 @@ class JIRAProvider(BasePMProvider):
                 "assignee",          # assignee
                 "project",           # project info
                 "parent",            # parent task
+                "customfield_10020", # sprint field (for Scrum/Kanban boards)
                 # estimated hours (seconds)
                 "timeoriginalestimate",
                 "timespent",         # actual hours (seconds)

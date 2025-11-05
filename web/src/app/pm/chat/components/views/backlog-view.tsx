@@ -539,6 +539,101 @@ export function BacklogView() {
     }
   };
 
+  const handleAssignTaskToSprint = async (taskId: string, sprintId: string) => {
+    if (!projectIdForSprints) {
+      throw new Error('No project selected');
+    }
+    try {
+      const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/assign-sprint`);
+      
+      console.log(`[handleAssignTaskToSprint] Assigning task ${taskId} to sprint ${sprintId} in project ${projectIdForSprints}`);
+      console.log(`[handleAssignTaskToSprint] URL: ${url}`);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sprint_id: sprintId }),
+      });
+      
+      console.log(`[handleAssignTaskToSprint] Response status: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Failed to assign task to sprint: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorMessage;
+        } catch {
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+        console.error(`[handleAssignTaskToSprint] Error: ${errorMessage}`);
+        console.error(`[handleAssignTaskToSprint] Response status: ${response.status}`);
+        console.error(`[handleAssignTaskToSprint] Response text: ${errorText}`);
+        console.error(`[handleAssignTaskToSprint] Full URL attempted: ${url}`);
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      console.log(`[handleAssignTaskToSprint] Success:`, result);
+      
+      window.dispatchEvent(new CustomEvent("pm_refresh", { 
+        detail: { type: "pm_refresh" } 
+      }));
+    } catch (error) {
+      console.error("Failed to assign task to sprint:", error);
+      throw error;
+    }
+  };
+
+  const handleMoveTaskToBacklog = async (taskId: string) => {
+    if (!projectIdForSprints) {
+      throw new Error('No project selected');
+    }
+    try {
+      const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/move-to-backlog`);
+      
+      console.log(`[handleMoveTaskToBacklog] Moving task ${taskId} to backlog in project ${projectIdForSprints}`);
+      console.log(`[handleMoveTaskToBacklog] URL: ${url}`);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      console.log(`[handleMoveTaskToBacklog] Response status: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Failed to move task to backlog: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorMessage;
+        } catch {
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+        console.error(`[handleMoveTaskToBacklog] Error: ${errorMessage}`);
+        console.error(`[handleMoveTaskToBacklog] Response status: ${response.status}`);
+        console.error(`[handleMoveTaskToBacklog] Response text: ${errorText}`);
+        console.error(`[handleMoveTaskToBacklog] Full URL attempted: ${url}`);
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      console.log(`[handleMoveTaskToBacklog] Success:`, result);
+      
+      window.dispatchEvent(new CustomEvent("pm_refresh", { 
+        detail: { type: "pm_refresh" } 
+      }));
+    } catch (error) {
+      console.error("Failed to move task to backlog:", error);
+      throw error;
+    }
+  };
+
   // Filter tasks
   const filteredTasks = useMemo(() => {
     let filtered = tasks;
@@ -598,16 +693,58 @@ export function BacklogView() {
   // Group tasks by sprint
   const tasksInSprints = useMemo(() => {
     const grouped: Record<string, Task[]> = {};
+    
+    // Debug: Log sprint IDs and task sprint_ids
+    const sprintInfo = sprints.map(s => ({ id: s.id, name: s.name, id_type: typeof s.id }));
+    const taskInfo = epicFilteredTasks.map(t => ({ id: t.id, title: t.title, sprint_id: t.sprint_id, sprint_id_type: typeof t.sprint_id }));
+    console.log('[tasksInSprints] Sprint IDs:', JSON.stringify(sprintInfo, null, 2));
+    console.log('[tasksInSprints] Task sprint_ids:', JSON.stringify(taskInfo, null, 2));
+    
     sprints.forEach(sprint => {
-      grouped[sprint.id] = epicFilteredTasks.filter(task => task.sprint_id === sprint.id);
+      const matchingTasks = epicFilteredTasks.filter(task => {
+        const matches = task.sprint_id === sprint.id || 
+                       String(task.sprint_id) === String(sprint.id) ||
+                       task.sprint_id?.toString() === sprint.id?.toString();
+        if (matches && task.sprint_id !== sprint.id) {
+          console.log(`[tasksInSprints] Type mismatch fixed: task.sprint_id="${task.sprint_id}" (${typeof task.sprint_id}) === sprint.id="${sprint.id}" (${typeof sprint.id})`);
+        }
+        return matches;
+      });
+      grouped[sprint.id] = matchingTasks;
+      if (matchingTasks.length > 0) {
+        console.log(`[tasksInSprints] Sprint "${sprint.name}" (${sprint.id}): ${matchingTasks.length} tasks:`, matchingTasks.map(t => t.id));
+      } else {
+        console.log(`[tasksInSprints] Sprint "${sprint.name}" (${sprint.id}): No matching tasks`);
+        // Show why tasks don't match
+        const tasksWithSprintId = epicFilteredTasks.filter(t => t.sprint_id);
+        if (tasksWithSprintId.length > 0) {
+          console.log(`[tasksInSprints] But found ${tasksWithSprintId.length} tasks with sprint_id:`, tasksWithSprintId.map(t => ({ id: t.id, sprint_id: t.sprint_id, sprint_id_type: typeof t.sprint_id })));
+        }
+      }
     });
+    
+    const groupedInfo = Object.keys(grouped).map(key => ({ 
+      sprintId: key, 
+      count: grouped[key].length,
+      taskIds: grouped[key].map(t => t.id)
+    }));
+    console.log('[tasksInSprints] Grouped tasks:', JSON.stringify(groupedInfo, null, 2));
     return grouped;
   }, [sprints, epicFilteredTasks]);
 
   // Backlog tasks (tasks not in any sprint)
   const backlogTasks = useMemo(() => {
     const sprintIds = new Set(sprints.map(s => s.id));
-    return epicFilteredTasks.filter(task => !task.sprint_id || !sprintIds.has(task.sprint_id));
+    const backlog = epicFilteredTasks.filter(task => {
+      const hasSprintId = task.sprint_id && (sprintIds.has(task.sprint_id) || 
+                                             sprintIds.has(String(task.sprint_id)) ||
+                                             Array.from(sprintIds).some(sid => String(sid) === String(task.sprint_id)));
+      return !hasSprintId;
+    });
+    console.log('[backlogTasks] Backlog tasks:', backlog.length, 'out of', epicFilteredTasks.length, 'total tasks');
+    const orphanedTasks = epicFilteredTasks.filter(t => t.sprint_id && !sprintIds.has(t.sprint_id) && !Array.from(sprintIds).some(sid => String(sid) === String(t.sprint_id))).map(t => ({ id: t.id, title: t.title, sprint_id: t.sprint_id }));
+    console.log('[backlogTasks] Tasks with sprint_id but not in sprints:', JSON.stringify(orphanedTasks, null, 2));
+    return backlog;
   }, [epicFilteredTasks, sprints]);
 
   // Handle drag end - assign task to sprint, epic, or remove from sprint
@@ -620,12 +757,12 @@ export function BacklogView() {
     const taskId = active.id as string;
     const overId = over.id as string;
 
-    // Check if dropped on backlog (remove from sprint)
+    // Check if dropped on backlog (move to backlog)
     if (overId === "backlog") {
       try {
-        await handleUpdateTask(taskId, { sprint_id: undefined });
+        await handleMoveTaskToBacklog(taskId);
       } catch (error) {
-        console.error("Failed to remove task from sprint:", error);
+        console.error("Failed to move task to backlog:", error);
       }
       return;
     }
@@ -657,7 +794,7 @@ export function BacklogView() {
       const sprintId = overId.replace("sprint-", "");
       
       try {
-        await handleUpdateTask(taskId, { sprint_id: sprintId });
+        await handleAssignTaskToSprint(taskId, sprintId);
       } catch (error) {
         console.error("Failed to assign task to sprint:", error);
       }

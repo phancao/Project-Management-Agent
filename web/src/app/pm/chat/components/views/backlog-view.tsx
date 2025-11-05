@@ -20,6 +20,7 @@ import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { useSprints } from "~/core/api/hooks/pm/use-sprints";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useTasks } from "~/core/api/hooks/pm/use-tasks";
+import { useEpics, type Epic } from "~/core/api/hooks/pm/use-epics";
 
 import { TaskDetailsModal } from "../task-details-modal";
 
@@ -73,18 +74,23 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
   );
 }
 
-// Epic sidebar component (placeholder for now)
+// Epic sidebar component
 function EpicSidebar({ 
   onEpicSelect, 
   tasks,
-  onTaskUpdate: _onTaskUpdate 
+  onTaskUpdate: _onTaskUpdate,
+  projectId
 }: { 
   onEpicSelect: (epicId: string | null) => void;
   tasks: Task[];
   onTaskUpdate: (taskId: string, updates: Partial<Task>) => Promise<void>;
+  projectId: string | null | undefined;
 }) {
   const [selectedEpic, setSelectedEpic] = useState<string | null>("all");
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(new Set());
+  
+  // Fetch epics from backend
+  const { epics, loading: epicsLoading } = useEpics(projectId);
 
   const toggleEpic = (epicId: string) => {
     setExpandedEpics(prev => {
@@ -97,12 +103,6 @@ function EpicSidebar({
       return next;
     });
   };
-
-  // Placeholder epics data - will be replaced with real API data later
-  const epics = [
-    { id: "epic-1", name: "Epic 1", color: "bg-yellow-400", issueCount: 5, completed: 2 },
-    { id: "epic-2", name: "Epic 2", color: "bg-orange-400", issueCount: 3, completed: 1 },
-  ];
 
   return (
     <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
@@ -129,22 +129,32 @@ function EpicSidebar({
           }}
         />
 
-        {epics.map((epic) => (
-          <EpicDropZone
-            key={epic.id}
-            id={`epic-${epic.id}`}
-            label={epic.name}
-            color={epic.color}
-            issueCount={tasks.filter(t => t.epic_id === epic.id).length}
-            isSelected={selectedEpic === epic.id}
-            isExpanded={expandedEpics.has(epic.id)}
-            onClick={() => {
-              toggleEpic(epic.id);
-              setSelectedEpic(epic.id);
-              onEpicSelect(epic.id);
-            }}
-          />
-        ))}
+        {epicsLoading ? (
+          <div className="p-2 text-sm text-gray-500 dark:text-gray-400">
+            Loading epics...
+          </div>
+        ) : epics.length > 0 ? (
+          epics.map((epic) => (
+            <EpicDropZone
+              key={epic.id}
+              id={`epic-${epic.id}`}
+              label={epic.name}
+              color={epic.color}
+              issueCount={tasks.filter(t => t.epic_id === epic.id).length}
+              isSelected={selectedEpic === epic.id}
+              isExpanded={expandedEpics.has(epic.id)}
+              onClick={() => {
+                toggleEpic(epic.id);
+                setSelectedEpic(epic.id);
+                onEpicSelect(epic.id);
+              }}
+            />
+          ))
+        ) : (
+          <div className="p-2 text-sm text-gray-500 dark:text-gray-400">
+            No epics found
+          </div>
+        )}
 
         <EpicDropZone
           id="epic-none"
@@ -618,6 +628,7 @@ export function BacklogView() {
           onEpicSelect={setSelectedEpic}
           tasks={tasks}
           onTaskUpdate={handleUpdateTask}
+          projectId={projectIdForSprints}
         />
 
         {/* Main Content Area */}

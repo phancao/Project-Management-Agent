@@ -731,6 +731,209 @@ class PMHandler:
             for e in epics
         ]
     
+    async def create_project_epic(
+        self, project_id: str, epic_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Create a new epic for a specific project.
+        
+        Args:
+            project_id: Project ID in format "provider_id:actual_project_id"
+            epic_data: Epic data (name, description, etc.)
+            
+        Returns:
+            Created epic data
+        """
+        if ":" not in project_id:
+            raise ValueError(f"Invalid project_id format: {project_id}")
+        
+        parts = project_id.split(":", 1)
+        provider_id_str = parts[0]
+        actual_project_id = parts[1]
+        
+        from uuid import UUID
+        try:
+            provider_uuid = UUID(provider_id_str)
+        except ValueError:
+            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
+        
+        provider = self.db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == provider_uuid,
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        provider_instance = self._create_provider_instance(provider)
+        
+        # Convert epic_data to PMEpic
+        from datetime import datetime
+        from src.pm_providers.models import PMEpic
+        
+        epic = PMEpic(
+            name=epic_data.get("name", ""),
+            description=epic_data.get("description"),
+            project_id=actual_project_id,
+            start_date=(
+                datetime.fromisoformat(epic_data["start_date"]).date()
+                if epic_data.get("start_date")
+                else None
+            ),
+            end_date=(
+                datetime.fromisoformat(epic_data["end_date"]).date()
+                if epic_data.get("end_date")
+                else None
+            ),
+        )
+        
+        try:
+            created_epic = await provider_instance.create_epic(epic)
+        except NotImplementedError:
+            raise ValueError(f"Epic creation not yet implemented for {provider.provider_type}")
+        except Exception as e:
+            raise ValueError(str(e))
+        
+        return {
+            "id": str(created_epic.id),
+            "name": created_epic.name,
+            "description": created_epic.description,
+            "status": (
+                created_epic.status.value
+                if created_epic.status and hasattr(created_epic.status, 'value')
+                else str(created_epic.status) if created_epic.status else None
+            ),
+            "priority": (
+                created_epic.priority.value
+                if created_epic.priority and hasattr(created_epic.priority, 'value')
+                else str(created_epic.priority) if created_epic.priority else None
+            ),
+            "start_date": created_epic.start_date.isoformat() if created_epic.start_date else None,
+            "end_date": created_epic.end_date.isoformat() if created_epic.end_date else None,
+        }
+    
+    async def update_project_epic(
+        self, project_id: str, epic_id: str, updates: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Update an epic for a specific project.
+        
+        Args:
+            project_id: Project ID in format "provider_id:actual_project_id"
+            epic_id: Epic ID
+            updates: Updates to apply
+            
+        Returns:
+            Updated epic data
+        """
+        if ":" not in project_id:
+            raise ValueError(f"Invalid project_id format: {project_id}")
+        
+        parts = project_id.split(":", 1)
+        provider_id_str = parts[0]
+        
+        from uuid import UUID
+        try:
+            provider_uuid = UUID(provider_id_str)
+        except ValueError:
+            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
+        
+        provider = self.db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == provider_uuid,
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        provider_instance = self._create_provider_instance(provider)
+        
+        # Map updates
+        epic_updates: Dict[str, Any] = {}
+        if "name" in updates:
+            epic_updates["name"] = updates["name"]
+        if "description" in updates:
+            epic_updates["description"] = updates["description"]
+        if "start_date" in updates:
+            from datetime import datetime
+            epic_updates["start_date"] = (
+                datetime.fromisoformat(updates["start_date"]).date()
+                if updates["start_date"]
+                else None
+            )
+        if "end_date" in updates:
+            from datetime import datetime
+            epic_updates["end_date"] = (
+                datetime.fromisoformat(updates["end_date"]).date()
+                if updates["end_date"]
+                else None
+            )
+        
+        try:
+            updated_epic = await provider_instance.update_epic(epic_id, epic_updates)
+        except NotImplementedError:
+            raise ValueError(f"Epic updates not yet implemented for {provider.provider_type}")
+        except Exception as e:
+            raise ValueError(str(e))
+        
+        return {
+            "id": str(updated_epic.id),
+            "name": updated_epic.name,
+            "description": updated_epic.description,
+            "status": (
+                updated_epic.status.value
+                if updated_epic.status and hasattr(updated_epic.status, 'value')
+                else str(updated_epic.status) if updated_epic.status else None
+            ),
+            "priority": (
+                updated_epic.priority.value
+                if updated_epic.priority and hasattr(updated_epic.priority, 'value')
+                else str(updated_epic.priority) if updated_epic.priority else None
+            ),
+            "start_date": updated_epic.start_date.isoformat() if updated_epic.start_date else None,
+            "end_date": updated_epic.end_date.isoformat() if updated_epic.end_date else None,
+        }
+    
+    async def delete_project_epic(self, project_id: str, epic_id: str) -> bool:
+        """
+        Delete an epic for a specific project.
+        
+        Args:
+            project_id: Project ID in format "provider_id:actual_project_id"
+            epic_id: Epic ID
+            
+        Returns:
+            True if deleted successfully
+        """
+        if ":" not in project_id:
+            raise ValueError(f"Invalid project_id format: {project_id}")
+        
+        parts = project_id.split(":", 1)
+        provider_id_str = parts[0]
+        
+        from uuid import UUID
+        try:
+            provider_uuid = UUID(provider_id_str)
+        except ValueError:
+            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
+        
+        provider = self.db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == provider_uuid,
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider:
+            raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        provider_instance = self._create_provider_instance(provider)
+        
+        try:
+            return await provider_instance.delete_epic(epic_id)
+        except NotImplementedError:
+            raise ValueError(f"Epic deletion not yet implemented for {provider.provider_type}")
+        except Exception as e:
+            raise ValueError(str(e))
+    
     async def list_project_labels(self, project_id: str) -> List[Dict[str, Any]]:
         """List labels for a specific project"""
         if ":" not in project_id:

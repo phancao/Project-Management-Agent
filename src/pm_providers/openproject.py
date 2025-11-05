@@ -900,20 +900,249 @@ class OpenProjectProvider(BasePMProvider):
             raise ValueError(f"Failed to list epics: {str(e)}")
     
     async def get_epic(self, epic_id: str) -> Optional[PMEpic]:
-        """Get a single epic by ID"""
-        raise NotImplementedError("Epics not yet implemented for OpenProject")
+        """
+        Get a single epic by ID.
+        
+        TESTED: ✅ Works via GET /api/v3/work_packages/{id}
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/api/v3/work_packages/{epic_id}"
+        
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 200:
+                wp_data = response.json()
+                
+                # Verify it's an epic by checking type
+                wp_type = wp_data.get('_links', {}).get('type', {}).get('title', '').lower()
+                if 'epic' not in wp_type:
+                    logger.warning(f"Work package {epic_id} is not an epic (type: {wp_type})")
+                    return None
+                
+                epic = PMEpic(
+                    id=str(wp_data.get('id')),
+                    name=wp_data.get('subject', ''),
+                    description=wp_data.get('description', {}).get('raw') if isinstance(wp_data.get('description'), dict) else wp_data.get('description'),
+                    project_id=str(wp_data.get('_links', {}).get('project', {}).get('href', '').split('/')[-1]) if wp_data.get('_links', {}).get('project') else None,
+                    status=wp_data.get('_links', {}).get('status', {}).get('title') if wp_data.get('_links', {}).get('status') else None,
+                    priority=wp_data.get('_links', {}).get('priority', {}).get('title') if wp_data.get('_links', {}).get('priority') else None,
+                    start_date=self._parse_date(wp_data.get('startDate')),
+                    end_date=self._parse_date(wp_data.get('dueDate')),
+                    created_at=self._parse_datetime(wp_data.get('createdAt')),
+                    updated_at=self._parse_datetime(wp_data.get('updatedAt')),
+                    raw_data=wp_data
+                )
+                logger.info(f"Retrieved epic {epic_id} from OpenProject")
+                return epic
+            elif response.status_code == 404:
+                logger.warning(f"Epic {epic_id} not found")
+                return None
+            else:
+                logger.error(
+                    f"Failed to get epic: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to get epic: ({response.status_code}) "
+                    f"{response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error getting epic: {e}", exc_info=True)
+            raise ValueError(f"Failed to get epic: {str(e)}")
     
     async def create_epic(self, epic: PMEpic) -> PMEpic:
-        """Create a new epic"""
-        raise NotImplementedError("Epics not yet implemented for OpenProject")
+        """
+        Create a new epic in OpenProject.
+        
+        TESTED: ✅ Works via POST /api/v3/work_packages with type Epic
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not epic.project_id:
+            raise ValueError("project_id is required to create an epic")
+        
+        # First, get Epic type ID
+        types_url = f"{self.base_url}/api/v3/types"
+        epic_type_id = None
+        
+        try:
+            types_response = requests.get(types_url, headers=self.headers, timeout=10)
+            if types_response.status_code == 200:
+                types_data = types_response.json()
+                elements = types_data.get('_embedded', {}).get('elements', [])
+                for t in elements:
+                    if 'epic' in t.get('name', '').lower():
+                        epic_type_id = str(t.get('id'))
+                        break
+        except Exception as e:
+            logger.warning(f"Could not fetch types to find Epic ID: {e}")
+        
+        if not epic_type_id:
+            raise ValueError("Epic type not found in OpenProject. Please ensure Epic type exists.")
+        
+        url = f"{self.base_url}/api/v3/work_packages"
+        
+        # Build payload
+        payload = {
+            "subject": epic.name,
+            "_links": {
+                "type": {"href": f"/api/v3/types/{epic_type_id}"},
+                "project": {"href": f"/api/v3/projects/{epic.project_id}"}
+            }
+        }
+        
+        # Add description if provided
+        if epic.description:
+            payload["description"] = {
+                "format": "plain",
+                "raw": epic.description
+            }
+        
+        # Add dates if provided
+        if epic.start_date:
+            payload["startDate"] = epic.start_date.isoformat()
+        if epic.end_date:
+            payload["dueDate"] = epic.end_date.isoformat()
+        
+        try:
+            response = requests.post(
+                url, headers=self.headers, json=payload, timeout=10
+            )
+            
+            if response.status_code == 201:
+                created_wp = response.json()
+                created_id = str(created_wp.get('id'))
+                
+                # Fetch the full epic to return complete data
+                created_epic = await self.get_epic(created_id)
+                if created_epic:
+                    logger.info(f"Created epic {created_id} in OpenProject")
+                    return created_epic
+                else:
+                    raise ValueError("Failed to retrieve created epic")
+            else:
+                logger.error(
+                    f"Failed to create epic: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to create epic: ({response.status_code}) "
+                    f"{response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error creating epic: {e}", exc_info=True)
+            raise ValueError(f"Failed to create epic: {str(e)}")
     
     async def update_epic(self, epic_id: str, updates: Dict[str, Any]) -> PMEpic:
-        """Update an existing epic"""
-        raise NotImplementedError("Epics not yet implemented for OpenProject")
+        """
+        Update an existing epic in OpenProject.
+        
+        TESTED: ✅ Works via PATCH /api/v3/work_packages/{id}
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/api/v3/work_packages/{epic_id}"
+        
+        # Map updates to OpenProject fields
+        payload: Dict[str, Any] = {}
+        
+        if "name" in updates:
+            payload["subject"] = updates["name"]
+        if "description" in updates:
+            desc = updates["description"]
+            if desc:
+                payload["description"] = {
+                    "format": "plain",
+                    "raw": desc
+                }
+            else:
+                payload["description"] = None
+        if "start_date" in updates:
+            payload["startDate"] = (
+                updates["start_date"].isoformat()
+                if updates["start_date"]
+                else None
+            )
+        if "end_date" in updates:
+            payload["dueDate"] = (
+                updates["end_date"].isoformat()
+                if updates["end_date"]
+                else None
+            )
+        if "status" in updates:
+            # Status updates require status ID, not name
+            # For now, we'll just log a warning
+            logger.warning(
+                "Status updates require status ID lookup, not implemented yet"
+            )
+        
+        if not payload:
+            # No updates to apply, just return the current epic
+            return await self.get_epic(epic_id) or PMEpic()
+        
+        try:
+            response = requests.patch(
+                url, headers=self.headers, json=payload, timeout=10
+            )
+            
+            if response.status_code == 200:
+                # Fetch updated epic
+                updated_epic = await self.get_epic(epic_id)
+                if updated_epic:
+                    logger.info(f"Updated epic {epic_id} in OpenProject")
+                    return updated_epic
+                else:
+                    raise ValueError("Failed to retrieve updated epic")
+            else:
+                logger.error(
+                    f"Failed to update epic: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to update epic: ({response.status_code}) "
+                    f"{response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error updating epic: {e}", exc_info=True)
+            raise ValueError(f"Failed to update epic: {str(e)}")
     
     async def delete_epic(self, epic_id: str) -> bool:
-        """Delete an epic"""
-        raise NotImplementedError("Epics not yet implemented for OpenProject")
+        """
+        Delete an epic in OpenProject.
+        
+        TESTED: ✅ Works via DELETE /api/v3/work_packages/{id}
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/api/v3/work_packages/{epic_id}"
+        
+        try:
+            response = requests.delete(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 204:
+                logger.info(f"Deleted epic {epic_id} from OpenProject")
+                return True
+            elif response.status_code == 404:
+                logger.warning(f"Epic {epic_id} not found for deletion")
+                return False
+            else:
+                logger.error(
+                    f"Failed to delete epic: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to delete epic: ({response.status_code}) "
+                    f"{response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error deleting epic: {e}", exc_info=True)
+            raise ValueError(f"Failed to delete epic: {str(e)}")
     
     # ==================== Label Operations ====================
     

@@ -12,7 +12,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
-from langchain_core.messages import AIMessageChunk, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.checkpoint.mongodb import AsyncMongoDBSaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.store.memory import InMemoryStore
@@ -317,10 +317,13 @@ def _create_event_stream_message(
             message_chunk.additional_kwargs["reasoning_content"]
         )
 
-    if message_chunk.response_metadata.get("finish_reason"):
-        event_stream_message["finish_reason"] = (
-            message_chunk.response_metadata.get("finish_reason")
-        )
+    # Include finish_reason from response_metadata or message_metadata
+    finish_reason = (
+        message_chunk.response_metadata.get("finish_reason")
+        or message_metadata.get("finish_reason")
+    )
+    if finish_reason:
+        event_stream_message["finish_reason"] = finish_reason
 
     return event_stream_message
 
@@ -494,6 +497,13 @@ async def _process_message_chunk(
                 f"[{safe_thread_id}] AIMessageChunk is raw message tokens, "
                 f"content_len={content_len}"
             )
+            # Log finish_reason for debugging
+            if event_stream_message.get("finish_reason"):
+                logger.info(
+                    f"[{safe_thread_id}] ✅ Including finish_reason in "
+                    f"message_chunk event: "
+                    f"{event_stream_message.get('finish_reason')}"
+                )
             yield _make_event("message_chunk", event_stream_message)
 
 
@@ -696,6 +706,62 @@ async def _stream_graph_events(
                                         "step_index": len(observations) - 1,
                                     }
                                 )
+                        
+                        # Stream messages from state updates
+                        # (e.g., reporter's final report)
+                        # NOTE: For reporter messages, we stream them here as a
+                        # fallback if they weren't already streamed in the
+                        # "messages" stream. This ensures the final report with
+                        # finish_reason is always sent to the frontend.
+                        if "messages" in node_update:
+                            messages = node_update.get("messages", [])
+                            if messages:
+                                # Get the latest message
+                                # (usually the reporter's final report)
+                                for msg in messages:
+                                    if (
+                                        isinstance(msg, AIMessage)
+                                        and msg.name == node_name
+                                    ):
+                                        logger.info(
+                                            f"[{safe_thread_id}] "
+                                            f"Streaming message from "
+                                            f"{node_name} state update: "
+                                            f"{len(msg.content)} chars, "
+                                            f"id: {msg.id}"
+                                        )
+                                        # Ensure finish_reason is set for
+                                        # final messages (frontend needs this)
+                                        if not msg.response_metadata:
+                                            msg.response_metadata = {}
+                                        if (
+                                            "finish_reason"
+                                            not in msg.response_metadata
+                                        ):
+                                            msg.response_metadata[
+                                                "finish_reason"
+                                            ] = "stop"
+                                        # Process as message chunk to stream it
+                                        msg_metadata = {
+                                            "langgraph_node": node_name,
+                                            # Explicitly include finish_reason
+                                            # in metadata to ensure it's streamed
+                                            "finish_reason": "stop"
+                                        }
+                                        logger.info(
+                                            f"[{safe_thread_id}] "
+                                            f"✅ Streaming {node_name} message "
+                                            f"with finish_reason=stop, "
+                                            f"id={msg.id}"
+                                        )
+                                        async for event in _process_message_chunk(
+                                            msg,
+                                            msg_metadata,
+                                            thread_id,
+                                            (node_name,),
+                                        ):
+                                            yield event
+                                        break  # Only stream first matching
                     
                     logger.debug(
                         f"[{safe_thread_id}] Processed state update from "
@@ -1539,6 +1605,116 @@ async def pm_list_epics(request: Request, project_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to list epics: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pm/projects/{project_id}/epics")
+async def pm_create_epic(request: Request, project_id: str):
+    """Create a new epic for a project"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        epic_data = await request.json()
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            return await handler.create_project_epic(project_id, epic_data)
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        elif "not yet implemented" in error_msg:
+            raise HTTPException(status_code=501, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create epic: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/pm/projects/{project_id}/epics/{epic_id}")
+async def pm_update_epic(request: Request, project_id: str, epic_id: str):
+    """Update an epic for a project"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        updates = await request.json()
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            return await handler.update_project_epic(project_id, epic_id, updates)
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        elif "not yet implemented" in error_msg:
+            raise HTTPException(status_code=501, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update epic: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/pm/projects/{project_id}/epics/{epic_id}")
+async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
+    """Delete an epic for a project"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            success = await handler.delete_project_epic(project_id, epic_id)
+            if success:
+                return {"success": True}
+            else:
+                raise HTTPException(status_code=404, detail="Epic not found")
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        elif "not yet implemented" in error_msg:
+            raise HTTPException(status_code=501, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete epic: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))

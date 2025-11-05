@@ -54,31 +54,52 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
     }
   }, [task, isEditing]);
 
-  // Early return if task is null
-  if (!task) return null;
-
   // Helper function to find matching status/priority name (case-insensitive)
+  // IMPORTANT: Check longer names first to avoid "high" matching "highest"
   const findMatchingName = (value: string | undefined, options: Array<{ id: string; name: string }>): string | undefined => {
     if (!value) return undefined;
     
+    // Sort options by name length (longest first) to prefer longer matches
+    // This prevents "high" from matching when looking for "highest"
+    const sortedOptions = [...options].sort((a, b) => b.name.length - a.name.length);
+    
     // First try exact match
-    const exactMatch = options.find(opt => opt.name === value);
+    const exactMatch = sortedOptions.find(opt => opt.name === value);
     if (exactMatch) return exactMatch.name;
     
     // Then try case-insensitive match
-    const caseInsensitiveMatch = options.find(opt => opt.name.toLowerCase() === value.toLowerCase());
+    const caseInsensitiveMatch = sortedOptions.find(opt => opt.name.toLowerCase() === value.toLowerCase());
     if (caseInsensitiveMatch) return caseInsensitiveMatch.name;
     
-    // Finally try partial match
-    const partialMatch = options.find(opt => 
-      opt.name.toLowerCase().includes(value.toLowerCase()) || 
-      value.toLowerCase().includes(opt.name.toLowerCase())
-    );
+    // Finally try partial match (but only if the option name is at least as long as the value)
+    // This prevents "high" from matching when looking for "highest"
+    const partialMatch = sortedOptions.find(opt => {
+      const optLower = opt.name.toLowerCase();
+      const valueLower = value.toLowerCase();
+      // Only match if the option name is at least as long as the value (prevents "high" matching "highest")
+      if (optLower.length >= valueLower.length) {
+        return optLower.includes(valueLower);
+      }
+      // Or if the value is longer, check if option name is contained in value
+      return valueLower.includes(optLower);
+    });
     if (partialMatch) return partialMatch.name;
     
     // If no match found, return the original value (will show as-is but may not be selectable)
     return value;
   };
+
+  // Debug logging for priority matching (must be before early return to follow Rules of Hooks)
+  useEffect(() => {
+    if (task?.priority && priorities.length > 0) {
+      const matched = findMatchingName(task.priority, priorities);
+      console.log(`[TaskDetailsModal] Task priority: '${task.priority}' -> Matched to: '${matched}'`);
+      console.log(`[TaskDetailsModal] Available priorities:`, priorities.map(p => p.name));
+    }
+  }, [task?.priority, priorities]);
+
+  // Early return if task is null
+  if (!task) return null;
 
   // Get the matching status and priority names for the Select values (task is guaranteed to be non-null here)
   const currentStatusValue = findMatchingName(editedTask?.status ?? task?.status, statuses) ?? editedTask?.status ?? task?.status ?? "";
@@ -118,6 +139,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
         updates.status = editedTask.status;
       }
       if (editedTask.priority !== undefined && editedTask.priority !== task.priority) {
+        console.log(`[TaskDetailsModal] Sending priority update: '${editedTask.priority}' (was: '${task.priority}')`);
         updates.priority = editedTask.priority;
       }
       
@@ -312,7 +334,11 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
               {isEditing ? (
                 <Select
                   value={currentPriorityValue}
-                  onValueChange={(value) => setEditedTask({ ...editedTask, priority: value })}
+                  onValueChange={(value) => {
+                    console.log(`[TaskDetailsModal] Priority selected from dropdown: '${value}'`);
+                    console.log(`[TaskDetailsModal] Available priorities:`, priorities.map(p => p.name));
+                    setEditedTask({ ...editedTask, priority: value });
+                  }}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />

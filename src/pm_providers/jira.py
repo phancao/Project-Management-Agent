@@ -543,24 +543,32 @@ class JIRAProvider(BasePMProvider):
         )
         
         # Map JIRA priority to unified priority
+        # Note: Check for longer matches first to avoid "high" matching "highest"
         priority_mapping = {
-            "lowest": "lowest",
-            "low": "low",
-            "medium": "medium",
-            "high": "high",
+            "blocker": "highest",
             "highest": "highest",
             "critical": "critical",
-            "blocker": "highest",
+            "high": "high",
+            "medium": "medium",
+            "low": "low",
+            "lowest": "lowest",
+            "trivial": "lowest",
         }
         unified_priority = None
         if priority_name:
-            for (
-                jira_priority,
-                unified_priority_value
-            ) in priority_mapping.items():
-                if jira_priority in priority_name:
-                    unified_priority = unified_priority_value
-                    break
+            # Check for exact match first
+            priority_name_lower = priority_name.lower()
+            if priority_name_lower in priority_mapping:
+                unified_priority = priority_mapping[priority_name_lower]
+            else:
+                # Try partial matching (check longer matches first to avoid "high" matching "highest")
+                # Sort by length descending to check longer matches first
+                sorted_mappings = sorted(priority_mapping.items(), key=lambda x: len(x[0]), reverse=True)
+                for jira_priority, unified_priority_value in sorted_mappings:
+                    if jira_priority in priority_name_lower:
+                        unified_priority = unified_priority_value
+                        logger.debug(f"Mapped JIRA priority '{priority_name}' -> '{unified_priority}' (via '{jira_priority}')")
+                        break
             if not unified_priority:
                 unified_priority = priority_name
         
@@ -811,6 +819,7 @@ class JIRAProvider(BasePMProvider):
         if "priority" in updates:
             # Priority updates
             priority_value = updates["priority"]
+            logger.info(f"[JIRA update_task] Received priority update: '{priority_value}' (type: {type(priority_value).__name__})")
             if priority_value:
                 # Try to get priority by name or ID
                 try:
@@ -818,44 +827,112 @@ class JIRAProvider(BasePMProvider):
                     prio_resp = requests.get(priorities_url, headers=self.headers, timeout=10)
                     if prio_resp.status_code == 200:
                         priorities = prio_resp.json()
+                        logger.info(f"[JIRA update_task] Fetched {len(priorities)} priorities from JIRA: {[p.get('name') for p in priorities]}")
                         # Priority name mapping
+                        # Note: Order matters - check longer names first to avoid "high" matching "highest"
                         priority_name_mapping = {
                             "lowest": ["lowest", "trivial"],
                             "low": ["low", "minor"],
                             "medium": ["medium", "normal"],
+                            "highest": ["highest", "critical", "blocker"],  # Check "highest" before "high"
                             "high": ["high", "major"],
-                            "highest": ["highest", "critical", "blocker"],
                             "critical": ["critical", "highest", "blocker"]
                         }
                         
                         priority_lower = str(priority_value).lower()
                         matching_priority = None
+                        logger.info(f"[JIRA update_task] Looking for priority: '{priority_value}' (lowercase: '{priority_lower}')")
                         
-                        # First try exact match by name
-                        for prio in priorities:
-                            if prio.get("name", "").lower() == priority_lower:
+                        # First try exact match by name (case-insensitive)
+                        # IMPORTANT: Sort by name length (longest first) to prefer "Highest" over "High"
+                        sorted_priorities_exact = sorted(priorities, key=lambda p: len(p.get("name", "")), reverse=True)
+                        logger.info(f"[JIRA update_task] Checking exact match (sorted by length): {[p.get('name') for p in sorted_priorities_exact]}")
+                        for prio in sorted_priorities_exact:
+                            prio_name_lower = prio.get("name", "").lower()
+                            logger.debug(f"[JIRA update_task] Comparing '{priority_lower}' with '{prio_name_lower}' (from '{prio.get('name')}')")
+                            if prio_name_lower == priority_lower:
                                 matching_priority = prio
+                                logger.info(f"[JIRA update_task] Exact match found for priority '{priority_value}': '{prio.get('name')}' (ID: {prio.get('id')})")
                                 break
                         
                         # If no exact match, try mapping
+                        # IMPORTANT: When checking priorities, we need to ensure longer names are checked first
+                        # to avoid "high" matching when we're looking for "highest"
                         if not matching_priority and priority_lower in priority_name_mapping:
                             possible_names = priority_name_mapping[priority_lower]
-                            for possible_name in possible_names:
-                                for prio in priorities:
-                                    if prio.get("name", "").lower() == possible_name.lower():
-                                        matching_priority = prio
+                            logger.info(f"No exact match for '{priority_value}', trying mapping: {possible_names}")
+                            
+                            # For "highest", check priorities in order: "highest" first, then "critical", then "blocker"
+                            # This ensures we don't accidentally match "high" if it exists
+                            if priority_lower == "highest":
+                                # Sort priorities by name length (longest first) to prefer "highest" over "high"
+                                sorted_priorities = sorted(priorities, key=lambda p: len(p.get("name", "")), reverse=True)
+                                for possible_name in possible_names:
+                                    for prio in sorted_priorities:
+                                        prio_name_lower = prio.get("name", "").lower()
+                                        # Exact match only
+                                        if prio_name_lower == possible_name.lower():
+                                            matching_priority = prio
+                                            logger.info(f"Mapping match found: '{priority_value}' -> '{prio.get('name')}' (ID: {prio.get('id')})")
+                                            break
+                                    if matching_priority:
                                         break
-                                if matching_priority:
-                                    break
+                            else:
+                                # For other priorities, use normal matching
+                                for possible_name in possible_names:
+                                    for prio in priorities:
+                                        prio_name_lower = prio.get("name", "").lower()
+                                        if prio_name_lower == possible_name.lower():
+                                            matching_priority = prio
+                                            logger.info(f"Mapping match found: '{priority_value}' -> '{prio.get('name')}' (ID: {prio.get('id')})")
+                                            break
+                                    if matching_priority:
+                                        break
+                        
+                        # If still no match, try partial/fuzzy matching (but be careful with "high" vs "highest")
+                        if not matching_priority:
+                            # For "highest", avoid matching "high" by checking for longer match first
+                            if priority_lower == "highest":
+                                # Try to find priorities that contain "highest" (not just "high")
+                                for prio in priorities:
+                                    prio_name_lower = prio.get("name", "").lower()
+                                    if "highest" in prio_name_lower or prio_name_lower == "highest":
+                                        matching_priority = prio
+                                        logger.info(f"Partial match found for 'highest': '{prio.get('name')}' (ID: {prio.get('id')})")
+                                        break
+                            else:
+                                # For other priorities, try partial matching
+                                # But avoid matching shorter strings when looking for longer ones
+                                # (e.g., don't match "high" when looking for "highest")
+                                for prio in priorities:
+                                    prio_name_lower = prio.get("name", "").lower()
+                                    # Only match if the priority name is at least as long as what we're looking for
+                                    # This prevents "high" from matching when we're looking for "highest"
+                                    if len(prio_name_lower) >= len(priority_lower):
+                                        if priority_lower in prio_name_lower:
+                                            matching_priority = prio
+                                            logger.info(f"Partial match found for '{priority_value}': '{prio.get('name')}' (ID: {prio.get('id')})")
+                                            break
+                                    elif len(priority_lower) >= len(prio_name_lower):
+                                        # If what we're looking for is longer, check if the priority name is contained in it
+                                        if prio_name_lower in priority_lower:
+                                            matching_priority = prio
+                                            logger.info(f"Partial match found for '{priority_value}': '{prio.get('name')}' (ID: {prio.get('id')})")
+                                            break
                         
                         if matching_priority:
                             fields["priority"] = {"id": str(matching_priority.get("id"))}
-                            logger.info(f"Found priority: {matching_priority.get('name')}")
+                            logger.info(f"Setting priority to: {matching_priority.get('name')} (ID: {matching_priority.get('id')})")
                         elif str(priority_value).isdigit():
                             # Use as ID directly
                             fields["priority"] = {"id": str(priority_value)}
                         else:
-                            logger.warning(f"Priority '{priority_value}' not found")
+                            available_priorities = [p.get("name") for p in priorities]
+                            logger.warning(
+                                f"Priority '{priority_value}' not found. "
+                                f"Available priorities: {available_priorities}. "
+                                f"Tried: exact match, mapping, and partial match."
+                            )
                     else:
                         # If can't fetch priorities, try using as ID
                         if str(priority_value).isdigit():
@@ -1001,6 +1078,9 @@ class JIRAProvider(BasePMProvider):
                 raise ValueError(f"Task {task_id} not found")
         
         payload = {"fields": fields}
+        logger.info(f"[JIRA update_task] Sending payload with fields: {list(fields.keys())}")
+        if "priority" in fields:
+            logger.info(f"[JIRA update_task] Priority field being sent: {fields['priority']}")
         
         try:
             response = requests.put(
@@ -1011,7 +1091,7 @@ class JIRAProvider(BasePMProvider):
                 # Fetch updated task
                 updated_task = await self.get_task(task_id)
                 if updated_task:
-                    logger.info(f"Updated task {task_id} in JIRA")
+                    logger.info(f"Updated task {task_id} in JIRA. Priority after update: '{updated_task.priority}'")
                     return updated_task
                 else:
                     raise ValueError("Failed to retrieve updated task")

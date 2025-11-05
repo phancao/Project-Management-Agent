@@ -6,6 +6,8 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useMemo, useEffect } from "react";
 
+import { toast } from "sonner";
+
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
@@ -37,7 +39,15 @@ export function DashboardView() {
         provider_type: p.provider_type || ''
       })).filter(p => p.id && p.provider_type);
       setProviders(mapped);
-    }).catch(console.error);
+    }).catch((error) => {
+      console.error("Failed to fetch providers:", error);
+      toast.error(
+        "Failed to load providers",
+        {
+          description: error instanceof Error ? error.message : "Unknown error",
+        }
+      );
+    });
   }, []);
 
   // Create mapping from provider_id to provider_type

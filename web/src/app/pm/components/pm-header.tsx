@@ -9,6 +9,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { useMemo, useEffect, useState } from "react";
 import { Suspense } from "react";
 
+import { toast } from "sonner";
+
 import { Button } from "~/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
@@ -43,7 +45,15 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
         provider_type: p.provider_type || ''
       })).filter(p => p.id && p.provider_type);
       setProviders(mapped);
-    }).catch(console.error);
+    }).catch((error) => {
+      console.error("Failed to fetch providers:", error);
+      toast.error(
+        "Failed to load providers",
+        {
+          description: error instanceof Error ? error.message : "Unknown error",
+        }
+      );
+    });
   }, []);
 
   // Create mapping from provider_id to provider_type

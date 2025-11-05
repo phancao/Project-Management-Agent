@@ -22,6 +22,7 @@ from database.orm_models import PMProviderConnection
 from src.pm_providers.factory import create_pm_provider
 from src.pm_providers.base import BasePMProvider
 from src.pm_providers.builder import build_pm_provider
+from src.pm_providers.models import PMTask, PMProject
 
 logger = logging.getLogger(__name__)
 

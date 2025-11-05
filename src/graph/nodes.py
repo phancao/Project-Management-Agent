@@ -21,6 +21,7 @@ from src.prompts.planner_model import Plan
 from src.prompts.template import apply_prompt_template
 from src.tools import (
     crawl_tool,
+    get_pm_tools,
     get_retriever_tool,
     get_web_search_tool,
     python_repl_tool,
@@ -959,6 +960,16 @@ async def researcher_node(
         logger.debug(f"[researcher_node] Adding retriever tool to tools list")
         tools.insert(0, retriever_tool)
     
+    # Add PM tools for agent decision-making (query PM data during research)
+    try:
+        pm_tools = get_pm_tools()
+        if pm_tools:
+            tools.extend(pm_tools)
+            logger.info(f"[researcher_node] Added {len(pm_tools)} PM tools to researcher agent")
+            logger.debug(f"[researcher_node] PM tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in pm_tools]}")
+    except Exception as e:
+        logger.warning(f"[researcher_node] Could not add PM tools: {e}")
+    
     logger.info(f"[researcher_node] Researcher tools count: {len(tools)}")
     logger.debug(f"[researcher_node] Researcher tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in tools]}")
     
@@ -977,9 +988,21 @@ async def coder_node(
     logger.info("Coder node is coding.")
     logger.debug(f"[coder_node] Starting coder agent with python_repl_tool")
     
+    tools = [python_repl_tool]
+    
+    # Add PM tools for agent decision-making (query PM data during analysis)
+    try:
+        pm_tools = get_pm_tools()
+        if pm_tools:
+            tools.extend(pm_tools)
+            logger.info(f"[coder_node] Added {len(pm_tools)} PM tools to coder agent")
+            logger.debug(f"[coder_node] PM tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in pm_tools]}")
+    except Exception as e:
+        logger.warning(f"[coder_node] Could not add PM tools: {e}")
+    
     return await _setup_and_execute_agent_step(
         state,
         config,
         "coder",
-        [python_repl_tool],
+        tools,
     )

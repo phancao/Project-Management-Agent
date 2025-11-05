@@ -6,13 +6,13 @@ import base64
 import json
 import logging
 import os
-from typing import Annotated, Any, AsyncIterator, List, Optional, cast
+from typing import Annotated, Any, AsyncIterator, List, Optional
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
-from langchain_core.messages import AIMessageChunk, BaseMessage, ToolMessage
+from langchain_core.messages import AIMessageChunk, ToolMessage
 from langgraph.checkpoint.mongodb import AsyncMongoDBSaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.store.memory import InMemoryStore
@@ -500,88 +500,223 @@ async def _process_message_chunk(
 async def _stream_graph_events(
     graph_instance, workflow_input, workflow_config, thread_id
 ):
-    """Stream events from the graph and process them."""
+    """Stream events from the graph using latest LangGraph features.
+    
+    Features:
+    - messages: Streams LangChain messages (agent responses, tool calls)
+    - updates: Streams state updates by node (plan updates, observations)
+    - debug: Streams structured debug events for server-side observability
+    """
     safe_thread_id = sanitize_thread_id(thread_id)
     logger.debug(
-        f"[{safe_thread_id}] Starting graph event stream with agent nodes"
+        f"[{safe_thread_id}] Starting graph event stream with "
+        f"latest LangGraph features"
     )
     try:
         event_count = 0
-        async for agent, _, event_data in graph_instance.astream(
+        debug_event_count = 0
+        
+        # Use latest LangGraph streaming with debug mode for observability
+        # debug events processed server-side only, not streamed to client
+        async for agent, stream_type, event_data in graph_instance.astream(
             workflow_input,
             config=workflow_config,
-            stream_mode=["messages", "updates"],
+            stream_mode=["messages", "updates", "debug"],  # Added debug mode
             subgraphs=True,
+            debug=False,  # Set to True for verbose debug output
         ):
             event_count += 1
             safe_agent = sanitize_agent_name(agent)
+            
+            # Process debug events for server-side observability
+            if stream_type == "debug":
+                debug_event_count += 1
+                if isinstance(event_data, dict):
+                    event_type = event_data.get("type", "unknown")
+                    step = event_data.get("step", 0)
+                    timestamp = event_data.get("timestamp", "")
+                    
+                    if event_type == "task":
+                        # Node task started
+                        payload = event_data.get("payload", {})
+                        task_name = payload.get("name", safe_agent)
+                        task_id = payload.get("id", "unknown")
+                        logger.info(
+                            f"[{safe_thread_id}] 🔵 Task started: {task_name} "
+                            f"(id={task_id}, step={step})"
+                        )
+                    elif event_type == "task_result":
+                        # Node task completed
+                        payload = event_data.get("payload", {})
+                        task_name = payload.get("name", safe_agent)
+                        task_id = payload.get("id", "unknown")
+                        error = payload.get("error")
+                        if error:
+                            logger.error(
+                                f"[{safe_thread_id}] ❌ Task failed: {task_name} "
+                                f"(id={task_id}, step={step}): {error}"
+                            )
+                        else:
+                            logger.info(
+                                f"[{safe_thread_id}] ✅ Task completed: {task_name} "
+                                f"(id={task_id}, step={step})"
+                            )
+                    elif event_type == "checkpoint":
+                        # State checkpoint created
+                        logger.debug(
+                            f"[{safe_thread_id}] 💾 Checkpoint created "
+                            f"(step={step}, timestamp={timestamp})"
+                        )
+                
+                # Debug events are not streamed to client (too verbose)
+                continue
+            
+            # Process messages and updates for client streaming
             logger.debug(
                 f"[{safe_thread_id}] Graph event #{event_count} received "
-                f"from agent: {safe_agent}"
+                f"from agent: {safe_agent}, type: {stream_type}"
             )
             
-            if isinstance(event_data, dict):
-                if "__interrupt__" in event_data:
-                    interrupt_data = event_data['__interrupt__']
-                    ns_value = (
-                        getattr(interrupt_data[0], 'ns', 'unknown')
-                        if isinstance(interrupt_data, (list, tuple))
-                        and len(interrupt_data) > 0
-                        else 'unknown'
+            if stream_type == "messages":
+                # Process message chunks (agent responses, tool calls)
+                if isinstance(event_data, (list, tuple)) and len(event_data) > 0:
+                    message_chunk, message_metadata = (
+                        event_data[0], 
+                        event_data[1] if len(event_data) > 1 else {}
                     )
-                    value_len = (
-                        len(getattr(interrupt_data[0], 'value', ''))
-                        if isinstance(interrupt_data, (list, tuple))
-                        and len(interrupt_data) > 0
-                        and hasattr(interrupt_data[0], 'value')
-                        and hasattr(interrupt_data[0].value, '__len__')
-                        else 'unknown'
-                    )
+                    async for event in _process_message_chunk(
+                        message_chunk, message_metadata, thread_id, agent
+                    ):
+                        yield event
+            
+            elif stream_type == "updates":
+                # Process state updates (plan updates, observations)
+                if isinstance(event_data, dict):
+                    # Check for interrupts first
+                    if "__interrupt__" in event_data:
+                        interrupt_data = event_data['__interrupt__']
+                        ns_value = (
+                            getattr(interrupt_data[0], 'ns', 'unknown')
+                            if isinstance(interrupt_data, (list, tuple))
+                            and len(interrupt_data) > 0
+                            else 'unknown'
+                        )
+                        value_len = (
+                            len(getattr(interrupt_data[0], 'value', ''))
+                            if isinstance(interrupt_data, (list, tuple))
+                            and len(interrupt_data) > 0
+                            and hasattr(interrupt_data[0], 'value')
+                            and hasattr(interrupt_data[0].value, '__len__')
+                            else 'unknown'
+                        )
+                        logger.debug(
+                            f"[{safe_thread_id}] Processing interrupt event: "
+                            f"ns={ns_value}, value_len={value_len}"
+                        )
+                        yield _create_interrupt_event(thread_id, event_data)
+                    
+                    # Process node-specific state updates
+                    # With stream_mode=["messages", "updates"], updates come as
+                    # dicts keyed by node name
+                    for node_name, node_update in event_data.items():
+                        if (
+                            not isinstance(node_update, dict)
+                            or node_name == "__interrupt__"
+                        ):
+                            continue
+                        
+                        # Stream plan updates
+                        if "current_plan" in node_update:
+                            current_plan = node_update.get("current_plan")
+                            if current_plan:
+                                # Extract plan information
+                                plan_data = {}
+                                if hasattr(current_plan, 'title'):
+                                    plan_data["title"] = current_plan.title
+                                if hasattr(current_plan, 'steps'):
+                                    plan_data["steps"] = [
+                                        {
+                                            "title": step.title,
+                                            "description": step.description,
+                                            "step_type": (
+                                                step.step_type.value
+                                                if hasattr(
+                                                    step.step_type, 'value'
+                                                )
+                                                else str(step.step_type)
+                                            ) if hasattr(
+                                                step, 'step_type'
+                                            ) else None,
+                                            "execution_res": (
+                                                step.execution_res
+                                                if hasattr(
+                                                    step, 'execution_res'
+                                                ) else None
+                                            ),
+                                        }
+                                        for step in current_plan.steps
+                                    ] if current_plan.steps else []
+                                
+                                # Stream plan update event
+                                logger.info(
+                                    f"[{safe_thread_id}] Streaming plan update "
+                                    f"from {node_name}: "
+                                    f"{len(plan_data.get('steps', []))} steps"
+                                )
+                                yield _make_event(
+                                    "plan_update",
+                                    {
+                                        "thread_id": thread_id,
+                                        "agent": node_name,
+                                        "role": "assistant",
+                                        "plan": plan_data,
+                                    }
+                                )
+                        
+                        # Stream step execution updates
+                        if "observations" in node_update:
+                            observations = node_update.get("observations", [])
+                            if observations:
+                                # Get the latest observation (current step result)
+                                latest_observation = (
+                                    observations[-1] if observations else ""
+                                )
+                                logger.info(
+                                    f"[{safe_thread_id}] Streaming step "
+                                    f"execution update from {node_name}: "
+                                    f"{len(latest_observation)} chars"
+                                )
+                                yield _make_event(
+                                    "step_update",
+                                    {
+                                        "thread_id": thread_id,
+                                        "agent": node_name,
+                                        "role": "assistant",
+                                        "observation": latest_observation,
+                                        "step_index": len(observations) - 1,
+                                    }
+                                )
+                    
                     logger.debug(
-                        f"[{safe_thread_id}] Processing interrupt event: "
-                        f"ns={ns_value}, value_len={value_len}"
+                        f"[{safe_thread_id}] Processed state update from "
+                        f"{safe_agent}"
                     )
-                    yield _create_interrupt_event(thread_id, event_data)
-                logger.debug(
-                    f"[{safe_thread_id}] Dict event without interrupt, "
-                    f"skipping"
-                )
-                continue
-
-            message_chunk, message_metadata = cast(
-                tuple[BaseMessage, dict[str, Any]], event_data
-            )
-            
-            safe_node = sanitize_agent_name(
-                message_metadata.get('langgraph_node', 'unknown')
-            )
-            safe_step = sanitize_log_input(
-                message_metadata.get('langgraph_step', 'unknown')
-            )
-            logger.debug(
-                f"[{safe_thread_id}] Processing message chunk: "
-                f"type={type(message_chunk).__name__}, "
-                f"node={safe_node}, "
-                f"step={safe_step}"
-            )
-
-            async for event in _process_message_chunk(
-                message_chunk, message_metadata, thread_id, agent
-            ):
-                yield event
         
-        logger.debug(
-            f"[{safe_thread_id}] Graph event stream completed. "
-            f"Total events: {event_count}"
+        logger.info(
+            f"[{safe_thread_id}] ✅ Streaming completed: {event_count} events, "
+            f"{debug_event_count} debug events processed"
         )
-    except Exception:
-        logger.exception(f"[{safe_thread_id}] Error during graph execution")
+    except Exception as e:
+        logger.error(
+            f"[{safe_thread_id}] ❌ Error in graph event stream: {e}",
+            exc_info=True
+        )
         yield _make_event(
             "error",
             {
                 "thread_id": thread_id,
-                "error": "Error during graph execution",
-            },
+                "error": f"Streaming error: {str(e)}",
+            }
         )
 
 
@@ -1719,10 +1854,28 @@ async def pm_list_providers():
         finally:
             db.close()
     except Exception as e:
-        logger.error(f"Failed to list providers: {e}")
+        # Log the full error for debugging
+        error_msg = str(e)
+        logger.error(f"Failed to list providers: {error_msg}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        
+        # Return proper error response so the issue can be identified
+        # and fixed immediately
+        if "connection" in error_msg.lower() or "Connection refused" in error_msg:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Database connection unavailable. "
+                    "Please ensure PostgreSQL is running and configured. "
+                    f"Error: {error_msg}"
+                )
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to list providers: {error_msg}"
+            )
 
 
 @app.post("/api/pm/providers/import-projects")

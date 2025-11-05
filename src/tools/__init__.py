@@ -6,6 +6,7 @@ from .python_repl import python_repl_tool
 from .retriever import get_retriever_tool
 from .search import get_web_search_tool
 from .tts import VolcengineTTS
+from .pm_tools import get_pm_tools, set_pm_handler
 
 __all__ = [
     "crawl_tool",
@@ -13,4 +14,6 @@ __all__ = [
     "get_web_search_tool",
     "get_retriever_tool",
     "VolcengineTTS",
+    "get_pm_tools",
+    "set_pm_handler",
 ]

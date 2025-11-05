@@ -75,11 +75,18 @@ export async function listProviders(): Promise<ProviderConfig[]> {
   });
 
   if (!response.ok) {
-    if (response.status === 404) {
-      // No providers endpoint yet, return empty array
-      return [];
+    // Extract error detail from backend response
+    let errorMessage = "Failed to fetch providers";
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.detail || errorMessage;
+    } catch {
+      // If response is not JSON, use status text
+      errorMessage = response.statusText || errorMessage;
     }
-    throw new Error("Failed to fetch providers");
+    
+    // Throw error with detailed message so it can be displayed to user
+    throw new Error(errorMessage);
   }
 
   const data = await response.json();

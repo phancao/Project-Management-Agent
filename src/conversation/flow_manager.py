@@ -92,23 +92,34 @@ class ConversationFlowManager:
         # Initialize PM handler (unified abstraction layer)
         self.pm_handler = None
         try:
-            from src.pm_providers import build_pm_provider
             from src.server.pm_handler import PMHandler
+            from src.tools.pm_tools import set_pm_handler
             
-            # Build single provider for conversation context
-            pm_provider = build_pm_provider(db_session=db_session)
-            if pm_provider:
-                # Wrap in PMHandler for unified interface
-                self.pm_handler = PMHandler.from_single_provider(pm_provider)
-                logger.info(
-                    f"PM Handler initialized with provider: "
-                    f"{pm_provider.__class__.__name__}"
-                )
+            # Use multi-provider mode to query all active providers (OpenProject, JIRA, etc.)
+            # This allows agents to query tasks/projects from all configured providers
+            if db_session:
+                self.pm_handler = PMHandler.from_db_session(db_session)
+                # Set PM handler for tools to use
+                set_pm_handler(self.pm_handler)
+                logger.info("PM Handler initialized in multi-provider mode")
+            else:
+                # Fallback to single provider if no DB session
+                from src.pm_providers import build_pm_provider
+                pm_provider = build_pm_provider(db_session=db_session)
+                if pm_provider:
+                    self.pm_handler = PMHandler.from_single_provider(pm_provider)
+                    set_pm_handler(self.pm_handler)
+                    logger.info(
+                        f"PM Handler initialized with single provider: "
+                        f"{pm_provider.__class__.__name__}"
+                    )
         except Exception as e:
             logger.warning(f"Could not initialize PM handler: {e}")
         
         # Keep backward compatibility - expose pm_provider directly
-        self.pm_provider = self.pm_handler.single_provider if self.pm_handler else None
+        # For multi-provider mode, we don't have a single_provider, so use None
+        # Code that needs a provider should use pm_handler instead
+        self.pm_provider = self.pm_handler.single_provider if self.pm_handler and self.pm_handler.single_provider else None
         
         # Initialize self-learning system
         self.self_learning = None
@@ -221,12 +232,14 @@ class ConversationFlowManager:
             context.gathered_data.update(extracted_data)
             
             if await self._has_enough_context(context):
-                # Determine next state based on intent - some need research, others go straight to execution
-                needs_research = context.intent in [IntentType.RESEARCH_TOPIC, IntentType.CREATE_WBS]
-                logger.info(f"Has enough context. Intent: {context.intent}, needs_research: {needs_research}")
-                if needs_research:
+                # Route everything to DeerFlow for agent decision-making
+                # Agents now have PM tools and can handle all queries (simple and complex)
+                if self.run_deerflow_workflow:
+                    logger.info(f"Routing to DeerFlow for intent: {context.intent}")
                     context.current_state = FlowState.RESEARCH_PHASE
                 else:
+                    # Fallback to execution phase if DeerFlow not available
+                    logger.warning("DeerFlow not available, falling back to execution phase")
                     context.current_state = FlowState.EXECUTION_PHASE
                 logger.info(f"State set to: {context.current_state}")
             else:
@@ -235,25 +248,19 @@ class ConversationFlowManager:
         logger.info(f"Final current_state: {context.current_state}, intent: {context.intent}")
         
         # Execute appropriate action based on state
+        # Option 2: Route everything to DeerFlow agents
         if context.current_state == FlowState.RESEARCH_PHASE:
-            research_result = await self._handle_research_phase(context)
-            # If research phase changed state to EXECUTION (e.g., for CREATE_WBS),
-            # continue to execution phase instead of returning
-            if context.current_state == FlowState.EXECUTION_PHASE:
-                # Research completed, now execute
-                return await self._handle_execution_phase(context)
-            # If research returned None after setting state to something other than EXECUTION, error
-            if research_result is None:
-                logger.error("Research phase returned None unexpectedly")
-                return {
-                    "type": "error",
-                    "message": "Research phase failed to complete",
-                    "state": context.current_state.value
-                }
-            return research_result
+            # Route all queries to DeerFlow - agents decide what tools to use
+            result = await self._handle_research_phase(context)
+            if result is not None:
+                return result
+            # If None returned, continue to check other states
         elif context.current_state == FlowState.PLANNING_PHASE:
+            # Planning phase still used for multi-step PM operations
             return await self._handle_planning_phase(context, stream_callback)
         elif context.current_state == FlowState.EXECUTION_PHASE:
+            # Fallback: Only used if DeerFlow is not available
+            logger.warning("Falling back to execution phase - DeerFlow should handle this")
             return await self._handle_execution_phase(context)
         else:
             return await self._handle_unknown_state(context)
@@ -379,36 +386,34 @@ class ConversationFlowManager:
         self, 
         context: ConversationContext
     ) -> Dict[str, Any]:
-        """Handle research phase using DeerFlow"""
-        logger.info(f"Starting research phase for intent: {context.intent}")
+        """Handle all queries using DeerFlow agents (agent decision-making approach)"""
+        logger.info(f"Routing query to DeerFlow agents for intent: {context.intent}")
         
         # Skip if research already done (from streaming)
         if context.gathered_data.get('research_already_done'):
             logger.info("Research already completed via streaming, skipping")
-            context.current_state = FlowState.EXECUTION_PHASE
+            context.current_state = FlowState.COMPLETED
             return None
         
-        # For RESEARCH_TOPIC and CREATE_WBS intents, use DeerFlow
-        needs_research = context.intent in [IntentType.RESEARCH_TOPIC, IntentType.CREATE_WBS]
-        
-        if needs_research and self.run_deerflow_workflow:
-            # Determine research topic based on intent
+        # Route ALL queries to DeerFlow - agents decide what tools to use
+        if self.run_deerflow_workflow:
+            # Build user input from message and context
+            # For all queries, use the original message - agents will decide what to do
+            # They have PM tools available, so they can handle both research and PM queries
+            if context.conversation_history:
+                # Use the most recent user message
+                user_input = context.conversation_history[-1].get("content", "")
+            else:
+                user_input = "Help with project management"
+            
+            # Enhance query with context if available
             if context.intent == IntentType.CREATE_WBS:
                 project_name = context.gathered_data.get("project_name", "")
-                project_description = context.gathered_data.get("project_description", "")
                 domain = context.gathered_data.get("domain", "")
-                topic = f"{project_name} project structure" if project_name else domain if domain else "project structure"
-                # Research query for WBS
-                user_input = f"Research typical phases, deliverables, and tasks for {domain or project_name or 'this type of project'}. Focus on project structure and common components."
-            else:
-                topic = context.gathered_data.get("topic", "")
-                if not topic:
-                    return {
-                        "type": "error",
-                        "message": "No research topic provided. Please specify what you'd like to research.",
-                        "state": context.current_state.value
-                    }
-                user_input = f"Research: {topic}"
+                if project_name or domain:
+                    user_input = f"{user_input}. Project: {project_name or domain}"
+            
+            topic = context.intent.value if context.intent != IntentType.UNKNOWN else "user query"
             
             try:
                 
@@ -443,32 +448,24 @@ class ConversationFlowManager:
                         if observations:
                             research_result = "\n".join(observations[-3:])  # Last 3 observations
                 
-                # Store research results in context for execution phase
+                # Store results in context
                 if research_result:
-                    context.gathered_data['research_context'] = research_result
-                    summary_msg = f"Research on '{topic}' completed successfully.\n\n{research_result[:500]}{'...' if len(research_result) > 500 else ''}"
+                    context.gathered_data['deerflow_result'] = research_result
+                    summary_msg = f"Query completed successfully.\n\n{research_result[:500]}{'...' if len(research_result) > 500 else ''}"
                 else:
-                    summary_msg = f"Research on '{topic}' has been completed using DeerFlow."
+                    summary_msg = f"Query has been processed by DeerFlow agents."
                 
-                # For CREATE_WBS, move to execution phase after research
-                # For RESEARCH_TOPIC, complete here
-                if context.intent == IntentType.CREATE_WBS:
-                    context.current_state = FlowState.EXECUTION_PHASE
-                    # Return None to signal continuation to execution phase
-                    # The process_message will continue to handle_execution_phase
-                    return None
-                else:
-                    context.current_state = FlowState.COMPLETED
-                    # Return for RESEARCH_TOPIC intent
-                    return {
-                        "type": "research_completed",
-                        "message": summary_msg,
-                        "state": context.current_state.value,
-                        "data": {
-                            "topic": topic,
-                            "full_results": research_result if research_result else None
-                        }
+                # All queries complete here - agents handled everything
+                context.current_state = FlowState.COMPLETED
+                return {
+                    "type": "agent_completed",
+                    "message": summary_msg,
+                    "state": context.current_state.value,
+                    "data": {
+                        "intent": context.intent.value,
+                        "full_results": research_result if research_result else None
                     }
+                }
             except Exception as e:
                 logger.error(f"DeerFlow research failed: {e}")
                 return {

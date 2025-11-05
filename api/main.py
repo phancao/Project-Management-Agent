@@ -172,24 +172,21 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
             logger.info(f"[API-TIMING] generate_stream started")
             
             try:
-                # First, generate PM plan to check if CREATE_WBS is needed
-                # This is fast (one LLM call) and tells us if we need DeerFlow research
-                plan_start = time.time()
-                temp_context = fm._get_or_create_context(thread_id)
-                pm_plan = await fm.generate_pm_plan(user_message, temp_context)
-                logger.info(f"[API-TIMING] PM plan generated: {time.time() - plan_start:.2f}s")
+                # Option 2: Route everything to DeerFlow (skip PM plan generation)
+                # Detect if this is a research query or should go to DeerFlow
+                user_message_lower = user_message.lower().strip()
+                is_research_query = any(keyword in user_message_lower for keyword in [
+                    "research", "what is", "explain", "analyze", "compare", 
+                    "tell me about", "how does", "why does"
+                ])
                 
-                # Check if plan has CREATE_WBS steps that need research
-                needs_research = False
-                if pm_plan and pm_plan.get('steps'):
-                    for step in pm_plan.get('steps', []):
-                        if step.get('step_type') == 'create_wbs':
-                            needs_research = True
-                            break
+                # For Option 2, route all queries to DeerFlow
+                # Skip PM plan generation to avoid project ID errors for research queries
+                needs_research = True  # Always route to DeerFlow with Option 2
                 
-                logger.info(f"[API-TIMING] Needs research: {needs_research} - {time.time() - api_start:.2f}s")
+                logger.info(f"[API-TIMING] Routing to DeerFlow (Option 2): is_research={is_research_query}")
                 
-                # For research queries, stream DeerFlow updates
+                # Route all queries to DeerFlow
                 if needs_research:
                     # Yield initial message
                     initial_chunk = {
@@ -205,18 +202,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                     
                     # Stream DeerFlow research progress
                     try:
-                        # Extract project info for research query
-                        project_name = ""
-                        if "create wbs" in user_message.lower():
-                            # Try to extract project name from message
-                            parts = user_message.lower().split("wbs")
-                            if len(parts) > 1:
-                                remaining = parts[1].strip().split()
-                                if remaining:
-                                    # Get first few words as project name
-                                    project_name = " ".join(remaining[:3]).replace("and", "").strip()
-                        
-                        research_query = f"Research typical phases, deliverables, and tasks for {project_name or 'this type of project'}. Focus on project structure and common components."
+                        # Use original message for research query (Option 2: agents decide what to do)
+                        research_query = user_message
                         
                         # Call streaming workflow
                         research_chunk = {

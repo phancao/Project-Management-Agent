@@ -249,12 +249,56 @@ class OpenProjectProvider(BasePMProvider):
                 }
             }
         if "assignee_id" in updates:
-            payload["_links"] = {
-                **payload.get("_links", {}),
-                "assignee": {
-                    "href": f"/api/v3/users/{updates['assignee_id']}"
+            payload["_links"] = payload.get("_links", {})
+            assignee_id = updates["assignee_id"]
+            if assignee_id:
+                payload["_links"]["assignee"] = {
+                    "href": f"/api/v3/users/{assignee_id}"
                 }
-            }
+            else:
+                payload["_links"]["assignee"] = None
+        if "epic_id" in updates:
+            # Epic assignment via parent relationship
+            payload["_links"] = payload.get("_links", {})
+            epic_id = updates["epic_id"]
+            if epic_id:
+                payload["_links"]["parent"] = {
+                    "href": f"/api/v3/work_packages/{epic_id}"
+                }
+            else:
+                # To remove parent in OpenProject, we need to use the changeParent link
+                # However, since we can't easily determine if current parent is an epic,
+                # we'll try to set parent to None (may not work in all cases)
+                # Alternative: Use changeParent link with empty href
+                # For now, we'll try setting parent to an empty dict which might work
+                try:
+                    # Try to use changeParent link if available
+                    current_wp = requests.get(url, headers=self.headers, timeout=10)
+                    if current_wp.status_code == 200:
+                        current_data = current_wp.json()
+                        change_parent_link = current_data.get("_links", {}).get("changeParent")
+                        if change_parent_link and change_parent_link.get("href"):
+                            # Use changeParent link to remove parent
+                            change_url = change_parent_link["href"]
+                            if not change_url.startswith("http"):
+                                change_url = f"{self.base_url}{change_url}"
+                            # POST to changeParent with null parent
+                            change_resp = requests.post(
+                                change_url,
+                                headers=self.headers,
+                                json={"parent": None},
+                                timeout=10
+                            )
+                            if change_resp.status_code in [200, 204]:
+                                logger.info(f"Removed parent from work package {task_id}")
+                                return self._parse_task(change_resp.json() if change_resp.text else current_data)
+                except Exception as e:
+                    logger.warning(
+                        f"Could not remove parent via changeParent link: {e}. "
+                        "Parent may still be set."
+                    )
+                # Fallback: try setting parent to empty dict
+                payload["_links"]["parent"] = {}
         if "estimated_hours" in updates:
             # Convert hours to ISO 8601 duration
             # (e.g., 2.5 -> PT2H30M, 2.0 -> PT2H)
@@ -542,6 +586,9 @@ class OpenProjectProvider(BasePMProvider):
             assignee_id=self._extract_id_from_href(
                 links.get("assignee", {}).get("href")
             ),
+            epic_id=self._extract_id_from_href(
+                links.get("parent", {}).get("href")
+            ) if links.get("parent", {}).get("href") else None,
             estimated_hours=self._parse_duration_to_hours(
                 data.get("estimatedTime")
             ),

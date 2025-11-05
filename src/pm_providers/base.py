@@ -218,6 +218,38 @@ class BasePMProvider(ABC):
         all_tasks = await self.list_tasks()
         return [t for t in all_tasks if t.epic_id == epic_id]
     
+    async def assign_task_to_epic(self, task_id: str, epic_id: str) -> PMTask:
+        """
+        Assign a task to an epic.
+        
+        This sets the epic_id field on the task, creating a link between
+        the task and the epic.
+        
+        Args:
+            task_id: ID of the task to assign
+            epic_id: ID of the epic to assign to
+            
+        Returns:
+            Updated task with epic_id set
+        """
+        updates = {"epic_id": epic_id}
+        return await self.update_task(task_id, updates)
+    
+    async def remove_task_from_epic(self, task_id: str) -> PMTask:
+        """
+        Remove a task from its epic.
+        
+        This clears the epic_id field on the task.
+        
+        Args:
+            task_id: ID of the task to remove from epic
+            
+        Returns:
+            Updated task with epic_id cleared
+        """
+        updates = {"epic_id": None}
+        return await self.update_task(task_id, updates)
+    
     # ==================== Label Operations ====================
     
     @abstractmethod

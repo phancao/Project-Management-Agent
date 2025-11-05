@@ -712,9 +712,17 @@ def reporter_node(state: State, config: RunnableConfig):
     response_content = response.content
     logger.info(f"reporter response: {response_content}")
 
+    # Create AIMessage with finish_reason in response_metadata
+    # This ensures the frontend knows the message is complete
+    reporter_message = AIMessage(
+        content=response_content,
+        name="reporter",
+        response_metadata={"finish_reason": "stop"}
+    )
+
     # Add AIMessage so the final report gets streamed to the client
     return {
-        "messages": [AIMessage(content=response_content, name="reporter")],
+        "messages": [reporter_message],
         "final_report": response_content,
     }
 

@@ -506,16 +506,10 @@ async def _process_message_chunk(
                     f"message_id: {event_stream_message.get('id')}, "
                     f"agent: {event_stream_message.get('agent')}"
                 )
-            # Ensure finish_reason is always included for reporter messages
-            if (
-                event_stream_message.get("agent") == "reporter"
-                and "finish_reason" not in event_stream_message
-            ):
-                event_stream_message["finish_reason"] = "stop"
-                logger.warning(
-                    f"[{safe_thread_id}] ⚠️ Added missing finish_reason "
-                    f"for reporter message"
-                )
+            # NOTE: Don't add finish_reason to all chunks - only include it
+            # when it's actually present in the message metadata (final chunk).
+            # The frontend will set isStreaming=false when it receives ANY
+            # chunk with finish_reason.
             yield _make_event("message_chunk", event_stream_message)
 
 
@@ -1684,6 +1678,73 @@ async def pm_update_epic(request: Request, project_id: str, epic_id: str):
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/api/pm/projects/{project_id}/tasks/{task_id}/assign-epic")
+async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str):
+    """Assign a task to an epic"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        epic_data = await request.json()
+        epic_id = epic_data.get("epic_id")
+        if not epic_id:
+            raise HTTPException(status_code=400, detail="epic_id is required")
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            return await handler.assign_task_to_epic(project_id, task_id, epic_id)
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to assign task to epic: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/pm/projects/{project_id}/tasks/{task_id}/remove-epic")
+async def pm_remove_task_from_epic(request: Request, project_id: str, task_id: str):
+    """Remove a task from its epic"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            return await handler.remove_task_from_epic(project_id, task_id)
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to remove task from epic: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/pm/projects/{project_id}/epics/{epic_id}")
 async def pm_delete_epic(request: Request, project_id: str, epic_id: str):

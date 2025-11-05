@@ -422,7 +422,18 @@ export function useRenderableMessageIds() {
     useShallow((state) => {
       // Filter to only messages that will actually render in MessageListView
       // This prevents duplicate keys and React warnings when messages change state
+      const seen = new Set<string>();
       return state.messageIds.filter((messageId) => {
+        // Skip null/undefined/empty messageIds
+        if (!messageId) {
+          return false;
+        }
+        // Skip duplicates to ensure unique keys
+        if (seen.has(messageId)) {
+          return false;
+        }
+        seen.add(messageId);
+        
         const message = state.messages.get(messageId);
         if (!message) return false;
         

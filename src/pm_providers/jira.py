@@ -577,11 +577,23 @@ class JIRAProvider(BasePMProvider):
         project_obj = fields.get("project", {})
         project_id = project_obj.get("key") or project_obj.get("id")
         
-        # Parse parent task (for subtasks)
+        # Parse parent task (for subtasks) and epic (if parent is an epic)
         parent_obj = fields.get("parent")
         parent_task_id = None
+        epic_id = None
         if parent_obj:
-            parent_task_id = parent_obj.get("key") or parent_obj.get("id")
+            parent_key = parent_obj.get("key")
+            parent_id = parent_obj.get("id")
+            # Check if parent is an epic
+            parent_type = parent_obj.get("fields", {}).get("issuetype", {})
+            parent_type_name = parent_type.get("name", "").lower()
+            
+            if parent_type_name == "epic":
+                # Parent is an epic, set epic_id
+                epic_id = parent_key or parent_id
+            else:
+                # Parent is a regular task/subtask, set parent_task_id
+                parent_task_id = parent_key or parent_id
         
         # Parse time estimates (JIRA stores in seconds)
         time_original_estimate = fields.get("timeoriginalestimate")
@@ -636,6 +648,7 @@ class JIRAProvider(BasePMProvider):
             priority=unified_priority,
             project_id=project_id,
             parent_task_id=parent_task_id,
+            epic_id=epic_id,  # Set epic_id if parent is an epic
             assignee_id=assignee_id,
             estimated_hours=estimated_hours,
             actual_hours=actual_hours,
@@ -658,13 +671,135 @@ class JIRAProvider(BasePMProvider):
             return None
     
     async def get_task(self, task_id: str) -> Optional[PMTask]:
-        raise NotImplementedError("JIRA provider not yet implemented")
+        """
+        Get a single task by ID (key or numeric ID).
+        
+        TESTED: ✅ Works via /rest/api/3/issue/{key}
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/rest/api/3/issue/{task_id}"
+        
+        try:
+            response = requests.get(
+                url,
+                headers=self.headers,
+                params={"expand": "names,schema"},
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                issue_data = response.json()
+                task = self._parse_task(issue_data)
+                logger.info(f"Retrieved task {task_id} from JIRA")
+                return task
+            elif response.status_code == 404:
+                logger.warning(f"Task {task_id} not found in JIRA")
+                return None
+            else:
+                logger.error(
+                    f"Failed to get task: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                response.raise_for_status()
+                return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error getting task: {e}", exc_info=True)
+            raise ValueError(f"Failed to get task: {str(e)}")
     
     async def create_task(self, task: PMTask) -> PMTask:
         raise NotImplementedError("JIRA provider not yet implemented")
     
-    async def update_task(self, task_id: str, updates: Dict) -> PMTask:
-        raise NotImplementedError("JIRA provider not yet implemented")
+    async def update_task(self, task_id: str, updates: Dict[str, Any]) -> PMTask:
+        """
+        Update an existing task in JIRA.
+        
+        Supports updating epic_id via parent field:
+        - If epic_id is set, uses parent field to link to epic
+        - If epic_id is None, removes parent relationship
+        
+        TESTED: ✅ Works via PUT /rest/api/3/issue/{key} with parent field
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/rest/api/3/issue/{task_id}"
+        
+        # Map updates to JIRA fields
+        fields: Dict[str, Any] = {}
+        
+        if "title" in updates or "summary" in updates:
+            fields["summary"] = updates.get("title") or updates.get("summary")
+        if "description" in updates:
+            desc = updates["description"]
+            if desc:
+                fields["description"] = {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [{"type": "text", "text": desc}]
+                        }
+                    ]
+                }
+            else:
+                fields["description"] = None
+        if "status" in updates:
+            # Status updates require transitions API
+            logger.warning(
+                "Status updates require transitions API, not implemented yet"
+            )
+        if "assignee_id" in updates:
+            assignee_id = updates["assignee_id"]
+            if assignee_id:
+                fields["assignee"] = {"accountId": assignee_id}
+            else:
+                fields["assignee"] = None
+        if "epic_id" in updates:
+            # Epic assignment via parent field
+            epic_id = updates["epic_id"]
+            if epic_id:
+                fields["parent"] = {"key": epic_id}
+            else:
+                fields["parent"] = None
+        
+        if not fields:
+            # No updates to apply, just return the current task
+            task = await self.get_task(task_id)
+            if task:
+                return task
+            else:
+                raise ValueError(f"Task {task_id} not found")
+        
+        payload = {"fields": fields}
+        
+        try:
+            response = requests.put(
+                url, headers=self.headers, json=payload, timeout=10
+            )
+            
+            if response.status_code == 204:
+                # Fetch updated task
+                updated_task = await self.get_task(task_id)
+                if updated_task:
+                    logger.info(f"Updated task {task_id} in JIRA")
+                    return updated_task
+                else:
+                    raise ValueError("Failed to retrieve updated task")
+            else:
+                logger.error(
+                    f"Failed to update task: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to update task: ({response.status_code}) "
+                    f"{response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error updating task: {e}", exc_info=True)
+            raise ValueError(f"Failed to update task: {str(e)}")
     
     async def delete_task(self, task_id: str) -> bool:
         raise NotImplementedError("JIRA provider not yet implemented")

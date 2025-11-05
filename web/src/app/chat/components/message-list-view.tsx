@@ -259,9 +259,9 @@ function ResearchCard({
   const t = useTranslations("chat.research");
   const reportId = useStore((state) => state.researchReportIds.get(researchId));
   const hasReport = reportId !== undefined;
-  const reportGenerating = useStore(
-    (state) => hasReport && state.messages.get(reportId)!.isStreaming,
-  );
+  // Use useMessage hook to properly subscribe to message updates
+  const reportMessage = useMessage(reportId);
+  const reportGenerating = hasReport && (reportMessage?.isStreaming ?? true);
   const openResearchId = useStore((state) => state.openResearchId);
   const state = useMemo(() => {
     if (hasReport) {

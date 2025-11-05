@@ -244,7 +244,24 @@ function SprintSection({ sprint, tasks, onTaskClick }: { sprint: { id: string; n
       }`}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white">{sprint.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-gray-900 dark:text-white">{sprint.name}</h3>
+              {isActive && (
+                <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                  Active
+                </span>
+              )}
+              {isClosed && (
+                <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                  Closed
+                </span>
+              )}
+              {isFuture && (
+                <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                  Future
+                </span>
+              )}
+            </div>
             {sprint.start_date && sprint.end_date && (
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                 {new Date(sprint.start_date).toLocaleDateString()} • {new Date(sprint.end_date).toLocaleDateString()}
@@ -673,15 +690,63 @@ export function BacklogView() {
               </Card>
             ) : (
               <div>
-                {/* Sprints - stacked vertically */}
-                {sprints.map((sprint) => (
-                  <SprintSection
-                    key={sprint.id}
-                    sprint={sprint}
-                    tasks={tasksInSprints[sprint.id] ?? []}
-                    onTaskClick={handleTaskClick}
-                  />
-                ))}
+                {/* Sprints - stacked vertically, grouped by state */}
+                {/* Active sprints first */}
+                {sprints.filter(s => s.status === "active").length > 0 && (
+                  <div className="mb-6">
+                    <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 px-1">
+                      Active Sprints
+                    </h2>
+                    {sprints
+                      .filter(s => s.status === "active")
+                      .map((sprint) => (
+                        <SprintSection
+                          key={sprint.id}
+                          sprint={sprint}
+                          tasks={tasksInSprints[sprint.id] ?? []}
+                          onTaskClick={handleTaskClick}
+                        />
+                      ))}
+                  </div>
+                )}
+                
+                {/* Future sprints */}
+                {sprints.filter(s => s.status === "future").length > 0 && (
+                  <div className="mb-6">
+                    <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 px-1">
+                      Future Sprints
+                    </h2>
+                    {sprints
+                      .filter(s => s.status === "future")
+                      .map((sprint) => (
+                        <SprintSection
+                          key={sprint.id}
+                          sprint={sprint}
+                          tasks={tasksInSprints[sprint.id] ?? []}
+                          onTaskClick={handleTaskClick}
+                        />
+                      ))}
+                  </div>
+                )}
+                
+                {/* Closed sprints */}
+                {sprints.filter(s => s.status === "closed").length > 0 && (
+                  <div className="mb-6">
+                    <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 px-1">
+                      Closed Sprints
+                    </h2>
+                    {sprints
+                      .filter(s => s.status === "closed")
+                      .map((sprint) => (
+                        <SprintSection
+                          key={sprint.id}
+                          sprint={sprint}
+                          tasks={tasksInSprints[sprint.id] ?? []}
+                          onTaskClick={handleTaskClick}
+                        />
+                      ))}
+                  </div>
+                )}
 
                 {/* Backlog - at the bottom */}
                 <BacklogSection

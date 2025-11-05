@@ -1030,6 +1030,47 @@ class PMHandler:
         
         return statuses
     
+    async def assign_task_to_epic(self, project_id: str, task_id: str, epic_id: str) -> Dict[str, Any]:
+        """
+        Assign a task to an epic within a project.
+        
+        Args:
+            project_id: Project ID in format "provider_id:project_key"
+            task_id: Task ID to assign
+            epic_id: Epic ID to assign to
+            
+        Returns:
+            Updated task dictionary
+        """
+        provider = self._get_provider_for_project(project_id)
+        updated_task = await provider.assign_task_to_epic(task_id, epic_id)
+        
+        # Get project name for _task_to_dict
+        project = await provider.get_project(project_id.split(":")[-1])
+        project_name = project.name if project else "Unknown"
+        
+        return self._task_to_dict(updated_task, project_name)
+    
+    async def remove_task_from_epic(self, project_id: str, task_id: str) -> Dict[str, Any]:
+        """
+        Remove a task from its epic.
+        
+        Args:
+            project_id: Project ID in format "provider_id:project_key"
+            task_id: Task ID to remove from epic
+            
+        Returns:
+            Updated task dictionary
+        """
+        provider = self._get_provider_for_project(project_id)
+        updated_task = await provider.remove_task_from_epic(task_id)
+        
+        # Get project name for _task_to_dict
+        project = await provider.get_project(project_id.split(":")[-1])
+        project_name = project.name if project else "Unknown"
+        
+        return self._task_to_dict(updated_task, project_name)
+    
     def _task_to_dict(self, task: PMTask, project_name: str) -> Dict[str, Any]:
         """Convert PMTask to dictionary with project_name"""
         return {

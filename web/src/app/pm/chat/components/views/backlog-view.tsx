@@ -9,7 +9,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, Filter, GripVertical, Search, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
@@ -21,6 +21,8 @@ import { useSprints } from "~/core/api/hooks/pm/use-sprints";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useTasks } from "~/core/api/hooks/pm/use-tasks";
 import { useEpics, type Epic } from "~/core/api/hooks/pm/use-epics";
+import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
+import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
 
 import { TaskDetailsModal } from "../task-details-modal";
 import { CreateEpicDialog } from "../create-epic-dialog";
@@ -405,12 +407,24 @@ export function BacklogView() {
     return activeProject.id;
   }, [activeProject]);
   
+  // Reset filters when project changes
+  useEffect(() => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setPriorityFilter("all");
+    setSelectedEpic(null);
+    // Also reset when projectIdForSprints changes to handle JIRA projects
+  }, [activeProject?.id, projectIdForSprints]);
+  
   // Fetch tasks for the active project - use full project ID (with provider_id)
   const { tasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
   // Fetch all sprints (active, closed, future) - no state filter to show all
   const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
   // Fetch epics for the active project
   const { epics } = useEpics(projectIdForSprints ?? undefined);
+  // Fetch statuses and priorities from backend
+  const { statuses: availableStatusesFromBackend } = useStatuses(projectIdForSprints ?? undefined, "task");
+  const { priorities: availablePrioritiesFromBackend } = usePriorities(projectIdForSprints ?? undefined);
   
   // Create a map of epic_id -> epic for quick lookup
   const epicsMap = useMemo(() => {
@@ -680,65 +694,123 @@ export function BacklogView() {
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
-    // Return empty array if loading to prevent flash of stale data
-    if (loading) return [];
-    if (!tasks) return [];
-    let filtered = tasks;
+    console.log("[BacklogView] filteredTasks useMemo running. searchQuery:", searchQuery, "tasks.length:", tasks?.length, "loading:", loading);
+    
+    // Return empty array only if we're loading AND have no tasks yet (to prevent flash of stale data)
+    // If we have tasks, always filter them even if loading is true (for real-time filtering)
+    if (loading && (!tasks || tasks.length === 0)) {
+      console.log("[BacklogView] Returning empty array (loading with no tasks)");
+      return [];
+    }
+    
+    // If we have no tasks at all, return empty
+    if (!tasks || tasks.length === 0) {
+      console.log("[BacklogView] Returning empty array (no tasks)");
+      return [];
+    }
+    
+    let filtered = [...tasks]; // Create a copy to avoid mutating original
 
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(t => 
-        t.title.toLowerCase().includes(query) ||
-        (t.description?.toLowerCase().includes(query)) ||
-        (t.project_name?.toLowerCase().includes(query))
-      );
+    // Search filter - search in title and description only
+    const trimmedQuery = (searchQuery || "").trim();
+    console.log("[BacklogView] Filtering tasks. Search query:", trimmedQuery, "Total tasks:", tasks.length, "Loading:", loading);
+    if (trimmedQuery) {
+      const query = trimmedQuery.toLowerCase();
+      const beforeCount = filtered.length;
+      filtered = filtered.filter(t => {
+        if (!t) return false;
+        const title = (t.title || "").toLowerCase();
+        const description = (t.description || "").toLowerCase();
+        // Search in title and description only
+        const matches = title.includes(query) || description.includes(query);
+        return matches;
+      });
+      console.log("[BacklogView] After search filter:", filtered.length, "tasks (was", beforeCount, "). Query:", trimmedQuery);
+    } else {
+      console.log("[BacklogView] No search query, skipping search filter");
     }
 
-    // Status filter - match by exact status (case-insensitive)
-    if (statusFilter !== "all") {
+    // Status filter - match by status name (case-insensitive)
+    if (statusFilter && statusFilter !== "all") {
+      const filterStatusLower = statusFilter.toLowerCase();
+      const beforeCount = filtered.length;
       filtered = filtered.filter(t => {
-        const status = t.status?.toLowerCase() || "";
-        return status === statusFilter.toLowerCase();
+        const taskStatus = (t.status || "").toLowerCase();
+        return taskStatus === filterStatusLower;
       });
+      console.log("[BacklogView] After status filter:", filtered.length, "tasks (was", beforeCount, ")");
     }
 
     // Priority filter - match by exact priority (case-insensitive)
-    if (priorityFilter !== "all") {
+    if (priorityFilter && priorityFilter !== "all") {
+      const filterPriorityLower = priorityFilter.toLowerCase();
+      const beforeCount = filtered.length;
       filtered = filtered.filter(t => {
-        const priority = t.priority?.toLowerCase() || "";
-        return priority === priorityFilter.toLowerCase();
+        const taskPriority = (t.priority || "").toLowerCase();
+        return taskPriority === filterPriorityLower;
       });
+      console.log("[BacklogView] After priority filter:", filtered.length, "tasks (was", beforeCount, ")");
     }
 
+    console.log("[BacklogView] Final filtered tasks:", filtered.length, "out of", tasks.length, "original tasks");
     return filtered;
   }, [tasks, searchQuery, statusFilter, priorityFilter, loading]);
+  
+  // Debug: Log when searchQuery changes
+  useEffect(() => {
+    console.log("[BacklogView] searchQuery state changed to:", searchQuery);
+  }, [searchQuery]);
 
-  // Extract unique statuses and priorities from tasks
+  // Use statuses and priorities from backend, with fallback to task data
   const availableStatuses = useMemo(() => {
-    const statusSet = new Set<string>();
+    if (availableStatusesFromBackend && availableStatusesFromBackend.length > 0) {
+      // Use backend statuses, store lowercase value for matching
+      return availableStatusesFromBackend.map(status => ({
+        value: status.name.toLowerCase(),
+        label: status.name
+      }));
+    }
+    // Fallback: extract from tasks if backend doesn't have statuses
+    const statusMap = new Map<string, string>(); // lowercase -> original case
     tasks.forEach(task => {
       if (task.status) {
-        statusSet.add(task.status);
+        const lower = task.status.toLowerCase();
+        if (!statusMap.has(lower)) {
+          statusMap.set(lower, task.status);
+        }
       }
     });
-    return Array.from(statusSet).sort();
-  }, [tasks]);
+    return Array.from(statusMap.entries()).map(([lower, original]) => ({ value: lower, label: original }));
+  }, [availableStatusesFromBackend, tasks]);
 
   const availablePriorities = useMemo(() => {
-    const prioritySet = new Set<string>();
+    if (availablePrioritiesFromBackend && availablePrioritiesFromBackend.length > 0) {
+      // Use backend priorities, store lowercase value for matching
+      return availablePrioritiesFromBackend.map(priority => ({
+        value: priority.name.toLowerCase(),
+        label: priority.name
+      }));
+    }
+    // Fallback: extract from tasks if backend doesn't have priorities
+    const priorityMap = new Map<string, string>(); // lowercase -> original case
     tasks.forEach(task => {
       if (task.priority) {
-        prioritySet.add(task.priority);
+        const lower = task.priority.toLowerCase();
+        if (!priorityMap.has(lower)) {
+          priorityMap.set(lower, task.priority);
+        }
       }
     });
-    return Array.from(prioritySet).sort();
-  }, [tasks]);
+    return Array.from(priorityMap.entries()).map(([lower, original]) => ({ value: lower, label: original }));
+  }, [availablePrioritiesFromBackend, tasks]);
 
   // Filter tasks by selected epic
   const epicFilteredTasks = useMemo(() => {
-    // Return empty array if loading to prevent flash of stale data
-    if (loading) return [];
+    // Return empty array only if loading AND no tasks yet (to prevent flash)
+    // But allow filtering if we have tasks, even if loading is true (for real-time filtering)
+    if (loading && (!filteredTasks || filteredTasks.length === 0)) return [];
+    if (!filteredTasks || filteredTasks.length === 0) return [];
+    
     if (!selectedEpic) return filteredTasks;
     if (selectedEpic === "all") return filteredTasks;
     // Filter by epic_id
@@ -962,7 +1034,18 @@ export function BacklogView() {
                     type="text"
                     placeholder="Search tasks..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      console.log("[BacklogView] Input onChange triggered. Current searchQuery:", searchQuery, "New value:", newValue);
+                      setSearchQuery(newValue);
+                      // Force immediate re-render
+                      console.log("[BacklogView] setSearchQuery called with:", newValue);
+                    }}
+                    onInput={(e) => {
+                      // Additional logging for input events
+                      const newValue = (e.target as HTMLInputElement).value;
+                      console.log("[BacklogView] Input onInput event. Value:", newValue);
+                    }}
                     className="pl-10"
                   />
                 </div>
@@ -977,9 +1060,9 @@ export function BacklogView() {
                    </SelectTrigger>
                    <SelectContent>
                      <SelectItem value="all">All Status</SelectItem>
-                        {availableStatuses.map(status => (
-                          <SelectItem key={status} value={status.toLowerCase()}>
-                            {status}
+                        {availableStatuses.map(({ value, label }) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
                           </SelectItem>
                         ))}
                    </SelectContent>
@@ -992,9 +1075,9 @@ export function BacklogView() {
                    </SelectTrigger>
                    <SelectContent>
                      <SelectItem value="all">All Priority</SelectItem>
-                        {availablePriorities.map(priority => (
-                          <SelectItem key={priority} value={priority.toLowerCase()}>
-                            {priority}
+                        {availablePriorities.map(({ value, label }) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
                           </SelectItem>
                         ))}
                    </SelectContent>

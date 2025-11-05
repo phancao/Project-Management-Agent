@@ -1042,14 +1042,32 @@ class OpenProjectProvider(BasePMProvider):
         Update an existing epic in OpenProject.
         
         TESTED: ✅ Works via PATCH /api/v3/work_packages/{id}
+        Note: OpenProject requires lockVersion for optimistic locking
         """
         import logging
         logger = logging.getLogger(__name__)
         
         url = f"{self.base_url}/api/v3/work_packages/{epic_id}"
         
+        # First, get the current epic to get lockVersion
+        current_epic = await self.get_epic(epic_id)
+        if not current_epic:
+            raise ValueError(f"Epic {epic_id} not found")
+        
+        # Get lockVersion from raw data
+        lock_version = None
+        if current_epic.raw_data:
+            lock_version = current_epic.raw_data.get('lockVersion')
+        
+        if lock_version is None:
+            logger.warning(f"Could not get lockVersion for epic {epic_id}, trying update anyway")
+        
         # Map updates to OpenProject fields
         payload: Dict[str, Any] = {}
+        
+        # Include lockVersion for optimistic locking
+        if lock_version is not None:
+            payload["lockVersion"] = lock_version
         
         if "name" in updates:
             payload["subject"] = updates["name"]
@@ -1081,9 +1099,9 @@ class OpenProjectProvider(BasePMProvider):
                 "Status updates require status ID lookup, not implemented yet"
             )
         
-        if not payload:
+        if not payload or (len(payload) == 1 and "lockVersion" in payload):
             # No updates to apply, just return the current epic
-            return await self.get_epic(epic_id) or PMEpic()
+            return current_epic
         
         try:
             response = requests.patch(
@@ -1098,6 +1116,27 @@ class OpenProjectProvider(BasePMProvider):
                     return updated_epic
                 else:
                     raise ValueError("Failed to retrieve updated epic")
+            elif response.status_code == 409:
+                # Conflict - lockVersion mismatch, retry once
+                logger.warning(f"Update conflict for epic {epic_id}, retrying...")
+                # Get fresh data and retry
+                fresh_epic = await self.get_epic(epic_id)
+                if fresh_epic and fresh_epic.raw_data:
+                    fresh_lock_version = fresh_epic.raw_data.get('lockVersion')
+                    if fresh_lock_version is not None:
+                        payload["lockVersion"] = fresh_lock_version
+                        retry_response = requests.patch(
+                            url, headers=self.headers, json=payload, timeout=10
+                        )
+                        if retry_response.status_code == 200:
+                            updated_epic = await self.get_epic(epic_id)
+                            if updated_epic:
+                                logger.info(f"Updated epic {epic_id} in OpenProject (after retry)")
+                                return updated_epic
+                raise ValueError(
+                    f"Failed to update epic: Update conflict (409). "
+                    f"Epic may have been modified by another process."
+                )
             else:
                 logger.error(
                     f"Failed to update epic: {response.status_code}, "

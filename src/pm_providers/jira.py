@@ -916,10 +916,33 @@ class JIRAProvider(BasePMProvider):
                     status_obj = fields.get('status', {})
                     priority_obj = fields.get('priority', {})
                     
+                    # Parse description (can be ADF format or string)
+                    description = fields.get('description')
+                    if isinstance(description, dict):
+                        # ADF (Atlassian Document Format) - extract plain text if possible
+                        description_text = description.get("content", [])
+                        if description_text:
+                            def extract_adf_text(content):
+                                if isinstance(content, list):
+                                    return " ".join(
+                                        extract_adf_text(item) for item in content
+                                    )
+                                elif isinstance(content, dict):
+                                    if content.get("type") == "text":
+                                        return content.get("text", "")
+                                    elif "content" in content:
+                                        return extract_adf_text(content["content"])
+                                return ""
+                            description = extract_adf_text(description_text)
+                        else:
+                            description = None
+                    elif not description:
+                        description = None
+                    
                     epic = PMEpic(
                         id=issue.get('key'),
                         name=fields.get('summary', ''),
-                        description=fields.get('description'),
+                        description=description,
                         project_id=fields.get('project', {}).get('key'),
                         status=status_obj.get('name') if status_obj else None,
                         priority=priority_obj.get('name') if priority_obj else None,
@@ -1044,11 +1067,12 @@ class JIRAProvider(BasePMProvider):
                 ]
             }
         
-        # Add dates if provided
-        if epic.start_date:
-            fields["startdate"] = epic.start_date.isoformat()
+        # Add dates if provided (only if fields are available for epics)
+        # Note: Some JIRA instances may not have startdate/duedate for epics
+        # We'll try to set them, but if they fail, we'll continue without them
         if epic.end_date:
             fields["duedate"] = epic.end_date.isoformat()
+        # startdate is often not available for epics, so we skip it
         
         payload = {"fields": fields}
         

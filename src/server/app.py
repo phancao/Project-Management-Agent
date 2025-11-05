@@ -502,7 +502,19 @@ async def _process_message_chunk(
                 logger.info(
                     f"[{safe_thread_id}] ✅ Including finish_reason in "
                     f"message_chunk event: "
-                    f"{event_stream_message.get('finish_reason')}"
+                    f"{event_stream_message.get('finish_reason')}, "
+                    f"message_id: {event_stream_message.get('id')}, "
+                    f"agent: {event_stream_message.get('agent')}"
+                )
+            # Ensure finish_reason is always included for reporter messages
+            if (
+                event_stream_message.get("agent") == "reporter"
+                and "finish_reason" not in event_stream_message
+            ):
+                event_stream_message["finish_reason"] = "stop"
+                logger.warning(
+                    f"[{safe_thread_id}] ⚠️ Added missing finish_reason "
+                    f"for reporter message"
                 )
             yield _make_event("message_chunk", event_stream_message)
 
@@ -709,29 +721,29 @@ async def _stream_graph_events(
                         
                         # Stream messages from state updates
                         # (e.g., reporter's final report)
-                        # NOTE: For reporter messages, we stream them here as a
-                        # fallback if they weren't already streamed in the
-                        # "messages" stream. This ensures the final report with
-                        # finish_reason is always sent to the frontend.
-                        if "messages" in node_update:
+                        # NOTE: For reporter messages, we DON'T stream from
+                        # state updates because they should already be streamed
+                        # in the "messages" stream. Streaming here would create
+                        # a duplicate message with a different ID, causing the
+                        # frontend to not recognize the finish_reason properly.
+                        # Only stream non-reporter messages from state updates.
+                        if "messages" in node_update and node_name != "reporter":
                             messages = node_update.get("messages", [])
                             if messages:
                                 # Get the latest message
-                                # (usually the reporter's final report)
                                 for msg in messages:
                                     if (
                                         isinstance(msg, AIMessage)
                                         and msg.name == node_name
                                     ):
-                                        logger.info(
+                                        logger.debug(
                                             f"[{safe_thread_id}] "
-                                            f"Streaming message from "
-                                            f"{node_name} state update: "
+                                            f"Streaming {node_name} message "
+                                            f"from state update: "
                                             f"{len(msg.content)} chars, "
                                             f"id: {msg.id}"
                                         )
-                                        # Ensure finish_reason is set for
-                                        # final messages (frontend needs this)
+                                        # Ensure finish_reason is set
                                         if not msg.response_metadata:
                                             msg.response_metadata = {}
                                         if (
@@ -741,19 +753,10 @@ async def _stream_graph_events(
                                             msg.response_metadata[
                                                 "finish_reason"
                                             ] = "stop"
-                                        # Process as message chunk to stream it
                                         msg_metadata = {
                                             "langgraph_node": node_name,
-                                            # Explicitly include finish_reason
-                                            # in metadata to ensure it's streamed
                                             "finish_reason": "stop"
                                         }
-                                        logger.info(
-                                            f"[{safe_thread_id}] "
-                                            f"✅ Streaming {node_name} message "
-                                            f"with finish_reason=stop, "
-                                            f"id={msg.id}"
-                                        )
                                         async for event in _process_message_chunk(
                                             msg,
                                             msg_metadata,
@@ -761,7 +764,7 @@ async def _stream_graph_events(
                                             (node_name,),
                                         ):
                                             yield event
-                                        break  # Only stream first matching
+                                        break
                     
                     logger.debug(
                         f"[{safe_thread_id}] Processed state update from "

@@ -436,18 +436,54 @@ export function BacklogView() {
 
   const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
     try {
-      const response = await fetch(resolveServiceURL(`pm/tasks/${taskId}`), {
+      if (!projectIdForSprints) {
+        throw new Error("Project ID is required to update a task");
+      }
+      
+      const url = new URL(resolveServiceURL(`pm/tasks/${taskId}`));
+      url.searchParams.set('project_id', projectIdForSprints);
+      
+      console.log(`[handleUpdateTask] Updating task ${taskId}`);
+      console.log(`[handleUpdateTask] URL: ${url.toString()}`);
+      console.log(`[handleUpdateTask] Updates:`, updates);
+      
+      const response = await fetch(url.toString(), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if (!response.ok) throw new Error('Failed to update task');
+      
+      console.log(`[handleUpdateTask] Response status: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Failed to update task: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorMessage;
+        } catch {
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+        console.error(`[handleUpdateTask] Error: ${errorMessage}`);
+        console.error(`[handleUpdateTask] Response status: ${response.status}`);
+        console.error(`[handleUpdateTask] Response text: ${errorText}`);
+        console.error(`[handleUpdateTask] Full URL attempted: ${url}`);
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      console.log(`[handleUpdateTask] Success:`, result);
       
       window.dispatchEvent(new CustomEvent("pm_refresh", { 
         detail: { type: "pm_refresh" } 
       }));
     } catch (error) {
-      console.error("Failed to update task:", error);
+      console.error("[handleUpdateTask] Failed to update task:", error);
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
+        console.error("[handleUpdateTask] Network error - check if server is running and CORS is configured");
+      }
       throw error;
     }
   };
@@ -648,39 +684,45 @@ export function BacklogView() {
       );
     }
 
-    // Status filter
+    // Status filter - match by exact status (case-insensitive)
     if (statusFilter !== "all") {
       filtered = filtered.filter(t => {
         const status = t.status?.toLowerCase() || "";
-        if (statusFilter === "todo") {
-          return !status || status === "none" || status.includes("todo") || status.includes("new");
-        }
-        if (statusFilter === "in-progress") {
-          return status.includes("progress") || status.includes("in_progress");
-        }
-        if (statusFilter === "done") {
-          return status.includes("done") || status.includes("completed") || status.includes("closed");
-        }
-        return status === statusFilter;
+        return status === statusFilter.toLowerCase();
       });
     }
 
-    // Priority filter
+    // Priority filter - match by exact priority (case-insensitive)
     if (priorityFilter !== "all") {
       filtered = filtered.filter(t => {
         const priority = t.priority?.toLowerCase() || "";
-        if (priorityFilter === "high") {
-          return priority === "high" || priority === "highest" || priority === "critical";
-        }
-        if (priorityFilter === "low") {
-          return priority === "low" || priority === "lowest";
-        }
-        return priority === priorityFilter;
+        return priority === priorityFilter.toLowerCase();
       });
     }
 
     return filtered;
   }, [tasks, searchQuery, statusFilter, priorityFilter]);
+
+  // Extract unique statuses and priorities from tasks
+  const availableStatuses = useMemo(() => {
+    const statusSet = new Set<string>();
+    tasks.forEach(task => {
+      if (task.status) {
+        statusSet.add(task.status);
+      }
+    });
+    return Array.from(statusSet).sort();
+  }, [tasks]);
+
+  const availablePriorities = useMemo(() => {
+    const prioritySet = new Set<string>();
+    tasks.forEach(task => {
+      if (task.priority) {
+        prioritySet.add(task.priority);
+      }
+    });
+    return Array.from(prioritySet).sort();
+  }, [tasks]);
 
   // Filter tasks by selected epic
   const epicFilteredTasks = useMemo(() => {
@@ -912,31 +954,41 @@ export function BacklogView() {
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                   <SelectTrigger className="w-[140px]">
-                     <Filter className="w-4 h-4 mr-2" />
-                     <SelectValue placeholder="Status" />
-                   </SelectTrigger>
-                   <SelectContent>
-                     <SelectItem value="all">All Status</SelectItem>
-                     <SelectItem value="todo">To Do</SelectItem>
-                     <SelectItem value="in-progress">In Progress</SelectItem>
-                     <SelectItem value="done">Done</SelectItem>
-                   </SelectContent>
-                 </Select>
-                 <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                   <SelectTrigger className="w-[140px]">
-                     <SelectValue placeholder="Priority" />
-                   </SelectTrigger>
-                   <SelectContent>
-                     <SelectItem value="all">All Priority</SelectItem>
-                     <SelectItem value="high">High</SelectItem>
-                     <SelectItem value="medium">Medium</SelectItem>
-                     <SelectItem value="low">Low</SelectItem>
-                   </SelectContent>
-                 </Select>
-              </div>
+              {availableStatuses.length > 0 || availablePriorities.length > 0 ? (
+                <div className="flex gap-2">
+                  {availableStatuses.length > 0 && (
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-[140px]">
+                        <Filter className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        {availableStatuses.map(status => (
+                          <SelectItem key={status} value={status.toLowerCase()}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {availablePriorities.length > 0 && (
+                    <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Priority</SelectItem>
+                        {availablePriorities.map(priority => (
+                          <SelectItem key={priority} value={priority.toLowerCase()}>
+                            {priority}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              ) : null}
             </div>
           </div>
 

@@ -22,6 +22,8 @@ interface TaskDetailsModalProps {
 export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTask, setEditedTask] = useState<Partial<Task> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   if (!task) return null;
 
@@ -33,12 +35,42 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
   const handleSave = async () => {
     if (!editedTask || !onUpdate) return;
     
+    setError(null);
+    setIsSaving(true);
+    
     try {
-      await onUpdate(task.id, editedTask);
-      setIsEditing(false);
-      setEditedTask(null);
+      // Only send fields that can be updated (exclude read-only fields like id, project_name, etc.)
+      const updates: Partial<Task> = {};
+      if (editedTask.title !== undefined && editedTask.title !== task.title) {
+        updates.title = editedTask.title;
+      }
+      if (editedTask.description !== undefined && editedTask.description !== task.description) {
+        updates.description = editedTask.description;
+      }
+      if (editedTask.status !== undefined && editedTask.status !== task.status) {
+        updates.status = editedTask.status;
+      }
+      if (editedTask.priority !== undefined && editedTask.priority !== task.priority) {
+        updates.priority = editedTask.priority;
+      }
+      
+      // Only call update if there are actual changes
+      if (Object.keys(updates).length > 0) {
+        await onUpdate(task.id, updates);
+        setIsEditing(false);
+        setEditedTask(null);
+      } else {
+        // No changes, just close editing mode
+        setIsEditing(false);
+        setEditedTask(null);
+      }
     } catch (error) {
       console.error("Failed to update task:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to update task. Please check your connection and try again.";
+      setError(errorMessage);
+      // Don't close the modal on error so user can retry
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -65,14 +97,20 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate }: TaskDetailsM
                 <Button variant="ghost" size="sm" onClick={handleCancel}>
                   Cancel
                 </Button>
-                <Button size="sm" onClick={handleSave}>
+                <Button size="sm" onClick={handleSave} disabled={isSaving}>
                   <Save className="w-4 h-4 mr-2" />
-                  Save
+                  {isSaving ? "Saving..." : "Save"}
                 </Button>
               </div>
             )}
           </DialogTitle>
         </DialogHeader>
+
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 mb-4">
+            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+          </div>
+        )}
 
         <div className="space-y-4 mt-4">
           {/* Title */}

@@ -103,7 +103,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -1450,44 +1450,47 @@ async def pm_list_all_tasks(request: Request):
 
 
 @app.patch("/api/pm/tasks/{task_id}")
-async def pm_update_task(request: Request, task_id: str):
+async def pm_update_task(request: Request, task_id: str, project_id: str = Query(..., description="Project ID in format 'provider_id:project_key'")):
     """Update a task"""
     try:
-        from src.conversation.flow_manager import ConversationFlowManager
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        updates = await request.json()
         
         db_gen = get_db_session()
         db = next(db_gen)
         
-        global flow_manager
-        if flow_manager is None:
-            flow_manager = ConversationFlowManager(db_session=db)
-        fm = flow_manager
-        
-        if not fm.pm_provider:
-            raise HTTPException(
-                status_code=503, detail="PM Provider not configured"
-            )
-        
-        updates = await request.json()
-        updated_task = await fm.pm_provider.update_task(task_id, updates)
-        
-        return {
-            "id": str(updated_task.id),
-            "title": updated_task.title,
-            "description": updated_task.description,
-            "status": (
-                updated_task.status.value
-                if hasattr(updated_task.status, 'value')
-                else str(updated_task.status)
-            ),
-            "priority": (
-                updated_task.priority.value
-                if hasattr(updated_task.priority, 'value')
-                else str(updated_task.priority)
-            ),
-            "estimated_hours": updated_task.estimated_hours,
-        }
+        try:
+            handler = PMHandler.from_db_session(db)
+            provider = handler._get_provider_for_project(project_id)
+            
+            logger.info(f"Updating task {task_id} in project {project_id} with updates: {updates}")
+            
+            # Update the task using the provider
+            updated_task = await provider.update_task(task_id, updates)
+            
+            logger.info(f"Task {task_id} updated successfully: {updated_task.title}")
+            
+            # Get project name for response
+            actual_project_id = project_id.split(":")[-1]
+            project = await provider.get_project(actual_project_id)
+            project_name = project.name if project else "Unknown"
+            
+            # Convert to dict format
+            result = handler._task_to_dict(updated_task, project_name)
+            logger.info(f"Returning updated task data: {result}")
+            return result
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
     except HTTPException:
         # Re-raise HTTPExceptions as-is (preserve status codes)
         raise

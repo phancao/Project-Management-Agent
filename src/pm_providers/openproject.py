@@ -219,6 +219,9 @@ class OpenProjectProvider(BasePMProvider):
         self, task_id: str, updates: Dict[str, Any]
     ) -> PMTask:
         """Update an existing work package"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         url = f"{self.base_url}/api/v3/work_packages/{task_id}"
         payload: Dict[str, Any] = {}
         
@@ -243,11 +246,114 @@ class OpenProjectProvider(BasePMProvider):
                 "format": "plain"
             }
         if "status" in updates:
-            payload["_links"] = {
-                "status": {
-                    "href": f"/api/v3/statuses/{updates['status']}"
+            # Status can be either an ID or a name - need to resolve it
+            status_value = updates["status"]
+            payload["_links"] = payload.get("_links", {})
+            # If it's a numeric string or number, use it as ID
+            if str(status_value).isdigit():
+                payload["_links"]["status"] = {
+                    "href": f"/api/v3/statuses/{status_value}"
                 }
+            else:
+                # Try to look up status by name
+                try:
+                    statuses_url = f"{self.base_url}/api/v3/statuses"
+                    statuses_resp = requests.get(statuses_url, headers=self.headers, timeout=10)
+                    if statuses_resp.status_code == 200:
+                        statuses = statuses_resp.json().get("_embedded", {}).get("elements", [])
+                        # Try to find by name (case-insensitive, also try matching common status names)
+                        status_lower = str(status_value).lower().replace("_", " ").replace("-", " ")
+                        matching_status = next(
+                            (s for s in statuses 
+                             if s.get("name", "").lower().replace("_", " ").replace("-", " ") == status_lower
+                             or s.get("name", "").lower() == status_lower),
+                            None
+                        )
+                        if matching_status:
+                            status_id = matching_status.get("id")
+                            payload["_links"]["status"] = {
+                                "href": f"/api/v3/statuses/{status_id}"
+                            }
+                        else:
+                            logger.warning(f"Status '{status_value}' not found, skipping status update")
+                    else:
+                        logger.warning(f"Failed to fetch statuses: {statuses_resp.status_code}")
+                except Exception as e:
+                    logger.warning(f"Error looking up status: {e}")
+        if "priority" in updates:
+            # Priority updates - need to look up priority ID by name
+            priority_value = updates["priority"]
+            payload["_links"] = payload.get("_links", {})
+            
+            # Priority name mapping from frontend values to common OpenProject names
+            priority_name_mapping = {
+                "lowest": ["lowest", "trivial", "very low", "very-low"],
+                "low": ["low", "minor"],
+                "medium": ["medium", "normal", "moderate"],
+                "high": ["high", "major", "important"],
+                "highest": ["highest", "critical", "urgent", "blocker"],
+                "critical": ["critical", "highest", "urgent", "blocker"]
             }
+            
+            # Try to find priority by name if it's not numeric
+            if not str(priority_value).isdigit():
+                try:
+                    # List priorities and find matching one
+                    priorities_url = f"{self.base_url}/api/v3/priorities"
+                    priorities_resp = requests.get(priorities_url, headers=self.headers, timeout=10)
+                    if priorities_resp.status_code == 200:
+                        priorities = priorities_resp.json().get("_embedded", {}).get("elements", [])
+                        priority_lower = str(priority_value).lower()
+                        
+                        # First try exact match
+                        matching_priority = next(
+                            (p for p in priorities if p.get("name", "").lower() == priority_lower),
+                            None
+                        )
+                        
+                        # If no exact match, try mapping
+                        if not matching_priority and priority_lower in priority_name_mapping:
+                            possible_names = priority_name_mapping[priority_lower]
+                            for possible_name in possible_names:
+                                matching_priority = next(
+                                    (p for p in priorities 
+                                     if p.get("name", "").lower() == possible_name.lower()),
+                                    None
+                                )
+                                if matching_priority:
+                                    break
+                        
+                        # If still no match, try partial/fuzzy matching
+                        if not matching_priority:
+                            for priority in priorities:
+                                priority_name = priority.get("name", "").lower()
+                                if priority_lower in priority_name or priority_name in priority_lower:
+                                    matching_priority = priority
+                                    break
+                        
+                        if matching_priority:
+                            priority_id = matching_priority.get("id")
+                            priority_name_found = matching_priority.get("name", "unknown")
+                            logger.info(f"Found priority match: '{priority_value}' -> '{priority_name_found}' (ID: {priority_id})")
+                            payload["_links"]["priority"] = {
+                                "href": f"/api/v3/priorities/{priority_id}"
+                            }
+                        else:
+                            available_priorities = [p.get("name") for p in priorities]
+                            logger.warning(
+                                f"Priority '{priority_value}' not found. "
+                                f"Available priorities: {available_priorities}. Skipping priority update."
+                            )
+                    else:
+                        logger.warning(f"Failed to fetch priorities: {priorities_resp.status_code}")
+                except Exception as e:
+                    logger.error(f"Error looking up priority: {e}", exc_info=True)
+            else:
+                # Use as ID directly
+                logger.info(f"Using priority as ID: {priority_value}")
+                payload["_links"]["priority"] = {
+                    "href": f"/api/v3/priorities/{priority_value}"
+                }
         if "assignee_id" in updates:
             payload["_links"] = payload.get("_links", {})
             assignee_id = updates["assignee_id"]
@@ -341,9 +447,116 @@ class OpenProjectProvider(BasePMProvider):
                 else:
                     payload["estimatedTime"] = f"PT{hours_int}H"
         
-        response = requests.patch(url, headers=self.headers, json=payload)
+        if "due_date" in updates:
+            due_date = updates["due_date"]
+            if due_date:
+                # OpenProject expects ISO 8601 date format (YYYY-MM-DD)
+                if isinstance(due_date, str):
+                    payload["dueDate"] = due_date
+                elif hasattr(due_date, "isoformat"):
+                    payload["dueDate"] = due_date.isoformat()
+                else:
+                    payload["dueDate"] = str(due_date)
+            else:
+                payload["dueDate"] = None
+        
+        if "start_date" in updates:
+            start_date = updates["start_date"]
+            if start_date:
+                # OpenProject expects ISO 8601 date format (YYYY-MM-DD)
+                if isinstance(start_date, str):
+                    payload["startDate"] = start_date
+                elif hasattr(start_date, "isoformat"):
+                    payload["startDate"] = start_date.isoformat()
+                else:
+                    payload["startDate"] = str(start_date)
+            else:
+                payload["startDate"] = None
+        
+        if "parent_task_id" in updates:
+            # Parent task assignment (for subtasks)
+            payload["_links"] = payload.get("_links", {})
+            parent_id = updates["parent_task_id"]
+            if parent_id:
+                payload["_links"]["parent"] = {
+                    "href": f"/api/v3/work_packages/{parent_id}"
+                }
+            else:
+                # Remove parent - use changeParent link if available
+                try:
+                    current_wp = requests.get(url, headers=self.headers, timeout=10)
+                    if current_wp.status_code == 200:
+                        current_data = current_wp.json()
+                        change_parent_link = current_data.get("_links", {}).get("changeParent")
+                        if change_parent_link and change_parent_link.get("href"):
+                            change_url = change_parent_link["href"]
+                            if not change_url.startswith("http"):
+                                change_url = f"{self.base_url}{change_url}"
+                            change_resp = requests.post(
+                                change_url,
+                                headers=self.headers,
+                                json={"parent": None},
+                                timeout=10
+                            )
+                            if change_resp.status_code in [200, 204]:
+                                logger.info(f"Removed parent from work package {task_id}")
+                                return self._parse_task(change_resp.json() if change_resp.text else current_data)
+                except Exception as e:
+                    logger.warning(f"Could not remove parent via changeParent link: {e}")
+                # Fallback: try setting parent to empty dict
+                payload["_links"]["parent"] = {}
+        
+        if "label_ids" in updates:
+            # Labels in OpenProject are categories
+            payload["_links"] = payload.get("_links", {})
+            label_ids = updates["label_ids"]
+            if label_ids is None:
+                payload["_links"]["categories"] = []
+            elif isinstance(label_ids, list):
+                payload["_links"]["categories"] = [
+                    {"href": f"/api/v3/categories/{label_id}"} for label_id in label_ids
+                ]
+            else:
+                payload["_links"]["categories"] = [
+                    {"href": f"/api/v3/categories/{label_ids}"}
+                ]
+        
+        if "actual_hours" in updates:
+            # Actual hours (spent time) in OpenProject
+            # Note: spentTime may be read-only, but we'll try
+            hours = updates["actual_hours"]
+            if hours is None or hours == 0:
+                payload["spentTime"] = None
+            elif hours:
+                hours_float = float(hours)
+                hours_int = int(hours_float)
+                minutes_int = int((hours_float - hours_int) * 60)
+                
+                if minutes_int > 0:
+                    payload["spentTime"] = f"PT{hours_int}H{minutes_int}M"
+                else:
+                    payload["spentTime"] = f"PT{hours_int}H"
+        
+        # Only send request if there are actual updates (beyond lockVersion)
+        if not payload or (len(payload) == 1 and "lockVersion" in payload):
+            logger.warning(f"No updates to apply for task {task_id}, payload: {payload}")
+            # Return current task if no updates
+            current_task = await self.get_task(task_id)
+            if current_task:
+                return current_task
+            else:
+                raise ValueError(f"Task {task_id} not found")
+        
+        # Log the final payload structure for debugging
+        logger.info(f"Updating task {task_id} with payload: {payload}")
+        if "_links" in payload:
+            logger.info(f"Payload _links: {payload['_links']}")
+        response = requests.patch(url, headers=self.headers, json=payload, timeout=10)
         response.raise_for_status()
-        return self._parse_task(response.json())
+        updated_data = response.json()
+        priority_after = updated_data.get('_links', {}).get('priority', {}).get('title', 'N/A')
+        logger.info(f"Task {task_id} updated successfully. Priority after update: {priority_after}")
+        return self._parse_task(updated_data)
     
     async def delete_task(self, task_id: str) -> bool:
         """Delete a work package"""

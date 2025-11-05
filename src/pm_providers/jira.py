@@ -578,6 +578,10 @@ class JIRAProvider(BasePMProvider):
         project_obj = fields.get("project", {})
         project_id = project_obj.get("key") or project_obj.get("id")
         
+        # Parse labels
+        labels = fields.get("labels", [])
+        label_ids = labels if labels else None
+        
         # Parse parent task (for subtasks) and epic (if parent is an epic)
         parent_obj = fields.get("parent")
         parent_task_id = None
@@ -665,6 +669,7 @@ class JIRAProvider(BasePMProvider):
             epic_id=epic_id,  # Set epic_id if parent is an epic
             sprint_id=sprint_id,  # Set sprint_id from customfield_10020
             assignee_id=assignee_id,
+            label_ids=label_ids,
             estimated_hours=estimated_hours,
             actual_hours=actual_hours,
             start_date=self._parse_date(start_date_str),
@@ -763,9 +768,105 @@ class JIRAProvider(BasePMProvider):
                 fields["description"] = None
         if "status" in updates:
             # Status updates require transitions API
-            logger.warning(
-                "Status updates require transitions API, not implemented yet"
-            )
+            status_value = updates["status"]
+            try:
+                # Get available transitions
+                transitions_url = f"{self.base_url}/rest/api/3/issue/{task_id}/transitions"
+                trans_resp = requests.get(transitions_url, headers=self.headers, timeout=10)
+                if trans_resp.status_code == 200:
+                    transitions = trans_resp.json().get("transitions", [])
+                    # Try to find transition by name (case-insensitive)
+                    status_lower = str(status_value).lower().replace("_", " ").replace("-", " ")
+                    matching_transition = None
+                    for trans in transitions:
+                        trans_name = trans.get("name", "").lower()
+                        if trans_name == status_lower or status_lower in trans_name:
+                            matching_transition = trans
+                            break
+                    
+                    if matching_transition:
+                        transition_id = matching_transition.get("id")
+                        # Execute transition
+                        transition_url = f"{self.base_url}/rest/api/3/issue/{task_id}/transitions"
+                        transition_payload = {"transition": {"id": transition_id}}
+                        transition_resp = requests.post(
+                            transition_url, headers=self.headers, json=transition_payload, timeout=10
+                        )
+                        if transition_resp.status_code == 204:
+                            logger.info(f"Status transition successful: {status_value}")
+                        else:
+                            logger.warning(
+                                f"Failed to transition status: {transition_resp.status_code}, "
+                                f"{transition_resp.text[:200]}"
+                            )
+                    else:
+                        logger.warning(
+                            f"Status transition '{status_value}' not found. "
+                            f"Available: {[t.get('name') for t in transitions]}"
+                        )
+                else:
+                    logger.warning(f"Failed to get transitions: {trans_resp.status_code}")
+            except Exception as e:
+                logger.warning(f"Error updating status: {e}")
+        if "priority" in updates:
+            # Priority updates
+            priority_value = updates["priority"]
+            if priority_value:
+                # Try to get priority by name or ID
+                try:
+                    priorities_url = f"{self.base_url}/rest/api/3/priority"
+                    prio_resp = requests.get(priorities_url, headers=self.headers, timeout=10)
+                    if prio_resp.status_code == 200:
+                        priorities = prio_resp.json()
+                        # Priority name mapping
+                        priority_name_mapping = {
+                            "lowest": ["lowest", "trivial"],
+                            "low": ["low", "minor"],
+                            "medium": ["medium", "normal"],
+                            "high": ["high", "major"],
+                            "highest": ["highest", "critical", "blocker"],
+                            "critical": ["critical", "highest", "blocker"]
+                        }
+                        
+                        priority_lower = str(priority_value).lower()
+                        matching_priority = None
+                        
+                        # First try exact match by name
+                        for prio in priorities:
+                            if prio.get("name", "").lower() == priority_lower:
+                                matching_priority = prio
+                                break
+                        
+                        # If no exact match, try mapping
+                        if not matching_priority and priority_lower in priority_name_mapping:
+                            possible_names = priority_name_mapping[priority_lower]
+                            for possible_name in possible_names:
+                                for prio in priorities:
+                                    if prio.get("name", "").lower() == possible_name.lower():
+                                        matching_priority = prio
+                                        break
+                                if matching_priority:
+                                    break
+                        
+                        if matching_priority:
+                            fields["priority"] = {"id": str(matching_priority.get("id"))}
+                            logger.info(f"Found priority: {matching_priority.get('name')}")
+                        elif str(priority_value).isdigit():
+                            # Use as ID directly
+                            fields["priority"] = {"id": str(priority_value)}
+                        else:
+                            logger.warning(f"Priority '{priority_value}' not found")
+                    else:
+                        # If can't fetch priorities, try using as ID
+                        if str(priority_value).isdigit():
+                            fields["priority"] = {"id": str(priority_value)}
+                except Exception as e:
+                    logger.warning(f"Error looking up priority: {e}")
+                    # Fallback: try using as ID
+                    if str(priority_value).isdigit():
+                        fields["priority"] = {"id": str(priority_value)}
+            else:
+                fields["priority"] = None
         if "assignee_id" in updates:
             assignee_id = updates["assignee_id"]
             if assignee_id:
@@ -828,6 +929,68 @@ class JIRAProvider(BasePMProvider):
                     return updated_task
                 else:
                     raise ValueError("Failed to retrieve updated task after sprint assignment")
+        
+        if "due_date" in updates:
+            due_date = updates["due_date"]
+            if due_date:
+                # JIRA expects YYYY-MM-DD format
+                if isinstance(due_date, str):
+                    fields["duedate"] = due_date
+                elif hasattr(due_date, "isoformat"):
+                    fields["duedate"] = due_date.isoformat()
+                else:
+                    fields["duedate"] = str(due_date)
+            else:
+                fields["duedate"] = None
+        
+        if "start_date" in updates:
+            start_date = updates["start_date"]
+            if start_date:
+                # JIRA expects YYYY-MM-DD format
+                if isinstance(start_date, str):
+                    fields["startdate"] = start_date
+                elif hasattr(start_date, "isoformat"):
+                    fields["startdate"] = start_date.isoformat()
+                else:
+                    fields["startdate"] = str(start_date)
+            else:
+                fields["startdate"] = None
+        
+        if "estimated_hours" in updates:
+            hours = updates["estimated_hours"]
+            if hours is None or hours == 0:
+                fields["timeoriginalestimate"] = None
+            elif hours:
+                # Convert hours to seconds
+                seconds = int(float(hours) * 3600)
+                fields["timeoriginalestimate"] = seconds
+        
+        if "actual_hours" in updates:
+            hours = updates["actual_hours"]
+            if hours is None or hours == 0:
+                fields["timespent"] = None
+            elif hours:
+                # Convert hours to seconds
+                # Note: timespent may be read-only, but we'll try
+                seconds = int(float(hours) * 3600)
+                fields["timespent"] = seconds
+        
+        if "parent_task_id" in updates:
+            parent_id = updates["parent_task_id"]
+            if parent_id:
+                fields["parent"] = {"key": parent_id}
+            else:
+                fields["parent"] = None
+        
+        if "label_ids" in updates:
+            labels = updates["label_ids"]
+            if labels is None:
+                fields["labels"] = []
+            elif isinstance(labels, list):
+                # JIRA labels are just strings
+                fields["labels"] = [str(label) for label in labels]
+            else:
+                fields["labels"] = [str(labels)]
         
         if not fields:
             # No updates to apply, just return the current task

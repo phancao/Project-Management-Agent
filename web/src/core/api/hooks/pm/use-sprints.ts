@@ -14,8 +14,12 @@ export interface Sprint {
   status: string;
 }
 
-const fetchSprints = async (projectId: string): Promise<Sprint[]> => {
-  const response = await fetch(resolveServiceURL(`pm/projects/${projectId}/sprints`));
+const fetchSprints = async (projectId: string, state?: string): Promise<Sprint[]> => {
+  const url = new URL(resolveServiceURL(`pm/projects/${projectId}/sprints`));
+  if (state) {
+    url.searchParams.set('state', state);
+  }
+  const response = await fetch(url.toString());
   if (!response.ok) {
     const errorText = await response.text();
     let errorMessage = `Failed to fetch sprints: ${response.status} ${response.statusText}`;
@@ -33,7 +37,7 @@ const fetchSprints = async (projectId: string): Promise<Sprint[]> => {
   return response.json();
 };
 
-export function useSprints(projectId: string) {
+export function useSprints(projectId: string, state?: string) {
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -52,7 +56,7 @@ export function useSprints(projectId: string) {
     // from previous projects
     setSprints([]);
     
-    fetchSprints(projectId)
+    fetchSprints(projectId, state)
       .then((data) => {
         setSprints(data);
         setLoading(false);
@@ -63,7 +67,7 @@ export function useSprints(projectId: string) {
         setSprints([]); // Clear sprints on error to avoid showing stale data
         setLoading(false);
       });
-  }, [projectId]);
+  }, [projectId, state]);
 
   useEffect(() => {
     refresh();

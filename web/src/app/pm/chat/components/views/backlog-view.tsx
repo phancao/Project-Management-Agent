@@ -226,12 +226,21 @@ function EpicDropZone({
 function SprintSection({ sprint, tasks, onTaskClick }: { sprint: { id: string; name: string; start_date?: string; end_date?: string; status: string }; tasks: Task[]; onTaskClick: (task: Task) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `sprint-${sprint.id}` });
   
-  const isActive = sprint.status === "active" || sprint.status === "open";
+  // Map sprint status to determine if it's active, closed, or future
+  const isActive = sprint.status === "active";
+  const isClosed = sprint.status === "closed";
+  const isFuture = sprint.status === "future";
   
   return (
     <div className="mb-4">
       <div className={`p-3 rounded-t-lg border border-b-0 ${
-        isActive ? "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700"
+        isActive 
+          ? "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800" 
+          : isClosed
+          ? "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 opacity-75"
+          : isFuture
+          ? "bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800"
+          : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700"
       }`}>
         <div className="flex items-center justify-between">
           <div>
@@ -355,7 +364,8 @@ export function BacklogView() {
   
   // Fetch tasks for the active project - use full project ID (with provider_id)
   const { tasks, loading, error } = useTasks(projectIdForSprints ?? undefined);
-  const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "");
+  // Fetch all sprints (active, closed, future) - no state filter to show all
+  const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {

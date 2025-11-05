@@ -405,9 +405,11 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
               ) : (
                 <div className="mt-1">
                   <span className={`px-2 py-1 rounded text-sm ${
-                    task.priority === "high" || task.priority === "critical" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
-                    task.priority === "medium" ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" :
-                    "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                    task.priority === "high" || task.priority === "highest" || task.priority === "critical"
+                      ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                      : task.priority === "medium"
+                      ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                      : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
                   }`}>
                     {task.priority || "None"}
                   </span>

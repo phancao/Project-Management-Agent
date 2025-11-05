@@ -852,8 +852,8 @@ export function BacklogView() {
     
     const groupedInfo = Object.keys(grouped).map(key => ({ 
       sprintId: key, 
-      count: grouped[key].length,
-      taskIds: grouped[key].map(t => t.id)
+      count: grouped[key]?.length ?? 0,
+      taskIds: grouped[key]?.map(t => t.id) ?? []
     }));
     console.log('[tasksInSprints] Grouped tasks:', JSON.stringify(groupedInfo, null, 2));
     return grouped;

@@ -8,16 +8,17 @@ import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Search, Filter } from "lucide-react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState, useMemo, useEffect } from "react";
 
 import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
-import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
-import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
+import { useTasks, useMyTasks } from "~/core/api/hooks/pm/use-tasks";
+import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
+import { useEpics } from "~/core/api/hooks/pm/use-epics";
 
 import { TaskDetailsModal } from "../task-details-modal";
 
@@ -47,9 +48,11 @@ function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
       <div className="flex items-center gap-2 text-xs">
         {task.priority && (
           <span className={`px-2 py-0.5 rounded ${
-            task.priority === "high" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
-            task.priority === "medium" ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" :
-            "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+            task.priority === "high" || task.priority === "highest" || task.priority === "critical"
+              ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+              : task.priority === "medium"
+              ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+              : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
           }`}>
             {task.priority}
           </span>
@@ -96,47 +99,58 @@ function Column({ column, tasks, onTaskClick }: { column: { id: string; title: s
 }
 
 export function SprintBoardView() {
-  const { tasks, loading, error } = useMyTasks();
-  const { projects } = useProjects();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [epicFilter, setEpicFilter] = useState<string | null>(null);
   
-  // Get project filter from URL, fallback to local state
+  // Get project from URL (if any)
   const activeProjectId = searchParams.get('project');
-  const initialProjectFilter = useMemo(() => {
-    if (activeProjectId) {
-      const project = projects.find(p => p.id === activeProjectId);
-      return project ? project.name : "all";
-    }
-    return "all";
-  }, [activeProjectId, projects]);
   
-  const [projectFilter, setProjectFilter] = useState<string>(initialProjectFilter);
+  // Use project-specific tasks if a project is selected, otherwise use "my tasks"
+  const projectIdForTasks = useMemo(() => {
+    if (!activeProjectId) return undefined;
+    // Use the full project ID including provider_id so backend can identify the provider
+    return activeProjectId;
+  }, [activeProjectId]);
   
-  // Sync project filter with URL when it changes
+  const { tasks, loading, error } = activeProjectId ? useTasks(projectIdForTasks) : useMyTasks();
+  
+  // Fetch priorities and epics from backend for the active project
+  const { priorities: availablePrioritiesFromBackend } = usePriorities(activeProjectId ?? undefined);
+  const { epics } = useEpics(activeProjectId ?? undefined);
+  
+  // Reset filters when project changes
   useEffect(() => {
-    if (initialProjectFilter !== "all") {
-      setProjectFilter(initialProjectFilter);
-    }
-  }, [initialProjectFilter]);
+    setSearchQuery("");
+    setPriorityFilter("all");
+    setEpicFilter(null);
+  }, [activeProjectId]);
   
-  // Handle project filter changes to update URL
-  const handleProjectFilterChange = (value: string) => {
-    setProjectFilter(value);
-    if (value === "all") {
-      router.push('/pm/chat');
-    } else {
-      const project = projects.find(p => p.name === value);
-      if (project) {
-        router.push(`/pm/chat?project=${project.id}`);
-      }
+  // Use priorities from backend, with fallback to task data
+  const availablePriorities = useMemo(() => {
+    if (availablePrioritiesFromBackend && availablePrioritiesFromBackend.length > 0) {
+      // Use backend priorities, store lowercase value for matching
+      return availablePrioritiesFromBackend.map(priority => ({
+        value: priority.name.toLowerCase(),
+        label: priority.name
+      }));
     }
-  };
+    // Fallback: extract from tasks if backend doesn't have priorities
+    const priorityMap = new Map<string, string>(); // lowercase -> original case
+    tasks.forEach(task => {
+      if (task.priority) {
+        const lower = task.priority.toLowerCase();
+        if (!priorityMap.has(lower)) {
+          priorityMap.set(lower, task.priority);
+        }
+      }
+    });
+    return Array.from(priorityMap.entries()).map(([lower, original]) => ({ value: lower, label: original }));
+  }, [availablePrioritiesFromBackend, tasks]);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -148,41 +162,50 @@ export function SprintBoardView() {
   
   // Filter tasks
   const filteredTasks = useMemo(() => {
-    let filtered = tasks;
+    // Return empty array only if we're loading AND have no tasks yet (to prevent flash of stale data)
+    // If we have tasks, always filter them even if loading is true (for real-time filtering)
+    if (loading && (!tasks || tasks.length === 0)) return [];
+    
+    // If we have no tasks at all, return empty
+    if (!tasks || tasks.length === 0) return [];
+    
+    let filtered = [...tasks]; // Create a copy to avoid mutating original
 
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(t => 
-        t.title.toLowerCase().includes(query) ||
-        (t.description?.toLowerCase().includes(query)) ||
-        (t.project_name?.toLowerCase().includes(query))
-      );
-    }
-
-    // Priority filter
-    if (priorityFilter !== "all") {
+    // Search filter - search in title and description only
+    const trimmedQuery = (searchQuery || "").trim();
+    if (trimmedQuery) {
+      const query = trimmedQuery.toLowerCase();
       filtered = filtered.filter(t => {
-        const priority = t.priority?.toLowerCase() || "";
-        if (priorityFilter === "high") {
-          return priority === "high" || priority === "highest" || priority === "critical";
-        }
-        if (priorityFilter === "low") {
-          return priority === "low" || priority === "lowest";
-        }
-        return priority === priorityFilter;
+        if (!t) return false;
+        const title = (t.title || "").toLowerCase();
+        const description = (t.description || "").toLowerCase();
+        // Search in title and description only
+        const matches = title.includes(query) || description.includes(query);
+        return matches;
       });
     }
 
-    // Project filter
-    if (projectFilter !== "all") {
-      filtered = filtered.filter(t => t.project_name === projectFilter);
+    // Priority filter - match by exact priority (case-insensitive)
+    if (priorityFilter && priorityFilter !== "all") {
+      const filterPriorityLower = priorityFilter.toLowerCase();
+      filtered = filtered.filter(t => {
+        const taskPriority = (t.priority || "").toLowerCase();
+        return taskPriority === filterPriorityLower;
+      });
+    }
+
+    // Epic filter
+    if (epicFilter && epicFilter !== "all") {
+      filtered = filtered.filter(task => {
+        if (epicFilter === "none") {
+          return !task.epic_id;
+        }
+        return task.epic_id === epicFilter;
+      });
     }
 
     return filtered;
-  }, [tasks, searchQuery, priorityFilter, projectFilter]);
-  
-  const hasActiveFilters = priorityFilter !== "all" || projectFilter !== "all" || searchQuery;
+  }, [tasks, searchQuery, priorityFilter, epicFilter, loading]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -294,59 +317,6 @@ export function SprintBoardView() {
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Sprint Board</h2>
-          {hasActiveFilters && (
-            <div className="flex flex-wrap items-center gap-2">
-              {searchQuery && (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
-                  <Search className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {searchQuery}
-                  </span>
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-                    aria-label="Remove search filter"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-              {priorityFilter !== "all" && (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
-                    {priorityFilter}
-                  </span>
-                  <button
-                    onClick={() => setPriorityFilter("all")}
-                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-                    aria-label="Remove priority filter"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-              {projectFilter !== "all" && (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {projectFilter}
-                  </span>
-                  <button
-                    onClick={() => setProjectFilter("all")}
-                    className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-                    aria-label="Remove project filter"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
         <div className="text-sm text-gray-500 dark:text-gray-400">
           {filteredTasks.length} of {tasks.length} tasks
@@ -369,28 +339,40 @@ export function SprintBoardView() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priority</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={projectFilter} onValueChange={handleProjectFilterChange}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Project" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Projects</SelectItem>
-                {[...new Set(tasks.map(t => t.project_name).filter((n): n is string => !!n))].map(projectName => (
-                  <SelectItem key={projectName} value={projectName}>{projectName}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {availablePriorities.length > 0 && (
+              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Priority</SelectItem>
+                  {availablePriorities.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {epics.length > 0 && (
+              <Select 
+                value={epicFilter ?? "all"} 
+                onValueChange={(value) => setEpicFilter(value === "all" ? null : value)}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Epic" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Epics</SelectItem>
+                  <SelectItem value="none">No Epic</SelectItem>
+                  {epics.map((epic) => (
+                    <SelectItem key={epic.id} value={epic.id}>
+                      {epic.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
       </Card>
@@ -421,7 +403,7 @@ export function SprintBoardView() {
           setSelectedTask(null);
         }}
         onUpdate={handleUpdateTask}
-        projectId={undefined}
+        projectId={activeProjectId}
       />
     </div>
   );

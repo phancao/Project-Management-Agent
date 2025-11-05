@@ -9,7 +9,7 @@ from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMLabel,
     PMProviderConfig
 )
-from typing import List, Optional, Dict, Any, Dict
+from typing import List, Optional, Dict, Any
 
 
 class ClickUpProvider(BasePMProvider):

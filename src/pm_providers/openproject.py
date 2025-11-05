@@ -285,7 +285,7 @@ class OpenProjectProvider(BasePMProvider):
     # ==================== Sprint Operations ====================
     
     async def list_sprints(
-        self, project_id: Optional[str] = None
+        self, project_id: Optional[str] = None, state: Optional[str] = None
     ) -> List[PMSprint]:
         """
         List sprints (iterations) from OpenProject

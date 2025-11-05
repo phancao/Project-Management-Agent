@@ -607,12 +607,15 @@ class PMHandler:
         
         return result
     
-    async def list_project_sprints(self, project_id: str) -> List[Dict[str, Any]]:
+    async def list_project_sprints(
+        self, project_id: str, state: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
-        List sprints for a specific project.
+        List sprints for a specific project, optionally filtered by state.
         
         Args:
             project_id: Project ID in format "provider_id:actual_project_id"
+            state: Optional state filter ("active", "closed", "future", or None for all)
             
         Returns:
             List of sprints for the project
@@ -643,8 +646,11 @@ class PMHandler:
         # Create provider instance
         provider_instance = self._create_provider_instance(provider)
         
-        # Fetch sprints
-        sprints = await provider_instance.list_sprints(project_id=actual_project_id)
+        # Fetch sprints with optional state filter
+        sprints = await provider_instance.list_sprints(
+            project_id=actual_project_id,
+            state=state
+        )
         
         return [
             {

@@ -21,11 +21,20 @@ from .types import State
 
 def continue_to_running_research_team(state: State):
     current_plan = state.get("current_plan")
-    if not current_plan or not current_plan.steps:
+    if not current_plan:
+        return "planner"
+    
+    # Handle case where current_plan might be a string (legacy)
+    if isinstance(current_plan, str):
+        return "planner"
+    
+    if not current_plan.steps:
         return "planner"
 
     if all(step.execution_res for step in current_plan.steps):
-        return "planner"
+        # All steps completed - route to reporter to generate final response
+        # Don't route back to planner, as that would regenerate a new plan
+        return "reporter"
 
     # Find first incomplete step
     incomplete_step = None
@@ -35,7 +44,9 @@ def continue_to_running_research_team(state: State):
             break
 
     if not incomplete_step:
-        return "planner"
+        # No incomplete step found but also not all completed?
+        # This shouldn't happen, but route to reporter to finish
+        return "reporter"
 
     if incomplete_step.step_type == StepType.RESEARCH:
         return "researcher"
@@ -60,7 +71,7 @@ def _build_base_graph():
     builder.add_conditional_edges(
         "research_team",
         continue_to_running_research_team,
-        ["planner", "researcher", "coder"],
+        ["planner", "researcher", "coder", "reporter"],
     )
     builder.add_edge("reporter", END)
     # Add conditional edges for coordinator to handle clarification flow

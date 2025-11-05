@@ -17,7 +17,18 @@ export interface Sprint {
 const fetchSprints = async (projectId: string): Promise<Sprint[]> => {
   const response = await fetch(resolveServiceURL(`pm/projects/${projectId}/sprints`));
   if (!response.ok) {
-    throw new Error("Failed to fetch sprints");
+    const errorText = await response.text();
+    let errorMessage = `Failed to fetch sprints: ${response.status} ${response.statusText}`;
+    try {
+      const errorData = JSON.parse(errorText);
+      errorMessage = errorData.detail || errorMessage;
+    } catch {
+      // If response is not JSON, use the text or default message
+      if (errorText) {
+        errorMessage = errorText;
+      }
+    }
+    throw new Error(errorMessage);
   }
   return response.json();
 };
@@ -29,18 +40,27 @@ export function useSprints(projectId: string) {
 
   const refresh = useCallback(() => {
     if (!projectId) {
+      setSprints([]);
       setLoading(false);
+      setError(null);
       return;
     }
     
     setLoading(true);
+    setError(null);
+    // Clear sprints immediately when project changes to avoid showing stale data
+    // from previous projects
+    setSprints([]);
+    
     fetchSprints(projectId)
       .then((data) => {
         setSprints(data);
         setLoading(false);
+        setError(null);
       })
       .catch((err) => {
         setError(err as Error);
+        setSprints([]); // Clear sprints on error to avoid showing stale data
         setLoading(false);
       });
   }, [projectId]);

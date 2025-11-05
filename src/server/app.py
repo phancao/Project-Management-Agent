@@ -1436,7 +1436,11 @@ async def pm_update_task(request: Request, task_id: str):
 
 
 @app.get("/api/pm/projects/{project_id}/sprints")
-async def pm_list_sprints(request: Request, project_id: str):
+async def pm_list_sprints(
+    request: Request, 
+    project_id: str,
+    state: Optional[str] = None
+):
     """List all sprints for a project"""
     try:
         from database.connection import get_db_session
@@ -1484,7 +1488,7 @@ async def pm_list_sprints(request: Request, project_id: str):
             
             # Use PMHandler for provider-prefixed project IDs
             handler = PMHandler.from_db_session(db)
-            return await handler.list_project_sprints(project_id)
+            return await handler.list_project_sprints(project_id, state=state)
         finally:
             db.close()
     except ValueError as ve:

@@ -670,9 +670,106 @@ class JIRAProvider(BasePMProvider):
         raise NotImplementedError("JIRA provider not yet implemented")
     
     async def list_sprints(
-        self, project_id: Optional[str] = None
+        self, project_id: Optional[str] = None, state: Optional[str] = None
     ) -> List[PMSprint]:
-        raise NotImplementedError("JIRA provider not yet implemented")
+        """
+        List all sprints for a project, optionally filtered by state.
+        
+        JIRA API: /rest/agile/1.0/board/{boardId}/sprint
+        Supports state filter: "active", "closed", "future", or None for all
+        
+        TESTED: ✅ Works with state filtering
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # First, get boards for the project
+            boards_url = f"{self.base_url}/rest/agile/1.0/board"
+            params = {}
+            
+            if project_id:
+                # Try to use project_id as projectKeyOrId
+                # Could be numeric ID or project key (e.g., "SCRUM")
+                params['projectKeyOrId'] = project_id
+            
+            response = requests.get(boards_url, headers=self.headers, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                boards = data.get('values', [])
+                
+                if not boards:
+                    logger.warning(f"No boards found for project: {project_id}")
+                    return []
+                
+                # Get sprints from the first board (or all boards if project_id not specified)
+                all_sprints = []
+                
+                for board in boards:
+                    board_id = board.get('id')
+                    if not board_id:
+                        continue
+                    
+                    sprints_url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/sprint"
+                    
+                    # Add state filter if specified
+                    sprint_params = {}
+                    if state:
+                        sprint_params['state'] = state
+                    
+                    sprint_response = requests.get(
+                        sprints_url, 
+                        headers=self.headers, 
+                        params=sprint_params if sprint_params else None,
+                        timeout=10
+                    )
+                    
+                    if sprint_response.status_code == 200:
+                        sprint_data = sprint_response.json()
+                        board_sprints = sprint_data.get('values', [])
+                        all_sprints.extend(board_sprints)
+                        logger.info(
+                            f"Found {len(board_sprints)} sprints from board {board_id} "
+                            f"(state={state or 'all'})"
+                        )
+                    else:
+                        logger.warning(
+                            f"Failed to get sprints from board {board_id}: "
+                            f"{sprint_response.status_code}"
+                        )
+                
+                # Convert to PMSprint objects
+                sprints = []
+                for s in all_sprints:
+                    sprint = PMSprint(
+                        id=str(s.get('id')),
+                        name=s.get('name', ''),
+                        project_id=project_id,
+                        start_date=self._parse_date(s.get('startDate')),
+                        end_date=self._parse_date(s.get('endDate')),
+                        status=s.get('state'),  # active, closed, future
+                        goal=s.get('goal'),
+                        created_at=self._parse_datetime(s.get('createdDate')),
+                        updated_at=self._parse_datetime(s.get('updatedDate')),
+                        raw_data=s
+                    )
+                    sprints.append(sprint)
+                
+                logger.info(f"Returning {len(sprints)} sprints (state={state or 'all'})")
+                return sprints
+            else:
+                logger.error(
+                    f"Failed to get boards: {response.status_code}, "
+                    f"{response.text[:200]}"
+                )
+                raise ValueError(
+                    f"Failed to get boards: ({response.status_code}) "
+                    f"{response.text[:200]}"
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error listing sprints: {e}", exc_info=True)
+            raise ValueError(f"Failed to list sprints: {str(e)}")
     
     async def get_sprint(self, sprint_id: str) -> Optional[PMSprint]:
         raise NotImplementedError("JIRA provider not yet implemented")

@@ -296,13 +296,33 @@ def planner_node(
     if isinstance(curr_plan, dict) and curr_plan.get("has_enough_context"):
         logger.info("Planner response has enough context.")
         new_plan = Plan.model_validate(curr_plan)
-        return Command(
-            update={
-                "messages": [AIMessage(content=full_response, name="planner")],
-                "current_plan": new_plan,
-            },
-            goto="reporter",
-        )
+        
+        # Check if plan has steps that need execution (e.g., PM tool calls)
+        # Even if has_enough_context is true, we need to execute steps first
+        if new_plan.steps and len(new_plan.steps) > 0:
+            logger.info(
+                f"Plan has {len(new_plan.steps)} step(s) to execute. "
+                "Routing to research_team before reporting."
+            )
+            # Route to research_team to execute the plan steps (PM tools, etc.)
+            # After execution, research_team will route back to planner/reporter
+            return Command(
+                update={
+                    "messages": [AIMessage(content=full_response, name="planner")],
+                    "current_plan": new_plan,
+                },
+                goto="research_team",
+            )
+        else:
+            # No steps to execute, can go directly to reporter
+            logger.info("Plan has no steps to execute. Routing directly to reporter.")
+            return Command(
+                update={
+                    "messages": [AIMessage(content=full_response, name="planner")],
+                    "current_plan": new_plan,
+                },
+                goto="reporter",
+            )
     return Command(
         update={
             "messages": [AIMessage(content=full_response, name="planner")],

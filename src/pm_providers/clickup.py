@@ -64,7 +64,9 @@ class ClickUpProvider(BasePMProvider):
     async def delete_task(self, task_id: str) -> bool:
         raise NotImplementedError("ClickUp provider not yet implemented")
     
-    async def list_sprints(self, project_id: Optional[str] = None) -> List[PMSprint]:
+    async def list_sprints(
+        self, project_id: Optional[str] = None, state: Optional[str] = None
+    ) -> List[PMSprint]:
         raise NotImplementedError("ClickUp provider not yet implemented")
     
     async def get_sprint(self, sprint_id: str) -> Optional[PMSprint]:

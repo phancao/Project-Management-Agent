@@ -81,7 +81,9 @@ class BasePMProvider(ABC):
     # ==================== Sprint Operations ====================
     
     @abstractmethod
-    async def list_sprints(self, project_id: Optional[str] = None) -> List[PMSprint]:
+    async def list_sprints(
+        self, project_id: Optional[str] = None, state: Optional[str] = None
+    ) -> List[PMSprint]:
         """List all sprints, optionally filtered by project"""
         pass
     

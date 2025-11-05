@@ -712,7 +712,11 @@ def reporter_node(state: State, config: RunnableConfig):
     response_content = response.content
     logger.info(f"reporter response: {response_content}")
 
-    return {"final_report": response_content}
+    # Add AIMessage so the final report gets streamed to the client
+    return {
+        "messages": [AIMessage(content=response_content, name="reporter")],
+        "final_report": response_content,
+    }
 
 
 def research_team_node(state: State):

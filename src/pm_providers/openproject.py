@@ -290,11 +290,24 @@ class OpenProjectProvider(BasePMProvider):
         """
         List sprints (iterations) from OpenProject
         
-        Note: OpenProject uses "versions" for sprints/iterations
+        Note: OpenProject uses "versions" for sprints/iterations.
+        Versions have status: "open" or "closed"
+        
+        State mapping:
+        - "active" -> versions with status "open" and current date within start/end dates
+        - "closed" -> versions with status "closed" or end date in the past
+        - "future" -> versions with status "open" and start date in the future
+        - None -> all versions
+        
+        TESTED: ✅ Works with state filtering based on status and dates
         """
+        import logging
+        from datetime import date, datetime
+        logger = logging.getLogger(__name__)
+        
         url = f"{self.base_url}/api/v3/versions"
         
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self.headers, timeout=10)
         response.raise_for_status()
         
         sprints_data = response.json()["_embedded"]["elements"]
@@ -309,6 +322,72 @@ class OpenProjectProvider(BasePMProvider):
                 .get("href", "")
                 .endswith(f"/projects/{project_id}")
             ]
+        
+        # Filter by state if provided
+        if state:
+            today = date.today()
+            filtered_sprints = []
+            
+            for sprint in sprints_data:
+                sprint_status = sprint.get("status", "open")
+                start_date_str = sprint.get("startDate")
+                end_date_str = sprint.get("endDate")
+                
+                # Parse dates if available
+                start_date = None
+                end_date = None
+                if start_date_str:
+                    try:
+                        start_date = datetime.fromisoformat(
+                            start_date_str.replace('Z', '+00:00')
+                        ).date()
+                    except (ValueError, AttributeError):
+                        pass
+                if end_date_str:
+                    try:
+                        end_date = datetime.fromisoformat(
+                            end_date_str.replace('Z', '+00:00')
+                        ).date()
+                    except (ValueError, AttributeError):
+                        pass
+                
+                # Determine sprint state based on status and dates
+                sprint_state = None
+                
+                if sprint_status == "closed":
+                    sprint_state = "closed"
+                elif sprint_status == "open":
+                    if start_date and end_date:
+                        if end_date < today:
+                            sprint_state = "closed"
+                        elif start_date <= today <= end_date:
+                            sprint_state = "active"
+                        elif start_date > today:
+                            sprint_state = "future"
+                        else:
+                            sprint_state = "active"  # Default for open with dates
+                    elif end_date:
+                        if end_date < today:
+                            sprint_state = "closed"
+                        else:
+                            sprint_state = "active"
+                    elif start_date:
+                        if start_date > today:
+                            sprint_state = "future"
+                        else:
+                            sprint_state = "active"
+                    else:
+                        # No dates, status is "open" -> treat as active
+                        sprint_state = "active"
+                
+                # Match against requested state
+                if sprint_state == state:
+                    filtered_sprints.append(sprint)
+            
+            sprints_data = filtered_sprints
+            logger.info(
+                f"Filtered to {len(sprints_data)} sprints with state '{state}'"
+            )
         
         return [self._parse_sprint(sprint) for sprint in sprints_data]
     
@@ -477,8 +556,46 @@ class OpenProjectProvider(BasePMProvider):
         )
     
     def _parse_sprint(self, data: Dict[str, Any]) -> PMSprint:
-        """Parse OpenProject version to unified format"""
+        """
+        Parse OpenProject version to unified format.
+        
+        Maps OpenProject status ("open"/"closed") to logical states:
+        - "closed" if status is "closed" or end date passed
+        - "active" if status is "open" and current date within range
+        - "future" if status is "open" and start date in future
+        """
+        from datetime import date
         links = data.get("_links", {})
+        
+        sprint_status = data.get("status", "open")
+        start_date = self._parse_date(data.get("startDate"))
+        end_date = self._parse_date(data.get("endDate"))
+        today = date.today()
+        
+        # Determine logical state based on status and dates
+        logical_state = "active"  # default
+        
+        if sprint_status == "closed":
+            logical_state = "closed"
+        elif sprint_status == "open":
+            if start_date and end_date:
+                if end_date < today:
+                    logical_state = "closed"
+                elif start_date <= today <= end_date:
+                    logical_state = "active"
+                elif start_date > today:
+                    logical_state = "future"
+            elif end_date:
+                if end_date < today:
+                    logical_state = "closed"
+                else:
+                    logical_state = "active"
+            elif start_date:
+                if start_date > today:
+                    logical_state = "future"
+                else:
+                    logical_state = "active"
+            # else: no dates, status is "open" -> "active" (default)
         
         return PMSprint(
             id=str(data["id"]),
@@ -486,9 +603,9 @@ class OpenProjectProvider(BasePMProvider):
             project_id=self._extract_id_from_href(
                 links.get("definingProject", {}).get("href")
             ),
-            start_date=self._parse_date(data.get("startDate")),
-            end_date=self._parse_date(data.get("endDate")),
-            status=data.get("status"),
+            start_date=start_date,
+            end_date=end_date,
+            status=logical_state,  # Use logical state instead of raw "open"/"closed"
             raw_data=data
         )
     

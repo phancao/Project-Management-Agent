@@ -32,7 +32,7 @@ import { debug } from "../../../utils/debug";
 
 import { TaskDetailsModal } from "../task-details-modal";
 
-function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
+function TaskCard({ task, onClick, isColumnDragging }: { task: any; onClick: () => void; isColumnDragging?: boolean }) {
   // Ensure task.id is always a string for dnd-kit (OpenProject uses numeric IDs, JIRA uses string IDs)
   const taskId = String(task.id);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -41,11 +41,13 @@ function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    // Always use smooth transitions - dnd-kit provides the transition string
-    // When dragging, only animate opacity. When not dragging, animate position changes
-    transition: isDragging 
-      ? 'opacity 0.2s ease-out' 
-      : (transition || 'transform 300ms cubic-bezier(0.2, 0, 0, 1), opacity 300ms ease'),
+    // Disable transitions when a column is being dragged to prevent task animations
+    // When dragging a task, only animate opacity. When not dragging, animate position changes
+    transition: isColumnDragging 
+      ? 'none'  // No transition when columns are being dragged
+      : (isDragging 
+        ? 'opacity 0.2s ease-out' 
+        : (transition || 'transform 300ms cubic-bezier(0.2, 0, 0, 1), opacity 300ms ease')),
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -96,13 +98,14 @@ function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
   );
 }
 
-function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, isDraggingColumn }: { 
+function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, isDraggingColumn, isAnyColumnDragging }: { 
   column: { id: string; title: string }; 
   tasks: any[]; 
   onTaskClick: (task: any) => void;
   activeColumnId?: string | null;
   activeId?: string | null;
   isDraggingColumn?: boolean;
+  isAnyColumnDragging?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.id,
@@ -372,7 +375,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
                   // Use String(task.id) for key to match useSortable id and ensure stable keys
                   const taskIdStr = String(task.id);
                   return (
-                    <TaskCard key={taskIdStr} task={task} onClick={() => onTaskClick(task)} />
+                    <TaskCard key={taskIdStr} task={task} onClick={() => onTaskClick(task)} isColumnDragging={isAnyColumnDragging} />
                   );
                 })}
               </div>
@@ -618,6 +621,7 @@ export function SprintBoardView() {
   }, [tasks, searchQuery, priorityFilter, epicFilter, sprintFilter, loading]);
 
   // Auto-scroll horizontally when dragging columns near viewport edges
+  // Only scroll when mouse is very close to edge and actively dragging
   useEffect(() => {
     if (!draggedColumnId || !columnsContainerRef.current) {
       // Clear any existing scroll interval when not dragging a column
@@ -629,14 +633,15 @@ export function SprintBoardView() {
     }
     
     const container = columnsContainerRef.current;
+    let isDragging = true;
     
     const handleMouseMove = (e: MouseEvent) => {
-      if (!container) return;
+      if (!container || !isDragging) return;
       
       const viewportWidth = window.innerWidth;
       const mouseX = e.clientX;
-      const scrollThreshold = 100; // Distance from edge to trigger scroll
-      const scrollSpeed = 15; // Pixels to scroll per interval
+      const scrollThreshold = 50; // Reduced threshold - only scroll when very close to edge
+      const scrollSpeed = 10; // Reduced speed to be less aggressive
       
       // Check if mouse is near left or right edge of viewport
       const distanceFromLeft = mouseX;
@@ -648,11 +653,18 @@ export function SprintBoardView() {
         horizontalScrollIntervalRef.current = null;
       }
       
+      // Only scroll if we're very close to the edge and there's room to scroll
       if (distanceFromLeft < scrollThreshold && container.scrollLeft > 0) {
         // Scroll left
         horizontalScrollIntervalRef.current = setInterval(() => {
-          if (container && container.scrollLeft > 0) {
-            container.scrollLeft = Math.max(0, container.scrollLeft - scrollSpeed);
+          if (container && container.scrollLeft > 0 && isDragging) {
+            const newScrollLeft = Math.max(0, container.scrollLeft - scrollSpeed);
+            container.scrollLeft = newScrollLeft;
+            // Stop if we've reached the beginning
+            if (newScrollLeft === 0 && horizontalScrollIntervalRef.current) {
+              clearInterval(horizontalScrollIntervalRef.current);
+              horizontalScrollIntervalRef.current = null;
+            }
           } else if (horizontalScrollIntervalRef.current) {
             clearInterval(horizontalScrollIntervalRef.current);
             horizontalScrollIntervalRef.current = null;
@@ -662,11 +674,20 @@ export function SprintBoardView() {
                  container.scrollLeft < container.scrollWidth - container.clientWidth) {
         // Scroll right
         horizontalScrollIntervalRef.current = setInterval(() => {
-          if (container && container.scrollLeft < container.scrollWidth - container.clientWidth) {
-            container.scrollLeft = Math.min(
-              container.scrollWidth - container.clientWidth,
-              container.scrollLeft + scrollSpeed
-            );
+          if (container && isDragging) {
+            const maxScroll = container.scrollWidth - container.clientWidth;
+            if (container.scrollLeft < maxScroll) {
+              const newScrollLeft = Math.min(maxScroll, container.scrollLeft + scrollSpeed);
+              container.scrollLeft = newScrollLeft;
+              // Stop if we've reached the end
+              if (newScrollLeft >= maxScroll && horizontalScrollIntervalRef.current) {
+                clearInterval(horizontalScrollIntervalRef.current);
+                horizontalScrollIntervalRef.current = null;
+              }
+            } else if (horizontalScrollIntervalRef.current) {
+              clearInterval(horizontalScrollIntervalRef.current);
+              horizontalScrollIntervalRef.current = null;
+            }
           } else if (horizontalScrollIntervalRef.current) {
             clearInterval(horizontalScrollIntervalRef.current);
             horizontalScrollIntervalRef.current = null;
@@ -675,10 +696,21 @@ export function SprintBoardView() {
       }
     };
     
+    const handleMouseUp = () => {
+      isDragging = false;
+      if (horizontalScrollIntervalRef.current) {
+        clearInterval(horizontalScrollIntervalRef.current);
+        horizontalScrollIntervalRef.current = null;
+      }
+    };
+    
     document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
     
     return () => {
+      isDragging = false;
       document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
       if (horizontalScrollIntervalRef.current) {
         clearInterval(horizontalScrollIntervalRef.current);
         horizontalScrollIntervalRef.current = null;
@@ -2392,6 +2424,7 @@ export function SprintBoardView() {
                       activeColumnId={activeColumnId}
                       activeId={activeId}
                       isDraggingColumn={draggedColumnId === column.id}
+                      isAnyColumnDragging={!!draggedColumnId}
                     />
                   </div>
                 ))}

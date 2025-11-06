@@ -98,7 +98,7 @@ function TaskCard({ task, onClick, isColumnDragging }: { task: any; onClick: () 
   );
 }
 
-function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, isDraggingColumn, isAnyColumnDragging }: { 
+function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, isDraggingColumn, isAnyColumnDragging, onColumnDragStateChange }: { 
   column: { id: string; title: string }; 
   tasks: any[]; 
   onTaskClick: (task: any) => void;
@@ -106,6 +106,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
   activeId?: string | null;
   isDraggingColumn?: boolean;
   isAnyColumnDragging?: boolean;
+  onColumnDragStateChange?: (columnId: string, isDragging: boolean) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.id,
@@ -113,6 +114,13 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       type: 'column',
     },
   });
+  
+  // Notify parent when column drag state changes
+  useEffect(() => {
+    if (onColumnDragStateChange) {
+      onColumnDragStateChange(column.id, isDragging);
+    }
+  }, [isDragging, column.id, onColumnDragStateChange]);
 
   // Make the entire column droppable
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({ 
@@ -2604,6 +2612,18 @@ export function SprintBoardView() {
                       activeId={activeId}
                       isDraggingColumn={draggedColumnId === column.id}
                       isAnyColumnDragging={!!draggedColumnId}
+                      onColumnDragStateChange={(columnId, isDragging) => {
+                        setDraggingColumnIds(prev => {
+                          const next = new Set(prev);
+                          if (isDragging) {
+                            next.add(columnId);
+                          } else {
+                            next.delete(columnId);
+                          }
+                          debug.dnd('Column drag state changed', { columnId, isDragging, draggingColumnIds: Array.from(next) });
+                          return next;
+                        });
+                      }}
                     />
                   </div>
                 ))}

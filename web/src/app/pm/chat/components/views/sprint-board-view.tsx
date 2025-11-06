@@ -2438,7 +2438,7 @@ export function SprintBoardView() {
         })()}
 
         <DragOverlay>
-          {activeTask ? <TaskCard task={activeTask} onClick={() => {}} /> : null}
+          {activeTask ? <TaskCard task={activeTask} onClick={() => {}} isColumnDragging={false} /> : null}
         </DragOverlay>
       </DndContext>
 

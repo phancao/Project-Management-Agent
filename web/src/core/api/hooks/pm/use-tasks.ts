@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMRefresh } from "./use-pm-refresh";
+import { debug } from "~/app/pm/utils/debug";
 
 export interface Task {
   id: string;
@@ -31,14 +32,13 @@ const fetchTasksFn = async (projectId?: string) => {
   
   const url = `pm/projects/${projectId}/tasks`;
   const fullUrl = resolveServiceURL(url);
-  console.log(`[useTasks] 🚀 Fetching tasks from: ${fullUrl}`);
-  console.log(`[useTasks] 🚀 Project ID: ${projectId}`);
+  debug.api('Fetching tasks', { url: fullUrl, projectId });
   let response: Response;
   try {
     response = await fetch(fullUrl);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[useTasks] Network error fetching tasks from ${fullUrl}:`, errorMessage);
+    debug.error('Network error fetching tasks', { url: fullUrl, error: errorMessage });
     const userFriendlyError = new Error(`Network error: Unable to connect to the server. Please check your connection and try again.`);
     toast.error("Connection Error", {
       description: "Unable to connect to the server. Please check your connection.",
@@ -110,9 +110,9 @@ const fetchTasksFn = async (projectId?: string) => {
     // Log client errors (4xx) as warnings since they're expected business conditions
     // Log server errors (5xx) as errors since they're unexpected
     if (isClientError) {
-      console.warn(`Failed to fetch tasks from ${fullUrl}: ${errorDetail}`);
+      debug.warn('Failed to fetch tasks (client error)', { url: fullUrl, error: errorDetail });
     } else {
-      console.error(`Failed to fetch tasks from ${fullUrl}: ${errorDetail}`);
+      debug.error('Failed to fetch tasks (server error)', { url: fullUrl, error: errorDetail });
     }
     throw new Error(userFriendlyMessage + (errorDetail !== userFriendlyMessage ? `: ${errorDetail}` : ""));
   }
@@ -154,68 +154,61 @@ export function useTasks(projectId?: string) {
   }, [projectId]);
 
   useEffect(() => {
-    const effectStartTime = performance.now();
-    console.log(`[useTasks] 🔄 [${effectStartTime.toFixed(2)}ms] Effect triggered. projectId: ${projectId}`);
+    debug.api('Effect triggered', { projectId });
     // Clear tasks immediately when projectId changes to avoid showing stale data
-    console.log(`[useTasks] 🧹 [${effectStartTime.toFixed(2)}ms] Clearing tasks (projectId changed)`);
+    debug.api('Clearing tasks (projectId changed)');
     setTasks([]);
     setError(null);
     
     // If no project ID, set loading to false and return empty
     if (!projectId) {
-      const noProjectTime = performance.now();
-      console.log(`[useTasks] ⚠️ [${noProjectTime.toFixed(2)}ms] No projectId, setting loading to false`);
+      debug.api('No projectId, setting loading to false');
       setLoading(false);
       return;
     }
     
-    const loadingStartTime = performance.now();
-    console.log(`[useTasks] ⏳ [${loadingStartTime.toFixed(2)}ms] Setting loading to true for projectId: ${projectId}`);
+    debug.api('Setting loading to true for projectId', { projectId });
     setLoading(true);
     
     // Use a flag to track if this effect is still relevant (projectId hasn't changed)
     let isCurrent = true;
-    const fetchStartTime = performance.now();
+    debug.timeStart(`fetch-tasks-${projectId}`);
     
     // Fetch new data
     fetchTasksFn(projectId)
       .then((data) => {
-        const fetchEndTime = performance.now();
-        const fetchDuration = fetchEndTime - fetchStartTime;
-        console.log(`[useTasks] ✅ [${fetchEndTime.toFixed(2)}ms] Tasks fetched successfully. Count: ${data.length}, projectId: ${projectId}, isCurrent: ${isCurrent}, fetch took ${fetchDuration.toFixed(2)}ms`);
-        if (data.length > 0) {
-          console.log(`[useTasks] ✅ [${fetchEndTime.toFixed(2)}ms] Task IDs: ${data.slice(0, 5).map(t => t.id).join(", ")}${data.length > 5 ? "..." : ""}`);
-        }
+        debug.timeEnd(`fetch-tasks-${projectId}`, `Tasks fetched successfully. Count: ${data.length}`);
+        debug.api('Tasks fetched successfully', { 
+          count: data.length, 
+          projectId, 
+          isCurrent,
+          taskIds: data.length > 0 ? data.slice(0, 5).map(t => t.id) : []
+        });
         // Only update state if this effect is still relevant (projectId hasn't changed)
         if (isCurrent) {
-          const updateTime = performance.now();
-          console.log(`[useTasks] ✅ [${updateTime.toFixed(2)}ms] Updating state with ${data.length} tasks (${(updateTime - fetchEndTime).toFixed(2)}ms after fetch)`);
+          debug.api('Updating state with tasks', { count: data.length });
           setTasks(data);
           setLoading(false);
-          const stateUpdateTime = performance.now();
-          console.log(`[useTasks] ✅ [${stateUpdateTime.toFixed(2)}ms] State updated (total effect time: ${(stateUpdateTime - effectStartTime).toFixed(2)}ms)`);
+          debug.api('State updated');
         } else {
-          console.log(`[useTasks] ⚠️ [${fetchEndTime.toFixed(2)}ms] Effect is stale (projectId changed), ignoring response`);
+          debug.api('Effect is stale (projectId changed), ignoring response');
         }
       })
       .catch((err) => {
-        const errorTime = performance.now();
-        const fetchDuration = errorTime - fetchStartTime;
-        console.error(`[useTasks] ❌ [${errorTime.toFixed(2)}ms] Error fetching tasks for projectId ${projectId} (took ${fetchDuration.toFixed(2)}ms):`, err);
+        debug.error('Error fetching tasks', { projectId, error: err });
         // Only update state if this effect is still relevant (projectId hasn't changed)
         if (isCurrent) {
           setError(err as Error);
           setTasks([]);
           setLoading(false);
         } else {
-          console.log(`[useTasks] ⚠️ [${errorTime.toFixed(2)}ms] Effect is stale (projectId changed), ignoring error`);
+          debug.api('Effect is stale (projectId changed), ignoring error');
         }
       });
     
     // Cleanup: mark this effect as stale if projectId changes
     return () => {
-      const cleanupTime = performance.now();
-      console.log(`[useTasks] 🧹 [${cleanupTime.toFixed(2)}ms] Cleanup: marking effect as stale for projectId: ${projectId} (effect lasted ${(cleanupTime - effectStartTime).toFixed(2)}ms)`);
+      debug.api('Cleanup: marking effect as stale', { projectId });
       isCurrent = false;
     };
   }, [projectId]);
@@ -231,13 +224,13 @@ export function useMyTasks() {
 
 const fetchAllTasksFn = async () => {
   const fullUrl = resolveServiceURL("pm/tasks/all");
-  console.log(`[useAllTasks] Fetching all tasks from: ${fullUrl}`);
+  debug.api('Fetching all tasks', { url: fullUrl });
   let response: Response;
   try {
     response = await fetch(fullUrl);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[useAllTasks] Network error fetching all tasks from ${fullUrl}:`, errorMessage);
+    debug.error('Network error fetching all tasks', { url: fullUrl, error: errorMessage });
     const userFriendlyError = new Error(`Network error: Unable to connect to the server. Please check your connection and try again.`);
     toast.error("Connection Error", {
       description: "Unable to connect to the server. Please check your connection.",
@@ -283,9 +276,9 @@ const fetchAllTasksFn = async () => {
     // Log client errors (4xx) as warnings since they're expected business conditions
     // Log server errors (5xx) as errors since they're unexpected
     if (isClientError) {
-      console.warn(`Failed to fetch all tasks from ${fullUrl}: ${errorDetail}`);
+      debug.warn('Failed to fetch all tasks (client error)', { url: fullUrl, error: errorDetail });
     } else {
-      console.error(`Failed to fetch all tasks from ${fullUrl}: ${errorDetail}`);
+      debug.error('Failed to fetch all tasks (server error)', { url: fullUrl, error: errorDetail });
     }
     throw new Error(userFriendlyMessage + (errorDetail !== userFriendlyMessage ? `: ${errorDetail}` : ""));
   }

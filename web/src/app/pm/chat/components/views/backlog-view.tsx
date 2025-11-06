@@ -24,6 +24,7 @@ import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
 import { useProjectData } from "../../../hooks/use-project-data";
 import { useTaskFiltering } from "../../../hooks/use-task-filtering";
+import { debug } from "../../../utils/debug";
 
 import { TaskDetailsModal } from "../task-details-modal";
 import { CreateEpicDialog } from "../create-epic-dialog";
@@ -391,8 +392,7 @@ export function BacklogView() {
   
   // Log when projectIdForSprints changes
   useEffect(() => {
-    const timestamp = performance.now();
-    console.log(`[BacklogView] 🔄 [${timestamp.toFixed(2)}ms] projectIdForSprints changed:`, projectIdForSprints, "activeProjectId:", activeProjectId, "activeProject?.id:", activeProject?.id);
+    debug.project('projectIdForSprints changed', { projectIdForSprints, activeProjectId, activeProjectId: activeProject?.id });
   }, [projectIdForSprints, activeProjectId, activeProject?.id]);
   
   // Reset filters when project changes
@@ -423,8 +423,7 @@ export function BacklogView() {
   // Sync tasks state with loading context
   // Only sync when we actually have a project and should be loading
   useEffect(() => {
-    const timestamp = performance.now();
-    console.log(`[BacklogView] 🔄 [${timestamp.toFixed(2)}ms] Syncing tasks state. shouldLoadTasks:`, shouldLoadTasks, "projectIdForSprints:", projectIdForSprints, "allTasks.length:", allTasks.length, "loading:", loading);
+    debug.state('Syncing tasks state', { shouldLoadTasks, projectIdForSprints, allTasksLength: allTasks.length, loading });
     
     if (shouldLoadTasks) {
       setTasksState({
@@ -432,7 +431,7 @@ export function BacklogView() {
         error,
         data: allTasks,
       });
-      console.log(`[BacklogView] ✅ [${timestamp.toFixed(2)}ms] Synced tasks state:`, allTasks.length, "tasks, loading:", loading);
+      debug.state('Synced tasks state', { tasksCount: allTasks.length, loading });
     } else {
       // Don't clear the state immediately - keep it until we have a new project
       // This prevents flickering when switching projects
@@ -442,10 +441,10 @@ export function BacklogView() {
           error: null,
           data: null,
         });
-        console.log(`[BacklogView] 🧹 [${timestamp.toFixed(2)}ms] Cleared tasks state (no project)`);
+        debug.state('Cleared tasks state (no project)');
       } else {
         // Project exists but canLoadTasks is false - keep current state
-        console.log(`[BacklogView] ⏳ [${timestamp.toFixed(2)}ms] Keeping tasks state (waiting for canLoadTasks)`);
+        debug.state('Keeping tasks state (waiting for canLoadTasks)');
       }
     }
   }, [shouldLoadTasks, loading, error, allTasks, setTasksState, projectIdForSprints]);
@@ -460,22 +459,18 @@ export function BacklogView() {
   
   // Debug logging for task filtering
   useEffect(() => {
-    const timestamp = performance.now();
-    console.log(`[BacklogView] 📋 [${timestamp.toFixed(2)}ms] TASK STATE UPDATE`);
-    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - allTasks.length:`, allTasks.length);
-    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - filtered tasks.length:`, tasks.length);
-    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - projectIdForSprints:`, projectIdForSprints);
-    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - activeProject?.id:`, activeProject?.id);
-    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - loading:`, loading);
-    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - shouldLoadTasks:`, shouldLoadTasks);
-    if (allTasks.length > 0) {
-      console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - allTasks IDs:`, allTasks.slice(0, 5).map(t => t.id).join(", "), allTasks.length > 5 ? "..." : "");
-    }
-    if (tasks.length > 0) {
-      console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - filtered tasks IDs:`, tasks.slice(0, 5).map(t => t.id).join(", "), tasks.length > 5 ? "..." : "");
-    }
+    debug.state('TASK STATE UPDATE', {
+      allTasksLength: allTasks.length,
+      filteredTasksLength: tasks.length,
+      projectIdForSprints,
+      activeProjectId: activeProject?.id,
+      loading,
+      shouldLoadTasks,
+      allTasksIds: allTasks.length > 0 ? allTasks.slice(0, 5).map(t => t.id) : [],
+      filteredTasksIds: tasks.length > 0 ? tasks.slice(0, 5).map(t => t.id) : [],
+    });
     if (allTasks.length > 0 && tasks.length === 0) {
-      console.log(`[BacklogView] ⚠️ [${timestamp.toFixed(2)}ms] WARNING: Tasks loaded (${allTasks.length}) but filtered out (${tasks.length})!`);
+      debug.warn('WARNING: Tasks loaded but filtered out', { allTasksLength: allTasks.length, filteredTasksLength: tasks.length });
     }
   }, [allTasks.length, tasks.length, projectIdForSprints, activeProject?.id, loading, shouldLoadTasks]);
   
@@ -755,18 +750,18 @@ export function BacklogView() {
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
-    console.log("[BacklogView] filteredTasks useMemo running. searchQuery:", searchQuery, "tasks.length:", tasks?.length, "loading:", loading);
+    debug.filter('filteredTasks useMemo running', { searchQuery, tasksLength: tasks?.length, loading });
     
     // Return empty array only if we're loading AND have no tasks yet (to prevent flash of stale data)
     // If we have tasks, always filter them even if loading is true (for real-time filtering)
     if (loading && (!tasks || tasks.length === 0)) {
-      console.log("[BacklogView] Returning empty array (loading with no tasks)");
+      debug.filter('Returning empty array (loading with no tasks)');
       return [];
     }
     
     // If we have no tasks at all, return empty
     if (!tasks || tasks.length === 0) {
-      console.log("[BacklogView] Returning empty array (no tasks)");
+      debug.filter('Returning empty array (no tasks)');
       return [];
     }
     
@@ -774,7 +769,7 @@ export function BacklogView() {
 
     // Search filter - search in title and description only
     const trimmedQuery = (searchQuery || "").trim();
-    console.log("[BacklogView] Filtering tasks. Search query:", trimmedQuery, "Total tasks:", tasks.length, "Loading:", loading);
+    debug.filter('Filtering tasks', { searchQuery: trimmedQuery, totalTasks: tasks.length, loading });
     if (trimmedQuery) {
       const query = trimmedQuery.toLowerCase();
       const beforeCount = filtered.length;
@@ -786,9 +781,9 @@ export function BacklogView() {
         const matches = title.includes(query) || description.includes(query);
         return matches;
       });
-      console.log("[BacklogView] After search filter:", filtered.length, "tasks (was", beforeCount, "). Query:", trimmedQuery);
+      debug.filter('After search filter', { filteredCount: filtered.length, wasCount: beforeCount, query: trimmedQuery });
     } else {
-      console.log("[BacklogView] No search query, skipping search filter");
+      debug.filter('No search query, skipping search filter');
     }
 
     // Status filter - match by status name (case-insensitive)
@@ -799,7 +794,7 @@ export function BacklogView() {
         const taskStatus = (t.status || "").toLowerCase();
         return taskStatus === filterStatusLower;
       });
-      console.log("[BacklogView] After status filter:", filtered.length, "tasks (was", beforeCount, ")");
+      debug.filter('After status filter', { filteredCount: filtered.length, wasCount: beforeCount });
     }
 
     // Priority filter - match by exact priority (case-insensitive)
@@ -810,16 +805,16 @@ export function BacklogView() {
         const taskPriority = (t.priority || "").toLowerCase();
         return taskPriority === filterPriorityLower;
       });
-      console.log("[BacklogView] After priority filter:", filtered.length, "tasks (was", beforeCount, ")");
+      debug.filter('After priority filter', { filteredCount: filtered.length, wasCount: beforeCount });
     }
 
-    console.log("[BacklogView] Final filtered tasks:", filtered.length, "out of", tasks.length, "original tasks");
+    debug.filter('Final filtered tasks', { filteredCount: filtered.length, originalCount: tasks.length });
     return filtered;
   }, [tasks, searchQuery, statusFilter, priorityFilter, loading]);
   
   // Debug: Log when searchQuery changes
   useEffect(() => {
-    console.log("[BacklogView] searchQuery state changed to:", searchQuery);
+    debug.filter('searchQuery state changed', { searchQuery });
   }, [searchQuery]);
 
   // Use statuses and priorities from backend, with fallback to task data
@@ -867,30 +862,30 @@ export function BacklogView() {
 
   // Filter tasks by selected epic
   const epicFilteredTasks = useMemo(() => {
-    console.log("[BacklogView] 🎯 Epic filtering. filteredTasks.length:", filteredTasks?.length, "selectedEpic:", selectedEpic, "loading:", loading);
+    debug.filter('Epic filtering', { filteredTasksLength: filteredTasks?.length, selectedEpic, loading });
     
     // Return empty array only if loading AND no tasks yet (to prevent flash)
     // But allow filtering if we have tasks, even if loading is true (for real-time filtering)
     if (loading && (!filteredTasks || filteredTasks.length === 0)) {
-      console.log("[BacklogView] 🎯 Returning empty (loading with no filteredTasks)");
+      debug.filter('Returning empty (loading with no filteredTasks)');
       return [];
     }
     if (!filteredTasks || filteredTasks.length === 0) {
-      console.log("[BacklogView] 🎯 Returning empty (no filteredTasks)");
+      debug.filter('Returning empty (no filteredTasks)');
       return [];
     }
     
     if (!selectedEpic) {
-      console.log("[BacklogView] 🎯 No epic filter, returning all", filteredTasks.length, "filteredTasks");
+      debug.filter('No epic filter, returning all filteredTasks', { count: filteredTasks.length });
       return filteredTasks;
     }
     if (selectedEpic === "all") {
-      console.log("[BacklogView] 🎯 Epic filter is 'all', returning all", filteredTasks.length, "filteredTasks");
+      debug.filter('Epic filter is "all", returning all filteredTasks', { count: filteredTasks.length });
       return filteredTasks;
     }
     // Filter by epic_id
     const epicFiltered = filteredTasks.filter(task => task.epic_id === selectedEpic);
-    console.log("[BacklogView] 🎯 Epic filtered:", epicFiltered.length, "tasks (epic_id:", selectedEpic, ")");
+    debug.filter('Epic filtered', { filteredCount: epicFiltered.length, epicId: selectedEpic });
     return epicFiltered;
   }, [filteredTasks, selectedEpic, loading]);
 
@@ -901,8 +896,8 @@ export function BacklogView() {
     // Debug: Log sprint IDs and task sprint_ids
     const sprintInfo = sprints.map(s => ({ id: s.id, name: s.name, id_type: typeof s.id }));
     const taskInfo = epicFilteredTasks.map(t => ({ id: t.id, title: t.title, sprint_id: t.sprint_id, sprint_id_type: typeof t.sprint_id }));
-    console.log('[tasksInSprints] Sprint IDs:', JSON.stringify(sprintInfo, null, 2));
-    console.log('[tasksInSprints] Task sprint_ids:', JSON.stringify(taskInfo, null, 2));
+    debug.filter('Sprint IDs', { sprintInfo });
+    debug.filter('Task sprint_ids', { taskInfo });
     
     sprints.forEach(sprint => {
       const matchingTasks = epicFilteredTasks.filter(task => {
@@ -910,19 +905,19 @@ export function BacklogView() {
                        String(task.sprint_id) === String(sprint.id) ||
                        task.sprint_id?.toString() === sprint.id?.toString();
         if (matches && task.sprint_id !== sprint.id) {
-          console.log(`[tasksInSprints] Type mismatch fixed: task.sprint_id="${task.sprint_id}" (${typeof task.sprint_id}) === sprint.id="${sprint.id}" (${typeof sprint.id})`);
+          debug.filter('Type mismatch fixed', { taskSprintId: task.sprint_id, taskSprintIdType: typeof task.sprint_id, sprintId: sprint.id, sprintIdType: typeof sprint.id });
         }
         return matches;
       });
       grouped[sprint.id] = matchingTasks;
       if (matchingTasks.length > 0) {
-        console.log(`[tasksInSprints] Sprint "${sprint.name}" (${sprint.id}): ${matchingTasks.length} tasks:`, matchingTasks.map(t => t.id));
+        debug.filter(`Sprint "${sprint.name}" tasks`, { sprintId: sprint.id, count: matchingTasks.length, taskIds: matchingTasks.map(t => t.id) });
       } else {
-        console.log(`[tasksInSprints] Sprint "${sprint.name}" (${sprint.id}): No matching tasks`);
+        debug.filter(`Sprint "${sprint.name}" - No matching tasks`, { sprintId: sprint.id });
         // Show why tasks don't match
         const tasksWithSprintId = epicFilteredTasks.filter(t => t.sprint_id);
         if (tasksWithSprintId.length > 0) {
-          console.log(`[tasksInSprints] But found ${tasksWithSprintId.length} tasks with sprint_id:`, tasksWithSprintId.map(t => ({ id: t.id, sprint_id: t.sprint_id, sprint_id_type: typeof t.sprint_id })));
+          debug.filter('Found tasks with sprint_id', { count: tasksWithSprintId.length, tasks: tasksWithSprintId.map(t => ({ id: t.id, sprint_id: t.sprint_id, sprint_id_type: typeof t.sprint_id })) });
         }
       }
     });
@@ -932,7 +927,7 @@ export function BacklogView() {
       count: grouped[key]?.length ?? 0,
       taskIds: grouped[key]?.map(t => t.id) ?? []
     }));
-    console.log('[tasksInSprints] Grouped tasks:', JSON.stringify(groupedInfo, null, 2));
+    debug.filter('Grouped tasks', { groupedInfo });
     return grouped;
   }, [sprints, epicFilteredTasks]);
 
@@ -945,9 +940,11 @@ export function BacklogView() {
                                              Array.from(sprintIds).some(sid => String(sid) === String(task.sprint_id)));
       return !hasSprintId;
     });
-    console.log('[backlogTasks] Backlog tasks:', backlog.length, 'out of', epicFilteredTasks.length, 'total tasks');
+    debug.filter('Backlog tasks', { backlogCount: backlog.length, totalTasks: epicFilteredTasks.length });
     const orphanedTasks = epicFilteredTasks.filter(t => t.sprint_id && !sprintIds.has(t.sprint_id) && !Array.from(sprintIds).some(sid => String(sid) === String(t.sprint_id))).map(t => ({ id: t.id, title: t.title, sprint_id: t.sprint_id }));
-    console.log('[backlogTasks] Tasks with sprint_id but not in sprints:', JSON.stringify(orphanedTasks, null, 2));
+    if (orphanedTasks.length > 0) {
+      debug.filter('Tasks with sprint_id but not in sprints', { orphanedTasks });
+    }
     return backlog;
   }, [epicFilteredTasks, sprints]);
 

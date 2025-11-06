@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { findProjectById } from "../utils/project-utils";
 import type { Project } from "../types";
+import { debug } from "../utils/debug";
 
 /**
  * Custom hook to get the active project and project ID
@@ -30,19 +31,18 @@ export function useProjectData() {
   // CRITICAL: Always return activeProjectId from URL if available, even if activeProject is null
   // This prevents the projectId from flipping to null during project switching
   const projectIdForData = useMemo(() => {
-    const timestamp = performance.now();
     const projectChanged = activeProjectId !== previousActiveProjectIdRef.current;
     
     if (projectChanged && activeProjectId) {
-      console.log(`[useProjectData] 🔄 [${timestamp.toFixed(2)}ms] Project ID changed in URL:`, previousActiveProjectIdRef.current, "->", activeProjectId);
+      debug.project('Project ID changed in URL', { from: previousActiveProjectIdRef.current, to: activeProjectId });
       previousActiveProjectIdRef.current = activeProjectId;
     }
     
-    console.log(`[useProjectData] 🔍 [${timestamp.toFixed(2)}ms] Computing projectIdForData. activeProjectId:`, activeProjectId, "activeProject:", activeProject?.id, "projects.length:", projects.length);
+    debug.project('Computing projectIdForData', { activeProjectId, activeProjectId: activeProject?.id, projectsLength: projects.length });
     
     // PRIORITY 1: Use activeProject.id if available (most reliable)
     if (activeProject) {
-      console.log(`[useProjectData] ✅ [${timestamp.toFixed(2)}ms] Using activeProject.id:`, activeProject.id);
+      debug.project('Using activeProject.id', { projectId: activeProject.id });
       return activeProject.id;
     }
     
@@ -50,12 +50,12 @@ export function useProjectData() {
     // This is critical - even if activeProject is null (projects list not loaded yet),
     // we should still return the activeProjectId from URL to prevent flipping to null
     if (activeProjectId) {
-      console.log(`[useProjectData] ✅ [${timestamp.toFixed(2)}ms] Using activeProjectId from URL:`, activeProjectId);
+      debug.project('Using activeProjectId from URL', { projectId: activeProjectId });
       return activeProjectId;
     }
     
     // PRIORITY 3: No project ID available
-    console.log(`[useProjectData] ⚠️ [${timestamp.toFixed(2)}ms] No project ID available, returning null`);
+    debug.project('No project ID available, returning null');
     previousActiveProjectIdRef.current = null;
     return null;
   }, [activeProject, activeProjectId, projects.length]);
@@ -63,11 +63,10 @@ export function useProjectData() {
   // Update previous ref when activeProjectId changes
   useEffect(() => {
     if (activeProjectId !== previousActiveProjectIdRef.current) {
-      const timestamp = performance.now();
       if (activeProjectId) {
-        console.log(`[useProjectData] 🔄 [${timestamp.toFixed(2)}ms] activeProjectId changed:`, previousActiveProjectIdRef.current, "->", activeProjectId);
+        debug.project('activeProjectId changed', { from: previousActiveProjectIdRef.current, to: activeProjectId });
       } else {
-        console.log(`[useProjectData] 🧹 [${timestamp.toFixed(2)}ms] activeProjectId cleared (was:`, previousActiveProjectIdRef.current, ")");
+        debug.project('activeProjectId cleared', { was: previousActiveProjectIdRef.current });
       }
       previousActiveProjectIdRef.current = activeProjectId;
     }
@@ -75,8 +74,7 @@ export function useProjectData() {
   
   // Log when projectIdForData changes
   useEffect(() => {
-    const timestamp = performance.now();
-    console.log(`[useProjectData] 📊 [${timestamp.toFixed(2)}ms] projectIdForData changed to:`, projectIdForData);
+    debug.project('projectIdForData changed', { projectIdForData });
   }, [projectIdForData]);
   
   return {

@@ -4,6 +4,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import type { Task, Project } from "../types";
 import { extractProjectKey } from "../utils/project-utils";
+import { debug } from "../utils/debug";
 
 interface UseTaskFilteringOptions {
   allTasks: Task[];
@@ -29,21 +30,19 @@ export function useTaskFiltering({
   // Update refs when projectId changes
   useEffect(() => {
     if (projectId !== previousProjectIdRef.current) {
-      const timestamp = performance.now();
-      console.log(`[useTaskFiltering] 🔄 [${timestamp.toFixed(2)}ms] Project ID changed:`, previousProjectIdRef.current, "->", projectId);
-      console.log(`[useTaskFiltering] 🔄 [${timestamp.toFixed(2)}ms] Clearing lastLoadedProjectIdRef (was:`, lastLoadedProjectIdRef.current, ")");
+      debug.filter('Project ID changed', { from: previousProjectIdRef.current, to: projectId });
+      debug.filter('Clearing lastLoadedProjectIdRef', { was: lastLoadedProjectIdRef.current });
       previousProjectIdRef.current = projectId;
       // When project changes, clear the last loaded project ID immediately
       // This ensures new tasks won't be filtered out when they arrive
       lastLoadedProjectIdRef.current = null;
-      console.log(`[useTaskFiltering] 🔄 [${timestamp.toFixed(2)}ms] After clearing, lastLoadedProjectIdRef:`, lastLoadedProjectIdRef.current);
+      debug.filter('After clearing, lastLoadedProjectIdRef', { value: lastLoadedProjectIdRef.current });
     }
   }, [projectId]);
   
   // Update ref when tasks are loaded for a project
   useEffect(() => {
-    const timestamp = performance.now();
-    console.log(`[useTaskFiltering] 📊 [${timestamp.toFixed(2)}ms] Effect running. projectId:`, projectId, "loading:", loading, "allTasks.length:", allTasks.length, "lastLoadedProjectIdRef:", lastLoadedProjectIdRef.current);
+    debug.filter('Effect running', { projectId, loading, allTasksLength: allTasks.length, lastLoadedProjectIdRef: lastLoadedProjectIdRef.current });
     
     if (projectId && !loading && allTasks.length > 0) {
       // Only update if we don't have a last loaded project ID, or if it matches current project
@@ -51,44 +50,43 @@ export function useTaskFiltering({
       if (lastLoadedProjectIdRef.current === null || lastLoadedProjectIdRef.current === projectId) {
         const previousProjectId = lastLoadedProjectIdRef.current;
         if (previousProjectId !== projectId) {
-          console.log(`[useTaskFiltering] ✅ [${timestamp.toFixed(2)}ms] Tasks loaded for NEW project:`, projectId, "count:", allTasks.length, "previous project:", previousProjectId);
+          debug.filter('Tasks loaded for NEW project', { projectId, count: allTasks.length, previousProject: previousProjectId });
         } else {
-          console.log(`[useTaskFiltering] ✅ [${timestamp.toFixed(2)}ms] Tasks confirmed for project:`, projectId, "count:", allTasks.length);
+          debug.filter('Tasks confirmed for project', { projectId, count: allTasks.length });
         }
         lastLoadedProjectIdRef.current = projectId;
-        console.log(`[useTaskFiltering] ✅ [${timestamp.toFixed(2)}ms] Updated lastLoadedProjectIdRef to:`, projectId);
+        debug.filter('Updated lastLoadedProjectIdRef', { projectId });
       } else {
-        console.log(`[useTaskFiltering] ⚠️ [${timestamp.toFixed(2)}ms] Skipping update - lastLoadedProjectIdRef (`, lastLoadedProjectIdRef.current, ") doesn't match projectId (", projectId, ")");
+        debug.filter('Skipping update - lastLoadedProjectIdRef doesn\'t match projectId', { lastLoadedProjectId: lastLoadedProjectIdRef.current, projectId });
       }
     } else if (projectId && loading) {
-      console.log(`[useTaskFiltering] ⏳ [${timestamp.toFixed(2)}ms] Still loading tasks for project:`, projectId);
+      debug.filter('Still loading tasks for project', { projectId });
     } else if (projectId && !loading && allTasks.length === 0) {
-      console.log(`[useTaskFiltering] ⚠️ [${timestamp.toFixed(2)}ms] No tasks loaded for project:`, projectId, "(loading finished but no tasks)");
+      debug.filter('No tasks loaded for project (loading finished but no tasks)', { projectId });
     } else if (!projectId) {
-      console.log(`[useTaskFiltering] 🧹 [${timestamp.toFixed(2)}ms] Clearing refs (no projectId)`);
+      debug.filter('Clearing refs (no projectId)');
       lastLoadedProjectIdRef.current = null;
       previousProjectIdRef.current = null;
     }
   }, [projectId, loading, allTasks.length]);
   
   const filteredTasks = useMemo(() => {
-    const timestamp = performance.now();
-    const startTime = timestamp;
-    console.log(`[useTaskFiltering] 🔍 [${timestamp.toFixed(2)}ms] FILTERING TASKS`);
-    console.log(`[useTaskFiltering]   [${timestamp.toFixed(2)}ms] - allTasks.length:`, allTasks.length);
-    console.log(`[useTaskFiltering]   [${timestamp.toFixed(2)}ms] - projectId:`, projectId);
-    console.log(`[useTaskFiltering]   [${timestamp.toFixed(2)}ms] - activeProject?.id:`, activeProject?.id);
-    console.log(`[useTaskFiltering]   [${timestamp.toFixed(2)}ms] - lastLoadedProjectIdRef:`, lastLoadedProjectIdRef.current);
-    console.log(`[useTaskFiltering]   [${timestamp.toFixed(2)}ms] - previousProjectIdRef:`, previousProjectIdRef.current);
-    console.log(`[useTaskFiltering]   [${timestamp.toFixed(2)}ms] - loading:`, loading);
+    debug.filter('FILTERING TASKS', {
+      allTasksLength: allTasks.length,
+      projectId,
+      activeProjectId: activeProject?.id,
+      lastLoadedProjectIdRef: lastLoadedProjectIdRef.current,
+      previousProjectIdRef: previousProjectIdRef.current,
+      loading,
+    });
     
     if (!projectId) {
-      console.log(`[useTaskFiltering] ❌ [${timestamp.toFixed(2)}ms] No projectId, returning empty array`);
+      debug.filter('No projectId, returning empty array');
       return [];
     }
     
     if (allTasks.length === 0) {
-      console.log(`[useTaskFiltering] ❌ [${timestamp.toFixed(2)}ms] No tasks in allTasks, returning empty array`);
+      debug.filter('No tasks in allTasks, returning empty array');
       return [];
     }
     
@@ -109,17 +107,17 @@ export function useTaskFiltering({
                                       loadedProjectDiffers &&
                                       !loading;
     
-    const checkTime = performance.now();
-    console.log(`[useTaskFiltering]   [${checkTime.toFixed(2)}ms] - hasConfirmedLoadedProject:`, hasConfirmedLoadedProject);
-    console.log(`[useTaskFiltering]   [${checkTime.toFixed(2)}ms] - loadedProjectDiffers:`, loadedProjectDiffers);
-    console.log(`[useTaskFiltering]   [${checkTime.toFixed(2)}ms] - tasksFromDifferentProject:`, tasksFromDifferentProject);
+    debug.filter('Filter check', {
+      hasConfirmedLoadedProject,
+      loadedProjectDiffers,
+      tasksFromDifferentProject,
+    });
     
     if (tasksFromDifferentProject) {
-      const filterTime = performance.now();
-      console.log(`[useTaskFiltering] 🚫 [${filterTime.toFixed(2)}ms] FILTERING OUT: Tasks are from a different project`);
-      console.log(`[useTaskFiltering]   [${filterTime.toFixed(2)}ms] - lastLoadedProjectId:`, lastLoadedProjectIdRef.current);
-      console.log(`[useTaskFiltering]   [${filterTime.toFixed(2)}ms] - current projectId:`, projectId);
-      console.log(`[useTaskFiltering]   [${filterTime.toFixed(2)}ms] - Returning empty array`);
+      debug.filter('FILTERING OUT: Tasks are from a different project', {
+        lastLoadedProjectId: lastLoadedProjectIdRef.current,
+        currentProjectId: projectId,
+      });
       return [];
     }
     
@@ -127,10 +125,10 @@ export function useTaskFiltering({
     // The backend already filters tasks by project, so we should trust it
     // This ensures tasks are shown immediately when switching projects
     // When project changes, lastLoadedProjectIdRef is cleared, so we trust the backend
-    const endTime = performance.now();
-    const duration = endTime - startTime;
-    console.log(`[useTaskFiltering] ✅ [${endTime.toFixed(2)}ms] TRUSTING BACKEND: Returning all`, allTasks.length, "tasks (took", duration.toFixed(2), "ms)");
-    console.log(`[useTaskFiltering]   [${endTime.toFixed(2)}ms] - Task IDs:`, allTasks.slice(0, 5).map(t => t.id).join(", "), allTasks.length > 5 ? "..." : "");
+    debug.filter('TRUSTING BACKEND: Returning all tasks', {
+      count: allTasks.length,
+      taskIds: allTasks.slice(0, 5).map(t => t.id),
+    });
     return allTasks;
   }, [allTasks, projectId, activeProject, loading]);
   

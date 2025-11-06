@@ -612,7 +612,18 @@ export function SprintBoardView() {
     const activeIdStr = String(event.active.id);
     const activeData = event.active.data.current;
     
-    debug.dnd('Drag started', { activeId: activeIdStr, dataType: activeData?.type, activeData });
+    // Check if this is the last column
+    const isLastColumn = orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === activeIdStr;
+    
+    debug.dnd('Drag started', { 
+      activeId: activeIdStr, 
+      dataType: activeData?.type, 
+      activeData,
+      isLastColumn,
+      totalColumns: orderedColumns.length,
+      columnOrder: columnOrder,
+      orderedColumns: orderedColumns.map(c => ({ id: c.id, title: c.title }))
+    });
     
     // Check the data type first - this is the most reliable indicator
     // Columns have data.type === 'column', tasks don't have a type set
@@ -690,8 +701,12 @@ export function SprintBoardView() {
       } else {
         // Check if we're over something inside a column - look at the data
         const overData = over.data.current;
+        debug.dnd('Drag over: Checking overData', { overData, overDataType: overData?.type, overDataColumn: overData?.column });
         if (overData?.type === 'column' && overData?.column) {
           overId = overData.column;
+          debug.dnd('Drag over: Found overId from overData.column', { overId, activeId });
+        } else {
+          debug.dnd('Drag over: Could not find overId from overData', { overData });
         }
       }
       
@@ -870,7 +885,22 @@ export function SprintBoardView() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    debug.dnd('Drag ended', { activeId: active.id, overId: over?.id, draggedColumnId });
+    
+    // Check if this is the last column being dragged
+    const isLastColumn = draggedColumnId && orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === draggedColumnId;
+    const activeColumnIndex = draggedColumnId ? columnOrder.indexOf(draggedColumnId) : -1;
+    
+    debug.dnd('Drag ended', { 
+      activeId: active.id, 
+      overId: over?.id, 
+      draggedColumnId,
+      isLastColumn,
+      activeColumnIndex,
+      totalColumns: orderedColumns.length,
+      columnOrderLength: columnOrder.length,
+      overDataType: over?.data?.current?.type,
+      overData: over?.data?.current
+    });
     
     // Handle column reordering
     if (draggedColumnId) {
@@ -884,13 +914,42 @@ export function SprintBoardView() {
         // Check if we dropped directly on a column (status ID)
         if (typeof over.id === 'string' && availableStatuses.some(s => s.id === over.id)) {
           overId = over.id;
+          debug.dnd('Drag ended: Found overId from over.id', { overId, activeColumnId, isLastColumn });
         } else {
           // Check if we dropped on something inside a column - look at the data
           const overData = over.data.current;
+          debug.dnd('Drag ended: Checking overData for overId', { overData, overDataType: overData?.type, overDataColumn: overData?.column, isLastColumn });
           if (overData?.type === 'column' && overData?.column) {
             overId = overData.column;
+            debug.dnd('Drag ended: Found overId from overData.column', { overId, activeColumnId, isLastColumn });
+          } else {
+            // Try to find the column from the over.id by checking if it's a task or other element
+            // that belongs to a column
+            debug.dnd('Drag ended: Could not find overId from overData, trying alternative methods', { 
+              overId: over.id, 
+              overDataType: overData?.type,
+              availableStatuses: availableStatuses.map(s => s.id)
+            });
+            
+            // If over.id is a string, check if it matches any status ID
+            if (typeof over.id === 'string') {
+              const matchingStatus = availableStatuses.find(s => s.id === over.id);
+              if (matchingStatus) {
+                overId = matchingStatus.id;
+                debug.dnd('Drag ended: Found overId by matching over.id with status', { overId, activeColumnId });
+              }
+            }
           }
         }
+        
+        debug.dnd('Drag ended: Final overId check', { 
+          overId, 
+          activeColumnId, 
+          overIdValid: overId && availableStatuses.some(s => s.id === overId),
+          isLastColumn,
+          overIdIndex: overId ? columnOrder.indexOf(overId) : -1,
+          activeColumnIndex: columnOrder.indexOf(activeColumnId)
+        });
         
         if (overId && overId !== activeColumnId && availableStatuses.some(s => s.id === overId)) {
           // Ensure columnOrder is initialized (use current ordered columns if columnOrder is empty)
@@ -932,9 +991,21 @@ export function SprintBoardView() {
           const oldIndex = currentOrder.indexOf(activeColumnId);
           const newIndex = currentOrder.indexOf(overId);
           
+          debug.dnd('Column reordering: Index calculation', {
+            oldIndex,
+            newIndex,
+            activeColumnId,
+            overId,
+            currentOrder,
+            currentOrderLength: currentOrder.length,
+            isLastColumn,
+            isMovingToLast: newIndex === currentOrder.length - 1,
+            isMovingFromLast: oldIndex === currentOrder.length - 1
+          });
+          
           if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
             const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
-            debug.dnd('Column reordering', { 
+            debug.dnd('Column reordering: Success', { 
               oldIndex, 
               newIndex, 
               activeColumnId, 
@@ -942,7 +1013,10 @@ export function SprintBoardView() {
               currentOrder, 
               newOrder,
               activeProjectId,
-              newOrderLength: newOrder.length
+              newOrderLength: newOrder.length,
+              isLastColumn,
+              movedFromIndex: oldIndex,
+              movedToIndex: newIndex
             });
             setColumnOrder(newOrder);
             // Save immediately after reordering (don't wait for useEffect)
@@ -954,9 +1028,33 @@ export function SprintBoardView() {
               debug.dnd('Column reordered but not saved (missing projectId or empty order)', { activeProjectId, newOrder, newOrderLength: newOrder.length });
             }
           } else {
-            debug.dnd('Column reorder skipped (invalid indices)', { oldIndex, newIndex, activeColumnId, overId, currentOrder });
+            debug.dnd('Column reorder skipped (invalid indices)', { 
+              oldIndex, 
+              newIndex, 
+              activeColumnId, 
+              overId, 
+              currentOrder,
+              isLastColumn,
+              reason: oldIndex === -1 ? 'oldIndex not found' : newIndex === -1 ? 'newIndex not found' : 'indices are the same'
+            });
           }
+        } else {
+          debug.dnd('Column reorder skipped: Invalid overId or conditions not met', {
+            overId,
+            activeColumnId,
+            overIdValid: overId && availableStatuses.some(s => s.id === overId),
+            isSameColumn: overId === activeColumnId,
+            isLastColumn,
+            over: over ? { id: over.id, data: over.data?.current } : null
+          });
         }
+      } else {
+        debug.dnd('Column reorder skipped: No over target or availableStatuses', {
+          hasOver: !!over,
+          hasAvailableStatuses: !!availableStatuses,
+          isLastColumn,
+          over: over ? { id: over.id, data: over.data?.current } : null
+        });
       }
       return;
     }

@@ -59,7 +59,7 @@ function TaskCard({ task, onClick, isColumnDragging }: { task: any; onClick: () 
       className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer"
     >
       <div
-        {...listeners}
+      {...listeners}
         className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
         style={{
           touchAction: 'none',
@@ -72,26 +72,26 @@ function TaskCard({ task, onClick, isColumnDragging }: { task: any; onClick: () 
         <GripVertical className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0" onClick={onClick}>
-        <div className="font-medium text-sm text-gray-900 dark:text-white mb-2">
-          {task.title}
-        </div>
-        <div className="flex items-center gap-2 text-xs">
-          {task.priority && (
-            <span className={`px-2 py-0.5 rounded ${
+      <div className="font-medium text-sm text-gray-900 dark:text-white mb-2">
+        {task.title}
+      </div>
+      <div className="flex items-center gap-2 text-xs">
+        {task.priority && (
+          <span className={`px-2 py-0.5 rounded ${
               task.priority === "high" || task.priority === "highest" || task.priority === "critical"
                 ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
                 : task.priority === "medium"
                 ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
                 : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-            }`}>
-              {task.priority}
-            </span>
-          )}
-          {task.estimated_hours && (
-            <span className="text-gray-500 dark:text-gray-400">
-              ⏱️ {task.estimated_hours}h
-            </span>
-          )}
+          }`}>
+            {task.priority}
+          </span>
+        )}
+        {task.estimated_hours && (
+          <span className="text-gray-500 dark:text-gray-400">
+            ⏱️ {task.estimated_hours}h
+          </span>
+        )}
         </div>
       </div>
     </div>
@@ -403,7 +403,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
                     <TaskCard key={taskIdStr} task={task} onClick={() => onTaskClick(task)} isColumnDragging={isAnyColumnDragging} />
                   );
                 })}
-              </div>
+            </div>
             </SortableContext>
             {/* Drop indicator at the bottom when dragging over (only for tasks, not columns) */}
             {isActive && activeId && !isDraggingColumn && (
@@ -674,7 +674,7 @@ export function SprintBoardView() {
       originalCount: initialCount,
       taskIds: filtered.length > 0 ? filtered.slice(0, 5).map(t => t.id) : []
     });
-    
+
     return filtered;
   }, [tasks, searchQuery, priorityFilter, epicFilter, sprintFilter, loading]);
 
@@ -858,6 +858,7 @@ export function SprintBoardView() {
           });
           // Set the dragged column ID and clear task drag state
           setDraggedColumnId(matchingColumnId);
+          draggedColumnIdRef.current = matchingColumnId; // Update ref for immediate access
           setActiveId(null);
           setActiveColumnId(null);
           setReorderedTasks({});
@@ -884,6 +885,7 @@ export function SprintBoardView() {
       if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
         debug.dnd('Setting draggedColumnId', { activeId: activeIdStr, isLastColumn });
         setDraggedColumnId(activeIdStr);
+        draggedColumnIdRef.current = activeIdStr; // Update ref for immediate access
         setActiveId(null); // Clear any task drag state
         debug.dnd('Column drag state set', { draggedColumnId: activeIdStr });
         return;
@@ -936,6 +938,7 @@ export function SprintBoardView() {
           orderedColumns: orderedColumns.map(c => c.id)
         });
         setDraggedColumnId(activeIdStr);
+        draggedColumnIdRef.current = activeIdStr; // Update ref for immediate access
         setActiveId(null);
         debug.dnd('Column drag state set (priority check)', { draggedColumnId: activeIdStr });
         return;
@@ -951,6 +954,7 @@ export function SprintBoardView() {
           orderedColumns: orderedColumns.map(c => c.id)
         });
         setDraggedColumnId(activeIdStr);
+        draggedColumnIdRef.current = activeIdStr; // Update ref for immediate access
         setActiveId(null);
         debug.dnd('Column drag state set (column is being dragged)', { draggedColumnId: activeIdStr });
         return;
@@ -996,6 +1000,7 @@ export function SprintBoardView() {
       debug.dnd('Detected task drag', { activeId: activeIdStr, isColumnId, isColumnBeingDragged });
       setActiveId(activeIdStr);
       setDraggedColumnId(null); // Clear any column drag state
+      draggedColumnIdRef.current = null; // Clear ref
       
       if (availableStatuses) {
         // Find the status that matches this task's status
@@ -1046,7 +1051,7 @@ export function SprintBoardView() {
         });
         // Set the dragged column ID and clear task drag state
         setDraggedColumnId(matchingColumnId);
-        setActiveId(null);
+    setActiveId(null);
         setReorderedTasks({});
       }
     }
@@ -1147,7 +1152,7 @@ export function SprintBoardView() {
       setActiveColumnId(null);
       return;
     }
-    
+
     const activeId = active.id as string;
     let targetColumnId: string | null = null;
     
@@ -1306,8 +1311,9 @@ export function SprintBoardView() {
         });
         // Set draggedColumnId so column reordering logic can run
         setDraggedColumnId(activeIdStr);
+        draggedColumnIdRef.current = activeIdStr; // Update ref for immediate access
       }
-    } else if (!draggedColumnId && (draggingColumnIds.size > 0 || draggingColumnIdsRef.current.size > 0)) {
+    } else if (!draggedColumnId && !draggedColumnIdRef.current && (draggingColumnIds.size > 0 || draggingColumnIdsRef.current.size > 0)) {
       // Second check: Check if a column is being dragged via draggingColumnIds
       const currentDraggingIds = draggingColumnIdsRef.current.size > 0 
         ? draggingColumnIdsRef.current 
@@ -1328,6 +1334,7 @@ export function SprintBoardView() {
         });
         // Set draggedColumnId so column reordering logic can run
         setDraggedColumnId(matchingColumnId);
+        draggedColumnIdRef.current = matchingColumnId; // Update ref for immediate access
         // Don't process as task - this is a column drag
         setActiveId(null);
         setActiveColumnId(null);
@@ -1341,14 +1348,19 @@ export function SprintBoardView() {
       delayedCheckTimeoutRef.current = null;
     }
     
+    // Use ref for immediate access to draggedColumnId (no state update delay)
+    const currentDraggedColumnId = draggedColumnIdRef.current || draggedColumnId;
+    
     // Check if this is the last column being dragged
-    const isLastColumn = draggedColumnId && orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === draggedColumnId;
-    const activeColumnIndex = draggedColumnId ? columnOrder.indexOf(draggedColumnId) : -1;
+    const isLastColumn = currentDraggedColumnId && orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === currentDraggedColumnId;
+    const activeColumnIndex = currentDraggedColumnId ? columnOrder.indexOf(currentDraggedColumnId) : -1;
     
     debug.dnd('Drag ended', { 
       activeId: active.id, 
       overId: over?.id, 
       draggedColumnId,
+      draggedColumnIdRef: draggedColumnIdRef.current,
+      currentDraggedColumnId,
       draggingColumnIds: Array.from(draggingColumnIds),
       isLastColumn,
       activeColumnIndex,
@@ -1360,10 +1372,11 @@ export function SprintBoardView() {
     
     // Clear dragging column IDs on drag end
     setDraggingColumnIds(new Set());
+    draggingColumnIdsRef.current = new Set();
     
-    // Handle column reordering
-    if (draggedColumnId) {
-      const activeColumnId = draggedColumnId;
+    // Handle column reordering - use ref for immediate access
+    if (currentDraggedColumnId) {
+      const activeColumnId = currentDraggedColumnId;
       debug.dnd('handleDragEnd: Processing column drag end', {
         activeColumnId,
         isLastColumn,
@@ -1375,6 +1388,7 @@ export function SprintBoardView() {
       });
       
       setDraggedColumnId(null);
+      draggedColumnIdRef.current = null; // Clear ref
       setActiveColumnId(null);
       
       if (over && availableStatuses) {
@@ -1967,10 +1981,10 @@ export function SprintBoardView() {
     debug.api('Updating task', { taskId, url: url.toString(), updates });
     
     const response = await fetch(url.toString(), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -2025,8 +2039,8 @@ export function SprintBoardView() {
         ...result
       });
     }
-    
-    // Refresh tasks
+      
+      // Refresh tasks
     if (refreshTasks) {
       refreshTasks();
     } else {
@@ -2539,17 +2553,17 @@ export function SprintBoardView() {
       </div>
     );
   }
-  
+
   if (statusesError) {
-    return (
+  return (
       <div className="flex flex-col items-center justify-center py-20 px-4">
         <div className="text-red-500 font-semibold mb-2">Error loading statuses</div>
         <div className="text-red-400 text-sm text-center max-w-2xl">
           {statusesError.message}
-        </div>
+                </div>
         <div className="mt-4 text-xs text-muted-foreground">
           Tip: Check your PM provider configuration and verify the project exists.
-        </div>
+                </div>
         <Button 
           onClick={() => refreshStatuses()} 
           className="mt-4"
@@ -2557,7 +2571,7 @@ export function SprintBoardView() {
         >
           Retry
         </Button>
-      </div>
+                </div>
     );
   }
 
@@ -2600,19 +2614,19 @@ export function SprintBoardView() {
           </div>
           <div className="flex gap-2">
             {availablePriorities.length > 0 && (
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priority</SelectItem>
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priority</SelectItem>
                   {availablePriorities.map(({ value, label }) => (
                     <SelectItem key={value} value={value}>
                       {label}
                     </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
+              </SelectContent>
+            </Select>
             )}
             {epics.length > 0 && (
               <Select 
@@ -2621,17 +2635,17 @@ export function SprintBoardView() {
               >
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="Epic" />
-                </SelectTrigger>
-                <SelectContent>
+              </SelectTrigger>
+              <SelectContent>
                   <SelectItem value="all">All Epics</SelectItem>
                   <SelectItem value="none">No Epic</SelectItem>
                   {epics.map((epic) => (
                     <SelectItem key={epic.id} value={epic.id}>
                       {epic.name}
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                ))}
+              </SelectContent>
+            </Select>
             )}
             {sprints && sprints.length > 0 && (
               <Select 
@@ -2795,8 +2809,8 @@ export function SprintBoardView() {
                       onColumnDragStateChange={handleColumnDragStateChange}
                     />
                   </div>
-                ))}
-              </div>
+          ))}
+        </div>
             </SortableContext>
           ) : (
             <div className="flex items-center justify-center flex-1">

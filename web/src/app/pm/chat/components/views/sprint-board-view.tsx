@@ -1325,20 +1325,66 @@ export function SprintBoardView() {
     }
     
     // Handle task dragging
-    // First check if this is actually a column drag that wasn't detected in handleDragStart
-    // This can happen if the drag starts from a child element
+    // CRITICAL: First check if this is actually a column drag that wasn't detected in handleDragStart
+    // This can happen if the drag starts from a child element or if handleDragStart failed to detect it
     const activeData = active.data.current;
     const activeId = String(active.id);
     
-    // If active data has type 'column', it's definitely a column drag
+    // If active data has type 'column', it's definitely a column drag - DO NOT process as task
     if (activeData?.type === 'column') {
-      debug.dnd('Detected column drag in handleDragEnd (missed in handleDragStart)', { activeId });
-      // Handle as column drag
-      const activeColumnId = activeId;
-      setDraggedColumnId(null);
+      debug.warn('Column drag detected in handleDragEnd but draggedColumnId was not set! This should not happen.', { 
+        activeId, 
+        activeData,
+        draggedColumnId,
+        availableStatuses: availableStatuses?.map(s => s.id)
+      });
+      // Don't process as task - just reset state and return
+      setActiveId(null);
       setActiveColumnId(null);
-      
-      if (over && availableStatuses) {
+      setReorderedTasks({});
+      return;
+    }
+    
+    // Also check if the activeId matches a column ID (status ID) - if so, it's a column drag
+    if (availableStatuses && availableStatuses.some(s => String(s.id) === activeId)) {
+      // Check if it's also a task ID - if not, it's definitely a column
+      const isTaskId = tasks.some(t => String(t.id) === activeId);
+      if (!isTaskId) {
+        debug.warn('Column drag detected in handleDragEnd by ID check but draggedColumnId was not set! This should not happen.', { 
+          activeId, 
+          activeData,
+          draggedColumnId,
+          isTaskId
+        });
+        // Don't process as task - just reset state and return
+        setActiveId(null);
+        setActiveColumnId(null);
+        setReorderedTasks({});
+        return;
+      }
+    }
+    
+    // Only proceed with task dragging if we're certain it's not a column
+    // If we're not sure, don't process it
+    if (!activeId || activeId === 'undefined' || activeId === 'null') {
+      debug.warn('Invalid activeId in handleDragEnd, skipping task drag processing', { activeId, activeData });
+      setActiveId(null);
+      setActiveColumnId(null);
+      setReorderedTasks({});
+      return;
+    }
+    
+    // Now handle task dragging - we've confirmed it's not a column drag
+    setActiveId(null);
+    setActiveColumnId(null);
+    setReorderedTasks({});
+
+    if (!over) {
+      debug.dnd('No drop target, cancelling task drag');
+      return;
+    }
+
+    if (over && availableStatuses) {
         let overId: string | null = null;
         
         // Check if we dropped directly on a column (status ID)

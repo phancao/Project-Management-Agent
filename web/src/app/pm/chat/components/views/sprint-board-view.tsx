@@ -1716,36 +1716,42 @@ export function SprintBoardView() {
         // Note: handleUpdateTask already refreshes the task list, so we don't need to do it again here
       } catch (err) {
         // Catch and handle the error - show toast notification instead of console error
-        debug.error('Error updating task', err);
         const errorMessage = err instanceof Error ? err.message : String(err);
         let userFriendlyMessage = 'Failed to update task status';
         let description = errorMessage;
         
         // Make OpenProject permission errors more user-friendly
-        if (errorMessage.includes('no valid transition exists')) {
+        if (errorMessage.includes('no valid transition exists') || 
+            errorMessage.includes('no valid transition')) {
           userFriendlyMessage = 'Status transition not allowed';
-          description = 'You do not have permission to change the task status from the current status to the target status. Please contact your administrator or try a different status.';
+          description = 'You do not have permission to change the task status from the current status to the target status based on your role. Please contact your administrator or try a different status transition.';
         } else if (errorMessage.includes('Status is invalid')) {
           userFriendlyMessage = 'Status change not allowed';
-          description = 'This status change is not allowed. The status transition may be restricted by your role permissions.';
-        } else if (errorMessage.includes('OpenProject validation error')) {
-          // Extract the actual error message after the prefix
-          const match = errorMessage.match(/OpenProject validation error \(\d+\): (.+)/);
-          if (match) {
-            description = match[1];
-            if (description.includes('no valid transition exists')) {
-              userFriendlyMessage = 'Status transition not allowed';
-              description = 'You do not have permission to change the task status from the current status to the target status. Please contact your administrator or try a different status.';
-            }
-          }
+          description = 'This status change is not allowed. The status transition may be restricted by your role permissions or workflow rules.';
+        } else if (errorMessage.includes('workflow') || errorMessage.includes('transition')) {
+          userFriendlyMessage = 'Workflow restriction';
+          description = 'This status transition is not allowed by the workflow rules. Please try a different status or contact your administrator.';
         }
         
-        // Show toast notification instead of console error
-        debug.task('Showing error toast', { userFriendlyMessage, description });
+        // Only log to debug if enabled (not to console.error to avoid noise)
+        debug.error('Error updating task status', { 
+          errorMessage, 
+          userFriendlyMessage, 
+          description,
+          taskId: activeId,
+          targetStatus: newStatus
+        });
+        
+        // Show toast notification - this is the primary way to inform the user
         toast.error(userFriendlyMessage, {
           description: description,
           duration: 6000,
         });
+        
+        // Reset drag state on error
+        setActiveId(null);
+        setActiveColumnId(null);
+        setReorderedTasks({});
       }
   };
 
@@ -1783,13 +1789,27 @@ export function SprintBoardView() {
                       errorData.error || 
                       (errorData.errors && Array.isArray(errorData.errors) && errorData.errors[0]?.message) ||
                       errorMessage;
+        
+        // Format OpenProject validation errors more clearly
+        if (errorMessage.includes('OpenProject validation error')) {
+          // Extract the actual error message after the prefix
+          const match = errorMessage.match(/OpenProject validation error \(\d+\): (.+)/);
+          if (match) {
+            errorMessage = match[1];
+          }
+        }
       } catch {
         if (errorText) {
           errorMessage = errorText;
         }
       }
+      
+      // Create a custom error that won't be logged as an uncaught exception
+      const error = new Error(errorMessage);
+      // Mark it as handled so it doesn't show up in console as uncaught
+      (error as any).isHandled = true;
       // Return a rejected promise instead of throwing to prevent Next.js from logging it
-      return Promise.reject(new Error(errorMessage));
+      return Promise.reject(error);
     }
     
     const result = await response.json();

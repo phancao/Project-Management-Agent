@@ -787,10 +787,35 @@ export function SprintBoardView() {
       dataType: activeData?.type, 
       activeData,
       isLastColumn,
+      draggingColumnIds: Array.from(draggingColumnIds),
       totalColumns: orderedColumns.length,
       columnOrder: columnOrder,
       orderedColumns: orderedColumns.map(c => ({ id: c.id, title: c.title }))
     });
+    
+    // CRITICAL: Use a small delay to check if a column is being dragged
+    // This handles the race condition where handleDragStart runs before column's isDragging becomes true
+    // We'll check draggingColumnIds after a brief delay
+    setTimeout(() => {
+      if (draggingColumnIds.size > 0 && !draggedColumnId) {
+        // Check if activeId matches any column being dragged
+        const matchingColumnId = Array.from(draggingColumnIds).find(colId => {
+          return colId === activeIdStr || availableStatuses?.some(s => String(s.id) === colId);
+        });
+        
+        if (matchingColumnId) {
+          debug.warn('CRITICAL: Detected column drag after delay (missed in initial handleDragStart)', {
+            activeId: activeIdStr,
+            matchingColumnId,
+            draggingColumnIds: Array.from(draggingColumnIds)
+          });
+          // Set the dragged column ID and clear task drag state
+          setDraggedColumnId(matchingColumnId);
+          setActiveId(null);
+          setReorderedTasks({});
+        }
+      }
+    }, 50); // Small delay to allow column's isDragging to update
     
     // CRITICAL: Check for column drags FIRST, before checking for tasks
     // This prevents column drags from being misidentified as task drags

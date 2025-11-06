@@ -2204,7 +2204,10 @@ export function SprintBoardView() {
     debug.column('Computing orderedColumns', { 
       columnsLength: columns.length, 
       visibleColumnsSize: visibleColumns.size, 
-      columnOrderLength: columnOrder.length 
+      columnOrderLength: columnOrder.length,
+      columnOrder,
+      draggedColumnId,
+      columns: columns.map(c => ({ id: c.id, title: c.title }))
     });
     
     // First filter by visibility

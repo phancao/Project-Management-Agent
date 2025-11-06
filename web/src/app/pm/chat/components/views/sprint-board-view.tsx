@@ -847,16 +847,28 @@ export function SprintBoardView() {
     // This handles the case where data.type is not set correctly (e.g., when dragging from header)
     const isColumnBeingDragged = draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr);
     
+    // Check if the column has any tasks - if it's empty and we're dragging by ID, it's likely a column drag
+    const columnWithId = availableStatuses?.find(s => String(s.id) === activeIdStr);
+    const columnHasTasks = columnWithId ? tasks.some(t => {
+      const taskStatusLower = (t.status || "").toLowerCase();
+      const statusNameLower = columnWithId.name.toLowerCase();
+      return taskStatusLower === statusNameLower || 
+             taskStatusLower.includes(statusNameLower) || 
+             statusNameLower.includes(taskStatusLower);
+    }) : false;
+    
     // If it's a column ID and either:
     // 1. It's NOT also a task ID (definitely a column), OR
-    // 2. The column IS being dragged (from draggingColumnIds)
+    // 2. The column IS being dragged (from draggingColumnIds), OR
+    // 3. The column has NO tasks (empty column - definitely a column drag when dragging by header)
     // Then treat it as a column drag
-    if (isColumnId && (!isTaskId || isColumnBeingDragged) && !activeData?.type) {
+    if (isColumnId && (!isTaskId || isColumnBeingDragged || !columnHasTasks) && !activeData?.type) {
       debug.warn('CRITICAL: Column ID detected but data.type is missing - treating as column drag', {
         activeId: activeIdStr,
         isColumnId,
         isTaskId,
         isColumnBeingDragged,
+        columnHasTasks,
         activeData,
         draggingColumnIds: Array.from(draggingColumnIds),
         draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)

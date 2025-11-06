@@ -927,6 +927,30 @@ export function SprintBoardView() {
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     
+    // CRITICAL FIX: If we haven't detected a column drag yet, but a column is being dragged,
+    // update the state now. This handles the case where drag starts from a task inside the column.
+    const activeIdStr = String(active.id);
+    if (!draggedColumnId && draggingColumnIds.size > 0) {
+      // Check if the activeId matches any of the columns being dragged
+      const matchingColumnId = Array.from(draggingColumnIds).find(colId => {
+        // Check if activeId matches the column ID, or if we're dragging over a column
+        return colId === activeIdStr || (over && String(over.id) === colId);
+      });
+      
+      if (matchingColumnId) {
+        debug.warn('CRITICAL: Detected column drag in handleDragOver (missed in handleDragStart)', {
+          activeId: activeIdStr,
+          matchingColumnId,
+          draggingColumnIds: Array.from(draggingColumnIds),
+          activeData: active.data.current
+        });
+        // Set the dragged column ID and clear task drag state
+        setDraggedColumnId(matchingColumnId);
+        setActiveId(null);
+        setReorderedTasks({});
+      }
+    }
+    
     // Check if this is the last column being dragged
     const isLastColumn = draggedColumnId && orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === draggedColumnId;
     const overColumnIndex = over ? orderedColumns.findIndex(c => c.id === over.id) : -1;
@@ -936,6 +960,7 @@ export function SprintBoardView() {
       activeId: active.id, 
       overId: over?.id, 
       draggedColumnId,
+      draggingColumnIds: Array.from(draggingColumnIds),
       isLastColumn,
       isOverLastColumn,
       overColumnIndex,

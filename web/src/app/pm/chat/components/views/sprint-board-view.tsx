@@ -467,6 +467,31 @@ export function SprintBoardView() {
   // Use a ref to track dragging columns for immediate access (no state update delay)
   const draggingColumnIdsRef = useRef<Set<string>>(new Set());
   
+  // Memoize the callback to prevent infinite loops
+  const handleColumnDragStateChange = useCallback((columnId: string, isDragging: boolean) => {
+    setDraggingColumnIds(prev => {
+      // Check if the state would actually change
+      const wouldAdd = isDragging && !prev.has(columnId);
+      const wouldRemove = !isDragging && prev.has(columnId);
+      
+      // Only update if state would change
+      if (!wouldAdd && !wouldRemove) {
+        return prev; // Return same reference to prevent unnecessary re-renders
+      }
+      
+      const next = new Set(prev);
+      if (isDragging) {
+        next.add(columnId);
+      } else {
+        next.delete(columnId);
+      }
+      // Also update ref for immediate access
+      draggingColumnIdsRef.current = next;
+      debug.dnd('Column drag state changed', { columnId, isDragging, draggingColumnIds: Array.from(next) });
+      return next;
+    });
+  }, []);
+  
   // Use the new useProjectData hook for cleaner project handling
   const { activeProjectId, projectIdForData: projectIdForTasks } = useProjectData();
   
@@ -2711,29 +2736,7 @@ export function SprintBoardView() {
                       activeId={activeId}
                       isDraggingColumn={draggedColumnId === column.id}
                       isAnyColumnDragging={!!draggedColumnId}
-                      onColumnDragStateChange={useCallback((columnId: string, isDragging: boolean) => {
-                        setDraggingColumnIds(prev => {
-                          // Check if the state would actually change
-                          const wouldAdd = isDragging && !prev.has(columnId);
-                          const wouldRemove = !isDragging && prev.has(columnId);
-                          
-                          // Only update if state would change
-                          if (!wouldAdd && !wouldRemove) {
-                            return prev; // Return same reference to prevent unnecessary re-renders
-                          }
-                          
-                          const next = new Set(prev);
-                          if (isDragging) {
-                            next.add(columnId);
-                          } else {
-                            next.delete(columnId);
-                          }
-                          // Also update ref for immediate access
-                          draggingColumnIdsRef.current = next;
-                          debug.dnd('Column drag state changed', { columnId, isDragging, draggingColumnIds: Array.from(next) });
-                          return next;
-                        });
-                      }, [])}
+                      onColumnDragStateChange={handleColumnDragStateChange}
                     />
                   </div>
                 ))}

@@ -54,10 +54,18 @@ function loadConfig(): DebugConfig {
   }
 
   try {
-    // Check if debug is explicitly enabled in localStorage
-    // If the key doesn't exist, default to disabled
+    // Check if debug is explicitly enabled/disabled in localStorage
+    // If the key doesn't exist, enable by default in development mode
     const enabledValue = localStorage.getItem('pm:debug:enabled');
-    const enabled = enabledValue === 'true'; // Only enable if explicitly set to 'true'
+    let enabled: boolean;
+    
+    if (enabledValue === null) {
+      // No setting in localStorage - enable by default in development
+      enabled = process.env.NODE_ENV === 'development';
+    } else {
+      // Respect the explicit setting
+      enabled = enabledValue === 'true';
+    }
     
     const categoriesStr = localStorage.getItem('pm:debug:categories');
     const categories = categoriesStr 
@@ -367,13 +375,16 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   // Log debug status on load
   const currentConfig = debug.getConfig();
   if (currentConfig.enabled) {
-    console.log('%c[PM Debug] Debug logging is ENABLED', 'color: green; font-weight: bold;', {
+    console.log('%c[PM Debug] ✅ Debug logging is ENABLED', 'color: green; font-weight: bold;', {
       categories: Array.from(currentConfig.categories),
       enabled: currentConfig.enabled
     });
+    console.log('%c[PM Debug]', 'color: blue;', 'To disable: window.pmDebug.disable()');
+    console.log('%c[PM Debug]', 'color: blue;', 'To filter categories: window.pmDebug.setCategories(["dnd", "column"])');
   } else {
-    console.log('%c[PM Debug] Debug logging is DISABLED', 'color: gray; font-style: italic;', 
-      'Enable with: window.pmDebug.enable() or localStorage.setItem("pm:debug:enabled", "true")');
+    console.log('%c[PM Debug] ❌ Debug logging is DISABLED', 'color: orange; font-weight: bold;');
+    console.log('%c[PM Debug]', 'color: blue;', 'Quick enable: window.pmDebug.enable()');
+    console.log('%c[PM Debug]', 'color: blue;', 'Or: localStorage.setItem("pm:debug:enabled", "true") then refresh');
   }
 }
 

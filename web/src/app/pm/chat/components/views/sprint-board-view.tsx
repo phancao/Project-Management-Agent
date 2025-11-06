@@ -198,7 +198,12 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     prevItemsLengthRef.current = sortableItems.length;
   }, [sortableItems.length]);
   
-  const isActive = isOver || isOverTop || isOverBottom || activeColumnId === column.id;
+  // Only show active state for task dragging, not column dragging
+  // When dragging a column, we only highlight if this is the target column (activeColumnId)
+  // When dragging a task, we show highlight based on droppable zones
+  const isActive = isDraggingColumn 
+    ? activeColumnId === column.id  // For column dragging, only highlight target column
+    : (isOver || isOverTop || isOverBottom || activeColumnId === column.id);  // For task dragging, use droppable zones
 
   // Auto-scroll when dragging over the column near edges
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -277,8 +282,8 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       style={style}
       className="flex flex-col h-full"
     >
-      {/* Top drop zone - only show when dragging over it to avoid blocking first task */}
-      {activeId && (
+      {/* Top drop zone - only show when dragging a task (not a column) */}
+      {activeId && !isDraggingColumn && (
         <div 
           ref={setTopDropRef}
           className={`transition-all ${
@@ -337,13 +342,13 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
         }}
       >
         {displayTasks.length === 0 ? (
-          <div className={`text-sm text-gray-500 dark:text-gray-400 text-center py-8 font-medium ${isActive ? 'text-blue-700 dark:text-blue-300' : ''}`}>
-            {isActive ? 'Drop here' : 'No tasks'}
+          <div className={`text-sm text-gray-500 dark:text-gray-400 text-center py-8 font-medium ${isActive && !isDraggingColumn ? 'text-blue-700 dark:text-blue-300' : ''}`}>
+            {isActive && !isDraggingColumn ? 'Drop here' : 'No tasks'}
           </div>
         ) : (
           <>
-            {/* Drop indicator at the top when dragging over */}
-            {isActive && activeId && (
+            {/* Drop indicator at the top when dragging over (only for tasks, not columns) */}
+            {isActive && activeId && !isDraggingColumn && (
               <div 
                 className="h-2 bg-blue-500 dark:bg-blue-400 rounded-full mb-2 transition-opacity"
                 style={{ pointerEvents: 'none' }}
@@ -372,8 +377,8 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
                 })}
               </div>
             </SortableContext>
-            {/* Drop indicator at the bottom when dragging over */}
-            {isActive && activeId && (
+            {/* Drop indicator at the bottom when dragging over (only for tasks, not columns) */}
+            {isActive && activeId && !isDraggingColumn && (
               <div 
                 className="h-2 bg-blue-500 dark:bg-blue-400 rounded-full mt-2 transition-opacity"
                 style={{ pointerEvents: 'none' }}
@@ -383,8 +388,8 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
         )}
       </div>
       
-      {/* Bottom drop zone - always visible when dragging */}
-      {activeId && (
+      {/* Bottom drop zone - only show when dragging a task (not a column) */}
+      {activeId && !isDraggingColumn && (
         <div 
           ref={setBottomDropRef}
           className={`h-8 transition-all ${

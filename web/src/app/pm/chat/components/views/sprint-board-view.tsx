@@ -8,13 +8,18 @@ import type { DragEndEvent, DragStartEvent, DragOverEvent } from "@dnd-kit/core"
 import { useSortable } from "@dnd-kit/sortable";
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Search, Filter, GripVertical, GripHorizontal } from "lucide-react";
+import { Search, Filter, GripVertical, GripHorizontal, Settings2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
 
 import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "~/components/ui/dialog";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Label } from "~/components/ui/label";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useTasks, useMyTasks } from "~/core/api/hooks/pm/use-tasks";
@@ -26,8 +31,10 @@ import { useSprints } from "~/core/api/hooks/pm/use-sprints";
 import { TaskDetailsModal } from "../task-details-modal";
 
 function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
+  // Ensure task.id is always a string for dnd-kit (OpenProject uses numeric IDs, JIRA uses string IDs)
+  const taskId = String(task.id);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
+    id: taskId,
   });
 
   const style = {
@@ -50,6 +57,13 @@ function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
       <div
         {...listeners}
         className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
+        style={{
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          zIndex: 10,
+          position: 'relative',
+        }}
       >
         <GripVertical className="w-4 h-4" />
       </div>
@@ -142,7 +156,46 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
   };
   
   // Filter out the active task being dragged from the tasks list for display
-  const displayTasks = tasks.filter(task => task.id !== activeId);
+  // Convert both to strings for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+  // Memoize to ensure stable reference and prevent unnecessary re-initializations
+  const displayTasks = useMemo(() => {
+    return tasks.filter(task => String(task.id) !== String(activeId));
+  }, [tasks, activeId]);
+  
+  // Memoize the items array for SortableContext to ensure stable reference
+  // Use a stable string representation of task IDs to prevent unnecessary recalculations
+  const sortableItems = useMemo(() => {
+    const items = displayTasks.map(t => String(t.id));
+    // Return empty array if no items to prevent initialization issues
+    return items;
+  }, [displayTasks]);
+  
+  // Track when items first become available to ensure proper SortableContext initialization
+  // This ensures SortableContext remounts once when items first load, fixing the first-item drag issue
+  // The issue occurs because dnd-kit needs SortableContext to be initialized with items present,
+  // but on first render, the context might initialize before all TaskCard components have mounted
+  const [sortableInitKey, setSortableInitKey] = useState(0);
+  const prevItemsLengthRef = useRef(0);
+  const isInitialMountRef = useRef(true);
+  
+  useEffect(() => {
+    // On initial mount, if items are already present, we need to remount after a brief delay
+    // to ensure all TaskCard components have mounted and registered with dnd-kit
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      if (sortableItems.length > 0) {
+        // Use requestAnimationFrame to ensure DOM is ready and all components have mounted
+        requestAnimationFrame(() => {
+          setSortableInitKey(prev => prev + 1);
+        });
+      }
+    } else if (sortableItems.length > 0 && prevItemsLengthRef.current === 0) {
+      // When items first become available after being empty, force SortableContext remount
+      setSortableInitKey(prev => prev + 1);
+    }
+    prevItemsLengthRef.current = sortableItems.length;
+  }, [sortableItems.length]);
+  
   const isActive = isOver || isOverTop || isOverBottom || activeColumnId === column.id;
 
   // Auto-scroll when dragging over the column near edges
@@ -222,15 +275,18 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       style={style}
       className="flex flex-col"
     >
-      {/* Top drop zone - always visible when dragging */}
+      {/* Top drop zone - only show when dragging over it to avoid blocking first task */}
       {activeId && (
         <div 
           ref={setTopDropRef}
-          className={`h-8 transition-all ${
-            isOverTop || (isActive && activeId)
-              ? 'bg-blue-200 dark:bg-blue-800 border-2 border-blue-500 dark:border-blue-400 rounded-t-lg'
-              : 'bg-transparent'
+          className={`transition-all ${
+            isOverTop
+              ? 'h-8 bg-blue-200 dark:bg-blue-800 border-2 border-blue-500 dark:border-blue-400 rounded-t-lg'
+              : 'h-0 pointer-events-none'
           }`}
+          style={{
+            pointerEvents: isOverTop ? 'auto' : 'none',
+          }}
         >
           {isOverTop && (
             <div className="h-full flex items-center justify-center">
@@ -241,21 +297,27 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       )}
       
       <div 
+        {...attributes}
+        {...listeners}
         className={`flex items-center justify-between p-3 rounded-t-lg transition-colors ${
           isActive && !isDraggingColumn
             ? 'bg-blue-100 dark:bg-blue-900' 
             : 'bg-gray-100 dark:bg-gray-800'
         }`}
+        style={{
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
       >
         <div className="flex items-center gap-2 flex-1">
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
-          >
+          <div className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0">
             <GripHorizontal className="w-4 h-4" />
           </div>
-          <h3 className="font-semibold text-gray-900 dark:text-white">{column.title}</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white">
+            {column.title}
+          </h3>
         </div>
         <span className="px-2 py-1 bg-white dark:bg-gray-700 rounded text-sm font-medium text-gray-700 dark:text-gray-300">
           {tasks.length}
@@ -268,6 +330,9 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
             ? 'bg-blue-50 dark:bg-blue-950 border-blue-500 dark:border-blue-500' 
             : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
         }`}
+        style={{
+          overscrollBehavior: 'contain',
+        }}
       >
         {displayTasks.length === 0 ? (
           <div className={`text-sm text-gray-500 dark:text-gray-400 text-center py-8 font-medium ${isActive ? 'text-blue-700 dark:text-blue-300' : ''}`}>
@@ -277,25 +342,40 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
           <>
             {/* Drop indicator at the top when dragging over */}
             {isActive && activeId && (
-              <div className="h-2 bg-blue-500 dark:bg-blue-400 rounded-full mb-2 transition-opacity" />
+              <div 
+                className="h-2 bg-blue-500 dark:bg-blue-400 rounded-full mb-2 transition-opacity"
+                style={{ pointerEvents: 'none' }}
+              />
             )}
-            <SortableContext items={displayTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext 
+              key={`sortable-${column.id}-${sortableInitKey}`}
+              items={sortableItems} 
+              strategy={verticalListSortingStrategy}
+            >
               <div 
                 className="space-y-2"
                 style={{
                   // Force browser to use GPU acceleration for smoother animations
                   transform: 'translateZ(0)',
                   willChange: activeId ? 'contents' : 'auto',
+                  paddingTop: '0.5rem', // Ensure first task has space for drag handle
                 }}
               >
-                {displayTasks.map((task) => (
-                  <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
-                ))}
+                {displayTasks.map((task) => {
+                  // Use String(task.id) for key to match useSortable id and ensure stable keys
+                  const taskIdStr = String(task.id);
+                  return (
+                    <TaskCard key={taskIdStr} task={task} onClick={() => onTaskClick(task)} />
+                  );
+                })}
               </div>
             </SortableContext>
             {/* Drop indicator at the bottom when dragging over */}
             {isActive && activeId && (
-              <div className="h-2 bg-blue-500 dark:bg-blue-400 rounded-full mt-2 transition-opacity" />
+              <div 
+                className="h-2 bg-blue-500 dark:bg-blue-400 rounded-full mt-2 transition-opacity"
+                style={{ pointerEvents: 'none' }}
+              />
             )}
           </>
         )}
@@ -324,6 +404,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
 
 export function SprintBoardView() {
   const searchParams = useSearchParams();
+  const DEBUG_DND = false;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -335,6 +416,8 @@ export function SprintBoardView() {
   const [reorderedTasks, setReorderedTasks] = useState<Record<string, any[]>>({});
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
+  const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
   
   // Get project from URL (if any)
   const activeProjectId = searchParams.get('project');
@@ -452,37 +535,66 @@ export function SprintBoardView() {
   }, [tasks, searchQuery, priorityFilter, epicFilter, sprintFilter, loading]);
 
   const handleDragStart = (event: DragStartEvent) => {
-    console.log('[handleDragStart] Drag started:', event.active.id);
-    const activeIdStr = event.active.id as string;
+    const activeIdStr = String(event.active.id);
+    const activeData = event.active.data.current;
     
-    // Check if we're dragging a column (status ID)
-    if (availableStatuses && availableStatuses.some(s => s.id === activeIdStr)) {
-      setDraggedColumnId(activeIdStr);
-      return;
-    }
+    console.log('[handleDragStart] Drag started:', { 
+      activeId: activeIdStr, 
+      dataType: activeData?.type,
+      activeData 
+    });
     
-    // Otherwise, it's a task being dragged
-    setActiveId(activeIdStr);
-    const task = tasks.find(t => t.id === activeIdStr);
-    if (task && availableStatuses) {
-      // Find the status that matches this task's status
-      const currentStatus = availableStatuses.find(status => {
-        const taskStatusLower = (task.status || "").toLowerCase();
-        const statusNameLower = status.name.toLowerCase();
-        return taskStatusLower === statusNameLower || 
-               taskStatusLower.includes(statusNameLower) || 
-               statusNameLower.includes(taskStatusLower);
-      });
-      if (currentStatus) {
-        // Use status ID as column ID
-        setActiveColumnId(currentStatus.id);
+    // Check the data type first to distinguish between tasks and columns
+    // Columns have data.type === 'column', tasks don't have a type set
+    if (activeData?.type === 'column') {
+      // It's a column being dragged
+      console.log('[handleDragStart] Detected column drag:', activeIdStr);
+      if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
+        console.log('[handleDragStart] Setting draggedColumnId:', activeIdStr);
+        setDraggedColumnId(activeIdStr);
+        return;
+      } else {
+        console.warn('[handleDragStart] Column ID not found in availableStatuses:', activeIdStr);
+      }
+    } else {
+      // It's likely a task - check if it exists in the tasks array
+      const task = tasks.find(t => String(t.id) === activeIdStr);
+      
+      if (task) {
+        console.log('[handleDragStart] Detected task drag:', activeIdStr);
+        // It's a task being dragged - set activeId immediately
+        setActiveId(activeIdStr);
+        
+        if (availableStatuses) {
+          // Find the status that matches this task's status
+          const currentStatus = availableStatuses.find(status => {
+            const taskStatusLower = (task.status || "").toLowerCase();
+            const statusNameLower = status.name.toLowerCase();
+            return taskStatusLower === statusNameLower || 
+                   taskStatusLower.includes(statusNameLower) || 
+                   statusNameLower.includes(taskStatusLower);
+          });
+          if (currentStatus) {
+            // Use status ID as column ID for highlighting
+            setActiveColumnId(currentStatus.id);
+          }
+        }
+        return;
+      } else {
+        console.log('[handleDragStart] Not a task, checking if it might be a column without data.type');
+        // Fallback: check if it's a column by ID even without data.type
+        if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
+          console.log('[handleDragStart] Fallback: Setting draggedColumnId:', activeIdStr);
+          setDraggedColumnId(activeIdStr);
+          return;
+        }
       }
     }
   };
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    console.log('[handleDragOver] Drag over:', { active: active.id, over: over?.id, draggedColumnId });
+    if (DEBUG_DND) console.log('[handleDragOver] Drag over:', { active: active.id, over: over?.id, draggedColumnId });
     
     // Handle column reordering
     if (draggedColumnId) {
@@ -516,7 +628,8 @@ export function SprintBoardView() {
     
     if (!over || !availableStatuses) {
       // Clear reordered tasks for all columns when not over any column
-      const activeTask = tasks.find(t => t.id === active.id);
+      // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+      const activeTask = tasks.find(t => String(t.id) === String(active.id));
       if (activeTask) {
         // Find source column and clear its reordered state
         const sourceStatus = availableStatuses.find(status => {
@@ -552,7 +665,8 @@ export function SprintBoardView() {
         targetColumnId = overData.column;
       } else {
         // Check if we're over a task (which means we're in that task's column)
-        const overTask = tasks.find(t => t.id === over.id);
+        // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+        const overTask = tasks.find(t => String(t.id) === String(over.id));
         if (overTask && availableStatuses) {
           // Find which status this task belongs to
           const taskStatus = availableStatuses.find(status => {
@@ -574,7 +688,8 @@ export function SprintBoardView() {
       const targetStatus = availableStatuses.find(status => status.id === targetColumnId);
       if (targetStatus) {
         const columnTasks = getTasksForColumn(targetStatus.id);
-        const activeTask = tasks.find(t => t.id === activeId);
+        // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+        const activeTask = tasks.find(t => String(t.id) === String(activeId));
         
         if (activeTask) {
           // Find the source column (where the task currently is)
@@ -591,7 +706,8 @@ export function SprintBoardView() {
           
           // Get base tasks for target column (without the active task)
           const baseTargetTasks = filteredTasks.filter(task => {
-            if (task.id === activeId) return false;
+            // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+            if (String(task.id) === String(activeId)) return false;
             const taskStatusLower = (task.status || "").toLowerCase().trim();
             const statusNameLower = targetStatus.name.toLowerCase().trim();
             const normalizeStatus = (s: string) => s.replace(/[_\s-]/g, '').toLowerCase();
@@ -607,7 +723,8 @@ export function SprintBoardView() {
           let baseSourceTasks: any[] = [];
           if (sourceStatus && sourceStatus.id !== targetColumnId) {
             baseSourceTasks = filteredTasks.filter(task => {
-              if (task.id === activeId) return false;
+              // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+              if (String(task.id) === String(activeId)) return false;
               const taskStatusLower = (task.status || "").toLowerCase().trim();
               const statusNameLower = sourceStatus.name.toLowerCase().trim();
               const normalizeStatus = (s: string) => s.replace(/[_\s-]/g, '').toLowerCase();
@@ -622,7 +739,8 @@ export function SprintBoardView() {
           
           // Determine insertion position in target column
           let targetOrder: any[];
-          const overTask = tasks.find(t => t.id === over.id);
+          // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+          const overTask = tasks.find(t => String(t.id) === String(over.id));
           
           // Check if we're over a task in the target column
           if (overTask && overTask.status) {
@@ -636,7 +754,8 @@ export function SprintBoardView() {
             
             if (taskStatusMatch?.id === targetColumnId) {
               // Insert at the position of the over task
-              const overIndex = baseTargetTasks.findIndex(t => t.id === over.id);
+              // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+              const overIndex = baseTargetTasks.findIndex(t => String(t.id) === String(over.id));
               if (overIndex >= 0) {
                 targetOrder = [...baseTargetTasks];
                 targetOrder.splice(overIndex, 0, activeTask);
@@ -673,7 +792,7 @@ export function SprintBoardView() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    console.log('[handleDragEnd] Drag ended:', { active: active.id, over: over?.id, draggedColumnId });
+    if (DEBUG_DND) console.log('[handleDragEnd] Drag ended:', { active: active.id, over: over?.id, draggedColumnId });
     
     // Handle column reordering
     if (draggedColumnId) {
@@ -715,9 +834,9 @@ export function SprintBoardView() {
           if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
             const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
             setColumnOrder(newOrder);
-            console.log('[handleDragEnd] Column reordered:', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
+            if (DEBUG_DND) console.log('[handleDragEnd] Column reordered:', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
           } else {
-            console.log('[handleDragEnd] Column reorder skipped:', { oldIndex, newIndex, activeColumnId, overId, currentOrder });
+            if (DEBUG_DND) console.log('[handleDragEnd] Column reorder skipped:', { oldIndex, newIndex, activeColumnId, overId, currentOrder });
           }
         }
       }
@@ -730,7 +849,7 @@ export function SprintBoardView() {
     setReorderedTasks({});
 
     if (!over) {
-      console.log('[handleDragEnd] No drop target, cancelling');
+      if (DEBUG_DND) console.log('[handleDragEnd] No drop target, cancelling');
       return;
     }
 
@@ -738,7 +857,8 @@ export function SprintBoardView() {
     const overId = over.id as string;
 
     // Find the task being dragged
-    const task = tasks.find(t => t.id === activeId);
+    // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+    const task = tasks.find(t => String(t.id) === String(activeId));
     if (!task) return;
 
     // Determine which column we're dropping into
@@ -764,7 +884,8 @@ export function SprintBoardView() {
           targetColumnId = overData.column;
         } else {
           // We dropped on a task, find which status that task belongs to
-          const droppedOnTask = tasks.find(t => t.id === overId);
+          // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+          const droppedOnTask = tasks.find(t => String(t.id) === String(overId));
           if (droppedOnTask) {
             const taskStatus = availableStatuses.find(status => {
               const taskStatusLower = (droppedOnTask.status || "").toLowerCase();
@@ -782,7 +903,7 @@ export function SprintBoardView() {
     }
 
     if (!targetColumnId || !availableStatuses) {
-      console.log('[handleDragEnd] Could not determine target column');
+      if (DEBUG_DND) console.log('[handleDragEnd] Could not determine target column');
       return;
     }
 
@@ -795,20 +916,280 @@ export function SprintBoardView() {
 
     const newStatus = targetStatus.name;
 
-    console.log(`[handleDragEnd] Moving task from '${task.status}' to '${newStatus}' (status ID: ${targetColumnId})`);
+    if (DEBUG_DND) console.log(`[handleDragEnd] Moving task from '${task.status}' to '${newStatus}' (status ID: ${targetColumnId})`);
 
     // Don't update if status is the same
     if (newStatus === task.status) {
-      console.log(`[handleDragEnd] Task already has status '${newStatus}', skipping update`);
+      if (DEBUG_DND) console.log(`[handleDragEnd] Task already has status '${newStatus}', skipping update`);
       return;
     }
 
     // Update task status via API
-    try {
-      await handleUpdateTask(activeId, { status: newStatus });
-    } catch (err) {
-      console.error('Failed to update task status:', err);
+    // Always send the status name (not ID) to match manual editing behavior
+    // The backend will look up the status by name, which works correctly
+    
+    // Verify the status exists in available statuses before sending
+    const targetStatusExists = availableStatuses.some(s => s.id === targetColumnId);
+    if (!targetStatusExists) {
+      console.error(`[handleDragEnd] Status ID '${targetColumnId}' not found in available statuses`);
+      toast.error('Invalid status', {
+        description: `The selected status is not available.`,
+        duration: 4000,
+      });
+      return;
     }
+
+    // Always send the status name (not the ID) to match manual editing behavior
+    // The backend will look up the status by name, which works correctly
+    const statusValue = newStatus;
+    
+    console.log(`[handleDragEnd] Updating task ${activeId} status to: ${statusValue} (status name from column ID: ${targetColumnId})`);
+    
+    // Handle the update and catch errors to show toast notification instead of console error
+    try {
+        // Get the original task status before update
+        const originalTask = tasks.find(t => String(t.id) === String(activeId));
+        const originalStatus = originalTask?.status || 'No status';
+        
+        const result = await handleUpdateTask(activeId, { 
+          status: statusValue,
+        });
+        
+        // Get the actual status returned from OpenProject/JIRA
+        const actualStatus = result?.status || null;
+        
+        // Normalize status values for comparison (handle null, undefined, empty string, "No status", etc.)
+        const normalizeStatusForComparison = (status: string | null | undefined): string => {
+          if (!status) return '';
+          const normalized = status.toLowerCase().trim();
+          // Treat "new", "no status", empty string as the same
+          if (normalized === '' || normalized === 'new' || normalized === 'no status' || normalized === 'none') {
+            return '';
+          }
+          return normalized;
+        };
+        
+        // Also try to match status by checking if it's in the available statuses
+        // This handles cases where the status name might be slightly different
+        const findMatchingStatusId = (statusName: string | null | undefined): string | null => {
+          if (!statusName || !availableStatuses) return null;
+          const normalized = normalizeStatusForComparison(statusName);
+          // First try exact match
+          let matching = availableStatuses.find(s => {
+            const sNormalized = normalizeStatusForComparison(s.name);
+            return sNormalized === normalized;
+          });
+          // If no exact match, try partial match
+          if (!matching) {
+            matching = availableStatuses.find(s => {
+              const sNormalized = normalizeStatusForComparison(s.name);
+              return sNormalized.includes(normalized) || normalized.includes(sNormalized);
+            });
+          }
+          const foundId = matching?.id || null;
+          console.log(`[handleDragEnd] findMatchingStatusId: statusName="${statusName}", normalized="${normalized}", foundId="${foundId}", matchingStatus="${matching?.name}"`);
+          return foundId;
+        };
+        
+        const actualStatusNormalized = normalizeStatusForComparison(actualStatus);
+        const expectedStatusNormalized = normalizeStatusForComparison(newStatus);
+        const originalStatusNormalized = normalizeStatusForComparison(originalStatus);
+        
+        // Check if the actual status matches the target column ID
+        const actualStatusId = findMatchingStatusId(actualStatus);
+        const statusMatchesTargetColumn = actualStatusId === targetColumnId;
+        
+        console.log(`[handleDragEnd] Status ID matching:`, {
+          actualStatus,
+          actualStatusId,
+          targetColumnId,
+          statusMatchesTargetColumn,
+          availableStatuses: availableStatuses?.map(s => ({ id: s.id, name: s.name })),
+        });
+        
+        // Display-friendly status names
+        const displayStatus = (status: string | null | undefined): string => {
+          if (!status || status === '' || status.toLowerCase().trim() === 'new' || status.toLowerCase().trim() === 'no status') {
+            return 'No status';
+          }
+          return status;
+        };
+        
+        const displayOriginal = displayStatus(originalStatus);
+        const displayActual = displayStatus(actualStatus);
+        const displayExpected = displayStatus(newStatus);
+        
+        console.log(`[handleDragEnd] Status update result:`, {
+          original: originalStatus,
+          originalNormalized: originalStatusNormalized,
+          expected: newStatus,
+          expectedNormalized: expectedStatusNormalized,
+          expectedColumnId: targetColumnId,
+          actual: actualStatus,
+          actualNormalized: actualStatusNormalized,
+          actualStatusId: actualStatusId,
+          statusMatchesTargetColumn,
+          resultObject: result,
+        });
+        
+        // Check if the status actually changed to what we expected
+        // First, check if status changed at all
+        const statusChanged = actualStatusNormalized !== originalStatusNormalized;
+        // Check if status name matches
+        const statusNameMatches = actualStatusNormalized === expectedStatusNormalized;
+        // Check if status ID matches the target column
+        const statusIdMatches = statusMatchesTargetColumn;
+        // Overall match: both name and ID should match (or at least one if ID is not available)
+        const statusMatchesExpected = statusNameMatches && (statusIdMatches || actualStatusId === null);
+        
+        console.log(`[handleDragEnd] Status change analysis:`, {
+          statusChanged,
+          statusNameMatches,
+          statusIdMatches,
+          statusMatchesExpected,
+          statusMatchesTargetColumn,
+          originalStatusNormalized,
+          expectedStatusNormalized,
+          actualStatusNormalized,
+          targetColumnId,
+          actualStatusId,
+          comparison: {
+            'actual === expected (name)': actualStatusNormalized === expectedStatusNormalized,
+            'actualId === targetColumnId': actualStatusId === targetColumnId,
+            'actual !== original': actualStatusNormalized !== originalStatusNormalized,
+          }
+        });
+        
+        // IMPORTANT: Only show success if status actually changed AND matches expected
+        // If status didn't change, it means the update was ignored by OpenProject
+        if (!statusChanged) {
+          console.warn(`[handleDragEnd] Status did not change. Expected: ${newStatus} (${expectedStatusNormalized}, column: ${targetColumnId}), Got: ${actualStatus} (${actualStatusNormalized}, column: ${actualStatusId}), Original: ${originalStatus} (${originalStatusNormalized})`);
+          toast.error('Status update failed', {
+            description: `The task status could not be changed from "${displayOriginal}" to "${displayExpected}". The status remains "${displayActual}". This may be due to workflow restrictions or permissions.`,
+            duration: 6000,
+          });
+          return; // Exit early - don't show success
+        }
+        
+        // If status changed but doesn't match the target column, it's a partial success
+        if (statusChanged && !statusIdMatches && actualStatusId !== null) {
+          console.warn(`[handleDragEnd] Status changed but to different column. Expected column: ${targetColumnId}, Got column: ${actualStatusId}`);
+          toast.error('Status update partially successful', {
+            description: `Task status changed from "${displayOriginal}" to "${displayActual}" but may not be in the expected column. The system may have applied a different status due to workflow rules.`,
+            duration: 5000,
+          });
+          return;
+        }
+        
+        if (statusChanged && statusMatchesExpected) {
+          // Clear reordered tasks for the source and target columns to force UI update
+          // This ensures the task moves to the correct column after status change
+          // We need to clear both columns so the UI recalculates based on the refreshed task list
+          const sourceStatusId = findMatchingStatusId(originalStatus);
+          console.log(`[handleDragEnd] Clearing reordered tasks for source column: ${sourceStatusId}, target column: ${targetColumnId}`);
+          
+          setReorderedTasks(prev => {
+            const updated = { ...prev };
+            if (sourceStatusId) {
+              delete updated[sourceStatusId];
+            }
+            if (targetColumnId) {
+              delete updated[targetColumnId];
+            }
+            console.log(`[handleDragEnd] Updated reorderedTasks:`, Object.keys(updated));
+            return updated;
+          });
+          
+          // Capture task ID before clearing activeId
+          const updatedTaskId = activeId;
+          
+          // Also clear activeId to ensure the task is no longer filtered out
+          setActiveId(null);
+          setActiveColumnId(null);
+          
+          // Wait a bit for the refresh to complete, then verify the task status
+          // This ensures we show the correct notification based on what actually happened
+          setTimeout(() => {
+            // Use the captured task ID and check the current tasks state
+            const refreshedTask = tasks.find(t => String(t.id) === String(updatedTaskId));
+            if (refreshedTask) {
+              const refreshedStatus = refreshedTask.status || '';
+              const refreshedStatusNormalized = normalizeStatusForComparison(refreshedStatus);
+              const refreshedStatusId = findMatchingStatusId(refreshedStatus);
+              
+              console.log(`[handleDragEnd] After refresh - Task status check:`, {
+                taskId: updatedTaskId,
+                refreshedStatus,
+                refreshedStatusNormalized,
+                refreshedStatusId,
+                expectedStatusNormalized,
+                targetColumnId,
+                matches: refreshedStatusNormalized === expectedStatusNormalized && refreshedStatusId === targetColumnId,
+              });
+              
+              // If the refreshed task status doesn't match what we expected, show a warning
+              if (refreshedStatusNormalized !== expectedStatusNormalized || refreshedStatusId !== targetColumnId) {
+                console.warn(`[handleDragEnd] Task status after refresh doesn't match expected. Expected: ${newStatus} (${targetColumnId}), Got: ${refreshedStatus} (${refreshedStatusId})`);
+                toast.error('Status update may not have been applied', {
+                  description: `The task status was updated to "${displayActual}", but after refreshing, the status appears to be "${displayStatus(refreshedStatus)}". Please check the task status in OpenProject.`,
+                  duration: 6000,
+                });
+              } else {
+                console.log(`[handleDragEnd] Task status verified after refresh - status is correct: ${refreshedStatus}`);
+              }
+            } else {
+              console.warn(`[handleDragEnd] Task ${updatedTaskId} not found in refreshed task list`);
+            }
+          }, 1500); // Wait 1.5 seconds for refresh to complete
+          
+          // Status changed successfully to what we wanted
+          toast.success('Task status updated', {
+            description: `Task status changed from "${displayOriginal}" to "${displayActual}"`,
+            duration: 3000,
+          });
+        } else {
+          // Status changed but to something different than expected
+          console.warn(`[handleDragEnd] Status changed to unexpected value. Expected: ${newStatus} (${expectedStatusNormalized}, column: ${targetColumnId}), Got: ${actualStatus} (${actualStatusNormalized}, column: ${actualStatusId}), Original: ${originalStatus} (${originalStatusNormalized})`);
+          toast.error('Status update partially successful', {
+            description: `Task status changed from "${displayOriginal}" to "${displayActual}" (expected "${displayExpected}"). The system may have applied a different status due to workflow rules.`,
+            duration: 5000,
+          });
+        }
+        
+        // Note: handleUpdateTask already refreshes the task list, so we don't need to do it again here
+      } catch (err) {
+        // Catch and handle the error - show toast notification instead of console error
+        console.error('[handleDragEnd] Error updating task:', err);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        let userFriendlyMessage = 'Failed to update task status';
+        let description = errorMessage;
+        
+        // Make OpenProject permission errors more user-friendly
+        if (errorMessage.includes('no valid transition exists')) {
+          userFriendlyMessage = 'Status transition not allowed';
+          description = 'You do not have permission to change the task status from the current status to the target status. Please contact your administrator or try a different status.';
+        } else if (errorMessage.includes('Status is invalid')) {
+          userFriendlyMessage = 'Status change not allowed';
+          description = 'This status change is not allowed. The status transition may be restricted by your role permissions.';
+        } else if (errorMessage.includes('OpenProject validation error')) {
+          // Extract the actual error message after the prefix
+          const match = errorMessage.match(/OpenProject validation error \(\d+\): (.+)/);
+          if (match) {
+            description = match[1];
+            if (description.includes('no valid transition exists')) {
+              userFriendlyMessage = 'Status transition not allowed';
+              description = 'You do not have permission to change the task status from the current status to the target status. Please contact your administrator or try a different status.';
+            }
+          }
+        }
+        
+        // Show toast notification instead of console error
+        console.log('[handleDragEnd] Showing error toast:', userFriendlyMessage, description);
+        toast.error(userFriendlyMessage, {
+          description: description,
+          duration: 6000,
+        });
+      }
   };
 
   const handleTaskClick = (task: Task) => {
@@ -816,64 +1197,80 @@ export function SprintBoardView() {
     setIsModalOpen(true);
   };
 
-  const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
-    try {
-      if (!activeProjectId) {
-        throw new Error("Project ID is required to update a task");
-      }
-      
-      const url = new URL(resolveServiceURL(`pm/tasks/${taskId}`));
-      url.searchParams.set('project_id', activeProjectId);
-      
-      console.log(`[handleUpdateTask] Updating task ${taskId}`);
-      console.log(`[handleUpdateTask] URL: ${url.toString()}`);
-      console.log(`[handleUpdateTask] Updates:`, updates);
-      
-      const response = await fetch(url.toString(), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = `Failed to update task: ${response.status} ${response.statusText}`;
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.detail || errorMessage;
-        } catch {
-          if (errorText) {
-            errorMessage = errorText;
-          }
-        }
-        console.error(`[handleUpdateTask] Error: ${errorMessage}`);
-        throw new Error(errorMessage);
-      }
-      
-      const result = await response.json();
-      console.log(`[handleUpdateTask] Success:`, result);
-      
-      // Update the selected task in the modal if it's the same task
-      if (selectedTask && selectedTask.id === taskId) {
-        setSelectedTask({
-          ...selectedTask,
-          ...result
-        });
-      }
-      
-      // Refresh tasks
-      if (refreshTasks) {
-        refreshTasks();
-      } else {
-        // Fallback for useMyTasks which doesn't have refresh
-        window.dispatchEvent(new CustomEvent("pm_refresh", { 
-          detail: { type: "pm_refresh" } 
-        }));
-      }
-    } catch (error) {
-      console.error("Failed to update task:", error);
-      throw error;
+  const handleUpdateTask = async (taskId: string, updates: Partial<Task>): Promise<Task> => {
+    if (!activeProjectId) {
+      const error = new Error("Project ID is required to update a task");
+      // Return a rejected promise instead of throwing to prevent Next.js from logging it
+      return Promise.reject(error);
     }
+    
+    const url = new URL(resolveServiceURL(`pm/tasks/${taskId}`));
+    url.searchParams.set('project_id', activeProjectId);
+    
+    console.log(`[handleUpdateTask] Updating task ${taskId}`);
+    console.log(`[handleUpdateTask] URL: ${url.toString()}`);
+    console.log(`[handleUpdateTask] Updates:`, updates);
+    
+    const response = await fetch(url.toString(), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = `Failed to update task: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = JSON.parse(errorText);
+        // Try to extract detailed error message from various possible formats
+        errorMessage = errorData.detail || 
+                      errorData.message || 
+                      errorData.error || 
+                      (errorData.errors && Array.isArray(errorData.errors) && errorData.errors[0]?.message) ||
+                      errorMessage;
+      } catch {
+        if (errorText) {
+          errorMessage = errorText;
+        }
+      }
+      // Return a rejected promise instead of throwing to prevent Next.js from logging it
+      return Promise.reject(new Error(errorMessage));
+    }
+    
+    const result = await response.json();
+    console.log(`[handleUpdateTask] Success:`, result);
+    console.log(`[handleUpdateTask] Task status in response:`, result.status);
+    console.log(`[handleUpdateTask] Expected status:`, updates.status);
+    
+    // Check if the status actually changed
+    if (updates.status && result.status) {
+      const expectedStatus = String(updates.status);
+      const actualStatus = String(result.status);
+      if (expectedStatus !== actualStatus && !actualStatus.toLowerCase().includes(expectedStatus.toLowerCase())) {
+        console.warn(`[handleUpdateTask] Status mismatch! Expected: ${expectedStatus}, Got: ${actualStatus}`);
+      }
+    }
+    
+    // Update the selected task in the modal if it's the same task
+    if (selectedTask && selectedTask.id === taskId) {
+      setSelectedTask({
+        ...selectedTask,
+        ...result
+      });
+    }
+    
+    // Refresh tasks
+    if (refreshTasks) {
+      refreshTasks();
+    } else {
+      // Fallback for useMyTasks which doesn't have refresh
+      window.dispatchEvent(new CustomEvent("pm_refresh", { 
+        detail: { type: "pm_refresh" } 
+      }));
+    }
+    
+    // Return the updated task
+    return result as Task;
   };
 
   // Helper function to get tasks for a status column (used by both handleDragOver and columns)
@@ -890,8 +1287,25 @@ export function SprintBoardView() {
     
     // Get base tasks for this status
     const baseTasks = filteredTasks.filter(task => {
-      const taskStatusLower = (task.status || "").toLowerCase().trim();
+      const taskStatus = task.status || "";
+      const taskStatusLower = taskStatus.toLowerCase().trim();
       const statusNameLower = status.name.toLowerCase().trim();
+      
+      // Check if there's a status column named "none" in available statuses
+      const hasNoneStatus = availableStatuses.some(s => 
+        s.name.toLowerCase().trim() === "none"
+      );
+      
+      // Handle tasks with no status (null, undefined, empty string)
+      // Only treat "none" as "no status" if there's no "none" status column
+      const hasNoStatus = !task.status || taskStatusLower === "" || 
+        (taskStatusLower === "none" && !hasNoneStatus) ||
+        (taskStatusLower === "new" && !hasNoneStatus);
+      
+      // If task has no status, assign to default status column
+      if (hasNoStatus) {
+        return status.is_default;
+      }
       
       // Normalize status names (replace underscores, dashes, spaces)
       const normalizeStatus = (s: string) => s.replace(/[_\s-]/g, '').toLowerCase();
@@ -906,9 +1320,20 @@ export function SprintBoardView() {
         normalizedTaskStatus === normalizedStatusName ||
         // Partial match (either direction)
         taskStatusLower.includes(statusNameLower) ||
-        statusNameLower.includes(taskStatusLower) ||
-        // Handle tasks with no status - assign to first status if it's the default
-        (!task.status && status.is_default);
+        statusNameLower.includes(taskStatusLower);
+      
+      // Debug logging for specific task (task ID 1)
+      if (task.id === "1" || task.id === 1) {
+        console.log(`[getTasksForColumn] Task 1 matching for column "${status.name}" (ID: ${status.id}):`, {
+          taskStatus,
+          taskStatusLower,
+          statusNameLower,
+          hasNoStatus,
+          matches,
+          normalizedTaskStatus,
+          normalizedStatusName,
+        });
+      }
       
       return matches;
     });
@@ -918,14 +1343,16 @@ export function SprintBoardView() {
     if (reordered) {
       // Filter out active task if it's being dragged (it will be shown in DragOverlay)
       if (activeId) {
-        return reordered.filter(t => t.id !== activeId);
+        // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+        return reordered.filter(t => String(t.id) !== String(activeId));
       }
       return reordered;
     }
     
     // Return base tasks (also filter out active task if dragging)
     if (activeId) {
-      return baseTasks.filter(t => t.id !== activeId);
+      // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+      return baseTasks.filter(t => String(t.id) !== String(activeId));
     }
     return baseTasks;
   }, [availableStatuses, filteredTasks, reorderedTasks, activeId]);
@@ -945,20 +1372,27 @@ export function SprintBoardView() {
       return a.name.localeCompare(b.name);
     });
     
-    const columns = sortedStatuses.map(status => ({
-      id: status.id,
-      title: status.name,
-      tasks: getTasksForColumn(status.id) || [],
-    }));
+    const columns = sortedStatuses.map(status => {
+      // Map "New" status name to "No status" for display
+      const displayName = status.name.toLowerCase().trim() === "new" 
+        ? "No status" 
+        : status.name;
+      
+      return {
+        id: status.id,
+        title: displayName,
+        tasks: getTasksForColumn(status.id) || [],
+      };
+    });
     
     // Debug: Log total tasks distributed across columns
     const totalTasksInColumns = columns.reduce((sum, col) => sum + (col.tasks?.length || 0), 0);
-    console.log(`[SprintBoard] Total tasks in columns: ${totalTasksInColumns}, Total filtered tasks: ${filteredTasks.length}, Available statuses:`, availableStatuses.map(s => s.name));
+    if (DEBUG_DND) console.log(`[SprintBoard] Total tasks in columns: ${totalTasksInColumns}, Total filtered tasks: ${filteredTasks.length}, Available statuses:`, availableStatuses.map(s => s.name));
     
     // Debug: Find unmatched tasks
     const matchedTaskIds = new Set(columns.flatMap(col => (col.tasks || []).map(t => t.id)));
     const unmatchedTasks = filteredTasks.filter(t => !matchedTaskIds.has(t.id));
-    if (unmatchedTasks.length > 0) {
+    if (DEBUG_DND && unmatchedTasks.length > 0) {
       console.warn(`[SprintBoard] Found ${unmatchedTasks.length} unmatched tasks:`, unmatchedTasks.map(t => ({
         id: t.id,
         title: t.title,
@@ -973,6 +1407,11 @@ export function SprintBoardView() {
   const getStorageKey = (projectId: string | null) => {
     if (!projectId) return null;
     return `sprint-board-column-order-${projectId}`;
+  };
+
+  const getVisibilityStorageKey = (projectId: string | null) => {
+    if (!projectId) return null;
+    return `sprint-board-column-visibility-${projectId}`;
   };
 
   const loadColumnOrderFromStorage = useCallback((projectId: string | null): string[] | null => {
@@ -1010,7 +1449,7 @@ export function SprintBoardView() {
   // Track if we're currently loading from localStorage to avoid saving during initial load
   const [isLoadingFromStorage, setIsLoadingFromStorage] = useState(false);
 
-  // Load column order from localStorage when project or statuses change
+  // Load column order and visibility from localStorage when project or statuses change
   useEffect(() => {
     if (availableStatuses && availableStatuses.length > 0 && activeProjectId) {
       // Only load if project changed or we haven't loaded yet
@@ -1053,10 +1492,38 @@ export function SprintBoardView() {
           // Reset loading flag after a brief delay to allow state to settle
           setTimeout(() => setIsLoadingFromStorage(false), 100);
         }
+
+        // Load column visibility from localStorage
+        const key = getVisibilityStorageKey(activeProjectId);
+        if (key) {
+          try {
+            const saved = localStorage.getItem(key);
+            if (saved) {
+              const visibility = JSON.parse(saved);
+              if (Array.isArray(visibility) && visibility.every((id): id is string => typeof id === 'string')) {
+                const validStatusIds = new Set(availableStatuses.map(s => s.id));
+                const validVisibility = new Set(
+                  visibility.filter(id => validStatusIds.has(id))
+                );
+                if (validVisibility.size > 0) {
+                  setVisibleColumns(validVisibility);
+                } else {
+                  setVisibleColumns(new Set(availableStatuses.map(s => s.id)));
+                }
+              }
+            } else {
+              setVisibleColumns(new Set(availableStatuses.map(s => s.id)));
+            }
+          } catch (error) {
+            console.error('[SprintBoard] Failed to load column visibility from localStorage:', error);
+            setVisibleColumns(new Set(availableStatuses.map(s => s.id)));
+          }
+        }
       }
     } else if (!activeProjectId && lastLoadedProjectId) {
-      // Clear column order when no project is selected
+      // Clear column order and visibility when no project is selected
       setColumnOrder([]);
+      setVisibleColumns(new Set());
       setLastLoadedProjectId(null);
     }
   }, [availableStatuses, activeProjectId, lastLoadedProjectId, loadColumnOrderFromStorage]);
@@ -1080,28 +1547,62 @@ export function SprintBoardView() {
     }
   }, [columnOrder, activeProjectId, availableStatuses, isLoadingFromStorage, saveColumnOrderToStorage]);
 
-  // Apply column order to columns
+  // Convert Set to sorted array for stable comparison in useEffect
+  const visibleColumnsArray = useMemo(() => {
+    return Array.from(visibleColumns).sort();
+  }, [visibleColumns]);
+
+  // Save column visibility to localStorage whenever it changes (but not during initial load)
+  useEffect(() => {
+    if (isLoadingFromStorage) {
+      return;
+    }
+    if (visibleColumns.size === 0) {
+      return;
+    }
+    if (activeProjectId && availableStatuses) {
+      const key = getVisibilityStorageKey(activeProjectId);
+      if (key) {
+        try {
+          localStorage.setItem(key, JSON.stringify(Array.from(visibleColumns)));
+        } catch (error) {
+          console.error('[SprintBoard] Failed to save column visibility to localStorage:', error);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleColumnsArray, activeProjectId, availableStatuses, isLoadingFromStorage]);
+
+  // Apply column order and visibility to columns
   const orderedColumns = useMemo(() => {
+    // First filter by visibility
+    let visibleCols = columns;
+    if (visibleColumns.size > 0) {
+      visibleCols = columns.filter(col => visibleColumns.has(col.id));
+    }
+    
+    // Then apply order
     if (columnOrder.length === 0) {
-      return columns;
+      return visibleCols;
     }
     
     // Create a map for quick lookup
-    const columnMap = new Map(columns.map(col => [col.id, col]));
+    const columnMap = new Map(visibleCols.map(col => [col.id, col]));
     
     // Return columns in the order specified by columnOrder
     const ordered = columnOrder
       .map(id => columnMap.get(id))
       .filter((col): col is typeof columns[0] => col !== undefined);
     
-    // Add any columns that weren't in the order (new statuses)
+    // Add any visible columns that weren't in the order (new statuses)
     const orderedIds = new Set(columnOrder);
-    const newColumns = columns.filter(col => !orderedIds.has(col.id));
+    const newColumns = visibleCols.filter(col => !orderedIds.has(col.id));
     
     return [...ordered, ...newColumns];
-  }, [columns, columnOrder]);
+  }, [columns, columnOrder, visibleColumns]);
 
-  const activeTask = activeId ? filteredTasks.find(t => t.id === activeId) : null;
+  // Use tasks instead of filteredTasks to ensure we can always find the dragged task
+  const activeTask = activeId ? tasks.find(t => String(t.id) === String(activeId)) : null;
 
   if (loading) {
     return (
@@ -1127,9 +1628,20 @@ export function SprintBoardView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Sprint Board</h2>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sprint Board</h2>
+          {availableStatuses && availableStatuses.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsColumnManagerOpen(true)}
+              className="gap-2"
+            >
+              <Settings2 className="w-4 h-4" />
+              Columns
+            </Button>
+          )}
         </div>
         <div className="text-sm text-gray-500 dark:text-gray-400">
           {filteredTasks.length} of {tasks.length} tasks
@@ -1208,6 +1720,99 @@ export function SprintBoardView() {
           </div>
         </div>
       </Card>
+
+      {/* Column Management Dialog */}
+      <Dialog open={isColumnManagerOpen} onOpenChange={setIsColumnManagerOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Columns</DialogTitle>
+            <DialogDescription>
+              Select which columns to display on the board. At least one column must be visible.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4 max-h-[60vh] overflow-y-auto">
+            {availableStatuses && availableStatuses.length > 0 ? (
+              availableStatuses
+                .sort((a, b) => {
+                  if (a.is_default && !b.is_default) return -1;
+                  if (!a.is_default && b.is_default) return 1;
+                  return a.name.localeCompare(b.name);
+                })
+                .map((status) => {
+                  const isVisible = visibleColumns.size === 0 || visibleColumns.has(status.id);
+                  const visibleCount = visibleColumns.size === 0 
+                    ? (availableStatuses?.length || 0)
+                    : visibleColumns.size;
+                  const isLastVisible = visibleCount === 1 && isVisible;
+                  
+                  return (
+                    <div
+                      key={status.id}
+                      className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <Checkbox
+                        id={`column-${status.id}`}
+                        checked={isVisible}
+                        disabled={isLastVisible}
+                        onCheckedChange={(checked) => {
+                          if (!availableStatuses) return;
+                          const currentVisible = visibleColumns.size === 0
+                            ? new Set(availableStatuses.map(s => s.id))
+                            : new Set(visibleColumns);
+                          
+                          if (checked) {
+                            currentVisible.add(status.id);
+                            setVisibleColumns(currentVisible);
+                          } else {
+                            if (currentVisible.size > 1) {
+                              currentVisible.delete(status.id);
+                              setVisibleColumns(currentVisible);
+                            }
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`column-${status.id}`}
+                        className={`flex-1 cursor-pointer ${isLastVisible ? 'opacity-50' : ''}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {status.name.toLowerCase().trim() === "new" ? "No status" : status.name}
+                          </span>
+                          {status.is_default && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">(default)</span>
+                          )}
+                        </div>
+                      </Label>
+                    </div>
+                  );
+                })
+            ) : (
+              <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                No statuses available
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (availableStatuses) {
+                  setVisibleColumns(new Set(availableStatuses.map(s => s.id)));
+                }
+              }}
+            >
+              Show All
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsColumnManagerOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <DndContext
         sensors={sensors}

@@ -227,21 +227,17 @@ class OpenProjectProvider(BasePMProvider):
         import logging
         logger = logging.getLogger(__name__)
         
+        # Get the original task status before update for comparison
+        original_task = await self.get_task(task_id)
+        original_status = original_task.status if original_task else None
+        if "status" in updates:
+            logger.info(f"Updating task {task_id} status from '{original_status}' to '{updates['status']}'")
+        
         url = f"{self.base_url}/api/v3/work_packages/{task_id}"
         payload: Dict[str, Any] = {}
         
-        # Get lockVersion from form to prevent conflicts
-        form_url = f"{self.base_url}/api/v3/work_packages/{task_id}/form"
-        form_response = requests.post(form_url, headers=self.headers)
-        form_response.raise_for_status()
-        lock_version = (
-            form_response.json()
-            .get("_embedded", {})
-            .get("payload", {})
-            .get("lockVersion")
-        )
-        if lock_version is not None:
-            payload["lockVersion"] = lock_version
+        # Build the payload first (without lockVersion)
+        # We'll get lockVersion and validation from the form endpoint
         
         if "title" in updates or "subject" in updates:
             payload["subject"] = updates.get("title") or updates.get("subject")
@@ -256,9 +252,38 @@ class OpenProjectProvider(BasePMProvider):
             payload["_links"] = payload.get("_links", {})
             # If it's a numeric string or number, use it as ID
             if str(status_value).isdigit():
-                payload["_links"]["status"] = {
-                    "href": f"/api/v3/statuses/{status_value}"
-                }
+                # Verify the status exists before trying to use it
+                try:
+                    statuses_url = f"{self.base_url}/api/v3/statuses"
+                    statuses_resp = requests.get(statuses_url, headers=self.headers, timeout=10)
+                    if statuses_resp.status_code == 200:
+                        statuses = statuses_resp.json().get("_embedded", {}).get("elements", [])
+                        status_id_int = int(status_value)
+                        matching_status = next((s for s in statuses if s.get("id") == status_id_int), None)
+                        if matching_status:
+                            logger.info(f"Using status ID {status_value} (name: {matching_status.get('name')})")
+                            payload["_links"]["status"] = {
+                                "href": f"/api/v3/statuses/{status_value}"
+                            }
+                        else:
+                            available_status_ids = [s.get("id") for s in statuses]
+                            logger.warning(f"Status ID {status_value} not found. Available status IDs: {available_status_ids}")
+                            # Still try to use it - maybe it's valid but not in the list
+                            payload["_links"]["status"] = {
+                                "href": f"/api/v3/statuses/{status_value}"
+                            }
+                    else:
+                        logger.warning(f"Failed to fetch statuses for validation: {statuses_resp.status_code}")
+                        # Fall back to using the ID directly
+                        payload["_links"]["status"] = {
+                            "href": f"/api/v3/statuses/{status_value}"
+                        }
+                except Exception as e:
+                    logger.warning(f"Error validating status ID: {e}")
+                    # Fall back to using the ID directly
+                    payload["_links"]["status"] = {
+                        "href": f"/api/v3/statuses/{status_value}"
+                    }
             else:
                 # Try to look up status by name
                 try:
@@ -545,9 +570,9 @@ class OpenProjectProvider(BasePMProvider):
                 else:
                     payload["spentTime"] = f"PT{hours_int}H"
         
-        # Only send request if there are actual updates (beyond lockVersion)
-        if not payload or (len(payload) == 1 and "lockVersion" in payload):
-            logger.warning(f"No updates to apply for task {task_id}, payload: {payload}")
+        # Only send request if there are actual updates
+        if not payload:
+            logger.warning(f"No updates to apply for task {task_id}")
             # Return current task if no updates
             current_task = await self.get_task(task_id)
             if current_task:
@@ -555,16 +580,267 @@ class OpenProjectProvider(BasePMProvider):
             else:
                 raise ValueError(f"Task {task_id} not found")
         
-        # Log the final payload structure for debugging
-        logger.info(f"Updating task {task_id} with payload: {payload}")
-        if "_links" in payload:
-            logger.info(f"Payload _links: {payload['_links']}")
-        response = requests.patch(url, headers=self.headers, json=payload, timeout=10)
-        response.raise_for_status()
-        updated_data = response.json()
-        priority_after = updated_data.get('_links', {}).get('priority', {}).get('title', 'N/A')
-        logger.info(f"Task {task_id} updated successfully. Priority after update: {priority_after}")
-        return self._parse_task(updated_data)
+        # POST to form endpoint first to get validation and lockVersion
+        # This is the recommended OpenProject workflow
+        # IMPORTANT: This code path uses form validation - if you see this log, new code is running
+        form_url = f"{self.base_url}/api/v3/work_packages/{task_id}/form"
+        
+        # Get current lockVersion to include in form request (helps with validation)
+        current_lock_version = None
+        try:
+            current_task = await self.get_task(task_id)
+            if current_task and hasattr(current_task, 'raw_data') and current_task.raw_data:
+                current_lock_version = current_task.raw_data.get('lockVersion')
+                if current_lock_version is not None:
+                    # Include current lockVersion in payload for form validation
+                    form_payload = payload.copy()
+                    form_payload["lockVersion"] = current_lock_version
+                else:
+                    form_payload = payload
+            else:
+                form_payload = payload
+        except Exception as e:
+            logger.warning(f"Could not get current task for lockVersion: {e}")
+            form_payload = payload
+        
+        logger.info(f"[NEW CODE PATH] Validating update via form endpoint with payload: {form_payload}")
+        
+        # Retry form endpoint if we get 409 (lockVersion conflict)
+        form_max_retries = 2
+        form_validated_payload = None
+        for form_attempt in range(form_max_retries + 1):
+            error_text = None
+            status_code = None
+            try:
+                form_response = requests.post(form_url, headers=self.headers, json=form_payload, timeout=10)
+                if not form_response.ok:
+                    # Form endpoint returned an error
+                    error_text = form_response.text
+                    status_code = form_response.status_code
+                    
+                    # Handle 409 Conflict from form endpoint - get fresh lockVersion and retry
+                    if status_code == 409 and form_attempt < form_max_retries:
+                        logger.warning(f"Form endpoint returned 409 conflict on attempt {form_attempt + 1}, getting fresh lockVersion...")
+                        # Get current task to get fresh lockVersion
+                        try:
+                            current_task = await self.get_task(task_id)
+                            if current_task and hasattr(current_task, 'raw_data') and current_task.raw_data:
+                                fresh_lock_version = current_task.raw_data.get('lockVersion')
+                                if fresh_lock_version is not None:
+                                    # Update form payload with fresh lockVersion
+                                    form_payload = payload.copy()
+                                    form_payload["lockVersion"] = fresh_lock_version
+                                    logger.info(f"Retrying form endpoint with fresh lockVersion: {fresh_lock_version}")
+                                    continue  # Retry form endpoint
+                        except Exception as retry_error:
+                            logger.error(f"Error getting fresh lockVersion for form retry: {retry_error}")
+                    
+                    logger.error(f"Form validation error ({status_code}): {error_text}")
+                    
+                    # Try to parse the error response
+                    error_message = None
+                    try:
+                        error_data = form_response.json()
+                        logger.error(f"Form validation error JSON: {error_data}")
+                        
+                        if "_embedded" in error_data and "errors" in error_data["_embedded"]:
+                            errors = error_data["_embedded"]["errors"]
+                            if errors and len(errors) > 0:
+                                error_parts = []
+                                for err in errors:
+                                    msg = err.get("message", "")
+                                    attr = err.get("_attribute", "")
+                                    if msg:
+                                        error_parts.append(f"{attr}: {msg}" if attr else msg)
+                                if error_parts:
+                                    error_message = "; ".join(error_parts)
+                        
+                        if not error_message:
+                            error_message = error_data.get("message") or error_data.get("error") or (error_text if error_text else "Unknown error")
+                    except (ValueError, KeyError, AttributeError) as parse_error:
+                        logger.error(f"Failed to parse form validation error: {parse_error}")
+                        error_message = error_text if error_text else str(parse_error)
+                    
+                    if not error_message:
+                        error_message = error_text if error_text else (f"HTTP {status_code} error" if status_code else "Unknown error")
+                    
+                    final_status_code = status_code if status_code else 500
+                    raise ValueError(f"OpenProject validation error ({final_status_code}): {error_message}")
+                
+                # Form endpoint succeeded - get validated payload
+                form_data = form_response.json()
+                validated_payload = form_data.get("_embedded", {}).get("payload", {})
+                lock_version = validated_payload.get("lockVersion")
+                
+                if not validated_payload:
+                    logger.warning("Form endpoint returned empty payload, using original payload")
+                    validated_payload = payload.copy()
+                    # Still try to get lockVersion from current task
+                    current_task = await self.get_task(task_id)
+                    if current_task and hasattr(current_task, 'raw_data') and current_task.raw_data:
+                        lock_version = current_task.raw_data.get('lockVersion')
+                
+                # Ensure lockVersion is included
+                if lock_version is not None:
+                    validated_payload["lockVersion"] = lock_version
+                elif "lockVersion" not in validated_payload:
+                    # Fallback: get lockVersion from current task
+                    current_task = await self.get_task(task_id)
+                    if current_task and hasattr(current_task, 'raw_data') and current_task.raw_data:
+                        lock_version = current_task.raw_data.get('lockVersion')
+                        if lock_version is not None:
+                            validated_payload["lockVersion"] = lock_version
+                
+                logger.info(f"Form validation successful. Using validated payload: {validated_payload}")
+                form_validated_payload = validated_payload
+                break  # Success - exit retry loop
+                
+            except ValueError:
+                # Re-raise validation errors (don't retry)
+                raise
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Error calling form endpoint (attempt {form_attempt + 1}): {e}")
+                if form_attempt < form_max_retries:
+                    logger.warning("Retrying form endpoint...")
+                    continue
+                # Final attempt failed - fallback to getting lockVersion from current task
+                logger.warning("Form endpoint failed after retries, falling back to direct update")
+                try:
+                    current_task = await self.get_task(task_id)
+                    if current_task and hasattr(current_task, 'raw_data') and current_task.raw_data:
+                        lock_version = current_task.raw_data.get('lockVersion')
+                        if lock_version is not None:
+                            payload["lockVersion"] = lock_version
+                    form_validated_payload = payload
+                except Exception as fallback_error:
+                    logger.error(f"Error in fallback: {fallback_error}")
+                    raise ValueError(f"Failed to update task: Form endpoint failed and fallback also failed: {str(e)}")
+                break
+            except Exception as e:
+                # Catch any other unexpected exceptions
+                logger.error(f"Unexpected error in form endpoint (attempt {form_attempt + 1}): {e}")
+                if form_attempt < form_max_retries:
+                    logger.warning("Retrying form endpoint...")
+                    continue
+                raise ValueError(f"Failed to update task: Unexpected error: {str(e)}")
+        
+        # Use the validated payload (either from form endpoint or fallback)
+        validated_payload = form_validated_payload
+        
+        # Now perform the actual update with validated payload
+        logger.info(f"Updating task {task_id} with validated payload: {validated_payload}")
+        if "_links" in validated_payload:
+            logger.info(f"Validated payload _links: {validated_payload['_links']}")
+        
+        # Retry logic for 409 conflicts (lockVersion mismatch)
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                response = requests.patch(url, headers=self.headers, json=validated_payload, timeout=10)
+                
+                # Check response status manually instead of using raise_for_status()
+                # This gives us better control over error handling
+                if not response.ok:
+                    error_text = response.text
+                    status_code = response.status_code
+                    
+                    # Handle 409 Conflict (lockVersion mismatch) by retrying with fresh lockVersion
+                    if status_code == 409 and attempt < max_retries:
+                        logger.warning(f"LockVersion conflict (409) on attempt {attempt + 1}, retrying with fresh lockVersion...")
+                        # Get fresh lockVersion from form endpoint and retry
+                        try:
+                            fresh_form_response = requests.post(form_url, headers=self.headers, json=payload, timeout=10)
+                            if fresh_form_response.ok:
+                                fresh_form_data = fresh_form_response.json()
+                                fresh_validated_payload = fresh_form_data.get("_embedded", {}).get("payload", {})
+                                fresh_lock_version = fresh_validated_payload.get("lockVersion")
+                                if fresh_lock_version is not None:
+                                    # Update the validated payload with fresh lockVersion
+                                    validated_payload = fresh_validated_payload.copy()
+                                    validated_payload["lockVersion"] = fresh_lock_version
+                                    logger.info(f"Retrying with fresh lockVersion: {fresh_lock_version}")
+                                    continue  # Retry the update
+                        except Exception as retry_error:
+                            logger.error(f"Error getting fresh lockVersion for retry: {retry_error}")
+                    
+                    logger.error(f"OpenProject API error ({status_code}): {error_text}")
+                    
+                    # Try to parse the error response
+                    error_message = None
+                    try:
+                        error_data = response.json()
+                        logger.error(f"OpenProject error response JSON: {error_data}")
+                        
+                        # Try multiple ways to extract error message from OpenProject error response
+                        if "_embedded" in error_data and "errors" in error_data["_embedded"]:
+                            errors = error_data["_embedded"]["errors"]
+                            if errors and len(errors) > 0:
+                                # OpenProject returns errors as array of objects with message and attribute
+                                error_parts = []
+                                for err in errors:
+                                    msg = err.get("message", "")
+                                    attr = err.get("_attribute", "")
+                                    if msg:
+                                        error_parts.append(f"{attr}: {msg}" if attr else msg)
+                                if error_parts:
+                                    error_message = "; ".join(error_parts)
+                        
+                        if not error_message:
+                            error_message = error_data.get("message") or error_data.get("error", error_text)
+                    except (ValueError, KeyError, AttributeError) as parse_error:
+                        logger.error(f"Failed to parse OpenProject error response: {parse_error}")
+                        error_message = error_text
+                    
+                    if not error_message:
+                        error_message = error_text or f"HTTP {status_code} error"
+                    
+                    raise ValueError(f"OpenProject validation error ({status_code}): {error_message}")
+                
+                # Success!
+                updated_data = response.json()
+                break  # Exit retry loop on success
+                
+            except ValueError:
+                # Re-raise ValueError (our custom errors) - don't retry
+                raise
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request error when updating task (attempt {attempt + 1}): {e}")
+                if attempt < max_retries:
+                    # Retry on network errors
+                    logger.warning(f"Retrying after request error...")
+                    continue
+                raise ValueError(f"Failed to update task: {str(e)}")
+        
+        # After successful update, fetch the task again with embedded data to get the full status
+        # The PATCH response may not include _embedded.status, so we need to fetch it separately
+        logger.info(f"Task {task_id} updated successfully. Fetching updated task with embedded data...")
+        
+        # Wait a moment for OpenProject to process the update
+        import asyncio
+        await asyncio.sleep(0.5)
+        
+        # Fetch the updated task
+        updated_task = await self.get_task(task_id)
+        if updated_task:
+            logger.info(f"Task {task_id} status after update: {updated_task.status} (original: {original_status})")
+            
+            # Verify that the status actually changed if we were trying to update it
+            if "status" in updates and original_status is not None:
+                expected_status_value = updates["status"]
+                # Check if status actually changed
+                if updated_task.status == original_status:
+                    # Status didn't change - this might be a workflow restriction
+                    logger.warning(f"Task {task_id} status did not change after update. Original: {original_status}, After: {updated_task.status}, Attempted: {expected_status_value}")
+                    # Raise an error so the frontend knows the update didn't work
+                    raise ValueError(f"Status update failed: Task status did not change from '{original_status}' to '{expected_status_value}'. This may be due to workflow restrictions or permissions in OpenProject.")
+                else:
+                    logger.info(f"Task {task_id} status successfully changed from {original_status} to {updated_task.status}")
+            
+            return updated_task
+        else:
+            # Fallback: parse the response data even if it doesn't have embedded status
+            logger.warning(f"Could not fetch updated task {task_id}, using PATCH response data")
+            return self._parse_task(updated_data)
     
     async def delete_task(self, task_id: str) -> bool:
         """Delete a work package"""
@@ -821,6 +1097,13 @@ class OpenProjectProvider(BasePMProvider):
         elif links.get("priority", {}).get("title"):
             priority = links.get("priority", {}).get("title")
         
+        # Extract status from embedded data or links (similar to priority)
+        status = None
+        if embedded.get("status"):
+            status = embedded.get("status", {}).get("name")
+        elif links.get("status", {}).get("title"):
+            status = links.get("status", {}).get("title")
+        
         return PMTask(
             id=str(data["id"]),
             title=data.get("subject", ""),
@@ -829,10 +1112,7 @@ class OpenProjectProvider(BasePMProvider):
                 if isinstance(data.get("description"), dict)
                 else data.get("description")
             ),
-            status=(
-                embedded.get("status", {}).get("name")
-                if embedded.get("status") else None
-            ),
+            status=status,
             priority=priority,
             project_id=self._extract_id_from_href(
                 links.get("project", {}).get("href")

@@ -1489,6 +1489,18 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
             raise HTTPException(status_code=400, detail=error_msg)
         elif "Provider not found" in error_msg:
             raise HTTPException(status_code=404, detail=error_msg)
+        elif "OpenProject API error (422)" in error_msg:
+            # Preserve 422 status code for OpenProject validation errors
+            # Extract the actual error message after the status code
+            detail = error_msg.replace("OpenProject API error (422): ", "")
+            raise HTTPException(status_code=422, detail=detail)
+        elif "OpenProject API error" in error_msg:
+            # Extract status code from error message if present
+            import re
+            status_match = re.search(r'\((\d+)\)', error_msg)
+            status_code = int(status_match.group(1)) if status_match else 400
+            detail = error_msg.split(": ", 1)[1] if ": " in error_msg else error_msg
+            raise HTTPException(status_code=status_code, detail=detail)
         else:
             raise HTTPException(status_code=400, detail=error_msg)
     except HTTPException:

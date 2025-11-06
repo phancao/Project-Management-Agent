@@ -859,30 +859,50 @@ export function SprintBoardView() {
     const taskWithSameId = tasks.find(t => String(t.id) === activeIdStr);
     const taskIsInThisColumn = taskWithSameId && columnWithId ? (columnWithId.tasks?.some(t => String(t.id) === String(taskWithSameId.id)) ?? false) : false;
     
-    // If it's a column ID and either:
-    // 1. It's NOT also a task ID (definitely a column), OR
-    // 2. The column IS being dragged (from draggingColumnIds), OR
-    // 3. The column has NO tasks (empty column - definitely a column drag when dragging by header), OR
-    // 4. There's a task with this ID but it's NOT in this column (task is elsewhere, so this is a column drag)
-    // Then treat it as a column drag
-    if (isColumnId && (!isTaskId || isColumnBeingDragged || !columnHasTasks || (taskWithSameId && !taskIsInThisColumn)) && !activeData?.type) {
-      debug.warn('CRITICAL: Column ID detected but data.type is missing - treating as column drag', {
-        activeId: activeIdStr,
-        isColumnId,
-        isTaskId,
-        isColumnBeingDragged,
-        columnHasTasks,
-        taskWithSameId: !!taskWithSameId,
-        taskIsInThisColumn,
-        activeData,
-        draggingColumnIds: Array.from(draggingColumnIds),
-        draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)
-      });
-      // Treat as column drag
-      setDraggedColumnId(activeIdStr);
-      draggedColumnIdRef.current = activeIdStr;
-      setActiveId(null);
-      return;
+    // CRITICAL: If it's a column ID and data.type is missing, prioritize column drag detection
+    // The key insight: If data.type is missing, we can't rely on it. Instead, we use heuristics:
+    // - If it's a column ID and NOT a task ID, it's definitely a column drag
+    // - If it's both, we need to check if the column is being dragged (from draggingColumnIds)
+    // - If the column is empty, it's likely a column drag (can't drag a task from an empty column)
+    // - If the task is not in this column, it's a column drag (the task is elsewhere)
+    // - Only treat as task drag if: task exists in this column AND column is NOT being dragged
+    if (isColumnId && !activeData?.type) {
+      // Determine if this is definitely a task drag
+      // It's a task drag ONLY if: task exists in this column AND column is NOT being dragged
+      const isDefinitelyTaskDrag = isTaskId && taskIsInThisColumn && !isColumnBeingDragged && columnHasTasks;
+      
+      if (!isDefinitelyTaskDrag) {
+        // Not a definite task drag, so treat as column drag
+        // This covers: empty columns, columns being dragged, tasks not in this column, or no task with this ID
+        debug.warn('CRITICAL: Column ID detected but data.type is missing - treating as column drag', {
+          activeId: activeIdStr,
+          isColumnId,
+          isTaskId,
+          isColumnBeingDragged,
+          columnHasTasks,
+          taskWithSameId: !!taskWithSameId,
+          taskIsInThisColumn,
+          isDefinitelyTaskDrag,
+          activeData,
+          draggingColumnIds: Array.from(draggingColumnIds),
+          draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)
+        });
+        // Treat as column drag
+        setDraggedColumnId(activeIdStr);
+        draggedColumnIdRef.current = activeIdStr;
+        setActiveId(null);
+        return;
+      } else {
+        // It's a definite task drag, so let it fall through to task drag handling
+        debug.dnd('Column ID matches task ID, but treating as task drag (task in column, column not being dragged)', {
+          activeId: activeIdStr,
+          isColumnId,
+          isTaskId,
+          taskIsInThisColumn,
+          isColumnBeingDragged,
+          columnHasTasks
+        });
+      }
     }
     
     // CRITICAL: Use a small delay to check if a column is being dragged
@@ -956,71 +976,8 @@ export function SprintBoardView() {
       }
     }
     
-    // Method 2: Check if activeId matches a column ID (status ID) BEFORE checking for tasks
-    // This is important because if a task ID happens to match a column ID, we want to prioritize column
-    if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
-      // Check if it's also a task ID
-      const isTaskId = tasks.some(t => String(t.id) === activeIdStr);
-      // CRITICAL: Check if this column is actually being dragged (from draggingColumnIdsRef for immediate access)
-      // This handles the case where drag starts from a task inside the column
-      // Use ref for immediate check (no state update delay)
-      const isColumnBeingDragged = draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr);
-      
-      debug.dnd('Checking if activeId is a column ID', { 
-        activeId: activeIdStr, 
-        isTaskId, 
-        isLastColumn,
-        isColumnBeingDragged,
-        draggingColumnIds: Array.from(draggingColumnIds),
-        draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current),
-        availableStatuses: availableStatuses.map(s => s.id),
-        taskIds: tasks.slice(0, 5).map(t => String(t.id))
-      });
-      
-      // CRITICAL: If activeId matches a column ID, we need to be more careful:
-      // - If it's NOT also a task ID, it's definitely a column drag
-      // - If it IS also a task ID, we need to check if the column is being dragged
-      // - But since draggingColumnIds might not be updated yet, we should check the DOM
-      //   or wait a bit for the column's isDragging to become true
-      // For now, if it's a column ID and NOT a task ID, treat as column
-      // If it's both, we'll rely on the delayed check and handleDragOver to catch it
-      if (!isTaskId || activeData?.type === 'column') {
-        // It's a column ID and either:
-        // 1. It's not also a task ID (!isTaskId) - definitely a column
-        // 2. It's explicitly marked as column type (activeData?.type === 'column')
-        debug.dnd('Detected column drag (by ID, priority check)', { 
-          activeId: activeIdStr, 
-          isLastColumn,
-          isTaskId,
-          isColumnBeingDragged,
-          columnOrder,
-          orderedColumns: orderedColumns.map(c => c.id)
-        });
-        setDraggedColumnId(activeIdStr);
-        draggedColumnIdRef.current = activeIdStr; // Update ref for immediate access
-        setActiveId(null);
-        debug.dnd('Column drag state set (priority check)', { draggedColumnId: activeIdStr });
-        return;
-      } else if (isTaskId && isColumnBeingDragged) {
-        // It's both a task and column ID, but the column IS being dragged
-        // This means we're dragging the column, not the task
-        debug.dnd('Detected column drag (by ID, column is being dragged)', { 
-          activeId: activeIdStr, 
-          isLastColumn,
-          isTaskId,
-          isColumnBeingDragged,
-          columnOrder,
-          orderedColumns: orderedColumns.map(c => c.id)
-        });
-        setDraggedColumnId(activeIdStr);
-        draggedColumnIdRef.current = activeIdStr; // Update ref for immediate access
-        setActiveId(null);
-        debug.dnd('Column drag state set (column is being dragged)', { draggedColumnId: activeIdStr });
-        return;
-      }
-      // If it's both a task and column ID, and column is NOT being dragged yet,
-      // we'll treat it as a task for now, but the delayed check and handleDragOver will catch it
-    }
+    // Method 2: This is now handled by the check above (lines 862-906)
+    // If we reach here, either data.type was set, or it's not a column ID, or it's a definite task drag
     
     // Method 3: Check if it's a task ID (only if it's NOT a column being dragged)
     const task = tasks.find(t => String(t.id) === activeIdStr);

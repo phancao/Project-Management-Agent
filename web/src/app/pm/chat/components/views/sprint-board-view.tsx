@@ -896,13 +896,36 @@ export function SprintBoardView() {
           // Ensure columnOrder is initialized (use current ordered columns if columnOrder is empty)
           let currentOrder = columnOrder;
           if (currentOrder.length === 0 && availableStatuses) {
-            // Initialize from current column order (sorted by default, then name)
-            const sortedStatuses = [...availableStatuses].sort((a, b) => {
-              if (a.is_default && !b.is_default) return -1;
-              if (!a.is_default && b.is_default) return 1;
-              return a.name.localeCompare(b.name);
-            });
-            currentOrder = sortedStatuses.map(s => s.id);
+            // Try to load from localStorage first
+            debug.dnd('Column order is empty, trying to load from localStorage', { activeProjectId });
+            const savedOrder = loadColumnOrderFromStorage(activeProjectId);
+            if (savedOrder && savedOrder.length > 0) {
+              // Validate saved order
+              const validStatusIds = new Set(availableStatuses.map(s => s.id));
+              const validOrder = savedOrder.filter(id => validStatusIds.has(id));
+              if (validOrder.length > 0) {
+                currentOrder = validOrder;
+                debug.dnd('Loaded column order from localStorage', { currentOrder });
+              } else {
+                // Fallback to default order
+                const sortedStatuses = [...availableStatuses].sort((a, b) => {
+                  if (a.is_default && !b.is_default) return -1;
+                  if (!a.is_default && b.is_default) return 1;
+                  return a.name.localeCompare(b.name);
+                });
+                currentOrder = sortedStatuses.map(s => s.id);
+                debug.dnd('Using default column order (saved order invalid)', { currentOrder });
+              }
+            } else {
+              // No saved order, use default
+              const sortedStatuses = [...availableStatuses].sort((a, b) => {
+                if (a.is_default && !b.is_default) return -1;
+                if (!a.is_default && b.is_default) return 1;
+                return a.name.localeCompare(b.name);
+              });
+              currentOrder = sortedStatuses.map(s => s.id);
+              debug.dnd('Using default column order (no saved order)', { currentOrder });
+            }
             setColumnOrder(currentOrder);
           }
           

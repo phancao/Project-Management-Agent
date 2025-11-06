@@ -405,6 +405,13 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
 
 export function SprintBoardView() {
   const DEBUG_DND = false;
+  
+  // Log component render
+  useEffect(() => {
+    const timestamp = performance.now();
+    console.log(`[SprintBoard] 🎬 [${timestamp.toFixed(2)}ms] Component rendered`);
+  });
+  
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -426,10 +433,14 @@ export function SprintBoardView() {
   const { state: loadingState, setTasksState } = usePMLoading();
   
   // Only load tasks when filter data is ready (Step 3: after all requirements loaded)
+  // IMPORTANT: Always pass projectIdForTasks to useTasks to prevent projectId from flipping
+  // between valid and undefined, which causes race conditions
   const shouldLoadTasks = loadingState.canLoadTasks && activeProjectId;
   
-  const tasksHook = (shouldLoadTasks && activeProjectId) ? useTasks(projectIdForTasks) : useMyTasks();
-  const { tasks, loading, error, refresh: refreshTasks } = tasksHook;
+  // Always use useTasks with projectIdForTasks (or undefined if no project)
+  // This prevents the hook from switching between useTasks and useMyTasks, which causes
+  // the effect to restart and mark previous fetches as stale
+  const { tasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForTasks ?? undefined);
   
   // Sync tasks state with loading context
   useEffect(() => {
@@ -472,6 +483,9 @@ export function SprintBoardView() {
     setPriorityFilter("all");
     setEpicFilter(null);
     setSprintFilter(null);
+    // Clear visibleColumns immediately when project changes to prevent filtering out new columns
+    // It will be repopulated from localStorage or set to all columns in the effect below
+    setVisibleColumns(new Set());
     // Note: columnOrder will be loaded from localStorage in the effect below
   }, [activeProjectId]);
   
@@ -507,14 +521,24 @@ export function SprintBoardView() {
   
   // Filter tasks
   const filteredTasks = useMemo(() => {
+    const timestamp = performance.now();
+    console.log(`[SprintBoard] 🔍 [${timestamp.toFixed(2)}ms] Filtering tasks. tasks.length:`, tasks.length, "loading:", loading);
+    
     // Return empty array only if we're loading AND have no tasks yet (to prevent flash of stale data)
     // If we have tasks, always filter them even if loading is true (for real-time filtering)
-    if (loading && (!tasks || tasks.length === 0)) return [];
+    if (loading && (!tasks || tasks.length === 0)) {
+      console.log(`[SprintBoard] ⏳ [${timestamp.toFixed(2)}ms] Returning empty (loading with no tasks)`);
+      return [];
+    }
     
     // If we have no tasks at all, return empty
-    if (!tasks || tasks.length === 0) return [];
+    if (!tasks || tasks.length === 0) {
+      console.log(`[SprintBoard] ⚠️ [${timestamp.toFixed(2)}ms] Returning empty (no tasks)`);
+      return [];
+    }
     
     let filtered = [...tasks]; // Create a copy to avoid mutating original
+    const initialCount = filtered.length;
 
     // Search filter - search in title and description only
     const trimmedQuery = (searchQuery || "").trim();
@@ -528,37 +552,49 @@ export function SprintBoardView() {
         const matches = title.includes(query) || description.includes(query);
         return matches;
       });
+      console.log(`[SprintBoard] 🔍 [${timestamp.toFixed(2)}ms] After search filter (query: "${trimmedQuery}"): ${filtered.length} tasks (was ${initialCount})`);
     }
 
     // Priority filter - match by exact priority (case-insensitive)
     if (priorityFilter && priorityFilter !== "all") {
       const filterPriorityLower = priorityFilter.toLowerCase();
+      const beforeCount = filtered.length;
       filtered = filtered.filter(t => {
         const taskPriority = (t.priority || "").toLowerCase();
         return taskPriority === filterPriorityLower;
       });
+      console.log(`[SprintBoard] 🔍 [${timestamp.toFixed(2)}ms] After priority filter (${priorityFilter}): ${filtered.length} tasks (was ${beforeCount})`);
     }
 
     // Epic filter
     if (epicFilter && epicFilter !== "all") {
+      const beforeCount = filtered.length;
       filtered = filtered.filter(task => {
         if (epicFilter === "none") {
           return !task.epic_id;
         }
         return task.epic_id === epicFilter;
       });
+      console.log(`[SprintBoard] 🔍 [${timestamp.toFixed(2)}ms] After epic filter (${epicFilter}): ${filtered.length} tasks (was ${beforeCount})`);
     }
 
     // Sprint filter
     if (sprintFilter && sprintFilter !== "all") {
+      const beforeCount = filtered.length;
       filtered = filtered.filter(task => {
         if (sprintFilter === "none") {
           return !task.sprint_id;
         }
         return task.sprint_id === sprintFilter;
       });
+      console.log(`[SprintBoard] 🔍 [${timestamp.toFixed(2)}ms] After sprint filter (${sprintFilter}): ${filtered.length} tasks (was ${beforeCount})`);
     }
 
+    console.log(`[SprintBoard] ✅ [${timestamp.toFixed(2)}ms] Final filtered tasks: ${filtered.length} out of ${initialCount} original tasks`);
+    if (filtered.length > 0) {
+      console.log(`[SprintBoard] ✅ [${timestamp.toFixed(2)}ms] Filtered task IDs:`, filtered.slice(0, 5).map(t => t.id).join(", "), filtered.length > 5 ? "..." : "");
+    }
+    
     return filtered;
   }, [tasks, searchQuery, priorityFilter, epicFilter, sprintFilter, loading]);
 
@@ -1455,13 +1491,19 @@ export function SprintBoardView() {
     
     // Debug: Log total tasks distributed across columns
     const totalTasksInColumns = columns.reduce((sum, col) => sum + (col.tasks?.length || 0), 0);
-    if (DEBUG_DND) console.log(`[SprintBoard] Total tasks in columns: ${totalTasksInColumns}, Total filtered tasks: ${filteredTasks.length}, Available statuses:`, availableStatuses.map(s => s.name));
+    const timestamp = performance.now();
+    console.log(`[SprintBoard] 📊 [${timestamp.toFixed(2)}ms] Column distribution:`, {
+      "totalTasksInColumns": totalTasksInColumns,
+      "totalFilteredTasks": filteredTasks.length,
+      "availableStatuses": availableStatuses.length,
+      "columns": columns.map(col => ({ id: col.id, title: col.title, taskCount: col.tasks?.length || 0 })),
+    });
     
     // Debug: Find unmatched tasks
     const matchedTaskIds = new Set(columns.flatMap(col => (col.tasks || []).map(t => t.id)));
     const unmatchedTasks = filteredTasks.filter(t => !matchedTaskIds.has(t.id));
-    if (DEBUG_DND && unmatchedTasks.length > 0) {
-      console.warn(`[SprintBoard] Found ${unmatchedTasks.length} unmatched tasks:`, unmatchedTasks.map(t => ({
+    if (unmatchedTasks.length > 0) {
+      console.warn(`[SprintBoard] ⚠️ [${timestamp.toFixed(2)}ms] Found ${unmatchedTasks.length} unmatched tasks:`, unmatchedTasks.map(t => ({
         id: t.id,
         title: t.title,
         status: t.status
@@ -1654,14 +1696,30 @@ export function SprintBoardView() {
 
   // Apply column order and visibility to columns
   const orderedColumns = useMemo(() => {
+    const timestamp = performance.now();
+    console.log(`[SprintBoard] 🔍 [${timestamp.toFixed(2)}ms] Computing orderedColumns. columns.length:`, columns.length, "visibleColumns.size:", visibleColumns.size, "columnOrder.length:", columnOrder.length);
+    
     // First filter by visibility
     let visibleCols = columns;
     if (visibleColumns.size > 0) {
-      visibleCols = columns.filter(col => visibleColumns.has(col.id));
+      // Check if any of the visibleColumns IDs actually match current columns
+      const columnIds = new Set(columns.map(col => col.id));
+      const hasMatchingVisibleColumns = Array.from(visibleColumns).some(id => columnIds.has(id));
+      
+      if (hasMatchingVisibleColumns) {
+        // Filter by visibility only if we have matching IDs
+        visibleCols = columns.filter(col => visibleColumns.has(col.id));
+        console.log(`[SprintBoard] 🔍 [${timestamp.toFixed(2)}ms] After visibility filter:`, visibleCols.length, "columns (visibleColumns.size:", visibleColumns.size, ")");
+      } else {
+        // If visibleColumns has no matching IDs (e.g., from a different project), show all columns
+        console.log(`[SprintBoard] ⚠️ [${timestamp.toFixed(2)}ms] visibleColumns has no matching IDs, showing all columns. visibleColumns:`, Array.from(visibleColumns).slice(0, 5), "columnIds:", Array.from(columnIds).slice(0, 5));
+        visibleCols = columns;
+      }
     }
     
     // Then apply order
     if (columnOrder.length === 0) {
+      console.log(`[SprintBoard] ✅ [${timestamp.toFixed(2)}ms] No column order, returning`, visibleCols.length, "visible columns");
       return visibleCols;
     }
     
@@ -1677,14 +1735,46 @@ export function SprintBoardView() {
     const orderedIds = new Set(columnOrder);
     const newColumns = visibleCols.filter(col => !orderedIds.has(col.id));
     
-    return [...ordered, ...newColumns];
+    const result = [...ordered, ...newColumns];
+    console.log(`[SprintBoard] ✅ [${timestamp.toFixed(2)}ms] Final orderedColumns:`, result.length, "columns (ordered:", ordered.length, "new:", newColumns.length, ")");
+    return result;
   }, [columns, columnOrder, visibleColumns]);
 
   // Use tasks instead of filteredTasks to ensure we can always find the dragged task
   const activeTask = activeId ? tasks.find(t => String(t.id) === String(activeId)) : null;
 
-  // Show loading state if filter data is not ready or tasks/statuses are loading
-  if (loadingState.filterData.loading || (shouldLoadTasks && loading) || statusesLoading) {
+  // Show loading state only if we don't have the essential data yet
+  // Allow rendering if we have tasks, even if statuses are still loading (optimistic rendering)
+  // Statuses are not critical for initial render - we can show tasks even without statuses
+  // Only show loading if we have NO tasks AND we're still loading, OR if filter data is loading
+  const hasTasks = tasks.length > 0;
+  const hasStatuses = availableStatuses.length > 0;
+  
+  // Only block rendering if:
+  // 1. Filter data is loading (providers, projects, etc.)
+  // 2. We're loading tasks AND we don't have any tasks yet
+  // Don't block on statuses loading - we can render tasks without statuses
+  const isLoading = loadingState.filterData.loading || 
+                    (shouldLoadTasks && loading && !hasTasks);
+  
+  useEffect(() => {
+    const timestamp = performance.now();
+    console.log(`[SprintBoard] 🔍 [${timestamp.toFixed(2)}ms] Loading check:`, {
+      "filterData.loading": loadingState.filterData.loading,
+      "shouldLoadTasks": shouldLoadTasks,
+      "loading": loading,
+      "statusesLoading": statusesLoading,
+      "hasTasks": hasTasks,
+      "hasStatuses": hasStatuses,
+      "isLoading": isLoading,
+      "tasks.length": tasks.length,
+      "availableStatuses.length": availableStatuses.length,
+    });
+  }, [isLoading, loadingState.filterData.loading, shouldLoadTasks, loading, statusesLoading, hasTasks, hasStatuses, tasks.length, availableStatuses.length]);
+  
+  if (isLoading) {
+    const timestamp = performance.now();
+    console.log(`[SprintBoard] ⏳ [${timestamp.toFixed(2)}ms] Showing loading state (filterData.loading: ${loadingState.filterData.loading}, shouldLoadTasks: ${shouldLoadTasks}, loading: ${loading}, statusesLoading: ${statusesLoading}, hasTasks: ${hasTasks}, hasStatuses: ${hasStatuses})`);
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-gray-500 dark:text-gray-400">Loading board...</div>
@@ -1923,31 +2013,38 @@ export function SprintBoardView() {
         onDragEnd={handleDragEnd}
       >
         {/* Kanban Board */}
-        {orderedColumns.length > 0 ? (
-          <SortableContext 
-            items={orderedColumns.map(col => col.id)} 
-            strategy={horizontalListSortingStrategy}
-          >
-            <div className="flex gap-4 overflow-x-auto flex-1 min-h-0">
-              {orderedColumns.map((column) => (
-                <div key={column.id} className="flex-shrink-0 w-80 h-full">
-                  <SortableColumn 
-                    column={{ id: column.id, title: column.title }} 
-                    tasks={column.tasks || []} 
-                    onTaskClick={handleTaskClick}
-                    activeColumnId={activeColumnId}
-                    activeId={activeId}
-                    isDraggingColumn={draggedColumnId === column.id}
-                  />
-                </div>
-              ))}
+        {(() => {
+          const timestamp = performance.now();
+          console.log(`[SprintBoard] 🎨 [${timestamp.toFixed(2)}ms] Rendering board. orderedColumns.length:`, orderedColumns.length, "columns.length:", columns.length, "availableStatuses.length:", availableStatuses.length);
+          if (orderedColumns.length === 0) {
+            console.log(`[SprintBoard] ⚠️ [${timestamp.toFixed(2)}ms] orderedColumns is empty! columns:`, columns.length, "visibleColumns:", visibleColumns.size, "columnOrder:", columnOrder.length);
+          }
+          return orderedColumns.length > 0 ? (
+            <SortableContext 
+              items={orderedColumns.map(col => col.id)} 
+              strategy={horizontalListSortingStrategy}
+            >
+              <div className="flex gap-4 overflow-x-auto flex-1 min-h-0">
+                {orderedColumns.map((column) => (
+                  <div key={column.id} className="flex-shrink-0 w-80 h-full">
+                    <SortableColumn 
+                      column={{ id: column.id, title: column.title }} 
+                      tasks={column.tasks || []} 
+                      onTaskClick={handleTaskClick}
+                      activeColumnId={activeColumnId}
+                      activeId={activeId}
+                      isDraggingColumn={draggedColumnId === column.id}
+                    />
+                  </div>
+                ))}
+              </div>
+            </SortableContext>
+          ) : (
+            <div className="flex items-center justify-center flex-1">
+              <div className="text-gray-500 dark:text-gray-400">No statuses available for this project</div>
             </div>
-          </SortableContext>
-        ) : (
-          <div className="flex items-center justify-center flex-1">
-            <div className="text-gray-500 dark:text-gray-400">No statuses available for this project</div>
-          </div>
-        )}
+          );
+        })()}
 
         <DragOverlay>
           {activeTask ? <TaskCard task={activeTask} onClick={() => {}} /> : null}

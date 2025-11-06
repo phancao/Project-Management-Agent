@@ -31,7 +31,8 @@ const fetchTasksFn = async (projectId?: string) => {
   
   const url = `pm/projects/${projectId}/tasks`;
   const fullUrl = resolveServiceURL(url);
-  console.log(`[useTasks] Fetching tasks from: ${fullUrl}`);
+  console.log(`[useTasks] 🚀 Fetching tasks from: ${fullUrl}`);
+  console.log(`[useTasks] 🚀 Project ID: ${projectId}`);
   let response: Response;
   try {
     response = await fetch(fullUrl);
@@ -153,41 +154,68 @@ export function useTasks(projectId?: string) {
   }, [projectId]);
 
   useEffect(() => {
+    const effectStartTime = performance.now();
+    console.log(`[useTasks] 🔄 [${effectStartTime.toFixed(2)}ms] Effect triggered. projectId: ${projectId}`);
     // Clear tasks immediately when projectId changes to avoid showing stale data
+    console.log(`[useTasks] 🧹 [${effectStartTime.toFixed(2)}ms] Clearing tasks (projectId changed)`);
     setTasks([]);
     setError(null);
     
     // If no project ID, set loading to false and return empty
     if (!projectId) {
+      const noProjectTime = performance.now();
+      console.log(`[useTasks] ⚠️ [${noProjectTime.toFixed(2)}ms] No projectId, setting loading to false`);
       setLoading(false);
       return;
     }
     
+    const loadingStartTime = performance.now();
+    console.log(`[useTasks] ⏳ [${loadingStartTime.toFixed(2)}ms] Setting loading to true for projectId: ${projectId}`);
     setLoading(true);
     
     // Use a flag to track if this effect is still relevant (projectId hasn't changed)
     let isCurrent = true;
+    const fetchStartTime = performance.now();
     
     // Fetch new data
     fetchTasksFn(projectId)
       .then((data) => {
+        const fetchEndTime = performance.now();
+        const fetchDuration = fetchEndTime - fetchStartTime;
+        console.log(`[useTasks] ✅ [${fetchEndTime.toFixed(2)}ms] Tasks fetched successfully. Count: ${data.length}, projectId: ${projectId}, isCurrent: ${isCurrent}, fetch took ${fetchDuration.toFixed(2)}ms`);
+        if (data.length > 0) {
+          console.log(`[useTasks] ✅ [${fetchEndTime.toFixed(2)}ms] Task IDs: ${data.slice(0, 5).map(t => t.id).join(", ")}${data.length > 5 ? "..." : ""}`);
+        }
         // Only update state if this effect is still relevant (projectId hasn't changed)
         if (isCurrent) {
+          const updateTime = performance.now();
+          console.log(`[useTasks] ✅ [${updateTime.toFixed(2)}ms] Updating state with ${data.length} tasks (${(updateTime - fetchEndTime).toFixed(2)}ms after fetch)`);
           setTasks(data);
           setLoading(false);
+          const stateUpdateTime = performance.now();
+          console.log(`[useTasks] ✅ [${stateUpdateTime.toFixed(2)}ms] State updated (total effect time: ${(stateUpdateTime - effectStartTime).toFixed(2)}ms)`);
+        } else {
+          console.log(`[useTasks] ⚠️ [${fetchEndTime.toFixed(2)}ms] Effect is stale (projectId changed), ignoring response`);
         }
       })
       .catch((err) => {
+        const errorTime = performance.now();
+        const fetchDuration = errorTime - fetchStartTime;
+        console.error(`[useTasks] ❌ [${errorTime.toFixed(2)}ms] Error fetching tasks for projectId ${projectId} (took ${fetchDuration.toFixed(2)}ms):`, err);
         // Only update state if this effect is still relevant (projectId hasn't changed)
         if (isCurrent) {
           setError(err as Error);
           setTasks([]);
           setLoading(false);
+        } else {
+          console.log(`[useTasks] ⚠️ [${errorTime.toFixed(2)}ms] Effect is stale (projectId changed), ignoring error`);
         }
       });
     
     // Cleanup: mark this effect as stale if projectId changes
     return () => {
+      const cleanupTime = performance.now();
+      console.log(`[useTasks] 🧹 [${cleanupTime.toFixed(2)}ms] Cleanup: marking effect as stale for projectId: ${projectId} (effect lasted ${(cleanupTime - effectStartTime).toFixed(2)}ms)`);
       isCurrent = false;
     };
   }, [projectId]);

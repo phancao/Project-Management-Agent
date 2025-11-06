@@ -389,6 +389,12 @@ export function BacklogView() {
   // Use the new useProjectData hook for cleaner project handling
   const { activeProjectId, activeProject, projectIdForData: projectIdForSprints, projects } = useProjectData();
   
+  // Log when projectIdForSprints changes
+  useEffect(() => {
+    const timestamp = performance.now();
+    console.log(`[BacklogView] 🔄 [${timestamp.toFixed(2)}ms] projectIdForSprints changed:`, projectIdForSprints, "activeProjectId:", activeProjectId, "activeProject?.id:", activeProject?.id);
+  }, [projectIdForSprints, activeProjectId, activeProject?.id]);
+  
   // Reset filters when project changes
   useEffect(() => {
     setSearchQuery("");
@@ -402,29 +408,47 @@ export function BacklogView() {
   const { state: loadingState, setTasksState } = usePMLoading();
   
   // Only load tasks when filter data is ready (Step 3: after all requirements loaded)
+  // IMPORTANT: Use projectIdForSprints directly, not conditional on shouldLoadTasks
+  // This prevents the projectId from flipping between valid and undefined, which causes
+  // useTasks to restart the effect and mark previous fetches as stale
+  // useTasks will handle the loading state internally
   const shouldLoadTasks = loadingState.canLoadTasks && projectIdForSprints;
   
   // Fetch tasks for the active project - use full project ID (with provider_id)
-  // Only fetch when a project is selected (don't fall back to /pm/tasks/my)
-  // Use projectIdForSprints directly (can be string or null) - useTasks handles null/undefined correctly
-  const { tasks: allTasks, loading, error, refresh: refreshTasks } = useTasks(shouldLoadTasks ? projectIdForSprints : undefined);
+  // Always pass projectIdForSprints (even if shouldLoadTasks is false) to prevent
+  // the projectId from changing from valid -> undefined -> valid, which causes race conditions
+  // The useTasks hook will handle the case when projectId is null/undefined
+  const { tasks: allTasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
   
   // Sync tasks state with loading context
+  // Only sync when we actually have a project and should be loading
   useEffect(() => {
+    const timestamp = performance.now();
+    console.log(`[BacklogView] 🔄 [${timestamp.toFixed(2)}ms] Syncing tasks state. shouldLoadTasks:`, shouldLoadTasks, "projectIdForSprints:", projectIdForSprints, "allTasks.length:", allTasks.length, "loading:", loading);
+    
     if (shouldLoadTasks) {
       setTasksState({
         loading,
         error,
         data: allTasks,
       });
+      console.log(`[BacklogView] ✅ [${timestamp.toFixed(2)}ms] Synced tasks state:`, allTasks.length, "tasks, loading:", loading);
     } else {
-      setTasksState({
-        loading: false,
-        error: null,
-        data: null,
-      });
+      // Don't clear the state immediately - keep it until we have a new project
+      // This prevents flickering when switching projects
+      if (!projectIdForSprints) {
+        setTasksState({
+          loading: false,
+          error: null,
+          data: null,
+        });
+        console.log(`[BacklogView] 🧹 [${timestamp.toFixed(2)}ms] Cleared tasks state (no project)`);
+      } else {
+        // Project exists but canLoadTasks is false - keep current state
+        console.log(`[BacklogView] ⏳ [${timestamp.toFixed(2)}ms] Keeping tasks state (waiting for canLoadTasks)`);
+      }
     }
-  }, [shouldLoadTasks, loading, error, allTasks, setTasksState]);
+  }, [shouldLoadTasks, loading, error, allTasks, setTasksState, projectIdForSprints]);
   
   // Use the new useTaskFiltering hook for cleaner task filtering logic
   const { tasks } = useTaskFiltering({
@@ -433,6 +457,27 @@ export function BacklogView() {
     activeProject,
     loading,
   });
+  
+  // Debug logging for task filtering
+  useEffect(() => {
+    const timestamp = performance.now();
+    console.log(`[BacklogView] 📋 [${timestamp.toFixed(2)}ms] TASK STATE UPDATE`);
+    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - allTasks.length:`, allTasks.length);
+    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - filtered tasks.length:`, tasks.length);
+    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - projectIdForSprints:`, projectIdForSprints);
+    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - activeProject?.id:`, activeProject?.id);
+    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - loading:`, loading);
+    console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - shouldLoadTasks:`, shouldLoadTasks);
+    if (allTasks.length > 0) {
+      console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - allTasks IDs:`, allTasks.slice(0, 5).map(t => t.id).join(", "), allTasks.length > 5 ? "..." : "");
+    }
+    if (tasks.length > 0) {
+      console.log(`[BacklogView]   [${timestamp.toFixed(2)}ms] - filtered tasks IDs:`, tasks.slice(0, 5).map(t => t.id).join(", "), tasks.length > 5 ? "..." : "");
+    }
+    if (allTasks.length > 0 && tasks.length === 0) {
+      console.log(`[BacklogView] ⚠️ [${timestamp.toFixed(2)}ms] WARNING: Tasks loaded (${allTasks.length}) but filtered out (${tasks.length})!`);
+    }
+  }, [allTasks.length, tasks.length, projectIdForSprints, activeProject?.id, loading, shouldLoadTasks]);
   
   // Fetch all sprints (active, closed, future) - no state filter to show all
   const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
@@ -822,15 +867,31 @@ export function BacklogView() {
 
   // Filter tasks by selected epic
   const epicFilteredTasks = useMemo(() => {
+    console.log("[BacklogView] 🎯 Epic filtering. filteredTasks.length:", filteredTasks?.length, "selectedEpic:", selectedEpic, "loading:", loading);
+    
     // Return empty array only if loading AND no tasks yet (to prevent flash)
     // But allow filtering if we have tasks, even if loading is true (for real-time filtering)
-    if (loading && (!filteredTasks || filteredTasks.length === 0)) return [];
-    if (!filteredTasks || filteredTasks.length === 0) return [];
+    if (loading && (!filteredTasks || filteredTasks.length === 0)) {
+      console.log("[BacklogView] 🎯 Returning empty (loading with no filteredTasks)");
+      return [];
+    }
+    if (!filteredTasks || filteredTasks.length === 0) {
+      console.log("[BacklogView] 🎯 Returning empty (no filteredTasks)");
+      return [];
+    }
     
-    if (!selectedEpic) return filteredTasks;
-    if (selectedEpic === "all") return filteredTasks;
+    if (!selectedEpic) {
+      console.log("[BacklogView] 🎯 No epic filter, returning all", filteredTasks.length, "filteredTasks");
+      return filteredTasks;
+    }
+    if (selectedEpic === "all") {
+      console.log("[BacklogView] 🎯 Epic filter is 'all', returning all", filteredTasks.length, "filteredTasks");
+      return filteredTasks;
+    }
     // Filter by epic_id
-    return filteredTasks.filter(task => task.epic_id === selectedEpic);
+    const epicFiltered = filteredTasks.filter(task => task.epic_id === selectedEpic);
+    console.log("[BacklogView] 🎯 Epic filtered:", epicFiltered.length, "tasks (epic_id:", selectedEpic, ")");
+    return epicFiltered;
   }, [filteredTasks, selectedEpic, loading]);
 
   // Group tasks by sprint
@@ -954,7 +1015,22 @@ export function BacklogView() {
   }, [activeId, tasks]);
 
   // Show loading state if filter data is not ready or tasks are loading
-  if (loadingState.filterData.loading || (shouldLoadTasks && loading)) {
+  const isLoading = loadingState.filterData.loading || (shouldLoadTasks && loading);
+  useEffect(() => {
+    const timestamp = performance.now();
+    console.log(`[BacklogView] 🔍 [${timestamp.toFixed(2)}ms] Loading check:`, {
+      "filterData.loading": loadingState.filterData.loading,
+      "shouldLoadTasks": shouldLoadTasks,
+      "loading": loading,
+      "isLoading": isLoading,
+      "allTasks.length": allTasks.length,
+      "tasks.length": tasks.length,
+    });
+  }, [isLoading, loadingState.filterData.loading, shouldLoadTasks, loading, allTasks.length, tasks.length]);
+  
+  if (isLoading) {
+    const timestamp = performance.now();
+    console.log(`[BacklogView] ⏳ [${timestamp.toFixed(2)}ms] Showing loading state (filterData.loading: ${loadingState.filterData.loading}, shouldLoadTasks: ${shouldLoadTasks}, loading: ${loading})`);
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-gray-500 dark:text-gray-400">Loading backlog...</div>

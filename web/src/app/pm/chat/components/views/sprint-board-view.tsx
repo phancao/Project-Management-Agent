@@ -466,6 +466,8 @@ export function SprintBoardView() {
   const [draggingColumnIds, setDraggingColumnIds] = useState<Set<string>>(new Set());
   // Use a ref to track dragging columns for immediate access (no state update delay)
   const draggingColumnIdsRef = useRef<Set<string>>(new Set());
+  // Ref to store timeout for delayed column drag detection
+  const delayedCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Memoize the callback to prevent infinite loops
   const handleColumnDragStateChange = useCallback((columnId: string, isDragging: boolean) => {
@@ -827,12 +829,10 @@ export function SprintBoardView() {
     // CRITICAL: Use a small delay to check if a column is being dragged
     // This handles the race condition where handleDragStart runs before column's isDragging becomes true
     // We'll check draggingColumnIds after a brief delay
-    // Store the timeout ID so we can clear it if needed
-    const delayedCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    
     // Clear any existing timeout
     if (delayedCheckTimeoutRef.current) {
       clearTimeout(delayedCheckTimeoutRef.current);
+      delayedCheckTimeoutRef.current = null;
     }
     
     delayedCheckTimeoutRef.current = setTimeout(() => {
@@ -1293,25 +1293,52 @@ export function SprintBoardView() {
     // CRITICAL: Check if a column is being dragged (via draggingColumnIds) even if draggedColumnId is not set
     // This handles the case where handleDragStart missed the column drag detection
     const activeIdStr = String(active.id);
-    if (!draggedColumnId && draggingColumnIds.size > 0) {
-      // Find the column that's being dragged
-      const matchingColumnId = Array.from(draggingColumnIds).find(colId => {
-        return colId === activeIdStr || (availableStatuses?.some(s => String(s.id) === colId));
+    const activeData = active.data.current;
+    
+    // First check: If activeData.type is 'column', it's definitely a column drag
+    if (activeData?.type === 'column') {
+      if (!draggedColumnId) {
+        debug.warn('CRITICAL: Column drag detected in handleDragEnd by data.type (missed in handleDragStart)', {
+          activeId: activeIdStr,
+          activeData,
+          draggedColumnId,
+          draggingColumnIds: Array.from(draggingColumnIds)
+        });
+        // Set draggedColumnId so column reordering logic can run
+        setDraggedColumnId(activeIdStr);
+      }
+    } else if (!draggedColumnId && (draggingColumnIds.size > 0 || draggingColumnIdsRef.current.size > 0)) {
+      // Second check: Check if a column is being dragged via draggingColumnIds
+      const currentDraggingIds = draggingColumnIdsRef.current.size > 0 
+        ? draggingColumnIdsRef.current 
+        : draggingColumnIds;
+        
+      // Find the column that's being dragged - check if activeId matches a column ID
+      const matchingColumnId = Array.from(currentDraggingIds).find(colId => {
+        return colId === activeIdStr;
       });
       
       if (matchingColumnId) {
         debug.warn('CRITICAL: Detected column drag in handleDragEnd (missed in handleDragStart and handleDragOver)', {
           activeId: activeIdStr,
           matchingColumnId,
-          draggingColumnIds: Array.from(draggingColumnIds)
+          draggingColumnIds: Array.from(draggingColumnIds),
+          draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current),
+          activeData
         });
+        // Set draggedColumnId so column reordering logic can run
+        setDraggedColumnId(matchingColumnId);
         // Don't process as task - this is a column drag
         setActiveId(null);
         setActiveColumnId(null);
         setReorderedTasks({});
-        setDraggingColumnIds(new Set()); // Clear dragging state
-        return; // Exit early, don't process as task drag
       }
+    }
+    
+    // Clear timeout if it's still pending
+    if (delayedCheckTimeoutRef.current) {
+      clearTimeout(delayedCheckTimeoutRef.current);
+      delayedCheckTimeoutRef.current = null;
     }
     
     // Check if this is the last column being dragged

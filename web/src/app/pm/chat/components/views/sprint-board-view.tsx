@@ -1051,6 +1051,7 @@ export function SprintBoardView() {
         });
         // Set the dragged column ID and clear task drag state
         setDraggedColumnId(matchingColumnId);
+        draggedColumnIdRef.current = matchingColumnId; // Update ref for immediate access
     setActiveId(null);
         setReorderedTasks({});
       }

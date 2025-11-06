@@ -150,7 +150,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
           {/* Project Selector - Only show on Project Management page */}
           {!isOverview && (
             <div className="flex items-center gap-2 min-w-[200px]">
-              <Select value={selectedProject || undefined} onValueChange={handleProjectChange} disabled={projectsLoading || projects.length === 0}>
+              <Select value={selectedProject || ""} onValueChange={handleProjectChange} disabled={projectsLoading || projects.length === 0}>
                 <SelectTrigger className="w-full">
                   {selectedProject ? (
                     <div className="flex items-center gap-2 flex-1 min-w-0">

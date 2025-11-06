@@ -430,7 +430,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Assigned To</label>
             {isEditing ? (
               <Select
-                value={editedTask?.assignee_id || task?.assignee_id || "__unassigned__"}
+                value={(editedTask?.assignee_id ?? task?.assignee_id) || "__unassigned__"}
                 onValueChange={(value) => {
                   setEditedTask({ 
                     ...editedTask, 

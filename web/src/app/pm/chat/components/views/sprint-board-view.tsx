@@ -683,11 +683,28 @@ export function SprintBoardView() {
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    debug.dnd('Drag over', { activeId: active.id, overId: over?.id, draggedColumnId });
+    
+    // Check if this is the last column being dragged
+    const isLastColumn = draggedColumnId && orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === draggedColumnId;
+    const overColumnIndex = over ? orderedColumns.findIndex(c => c.id === over.id) : -1;
+    const isOverLastColumn = overColumnIndex === orderedColumns.length - 1;
+    
+    debug.dnd('Drag over', { 
+      activeId: active.id, 
+      overId: over?.id, 
+      draggedColumnId,
+      isLastColumn,
+      isOverLastColumn,
+      overColumnIndex,
+      totalColumns: orderedColumns.length,
+      overDataType: over?.data?.current?.type,
+      overData: over?.data?.current
+    });
     
     // Handle column reordering
     if (draggedColumnId) {
       if (!over || !availableStatuses) {
+        debug.dnd('Drag over: No over target or no availableStatuses', { over: !!over, availableStatuses: !!availableStatuses, isLastColumn });
         setActiveColumnId(null);
         return;
       }
@@ -698,23 +715,26 @@ export function SprintBoardView() {
       // Check if we're over a column (status ID) directly
       if (typeof over.id === 'string' && availableStatuses.some(s => s.id === over.id)) {
         overId = over.id;
+        debug.dnd('Drag over: Found overId from over.id', { overId, activeId, isLastColumn });
       } else {
         // Check if we're over something inside a column - look at the data
         const overData = over.data.current;
-        debug.dnd('Drag over: Checking overData', { overData, overDataType: overData?.type, overDataColumn: overData?.column });
+        debug.dnd('Drag over: Checking overData', { overData, overDataType: overData?.type, overDataColumn: overData?.column, isLastColumn });
         if (overData?.type === 'column' && overData?.column) {
           overId = overData.column;
-          debug.dnd('Drag over: Found overId from overData.column', { overId, activeId });
+          debug.dnd('Drag over: Found overId from overData.column', { overId, activeId, isLastColumn });
         } else {
-          debug.dnd('Drag over: Could not find overId from overData', { overData });
+          debug.dnd('Drag over: Could not find overId from overData', { overData, isLastColumn });
         }
       }
       
       // Visual feedback: highlight the target column if it's different from the dragged column
       if (overId && overId !== activeId && availableStatuses.some(s => s.id === overId)) {
         setActiveColumnId(overId);
+        debug.dnd('Drag over: Setting activeColumnId for visual feedback', { overId, activeId, isLastColumn });
       } else {
         setActiveColumnId(null);
+        debug.dnd('Drag over: Clearing activeColumnId', { overId, activeId, isLastColumn, reason: !overId ? 'no overId' : overId === activeId ? 'same column' : 'invalid overId' });
       }
       return;
     }

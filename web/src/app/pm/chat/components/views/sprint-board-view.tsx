@@ -429,6 +429,10 @@ export function SprintBoardView() {
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
   
+  // Ref for horizontal scrolling container (columns container)
+  const columnsContainerRef = useRef<HTMLDivElement | null>(null);
+  const horizontalScrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Use the new useProjectData hook for cleaner project handling
   const { activeProjectId, projectIdForData: projectIdForTasks } = useProjectData();
   
@@ -612,6 +616,75 @@ export function SprintBoardView() {
     
     return filtered;
   }, [tasks, searchQuery, priorityFilter, epicFilter, sprintFilter, loading]);
+
+  // Auto-scroll horizontally when dragging columns near viewport edges
+  useEffect(() => {
+    if (!draggedColumnId || !columnsContainerRef.current) {
+      // Clear any existing scroll interval when not dragging a column
+      if (horizontalScrollIntervalRef.current) {
+        clearInterval(horizontalScrollIntervalRef.current);
+        horizontalScrollIntervalRef.current = null;
+      }
+      return;
+    }
+    
+    const container = columnsContainerRef.current;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!container) return;
+      
+      const viewportWidth = window.innerWidth;
+      const mouseX = e.clientX;
+      const scrollThreshold = 100; // Distance from edge to trigger scroll
+      const scrollSpeed = 15; // Pixels to scroll per interval
+      
+      // Check if mouse is near left or right edge of viewport
+      const distanceFromLeft = mouseX;
+      const distanceFromRight = viewportWidth - mouseX;
+      
+      // Clear existing interval before starting a new one
+      if (horizontalScrollIntervalRef.current) {
+        clearInterval(horizontalScrollIntervalRef.current);
+        horizontalScrollIntervalRef.current = null;
+      }
+      
+      if (distanceFromLeft < scrollThreshold && container.scrollLeft > 0) {
+        // Scroll left
+        horizontalScrollIntervalRef.current = setInterval(() => {
+          if (container && container.scrollLeft > 0) {
+            container.scrollLeft = Math.max(0, container.scrollLeft - scrollSpeed);
+          } else if (horizontalScrollIntervalRef.current) {
+            clearInterval(horizontalScrollIntervalRef.current);
+            horizontalScrollIntervalRef.current = null;
+          }
+        }, 16); // ~60fps
+      } else if (distanceFromRight < scrollThreshold && 
+                 container.scrollLeft < container.scrollWidth - container.clientWidth) {
+        // Scroll right
+        horizontalScrollIntervalRef.current = setInterval(() => {
+          if (container && container.scrollLeft < container.scrollWidth - container.clientWidth) {
+            container.scrollLeft = Math.min(
+              container.scrollWidth - container.clientWidth,
+              container.scrollLeft + scrollSpeed
+            );
+          } else if (horizontalScrollIntervalRef.current) {
+            clearInterval(horizontalScrollIntervalRef.current);
+            horizontalScrollIntervalRef.current = null;
+          }
+        }, 16); // ~60fps
+      }
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      if (horizontalScrollIntervalRef.current) {
+        clearInterval(horizontalScrollIntervalRef.current);
+        horizontalScrollIntervalRef.current = null;
+      }
+    };
+  }, [draggedColumnId]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const activeIdStr = String(event.active.id);
@@ -2303,7 +2376,13 @@ export function SprintBoardView() {
               items={orderedColumns.map(col => col.id)} 
               strategy={horizontalListSortingStrategy}
             >
-              <div className="flex gap-4 overflow-x-auto flex-1 min-h-0">
+              <div 
+                ref={columnsContainerRef}
+                className="flex gap-4 overflow-x-auto flex-1 min-h-0"
+                style={{
+                  scrollBehavior: 'smooth',
+                }}
+              >
                 {orderedColumns.map((column) => (
                   <div key={column.id} className="flex-shrink-0 w-80 h-full">
                     <SortableColumn 

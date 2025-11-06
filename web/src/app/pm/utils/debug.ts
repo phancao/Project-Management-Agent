@@ -363,18 +363,63 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   setInterval(() => {
     debug.reloadConfig();
   }, 2000);
+  
+  // Log debug status on load
+  const currentConfig = debug.getConfig();
+  if (currentConfig.enabled) {
+    console.log('%c[PM Debug] Debug logging is ENABLED', 'color: green; font-weight: bold;', {
+      categories: Array.from(currentConfig.categories),
+      enabled: currentConfig.enabled
+    });
+  } else {
+    console.log('%c[PM Debug] Debug logging is DISABLED', 'color: gray; font-style: italic;', 
+      'Enable with: window.pmDebug.enable() or localStorage.setItem("pm:debug:enabled", "true")');
+  }
 }
 
 // Expose debug controls to window for easy access in browser console
 if (typeof window !== 'undefined') {
   (window as any).pmDebug = {
-    enable: enableDebug,
-    disable: disableDebug,
-    setCategories: (cats: DebugCategory[]) => debug.setCategories(cats),
-    addCategories: (cats: DebugCategory[]) => debug.addCategories(cats),
-    removeCategories: (cats: DebugCategory[]) => debug.removeCategories(cats),
-    getConfig: () => debug.getConfig(),
-    reload: () => debug.reloadConfig(),
+    enable: () => {
+      enableDebug();
+      console.log('%c[PM Debug] ✅ Debug enabled! All categories active.', 'color: green; font-weight: bold;');
+      console.log('Available categories: time, api, filter, state, render, dnd, storage, project, task, column, all');
+      console.log('Example: window.pmDebug.setCategories(["dnd", "column"]) to filter categories');
+    },
+    disable: () => {
+      disableDebug();
+      console.log('%c[PM Debug] ❌ Debug disabled', 'color: gray;');
+    },
+    setCategories: (cats: DebugCategory[]) => {
+      debug.setCategories(cats);
+      console.log('%c[PM Debug] Categories updated:', 'color: blue;', Array.from(debug.getConfig().categories));
+    },
+    addCategories: (cats: DebugCategory[]) => {
+      debug.addCategories(cats);
+      console.log('%c[PM Debug] Categories added:', 'color: blue;', cats);
+    },
+    removeCategories: (cats: DebugCategory[]) => {
+      debug.removeCategories(cats);
+      console.log('%c[PM Debug] Categories removed:', 'color: blue;', cats);
+    },
+    getConfig: () => {
+      const config = debug.getConfig();
+      console.log('%c[PM Debug] Current config:', 'color: blue;', {
+        enabled: config.enabled,
+        categories: Array.from(config.categories),
+        includeTimestamp: config.includeTimestamp,
+        includePerformance: config.includePerformance
+      });
+      return config;
+    },
+    reload: () => {
+      debug.reloadConfig();
+      const config = debug.getConfig();
+      console.log('%c[PM Debug] Config reloaded:', 'color: blue;', {
+        enabled: config.enabled,
+        categories: Array.from(config.categories)
+      });
+    },
   };
 }
 

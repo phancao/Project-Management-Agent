@@ -116,8 +116,12 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
   });
   
   // Notify parent when column drag state changes
+  // Use a ref to track previous isDragging state to avoid unnecessary calls
+  const prevIsDraggingRef = useRef(isDragging);
   useEffect(() => {
-    if (onColumnDragStateChange) {
+    // Only call callback if isDragging actually changed
+    if (prevIsDraggingRef.current !== isDragging && onColumnDragStateChange) {
+      prevIsDraggingRef.current = isDragging;
       onColumnDragStateChange(column.id, isDragging);
     }
   }, [isDragging, column.id, onColumnDragStateChange]);
@@ -2707,8 +2711,17 @@ export function SprintBoardView() {
                       activeId={activeId}
                       isDraggingColumn={draggedColumnId === column.id}
                       isAnyColumnDragging={!!draggedColumnId}
-                      onColumnDragStateChange={(columnId, isDragging) => {
+                      onColumnDragStateChange={useCallback((columnId: string, isDragging: boolean) => {
                         setDraggingColumnIds(prev => {
+                          // Check if the state would actually change
+                          const wouldAdd = isDragging && !prev.has(columnId);
+                          const wouldRemove = !isDragging && prev.has(columnId);
+                          
+                          // Only update if state would change
+                          if (!wouldAdd && !wouldRemove) {
+                            return prev; // Return same reference to prevent unnecessary re-renders
+                          }
+                          
                           const next = new Set(prev);
                           if (isDragging) {
                             next.add(columnId);
@@ -2720,7 +2733,7 @@ export function SprintBoardView() {
                           debug.dnd('Column drag state changed', { columnId, isDragging, draggingColumnIds: Array.from(next) });
                           return next;
                         });
-                      }}
+                      }, [])}
                     />
                   </div>
                 ))}

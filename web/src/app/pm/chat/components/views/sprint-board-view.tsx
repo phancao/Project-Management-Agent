@@ -1578,14 +1578,12 @@ export function SprintBoardView() {
     // Handle task dragging
     // CRITICAL: First check if this is actually a column drag that wasn't detected in handleDragStart
     // This can happen if the drag starts from a child element or if handleDragStart failed to detect it
-    // Note: activeData and activeId are already defined above, so we don't need to redefine them here
-    // const activeData = active.data.current; // Already defined above
-    // const activeId = String(active.id); // Already defined above
+    // Note: activeData and activeIdStr are already defined above, so we use those
     
     // If active data has type 'column', it's definitely a column drag - DO NOT process as task
     if (activeData?.type === 'column') {
       debug.warn('Column drag detected in handleDragEnd but draggedColumnId was not set! This should not happen.', { 
-        activeId, 
+        activeId: activeIdStr, 
         activeData,
         draggedColumnId,
         availableStatuses: availableStatuses?.map(s => s.id)
@@ -1597,13 +1595,13 @@ export function SprintBoardView() {
       return;
     }
     
-    // Also check if the activeId matches a column ID (status ID) - if so, it's a column drag
-    if (availableStatuses && availableStatuses.some(s => String(s.id) === activeId)) {
+    // Also check if the activeIdStr matches a column ID (status ID) - if so, it's a column drag
+    if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
       // Check if it's also a task ID - if not, it's definitely a column
-      const isTaskId = tasks.some(t => String(t.id) === activeId);
+      const isTaskId = tasks.some(t => String(t.id) === activeIdStr);
       if (!isTaskId) {
         debug.warn('Column drag detected in handleDragEnd by ID check but draggedColumnId was not set! This should not happen.', { 
-          activeId, 
+          activeId: activeIdStr, 
           activeData,
           draggedColumnId,
           isTaskId
@@ -1618,8 +1616,8 @@ export function SprintBoardView() {
     
     // Only proceed with task dragging if we're certain it's not a column
     // If we're not sure, don't process it
-    if (!activeId || activeId === 'undefined' || activeId === 'null') {
-      debug.warn('Invalid activeId in handleDragEnd, skipping task drag processing', { activeId, activeData });
+    if (!activeIdStr || activeIdStr === 'undefined' || activeIdStr === 'null') {
+      debug.warn('Invalid activeId in handleDragEnd, skipping task drag processing', { activeId: activeIdStr, activeData });
       setActiveId(null);
       setActiveColumnId(null);
       setReorderedTasks({});
@@ -1645,7 +1643,7 @@ export function SprintBoardView() {
 
     // Find the task being dragged
     // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
-    const task = tasks.find(t => String(t.id) === activeId);
+    const task = tasks.find(t => String(t.id) === activeIdStr);
     if (!task) {
       debug.dnd('No task found for activeId', { activeId });
       return;

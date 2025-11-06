@@ -12,6 +12,7 @@ import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
 import { useEpics } from "~/core/api/hooks/pm/use-epics";
 import { useSprints } from "~/core/api/hooks/pm/use-sprints";
+import { debug } from "../utils/debug";
 
 /**
  * PMLoadingManager orchestrates the loading order:
@@ -36,10 +37,10 @@ export function PMLoadingManager() {
   // Step 1: Load providers
   useEffect(() => {
     if (state.providers.loading && !state.providers.data) {
-      console.log('[PMLoadingManager] Step 1: Loading providers...');
+      debug.state('Step 1: Loading providers...');
       listProviders()
         .then((providers) => {
-          console.log('[PMLoadingManager] Providers loaded:', providers.length);
+          debug.state('Providers loaded', { count: providers.length });
           setProvidersState({
             loading: false,
             error: null,
@@ -47,7 +48,7 @@ export function PMLoadingManager() {
           });
         })
         .catch((error) => {
-          console.error('[PMLoadingManager] Failed to load providers:', error);
+          debug.error('Failed to load providers', error);
           setProvidersState({
             loading: false,
             error: error instanceof Error ? error : new Error(String(error)),

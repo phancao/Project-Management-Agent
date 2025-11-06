@@ -54,7 +54,11 @@ function loadConfig(): DebugConfig {
   }
 
   try {
-    const enabled = localStorage.getItem('pm:debug:enabled') === 'true';
+    // Check if debug is explicitly enabled in localStorage
+    // If the key doesn't exist, default to disabled
+    const enabledValue = localStorage.getItem('pm:debug:enabled');
+    const enabled = enabledValue === 'true'; // Only enable if explicitly set to 'true'
+    
     const categoriesStr = localStorage.getItem('pm:debug:categories');
     const categories = categoriesStr 
       ? new Set<DebugCategory>(JSON.parse(categoriesStr))
@@ -343,6 +347,14 @@ export const enableDebug = (categories?: DebugCategory[]) => {
 
 export const disableDebug = () => {
   debug.setEnabled(false);
+  // Also clear from localStorage to ensure it stays disabled
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('pm:debug:enabled');
+    } catch (error) {
+      // Silently fail
+    }
+  }
 };
 
 // Auto-reload config in development (for hot-reloading during testing)

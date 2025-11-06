@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from "react";
 
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
+import { debug } from "~/app/pm/utils/debug";
 
 export interface Priority {
   id: string;
@@ -55,12 +56,12 @@ export function usePriorities(projectId?: string) {
     setError(null);
     fetchPrioritiesFn(projectId)
       .then((data) => {
-        console.log(`[usePriorities] Loaded ${data.length} priorities for project ${projectId}:`, data);
+        debug.api('Loaded priorities', { count: data.length, projectId, priorities: data });
         setPriorities(data);
         setLoading(false);
       })
       .catch((err) => {
-        console.error(`[usePriorities] Failed to fetch priorities for project ${projectId}:`, err);
+        debug.error('Failed to fetch priorities', { projectId, error: err });
         setError(err as Error);
         setPriorities([]); // Clear priorities on error
         setLoading(false);

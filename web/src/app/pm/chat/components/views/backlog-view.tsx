@@ -1014,20 +1014,22 @@ export function BacklogView() {
   // Show loading state if filter data is not ready or tasks are loading
   const isLoading = loadingState.filterData.loading || (shouldLoadTasks && loading);
   useEffect(() => {
-    const timestamp = performance.now();
-    console.log(`[BacklogView] 🔍 [${timestamp.toFixed(2)}ms] Loading check:`, {
-      "filterData.loading": loadingState.filterData.loading,
-      "shouldLoadTasks": shouldLoadTasks,
-      "loading": loading,
-      "isLoading": isLoading,
-      "allTasks.length": allTasks.length,
-      "tasks.length": tasks.length,
+    debug.state('Loading check', {
+      filterDataLoading: loadingState.filterData.loading,
+      shouldLoadTasks,
+      loading,
+      isLoading,
+      allTasksLength: allTasks.length,
+      tasksLength: tasks.length,
     });
   }, [isLoading, loadingState.filterData.loading, shouldLoadTasks, loading, allTasks.length, tasks.length]);
   
   if (isLoading) {
-    const timestamp = performance.now();
-    console.log(`[BacklogView] ⏳ [${timestamp.toFixed(2)}ms] Showing loading state (filterData.loading: ${loadingState.filterData.loading}, shouldLoadTasks: ${shouldLoadTasks}, loading: ${loading})`);
+    debug.render('Showing loading state', {
+      filterDataLoading: loadingState.filterData.loading,
+      shouldLoadTasks,
+      loading,
+    });
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-gray-500 dark:text-gray-400">Loading backlog...</div>

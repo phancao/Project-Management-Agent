@@ -460,6 +460,8 @@ export function SprintBoardView() {
   // Track which columns are currently being dragged (by their sortable isDragging state)
   // This helps us detect column drags even when the drag starts from a task inside the column
   const [draggingColumnIds, setDraggingColumnIds] = useState<Set<string>>(new Set());
+  // Use a ref to track dragging columns for immediate access (no state update delay)
+  const draggingColumnIdsRef = useRef<Set<string>>(new Set());
   
   // Use the new useProjectData hook for cleaner project handling
   const { activeProjectId, projectIdForData: projectIdForTasks } = useProjectData();
@@ -796,10 +798,12 @@ export function SprintBoardView() {
     // CRITICAL: Use a small delay to check if a column is being dragged
     // This handles the race condition where handleDragStart runs before column's isDragging becomes true
     // We'll check draggingColumnIds after a brief delay
-    setTimeout(() => {
-      if (draggingColumnIds.size > 0 && !draggedColumnId) {
+    const delayedCheckTimeout = setTimeout(() => {
+      // Check both state and ref
+      const currentDraggingIds = draggingColumnIdsRef.current.size > 0 ? draggingColumnIdsRef.current : draggingColumnIds;
+      if (currentDraggingIds.size > 0 && !draggedColumnId) {
         // Check if activeId matches any column being dragged
-        const matchingColumnId = Array.from(draggingColumnIds).find(colId => {
+        const matchingColumnId = Array.from(currentDraggingIds).find(colId => {
           return colId === activeIdStr || availableStatuses?.some(s => String(s.id) === colId);
         });
         
@@ -807,7 +811,8 @@ export function SprintBoardView() {
           debug.warn('CRITICAL: Detected column drag after delay (missed in initial handleDragStart)', {
             activeId: activeIdStr,
             matchingColumnId,
-            draggingColumnIds: Array.from(draggingColumnIds)
+            draggingColumnIds: Array.from(draggingColumnIds),
+            draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)
           });
           // Set the dragged column ID and clear task drag state
           setDraggedColumnId(matchingColumnId);
@@ -816,6 +821,9 @@ export function SprintBoardView() {
         }
       }
     }, 50); // Small delay to allow column's isDragging to update
+    
+    // Store timeout ref for cleanup (though it should complete before component unmounts)
+    // Note: We don't need to clean this up as it's a one-time check
     
     // CRITICAL: Check for column drags FIRST, before checking for tasks
     // This prevents column drags from being misidentified as task drags
@@ -851,9 +859,10 @@ export function SprintBoardView() {
     if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
       // Check if it's also a task ID
       const isTaskId = tasks.some(t => String(t.id) === activeIdStr);
-      // CRITICAL: Also check if this column is actually being dragged (from draggingColumnIds)
+      // CRITICAL: Check if this column is actually being dragged (from draggingColumnIdsRef for immediate access)
       // This handles the case where drag starts from a task inside the column
-      const isColumnBeingDragged = draggingColumnIds.has(activeIdStr);
+      // Use ref for immediate check (no state update delay)
+      const isColumnBeingDragged = draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr);
       
       debug.dnd('Checking if activeId is a column ID', { 
         activeId: activeIdStr, 
@@ -861,11 +870,15 @@ export function SprintBoardView() {
         isLastColumn,
         isColumnBeingDragged,
         draggingColumnIds: Array.from(draggingColumnIds),
+        draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current),
         availableStatuses: availableStatuses.map(s => s.id),
         taskIds: tasks.slice(0, 5).map(t => String(t.id))
       });
       
-      // If it's a column ID AND the column is being dragged, prioritize column drag
+      // CRITICAL: If activeId matches a column ID, ALWAYS prioritize column drag if:
+      // 1. The column is being dragged (isColumnBeingDragged), OR
+      // 2. It's not also a task ID (!isTaskId), OR  
+      // 3. It's explicitly marked as column type (activeData?.type === 'column')
       // This prevents column drags from being misidentified when dragging from column header
       // or when drag starts from a task inside the column
       if (isColumnBeingDragged || !isTaskId || activeData?.type === 'column') {
@@ -893,7 +906,8 @@ export function SprintBoardView() {
     if (task) {
       // Double-check: Make sure this is NOT a column ID that's being dragged
       const isColumnId = availableStatuses?.some(s => String(s.id) === activeIdStr);
-      const isColumnBeingDragged = isColumnId && draggingColumnIds.has(activeIdStr);
+      // Use ref for immediate check (no state update delay)
+      const isColumnBeingDragged = isColumnId && (draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr));
       
       if (isColumnId && !isColumnBeingDragged && activeData?.type !== 'column') {
         // This is ambiguous - it's both a task and column ID, but:
@@ -904,13 +918,16 @@ export function SprintBoardView() {
           activeId: activeIdStr,
           dataType: activeData?.type,
           isColumnBeingDragged,
-          draggingColumnIds: Array.from(draggingColumnIds)
+          draggingColumnIds: Array.from(draggingColumnIds),
+          draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)
         });
       } else if (isColumnBeingDragged) {
         // The column is being dragged, so this is a column drag, not a task drag
         debug.dnd('Column is being dragged, treating as column drag (not task)', { 
           activeId: activeIdStr,
-          isColumnBeingDragged
+          isColumnBeingDragged,
+          draggingColumnIds: Array.from(draggingColumnIds),
+          draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)
         });
         setDraggedColumnId(activeIdStr);
         setActiveId(null);
@@ -2698,6 +2715,8 @@ export function SprintBoardView() {
                           } else {
                             next.delete(columnId);
                           }
+                          // Also update ref for immediate access
+                          draggingColumnIdsRef.current = next;
                           debug.dnd('Column drag state changed', { columnId, isDragging, draggingColumnIds: Array.from(next) });
                           return next;
                         });

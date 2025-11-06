@@ -1645,7 +1645,7 @@ export function SprintBoardView() {
     // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
     const task = tasks.find(t => String(t.id) === activeIdStr);
     if (!task) {
-      debug.dnd('No task found for activeId', { activeId });
+      debug.dnd('No task found for activeId', { activeId: activeIdStr });
       return;
     }
 

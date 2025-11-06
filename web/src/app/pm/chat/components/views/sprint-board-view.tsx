@@ -334,6 +334,8 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       <div 
         {...attributes}
         {...listeners}
+        data-dnd-type="column"
+        data-column-id={column.id}
         className={`flex items-center justify-between p-3 rounded-t-lg transition-colors ${
           isActive && !isDraggingColumn
             ? 'bg-blue-100 dark:bg-blue-900' 
@@ -815,16 +817,43 @@ export function SprintBoardView() {
     // Check if this is the last column
     const isLastColumn = orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === activeIdStr;
     
+    // CRITICAL: Check if activeId matches a column ID (status ID)
+    // If it does, and there's no task with that ID, it's definitely a column drag
+    const isColumnId = availableStatuses?.some(s => String(s.id) === activeIdStr);
+    const isTaskId = tasks.some(t => String(t.id) === activeIdStr);
+    
     debug.dnd('Drag started', { 
       activeId: activeIdStr, 
       dataType: activeData?.type, 
       activeData,
       isLastColumn,
+      isColumnId,
+      isTaskId,
       draggingColumnIds: Array.from(draggingColumnIds),
+      draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current),
       totalColumns: orderedColumns.length,
       columnOrder: columnOrder,
-      orderedColumns: orderedColumns.map(c => ({ id: c.id, title: c.title }))
+      orderedColumns: orderedColumns.map(c => ({ id: c.id, title: c.title })),
+      // Check if column is being dragged (from ref for immediate access)
+      isColumnBeingDragged: draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr)
     });
+    
+    // CRITICAL FIX: If activeId is a column ID and NOT a task ID, treat it as a column drag immediately
+    // This handles the case where data.type is not set correctly (e.g., when dragging from header)
+    if (isColumnId && !isTaskId && !activeData?.type) {
+      debug.warn('CRITICAL: Column ID detected but data.type is missing - treating as column drag', {
+        activeId: activeIdStr,
+        isColumnId,
+        isTaskId,
+        activeData,
+        isColumnBeingDragged: draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr)
+      });
+      // Treat as column drag
+      setDraggedColumnId(activeIdStr);
+      draggedColumnIdRef.current = activeIdStr;
+      setActiveId(null);
+      return;
+    }
     
     // CRITICAL: Use a small delay to check if a column is being dragged
     // This handles the race condition where handleDragStart runs before column's isDragging becomes true

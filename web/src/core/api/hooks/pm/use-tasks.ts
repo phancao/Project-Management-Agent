@@ -153,7 +153,7 @@ export function useTasks(projectId?: string) {
   }, [projectId]);
 
   useEffect(() => {
-    // Clear tasks immediately when projectId changes
+    // Clear tasks immediately when projectId changes to avoid showing stale data
     setTasks([]);
     setError(null);
     
@@ -165,17 +165,31 @@ export function useTasks(projectId?: string) {
     
     setLoading(true);
     
+    // Use a flag to track if this effect is still relevant (projectId hasn't changed)
+    let isCurrent = true;
+    
     // Fetch new data
     fetchTasksFn(projectId)
       .then((data) => {
-        setTasks(data);
-        setLoading(false);
+        // Only update state if this effect is still relevant (projectId hasn't changed)
+        if (isCurrent) {
+          setTasks(data);
+          setLoading(false);
+        }
       })
       .catch((err) => {
-        setError(err as Error);
-        setTasks([]);
-        setLoading(false);
+        // Only update state if this effect is still relevant (projectId hasn't changed)
+        if (isCurrent) {
+          setError(err as Error);
+          setTasks([]);
+          setLoading(false);
+        }
       });
+    
+    // Cleanup: mark this effect as stale if projectId changes
+    return () => {
+      isCurrent = false;
+    };
   }, [projectId]);
 
   usePMRefresh(refresh);

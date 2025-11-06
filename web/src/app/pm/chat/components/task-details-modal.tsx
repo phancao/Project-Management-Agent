@@ -113,8 +113,9 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
   if (!task) return null;
 
   // Get the matching status and priority names for the Select values (task is guaranteed to be non-null here)
-  const currentStatusValue = findMatchingName(editedTask?.status ?? task?.status, statuses) ?? editedTask?.status ?? task?.status ?? "";
-  const currentPriorityValue = findMatchingName(editedTask?.priority ?? task?.priority, priorities) ?? editedTask?.priority ?? task?.priority ?? "";
+  // Ensure values are always strings (never empty string or undefined) to avoid controlled/uncontrolled warnings
+  const currentStatusValue = findMatchingName(editedTask?.status ?? task?.status, statuses) ?? editedTask?.status ?? task?.status ?? "__no_status__";
+  const currentPriorityValue = findMatchingName(editedTask?.priority ?? task?.priority, priorities) ?? editedTask?.priority ?? task?.priority ?? "__no_priority__";
   
   // Find the epic for this task (handle both string and number ID comparisons)
   const currentEpic = task.epic_id 
@@ -313,8 +314,8 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
               {isEditing ? (
                 <Select
-                  value={currentStatusValue}
-                  onValueChange={(value) => setEditedTask({ ...editedTask, status: value })}
+                  value={currentStatusValue === "__no_status__" && statuses.length > 0 ? statuses[0].name : currentStatusValue}
+                  onValueChange={(value) => setEditedTask({ ...editedTask, status: value === "__no_status__" ? undefined : value })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -327,8 +328,8 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
                             {status.name}
                           </SelectItem>
                         ))}
-                        {/* Add current value if it's not in the list */}
-                        {currentStatusValue && !statuses.find(s => s.name === currentStatusValue) && (
+                        {/* Add current value if it's not in the list and not a placeholder */}
+                        {currentStatusValue && currentStatusValue !== "__no_status__" && !statuses.find(s => s.name === currentStatusValue) && (
                           <SelectItem value={currentStatusValue}>
                             {currentStatusValue}
                           </SelectItem>
@@ -341,8 +342,8 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
                         <SelectItem value="in_progress">In Progress</SelectItem>
                         <SelectItem value="review">Review</SelectItem>
                         <SelectItem value="completed">Completed</SelectItem>
-                        {/* Add current value if it's not in the defaults */}
-                        {currentStatusValue && !["todo", "in_progress", "review", "completed"].includes(currentStatusValue) && (
+                        {/* Add current value if it's not in the defaults and not a placeholder */}
+                        {currentStatusValue && currentStatusValue !== "__no_status__" && !["todo", "in_progress", "review", "completed"].includes(currentStatusValue) && (
                           <SelectItem value={currentStatusValue}>
                             {currentStatusValue}
                           </SelectItem>
@@ -368,9 +369,9 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Priority</label>
               {isEditing ? (
                 <Select
-                  value={currentPriorityValue}
+                  value={currentPriorityValue === "__no_priority__" && priorities.length > 0 ? priorities[0].name : currentPriorityValue}
                   onValueChange={(value) => {
-                    setEditedTask({ ...editedTask, priority: value });
+                    setEditedTask({ ...editedTask, priority: value === "__no_priority__" ? undefined : value });
                   }}
                 >
                   <SelectTrigger className="mt-1">
@@ -385,7 +386,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
                           </SelectItem>
                         ))}
                         {/* Add current value if it's not in the list */}
-                        {currentPriorityValue && !priorities.find(p => p.name === currentPriorityValue) && (
+                        {currentPriorityValue && currentPriorityValue !== "__no_priority__" && !priorities.find(p => p.name === currentPriorityValue) && (
                           <SelectItem value={currentPriorityValue}>
                             {currentPriorityValue}
                           </SelectItem>
@@ -393,7 +394,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
                       </>
                     ) : prioritiesLoading ? (
                       // Show loading state
-                      <SelectItem value="" disabled>Loading priorities...</SelectItem>
+                      <SelectItem value="__loading__" disabled>Loading priorities...</SelectItem>
                     ) : (
                       // Fallback: Show current value if available, or generic message
                       <>
@@ -402,7 +403,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
                             {currentPriorityValue}
                           </SelectItem>
                         ) : (
-                          <SelectItem value="" disabled>No priorities available</SelectItem>
+                          <SelectItem value="__no_priorities__" disabled>No priorities available</SelectItem>
                         )}
                       </>
                     )}
@@ -429,7 +430,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Assigned To</label>
             {isEditing ? (
               <Select
-                value={editedTask?.assignee_id ?? task?.assignee_id ?? "__unassigned__"}
+                value={editedTask?.assignee_id || task?.assignee_id || "__unassigned__"}
                 onValueChange={(value) => {
                   setEditedTask({ 
                     ...editedTask, 

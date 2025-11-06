@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
-import { listProviders } from "~/core/api/pm/providers";
+import { usePMLoading } from "../context/pm-loading-context";
 
 import { ThemeToggle } from "../../../components/deer-flow/theme-toggle";
 import { Tooltip } from "../../../components/deer-flow/tooltip";
@@ -33,28 +33,21 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   const router = useRouter();
   const pathname = usePathname();
   const { projects, loading: projectsLoading } = useProjects();
+  const { state: loadingState } = usePMLoading();
   const [providers, setProviders] = useState<Array<{ id: string; provider_type: string }>>([]);
   
   const selectedProjectId = propSelectedProjectId || new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('project');
 
-  // Fetch providers to map project IDs to provider types
+  // Use providers from loading context
   useEffect(() => {
-    listProviders().then((providers) => {
-      const mapped = providers.map(p => ({
+    if (loadingState.providers.data) {
+      const mapped = loadingState.providers.data.map((p: any) => ({
         id: p.id || '',
         provider_type: p.provider_type || ''
-      })).filter(p => p.id && p.provider_type);
+      })).filter((p: any) => p.id && p.provider_type);
       setProviders(mapped);
-    }).catch((error) => {
-      console.error("Failed to fetch providers:", error);
-      toast.error(
-        "Failed to load providers",
-        {
-          description: error instanceof Error ? error.message : "Unknown error",
-        }
-      );
-    });
-  }, []);
+    }
+  }, [loadingState.providers.data]);
 
   // Create mapping from provider_id to provider_type
   const providerTypeMap = useMemo(() => {

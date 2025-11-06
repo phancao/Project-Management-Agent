@@ -40,13 +40,14 @@ const fetchStatusesFn = async (projectId?: string, entityType: string = "task") 
 
 export function useStatuses(projectId?: string, entityType: string = "task") {
   const [statuses, setStatuses] = useState<Status[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start as true to show loading state initially
   const [error, setError] = useState<Error | null>(null);
 
   const refresh = useCallback(() => {
     if (!projectId) {
       setStatuses([]);
       setLoading(false);
+      setError(null);
       return;
     }
     
@@ -59,14 +60,50 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
       })
       .catch((err) => {
         setError(err as Error);
+        setStatuses([]); // Clear statuses on error to avoid showing stale data
         setLoading(false);
-        // Don't set statuses to empty on error, keep previous values
       });
   }, [projectId, entityType]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    // Clear statuses immediately when projectId changes to avoid showing stale data
+    setStatuses([]);
+    setError(null);
+    
+    // If no project ID, set loading to false and return empty
+    if (!projectId) {
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    
+    // Use a flag to track if this effect is still relevant (projectId hasn't changed)
+    let isCurrent = true;
+    
+    // Fetch new data
+    fetchStatusesFn(projectId, entityType)
+      .then((data) => {
+        // Only update state if this effect is still relevant (projectId hasn't changed)
+        if (isCurrent) {
+          setStatuses(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        // Only update state if this effect is still relevant (projectId hasn't changed)
+        if (isCurrent) {
+          setError(err as Error);
+          setStatuses([]);
+          setLoading(false);
+        }
+      });
+    
+    // Cleanup: mark this effect as stale if projectId changes
+    return () => {
+      isCurrent = false;
+    };
+  }, [projectId, entityType]);
 
   return { statuses, loading, error, refresh };
 }

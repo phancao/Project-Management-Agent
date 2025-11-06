@@ -58,7 +58,14 @@ export function useUsers(projectId?: string) {
         setLoading(false);
       })
       .catch((err) => {
-        console.error(`[useUsers] Failed to fetch users for project ${projectId}:`, err);
+        // Log as warning instead of error - this is often expected (e.g., missing username for JIRA)
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (errorMessage.includes("JIRA requires email") || errorMessage.includes("username")) {
+          // This is a configuration issue, not a critical error - just log a warning
+          console.warn(`[useUsers] Cannot fetch users for project ${projectId}: ${errorMessage}. Users list will be empty.`);
+        } else {
+          console.error(`[useUsers] Failed to fetch users for project ${projectId}:`, err);
+        }
         setError(err as Error);
         setUsers([]);
         setLoading(false);

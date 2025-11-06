@@ -9,7 +9,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, Filter, GripVertical, Search, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
@@ -17,6 +17,7 @@ import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
+import { usePMLoading } from "../../../context/pm-loading-context";
 import { useSprints } from "~/core/api/hooks/pm/use-sprints";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useTasks } from "~/core/api/hooks/pm/use-tasks";
@@ -401,11 +402,22 @@ export function BacklogView() {
   }, [activeProjectId, projects]);
   
   // Fetch sprints for the active project - use full project ID (with provider_id)
+  // Use activeProjectId directly as fallback if activeProject is not found yet (e.g., during project switching)
   const projectIdForSprints = useMemo(() => {
-    if (!activeProject) return null;
-    // Use the full project ID including provider_id so backend can identify the provider
-    return activeProject.id;
-  }, [activeProject]);
+    // If we have an activeProject, use its ID (preferred)
+    if (activeProject) {
+      console.log(`[BacklogView] Using activeProject.id: ${activeProject.id}`);
+      return activeProject.id;
+    }
+    // Fallback: use activeProjectId directly from URL if projects list hasn't loaded yet
+    // This ensures tasks are fetched even during project switching
+    if (activeProjectId) {
+      console.log(`[BacklogView] Using activeProjectId from URL (activeProject not found): ${activeProjectId}`);
+      return activeProjectId;
+    }
+    console.log(`[BacklogView] No project ID available`);
+    return null;
+  }, [activeProject, activeProjectId]);
   
   // Reset filters when project changes
   useEffect(() => {
@@ -416,54 +428,156 @@ export function BacklogView() {
     // Also reset when projectIdForSprints changes to handle JIRA projects
   }, [activeProject?.id, projectIdForSprints]);
   
+  // Get loading state from context
+  const { state: loadingState, setTasksState } = usePMLoading();
+  
+  // Only load tasks when filter data is ready (Step 3: after all requirements loaded)
+  const shouldLoadTasks = loadingState.canLoadTasks && projectIdForSprints;
+  
   // Fetch tasks for the active project - use full project ID (with provider_id)
   // Only fetch when a project is selected (don't fall back to /pm/tasks/my)
-  const { tasks: allTasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
+  // Use projectIdForSprints directly (can be string or null) - useTasks handles null/undefined correctly
+  const { tasks: allTasks, loading, error, refresh: refreshTasks } = useTasks(shouldLoadTasks ? projectIdForSprints : undefined);
+  
+  // Sync tasks state with loading context
+  useEffect(() => {
+    if (shouldLoadTasks) {
+      setTasksState({
+        loading,
+        error,
+        data: allTasks,
+      });
+    } else {
+      setTasksState({
+        loading: false,
+        error: null,
+        data: null,
+      });
+    }
+  }, [shouldLoadTasks, loading, error, allTasks, setTasksState]);
+  
+  // Track the last project ID that tasks were loaded for
+  const lastLoadedProjectIdRef = useRef<string | null>(null);
+  
+  // Update ref when tasks are loaded for a new project
+  // This tracks which project the current tasks belong to
+  // CRITICAL: This must run AFTER tasks finish loading to ensure we know which project they belong to
+  useEffect(() => {
+    if (projectIdForSprints && !loading && allTasks.length > 0) {
+      // Tasks have finished loading for this project
+      const previousProjectId = lastLoadedProjectIdRef.current;
+      if (previousProjectId !== projectIdForSprints) {
+        console.log("[BacklogView] Tasks loaded for NEW project:", projectIdForSprints, "count:", allTasks.length, "previous project:", previousProjectId);
+      }
+      // Always update the ref when tasks finish loading for a project
+      lastLoadedProjectIdRef.current = projectIdForSprints;
+    } else if (projectIdForSprints && loading) {
+      // Loading started - don't clear the ref yet, keep it until new tasks arrive
+      // This allows us to show old tasks until new ones load
+      if (lastLoadedProjectIdRef.current !== projectIdForSprints) {
+        console.log("[BacklogView] Starting to load tasks for NEW project:", projectIdForSprints, "previous project:", lastLoadedProjectIdRef.current, "keeping old tasks visible until new ones load");
+      }
+    } else if (!projectIdForSprints) {
+      // No project selected - clear the ref
+      lastLoadedProjectIdRef.current = null;
+    }
+  }, [projectIdForSprints, loading, allTasks.length]);
   
   // Filter tasks by project as a safety measure (backend should already filter, but this ensures consistency)
+  // CRITICAL: For quick project switching, we trust backend filtering in most cases
+  // Only apply strict filtering when we're CERTAIN tasks are from a different project
   const tasks = useMemo(() => {
-    if (!projectIdForSprints || !activeProject) {
+    console.log("[BacklogView] tasks useMemo running. allTasks:", allTasks.length, "projectIdForSprints:", projectIdForSprints, "activeProject:", activeProject?.id, "lastLoadedProjectId:", lastLoadedProjectIdRef.current, "loading:", loading);
+    
+    if (!projectIdForSprints) {
+      console.log("[BacklogView] No projectIdForSprints, returning empty array");
       return [];
     }
     
-    // Extract project key from project ID (e.g., "fc9e2adf-476e-4432-907a-4a5818f90bbc:TS" -> "TS")
-    const activeProjectKey = activeProject.id.split(':').pop() || activeProject.id;
-    const activeProjectId = activeProject.id;
-    const activeProjectName = activeProject.name?.toLowerCase();
+    // If we have no tasks, return empty (don't try to filter empty array)
+    if (allTasks.length === 0) {
+      return [];
+    }
     
-    // Filter tasks by project
-    return allTasks.filter(task => {
-      // Method 1: Check if task ID starts with project key (JIRA tasks like "TS-8" start with project key)
-      if (task.id && activeProjectKey) {
-        const taskIdParts = task.id.split('-');
-        if (taskIdParts.length > 0 && taskIdParts[0] === activeProjectKey) {
-          return true;
-        }
-      }
+    // CRITICAL: Only filter out tasks if we're CERTAIN they're from a different project
+    // This prevents filtering out valid tasks during quick project switching
+    const tasksFromDifferentProject = lastLoadedProjectIdRef.current !== null && 
+                                      lastLoadedProjectIdRef.current !== projectIdForSprints &&
+                                      !loading; // Only check if not currently loading (to avoid race conditions)
+    
+    if (tasksFromDifferentProject) {
+      console.log("[BacklogView] CERTAIN: Tasks are from a different project, returning empty array. lastLoadedProjectId:", lastLoadedProjectIdRef.current, "projectIdForSprints:", projectIdForSprints);
+      return [];
+    }
+    
+    // DEFAULT: Trust backend filtering in all other cases
+    // The backend already filters tasks by project, so we should trust it
+    // This ensures tasks are shown immediately when switching projects
+    // We removed strict filtering because it was causing issues with quick project switching
+    // The backend is the source of truth for which tasks belong to which project
+    console.log("[BacklogView] Trusting backend filtering. Returning all", allTasks.length, "tasks. Reason: tasks not from different project or loading/uncertain state");
+    return allTasks;
+  }, [allTasks, projectIdForSprints, loading]);
+  
+  // Force refresh tasks when project changes and tasks finish loading
+  // This ensures tasks are displayed even if there was a timing issue during project switch
+  useEffect(() => {
+    if (!loading && projectIdForSprints && allTasks.length > 0) {
+      // Tasks have finished loading, but check if they're being filtered out incorrectly
+      // If activeProject is not loaded yet but we have tasks, they should be visible
+      // If activeProject is loaded but doesn't match, tasks should still be visible
+      const hasVisibleTasks = tasks.length > 0;
+      const activeProjectMatches = activeProject && activeProject.id === projectIdForSprints;
       
-      // Method 2: Check project_id if available (type assertion needed since TypeScript interface may not include it)
-      const taskProjectId = (task as any).project_id;
-      if (taskProjectId) {
-        const taskProjectIdStr = String(taskProjectId);
-        if (taskProjectIdStr === activeProjectId || 
-            taskProjectIdStr === activeProjectKey ||
-            taskProjectIdStr.includes(activeProjectKey)) {
-          return true;
+      if (!hasVisibleTasks && allTasks.length > 0) {
+        console.log('[BacklogView] Tasks loaded but not visible, checking if refresh needed. allTasks:', allTasks.length, 'filtered tasks:', tasks.length, 'activeProject:', activeProject?.id, 'activeProjectMatches:', activeProjectMatches);
+        
+        // If activeProject doesn't match yet, wait a bit for it to load
+        // Otherwise, if tasks are loaded but filtered out, there might be a filtering issue
+        if (!activeProjectMatches) {
+          console.log('[BacklogView] activeProject does not match projectIdForSprints yet, waiting for it to load...');
+          // Don't refresh yet, wait for activeProject to load
+          // But tasks should still be visible because we return allTasks when activeProject doesn't match
+          // However, if tasks are still empty, force a refresh after a delay
+          const timeoutId = setTimeout(() => {
+            if (tasks.length === 0 && allTasks.length > 0) {
+              console.log('[BacklogView] Tasks still not visible after waiting, forcing refresh');
+              refreshTasks(false); // Don't clear tasks to avoid flash
+            }
+          }, 500);
+          return () => clearTimeout(timeoutId);
         }
+        
+        // If activeProject matches but tasks are still filtered out, there might be a filtering issue
+        // Force a refresh to ensure tasks are re-fetched and displayed
+        console.log('[BacklogView] Tasks loaded but filtered out incorrectly, forcing refresh');
+        const timeoutId = setTimeout(() => {
+          refreshTasks(false); // Don't clear tasks to avoid flash
+        }, 200);
+        return () => clearTimeout(timeoutId);
       }
-      
-      // Method 3: Check project_name
-      if (task.project_name && activeProjectName) {
-        if (task.project_name.toLowerCase() === activeProjectName) {
-          return true;
-        }
-      }
-      
-      // If we can't verify the project, exclude the task (be strict)
-      // This prevents tasks from other projects from showing up
-      return false;
-    });
-  }, [allTasks, projectIdForSprints, activeProject]);
+    }
+  }, [loading, projectIdForSprints, allTasks.length, tasks.length, activeProject, refreshTasks]);
+  
+  // Additional refresh when loading finishes to ensure tasks are displayed
+  // This is a safety net to catch any edge cases where tasks don't show up
+  useEffect(() => {
+    if (!loading && projectIdForSprints && allTasks.length > 0 && tasks.length === 0) {
+      console.log('[BacklogView] Loading finished but no tasks visible, scheduling refresh. allTasks:', allTasks.length, 'tasks:', tasks.length);
+      // Wait a bit for state to settle, then refresh if tasks are still not visible
+      // Use a ref to track the current state to avoid stale closures
+      const allTasksCount = allTasks.length;
+      const timeoutId = setTimeout(() => {
+        // Re-check the current state - if tasks are still not visible, refresh
+        // Note: We can't directly check tasks.length here due to closure, so we'll just refresh
+        // if the condition was met when the effect ran
+        console.log('[BacklogView] Tasks still not visible after loading finished, forcing refresh. allTasks count was:', allTasksCount);
+        refreshTasks(false);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [loading, projectIdForSprints, allTasks.length, tasks.length, refreshTasks]);
+  
   // Fetch all sprints (active, closed, future) - no state filter to show all
   const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
   // Fetch epics for the active project
@@ -983,7 +1097,8 @@ export function BacklogView() {
     return tasks.find(t => t.id === activeId);
   }, [activeId, tasks]);
 
-  if (loading) {
+  // Show loading state if filter data is not ready or tasks are loading
+  if (loadingState.filterData.loading || (shouldLoadTasks && loading)) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-gray-500 dark:text-gray-400">Loading backlog...</div>

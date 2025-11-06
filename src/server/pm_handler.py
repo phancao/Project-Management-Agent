@@ -126,16 +126,25 @@ class PMHandler:
             api_token_str = str(provider.api_token).strip()
             api_token_value = api_token_str if api_token_str else None
         
+        # Handle username - check for None and empty strings
+        username_value = None
+        if provider.username:
+            username_str = str(provider.username).strip()
+            username_value = username_str if username_str else None
+        
+        logger.info(
+            f"[PMHandler._create_provider_instance] Creating provider: "
+            f"type={provider.provider_type}, "
+            f"username={username_value}, "
+            f"has_api_token={bool(api_token_value)}"
+        )
+        
         return create_pm_provider(
             provider_type=str(provider.provider_type),
             base_url=str(provider.base_url),
             api_key=api_key_value,
             api_token=api_token_value,
-            username=(
-                str(provider.username).strip()
-                if provider.username
-                else None
-            ),
+            username=username_value,
             organization_id=(
                 str(provider.organization_id)
                 if provider.organization_id
@@ -180,6 +189,15 @@ class PMHandler:
         
         if not provider:
             raise ValueError(f"Provider not found: {provider_id_str}")
+        
+        # Log what we're getting from the database for debugging
+        logger.info(
+            f"[PMHandler._get_provider_for_project] Provider found: "
+            f"type={provider.provider_type}, "
+            f"username={repr(provider.username)}, "
+            f"has_username={bool(provider.username)}, "
+            f"username_stripped={repr(str(provider.username).strip() if provider.username else None)}"
+        )
         
         return self._create_provider_instance(provider)
     

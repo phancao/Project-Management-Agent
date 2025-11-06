@@ -27,6 +27,7 @@ import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
 import { useEpics } from "~/core/api/hooks/pm/use-epics";
 import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import { useSprints } from "~/core/api/hooks/pm/use-sprints";
+import { usePMLoading } from "../../../context/pm-loading-context";
 
 import { TaskDetailsModal } from "../task-details-modal";
 
@@ -429,13 +430,48 @@ export function SprintBoardView() {
     return activeProjectId;
   }, [activeProjectId]);
   
-  const tasksHook = activeProjectId ? useTasks(projectIdForTasks) : useMyTasks();
+  // Get loading state from context
+  const { state: loadingState, setTasksState } = usePMLoading();
+  
+  // Only load tasks when filter data is ready (Step 3: after all requirements loaded)
+  const shouldLoadTasks = loadingState.canLoadTasks && activeProjectId;
+  
+  const tasksHook = (shouldLoadTasks && activeProjectId) ? useTasks(projectIdForTasks) : useMyTasks();
   const { tasks, loading, error, refresh: refreshTasks } = tasksHook;
+  
+  // Sync tasks state with loading context
+  useEffect(() => {
+    if (shouldLoadTasks) {
+      setTasksState({
+        loading,
+        error,
+        data: tasks,
+      });
+    } else {
+      setTasksState({
+        loading: false,
+        error: null,
+        data: null,
+      });
+    }
+  }, [shouldLoadTasks, loading, error, tasks, setTasksState]);
   
   // Fetch priorities, epics, statuses, and sprints from backend for the active project
   const { priorities: availablePrioritiesFromBackend } = usePriorities(activeProjectId ?? undefined);
   const { epics } = useEpics(activeProjectId ?? undefined);
-  const { statuses: availableStatuses } = useStatuses(activeProjectId ?? undefined, "task");
+  const { statuses: availableStatuses, loading: statusesLoading, error: statusesError, refresh: refreshStatuses } = useStatuses(activeProjectId ?? undefined, "task");
+  
+  // Force refresh statuses when project changes to ensure they're loaded
+  useEffect(() => {
+    if (activeProjectId && !statusesLoading && availableStatuses.length === 0 && !statusesError) {
+      // Project changed but statuses are empty and not loading, force a refresh
+      console.log('[SprintBoard] Project changed but statuses are empty, forcing refresh. activeProjectId:', activeProjectId);
+      const timeoutId = setTimeout(() => {
+        refreshStatuses();
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [activeProjectId, statusesLoading, availableStatuses.length, statusesError, refreshStatuses]);
   const { sprints } = useSprints(activeProjectId || "");
   
   // Reset filters when project changes (but don't reset columnOrder - let it load from localStorage)
@@ -842,6 +878,13 @@ export function SprintBoardView() {
           if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
             const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
             setColumnOrder(newOrder);
+            // Save immediately after reordering (don't wait for useEffect)
+            if (activeProjectId && newOrder.length > 0) {
+              saveColumnOrderToStorage(activeProjectId, newOrder);
+              console.log('[handleDragEnd] Column reordered and saved:', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
+            } else {
+              console.log('[handleDragEnd] Column reordered but not saved (missing projectId or empty order):', { activeProjectId, newOrder });
+            }
             if (DEBUG_DND) console.log('[handleDragEnd] Column reordered:', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
           } else {
             if (DEBUG_DND) console.log('[handleDragEnd] Column reorder skipped:', { oldIndex, newIndex, activeColumnId, overId, currentOrder });
@@ -898,6 +941,11 @@ export function SprintBoardView() {
           if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
             const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
             setColumnOrder(newOrder);
+            // Save immediately after reordering (don't wait for useEffect)
+            if (activeProjectId && newOrder.length > 0) {
+              saveColumnOrderToStorage(activeProjectId, newOrder);
+              console.log('[handleDragEnd] Column reordered and saved (from handleDragEnd):', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
+            }
             if (DEBUG_DND) console.log('[handleDragEnd] Column reordered (from handleDragEnd):', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
           }
         }
@@ -1461,12 +1509,18 @@ export function SprintBoardView() {
   }, []);
 
   const saveColumnOrderToStorage = useCallback((projectId: string | null, order: string[]) => {
-    if (typeof window === 'undefined' || !projectId || order.length === 0) return;
+    if (typeof window === 'undefined' || !projectId || order.length === 0) {
+      console.warn('[SprintBoard] Cannot save column order:', { projectId, orderLength: order.length });
+      return;
+    }
     const key = getStorageKey(projectId);
-    if (!key) return;
+    if (!key) {
+      console.warn('[SprintBoard] Cannot generate storage key for projectId:', projectId);
+      return;
+    }
     try {
       localStorage.setItem(key, JSON.stringify(order));
-      console.log('[SprintBoard] Saved column order to localStorage:', { projectId, order });
+      console.log('[SprintBoard] Saved column order to localStorage:', { projectId, key, order });
     } catch (error) {
       console.error('[SprintBoard] Failed to save column order to localStorage:', error);
     }
@@ -1564,13 +1618,18 @@ export function SprintBoardView() {
     }
     
     if (columnOrder.length > 0 && activeProjectId && availableStatuses) {
-      // Only save if we have all statuses in the order
+      // Save if we have valid statuses in the order (less strict condition)
+      // This ensures the order is saved even if not all statuses are present yet
       const statusIds = new Set(availableStatuses.map(s => s.id));
-      const orderHasAllStatuses = columnOrder.every(id => statusIds.has(id)) &&
-                                   availableStatuses.every(s => columnOrder.includes(s.id));
+      const orderHasValidStatuses = columnOrder.length > 0 && columnOrder.some(id => statusIds.has(id));
       
-      if (orderHasAllStatuses) {
-        saveColumnOrderToStorage(activeProjectId, columnOrder);
+      if (orderHasValidStatuses) {
+        // Only save if all statuses in the order are valid (but don't require all statuses to be in the order)
+        const allOrderIdsAreValid = columnOrder.every(id => statusIds.has(id));
+        if (allOrderIdsAreValid) {
+          saveColumnOrderToStorage(activeProjectId, columnOrder);
+          console.log('[SprintBoard] Saved column order via useEffect (backup):', { activeProjectId, columnOrder });
+        }
       }
     }
   }, [columnOrder, activeProjectId, availableStatuses, isLoadingFromStorage, saveColumnOrderToStorage]);
@@ -1632,7 +1691,8 @@ export function SprintBoardView() {
   // Use tasks instead of filteredTasks to ensure we can always find the dragged task
   const activeTask = activeId ? tasks.find(t => String(t.id) === String(activeId)) : null;
 
-  if (loading) {
+  // Show loading state if filter data is not ready or tasks/statuses are loading
+  if (loadingState.filterData.loading || (shouldLoadTasks && loading) || statusesLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-gray-500 dark:text-gray-400">Loading board...</div>
@@ -1650,6 +1710,27 @@ export function SprintBoardView() {
         <div className="mt-4 text-xs text-muted-foreground">
           Tip: Check your PM provider configuration and verify the project exists.
         </div>
+      </div>
+    );
+  }
+  
+  if (statusesError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 px-4">
+        <div className="text-red-500 font-semibold mb-2">Error loading statuses</div>
+        <div className="text-red-400 text-sm text-center max-w-2xl">
+          {statusesError.message}
+        </div>
+        <div className="mt-4 text-xs text-muted-foreground">
+          Tip: Check your PM provider configuration and verify the project exists.
+        </div>
+        <Button 
+          onClick={() => refreshStatuses()} 
+          className="mt-4"
+          variant="outline"
+        >
+          Retry
+        </Button>
       </div>
     );
   }

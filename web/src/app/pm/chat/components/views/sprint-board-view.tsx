@@ -848,27 +848,30 @@ export function SprintBoardView() {
     const isColumnBeingDragged = draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr);
     
     // Check if the column has any tasks - if it's empty and we're dragging by ID, it's likely a column drag
-    const columnWithId = availableStatuses?.find(s => String(s.id) === activeIdStr);
-    const columnHasTasks = columnWithId ? tasks.some(t => {
-      const taskStatusLower = (t.status || "").toLowerCase();
-      const statusNameLower = columnWithId.name.toLowerCase();
-      return taskStatusLower === statusNameLower || 
-             taskStatusLower.includes(statusNameLower) || 
-             statusNameLower.includes(taskStatusLower);
-    }) : false;
+    // Use the columns memoized data to check task count more efficiently
+    const columnWithId = orderedColumns.find(col => col.id === activeIdStr);
+    const columnHasTasks = columnWithId ? (columnWithId.tasks?.length ?? 0) > 0 : false;
+    
+    // Also check if there's a task with this exact ID in the tasks array
+    // If the column has no tasks AND there's a task with this ID elsewhere, it's definitely a column drag
+    const taskWithSameId = tasks.find(t => String(t.id) === activeIdStr);
+    const taskIsInThisColumn = taskWithSameId && columnWithId ? (columnWithId.tasks?.some(t => String(t.id) === String(taskWithSameId.id)) ?? false) : false;
     
     // If it's a column ID and either:
     // 1. It's NOT also a task ID (definitely a column), OR
     // 2. The column IS being dragged (from draggingColumnIds), OR
-    // 3. The column has NO tasks (empty column - definitely a column drag when dragging by header)
+    // 3. The column has NO tasks (empty column - definitely a column drag when dragging by header), OR
+    // 4. There's a task with this ID but it's NOT in this column (task is elsewhere, so this is a column drag)
     // Then treat it as a column drag
-    if (isColumnId && (!isTaskId || isColumnBeingDragged || !columnHasTasks) && !activeData?.type) {
+    if (isColumnId && (!isTaskId || isColumnBeingDragged || !columnHasTasks || (taskWithSameId && !taskIsInThisColumn)) && !activeData?.type) {
       debug.warn('CRITICAL: Column ID detected but data.type is missing - treating as column drag', {
         activeId: activeIdStr,
         isColumnId,
         isTaskId,
         isColumnBeingDragged,
         columnHasTasks,
+        taskWithSameId: !!taskWithSameId,
+        taskIsInThisColumn,
         activeData,
         draggingColumnIds: Array.from(draggingColumnIds),
         draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)

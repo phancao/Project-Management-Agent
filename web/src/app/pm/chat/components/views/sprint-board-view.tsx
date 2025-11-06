@@ -1190,6 +1190,30 @@ export function SprintBoardView() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     
+    // CRITICAL: Check if a column is being dragged (via draggingColumnIds) even if draggedColumnId is not set
+    // This handles the case where handleDragStart missed the column drag detection
+    const activeIdStr = String(active.id);
+    if (!draggedColumnId && draggingColumnIds.size > 0) {
+      // Find the column that's being dragged
+      const matchingColumnId = Array.from(draggingColumnIds).find(colId => {
+        return colId === activeIdStr || (availableStatuses?.some(s => String(s.id) === colId));
+      });
+      
+      if (matchingColumnId) {
+        debug.warn('CRITICAL: Detected column drag in handleDragEnd (missed in handleDragStart and handleDragOver)', {
+          activeId: activeIdStr,
+          matchingColumnId,
+          draggingColumnIds: Array.from(draggingColumnIds)
+        });
+        // Don't process as task - this is a column drag
+        setActiveId(null);
+        setActiveColumnId(null);
+        setReorderedTasks({});
+        setDraggingColumnIds(new Set()); // Clear dragging state
+        return; // Exit early, don't process as task drag
+      }
+    }
+    
     // Check if this is the last column being dragged
     const isLastColumn = draggedColumnId && orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === draggedColumnId;
     const activeColumnIndex = draggedColumnId ? columnOrder.indexOf(draggedColumnId) : -1;
@@ -1198,6 +1222,7 @@ export function SprintBoardView() {
       activeId: active.id, 
       overId: over?.id, 
       draggedColumnId,
+      draggingColumnIds: Array.from(draggingColumnIds),
       isLastColumn,
       activeColumnIndex,
       totalColumns: orderedColumns.length,
@@ -1205,6 +1230,9 @@ export function SprintBoardView() {
       overDataType: over?.data?.current?.type,
       overData: over?.data?.current
     });
+    
+    // Clear dragging column IDs on drag end
+    setDraggingColumnIds(new Set());
     
     // Handle column reordering
     if (draggedColumnId) {

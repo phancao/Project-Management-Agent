@@ -417,7 +417,53 @@ export function BacklogView() {
   }, [activeProject?.id, projectIdForSprints]);
   
   // Fetch tasks for the active project - use full project ID (with provider_id)
-  const { tasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
+  // Only fetch when a project is selected (don't fall back to /pm/tasks/my)
+  const { tasks: allTasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
+  
+  // Filter tasks by project as a safety measure (backend should already filter, but this ensures consistency)
+  const tasks = useMemo(() => {
+    if (!projectIdForSprints || !activeProject) {
+      return [];
+    }
+    
+    // Extract project key from project ID (e.g., "fc9e2adf-476e-4432-907a-4a5818f90bbc:TS" -> "TS")
+    const activeProjectKey = activeProject.id.split(':').pop() || activeProject.id;
+    const activeProjectId = activeProject.id;
+    const activeProjectName = activeProject.name?.toLowerCase();
+    
+    // Filter tasks by project
+    return allTasks.filter(task => {
+      // Method 1: Check if task ID starts with project key (JIRA tasks like "TS-8" start with project key)
+      if (task.id && activeProjectKey) {
+        const taskIdParts = task.id.split('-');
+        if (taskIdParts.length > 0 && taskIdParts[0] === activeProjectKey) {
+          return true;
+        }
+      }
+      
+      // Method 2: Check project_id if available (type assertion needed since TypeScript interface may not include it)
+      const taskProjectId = (task as any).project_id;
+      if (taskProjectId) {
+        const taskProjectIdStr = String(taskProjectId);
+        if (taskProjectIdStr === activeProjectId || 
+            taskProjectIdStr === activeProjectKey ||
+            taskProjectIdStr.includes(activeProjectKey)) {
+          return true;
+        }
+      }
+      
+      // Method 3: Check project_name
+      if (task.project_name && activeProjectName) {
+        if (task.project_name.toLowerCase() === activeProjectName) {
+          return true;
+        }
+      }
+      
+      // If we can't verify the project, exclude the task (be strict)
+      // This prevents tasks from other projects from showing up
+      return false;
+    });
+  }, [allTasks, projectIdForSprints, activeProject]);
   // Fetch all sprints (active, closed, future) - no state filter to show all
   const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
   // Fetch epics for the active project

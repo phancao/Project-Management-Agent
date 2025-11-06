@@ -23,11 +23,12 @@ export interface Task {
 }
 
 const fetchTasksFn = async (projectId?: string) => {
-  let url = "pm/tasks/my";
-  if (projectId) {
-    url = `pm/projects/${projectId}/tasks`;
+  // If no project ID is provided, return empty array (no fallback to /pm/tasks/my)
+  if (!projectId) {
+    return [];
   }
   
+  const url = `pm/projects/${projectId}/tasks`;
   const fullUrl = resolveServiceURL(url);
   console.log(`[useTasks] Fetching tasks from: ${fullUrl}`);
   let response: Response;
@@ -122,6 +123,14 @@ export function useTasks(projectId?: string) {
   const [error, setError] = useState<Error | null>(null);
 
   const refresh = useCallback((clearTasks: boolean = true) => {
+    // If no project ID, return empty immediately
+    if (!projectId) {
+      setTasks([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    
     // Optionally clear tasks to avoid showing stale data
     // Don't clear if we're just refreshing after an update (to prevent flash)
     if (clearTasks) {
@@ -145,8 +154,15 @@ export function useTasks(projectId?: string) {
   useEffect(() => {
     // Clear tasks immediately when projectId changes
     setTasks([]);
-    setLoading(true);
     setError(null);
+    
+    // If no project ID, set loading to false and return empty
+    if (!projectId) {
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
     
     // Fetch new data
     fetchTasksFn(projectId)

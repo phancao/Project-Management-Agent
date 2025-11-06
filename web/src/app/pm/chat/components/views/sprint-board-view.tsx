@@ -1578,8 +1578,9 @@ export function SprintBoardView() {
     // Handle task dragging
     // CRITICAL: First check if this is actually a column drag that wasn't detected in handleDragStart
     // This can happen if the drag starts from a child element or if handleDragStart failed to detect it
-    const activeData = active.data.current;
-    const activeId = String(active.id);
+    // Note: activeData and activeId are already defined above, so we don't need to redefine them here
+    // const activeData = active.data.current; // Already defined above
+    // const activeId = String(active.id); // Already defined above
     
     // If active data has type 'column', it's definitely a column drag - DO NOT process as task
     if (activeData?.type === 'column') {

@@ -3,8 +3,8 @@
 
 "use client";
 
-import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners, useDroppable, DragOverEvent } from "@dnd-kit/core";
-import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners, useDroppable } from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent, DragOverEvent } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -32,7 +32,11 @@ function TaskCard({ task, onClick }: { task: any; onClick: () => void }) {
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    // Always use smooth transitions - dnd-kit provides the transition string
+    // When dragging, only animate opacity. When not dragging, animate position changes
+    transition: isDragging 
+      ? 'opacity 0.2s ease-out' 
+      : (transition || 'transform 300ms cubic-bezier(0.2, 0, 0, 1), opacity 300ms ease'),
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -276,7 +280,14 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
               <div className="h-2 bg-blue-500 dark:bg-blue-400 rounded-full mb-2 transition-opacity" />
             )}
             <SortableContext items={displayTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2">
+              <div 
+                className="space-y-2"
+                style={{
+                  // Force browser to use GPU acceleration for smoother animations
+                  transform: 'translateZ(0)',
+                  willChange: activeId ? 'contents' : 'auto',
+                }}
+              >
                 {displayTasks.map((task) => (
                   <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
                 ))}
@@ -342,7 +353,7 @@ export function SprintBoardView() {
   const { priorities: availablePrioritiesFromBackend } = usePriorities(activeProjectId ?? undefined);
   const { epics } = useEpics(activeProjectId ?? undefined);
   const { statuses: availableStatuses } = useStatuses(activeProjectId ?? undefined, "task");
-  const { sprints } = useSprints(activeProjectId ?? undefined);
+  const { sprints } = useSprints(activeProjectId || "");
   
   // Reset filters when project changes (but don't reset columnOrder - let it load from localStorage)
   useEffect(() => {
@@ -504,8 +515,26 @@ export function SprintBoardView() {
     }
     
     if (!over || !availableStatuses) {
+      // Clear reordered tasks for all columns when not over any column
+      const activeTask = tasks.find(t => t.id === active.id);
+      if (activeTask) {
+        // Find source column and clear its reordered state
+        const sourceStatus = availableStatuses.find(status => {
+          const taskStatusLower = (activeTask.status || "").toLowerCase();
+          const statusNameLower = status.name.toLowerCase();
+          return taskStatusLower === statusNameLower || 
+                 taskStatusLower.includes(statusNameLower) || 
+                 statusNameLower.includes(taskStatusLower);
+        });
+        
+        if (sourceStatus) {
+          // Restore original order for source column
+          const newReorderedTasks = { ...reorderedTasks };
+          delete newReorderedTasks[sourceStatus.id];
+          setReorderedTasks(newReorderedTasks);
+        }
+      }
       setActiveColumnId(null);
-      setReorderedTasks({});
       return;
     }
     
@@ -548,10 +577,55 @@ export function SprintBoardView() {
         const activeTask = tasks.find(t => t.id === activeId);
         
         if (activeTask) {
-          // Check if we're over a specific task to determine insertion position
+          // Find the source column (where the task currently is)
+          const sourceStatus = availableStatuses.find(status => {
+            const taskStatusLower = (activeTask.status || "").toLowerCase();
+            const statusNameLower = status.name.toLowerCase();
+            return taskStatusLower === statusNameLower || 
+                   taskStatusLower.includes(statusNameLower) || 
+                   statusNameLower.includes(taskStatusLower);
+          });
+          
+          // Prepare new reordered tasks state - preserve existing reordered tasks
+          const newReorderedTasks = { ...reorderedTasks };
+          
+          // Get base tasks for target column (without the active task)
+          const baseTargetTasks = filteredTasks.filter(task => {
+            if (task.id === activeId) return false;
+            const taskStatusLower = (task.status || "").toLowerCase().trim();
+            const statusNameLower = targetStatus.name.toLowerCase().trim();
+            const normalizeStatus = (s: string) => s.replace(/[_\s-]/g, '').toLowerCase();
+            const normalizedTaskStatus = normalizeStatus(taskStatusLower || "");
+            const normalizedStatusName = normalizeStatus(statusNameLower || "");
+            return taskStatusLower === statusNameLower ||
+                   normalizedTaskStatus === normalizedStatusName ||
+                   taskStatusLower.includes(statusNameLower) ||
+                   statusNameLower.includes(taskStatusLower);
+          });
+          
+          // Get base tasks for source column (without the active task)
+          let baseSourceTasks: any[] = [];
+          if (sourceStatus && sourceStatus.id !== targetColumnId) {
+            baseSourceTasks = filteredTasks.filter(task => {
+              if (task.id === activeId) return false;
+              const taskStatusLower = (task.status || "").toLowerCase().trim();
+              const statusNameLower = sourceStatus.name.toLowerCase().trim();
+              const normalizeStatus = (s: string) => s.replace(/[_\s-]/g, '').toLowerCase();
+              const normalizedTaskStatus = normalizeStatus(taskStatusLower || "");
+              const normalizedStatusName = normalizeStatus(statusNameLower || "");
+              return taskStatusLower === statusNameLower ||
+                     normalizedTaskStatus === normalizedStatusName ||
+                     taskStatusLower.includes(statusNameLower) ||
+                     statusNameLower.includes(taskStatusLower);
+            });
+          }
+          
+          // Determine insertion position in target column
+          let targetOrder: any[];
           const overTask = tasks.find(t => t.id === over.id);
-          if (overTask && overTask.status && targetStatus.name) {
-            // Find the task's status and see if it matches target
+          
+          // Check if we're over a task in the target column
+          if (overTask && overTask.status) {
             const taskStatusMatch = availableStatuses.find(status => {
               const taskStatusLower = (overTask.status || "").toLowerCase();
               const statusNameLower = status.name.toLowerCase();
@@ -561,43 +635,35 @@ export function SprintBoardView() {
             });
             
             if (taskStatusMatch?.id === targetColumnId) {
-              // We're over a task in the target column - insert at that position
-              const tasksWithoutActive = columnTasks.filter(t => t.id !== activeId);
-              const overIndex = tasksWithoutActive.findIndex(t => t.id === over.id);
-              
+              // Insert at the position of the over task
+              const overIndex = baseTargetTasks.findIndex(t => t.id === over.id);
               if (overIndex >= 0) {
-                // Insert active task at the position of the over task
-                const newOrder = [...tasksWithoutActive];
-                newOrder.splice(overIndex, 0, activeTask);
-                setReorderedTasks({
-                  ...reorderedTasks,
-                  [targetColumnId]: newOrder
-                });
+                targetOrder = [...baseTargetTasks];
+                targetOrder.splice(overIndex, 0, activeTask);
               } else {
-                // Add to end if we can't find the task
-                setReorderedTasks({
-                  ...reorderedTasks,
-                  [targetColumnId]: [...tasksWithoutActive, activeTask]
-                });
+                targetOrder = [...baseTargetTasks, activeTask];
               }
             } else {
-              // We're over the column but not a task in it - add to end
-              const tasksWithoutActive = columnTasks.filter(t => t.id !== activeId);
-              setReorderedTasks({
-                ...reorderedTasks,
-                [targetColumnId]: [...tasksWithoutActive, activeTask]
-              });
+              targetOrder = [...baseTargetTasks, activeTask];
             }
           } else {
-            // Empty column or not over a task - add to end
-            const tasksWithoutActive = columnTasks.filter(t => t.id !== activeId);
-            setReorderedTasks({
-              ...reorderedTasks,
-              [targetColumnId]: columnTasks.length === 0 
-                ? [activeTask]
-                : [...tasksWithoutActive, activeTask]
-            });
+            targetOrder = baseTargetTasks.length === 0 
+              ? [activeTask]
+              : [...baseTargetTasks, activeTask];
           }
+          
+          newReorderedTasks[targetColumnId] = targetOrder;
+          
+          // Update source column (remove task) - only if different from target
+          if (sourceStatus && sourceStatus.id !== targetColumnId) {
+            newReorderedTasks[sourceStatus.id] = baseSourceTasks;
+          }
+          
+          // Update both columns simultaneously for smooth animation
+          // Use requestAnimationFrame to ensure DOM updates happen before state change
+          requestAnimationFrame(() => {
+            setReorderedTasks(newReorderedTasks);
+          });
         }
       }
     }
@@ -812,10 +878,6 @@ export function SprintBoardView() {
 
   // Helper function to get tasks for a status column (used by both handleDragOver and columns)
   const getTasksForColumn = useCallback((statusId: string) => {
-    if (reorderedTasks[statusId]) {
-      return reorderedTasks[statusId];
-    }
-    
     if (!availableStatuses) {
       return [];
     }
@@ -826,8 +888,8 @@ export function SprintBoardView() {
       return [];
     }
     
-    // Match tasks to this status by comparing status names
-    const matchedTasks = filteredTasks.filter(task => {
+    // Get base tasks for this status
+    const baseTasks = filteredTasks.filter(task => {
       const taskStatusLower = (task.status || "").toLowerCase().trim();
       const statusNameLower = status.name.toLowerCase().trim();
       
@@ -851,18 +913,22 @@ export function SprintBoardView() {
       return matches;
     });
     
-    // Debug logging for unmatched tasks
-    if (matchedTasks.length === 0 && filteredTasks.length > 0) {
-      const unmatchedSample = filteredTasks.slice(0, 3).map(t => ({
-        id: t.id,
-        title: t.title,
-        status: t.status
-      }));
-      console.log(`[getTasksForColumn] Status "${status.name}" (${statusId}): No tasks matched. Sample task statuses:`, unmatchedSample);
+    // If we have reordered tasks for this column, use them (but filter out the active dragging task)
+    const reordered = reorderedTasks[statusId];
+    if (reordered) {
+      // Filter out active task if it's being dragged (it will be shown in DragOverlay)
+      if (activeId) {
+        return reordered.filter(t => t.id !== activeId);
+      }
+      return reordered;
     }
     
-    return matchedTasks;
-  }, [availableStatuses, filteredTasks, reorderedTasks]);
+    // Return base tasks (also filter out active task if dragging)
+    if (activeId) {
+      return baseTasks.filter(t => t.id !== activeId);
+    }
+    return baseTasks;
+  }, [availableStatuses, filteredTasks, reorderedTasks, activeId]);
 
   // Create columns dynamically based on available statuses
   const columns = useMemo(() => {
@@ -882,15 +948,15 @@ export function SprintBoardView() {
     const columns = sortedStatuses.map(status => ({
       id: status.id,
       title: status.name,
-      tasks: getTasksForColumn(status.id),
+      tasks: getTasksForColumn(status.id) || [],
     }));
     
     // Debug: Log total tasks distributed across columns
-    const totalTasksInColumns = columns.reduce((sum, col) => sum + col.tasks.length, 0);
+    const totalTasksInColumns = columns.reduce((sum, col) => sum + (col.tasks?.length || 0), 0);
     console.log(`[SprintBoard] Total tasks in columns: ${totalTasksInColumns}, Total filtered tasks: ${filteredTasks.length}, Available statuses:`, availableStatuses.map(s => s.name));
     
     // Debug: Find unmatched tasks
-    const matchedTaskIds = new Set(columns.flatMap(col => col.tasks.map(t => t.id)));
+    const matchedTaskIds = new Set(columns.flatMap(col => (col.tasks || []).map(t => t.id)));
     const unmatchedTasks = filteredTasks.filter(t => !matchedTaskIds.has(t.id));
     if (unmatchedTasks.length > 0) {
       console.warn(`[SprintBoard] Found ${unmatchedTasks.length} unmatched tasks:`, unmatchedTasks.map(t => ({
@@ -1120,7 +1186,7 @@ export function SprintBoardView() {
                 </SelectContent>
               </Select>
             )}
-            {sprints.length > 0 && (
+            {sprints && sprints.length > 0 && (
               <Select 
                 value={sprintFilter ?? "all"} 
                 onValueChange={(value) => setSprintFilter(value === "all" ? null : value)}
@@ -1161,7 +1227,7 @@ export function SprintBoardView() {
                 <div key={column.id} className="flex-shrink-0 w-80">
                   <SortableColumn 
                     column={{ id: column.id, title: column.title }} 
-                    tasks={column.tasks} 
+                    tasks={column.tasks || []} 
                     onTaskClick={handleTaskClick}
                     activeColumnId={activeColumnId}
                     activeId={activeId}

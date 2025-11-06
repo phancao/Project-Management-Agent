@@ -160,9 +160,13 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     scrollAreaRef.current = node;
   };
 
-  // Combine refs for both sortable and droppable
-  const combinedRef = (node: HTMLDivElement | null) => {
+  // CRITICAL: The sortable ref and listeners MUST be on the same element for data to be passed correctly
+  // We'll apply the sortable ref and listeners to the header, and use a separate ref for the droppable container
+  const headerRef = (node: HTMLDivElement | null) => {
     setNodeRef(node);
+  };
+  
+  const containerRef = (node: HTMLDivElement | null) => {
     setDroppableRef(node);
   };
 
@@ -306,7 +310,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
   
   return (
     <div 
-      ref={combinedRef}
+      ref={containerRef}
       style={style}
       className="flex flex-col h-full"
     >
@@ -332,6 +336,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       )}
       
       <div 
+        ref={headerRef}
         {...attributes}
         {...listeners}
         data-dnd-type="column"

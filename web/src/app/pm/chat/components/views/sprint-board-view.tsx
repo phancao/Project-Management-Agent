@@ -911,14 +911,27 @@ export function SprintBoardView() {
           
           if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
             const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+            debug.dnd('Column reordering', { 
+              oldIndex, 
+              newIndex, 
+              activeColumnId, 
+              overId, 
+              currentOrder, 
+              newOrder,
+              activeProjectId,
+              newOrderLength: newOrder.length
+            });
             setColumnOrder(newOrder);
             // Save immediately after reordering (don't wait for useEffect)
             if (activeProjectId && newOrder.length > 0) {
+              debug.dnd('Calling saveColumnOrderToStorage', { activeProjectId, newOrder });
               saveColumnOrderToStorage(activeProjectId, newOrder);
               debug.dnd('Column reordered and saved', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
             } else {
-              debug.dnd('Column reordered but not saved (missing projectId or empty order)', { activeProjectId, newOrder });
+              debug.dnd('Column reordered but not saved (missing projectId or empty order)', { activeProjectId, newOrder, newOrderLength: newOrder.length });
             }
+          } else {
+            debug.dnd('Column reorder skipped (invalid indices)', { oldIndex, newIndex, activeColumnId, overId, currentOrder });
           }
         }
       }
@@ -971,12 +984,27 @@ export function SprintBoardView() {
           
           if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
             const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+            debug.dnd('Column reordering (from handleDragEnd fallback)', { 
+              oldIndex, 
+              newIndex, 
+              activeColumnId, 
+              overId, 
+              currentOrder, 
+              newOrder,
+              activeProjectId,
+              newOrderLength: newOrder.length
+            });
             setColumnOrder(newOrder);
             // Save immediately after reordering (don't wait for useEffect)
             if (activeProjectId && newOrder.length > 0) {
+              debug.dnd('Calling saveColumnOrderToStorage (from handleDragEnd fallback)', { activeProjectId, newOrder });
               saveColumnOrderToStorage(activeProjectId, newOrder);
               debug.dnd('Column reordered and saved (from handleDragEnd)', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
+            } else {
+              debug.dnd('Column reordered but not saved (missing projectId or empty order) (from handleDragEnd fallback)', { activeProjectId, newOrder, newOrderLength: newOrder.length });
             }
+          } else {
+            debug.dnd('Column reorder skipped (invalid indices) (from handleDragEnd fallback)', { oldIndex, newIndex, activeColumnId, overId, currentOrder });
           }
         }
       }
@@ -1555,8 +1583,9 @@ export function SprintBoardView() {
   }, []);
 
   const saveColumnOrderToStorage = useCallback((projectId: string | null, order: string[]) => {
+    debug.storage('saveColumnOrderToStorage called', { projectId, orderLength: order.length, order, windowDefined: typeof window !== 'undefined' });
     if (typeof window === 'undefined' || !projectId || order.length === 0) {
-      debug.storage('Cannot save column order', { projectId, orderLength: order.length });
+      debug.storage('Cannot save column order', { projectId, orderLength: order.length, reason: !projectId ? 'no projectId' : order.length === 0 ? 'empty order' : 'window undefined' });
       return;
     }
     const key = getStorageKey(projectId);
@@ -1565,10 +1594,23 @@ export function SprintBoardView() {
       return;
     }
     try {
-      localStorage.setItem(key, JSON.stringify(order));
-      debug.storage('Saved column order to localStorage', { projectId, key, order });
+      const orderString = JSON.stringify(order);
+      localStorage.setItem(key, orderString);
+      // Verify it was saved
+      const saved = localStorage.getItem(key);
+      const savedParsed = saved ? JSON.parse(saved) : null;
+      debug.storage('Saved column order to localStorage', { 
+        projectId, 
+        key, 
+        order, 
+        saved: savedParsed,
+        savedMatches: JSON.stringify(savedParsed) === JSON.stringify(order)
+      });
+      if (JSON.stringify(savedParsed) !== JSON.stringify(order)) {
+        debug.error('Column order save verification failed!', { expected: order, actual: savedParsed });
+      }
     } catch (error) {
-      debug.error('Failed to save column order to localStorage', error);
+      debug.error('Failed to save column order to localStorage', { error, projectId, order });
     }
   }, []);
 
@@ -1658,8 +1700,16 @@ export function SprintBoardView() {
 
   // Save column order to localStorage whenever it changes (but not during initial load)
   useEffect(() => {
+    debug.storage('useEffect for columnOrder change triggered', { 
+      isLoadingFromStorage, 
+      columnOrderLength: columnOrder.length, 
+      activeProjectId, 
+      availableStatusesLength: availableStatuses?.length 
+    });
+    
     if (isLoadingFromStorage) {
       // Don't save during initial load from localStorage
+      debug.storage('Skipping save (loading from storage)', { isLoadingFromStorage });
       return;
     }
     
@@ -1669,14 +1719,36 @@ export function SprintBoardView() {
       const statusIds = new Set(availableStatuses.map(s => s.id));
       const orderHasValidStatuses = columnOrder.length > 0 && columnOrder.some(id => statusIds.has(id));
       
+      debug.storage('Checking if should save', { 
+        orderHasValidStatuses, 
+        columnOrder, 
+        statusIds: Array.from(statusIds),
+        allOrderIdsAreValid: columnOrder.every(id => statusIds.has(id))
+      });
+      
       if (orderHasValidStatuses) {
         // Only save if all statuses in the order are valid (but don't require all statuses to be in the order)
         const allOrderIdsAreValid = columnOrder.every(id => statusIds.has(id));
         if (allOrderIdsAreValid) {
+          debug.storage('Calling saveColumnOrderToStorage from useEffect', { activeProjectId, columnOrder });
           saveColumnOrderToStorage(activeProjectId, columnOrder);
           debug.storage('Saved column order via useEffect (backup)', { activeProjectId, columnOrder });
+        } else {
+          debug.storage('Not saving: some order IDs are invalid', { 
+            columnOrder, 
+            statusIds: Array.from(statusIds),
+            invalidIds: columnOrder.filter(id => !statusIds.has(id))
+          });
         }
+      } else {
+        debug.storage('Not saving: no valid statuses in order', { columnOrder, statusIds: Array.from(statusIds) });
       }
+    } else {
+      debug.storage('Not saving: missing requirements', { 
+        columnOrderLength: columnOrder.length, 
+        activeProjectId, 
+        availableStatusesLength: availableStatuses?.length 
+      });
     }
   }, [columnOrder, activeProjectId, availableStatuses, isLoadingFromStorage, saveColumnOrderToStorage]);
 

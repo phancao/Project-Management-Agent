@@ -160,6 +160,19 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     opacity: isDragging ? 0.5 : 1,
   };
   
+  // Debug logging for column drag state
+  useEffect(() => {
+    if (isDragging) {
+      debug.dnd('SortableColumn: Column is being dragged', {
+        columnId: column.id,
+        columnTitle: column.title,
+        isDraggingColumn,
+        transform: CSS.Transform.toString(transform),
+        transition
+      });
+    }
+  }, [isDragging, column.id, column.title, isDraggingColumn, transform, transition]);
+  
   // Filter out the active task being dragged from the tasks list for display
   // Convert both to strings for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
   // Memoize to ensure stable reference and prevent unnecessary re-initializations
@@ -2229,10 +2242,14 @@ export function SprintBoardView() {
     debug.column('Final orderedColumns', { 
       resultLength: result.length, 
       orderedLength: ordered.length, 
-      newColumnsLength: newColumns.length 
+      newColumnsLength: newColumns.length,
+      result: result.map(c => ({ id: c.id, title: c.title })),
+      columnOrder,
+      draggedColumnId,
+      containerScrollLeft: columnsContainerRef.current?.scrollLeft
     });
     return result;
-  }, [columns, columnOrder, visibleColumns]);
+  }, [columns, columnOrder, visibleColumns, draggedColumnId]);
 
   // Use tasks instead of filteredTasks to ensure we can always find the dragged task
   const activeTask = activeId ? tasks.find(t => String(t.id) === String(activeId)) : null;

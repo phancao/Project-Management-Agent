@@ -1211,7 +1211,74 @@ class JIRAProvider(BasePMProvider):
     async def list_users(
         self, project_id: Optional[str] = None
     ) -> List[PMUser]:
-        raise NotImplementedError("JIRA provider not yet implemented")
+        """
+        List users from JIRA.
+        If project_id is provided, lists assignable users for that project.
+        Otherwise, lists all users (requires admin permissions).
+        """
+        import logging
+        _logger = logging.getLogger(__name__)
+        
+        try:
+            if project_id:
+                # List assignable users for a project
+                # JIRA API: GET /rest/api/3/user/assignable/search?project={projectKey}
+                url = f"{self.base_url}/rest/api/3/user/assignable/search"
+                params = {"project": project_id}
+            else:
+                # List all users (requires admin permissions)
+                # JIRA API: GET /rest/api/3/users/search
+                url = f"{self.base_url}/rest/api/3/users/search"
+                params = {}
+            
+            _logger.info("Fetching users from JIRA: %s (project_id=%s)", url, project_id)
+            
+            response = requests.get(
+                url, headers=self.headers, params=params, timeout=10
+            )
+            
+            _logger.info("JIRA list_users response: status=%d", response.status_code)
+            
+            if response.status_code == 200:
+                users_data = response.json()
+                _logger.info("JIRA users data: %d users found", len(users_data))
+                
+                users = []
+                for user_data in users_data:
+                    # JIRA returns user info with accountId as the unique identifier
+                    account_id = user_data.get("accountId") or user_data.get("key")
+                    email = user_data.get("emailAddress")
+                    display_name = user_data.get("displayName") or user_data.get("name", "")
+                    avatar_url = user_data.get("avatarUrls", {}).get("48x48") if user_data.get("avatarUrls") else None
+                    
+                    user_id = account_id or email or display_name
+                    if not user_id:
+                        _logger.warning("JIRA user data missing all ID fields. User data: %s", str(user_data)[:200])
+                        continue
+                    
+                    users.append(PMUser(
+                        id=user_id,
+                        name=display_name,
+                        email=email,
+                        username=user_data.get("name") or email,
+                        avatar_url=avatar_url,
+                        raw_data=user_data
+                    ))
+                
+                return users
+            elif response.status_code == 401:
+                _logger.error("JIRA authentication failed (401)")
+                raise ValueError("JIRA authentication failed. Please check your credentials.")
+            elif response.status_code == 403:
+                _logger.error("JIRA permission denied (403)")
+                raise ValueError("JIRA permission denied. You may need admin permissions to list users.")
+            else:
+                _logger.error("JIRA list_users failed: status=%d, response=%s", response.status_code, response.text[:500])
+                response.raise_for_status()
+                return []
+        except requests.exceptions.RequestException as e:
+            _logger.error("JIRA list_users request failed: %s", str(e))
+            raise ValueError(f"Failed to fetch users from JIRA: {str(e)}")
     
     async def get_user(self, user_id: str) -> Optional[PMUser]:
         raise NotImplementedError("JIRA provider not yet implemented")

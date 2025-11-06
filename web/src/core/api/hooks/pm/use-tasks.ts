@@ -17,6 +17,7 @@ export interface Task {
   start_date?: string;
   due_date?: string;
   assigned_to?: string;
+  assignee_id?: string;
   project_name?: string;
   sprint_id?: string;
   epic_id?: string;

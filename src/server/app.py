@@ -1359,6 +1359,7 @@ async def pm_list_tasks(request: Request, project_id: str):
                             if t.assignee_id
                             else None
                         ),
+                        "assignee_id": str(t.assignee_id) if t.assignee_id else None,
                     }
                     for t in tasks
                 ]
@@ -1508,6 +1509,120 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
         raise
     except Exception as e:
         logger.error(f"Failed to update task: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pm/projects/{project_id}/users")
+async def pm_list_users(request: Request, project_id: str):
+    """List all users for a project"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Check if project_id has provider prefix (UUID:project_id format)
+            # Try to parse the part before colon as UUID to determine if it's a provider prefix
+            has_provider_prefix = False
+            if ":" in project_id:
+                provider_part = project_id.split(":", 1)[0]
+                from uuid import UUID
+                from database.orm_models import PMProviderConnection
+                try:
+                    # If we can parse it as UUID, it might be a provider prefix
+                    UUID(provider_part)
+                    # Check if this UUID exists as a provider
+                    provider = db.query(PMProviderConnection).filter(
+                        PMProviderConnection.id == UUID(provider_part),
+                        PMProviderConnection.is_active.is_(True)
+                    ).first()
+                    has_provider_prefix = provider is not None
+                except (ValueError, AttributeError):
+                    # Not a valid UUID, so colon is part of project ID itself
+                    has_provider_prefix = False
+            
+            if not has_provider_prefix:
+                # Use global flow_manager (no provider prefix or colon is part of project ID)
+                from src.conversation.flow_manager import ConversationFlowManager
+                
+                global flow_manager
+                if flow_manager is None:
+                    flow_manager = ConversationFlowManager(db_session=db)
+                fm = flow_manager
+                
+                if not fm.pm_provider:
+                    raise HTTPException(
+                        status_code=503, detail="PM Provider not configured"
+                    )
+                
+                users = await fm.pm_provider.list_users(project_id=project_id)
+                
+                return [
+                    {
+                        "id": str(u.id),
+                        "name": u.name,
+                        "email": u.email or "",
+                        "username": u.username or "",
+                        "avatar_url": u.avatar_url or "",
+                    }
+                    for u in users
+                ]
+            
+            # Use PMHandler for provider-prefixed project IDs
+            provider_id, actual_project_id = project_id.split(":", 1)
+            from uuid import UUID
+            from database.orm_models import PMProviderConnection
+            provider_uuid = UUID(provider_id)
+            
+            provider = db.query(PMProviderConnection).filter(
+                PMProviderConnection.id == provider_uuid,
+                PMProviderConnection.is_active.is_(True)
+            ).first()
+            
+            if not provider:
+                raise HTTPException(
+                    status_code=404, detail="Provider not found"
+                )
+            
+            from src.pm_providers.factory import create_pm_provider
+            provider_instance = create_pm_provider(
+                provider_type=provider.provider_type,
+                base_url=provider.base_url,
+                api_key=provider.api_key,
+                api_token=provider.api_token,
+                username=provider.username,
+            )
+            user_objs = await provider_instance.list_users(project_id=actual_project_id)
+            users = [
+                {
+                    "id": str(u.id),
+                    "name": u.name,
+                    "email": u.email or "",
+                    "username": u.username or "",
+                    "avatar_url": u.avatar_url or "",
+                }
+                for u in user_objs
+            ]
+            
+            return users
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list users: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))

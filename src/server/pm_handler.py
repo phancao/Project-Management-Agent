@@ -1225,5 +1225,6 @@ class PMHandler:
             "epic_id": str(task.epic_id) if task.epic_id else None,
             "label_ids": [str(lid) for lid in task.label_ids] if task.label_ids else None,
             "sprint_id": str(task.sprint_id) if task.sprint_id else None,
+            "assignee_id": str(task.assignee_id) if task.assignee_id else None,
         }
 

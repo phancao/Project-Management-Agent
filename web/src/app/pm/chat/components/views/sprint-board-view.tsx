@@ -273,7 +273,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     <div 
       ref={combinedRef}
       style={style}
-      className="flex flex-col"
+      className="flex flex-col h-full"
     >
       {/* Top drop zone - only show when dragging over it to avoid blocking first task */}
       {activeId && (
@@ -325,7 +325,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       </div>
       <div 
         ref={setScrollAreaRef}
-        className={`flex-1 rounded-b-lg p-3 min-h-[400px] max-h-[600px] border-2 overflow-y-auto transition-all duration-200 ${
+        className={`flex-1 rounded-b-lg p-3 min-h-0 border-2 overflow-y-auto transition-all duration-200 ${
           isActive && !isDraggingColumn
             ? 'bg-blue-50 dark:bg-blue-950 border-blue-500 dark:border-blue-500' 
             : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -544,52 +544,60 @@ export function SprintBoardView() {
       activeData 
     });
     
-    // Check the data type first to distinguish between tasks and columns
+    // Check the data type first - this is the most reliable indicator
     // Columns have data.type === 'column', tasks don't have a type set
     if (activeData?.type === 'column') {
-      // It's a column being dragged
-      console.log('[handleDragStart] Detected column drag:', activeIdStr);
+      // It's definitely a column being dragged
+      console.log('[handleDragStart] Detected column drag (by data.type):', activeIdStr);
       if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
-        console.log('[handleDragStart] Setting draggedColumnId:', activeIdStr);
         setDraggedColumnId(activeIdStr);
+        setActiveId(null); // Clear any task drag state
         return;
       } else {
         console.warn('[handleDragStart] Column ID not found in availableStatuses:', activeIdStr);
       }
-    } else {
-      // It's likely a task - check if it exists in the tasks array
-      const task = tasks.find(t => String(t.id) === activeIdStr);
+    }
+    
+    // Check if it's a task ID
+    const task = tasks.find(t => String(t.id) === activeIdStr);
+    if (task) {
+      // It's a task being dragged
+      console.log('[handleDragStart] Detected task drag:', activeIdStr);
+      setActiveId(activeIdStr);
+      setDraggedColumnId(null); // Clear any column drag state
       
-      if (task) {
-        console.log('[handleDragStart] Detected task drag:', activeIdStr);
-        // It's a task being dragged - set activeId immediately
-        setActiveId(activeIdStr);
-        
-        if (availableStatuses) {
-          // Find the status that matches this task's status
-          const currentStatus = availableStatuses.find(status => {
-            const taskStatusLower = (task.status || "").toLowerCase();
-            const statusNameLower = status.name.toLowerCase();
-            return taskStatusLower === statusNameLower || 
-                   taskStatusLower.includes(statusNameLower) || 
-                   statusNameLower.includes(taskStatusLower);
-          });
-          if (currentStatus) {
-            // Use status ID as column ID for highlighting
-            setActiveColumnId(currentStatus.id);
-          }
-        }
-        return;
-      } else {
-        console.log('[handleDragStart] Not a task, checking if it might be a column without data.type');
-        // Fallback: check if it's a column by ID even without data.type
-        if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
-          console.log('[handleDragStart] Fallback: Setting draggedColumnId:', activeIdStr);
-          setDraggedColumnId(activeIdStr);
-          return;
+      if (availableStatuses) {
+        // Find the status that matches this task's status
+        const currentStatus = availableStatuses.find(status => {
+          const taskStatusLower = (task.status || "").toLowerCase();
+          const statusNameLower = status.name.toLowerCase();
+          return taskStatusLower === statusNameLower || 
+                 taskStatusLower.includes(statusNameLower) || 
+                 statusNameLower.includes(taskStatusLower);
+        });
+        if (currentStatus) {
+          // Use status ID as column ID for highlighting
+          setActiveColumnId(currentStatus.id);
         }
       }
+      return;
     }
+    
+    // Fallback: Check if it's a status ID (column) that's not a task
+    // This handles cases where data.type might not be set properly
+    if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
+      const isTaskId = tasks.some(t => String(t.id) === activeIdStr);
+      if (!isTaskId) {
+        // It's a column ID that's not also a task ID
+        console.log('[handleDragStart] Detected column drag (by ID, fallback):', activeIdStr);
+        setDraggedColumnId(activeIdStr);
+        setActiveId(null);
+        return;
+      }
+    }
+    
+    // If we get here, we couldn't determine what's being dragged
+    console.warn('[handleDragStart] Could not determine drag type:', { activeIdStr, activeData });
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -844,6 +852,60 @@ export function SprintBoardView() {
     }
     
     // Handle task dragging
+    // First check if this is actually a column drag that wasn't detected in handleDragStart
+    // This can happen if the drag starts from a child element
+    const activeData = active.data.current;
+    const activeId = String(active.id);
+    
+    // If active data has type 'column', it's definitely a column drag
+    if (activeData?.type === 'column') {
+      console.log('[handleDragEnd] Detected column drag in handleDragEnd (missed in handleDragStart):', activeId);
+      // Handle as column drag
+      const activeColumnId = activeId;
+      setDraggedColumnId(null);
+      setActiveColumnId(null);
+      
+      if (over && availableStatuses) {
+        let overId: string | null = null;
+        
+        // Check if we dropped directly on a column (status ID)
+        if (typeof over.id === 'string' && availableStatuses.some(s => s.id === over.id)) {
+          overId = over.id;
+        } else {
+          // Check if we dropped on something inside a column - look at the data
+          const overData = over.data.current;
+          if (overData?.type === 'column' && overData?.column) {
+            overId = overData.column;
+          }
+        }
+        
+        if (overId && overId !== activeColumnId && availableStatuses.some(s => s.id === overId)) {
+          // Ensure columnOrder is initialized
+          let currentOrder = columnOrder;
+          if (currentOrder.length === 0 && availableStatuses) {
+            const sortedStatuses = [...availableStatuses].sort((a, b) => {
+              if (a.is_default && !b.is_default) return -1;
+              if (!a.is_default && b.is_default) return 1;
+              return a.name.localeCompare(b.name);
+            });
+            currentOrder = sortedStatuses.map(s => s.id);
+            setColumnOrder(currentOrder);
+          }
+          
+          const oldIndex = currentOrder.indexOf(activeColumnId);
+          const newIndex = currentOrder.indexOf(overId);
+          
+          if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+            const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+            setColumnOrder(newOrder);
+            if (DEBUG_DND) console.log('[handleDragEnd] Column reordered (from handleDragEnd):', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
+          }
+        }
+      }
+      return;
+    }
+    
+    // Now handle task dragging
     setActiveId(null);
     setActiveColumnId(null);
     setReorderedTasks({});
@@ -853,13 +915,15 @@ export function SprintBoardView() {
       return;
     }
 
-    const activeId = active.id as string;
-    const overId = over.id as string;
+    const overId = String(over.id);
 
     // Find the task being dragged
     // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
-    const task = tasks.find(t => String(t.id) === String(activeId));
-    if (!task) return;
+    const task = tasks.find(t => String(t.id) === activeId);
+    if (!task) {
+      if (DEBUG_DND) console.log('[handleDragEnd] No task found for activeId:', activeId);
+      return;
+    }
 
     // Determine which column we're dropping into
     // Column IDs are now status IDs, so we can directly use them
@@ -1100,49 +1164,13 @@ export function SprintBoardView() {
             return updated;
           });
           
-          // Capture task ID before clearing activeId
-          const updatedTaskId = activeId;
-          
-          // Also clear activeId to ensure the task is no longer filtered out
+          // Clear activeId to ensure the task is no longer filtered out
           setActiveId(null);
           setActiveColumnId(null);
           
-          // Wait a bit for the refresh to complete, then verify the task status
-          // This ensures we show the correct notification based on what actually happened
-          setTimeout(() => {
-            // Use the captured task ID and check the current tasks state
-            const refreshedTask = tasks.find(t => String(t.id) === String(updatedTaskId));
-            if (refreshedTask) {
-              const refreshedStatus = refreshedTask.status || '';
-              const refreshedStatusNormalized = normalizeStatusForComparison(refreshedStatus);
-              const refreshedStatusId = findMatchingStatusId(refreshedStatus);
-              
-              console.log(`[handleDragEnd] After refresh - Task status check:`, {
-                taskId: updatedTaskId,
-                refreshedStatus,
-                refreshedStatusNormalized,
-                refreshedStatusId,
-                expectedStatusNormalized,
-                targetColumnId,
-                matches: refreshedStatusNormalized === expectedStatusNormalized && refreshedStatusId === targetColumnId,
-              });
-              
-              // If the refreshed task status doesn't match what we expected, show a warning
-              if (refreshedStatusNormalized !== expectedStatusNormalized || refreshedStatusId !== targetColumnId) {
-                console.warn(`[handleDragEnd] Task status after refresh doesn't match expected. Expected: ${newStatus} (${targetColumnId}), Got: ${refreshedStatus} (${refreshedStatusId})`);
-                toast.error('Status update may not have been applied', {
-                  description: `The task status was updated to "${displayActual}", but after refreshing, the status appears to be "${displayStatus(refreshedStatus)}". Please check the task status in OpenProject.`,
-                  duration: 6000,
-                });
-              } else {
-                console.log(`[handleDragEnd] Task status verified after refresh - status is correct: ${refreshedStatus}`);
-              }
-            } else {
-              console.warn(`[handleDragEnd] Task ${updatedTaskId} not found in refreshed task list`);
-            }
-          }, 1500); // Wait 1.5 seconds for refresh to complete
-          
           // Status changed successfully to what we wanted
+          // Note: We already verified the status matches immediately after the update above,
+          // so we can confidently show success here. The task list will be refreshed by handleUpdateTask.
           toast.success('Task status updated', {
             description: `Task status changed from "${displayOriginal}" to "${displayActual}"`,
             duration: 3000,
@@ -1627,8 +1655,8 @@ export function SprintBoardView() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-4">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sprint Board</h2>
           {availableStatuses && availableStatuses.length > 0 && (
@@ -1649,7 +1677,7 @@ export function SprintBoardView() {
       </div>
 
       {/* Filters */}
-      <Card className="p-4">
+      <Card className="p-4 mb-4 flex-shrink-0">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
@@ -1827,9 +1855,9 @@ export function SprintBoardView() {
             items={orderedColumns.map(col => col.id)} 
             strategy={horizontalListSortingStrategy}
           >
-            <div className="flex gap-4 overflow-x-auto pb-4">
+            <div className="flex gap-4 overflow-x-auto flex-1 min-h-0">
               {orderedColumns.map((column) => (
-                <div key={column.id} className="flex-shrink-0 w-80">
+                <div key={column.id} className="flex-shrink-0 w-80 h-full">
                   <SortableColumn 
                     column={{ id: column.id, title: column.title }} 
                     tasks={column.tasks || []} 
@@ -1843,7 +1871,7 @@ export function SprintBoardView() {
             </div>
           </SortableContext>
         ) : (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex items-center justify-center flex-1">
             <div className="text-gray-500 dark:text-gray-400">No statuses available for this project</div>
           </div>
         )}

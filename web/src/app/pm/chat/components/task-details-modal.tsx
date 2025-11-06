@@ -14,6 +14,7 @@ import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
 import { useEpics } from "~/core/api/hooks/pm/use-epics";
+import { useUsers } from "~/core/api/hooks/pm/use-users";
 
 interface TaskDetailsModalProps {
   task: Task | null;
@@ -30,10 +31,11 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Fetch statuses, priorities, and epics for the project (hooks must be called before early return)
+  // Fetch statuses, priorities, epics, and users for the project (hooks must be called before early return)
   const { statuses } = useStatuses(projectId ?? undefined, "task");
   const { priorities, loading: prioritiesLoading, error: prioritiesError } = usePriorities(projectId ?? undefined);
   const { epics } = useEpics(projectId ?? undefined);
+  const { users, loading: usersLoading } = useUsers(projectId ?? undefined);
   
   // Log errors only
   useEffect(() => {
@@ -166,6 +168,10 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
       }
       if (editedTask.priority !== undefined && editedTask.priority !== task.priority) {
         updates.priority = editedTask.priority;
+      }
+      if (editedTask.assignee_id !== undefined && editedTask.assignee_id !== task.assignee_id) {
+        // Convert empty string to null for unassignment
+        updates.assignee_id = editedTask.assignee_id || null;
       }
       
       // Only call update if there are actual changes
@@ -416,6 +422,50 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Assignee */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Assigned To</label>
+            {isEditing ? (
+              <Select
+                value={editedTask?.assignee_id ?? task?.assignee_id ?? "__unassigned__"}
+                onValueChange={(value) => {
+                  setEditedTask({ 
+                    ...editedTask, 
+                    assignee_id: value === "__unassigned__" ? undefined : value 
+                  });
+                }}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                  {usersLoading ? (
+                    <SelectItem value="__loading__" disabled>Loading users...</SelectItem>
+                  ) : users.length > 0 ? (
+                    users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name} {user.email ? `(${user.email})` : ""}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="__no_users__" disabled>No users available</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="mt-1 text-gray-700 dark:text-gray-300">
+                {task.assigned_to ? (
+                  <span className="px-2 py-1 rounded text-sm bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    {task.assigned_to}
+                  </span>
+                ) : (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Unassigned</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Dates */}

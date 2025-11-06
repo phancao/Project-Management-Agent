@@ -475,6 +475,8 @@ export function SprintBoardView() {
   const draggingColumnIdsRef = useRef<Set<string>>(new Set());
   // Ref to store timeout for delayed column drag detection
   const delayedCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref to track draggedColumnId for immediate access (no state update delay)
+  const draggedColumnIdRef = useRef<string | null>(null);
   
   // Memoize the callback to prevent infinite loops
   const handleColumnDragStateChange = useCallback((columnId: string, isDragging: boolean) => {

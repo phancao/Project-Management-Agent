@@ -626,6 +626,7 @@ export function SprintBoardView() {
     if (!draggedColumnId || !columnsContainerRef.current) {
       // Clear any existing scroll interval when not dragging a column
       if (horizontalScrollIntervalRef.current) {
+        debug.dnd('Clearing horizontal scroll interval (no drag)', { draggedColumnId, hasContainer: !!columnsContainerRef.current });
         clearInterval(horizontalScrollIntervalRef.current);
         horizontalScrollIntervalRef.current = null;
       }
@@ -634,6 +635,15 @@ export function SprintBoardView() {
     
     const container = columnsContainerRef.current;
     let isDragging = true;
+    
+    debug.dnd('Setting up horizontal scroll for column drag', { 
+      draggedColumnId, 
+      containerScrollLeft: container.scrollLeft,
+      containerScrollWidth: container.scrollWidth,
+      containerClientWidth: container.clientWidth,
+      canScrollLeft: container.scrollLeft > 0,
+      canScrollRight: container.scrollLeft < container.scrollWidth - container.clientWidth
+    });
     
     const handleMouseMove = (e: MouseEvent) => {
       if (!container || !isDragging) return;
@@ -646,6 +656,10 @@ export function SprintBoardView() {
       // Check if mouse is near left or right edge of viewport
       const distanceFromLeft = mouseX;
       const distanceFromRight = viewportWidth - mouseX;
+      const nearLeftEdge = distanceFromLeft < scrollThreshold;
+      const nearRightEdge = distanceFromRight < scrollThreshold;
+      const canScrollLeft = container.scrollLeft > 0;
+      const canScrollRight = container.scrollLeft < container.scrollWidth - container.clientWidth;
       
       // Clear existing interval before starting a new one
       if (horizontalScrollIntervalRef.current) {
@@ -654,14 +668,22 @@ export function SprintBoardView() {
       }
       
       // Only scroll if we're very close to the edge and there's room to scroll
-      if (distanceFromLeft < scrollThreshold && container.scrollLeft > 0) {
+      if (nearLeftEdge && canScrollLeft) {
+        debug.dnd('Starting horizontal scroll left', { 
+          mouseX, 
+          distanceFromLeft, 
+          scrollLeft: container.scrollLeft,
+          scrollSpeed 
+        });
         // Scroll left
         horizontalScrollIntervalRef.current = setInterval(() => {
           if (container && container.scrollLeft > 0 && isDragging) {
             const newScrollLeft = Math.max(0, container.scrollLeft - scrollSpeed);
             container.scrollLeft = newScrollLeft;
+            debug.dnd('Scrolling left', { oldScrollLeft: container.scrollLeft + scrollSpeed, newScrollLeft });
             // Stop if we've reached the beginning
             if (newScrollLeft === 0 && horizontalScrollIntervalRef.current) {
+              debug.dnd('Reached left edge, stopping scroll');
               clearInterval(horizontalScrollIntervalRef.current);
               horizontalScrollIntervalRef.current = null;
             }
@@ -670,8 +692,14 @@ export function SprintBoardView() {
             horizontalScrollIntervalRef.current = null;
           }
         }, 16); // ~60fps
-      } else if (distanceFromRight < scrollThreshold && 
-                 container.scrollLeft < container.scrollWidth - container.clientWidth) {
+      } else if (nearRightEdge && canScrollRight) {
+        debug.dnd('Starting horizontal scroll right', { 
+          mouseX, 
+          distanceFromRight, 
+          scrollLeft: container.scrollLeft,
+          maxScroll: container.scrollWidth - container.clientWidth,
+          scrollSpeed 
+        });
         // Scroll right
         horizontalScrollIntervalRef.current = setInterval(() => {
           if (container && isDragging) {
@@ -679,8 +707,10 @@ export function SprintBoardView() {
             if (container.scrollLeft < maxScroll) {
               const newScrollLeft = Math.min(maxScroll, container.scrollLeft + scrollSpeed);
               container.scrollLeft = newScrollLeft;
+              debug.dnd('Scrolling right', { oldScrollLeft: container.scrollLeft - scrollSpeed, newScrollLeft, maxScroll });
               // Stop if we've reached the end
               if (newScrollLeft >= maxScroll && horizontalScrollIntervalRef.current) {
+                debug.dnd('Reached right edge, stopping scroll');
                 clearInterval(horizontalScrollIntervalRef.current);
                 horizontalScrollIntervalRef.current = null;
               }
@@ -697,6 +727,7 @@ export function SprintBoardView() {
     };
     
     const handleMouseUp = () => {
+      debug.dnd('Mouse up detected, stopping horizontal scroll', { draggedColumnId });
       isDragging = false;
       if (horizontalScrollIntervalRef.current) {
         clearInterval(horizontalScrollIntervalRef.current);
@@ -708,6 +739,7 @@ export function SprintBoardView() {
     document.addEventListener('mouseup', handleMouseUp);
     
     return () => {
+      debug.dnd('Cleaning up horizontal scroll listeners', { draggedColumnId });
       isDragging = false;
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -739,13 +771,24 @@ export function SprintBoardView() {
     // Columns have data.type === 'column', tasks don't have a type set
     if (activeData?.type === 'column') {
       // It's definitely a column being dragged
-      debug.dnd('Detected column drag (by data.type)', { activeId: activeIdStr });
+      debug.dnd('Detected column drag (by data.type)', { 
+        activeId: activeIdStr, 
+        availableStatuses: availableStatuses?.map(s => s.id),
+        isLastColumn,
+        columnOrder,
+        orderedColumns: orderedColumns.map(c => c.id)
+      });
       if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
+        debug.dnd('Setting draggedColumnId', { activeId: activeIdStr, isLastColumn });
         setDraggedColumnId(activeIdStr);
         setActiveId(null); // Clear any task drag state
+        debug.dnd('Column drag state set', { draggedColumnId: activeIdStr });
         return;
       } else {
-        debug.warn('Column ID not found in availableStatuses', { activeId: activeIdStr });
+        debug.warn('Column ID not found in availableStatuses', { 
+          activeId: activeIdStr,
+          availableStatuses: availableStatuses?.map(s => s.id)
+        });
       }
     }
     
@@ -778,17 +821,38 @@ export function SprintBoardView() {
     // This handles cases where data.type might not be set properly
     if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
       const isTaskId = tasks.some(t => String(t.id) === activeIdStr);
+      debug.dnd('Checking fallback column detection', { 
+        activeId: activeIdStr, 
+        isTaskId, 
+        isLastColumn,
+        availableStatuses: availableStatuses.map(s => s.id),
+        taskIds: tasks.slice(0, 5).map(t => String(t.id))
+      });
       if (!isTaskId) {
         // It's a column ID that's not also a task ID
-        debug.dnd('Detected column drag (by ID, fallback)', { activeId: activeIdStr });
+        debug.dnd('Detected column drag (by ID, fallback)', { 
+          activeId: activeIdStr, 
+          isLastColumn,
+          columnOrder,
+          orderedColumns: orderedColumns.map(c => c.id)
+        });
         setDraggedColumnId(activeIdStr);
         setActiveId(null);
+        debug.dnd('Column drag state set (fallback)', { draggedColumnId: activeIdStr });
         return;
+      } else {
+        debug.dnd('ID matches both column and task, treating as task', { activeId: activeIdStr });
       }
     }
     
     // If we get here, we couldn't determine what's being dragged
-    debug.warn('Could not determine drag type', { activeIdStr, activeData });
+    debug.warn('Could not determine drag type', { 
+      activeIdStr, 
+      activeData,
+      isLastColumn,
+      availableStatuses: availableStatuses?.map(s => s.id),
+      taskIds: tasks.slice(0, 5).map(t => String(t.id))
+    });
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -840,11 +904,27 @@ export function SprintBoardView() {
       
       // Visual feedback: highlight the target column if it's different from the dragged column
       if (overId && overId !== activeId && availableStatuses.some(s => s.id === overId)) {
+        debug.dnd('Drag over: Setting activeColumnId for visual feedback', { 
+          overId, 
+          activeId, 
+          isLastColumn,
+          overColumnIndex,
+          activeColumnIndex: columnOrder.indexOf(activeId),
+          containerScrollLeft: columnsContainerRef.current?.scrollLeft,
+          containerScrollWidth: columnsContainerRef.current?.scrollWidth,
+          containerClientWidth: columnsContainerRef.current?.clientWidth
+        });
         setActiveColumnId(overId);
-        debug.dnd('Drag over: Setting activeColumnId for visual feedback', { overId, activeId, isLastColumn });
       } else {
+        debug.dnd('Drag over: Clearing activeColumnId', { 
+          overId, 
+          activeId, 
+          isLastColumn, 
+          overColumnIndex,
+          reason: !overId ? 'no overId' : overId === activeId ? 'same column' : 'invalid overId',
+          overIdValid: overId && availableStatuses.some(s => s.id === overId)
+        });
         setActiveColumnId(null);
-        debug.dnd('Drag over: Clearing activeColumnId', { overId, activeId, isLastColumn, reason: !overId ? 'no overId' : overId === activeId ? 'same column' : 'invalid overId' });
       }
       return;
     }
@@ -1035,10 +1115,26 @@ export function SprintBoardView() {
     // Handle column reordering
     if (draggedColumnId) {
       const activeColumnId = draggedColumnId;
+      debug.dnd('handleDragEnd: Processing column drag end', {
+        activeColumnId,
+        isLastColumn,
+        activeColumnIndex,
+        over: over ? { id: over.id, data: over.data?.current } : null,
+        columnOrder,
+        orderedColumns: orderedColumns.map(c => c.id),
+        containerScrollLeft: columnsContainerRef.current?.scrollLeft
+      });
+      
       setDraggedColumnId(null);
       setActiveColumnId(null);
       
       if (over && availableStatuses) {
+        debug.dnd('handleDragEnd: Has over target and availableStatuses', {
+          overId: over.id,
+          overDataType: over.data?.current?.type,
+          overData: over.data?.current,
+          availableStatuses: availableStatuses.map(s => s.id)
+        });
         let overId: string | null = null;
         
         // Check if we dropped directly on a column (status ID)
@@ -1078,12 +1174,24 @@ export function SprintBoardView() {
           overIdValid: overId && availableStatuses.some(s => s.id === overId),
           isLastColumn,
           overIdIndex: overId ? columnOrder.indexOf(overId) : -1,
-          activeColumnIndex: columnOrder.indexOf(activeColumnId)
+          activeColumnIndex: columnOrder.indexOf(activeColumnId),
+          columnOrderLength: columnOrder.length,
+          orderedColumnsLength: orderedColumns.length,
+          containerScrollLeft: columnsContainerRef.current?.scrollLeft,
+          containerScrollWidth: columnsContainerRef.current?.scrollWidth,
+          containerClientWidth: columnsContainerRef.current?.clientWidth
         });
         
         if (overId && overId !== activeColumnId && availableStatuses.some(s => s.id === overId)) {
           // Ensure columnOrder is initialized (use current ordered columns if columnOrder is empty)
           let currentOrder = columnOrder;
+          debug.dnd('Drag ended: Starting column reorder logic', {
+            currentOrderLength: currentOrder.length,
+            activeColumnId,
+            overId,
+            isLastColumn
+          });
+          
           if (currentOrder.length === 0 && availableStatuses) {
             // Try to load from localStorage first
             debug.dnd('Column order is empty, trying to load from localStorage', { activeProjectId });
@@ -1130,12 +1238,15 @@ export function SprintBoardView() {
             currentOrderLength: currentOrder.length,
             isLastColumn,
             isMovingToLast: newIndex === currentOrder.length - 1,
-            isMovingFromLast: oldIndex === currentOrder.length - 1
+            isMovingFromLast: oldIndex === currentOrder.length - 1,
+            activeColumnInOrder: currentOrder.includes(activeColumnId),
+            overIdInOrder: currentOrder.includes(overId),
+            containerScrollLeft: columnsContainerRef.current?.scrollLeft
           });
           
           if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
             const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
-            debug.dnd('Column reordering: Success', { 
+            debug.dnd('Column reordering: Success - calling arrayMove', { 
               oldIndex, 
               newIndex, 
               activeColumnId, 
@@ -1146,7 +1257,9 @@ export function SprintBoardView() {
               newOrderLength: newOrder.length,
               isLastColumn,
               movedFromIndex: oldIndex,
-              movedToIndex: newIndex
+              movedToIndex: newIndex,
+              beforeMove: currentOrder.map((id, idx) => ({ id, idx })),
+              afterMove: newOrder.map((id, idx) => ({ id, idx }))
             });
             setColumnOrder(newOrder);
             // Save immediately after reordering (don't wait for useEffect)
@@ -1155,7 +1268,13 @@ export function SprintBoardView() {
               saveColumnOrderToStorage(activeProjectId, newOrder);
               debug.dnd('Column reordered and saved', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
             } else {
-              debug.dnd('Column reordered but not saved (missing projectId or empty order)', { activeProjectId, newOrder, newOrderLength: newOrder.length });
+              debug.dnd('Column reordered but not saved (missing projectId or empty order)', { 
+                activeProjectId, 
+                newOrder, 
+                newOrderLength: newOrder.length,
+                hasProjectId: !!activeProjectId,
+                hasOrder: newOrder.length > 0
+              });
             }
           } else {
             debug.dnd('Column reorder skipped (invalid indices)', { 
@@ -1165,7 +1284,10 @@ export function SprintBoardView() {
               overId, 
               currentOrder,
               isLastColumn,
-              reason: oldIndex === -1 ? 'oldIndex not found' : newIndex === -1 ? 'newIndex not found' : 'indices are the same'
+              reason: oldIndex === -1 ? 'oldIndex not found' : newIndex === -1 ? 'newIndex not found' : 'indices are the same',
+              activeColumnInOrder: currentOrder.includes(activeColumnId),
+              overIdInOrder: currentOrder.includes(overId),
+              currentOrderDetails: currentOrder.map((id, idx) => ({ id, idx, isActive: id === activeColumnId, isOver: id === overId }))
             });
           }
         } else {

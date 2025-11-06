@@ -4,52 +4,30 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import type { 
+  Project, 
+  Sprint, 
+  Status, 
+  Priority, 
+  Epic, 
+  Task, 
+  ProviderConfig,
+  LoadingState,
+  FilterDataState 
+} from "../types";
 
 export interface PMLoadingState {
   // Section 1: Floating Header
-  providers: {
-    loading: boolean;
-    error: Error | null;
-    data: any[] | null;
-  };
+  providers: LoadingState<ProviderConfig[]>;
   
   // Section 2: Left Pane + Upper Body (Filter Data)
-  filterData: {
+  filterData: FilterDataState & {
     loading: boolean;
     error: Error | null;
-    projects: {
-      loading: boolean;
-      error: Error | null;
-      data: any[] | null;
-    };
-    sprints: {
-      loading: boolean;
-      error: Error | null;
-      data: any[] | null;
-    };
-    statuses: {
-      loading: boolean;
-      error: Error | null;
-      data: any[] | null;
-    };
-    priorities: {
-      loading: boolean;
-      error: Error | null;
-      data: any[] | null;
-    };
-    epics: {
-      loading: boolean;
-      error: Error | null;
-      data: any[] | null;
-    };
   };
   
   // Section 3: Content Area (Tasks/Issues)
-  tasks: {
-    loading: boolean;
-    error: Error | null;
-    data: any[] | null;
-  };
+  tasks: LoadingState<Task[]>;
   
   // Overall state
   isFilterDataReady: boolean;
@@ -73,6 +51,12 @@ interface PMLoadingContextType {
 
 const PMLoadingContext = createContext<PMLoadingContextType | undefined>(undefined);
 
+const createLoadingState = <T,>(): LoadingState<T> => ({
+  loading: false,
+  error: null,
+  data: null,
+});
+
 const initialState: PMLoadingState = {
   providers: {
     loading: true,
@@ -87,32 +71,12 @@ const initialState: PMLoadingState = {
       error: null,
       data: null,
     },
-    sprints: {
-      loading: false,
-      error: null,
-      data: null,
-    },
-    statuses: {
-      loading: false,
-      error: null,
-      data: null,
-    },
-    priorities: {
-      loading: false,
-      error: null,
-      data: null,
-    },
-    epics: {
-      loading: false,
-      error: null,
-      data: null,
-    },
+    sprints: createLoadingState<Sprint[]>(),
+    statuses: createLoadingState<Status[]>(),
+    priorities: createLoadingState<Priority[]>(),
+    epics: createLoadingState<Epic[]>(),
   },
-  tasks: {
-    loading: false,
-    error: null,
-    data: null,
-  },
+  tasks: createLoadingState<Task[]>(),
   isFilterDataReady: false,
   canLoadTasks: false,
 };

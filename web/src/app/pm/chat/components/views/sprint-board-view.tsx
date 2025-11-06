@@ -9,7 +9,6 @@ import { useSortable } from "@dnd-kit/sortable";
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Search, Filter, GripVertical, GripHorizontal, Settings2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 
@@ -28,6 +27,7 @@ import { useEpics } from "~/core/api/hooks/pm/use-epics";
 import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import { useSprints } from "~/core/api/hooks/pm/use-sprints";
 import { usePMLoading } from "../../../context/pm-loading-context";
+import { useProjectData } from "../../../hooks/use-project-data";
 
 import { TaskDetailsModal } from "../task-details-modal";
 
@@ -404,7 +404,6 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
 }
 
 export function SprintBoardView() {
-  const searchParams = useSearchParams();
   const DEBUG_DND = false;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -420,15 +419,8 @@ export function SprintBoardView() {
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
   
-  // Get project from URL (if any)
-  const activeProjectId = searchParams.get('project');
-  
-  // Use project-specific tasks if a project is selected, otherwise use "my tasks"
-  const projectIdForTasks = useMemo(() => {
-    if (!activeProjectId) return undefined;
-    // Use the full project ID including provider_id so backend can identify the provider
-    return activeProjectId;
-  }, [activeProjectId]);
+  // Use the new useProjectData hook for cleaner project handling
+  const { activeProjectId, projectIdForData: projectIdForTasks } = useProjectData();
   
   // Get loading state from context
   const { state: loadingState, setTasksState } = usePMLoading();

@@ -2188,6 +2188,17 @@ export function SprintBoardView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleColumnsArray, activeProjectId, availableStatuses, isLoadingFromStorage]);
 
+  // Track columnOrder changes for debugging
+  useEffect(() => {
+    debug.column('columnOrder state changed', {
+      columnOrder,
+      columnOrderLength: columnOrder.length,
+      draggedColumnId,
+      activeColumnId,
+      containerScrollLeft: columnsContainerRef.current?.scrollLeft
+    });
+  }, [columnOrder, draggedColumnId, activeColumnId]);
+
   // Apply column order and visibility to columns
   const orderedColumns = useMemo(() => {
     debug.column('Computing orderedColumns', { 

@@ -3,14 +3,14 @@
 
 "use client";
 
-import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter, useDroppable, DragOverEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners, useDroppable, DragOverEvent } from "@dnd-kit/core";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Search, Filter, GripVertical, GripHorizontal } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 
 import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -91,6 +91,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     },
   });
 
+  // Make the entire column droppable
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({ 
     id: column.id,
     data: {
@@ -98,6 +99,31 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       column: column.id,
     },
   });
+
+  // Separate droppable zones for top and bottom of column (easier to drop)
+  const { setNodeRef: setTopDropRef, isOver: isOverTop } = useDroppable({
+    id: `${column.id}-top-drop`,
+    data: {
+      type: 'column',
+      column: column.id,
+      position: 'top',
+    },
+  });
+
+  const { setNodeRef: setBottomDropRef, isOver: isOverBottom } = useDroppable({
+    id: `${column.id}-bottom-drop`,
+    data: {
+      type: 'column',
+      column: column.id,
+      position: 'bottom',
+    },
+  });
+
+  // Separate ref for the scrollable content area (for auto-scroll)
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
+  const setScrollAreaRef = (node: HTMLDivElement | null) => {
+    scrollAreaRef.current = node;
+  };
 
   // Combine refs for both sortable and droppable
   const combinedRef = (node: HTMLDivElement | null) => {
@@ -113,7 +139,78 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
   
   // Filter out the active task being dragged from the tasks list for display
   const displayTasks = tasks.filter(task => task.id !== activeId);
-  const isActive = isOver || activeColumnId === column.id;
+  const isActive = isOver || isOverTop || isOverBottom || activeColumnId === column.id;
+
+  // Auto-scroll when dragging over the column near edges
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  useEffect(() => {
+    if (!isActive || !activeId || !scrollAreaRef.current) {
+      // Clear any existing scroll interval when not active
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+        scrollIntervalRef.current = null;
+      }
+      return;
+    }
+    
+    const scrollArea = scrollAreaRef.current;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!scrollArea) return;
+      
+      const rect = scrollArea.getBoundingClientRect();
+      const mouseY = e.clientY;
+      const scrollThreshold = 100; // Distance from edge to trigger scroll
+      const scrollSpeed = 10; // Pixels to scroll per interval
+      
+      // Check if mouse is near top or bottom edge
+      const distanceFromTop = mouseY - rect.top;
+      const distanceFromBottom = rect.bottom - mouseY;
+      
+      // Clear existing interval before starting a new one
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+        scrollIntervalRef.current = null;
+      }
+      
+      if (distanceFromTop < scrollThreshold && scrollArea.scrollTop > 0) {
+        // Scroll up
+        scrollIntervalRef.current = setInterval(() => {
+          if (scrollArea && scrollArea.scrollTop > 0) {
+            scrollArea.scrollTop = Math.max(0, scrollArea.scrollTop - scrollSpeed);
+          } else if (scrollIntervalRef.current) {
+            clearInterval(scrollIntervalRef.current);
+            scrollIntervalRef.current = null;
+          }
+        }, 16); // ~60fps
+      } else if (distanceFromBottom < scrollThreshold && 
+                 scrollArea.scrollTop < scrollArea.scrollHeight - scrollArea.clientHeight) {
+        // Scroll down
+        scrollIntervalRef.current = setInterval(() => {
+          if (scrollArea && scrollArea.scrollTop < scrollArea.scrollHeight - scrollArea.clientHeight) {
+            scrollArea.scrollTop = Math.min(
+              scrollArea.scrollHeight - scrollArea.clientHeight,
+              scrollArea.scrollTop + scrollSpeed
+            );
+          } else if (scrollIntervalRef.current) {
+            clearInterval(scrollIntervalRef.current);
+            scrollIntervalRef.current = null;
+          }
+        }, 16); // ~60fps
+      }
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+        scrollIntervalRef.current = null;
+      }
+    };
+  }, [isActive, activeId]);
   
   return (
     <div 
@@ -121,7 +218,31 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       style={style}
       className="flex flex-col"
     >
-      <div className="flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-800 rounded-t-lg">
+      {/* Top drop zone - always visible when dragging */}
+      {activeId && (
+        <div 
+          ref={setTopDropRef}
+          className={`h-8 transition-all ${
+            isOverTop || (isActive && activeId)
+              ? 'bg-blue-200 dark:bg-blue-800 border-2 border-blue-500 dark:border-blue-400 rounded-t-lg'
+              : 'bg-transparent'
+          }`}
+        >
+          {isOverTop && (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-xs font-medium text-blue-700 dark:text-blue-300">Drop here</div>
+            </div>
+          )}
+        </div>
+      )}
+      
+      <div 
+        className={`flex items-center justify-between p-3 rounded-t-lg transition-colors ${
+          isActive && !isDraggingColumn
+            ? 'bg-blue-100 dark:bg-blue-900' 
+            : 'bg-gray-100 dark:bg-gray-800'
+        }`}
+      >
         <div className="flex items-center gap-2 flex-1">
           <div
             {...attributes}
@@ -137,9 +258,10 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
         </span>
       </div>
       <div 
-        className={`flex-1 rounded-b-lg p-3 min-h-[400px] border-2 overflow-y-auto transition-all duration-200 ${
-          isActive
-            ? 'bg-blue-100 dark:bg-blue-950 border-blue-500 dark:border-blue-500' 
+        ref={setScrollAreaRef}
+        className={`flex-1 rounded-b-lg p-3 min-h-[400px] max-h-[600px] border-2 overflow-y-auto transition-all duration-200 ${
+          isActive && !isDraggingColumn
+            ? 'bg-blue-50 dark:bg-blue-950 border-blue-500 dark:border-blue-500' 
             : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
         }`}
       >
@@ -148,6 +270,11 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
             {isActive ? 'Drop here' : 'No tasks'}
           </div>
         ) : (
+          <>
+            {/* Drop indicator at the top when dragging over */}
+            {isActive && activeId && (
+              <div className="h-2 bg-blue-500 dark:bg-blue-400 rounded-full mb-2 transition-opacity" />
+            )}
             <SortableContext items={displayTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
                 {displayTasks.map((task) => (
@@ -155,8 +282,31 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
                 ))}
               </div>
             </SortableContext>
+            {/* Drop indicator at the bottom when dragging over */}
+            {isActive && activeId && (
+              <div className="h-2 bg-blue-500 dark:bg-blue-400 rounded-full mt-2 transition-opacity" />
+            )}
+          </>
         )}
       </div>
+      
+      {/* Bottom drop zone - always visible when dragging */}
+      {activeId && (
+        <div 
+          ref={setBottomDropRef}
+          className={`h-8 transition-all ${
+            isOverBottom || (isActive && activeId)
+              ? 'bg-blue-200 dark:bg-blue-800 border-2 border-blue-500 dark:border-blue-400 rounded-b-lg'
+              : 'bg-transparent'
+          }`}
+        >
+          {isOverBottom && (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-xs font-medium text-blue-700 dark:text-blue-300">Drop here</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -362,67 +512,91 @@ export function SprintBoardView() {
     const activeId = active.id as string;
     let targetColumnId: string | null = null;
     
-    // Check if we're over a column (column ID is status ID)
+    // Check if we're over a column directly (column ID is status ID)
     const overStatus = availableStatuses.find(status => status.id === over.id);
     if (overStatus) {
       targetColumnId = overStatus.id;
-      
-      // When dragging over an empty column, show the task at the end
-      const columnTasks = getTasksForColumn(overStatus.id);
-      const activeTask = tasks.find(t => t.id === activeId);
-      
-      if (activeTask && columnTasks.length > 0) {
-        const tasksWithoutActive = columnTasks.filter(t => t.id !== activeId);
-        setReorderedTasks({
-          ...reorderedTasks,
-          [overStatus.id]: [...tasksWithoutActive, activeTask]
-        });
-      } else if (activeTask && columnTasks.length === 0) {
-        // Empty column - just add the task
-        setReorderedTasks({
-          ...reorderedTasks,
-          [overStatus.id]: [activeTask]
-        });
-      }
     } else {
-      // Check if we're over a task (which means we're in that task's column)
-      const overTask = tasks.find(t => t.id === over.id);
-      if (overTask && availableStatuses) {
-        // Find which status this task belongs to
-        const taskStatus = availableStatuses.find(status => {
-          const taskStatusLower = (overTask.status || "").toLowerCase();
-          const statusNameLower = status.name.toLowerCase();
-          return taskStatusLower === statusNameLower || 
-                 taskStatusLower.includes(statusNameLower) || 
-                 statusNameLower.includes(taskStatusLower);
-        });
-        if (taskStatus) {
-          targetColumnId = taskStatus.id;
-          
-          // Reorder tasks visually within the column to show where the task will be dropped
-          const columnTasks = getTasksForColumn(taskStatus.id);
-          const activeTask = tasks.find(t => t.id === activeId);
-          
-          if (activeTask) {
-            // Remove active task from its current position
-            const tasksWithoutActive = columnTasks.filter(t => t.id !== activeId);
-            const overIndex = tasksWithoutActive.findIndex(t => t.id === over.id);
+      // Check if we're over something inside a column - look at the data
+      const overData = over.data.current;
+      if (overData?.type === 'column' && overData?.column) {
+        targetColumnId = overData.column;
+      } else {
+        // Check if we're over a task (which means we're in that task's column)
+        const overTask = tasks.find(t => t.id === over.id);
+        if (overTask && availableStatuses) {
+          // Find which status this task belongs to
+          const taskStatus = availableStatuses.find(status => {
+            const taskStatusLower = (overTask.status || "").toLowerCase();
+            const statusNameLower = status.name.toLowerCase();
+            return taskStatusLower === statusNameLower || 
+                   taskStatusLower.includes(statusNameLower) || 
+                   statusNameLower.includes(taskStatusLower);
+          });
+          if (taskStatus) {
+            targetColumnId = taskStatus.id;
+          }
+        }
+      }
+    }
+    
+    // Update visual reordering if we have a target column
+    if (targetColumnId) {
+      const targetStatus = availableStatuses.find(status => status.id === targetColumnId);
+      if (targetStatus) {
+        const columnTasks = getTasksForColumn(targetStatus.id);
+        const activeTask = tasks.find(t => t.id === activeId);
+        
+        if (activeTask) {
+          // Check if we're over a specific task to determine insertion position
+          const overTask = tasks.find(t => t.id === over.id);
+          if (overTask && overTask.status && targetStatus.name) {
+            // Find the task's status and see if it matches target
+            const taskStatusMatch = availableStatuses.find(status => {
+              const taskStatusLower = (overTask.status || "").toLowerCase();
+              const statusNameLower = status.name.toLowerCase();
+              return taskStatusLower === statusNameLower || 
+                     taskStatusLower.includes(statusNameLower) || 
+                     statusNameLower.includes(taskStatusLower);
+            });
             
-            if (overIndex >= 0) {
-              // Insert active task at the position of the over task
-              const newOrder = [...tasksWithoutActive];
-              newOrder.splice(overIndex, 0, activeTask);
+            if (taskStatusMatch?.id === targetColumnId) {
+              // We're over a task in the target column - insert at that position
+              const tasksWithoutActive = columnTasks.filter(t => t.id !== activeId);
+              const overIndex = tasksWithoutActive.findIndex(t => t.id === over.id);
+              
+              if (overIndex >= 0) {
+                // Insert active task at the position of the over task
+                const newOrder = [...tasksWithoutActive];
+                newOrder.splice(overIndex, 0, activeTask);
+                setReorderedTasks({
+                  ...reorderedTasks,
+                  [targetColumnId]: newOrder
+                });
+              } else {
+                // Add to end if we can't find the task
+                setReorderedTasks({
+                  ...reorderedTasks,
+                  [targetColumnId]: [...tasksWithoutActive, activeTask]
+                });
+              }
+            } else {
+              // We're over the column but not a task in it - add to end
+              const tasksWithoutActive = columnTasks.filter(t => t.id !== activeId);
               setReorderedTasks({
                 ...reorderedTasks,
-                [taskStatus.id]: newOrder
-              });
-            } else if (tasksWithoutActive.length > 0) {
-              // If we're over the column but not a specific task, add to end
-              setReorderedTasks({
-                ...reorderedTasks,
-                [taskStatus.id]: [...tasksWithoutActive, activeTask]
+                [targetColumnId]: [...tasksWithoutActive, activeTask]
               });
             }
+          } else {
+            // Empty column or not over a task - add to end
+            const tasksWithoutActive = columnTasks.filter(t => t.id !== activeId);
+            setReorderedTasks({
+              ...reorderedTasks,
+              [targetColumnId]: columnTasks.length === 0 
+                ? [activeTask]
+                : [...tasksWithoutActive, activeTask]
+            });
           }
         }
       }
@@ -505,24 +679,37 @@ export function SprintBoardView() {
     // Column IDs are now status IDs, so we can directly use them
     let targetColumnId: string | null = null;
     
-    // Check if we dropped directly on a column (status ID)
-    if (availableStatuses) {
+    // Check if we dropped on a top/bottom drop zone
+    if (typeof overId === 'string' && (overId.endsWith('-top-drop') || overId.endsWith('-bottom-drop'))) {
+      // Extract the column ID from the drop zone ID
+      const columnId = overId.replace(/-top-drop$/, '').replace(/-bottom-drop$/, '');
+      if (availableStatuses?.some(s => s.id === columnId)) {
+        targetColumnId = columnId;
+      }
+    } else if (availableStatuses) {
+      // Check if we dropped directly on a column (status ID)
       const droppedOnStatus = availableStatuses.find(status => status.id === overId);
       if (droppedOnStatus) {
         targetColumnId = droppedOnStatus.id;
       } else {
-        // We dropped on a task, find which status that task belongs to
-        const droppedOnTask = tasks.find(t => t.id === overId);
-        if (droppedOnTask) {
-          const taskStatus = availableStatuses.find(status => {
-            const taskStatusLower = (droppedOnTask.status || "").toLowerCase();
-            const statusNameLower = status.name.toLowerCase();
-            return taskStatusLower === statusNameLower || 
-                   taskStatusLower.includes(statusNameLower) || 
-                   statusNameLower.includes(taskStatusLower);
-          });
-          if (taskStatus) {
-            targetColumnId = taskStatus.id;
+        // Check if we're over something inside a column - look at the data
+        const overData = over.data.current;
+        if (overData?.type === 'column' && overData?.column) {
+          targetColumnId = overData.column;
+        } else {
+          // We dropped on a task, find which status that task belongs to
+          const droppedOnTask = tasks.find(t => t.id === overId);
+          if (droppedOnTask) {
+            const taskStatus = availableStatuses.find(status => {
+              const taskStatusLower = (droppedOnTask.status || "").toLowerCase();
+              const statusNameLower = status.name.toLowerCase();
+              return taskStatusLower === statusNameLower || 
+                     taskStatusLower.includes(statusNameLower) || 
+                     statusNameLower.includes(taskStatusLower);
+            });
+            if (taskStatus) {
+              targetColumnId = taskStatus.id;
+            }
           }
         }
       }
@@ -958,7 +1145,7 @@ export function SprintBoardView() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}

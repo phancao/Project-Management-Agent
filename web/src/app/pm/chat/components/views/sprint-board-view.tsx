@@ -50,6 +50,7 @@ import {
   getStatusIdFromOrderId,
   getStatusIdsFromOrderIds,
   getOrderId,
+  isSameStatus,
   normalizeStatus,
   type DragInfo,
 } from "./sprint-board-helpers";
@@ -1140,7 +1141,7 @@ export function SprintBoardView() {
       }
 
       const newStatus = targetStatus.name;
-      if (!newStatus || newStatus === task.status) {
+      if (!newStatus || isSameStatus(newStatus, task.status)) {
         logTaskDragEvent("task-drag:ignored", {
           projectId: activeProjectId,
           reason: !newStatus ? "empty-status" : "status-unchanged",

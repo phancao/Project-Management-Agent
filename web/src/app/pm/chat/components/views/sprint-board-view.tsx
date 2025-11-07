@@ -270,6 +270,9 @@ export function SprintBoardView() {
   const { activeProjectId, projectIdForData: projectIdForTasks } = useProjectData();
   const { state: loadingState, setTasksState } = usePMLoading();
 
+  const previousProjectIdRef = useRef<string | null>(activeProjectId ?? null);
+  const resetProjectIdRef = useRef<string | null>(activeProjectId ?? null);
+
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -286,6 +289,29 @@ export function SprintBoardView() {
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
   const [isColumnDialogOpen, setIsColumnDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const currentProjectId = activeProjectId ?? null;
+    const previousProjectId = resetProjectIdRef.current;
+
+    if (currentProjectId !== previousProjectId) {
+      debug.project("SprintBoardView project change detected: resetting board state", {
+        previousProjectId,
+        currentProjectId,
+      });
+
+      setColumnOrderIds([]);
+      setColumnOrder([]);
+      setOrderIdToStatusIdMap(new Map<string, string>());
+      setVisibleColumns(new Set<string>());
+      setReorderedTasks({});
+      setDraggedColumnId(null);
+      setActiveColumnId(null);
+      setActiveId(null);
+    }
+
+    resetProjectIdRef.current = currentProjectId;
+  }, [activeProjectId]);
 
   const [dragMeasurements, setDragMeasurements] = useState<DragMeasurements>({
     taskWidth: null,
@@ -305,30 +331,28 @@ export function SprintBoardView() {
     refresh: refreshStatuses,
   } = useStatuses(activeProjectId ?? undefined, "task");
 
+  useEffect(() => {
+    const projectId = activeProjectId ?? null;
+    const boardSnapshot = {
+      projectId,
+      previousProjectId: previousProjectIdRef.current,
+      columnOrderIds,
+      columnOrder,
+      orderIdToStatusId: Array.from(orderIdToStatusIdMap.entries()),
+      availableStatuses: (availableStatuses ?? []).map((status) => ({ id: String(status.id), name: status.name })),
+      visibleColumns: Array.from(visibleColumns).map(String),
+    };
+
+    debug.project("SprintBoardView project effect: mount", boardSnapshot);
+
+    previousProjectIdRef.current = projectId;
+
+    return () => {
+      debug.project("SprintBoardView project effect: cleanup", boardSnapshot);
+    };
+  }, [activeProjectId, columnOrderIds, columnOrder, orderIdToStatusIdMap, availableStatuses, visibleColumns]);
+
   const shouldLoadTasks = loadingState.canLoadTasks && activeProjectId;
-
-  useEffect(() => {
-    if (shouldLoadTasks) {
-      setTasksState({ loading, error, data: tasks });
-    } else {
-      setTasksState({ loading: false, error: null, data: null });
-    }
-  }, [shouldLoadTasks, loading, error, tasks, setTasksState]);
-
-  useEffect(() => {
-    if (activeProjectId && !statusesLoading && availableStatuses.length === 0 && !statusesError) {
-      const timeout = setTimeout(() => refreshStatuses(), 100);
-      return () => clearTimeout(timeout);
-    }
-  }, [activeProjectId, statusesLoading, availableStatuses.length, statusesError, refreshStatuses]);
-
-  useEffect(() => {
-    setSearchQuery("");
-    setPriorityFilter("all");
-    setEpicFilter(null);
-    setSprintFilter(null);
-    setVisibleColumns(new Set());
-  }, [activeProjectId]);
 
   const availablePriorities = useMemo(() => {
     if (backendPriorities && backendPriorities.length > 0) {

@@ -2490,11 +2490,28 @@ export function SprintBoardView() {
   // Apply column order and visibility to columns
   // NEW: Use order IDs for ordering, but keep status IDs for task operations
   const orderedColumns = useMemo(() => {
-    debug.column('Computing orderedColumns', { 
-      columnsLength: columns.length, 
-      visibleColumnsSize: visibleColumns.size, 
-      columnOrderIdsLength: columnOrderIds.length,
+    const originalIndex = draggedColumnOriginalIndexRef.current;
+    let effectiveOrderIds = columnOrderIds;
+
+    if (
+      draggedColumnId !== null &&
+      originalIndex !== null &&
+      originalIndex !== undefined &&
+      columnHoverIndex !== null &&
+      columnHoverIndex !== undefined &&
+      columnHoverIndex !== originalIndex &&
+      columnOrderIds.length > 0
+    ) {
+      effectiveOrderIds = arrayMove(columnOrderIds, originalIndex, columnHoverIndex);
+    }
+
+    debug.column('Computing orderedColumns', {
+      columnsLength: columns.length,
+      visibleColumnsSize: visibleColumns.size,
+      effectiveOrderIdsLength: effectiveOrderIds.length,
       columnOrderIds,
+      columnHoverIndex,
+      originalIndex,
       columnOrderLength: columnOrder.length,
       columnOrder,
       draggedColumnId,
@@ -2574,7 +2591,16 @@ export function SprintBoardView() {
       containerScrollLeft: columnsContainerRef.current?.scrollLeft
     });
     return result;
-  }, [columns, columnOrderIds, columnOrder, visibleColumns, draggedColumnId, orderIdToStatusIdMap, getStatusIdFromOrderId]);
+  }, [
+    columns,
+    columnOrderIds,
+    columnOrder,
+    visibleColumns,
+    draggedColumnId,
+    columnHoverIndex,
+    orderIdToStatusIdMap,
+    getStatusIdFromOrderId,
+  ]);
 
   // Use tasks instead of filteredTasks to ensure we can always find the dragged task
   const activeTask = activeId ? tasks.find(t => String(t.id) === String(activeId)) : null;

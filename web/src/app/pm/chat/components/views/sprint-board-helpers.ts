@@ -152,8 +152,17 @@ export function extractTargetColumn(
   }
   
   const statusId = orderId ? getStatusIdFromOrderId(orderId, orderIdToStatusIdMap) : null;
-  
-  return { orderId, statusId };
+  let derivedStatusId = statusId;
+
+  if (!derivedStatusId && overData?.statusId) {
+    derivedStatusId = String(overData.statusId);
+  }
+
+  if (!derivedStatusId && orderId && !orderId.startsWith('order-')) {
+    derivedStatusId = orderId;
+  }
+
+  return { orderId, statusId: derivedStatusId };
 }
 
 /**

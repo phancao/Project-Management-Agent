@@ -286,19 +286,6 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     willChange: 'transform, opacity, box-shadow',
   };
   
-  // Debug logging for column drag state
-  useEffect(() => {
-    if (isDragging) {
-      debug.dnd('SortableColumn: Column is being dragged', {
-        columnId: column.id,
-        columnTitle: column.title,
-        isDraggingColumn,
-        transform: CSS.Transform.toString(transform),
-        transition
-      });
-    }
-  }, [isDragging, column.id, column.title, isDraggingColumn, transform, transition]);
-  
   // Memoize the items array for SortableContext to ensure stable reference
   // Use a stable string representation of task IDs to prevent unnecessary recalculations
   const sortableItems = useMemo(() => {
@@ -617,11 +604,6 @@ function ColumnDragPreview({ column, tasks, width, height, taskHeight }: { colum
 }
 
 export function SprintBoardView() {
-  // Log component render
-  useEffect(() => {
-    debug.render('SprintBoard component rendered');
-  });
-  
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -710,7 +692,6 @@ export function SprintBoardView() {
       }
       // Also update ref for immediate access
       draggingColumnIdsRef.current = next;
-      debug.dnd('Column drag state changed', { columnId, isDragging, draggingColumnIds: Array.from(next) });
       return next;
     });
   }, []);
@@ -757,7 +738,6 @@ export function SprintBoardView() {
   useEffect(() => {
     if (activeProjectId && !statusesLoading && availableStatuses.length === 0 && !statusesError) {
       // Project changed but statuses are empty and not loading, force a refresh
-      debug.project('Project changed but statuses are empty, forcing refresh', { activeProjectId });
       const timeoutId = setTimeout(() => {
         refreshStatuses();
       }, 100);
@@ -817,13 +797,6 @@ export function SprintBoardView() {
     // First, try to find collisions using closestCorners
     const collisions = closestCorners(args);
     
-    debug.dnd('Custom collision detection', {
-      activeId,
-      allCollisions: collisions.map(c => String(c.id)),
-      collisionsCount: collisions.length,
-      pointerCoordinates: pointerCoordinates ? { x: pointerCoordinates.x, y: pointerCoordinates.y } : null
-    });
-    
     // Filter out the dragged column itself and its droppable zones
     const filteredCollisions = collisions.filter(collision => {
       const collisionId = String(collision.id);
@@ -881,13 +854,6 @@ export function SprintBoardView() {
         });
         
         if (matchingCollision) {
-          debug.dnd('Using pointer-based collision detection (column directly under pointer)', {
-            activeId,
-            orderId: columnUnderPointer.id,
-            distance: columnUnderPointer.distance,
-            collisionId: String(matchingCollision.id),
-            allFilteredCollisions: filteredCollisions.map(c => String(c.id))
-          });
           // Return the matching collision, prioritizing the column ID over droppable zones
           const columnCollision = filteredCollisions.find(c => String(c.id) === columnUnderPointer!.id);
           return columnCollision ? [columnCollision] : [matchingCollision];
@@ -928,25 +894,12 @@ export function SprintBoardView() {
         });
         
         if (matchingCollision) {
-          debug.dnd('Using closest column by distance (pointer not directly over)', {
-            activeId,
-            closestOrderId: closestColumnByDistance.id,
-            distance: closestColumnByDistance.distance,
-            collisionId: String(matchingCollision.id),
-            allFilteredCollisions: filteredCollisions.map(c => String(c.id))
-          });
           // Return the matching collision, prioritizing the column ID over droppable zones
           const columnCollision = filteredCollisions.find(c => String(c.id) === closestColumnByDistance!.id);
           return columnCollision ? [columnCollision] : [matchingCollision];
         }
       }
     }
-    
-    debug.dnd('Filtered collisions (fallback to closestCorners)', {
-      activeId,
-      filteredCollisions: filteredCollisions.map(c => String(c.id)),
-      filteredCount: filteredCollisions.length
-    });
     
     // PRIORITY 3: Fall back to filtered collisions from closestCorners
     // If we have filtered collisions, return them (but prioritize column IDs over droppable zones)
@@ -974,18 +927,14 @@ export function SprintBoardView() {
   
   // Filter tasks
   const filteredTasks = useMemo(() => {
-    debug.filter('Filtering tasks', { tasksLength: tasks.length, loading });
-    
     // Return empty array only if we're loading AND have no tasks yet (to prevent flash of stale data)
     // If we have tasks, always filter them even if loading is true (for real-time filtering)
     if (loading && (!tasks || tasks.length === 0)) {
-      debug.filter('Returning empty (loading with no tasks)');
       return [];
     }
     
     // If we have no tasks at all, return empty
     if (!tasks || tasks.length === 0) {
-      debug.filter('Returning empty (no tasks)');
       return [];
     }
     
@@ -1004,10 +953,6 @@ export function SprintBoardView() {
         const matches = title.includes(query) || description.includes(query);
         return matches;
       });
-      debug.filter(`After search filter (query: "${trimmedQuery}")`, { 
-        filteredCount: filtered.length, 
-        wasCount: initialCount 
-      });
     }
 
     // Priority filter - match by exact priority (case-insensitive)
@@ -1017,10 +962,6 @@ export function SprintBoardView() {
       filtered = filtered.filter(t => {
         const taskPriority = (t.priority || "").toLowerCase();
         return taskPriority === filterPriorityLower;
-      });
-      debug.filter(`After priority filter (${priorityFilter})`, { 
-        filteredCount: filtered.length, 
-        wasCount: beforeCount 
       });
     }
 
@@ -1033,10 +974,6 @@ export function SprintBoardView() {
         }
         return task.epic_id === epicFilter;
       });
-      debug.filter(`After epic filter (${epicFilter})`, { 
-        filteredCount: filtered.length, 
-        wasCount: beforeCount 
-      });
     }
 
     // Sprint filter
@@ -1048,17 +985,7 @@ export function SprintBoardView() {
         }
         return task.sprint_id === sprintFilter;
       });
-      debug.filter(`After sprint filter (${sprintFilter})`, { 
-        filteredCount: filtered.length, 
-        wasCount: beforeCount 
-      });
     }
-
-    debug.filter('Final filtered tasks', { 
-      filteredCount: filtered.length, 
-      originalCount: initialCount,
-      taskIds: filtered.length > 0 ? filtered.slice(0, 5).map(t => t.id) : []
-    });
 
     return filtered;
   }, [tasks, searchQuery, priorityFilter, epicFilter, sprintFilter, loading]);
@@ -1069,7 +996,6 @@ export function SprintBoardView() {
     if (!draggedColumnId || !columnsContainerRef.current) {
       // Clear any existing scroll interval when not dragging a column
       if (horizontalScrollIntervalRef.current) {
-        debug.dnd('Clearing horizontal scroll interval (no drag)', { draggedColumnId, hasContainer: !!columnsContainerRef.current });
         clearInterval(horizontalScrollIntervalRef.current);
         horizontalScrollIntervalRef.current = null;
       }
@@ -1078,15 +1004,6 @@ export function SprintBoardView() {
     
     const container = columnsContainerRef.current;
     let isDragging = true;
-    
-    debug.dnd('Setting up horizontal scroll for column drag', { 
-      draggedColumnId, 
-      containerScrollLeft: container.scrollLeft,
-      containerScrollWidth: container.scrollWidth,
-      containerClientWidth: container.clientWidth,
-      canScrollLeft: container.scrollLeft > 0,
-      canScrollRight: container.scrollLeft < container.scrollWidth - container.clientWidth
-    });
     
     const handleMouseMove = (e: MouseEvent) => {
       if (!container || !isDragging) return;
@@ -1112,21 +1029,13 @@ export function SprintBoardView() {
       
       // Only scroll if we're very close to the edge and there's room to scroll
       if (nearLeftEdge && canScrollLeft) {
-        debug.dnd('Starting horizontal scroll left', { 
-          mouseX, 
-          distanceFromLeft, 
-          scrollLeft: container.scrollLeft,
-          scrollSpeed 
-        });
         // Scroll left
         horizontalScrollIntervalRef.current = setInterval(() => {
           if (container && container.scrollLeft > 0 && isDragging) {
             const newScrollLeft = Math.max(0, container.scrollLeft - scrollSpeed);
             container.scrollLeft = newScrollLeft;
-            debug.dnd('Scrolling left', { oldScrollLeft: container.scrollLeft + scrollSpeed, newScrollLeft });
             // Stop if we've reached the beginning
             if (newScrollLeft === 0 && horizontalScrollIntervalRef.current) {
-              debug.dnd('Reached left edge, stopping scroll');
               clearInterval(horizontalScrollIntervalRef.current);
               horizontalScrollIntervalRef.current = null;
             }
@@ -1136,13 +1045,6 @@ export function SprintBoardView() {
           }
         }, 16); // ~60fps
       } else if (nearRightEdge && canScrollRight) {
-        debug.dnd('Starting horizontal scroll right', { 
-          mouseX, 
-          distanceFromRight, 
-          scrollLeft: container.scrollLeft,
-          maxScroll: container.scrollWidth - container.clientWidth,
-          scrollSpeed 
-        });
         // Scroll right
         horizontalScrollIntervalRef.current = setInterval(() => {
           if (container && isDragging) {
@@ -1150,10 +1052,8 @@ export function SprintBoardView() {
             if (container.scrollLeft < maxScroll) {
               const newScrollLeft = Math.min(maxScroll, container.scrollLeft + scrollSpeed);
               container.scrollLeft = newScrollLeft;
-              debug.dnd('Scrolling right', { oldScrollLeft: container.scrollLeft - scrollSpeed, newScrollLeft, maxScroll });
               // Stop if we've reached the end
               if (newScrollLeft >= maxScroll && horizontalScrollIntervalRef.current) {
-                debug.dnd('Reached right edge, stopping scroll');
                 clearInterval(horizontalScrollIntervalRef.current);
                 horizontalScrollIntervalRef.current = null;
               }
@@ -1170,7 +1070,6 @@ export function SprintBoardView() {
     };
     
     const handleMouseUp = () => {
-      debug.dnd('Mouse up detected, stopping horizontal scroll', { draggedColumnId });
       isDragging = false;
       if (horizontalScrollIntervalRef.current) {
         clearInterval(horizontalScrollIntervalRef.current);
@@ -1182,7 +1081,6 @@ export function SprintBoardView() {
     document.addEventListener('mouseup', handleMouseUp);
     
     return () => {
-      debug.dnd('Cleaning up horizontal scroll listeners', { draggedColumnId });
       isDragging = false;
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -1197,12 +1095,12 @@ export function SprintBoardView() {
     const taskIds = new Set(tasks.map(t => String(t.id)));
     const dragInfo = detectDragType(event, columnOrderIds, taskIds);
     resetDragDimensions();
-    
-    debug.dnd('Drag started', { 
+    debug.dnd('handleDragStart', {
       activeId: dragInfo.id,
       dragType: dragInfo.type,
       orderId: dragInfo.orderId,
       statusId: dragInfo.statusId,
+      columnOrderIds,
     });
     
     if (dragInfo.type === 'column' && dragInfo.orderId) {
@@ -1218,7 +1116,15 @@ export function SprintBoardView() {
       }
       const originalIndex = columnOrderIds.indexOf(dragInfo.orderId);
       draggedColumnOriginalIndexRef.current = originalIndex >= 0 ? originalIndex : null;
-      setColumnHoverIndex(originalIndex >= 0 ? originalIndex : null);
+      const initialHover = originalIndex >= 0 ? originalIndex : null;
+      if (columnHoverIndex !== initialHover) {
+        setColumnHoverIndex(initialHover);
+      }
+      debug.dnd('Column drag initialized', {
+        draggedColumnId: dragInfo.orderId,
+        originalIndex,
+        columnOrderIds,
+      });
       setDraggedColumnId(dragInfo.orderId);
       draggedColumnIdRef.current = dragInfo.orderId;
       lastTargetColumnIdRef.current = null;
@@ -1260,7 +1166,15 @@ export function SprintBoardView() {
       const originalIndex = draggedColumnOriginalIndexRef.current;
       if (!over || !availableStatuses || originalIndex == null) {
         setActiveColumnId(null);
-        setColumnHoverIndex(null);
+        if (columnHoverIndex !== null) {
+          debug.dnd('Column drag over: no valid drop target', {
+            draggedColumnId,
+            originalIndex,
+            columnHoverIndex,
+            overId: over ? String(over.id) : null,
+          });
+          setColumnHoverIndex(null);
+        }
         return;
       }
 
@@ -1276,7 +1190,15 @@ export function SprintBoardView() {
 
       if (overOrderId) {
         if (overOrderId === draggedColumnId) {
-          setColumnHoverIndex(originalIndex);
+          if (columnHoverIndex !== originalIndex) {
+            debug.dnd('Column drag over: hovering original column', {
+              draggedColumnId,
+              originalIndex,
+              columnOrderIds,
+              overOrderId,
+            });
+            setColumnHoverIndex(originalIndex);
+          }
           setActiveColumnId(null);
           return;
         }
@@ -1291,6 +1213,17 @@ export function SprintBoardView() {
 
           if (columnHoverIndex !== targetIndex) {
             setColumnHoverIndex(targetIndex);
+            debug.dnd('Column drag over: hover index updated', {
+              draggedColumnId,
+              overOrderId,
+              position,
+              targetIndex,
+              previewOrder: [
+                ...withoutDragged.slice(0, targetIndex),
+                draggedColumnId,
+                ...withoutDragged.slice(targetIndex),
+              ],
+            });
           }
 
           const overStatusId = getStatusIdFromOrderId(overOrderId, orderIdToStatusIdMap);
@@ -1302,7 +1235,15 @@ export function SprintBoardView() {
         }
       }
 
-      setColumnHoverIndex(null);
+      if (columnHoverIndex !== null) {
+        debug.dnd('Column drag over: cleared hover index', {
+          draggedColumnId,
+          columnHoverIndex,
+          overId: over ? String(over.id) : null,
+          overOrderId: overOrderId ?? null,
+        });
+        setColumnHoverIndex(null);
+      }
       setActiveColumnId(null);
       return;
     }
@@ -1489,12 +1430,13 @@ export function SprintBoardView() {
     
     // Use the detected or existing draggedColumnId
     const finalDraggedColumnId = currentDraggedColumnId || (dragInfo.type === 'column' && dragInfo.orderId ? dragInfo.orderId : null);
-    
-    debug.dnd('Drag ended', { 
-      activeId: active.id,
+    debug.dnd('handleDragEnd', {
+      activeId: String(active.id),
       dragType: dragInfo.type,
-      draggedColumnId: finalDraggedColumnId,
-      overId: over?.id,
+      finalDraggedColumnId,
+      overId: over ? String(over.id) : null,
+      columnOrderIds,
+      columnHoverIndex,
     });
     
     // Clear dragging column IDs on drag end
@@ -1504,10 +1446,6 @@ export function SprintBoardView() {
     // Handle column reordering
     if (finalDraggedColumnId) {
       const activeOrderId = finalDraggedColumnId;
-      debug.dnd('handleDragEnd: Processing column drag end', {
-        activeOrderId,
-        over: over ? { id: over.id, data: over.data?.current } : null,
-      });
       
       setDraggedColumnId(null);
       draggedColumnIdRef.current = null;
@@ -1533,11 +1471,12 @@ export function SprintBoardView() {
         ];
 
         if (!arraysEqual(newOrderIds, columnOrderIds)) {
-          debug.dnd('Column reordering: Success', {
+          debug.dnd('Column reorder applied', {
+            draggedColumnId: finalDraggedColumnId,
             originalIndex,
-            hoverIndex: clampedIndex,
-            activeOrderId,
-            newOrderIdsLength: newOrderIds.length,
+            targetIndex: clampedIndex,
+            oldOrder: columnOrderIds,
+            newOrderIds,
           });
 
           setColumnOrderIds(newOrderIds);
@@ -1548,16 +1487,19 @@ export function SprintBoardView() {
             saveColumnOrderToStorage(activeProjectId, newStatusIds);
           }
         } else {
-          debug.dnd('Column reorder skipped: resulting order unchanged', {
+          debug.dnd('Column reorder skipped (no change)', {
+            draggedColumnId: finalDraggedColumnId,
             originalIndex,
-            hoverIndex: clampedIndex,
+            targetIndex: clampedIndex,
+            columnOrderIds,
           });
         }
       } else {
-        debug.dnd('Column reorder skipped: missing indices', {
+        debug.dnd('Column reorder skipped (missing data)', {
+          draggedColumnId: finalDraggedColumnId,
           originalIndex,
           hoverIndex,
-          hasOrderIds: columnOrderIds.length > 0,
+          columnOrderIdsLength: columnOrderIds.length,
         });
       }
 
@@ -1591,7 +1533,6 @@ export function SprintBoardView() {
     clearTaskDragState();
 
     if (!over) {
-      debug.dnd('No drop target, cancelling task drag');
       return;
     }
 
@@ -1606,7 +1547,6 @@ export function SprintBoardView() {
     // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
     const task = tasks.find(t => String(t.id) === activeIdStr);
     if (!task) {
-      debug.dnd('No task found for activeId', { activeId: activeIdStr });
       return;
     }
 
@@ -1620,8 +1560,6 @@ export function SprintBoardView() {
       tasks
     );
     
-    debug.dnd('Task drag: Target column extracted', { overId, overOrderId, targetColumnId });
-
     if (!targetColumnId || !availableStatuses) {
       debug.error('Could not determine target column', { 
         targetColumnId, 
@@ -1660,11 +1598,8 @@ export function SprintBoardView() {
       return;
     }
 
-    debug.dnd('Moving task', { from: task.status, to: newStatus, statusId: targetColumnId });
-
     // Don't update if status is the same
     if (newStatus === task.status) {
-      debug.dnd('Task already has status, skipping update', { status: newStatus });
       return;
     }
 
@@ -1686,8 +1621,6 @@ export function SprintBoardView() {
     // Always send the status name (not the ID) to match manual editing behavior
     // The backend will look up the status by name, which works correctly
     const statusValue = newStatus;
-    
-    debug.task('Updating task status', { taskId: activeId, statusValue, targetColumnId });
     
     // Handle the update and catch errors to show toast notification instead of console error
     try {
@@ -1723,14 +1656,6 @@ export function SprintBoardView() {
         
         const originalStatus = originalTask?.status || 'No status';
         
-        debug.task('Calling handleUpdateTask', { 
-          taskId: activeId, 
-          statusValue, 
-          targetColumnId,
-          originalStatus,
-          newStatus
-        });
-        
         const result = await handleUpdateTask(activeId, { 
           status: statusValue,
         });
@@ -1756,14 +1681,6 @@ export function SprintBoardView() {
         const actualStatusId = findMatchingStatusId(actualStatus, availableStatuses);
         const statusMatchesTargetColumn = actualStatusId === targetColumnId;
         
-        debug.task('Status ID matching', {
-          actualStatus,
-          actualStatusId,
-          targetColumnId,
-          statusMatchesTargetColumn,
-          availableStatuses: availableStatuses?.map(s => ({ id: s.id, name: s.name })),
-        });
-        
         // Display-friendly status names
         const displayStatus = (status: string | null | undefined): string => {
           if (!status || status === '' || status.toLowerCase().trim() === 'new' || status.toLowerCase().trim() === 'no status') {
@@ -1776,19 +1693,6 @@ export function SprintBoardView() {
         const displayActual = displayStatus(actualStatus);
         const displayExpected = displayStatus(newStatus);
         
-        debug.task('Status update result', {
-          original: originalStatus,
-          originalNormalized: originalStatusNormalized,
-          expected: newStatus,
-          expectedNormalized: expectedStatusNormalized,
-          expectedColumnId: targetColumnId,
-          actual: actualStatus,
-          actualNormalized: actualStatusNormalized,
-          actualStatusId: actualStatusId,
-          statusMatchesTargetColumn,
-          resultObject: result,
-        });
-        
         // Check if the status actually changed to what we expected
         // First, check if status changed at all
         const statusChanged = actualStatusNormalized !== originalStatusNormalized;
@@ -1798,19 +1702,6 @@ export function SprintBoardView() {
         const statusIdMatches = statusMatchesTargetColumn;
         // Overall match: both name and ID should match (or at least one if ID is not available)
         const statusMatchesExpected = statusNameMatches && (statusIdMatches || actualStatusId === null);
-        
-        debug.task('Status change analysis', {
-          statusChanged,
-          statusNameMatches,
-          statusIdMatches,
-          statusMatchesExpected,
-          statusMatchesTargetColumn,
-          originalStatusNormalized,
-          expectedStatusNormalized,
-          actualStatusNormalized,
-          targetColumnId,
-          actualStatusId,
-        });
         
         // IMPORTANT: Only show success if status actually changed AND matches expected
         // If status didn't change, it means the update was ignored by OpenProject
@@ -1847,7 +1738,6 @@ export function SprintBoardView() {
           // This ensures the task moves to the correct column after status change
           // We need to clear both columns so the UI recalculates based on the refreshed task list
           const sourceStatusId = findMatchingStatusId(originalStatus);
-          debug.task('Clearing reordered tasks', { sourceColumn: sourceStatusId, targetColumn: targetColumnId });
           
           setReorderedTasks(prev => {
             const updated = { ...prev };
@@ -1857,7 +1747,6 @@ export function SprintBoardView() {
             if (targetColumnId) {
               delete updated[targetColumnId];
             }
-            debug.task('Updated reorderedTasks', { keys: Object.keys(updated) });
             return updated;
           });
           
@@ -1937,8 +1826,6 @@ export function SprintBoardView() {
     const url = new URL(resolveServiceURL(`pm/tasks/${taskId}`));
     url.searchParams.set('project_id', activeProjectId);
     
-    debug.api('Updating task', { taskId, url: url.toString(), updates });
-    
     const response = await fetch(url.toString(), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1980,8 +1867,6 @@ export function SprintBoardView() {
     }
     
     const result = await response.json();
-    debug.api('Task update success', { result, taskStatus: result.status, expectedStatus: updates.status });
-    
     // Check if the status actually changed
     if (updates.status && result.status) {
       const expectedStatus = String(updates.status);
@@ -2062,21 +1947,6 @@ export function SprintBoardView() {
         taskStatusLower.includes(statusNameLower) ||
         statusNameLower.includes(taskStatusLower);
       
-      // Debug logging for specific task (task ID 1)
-      if (task.id === "1" || task.id === 1) {
-        debug.task('Task 1 matching for column', {
-          columnName: status.name,
-          columnId: status.id,
-          taskStatus,
-          taskStatusLower,
-          statusNameLower,
-          hasNoStatus,
-          matches,
-          normalizedTaskStatus,
-          normalizedStatusName,
-        });
-      }
-      
       return matches;
     });
     
@@ -2122,26 +1992,6 @@ export function SprintBoardView() {
       };
     });
     
-    // Debug: Log total tasks distributed across columns
-    const totalTasksInColumns = columns.reduce((sum, col) => sum + (col.tasks?.length || 0), 0);
-    debug.column('Column distribution', {
-      totalTasksInColumns,
-      totalFilteredTasks: filteredTasks.length,
-      availableStatuses: availableStatuses.length,
-      columns: columns.map(col => ({ id: col.id, title: col.title, taskCount: col.tasks?.length || 0 })),
-    });
-    
-    // Debug: Find unmatched tasks
-    const matchedTaskIds = new Set(columns.flatMap(col => (col.tasks || []).map(t => t.id)));
-    const unmatchedTasks = filteredTasks.filter(t => !matchedTaskIds.has(t.id));
-    if (unmatchedTasks.length > 0) {
-      debug.warn(`Found ${unmatchedTasks.length} unmatched tasks`, unmatchedTasks.map(t => ({
-        id: t.id,
-        title: t.title,
-        status: t.status
-      })));
-    }
-    
     return columns;
   }, [availableStatuses, getTasksForColumn, filteredTasks]);
 
@@ -2177,14 +2027,11 @@ export function SprintBoardView() {
   }, []);
 
   const saveColumnOrderToStorage = useCallback((projectId: string | null, order: string[]) => {
-    debug.storage('saveColumnOrderToStorage called', { projectId, orderLength: order.length, order, windowDefined: typeof window !== 'undefined' });
     if (typeof window === 'undefined' || !projectId || order.length === 0) {
-      debug.storage('Cannot save column order', { projectId, orderLength: order.length, reason: !projectId ? 'no projectId' : order.length === 0 ? 'empty order' : 'window undefined' });
       return;
     }
     const key = getStorageKey(projectId);
     if (!key) {
-      debug.storage('Cannot generate storage key for projectId', { projectId });
       return;
     }
     try {
@@ -2193,13 +2040,6 @@ export function SprintBoardView() {
       // Verify it was saved
       const saved = localStorage.getItem(key);
       const savedParsed = saved ? JSON.parse(saved) : null;
-      debug.storage('Saved column order to localStorage', { 
-        projectId, 
-        key, 
-        order, 
-        saved: savedParsed,
-        savedMatches: JSON.stringify(savedParsed) === JSON.stringify(order)
-      });
       if (JSON.stringify(savedParsed) !== JSON.stringify(order)) {
         debug.error('Column order save verification failed!', { expected: order, actual: savedParsed });
       }
@@ -2233,13 +2073,11 @@ export function SprintBoardView() {
       const key = getStorageKey(projectId);
       if (key) {
         localStorage.removeItem(key);
-        debug.storage('Reset column order: Cleared localStorage', { projectId, key, defaultOrder });
       }
     }
     
     // Set the default order
     setColumnOrder(defaultOrder);
-    debug.storage('Reset column order to default (sorted by status ID)', { projectId, defaultOrder });
   }, []);
 
   // Track the last loaded project ID to avoid re-loading on every render
@@ -2288,7 +2126,6 @@ export function SprintBoardView() {
           // Also set legacy columnOrder for backward compatibility
           setColumnOrder(finalOrder);
           setLastLoadedProjectId(activeProjectId);
-          debug.storage('Loaded column order from localStorage', { projectId: activeProjectId, finalOrder, orderIds });
           // Reset loading flag after a brief delay to allow state to settle
           setTimeout(() => setIsLoadingFromStorage(false), 100);
         } else {
@@ -2315,7 +2152,6 @@ export function SprintBoardView() {
           // Also set legacy columnOrder for backward compatibility
           setColumnOrder(defaultOrder);
           setLastLoadedProjectId(activeProjectId);
-          debug.storage('Using default column order (sorted by status ID)', { defaultOrder, orderIds });
           // Reset loading flag after a brief delay to allow state to settle
           setTimeout(() => setIsLoadingFromStorage(false), 100);
         }
@@ -2362,12 +2198,11 @@ export function SprintBoardView() {
     if (availableStatuses && availableStatuses.length > 0 && activeProjectId) {
       // Check if reset flag is set in localStorage
       const resetFlag = typeof window !== 'undefined' ? localStorage.getItem('sprint-board-reset-column-order') : null;
-      if (resetFlag === 'true') {
+        if (resetFlag === 'true') {
         // Reset the column order
         resetColumnOrderToDefault(activeProjectId, availableStatuses);
         // Clear the flag
         localStorage.removeItem('sprint-board-reset-column-order');
-        debug.storage('Column order reset triggered by flag', { projectId: activeProjectId });
       } else {
         // Check if we need to do a one-time reset for this project (migration to ID-based sorting)
         const resetVersionKey = `sprint-board-column-order-reset-v2-${activeProjectId}`;
@@ -2378,7 +2213,6 @@ export function SprintBoardView() {
           if (typeof window !== 'undefined') {
             localStorage.setItem(resetVersionKey, 'true');
           }
-          debug.storage('Column order reset to ID-based sorting (one-time migration)', { projectId: activeProjectId });
         }
       }
     }
@@ -2412,16 +2246,8 @@ export function SprintBoardView() {
   // Save column order to localStorage whenever columnOrderIds changes (but not during initial load)
   // NEW: Convert order IDs to status IDs before saving
   useEffect(() => {
-    debug.storage('useEffect for columnOrderIds change triggered', { 
-      isLoadingFromStorage, 
-      columnOrderIdsLength: columnOrderIds.length, 
-      activeProjectId, 
-      availableStatusesLength: availableStatuses?.length 
-    });
-    
     if (isLoadingFromStorage) {
       // Don't save during initial load from localStorage
-      debug.storage('Skipping save (loading from storage)', { isLoadingFromStorage });
       return;
     }
     
@@ -2433,42 +2259,22 @@ export function SprintBoardView() {
       const statusIds = new Set(availableStatuses.map(s => String(s.id)));
       const orderHasValidStatuses = statusIdsToSave.length > 0 && statusIdsToSave.some(id => statusIds.has(id));
       
-      debug.storage('Checking if should save', { 
-        orderHasValidStatuses, 
-        columnOrderIds,
-        statusIdsToSave, 
-        statusIds: Array.from(statusIds),
-        allOrderIdsAreValid: statusIdsToSave.every(id => statusIds.has(id))
-      });
-      
       if (orderHasValidStatuses) {
         // Only save if all statuses in the order are valid (but don't require all statuses to be in the order)
         const allOrderIdsAreValid = statusIdsToSave.every(id => statusIds.has(id));
         if (allOrderIdsAreValid) {
-          debug.storage('Calling saveColumnOrderToStorage from useEffect', { activeProjectId, statusIdsToSave, columnOrderIds });
           saveColumnOrderToStorage(activeProjectId, statusIdsToSave);
-          debug.storage('Saved column order via useEffect (backup)', { activeProjectId, statusIdsToSave, columnOrderIds });
           
           // Also update legacy columnOrder for backward compatibility
           setColumnOrder(statusIdsToSave);
         } else {
-          debug.storage('Not saving: some order IDs are invalid', { 
-            columnOrderIds,
-            statusIdsToSave, 
-            statusIds: Array.from(statusIds),
-            invalidIds: statusIdsToSave.filter(id => !statusIds.has(id))
-          });
+          
         }
       } else {
-        debug.storage('Not saving: no valid statuses in order', { columnOrderIds, statusIdsToSave, statusIds: Array.from(statusIds) });
+        
       }
     } else {
-      debug.storage('Not saving: missing requirements', { 
-        columnOrderIdsLength: columnOrderIds.length, 
-        activeProjectId, 
-        availableStatusesLength: availableStatuses?.length,
-        mappingSize: orderIdToStatusIdMap.size
-      });
+      
     }
   }, [columnOrderIds, activeProjectId, availableStatuses, isLoadingFromStorage, saveColumnOrderToStorage, orderIdToStatusIdMap, getStatusIdsFromOrderIds]);
 
@@ -2498,17 +2304,6 @@ export function SprintBoardView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleColumnsArray, activeProjectId, availableStatuses, isLoadingFromStorage]);
 
-  // Track columnOrder changes for debugging
-  useEffect(() => {
-    debug.column('columnOrder state changed', {
-      columnOrder,
-      columnOrderLength: columnOrder.length,
-      draggedColumnId,
-      activeColumnId,
-      containerScrollLeft: columnsContainerRef.current?.scrollLeft
-    });
-  }, [columnOrder, draggedColumnId, activeColumnId]);
-
   // Apply column order and visibility to columns
   // NEW: Use order IDs for ordering, but keep status IDs for task operations
   const orderedColumns = useMemo(() => {
@@ -2532,19 +2327,6 @@ export function SprintBoardView() {
       effectiveOrderIds = previewOrder;
     }
 
-    debug.column('Computing orderedColumns', {
-      columnsLength: columns.length,
-      visibleColumnsSize: visibleColumns.size,
-      effectiveOrderIdsLength: effectiveOrderIds.length,
-      columnOrderIds,
-      columnHoverIndex,
-      originalIndex,
-      columnOrderLength: columnOrder.length,
-      columnOrder,
-      draggedColumnId,
-      columns: columns.map(c => ({ id: c.id, title: c.title }))
-    });
-    
     // First filter by visibility
     let visibleCols = columns;
     if (visibleColumns.size > 0) {
@@ -2556,23 +2338,13 @@ export function SprintBoardView() {
       if (hasMatchingVisibleColumns) {
         // Filter by visibility only if we have matching IDs - convert to strings for comparison
         visibleCols = columns.filter(col => visibleColumns.has(String(col.id)));
-        debug.column('After visibility filter', { 
-          visibleColsLength: visibleCols.length, 
-          visibleColumnsSize: visibleColumns.size 
-        });
       } else {
-        // If visibleColumns has no matching IDs (e.g., from a different project), show all columns
-        debug.warn('visibleColumns has no matching IDs, showing all columns', { 
-          visibleColumns: Array.from(visibleColumns).slice(0, 5), 
-          columnIds: Array.from(columnIds).slice(0, 5) 
-        });
         visibleCols = columns;
       }
     }
     
     // Then apply order using order IDs
     if (columnOrderIds.length === 0) {
-      debug.column('No column order IDs, returning visible columns', { visibleColsLength: visibleCols.length });
       // If no order IDs, return columns with order IDs set to status IDs (fallback)
       return visibleCols.map(col => ({
         ...col,
@@ -2606,18 +2378,7 @@ export function SprintBoardView() {
         orderId: String(col.id) // Fallback: use status ID as order ID
       }));
     
-    const result = [...ordered, ...newColumns];
-    debug.column('Final orderedColumns', { 
-      resultLength: result.length, 
-      orderedLength: ordered.length, 
-      newColumnsLength: newColumns.length,
-      result: result.map(c => ({ id: c.id, orderId: (c as any).orderId, title: c.title })),
-      columnOrderIds,
-      columnOrder,
-      draggedColumnId,
-      containerScrollLeft: columnsContainerRef.current?.scrollLeft
-    });
-    return result;
+    return [...ordered, ...newColumns];
   }, [columns, columnOrderIds, columnOrder, visibleColumns, draggedColumnId, orderIdToStatusIdMap, getStatusIdFromOrderId, draggedColumnOriginalIndexRef.current, columnHoverIndex]);
 
   // Use tasks instead of filteredTasks to ensure we can always find the dragged task
@@ -2653,29 +2414,7 @@ export function SprintBoardView() {
   const isLoading = loadingState.filterData.loading || 
                     (shouldLoadTasks && loading && !hasTasks);
   
-  useEffect(() => {
-    debug.state('Loading check', {
-      filterDataLoading: loadingState.filterData.loading,
-      shouldLoadTasks,
-      loading,
-      statusesLoading,
-      hasTasks,
-      hasStatuses,
-      isLoading,
-      tasksLength: tasks.length,
-      availableStatusesLength: availableStatuses.length,
-    });
-  }, [isLoading, loadingState.filterData.loading, shouldLoadTasks, loading, statusesLoading, hasTasks, hasStatuses, tasks.length, availableStatuses.length]);
-  
   if (isLoading) {
-    debug.render('Showing loading state', {
-      filterDataLoading: loadingState.filterData.loading,
-      shouldLoadTasks,
-      loading,
-      statusesLoading,
-      hasTasks,
-      hasStatuses,
-    });
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-gray-500 dark:text-gray-400">Loading board...</div>
@@ -2915,18 +2654,6 @@ export function SprintBoardView() {
       >
         {/* Kanban Board */}
         {(() => {
-          debug.render('Rendering board', { 
-            orderedColumnsLength: orderedColumns.length, 
-            columnsLength: columns.length, 
-            availableStatusesLength: availableStatuses.length 
-          });
-          if (orderedColumns.length === 0) {
-            debug.warn('orderedColumns is empty', { 
-              columnsLength: columns.length, 
-              visibleColumnsSize: visibleColumns.size, 
-              columnOrderLength: columnOrder.length 
-            });
-          }
           const sortableColumnItems = orderedColumns.map(col => {
             const orderId = (col as any).orderId ?? String(col.id);
             return orderId;

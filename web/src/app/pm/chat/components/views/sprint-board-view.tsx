@@ -3,7 +3,7 @@
 
 "use client";
 
-import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners, useDroppable } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners, useDroppable, type CollisionDetection } from "@dnd-kit/core";
 import type { DragEndEvent, DragStartEvent, DragOverEvent } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
@@ -31,6 +31,26 @@ import { useProjectData } from "../../../hooks/use-project-data";
 import { debug } from "../../../utils/debug";
 
 import { TaskDetailsModal } from "../task-details-modal";
+import {
+  getOrderId,
+  createOrderIdsFromStatusIds,
+  getStatusIdsFromOrderIds,
+  getStatusIdFromOrderId,
+  getOrderIdFromStatusId,
+  detectDragType,
+  extractTargetColumn,
+  normalizeStatus,
+  findMatchingStatusId,
+  formatTaskUpdateError,
+  type DragInfo,
+} from "./sprint-board-helpers";
+
+type DragMeasurements = {
+  taskWidth: number | null;
+  taskHeight: number | null;
+  columnWidth: number | null;
+  columnHeight: number | null;
+};
 
 function TaskCard({ task, onClick, isColumnDragging }: { task: any; onClick: () => void; isColumnDragging?: boolean }) {
   // Ensure task.id is always a string for dnd-kit (OpenProject uses numeric IDs, JIRA uses string IDs)
@@ -41,14 +61,15 @@ function TaskCard({ task, onClick, isColumnDragging }: { task: any; onClick: () 
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    // Disable transitions when a column is being dragged to prevent task animations
-    // When dragging a task, only animate opacity. When not dragging, animate position changes
-    transition: isColumnDragging 
-      ? 'none'  // No transition when columns are being dragged
-      : (isDragging 
-        ? 'opacity 0.2s ease-out' 
-        : (transition || 'transform 300ms cubic-bezier(0.2, 0, 0, 1), opacity 300ms ease')),
-    opacity: isDragging ? 0.5 : 1,
+    transition: isColumnDragging
+      ? 'none'
+      : (isDragging
+        ? 'opacity 160ms ease, box-shadow 160ms ease'
+        : (transition || 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, box-shadow 220ms ease')),
+    opacity: isDragging ? 0 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    willChange: isColumnDragging ? undefined : 'transform, opacity, box-shadow',
+    pointerEvents: isDragging ? 'none' : undefined,
   };
 
   return (
@@ -56,7 +77,8 @@ function TaskCard({ task, onClick, isColumnDragging }: { task: any; onClick: () 
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer"
+      data-task-id={taskId}
+      className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer w-full"
     >
       <div
       {...listeners}
@@ -98,7 +120,67 @@ function TaskCard({ task, onClick, isColumnDragging }: { task: any; onClick: () 
   );
 }
 
-function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, isDraggingColumn, isAnyColumnDragging, onColumnDragStateChange }: { 
+function TaskPlaceholder({ isActive, height }: { isActive?: boolean; height?: number | null }) {
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-lg border-2 border-dashed px-3 py-4 text-sm font-medium transition-all w-full ${
+        isActive
+          ? 'border-blue-500 bg-blue-50/70 text-blue-600 dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-200'
+          : 'border-gray-300 bg-white/60 text-gray-400 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-400'
+      }`}
+      style={{
+        minHeight: height ? `${height}px` : '72px',
+        height: height ? `${height}px` : undefined,
+      }}
+      aria-hidden="true"
+    >
+      <span>Drop here</span>
+    </div>
+  );
+}
+
+function TaskDragPreview({ task, width, height }: { task: any; width?: number | null; height?: number | null }) {
+  return (
+    <div
+      className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl"
+      style={{
+        width: width ? `${width}px` : '100%',
+        height: height ? `${height}px` : undefined,
+        boxShadow: '0 18px 35px -15px rgba(15, 23, 42, 0.45)',
+        transform: 'translateZ(0)',
+      }}
+    >
+      <div className="text-gray-400 dark:text-gray-500">
+        <GripVertical className="w-4 h-4" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-sm text-gray-900 dark:text-white mb-1 line-clamp-2">
+          {task?.title}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          {task?.priority && (
+            <span className={`px-2 py-0.5 rounded ${
+                task.priority === "high" || task.priority === "highest" || task.priority === "critical"
+                  ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                  : task.priority === "medium"
+                  ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                  : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+            }`}>
+              {task.priority}
+            </span>
+          )}
+          {task?.estimated_hours && (
+            <span className="text-gray-500 dark:text-gray-400">
+              ⏱️ {task.estimated_hours}h
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, isDraggingColumn, isAnyColumnDragging, onColumnDragStateChange, orderId, placeholderHeight }: { 
   column: { id: string; title: string }; 
   tasks: any[]; 
   onTaskClick: (task: any) => void;
@@ -107,11 +189,18 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
   isDraggingColumn?: boolean;
   isAnyColumnDragging?: boolean;
   onColumnDragStateChange?: (columnId: string, isDragging: boolean) => void;
+  orderId?: string; // NEW: Order ID for dragging (separate from status ID)
+  placeholderHeight?: number | null;
 }) {
+  // Use orderId for dragging if provided, otherwise fall back to column.id (status ID)
+  const dragId = orderId || column.id;
+  
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: column.id,
+    id: dragId, // NEW: Use order ID for dragging
     data: {
       type: 'column',
+      statusId: column.id, // Keep status ID in data for task operations
+      orderId: orderId || column.id, // Include order ID in data
     },
   });
   
@@ -122,34 +211,42 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     // Only call callback if isDragging actually changed
     if (prevIsDraggingRef.current !== isDragging && onColumnDragStateChange) {
       prevIsDraggingRef.current = isDragging;
-      onColumnDragStateChange(column.id, isDragging);
+      // Use orderId for drag state change if provided, otherwise use column.id
+      onColumnDragStateChange(orderId || column.id, isDragging);
     }
-  }, [isDragging, column.id, onColumnDragStateChange]);
+  }, [isDragging, column.id, orderId, onColumnDragStateChange]);
 
   // Make the entire column droppable
+  // NEW: Use orderId for droppable zones if provided
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({ 
-    id: column.id,
+    id: dragId, // Use order ID for droppable
     data: {
       type: 'column',
-      column: column.id,
+      column: dragId, // Use order ID
+      statusId: column.id, // Keep status ID for task operations
+      orderId: orderId || column.id,
     },
   });
 
   // Separate droppable zones for top and bottom of column (easier to drop)
   const { setNodeRef: setTopDropRef, isOver: isOverTop } = useDroppable({
-    id: `${column.id}-top-drop`,
+    id: `${dragId}-top-drop`, // Use order ID
     data: {
       type: 'column',
-      column: column.id,
+      column: dragId, // Use order ID
+      statusId: column.id, // Keep status ID for task operations
+      orderId: orderId || column.id,
       position: 'top',
     },
   });
 
   const { setNodeRef: setBottomDropRef, isOver: isOverBottom } = useDroppable({
-    id: `${column.id}-bottom-drop`,
+    id: `${dragId}-bottom-drop`, // Use order ID
     data: {
       type: 'column',
-      column: column.id,
+      column: dragId, // Use order ID
+      statusId: column.id, // Keep status ID for task operations
+      orderId: orderId || column.id,
       position: 'bottom',
     },
   });
@@ -160,20 +257,33 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     scrollAreaRef.current = node;
   };
 
-  // CRITICAL: The sortable ref and listeners MUST be on the same element for data to be passed correctly
-  // We'll apply the sortable ref and listeners to the header, and use a separate ref for the droppable container
-  const headerRef = (node: HTMLDivElement | null) => {
+  // CRITICAL: The sortable ref should be on the entire column container for proper transformation
+  // But the drag listeners should only be on the grab handle to allow task dragging
+  // We'll apply the sortable ref to the outer container, and listeners to the grab handle
+  const columnContainerRef = (node: HTMLDivElement | null) => {
     setNodeRef(node);
   };
   
-  const containerRef = (node: HTMLDivElement | null) => {
+  const droppableContainerRef = (node: HTMLDivElement | null) => {
     setDroppableRef(node);
   };
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+  // Enhanced animation styles for column dragging
+  // Combine dnd-kit transform with scale effect during dragging
+  const sortableTransform = CSS.Transform.toString(transform);
+  const columnStyle = {
+    transform: sortableTransform,
+    // Smooth transitions: when dragging, use dnd-kit's transition; when not dragging, use smooth reordering animation
+    transition: isDragging 
+      ? transition || 'transform 160ms ease, opacity 160ms ease, box-shadow 160ms ease' // Use dnd-kit's transition during drag
+      : 'transform 280ms cubic-bezier(0.2, 0, 0, 1), opacity 220ms ease, box-shadow 220ms ease', // Smooth animation when reordering
+    opacity: isDragging ? 1 : (isAnyColumnDragging ? 0.94 : 1),
+    // Add shadow effects during dragging for better visual feedback
+    boxShadow: isDragging 
+      ? '0 20px 40px -25px rgba(15, 23, 42, 0.55)'
+      : (isAnyColumnDragging ? '0 12px 32px -20px rgba(30, 41, 59, 0.35)' : undefined),
+    zIndex: isDragging ? 60 : 1,
+    willChange: 'transform, opacity, box-shadow',
   };
   
   // Debug logging for column drag state
@@ -189,20 +299,15 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     }
   }, [isDragging, column.id, column.title, isDraggingColumn, transform, transition]);
   
-  // Filter out the active task being dragged from the tasks list for display
-  // Convert both to strings for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
-  // Memoize to ensure stable reference and prevent unnecessary re-initializations
-  const displayTasks = useMemo(() => {
-    return tasks.filter(task => String(task.id) !== String(activeId));
-  }, [tasks, activeId]);
-  
   // Memoize the items array for SortableContext to ensure stable reference
   // Use a stable string representation of task IDs to prevent unnecessary recalculations
   const sortableItems = useMemo(() => {
-    const items = displayTasks.map(t => String(t.id));
+    const items = tasks
+      .filter(task => !task?.__placeholder)
+      .map(t => String(t.id));
     // Return empty array if no items to prevent initialization issues
     return items;
-  }, [displayTasks]);
+  }, [tasks]);
   
   // Track when items first become available to ensure proper SortableContext initialization
   // This ensures SortableContext remounts once when items first load, fixing the first-item drag issue
@@ -217,7 +322,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     // to ensure all TaskCard components have mounted and registered with dnd-kit
     if (isInitialMountRef.current) {
       isInitialMountRef.current = false;
-      if (sortableItems.length > 0) {
+    if (sortableItems.length > 0) {
         // Use requestAnimationFrame to ensure DOM is ready and all components have mounted
         requestAnimationFrame(() => {
           setSortableInitKey(prev => prev + 1);
@@ -310,9 +415,13 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
   
   return (
     <div 
-      ref={containerRef}
-      style={style}
+      ref={columnContainerRef}
+      style={columnStyle}
+      {...attributes}
       className="flex flex-col h-full"
+      data-column-id={column.id}
+      data-order-id={dragId}
+      data-dnd-type="column"
     >
       {/* Top drop zone - only show when dragging a task (not a column) */}
       {activeId && !isDraggingColumn && (
@@ -336,25 +445,27 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       )}
       
       <div 
-        ref={headerRef}
-        {...attributes}
-        {...listeners}
-        data-dnd-type="column"
-        data-column-id={column.id}
         className={`flex items-center justify-between p-3 rounded-t-lg transition-colors ${
           isActive && !isDraggingColumn
             ? 'bg-blue-100 dark:bg-blue-900' 
             : 'bg-gray-100 dark:bg-gray-800'
         }`}
-        style={{
-          touchAction: 'none',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-          cursor: isDragging ? 'grabbing' : 'grab',
-        }}
+        data-column-id={column.id}
+        data-order-id={dragId}
       >
         <div className="flex items-center gap-2 flex-1">
-          <div className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0">
+          {/* Column grab handle - only this area is draggable for columns */}
+          <div 
+            {...listeners}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0 cursor-grab active:cursor-grabbing"
+            style={{
+              touchAction: 'none',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              padding: '4px',
+              margin: '-4px',
+            }}
+          >
             <GripHorizontal className="w-4 h-4" />
           </div>
           <h3 className="font-semibold text-gray-900 dark:text-white">
@@ -366,7 +477,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
         </span>
       </div>
       <div 
-        ref={setScrollAreaRef}
+        ref={droppableContainerRef}
         className={`flex-1 rounded-b-lg p-3 min-h-0 border-2 overflow-y-auto transition-all duration-200 ${
           isActive && !isDraggingColumn
             ? 'bg-blue-50 dark:bg-blue-950 border-blue-500 dark:border-blue-500' 
@@ -376,7 +487,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
           overscrollBehavior: 'contain',
         }}
       >
-        {displayTasks.length === 0 ? (
+        {tasks.length === 0 ? (
           <div className={`text-sm text-gray-500 dark:text-gray-400 text-center py-8 font-medium ${isActive && !isDraggingColumn ? 'text-blue-700 dark:text-blue-300' : ''}`}>
             {isActive && !isDraggingColumn ? 'Drop here' : 'No tasks'}
           </div>
@@ -403,11 +514,27 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
                   paddingTop: '0.5rem', // Ensure first task has space for drag handle
                 }}
               >
-                {displayTasks.map((task) => {
+                {tasks.map((task) => {
+                  const isPlaceholder = Boolean(task?.__placeholder);
+                  if (isPlaceholder) {
+                    return (
+                      <TaskPlaceholder
+                        key={String(task.id)}
+                        isActive={isActive && !isDraggingColumn}
+                        height={placeholderHeight}
+                      />
+                    );
+                  }
+
                   // Use String(task.id) for key to match useSortable id and ensure stable keys
                   const taskIdStr = String(task.id);
                   return (
-                    <TaskCard key={taskIdStr} task={task} onClick={() => onTaskClick(task)} isColumnDragging={isAnyColumnDragging} />
+                    <TaskCard
+                      key={taskIdStr}
+                      task={task}
+                      onClick={() => onTaskClick(task)}
+                      isColumnDragging={isAnyColumnDragging}
+                    />
                   );
                 })}
             </div>
@@ -444,6 +571,47 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
   );
 }
 
+function ColumnDragPreview({ column, tasks, width, height, taskHeight }: { column: { id: string; title: string }; tasks: any[]; width?: number | null; height?: number | null; taskHeight?: number | null }) {
+  const previewTasks = (tasks || []).slice(0, 3);
+
+  return (
+    <div
+      className="flex flex-col h-full pointer-events-none"
+      style={{
+        width: width ? `${width}px` : '20rem',
+        height: height ? `${height}px` : undefined,
+        boxShadow: '0 20px 45px -25px rgba(15, 23, 42, 0.45)',
+        borderRadius: '0.75rem',
+        overflow: 'hidden',
+        backgroundColor: 'transparent',
+      }}
+    >
+      <div className="flex items-center justify-between p-3 rounded-t-lg bg-gray-100 dark:bg-gray-800">
+        <div className="flex items-center gap-2 flex-1">
+          <div className="text-gray-400 dark:text-gray-500">
+            <GripHorizontal className="w-4 h-4" />
+          </div>
+          <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+            {column.title}
+          </h3>
+        </div>
+        <span className="px-2 py-1 bg-white dark:bg-gray-700 rounded text-sm font-medium text-gray-700 dark:text-gray-300">
+          {tasks?.length ?? 0}
+        </span>
+      </div>
+      <div className="flex-1 rounded-b-lg border-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 space-y-2">
+        {previewTasks.length > 0 ? (
+          previewTasks.map((task) => (
+            <TaskDragPreview key={task.id} task={task} height={taskHeight} />
+          ))
+        ) : (
+          <TaskPlaceholder isActive={false} height={taskHeight} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function SprintBoardView() {
   // Log component render
   useEffect(() => {
@@ -459,6 +627,13 @@ export function SprintBoardView() {
   const [sprintFilter, setSprintFilter] = useState<string | null>(null);
   const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
   const [reorderedTasks, setReorderedTasks] = useState<Record<string, any[]>>({});
+  // Column Order ID system: Separate visual ordering from status IDs
+  // columnOrderIds: Array of order IDs (e.g., ['order-0', 'order-1', 'order-2'])
+  // orderIdToStatusIdMap: Maps order ID to status ID (e.g., { 'order-0': '1', 'order-1': '3' })
+  const [columnOrderIds, setColumnOrderIds] = useState<string[]>([]);
+  const [orderIdToStatusIdMap, setOrderIdToStatusIdMap] = useState<Map<string, string>>(new Map());
+  
+  // Legacy columnOrder for backward compatibility during migration
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
@@ -477,6 +652,35 @@ export function SprintBoardView() {
   const delayedCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Ref to track draggedColumnId for immediate access (no state update delay)
   const draggedColumnIdRef = useRef<string | null>(null);
+  // Track the last valid target column ID during drag to provide stability
+  const lastTargetColumnIdRef = useRef<string | null>(null);
+  // Track measured dimensions for overlays so they can match source size
+  const [dragDimensions, setDragDimensions] = useState<DragMeasurements>({
+    taskWidth: null,
+    taskHeight: null,
+    columnWidth: null,
+    columnHeight: null,
+  });
+
+  const resetDragDimensions = useCallback(() => {
+    setDragDimensions({
+      taskWidth: null,
+      taskHeight: null,
+      columnWidth: null,
+      columnHeight: null,
+    });
+  }, []);
+
+  const updateDragDimensions = useCallback((updates: Partial<DragMeasurements>) => {
+    setDragDimensions(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const clearTaskDragState = useCallback(() => {
+    setActiveId(null);
+    setActiveColumnId(null);
+    setReorderedTasks({});
+    resetDragDimensions();
+  }, [resetDragDimensions]);
   
   // Memoize the callback to prevent infinite loops
   const handleColumnDragStateChange = useCallback((columnId: string, isDragging: boolean) => {
@@ -595,6 +799,170 @@ export function SprintBoardView() {
       },
     })
   );
+
+  // Custom collision detection that ignores the dragged column
+  // This is needed because dnd-kit considers the dragged item to be "over" itself
+  const customCollisionDetection: CollisionDetection = useCallback((args) => {
+    const { active, droppableContainers, pointerCoordinates } = args;
+    const activeId = String(active.id);
+    
+    // First, try to find collisions using closestCorners
+    const collisions = closestCorners(args);
+    
+    debug.dnd('Custom collision detection', {
+      activeId,
+      allCollisions: collisions.map(c => String(c.id)),
+      collisionsCount: collisions.length,
+      pointerCoordinates: pointerCoordinates ? { x: pointerCoordinates.x, y: pointerCoordinates.y } : null
+    });
+    
+    // Filter out the dragged column itself and its droppable zones
+    const filteredCollisions = collisions.filter(collision => {
+      const collisionId = String(collision.id);
+      // If this is the dragged column, skip it
+      if (collisionId === activeId) {
+        return false;
+      }
+      // If this is a droppable zone of the dragged column, skip it
+      if (collisionId === `${activeId}-top-drop` || collisionId === `${activeId}-bottom-drop`) {
+        return false;
+      }
+      return true;
+    });
+    
+    // PRIORITY 1: Use pointer-based detection to find the column directly under the pointer
+    // This is the most accurate method, especially when there are many columns and horizontal scrolling
+    if (pointerCoordinates && columnsContainerRef.current) {
+      const container = columnsContainerRef.current;
+      const pointerX = pointerCoordinates.x;
+      const pointerY = pointerCoordinates.y;
+      
+      // Find which column the pointer is actually over by checking DOM positions
+      // Use data-order-id for matching (order IDs are used for dragging)
+      const columnElements = container.querySelectorAll('[data-order-id]');
+      let columnUnderPointer: { id: string; distance: number } | null = null;
+      
+      for (const columnEl of columnElements) {
+        const orderId = columnEl.getAttribute('data-order-id');
+        if (orderId && orderId !== activeId) {
+          const columnRect = columnEl.getBoundingClientRect();
+          
+          // Check if pointer is within the column's bounds (both X and Y)
+          if (pointerX >= columnRect.left && pointerX <= columnRect.right &&
+              pointerY >= columnRect.top && pointerY <= columnRect.bottom) {
+            const columnCenterX = columnRect.left + columnRect.width / 2;
+            const distance = Math.abs(pointerX - columnCenterX);
+            
+            // If pointer is directly over this column, use it (prefer closest to center)
+            if (!columnUnderPointer || distance < columnUnderPointer.distance) {
+              columnUnderPointer = { id: orderId, distance };
+            }
+          }
+        }
+      }
+      
+      // If we found a column directly under the pointer, prioritize it
+      if (columnUnderPointer) {
+        // Check if this column is in the filtered collisions (it should be)
+        const matchingCollision = filteredCollisions.find(c => {
+          const collisionId = String(c.id);
+          // Match column ID directly, or match droppable zones (top-drop/bottom-drop)
+          return collisionId === columnUnderPointer!.id || 
+                 collisionId === `${columnUnderPointer!.id}-top-drop` || 
+                 collisionId === `${columnUnderPointer!.id}-bottom-drop`;
+        });
+        
+        if (matchingCollision) {
+          debug.dnd('Using pointer-based collision detection (column directly under pointer)', {
+            activeId,
+            orderId: columnUnderPointer.id,
+            distance: columnUnderPointer.distance,
+            collisionId: String(matchingCollision.id),
+            allFilteredCollisions: filteredCollisions.map(c => String(c.id))
+          });
+          // Return the matching collision, prioritizing the column ID over droppable zones
+          const columnCollision = filteredCollisions.find(c => String(c.id) === columnUnderPointer!.id);
+          return columnCollision ? [columnCollision] : [matchingCollision];
+        }
+      }
+      
+      // PRIORITY 2: If pointer is not directly over any column, find the closest one horizontally
+      // This handles edge cases when dragging near column boundaries
+      // Use a smaller threshold (200px) to avoid selecting columns that are too far away
+      let closestColumnByDistance: { id: string; distance: number } | null = null;
+      
+      for (const columnEl of columnElements) {
+        const orderId = columnEl.getAttribute('data-order-id');
+        if (orderId && orderId !== activeId) {
+          const columnRect = columnEl.getBoundingClientRect();
+          const columnCenterX = columnRect.left + columnRect.width / 2;
+          const distance = Math.abs(pointerX - columnCenterX);
+          
+          // Only consider columns that are reasonably close horizontally
+          // Check if the pointer is within a reasonable horizontal range of the column
+          const horizontalRange = columnRect.width * 1.5; // 1.5x the column width
+          if (distance < horizontalRange) {
+            if (!closestColumnByDistance || distance < closestColumnByDistance.distance) {
+              closestColumnByDistance = { id: orderId, distance };
+            }
+          }
+        }
+      }
+      
+      // If we found a close column (within reasonable distance), use it
+      // But only if it's also in the filtered collisions
+      if (closestColumnByDistance && closestColumnByDistance.distance < 200) { // 200px threshold (reduced from 500px)
+        const matchingCollision = filteredCollisions.find(c => {
+          const collisionId = String(c.id);
+          return collisionId === closestColumnByDistance!.id || 
+                 collisionId === `${closestColumnByDistance!.id}-top-drop` || 
+                 collisionId === `${closestColumnByDistance!.id}-bottom-drop`;
+        });
+        
+        if (matchingCollision) {
+          debug.dnd('Using closest column by distance (pointer not directly over)', {
+            activeId,
+            closestOrderId: closestColumnByDistance.id,
+            distance: closestColumnByDistance.distance,
+            collisionId: String(matchingCollision.id),
+            allFilteredCollisions: filteredCollisions.map(c => String(c.id))
+          });
+          // Return the matching collision, prioritizing the column ID over droppable zones
+          const columnCollision = filteredCollisions.find(c => String(c.id) === closestColumnByDistance!.id);
+          return columnCollision ? [columnCollision] : [matchingCollision];
+        }
+      }
+    }
+    
+    debug.dnd('Filtered collisions (fallback to closestCorners)', {
+      activeId,
+      filteredCollisions: filteredCollisions.map(c => String(c.id)),
+      filteredCount: filteredCollisions.length
+    });
+    
+    // PRIORITY 3: Fall back to filtered collisions from closestCorners
+    // If we have filtered collisions, return them (but prioritize column IDs over droppable zones)
+    if (filteredCollisions.length > 0) {
+      // Sort collisions to prioritize column IDs over droppable zones
+      const sortedCollisions = filteredCollisions.sort((a, b) => {
+        const aId = String(a.id);
+        const bId = String(b.id);
+        const aIsZone = aId.endsWith('-top-drop') || aId.endsWith('-bottom-drop');
+        const bIsZone = bId.endsWith('-top-drop') || bId.endsWith('-bottom-drop');
+        
+        // Column IDs come before droppable zones
+        if (aIsZone && !bIsZone) return 1;
+        if (!aIsZone && bIsZone) return -1;
+        return 0;
+      });
+      
+      return sortedCollisions;
+    }
+    
+    // If no collisions found (excluding the dragged column), return empty array
+    // This will allow the drag to continue but won't trigger any drop actions
+    return [];
+  }, []);
   
   // Filter tasks
   const filteredTasks = useMemo(() => {
@@ -818,328 +1186,85 @@ export function SprintBoardView() {
   }, [draggedColumnId]);
 
   const handleDragStart = (event: DragStartEvent) => {
-    const activeIdStr = String(event.active.id);
-    const activeData = event.active.data.current;
-    
-    // Check if this is the last column
-    const isLastColumn = orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === activeIdStr;
-    
-    // CRITICAL: Check if activeId matches a column ID (status ID)
-    // If it does, and there's no task with that ID, it's definitely a column drag
-    const isColumnId = availableStatuses?.some(s => String(s.id) === activeIdStr);
-    const isTaskId = tasks.some(t => String(t.id) === activeIdStr);
+    const taskIds = new Set(tasks.map(t => String(t.id)));
+    const dragInfo = detectDragType(event, columnOrderIds, taskIds);
+    resetDragDimensions();
     
     debug.dnd('Drag started', { 
-      activeId: activeIdStr, 
-      dataType: activeData?.type, 
-      activeData,
-      isLastColumn,
-      isColumnId,
-      isTaskId,
-      draggingColumnIds: Array.from(draggingColumnIds),
-      draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current),
-      totalColumns: orderedColumns.length,
-      columnOrder: columnOrder,
-      orderedColumns: orderedColumns.map(c => ({ id: c.id, title: c.title })),
-      // Check if column is being dragged (from ref for immediate access)
-      isColumnBeingDragged: draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr)
+      activeId: dragInfo.id,
+      dragType: dragInfo.type,
+      orderId: dragInfo.orderId,
+      statusId: dragInfo.statusId,
     });
     
-    // CRITICAL FIX: If activeId is a column ID, check if we should treat it as a column drag
-    // This handles the case where data.type is not set correctly (e.g., when dragging from header)
-    const isColumnBeingDragged = draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr);
-    
-    // Check if the column has any tasks - if it's empty and we're dragging by ID, it's likely a column drag
-    // Use the columns memoized data to check task count more efficiently
-    const columnWithId = orderedColumns.find(col => col.id === activeIdStr);
-    const columnHasTasks = columnWithId ? (columnWithId.tasks?.length ?? 0) > 0 : false;
-    
-    // Also check if there's a task with this exact ID in the tasks array
-    // If the column has no tasks AND there's a task with this ID elsewhere, it's definitely a column drag
-    const taskWithSameId = tasks.find(t => String(t.id) === activeIdStr);
-    const taskIsInThisColumn = taskWithSameId && columnWithId ? (columnWithId.tasks?.some(t => String(t.id) === String(taskWithSameId.id)) ?? false) : false;
-    
-    // CRITICAL: If it's a column ID and data.type is missing, prioritize column drag detection
-    // The key insight: If data.type is missing, we can't rely on it. Instead, we use heuristics:
-    // - If it's a column ID and NOT a task ID, it's definitely a column drag
-    // - If it's both, we need to check if the column is being dragged (from draggingColumnIds)
-    // - If the column is empty, it's likely a column drag (can't drag a task from an empty column)
-    // - If the task is not in this column, it's a column drag (the task is elsewhere)
-    // - Only treat as task drag if: task exists in this column AND column is NOT being dragged
-    if (isColumnId && !activeData?.type) {
-      // Determine if this is definitely a task drag
-      // It's a task drag ONLY if: task exists in this column AND column is NOT being dragged
-      const isDefinitelyTaskDrag = isTaskId && taskIsInThisColumn && !isColumnBeingDragged && columnHasTasks;
-      
-      if (!isDefinitelyTaskDrag) {
-        // Not a definite task drag, so treat as column drag
-        // This covers: empty columns, columns being dragged, tasks not in this column, or no task with this ID
-        debug.warn('CRITICAL: Column ID detected but data.type is missing - treating as column drag', {
-          activeId: activeIdStr,
-          isColumnId,
-          isTaskId,
-          isColumnBeingDragged,
-          columnHasTasks,
-          taskWithSameId: !!taskWithSameId,
-          taskIsInThisColumn,
-          isDefinitelyTaskDrag,
-          activeData,
-          draggingColumnIds: Array.from(draggingColumnIds),
-          draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)
-        });
-        // Treat as column drag
-        setDraggedColumnId(activeIdStr);
-        draggedColumnIdRef.current = activeIdStr;
-        setActiveId(null);
-        return;
-      } else {
-        // It's a definite task drag, so let it fall through to task drag handling
-        debug.dnd('Column ID matches task ID, but treating as task drag (task in column, column not being dragged)', {
-          activeId: activeIdStr,
-          isColumnId,
-          isTaskId,
-          taskIsInThisColumn,
-          isColumnBeingDragged,
-          columnHasTasks
-        });
-      }
-    }
-    
-    // CRITICAL: Use a small delay to check if a column is being dragged
-    // This handles the race condition where handleDragStart runs before column's isDragging becomes true
-    // We'll check draggingColumnIds after a brief delay
-    // Clear any existing timeout
-    if (delayedCheckTimeoutRef.current) {
-      clearTimeout(delayedCheckTimeoutRef.current);
-      delayedCheckTimeoutRef.current = null;
-    }
-    
-    delayedCheckTimeoutRef.current = setTimeout(() => {
-      // Check both state and ref - prefer ref for immediate access
-      const currentDraggingIds = draggingColumnIdsRef.current.size > 0 
-        ? draggingColumnIdsRef.current 
-        : draggingColumnIds;
-        
-      if (currentDraggingIds.size > 0 && !draggedColumnId) {
-        // Check if activeId matches any column being dragged
-        const matchingColumnId = Array.from(currentDraggingIds).find(colId => {
-          // Check if activeId matches the column ID directly
-          return colId === activeIdStr;
-        });
-        
-        if (matchingColumnId) {
-          debug.warn('CRITICAL: Detected column drag after delay (missed in initial handleDragStart)', {
-            activeId: activeIdStr,
-            matchingColumnId,
-            draggingColumnIds: Array.from(draggingColumnIds),
-            draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current),
-            activeData
-          });
-          // Set the dragged column ID and clear task drag state
-          setDraggedColumnId(matchingColumnId);
-          draggedColumnIdRef.current = matchingColumnId; // Update ref for immediate access
-          setActiveId(null);
-          setActiveColumnId(null);
-          setReorderedTasks({});
+    if (dragInfo.type === 'column' && dragInfo.orderId) {
+      // Column drag
+      try {
+        const columnElement = document.querySelector(`[data-order-id="${dragInfo.orderId}"]`);
+        if (columnElement instanceof HTMLElement) {
+          const rect = columnElement.getBoundingClientRect();
+          updateDragDimensions({ columnWidth: rect.width, columnHeight: rect.height });
         }
+      } catch (error) {
+        debug.warn('Failed to measure column width', { error, dragInfo });
       }
-      delayedCheckTimeoutRef.current = null;
-    }, 100); // Increased delay to 100ms to give more time for column's isDragging to update
-    
-    // CRITICAL: Check for column drags FIRST, before checking for tasks
-    // This prevents column drags from being misidentified as task drags
-    // Priority order: 1) data.type === 'column', 2) activeId matches column ID, 3) task ID
-    
-    // Method 1: Check the data type - this is the most reliable indicator
-    // Columns have data.type === 'column', tasks don't have a type set
-    if (activeData?.type === 'column') {
-      // It's definitely a column being dragged
-      debug.dnd('Detected column drag (by data.type)', { 
-        activeId: activeIdStr, 
-        availableStatuses: availableStatuses?.map(s => s.id),
-        isLastColumn,
-        columnOrder,
-        orderedColumns: orderedColumns.map(c => c.id)
-      });
-      if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
-        debug.dnd('Setting draggedColumnId', { activeId: activeIdStr, isLastColumn });
-        setDraggedColumnId(activeIdStr);
-        draggedColumnIdRef.current = activeIdStr; // Update ref for immediate access
-        setActiveId(null); // Clear any task drag state
-        debug.dnd('Column drag state set', { draggedColumnId: activeIdStr });
-        return;
-      } else {
-        debug.warn('Column ID not found in availableStatuses', { 
-          activeId: activeIdStr,
-          availableStatuses: availableStatuses?.map(s => s.id)
-        });
-      }
-    }
-    
-    // Method 2: This is now handled by the check above (lines 862-906)
-    // If we reach here, either data.type was set, or it's not a column ID, or it's a definite task drag
-    
-    // Method 3: Check if it's a task ID (only if it's NOT a column being dragged)
-    const task = tasks.find(t => String(t.id) === activeIdStr);
-    if (task) {
-      // Double-check: Make sure this is NOT a column ID that's being dragged
-      const isColumnId = availableStatuses?.some(s => String(s.id) === activeIdStr);
-      // Use ref for immediate check (no state update delay)
-      const isColumnBeingDragged = isColumnId && (draggingColumnIdsRef.current.has(activeIdStr) || draggingColumnIds.has(activeIdStr));
-      
-      if (isColumnId && !isColumnBeingDragged && activeData?.type !== 'column') {
-        // This is ambiguous - it's both a task and column ID, but:
-        // - data.type is not 'column'
-        // - The column is not actively being dragged
-        // In this case, treat as task
-        debug.dnd('Ambiguous ID (both task and column), treating as task (no column type in data and column not being dragged)', { 
-          activeId: activeIdStr,
-          dataType: activeData?.type,
-          isColumnBeingDragged,
-          draggingColumnIds: Array.from(draggingColumnIds),
-          draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)
-        });
-      } else if (isColumnBeingDragged) {
-        // The column is being dragged, so this is a column drag, not a task drag
-        debug.dnd('Column is being dragged, treating as column drag (not task)', { 
-          activeId: activeIdStr,
-          isColumnBeingDragged,
-          draggingColumnIds: Array.from(draggingColumnIds),
-          draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current)
-        });
-        setDraggedColumnId(activeIdStr);
-        setActiveId(null);
-        return;
-      }
-      
-      // It's a task being dragged (and not a column being dragged)
-      debug.dnd('Detected task drag', { activeId: activeIdStr, isColumnId, isColumnBeingDragged });
-      setActiveId(activeIdStr);
-      setDraggedColumnId(null); // Clear any column drag state
-      draggedColumnIdRef.current = null; // Clear ref
-      
-      if (availableStatuses) {
-        // Find the status that matches this task's status
-        const currentStatus = availableStatuses.find(status => {
-          const taskStatusLower = (task.status || "").toLowerCase();
-          const statusNameLower = status.name.toLowerCase();
-          return taskStatusLower === statusNameLower || 
-                 taskStatusLower.includes(statusNameLower) || 
-                 statusNameLower.includes(taskStatusLower);
-        });
-        if (currentStatus) {
-          // Use status ID as column ID for highlighting
-          setActiveColumnId(currentStatus.id);
+      setDraggedColumnId(dragInfo.orderId);
+      draggedColumnIdRef.current = dragInfo.orderId;
+      lastTargetColumnIdRef.current = null;
+      setActiveId(null);
+    } else if (dragInfo.type === 'task') {
+      // Task drag
+      try {
+        const taskElement = document.querySelector(`[data-task-id="${dragInfo.id}"]`);
+        if (taskElement instanceof HTMLElement) {
+          const rect = taskElement.getBoundingClientRect();
+          updateDragDimensions({ taskWidth: rect.width, taskHeight: rect.height });
         }
+      } catch (error) {
+        debug.warn('Failed to measure task width', { error, dragInfo });
       }
-      return;
+      setActiveId(dragInfo.id);
+      setDraggedColumnId(null);
+      draggedColumnIdRef.current = null;
+    } else {
+      // Unknown - default to task drag
+      debug.warn('Could not determine drag type, defaulting to task drag', { dragInfo });
+      setActiveId(dragInfo.id);
+      setDraggedColumnId(null);
+      draggedColumnIdRef.current = null;
+      lastTargetColumnIdRef.current = null;
+      setReorderedTasks({});
     }
-    
-    // If we get here, we couldn't determine what's being dragged
-    debug.warn('Could not determine drag type', { 
-      activeIdStr, 
-      activeData,
-      isLastColumn,
-      availableStatuses: availableStatuses?.map(s => s.id),
-      taskIds: tasks.slice(0, 5).map(t => String(t.id))
-    });
   };
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     
-    // CRITICAL FIX: If we haven't detected a column drag yet, but a column is being dragged,
-    // update the state now. This handles the case where drag starts from a task inside the column.
-    const activeIdStr = String(active.id);
-    if (!draggedColumnId && draggingColumnIds.size > 0) {
-      // Check if the activeId matches any of the columns being dragged
-      const matchingColumnId = Array.from(draggingColumnIds).find(colId => {
-        // Check if activeId matches the column ID, or if we're dragging over a column
-        return colId === activeIdStr || (over && String(over.id) === colId);
-      });
-      
-      if (matchingColumnId) {
-        debug.warn('CRITICAL: Detected column drag in handleDragOver (missed in handleDragStart)', {
-          activeId: activeIdStr,
-          matchingColumnId,
-          draggingColumnIds: Array.from(draggingColumnIds),
-          activeData: active.data.current
-        });
-        // Set the dragged column ID and clear task drag state
-        setDraggedColumnId(matchingColumnId);
-        draggedColumnIdRef.current = matchingColumnId; // Update ref for immediate access
-    setActiveId(null);
-        setReorderedTasks({});
-      }
-    }
-    
-    // Check if this is the last column being dragged
-    const isLastColumn = draggedColumnId && orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === draggedColumnId;
-    const overColumnIndex = over ? orderedColumns.findIndex(c => c.id === over.id) : -1;
-    const isOverLastColumn = overColumnIndex === orderedColumns.length - 1;
-    
-    debug.dnd('Drag over', { 
-      activeId: active.id, 
-      overId: over?.id, 
-      draggedColumnId,
-      draggingColumnIds: Array.from(draggingColumnIds),
-      isLastColumn,
-      isOverLastColumn,
-      overColumnIndex,
-      totalColumns: orderedColumns.length,
-      overDataType: over?.data?.current?.type,
-      overData: over?.data?.current
-    });
-    
     // Handle column reordering
     if (draggedColumnId) {
       if (!over || !availableStatuses) {
-        debug.dnd('Drag over: No over target or no availableStatuses', { over: !!over, availableStatuses: !!availableStatuses, isLastColumn });
         setActiveColumnId(null);
         return;
       }
       
-      const activeId = draggedColumnId;
-      let overId: string | null = null;
+      const activeOrderId = draggedColumnId;
+      const { orderId: overOrderId } = extractTargetColumn(
+        String(over.id),
+        over.data.current,
+        columnOrderIds,
+        orderIdToStatusIdMap,
+        availableStatuses,
+        tasks
+      );
       
-      // Check if we're over a column (status ID) directly
-      if (typeof over.id === 'string' && availableStatuses.some(s => s.id === over.id)) {
-        overId = over.id;
-        debug.dnd('Drag over: Found overId from over.id', { overId, activeId, isLastColumn });
-      } else {
-        // Check if we're over something inside a column - look at the data
-        const overData = over.data.current;
-        debug.dnd('Drag over: Checking overData', { overData, overDataType: overData?.type, overDataColumn: overData?.column, isLastColumn });
-        if (overData?.type === 'column' && overData?.column) {
-          overId = overData.column;
-          debug.dnd('Drag over: Found overId from overData.column', { overId, activeId, isLastColumn });
-        } else {
-          debug.dnd('Drag over: Could not find overId from overData', { overData, isLastColumn });
+      // Visual feedback: highlight target column
+      if (overOrderId && overOrderId !== activeOrderId && columnOrderIds.includes(overOrderId)) {
+        const overStatusId = getStatusIdFromOrderId(overOrderId, orderIdToStatusIdMap);
+        if (overStatusId) {
+          setActiveColumnId(overStatusId);
         }
-      }
-      
-      // Visual feedback: highlight the target column if it's different from the dragged column
-      if (overId && overId !== activeId && availableStatuses.some(s => s.id === overId)) {
-        debug.dnd('Drag over: Setting activeColumnId for visual feedback', { 
-          overId, 
-          activeId, 
-          isLastColumn,
-          overColumnIndex,
-          activeColumnIndex: columnOrder.indexOf(activeId),
-          containerScrollLeft: columnsContainerRef.current?.scrollLeft,
-          containerScrollWidth: columnsContainerRef.current?.scrollWidth,
-          containerClientWidth: columnsContainerRef.current?.clientWidth
-        });
-        setActiveColumnId(overId);
+        lastTargetColumnIdRef.current = overOrderId;
       } else {
-        debug.dnd('Drag over: Clearing activeColumnId', { 
-          overId, 
-          activeId, 
-          isLastColumn, 
-          overColumnIndex,
-          reason: !overId ? 'no overId' : overId === activeId ? 'same column' : 'invalid overId',
-          overIdValid: overId && availableStatuses.some(s => s.id === overId)
-        });
         setActiveColumnId(null);
       }
       return;
@@ -1170,43 +1295,21 @@ export function SprintBoardView() {
       return;
     }
 
+    // Handle task dragging - extract target column
     const activeId = active.id as string;
-    let targetColumnId: string | null = null;
-    
-    // Check if we're over a column directly (column ID is status ID)
-    const overStatus = availableStatuses.find(status => status.id === over.id);
-    if (overStatus) {
-      targetColumnId = overStatus.id;
-    } else {
-      // Check if we're over something inside a column - look at the data
-      const overData = over.data.current;
-      if (overData?.type === 'column' && overData?.column) {
-        targetColumnId = overData.column;
-      } else {
-        // Check if we're over a task (which means we're in that task's column)
-        // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
-        const overTask = tasks.find(t => String(t.id) === String(over.id));
-        if (overTask && availableStatuses) {
-          // Find which status this task belongs to
-          const taskStatus = availableStatuses.find(status => {
-            const taskStatusLower = (overTask.status || "").toLowerCase();
-            const statusNameLower = status.name.toLowerCase();
-            return taskStatusLower === statusNameLower || 
-                   taskStatusLower.includes(statusNameLower) || 
-                   statusNameLower.includes(taskStatusLower);
-          });
-          if (taskStatus) {
-            targetColumnId = taskStatus.id;
-          }
-        }
-      }
-    }
+    const { statusId: targetColumnId } = extractTargetColumn(
+      String(over.id),
+      over.data.current,
+      columnOrderIds,
+      orderIdToStatusIdMap,
+      availableStatuses,
+      tasks
+    );
     
     // Update visual reordering if we have a target column
     if (targetColumnId) {
       const targetStatus = availableStatuses.find(status => status.id === targetColumnId);
       if (targetStatus) {
-        const columnTasks = getTasksForColumn(targetStatus.id);
         // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
         const activeTask = tasks.find(t => String(t.id) === String(activeId));
         
@@ -1220,8 +1323,8 @@ export function SprintBoardView() {
                    statusNameLower.includes(taskStatusLower);
           });
           
-          // Prepare new reordered tasks state - preserve existing reordered tasks
-          const newReorderedTasks = { ...reorderedTasks };
+          // Prepare new reordered tasks state focused on affected columns
+          const newReorderedTasks: Record<string, any[]> = {};
           
           // Get base tasks for target column (without the active task)
           const baseTargetTasks = filteredTasks.filter(task => {
@@ -1260,6 +1363,12 @@ export function SprintBoardView() {
           let targetOrder: any[];
           // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
           const overTask = tasks.find(t => String(t.id) === String(over.id));
+          const placeholderTask = {
+            id: `placeholder-${String(activeId)}`,
+            __placeholder: true,
+            originalId: String(activeId),
+            title: activeTask.title,
+          };
           
           // Check if we're over a task in the target column
           if (overTask && overTask.status) {
@@ -1277,17 +1386,24 @@ export function SprintBoardView() {
               const overIndex = baseTargetTasks.findIndex(t => String(t.id) === String(over.id));
               if (overIndex >= 0) {
                 targetOrder = [...baseTargetTasks];
-                targetOrder.splice(overIndex, 0, activeTask);
+                targetOrder.splice(overIndex, 0, placeholderTask);
               } else {
-                targetOrder = [...baseTargetTasks, activeTask];
+                targetOrder = [...baseTargetTasks, placeholderTask];
               }
             } else {
-              targetOrder = [...baseTargetTasks, activeTask];
+              targetOrder = [...baseTargetTasks, placeholderTask];
             }
           } else {
-            targetOrder = baseTargetTasks.length === 0 
-              ? [activeTask]
-              : [...baseTargetTasks, activeTask];
+            const overIdStr = over ? String(over.id) : "";
+            if (overIdStr.endsWith('-top-drop')) {
+              targetOrder = [placeholderTask, ...baseTargetTasks];
+            } else if (overIdStr.endsWith('-bottom-drop')) {
+              targetOrder = [...baseTargetTasks, placeholderTask];
+            } else {
+              targetOrder = baseTargetTasks.length === 0 
+                ? [placeholderTask]
+                : [...baseTargetTasks, placeholderTask];
+            }
           }
           
           newReorderedTasks[targetColumnId] = targetOrder;
@@ -1302,6 +1418,10 @@ export function SprintBoardView() {
           requestAnimationFrame(() => {
             setReorderedTasks(newReorderedTasks);
           });
+
+          setActiveColumnId(targetColumnId);
+
+          return;
         }
       }
     }
@@ -1312,338 +1432,253 @@ export function SprintBoardView() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     
-    // CRITICAL: Check if a column is being dragged (via draggingColumnIds) even if draggedColumnId is not set
-    // This handles the case where handleDragStart missed the column drag detection
-    const activeIdStr = String(active.id);
-    const activeData = active.data.current;
-    
-    // First check: If activeData.type is 'column', it's definitely a column drag
-    if (activeData?.type === 'column') {
-      if (!draggedColumnId) {
-        debug.warn('CRITICAL: Column drag detected in handleDragEnd by data.type (missed in handleDragStart)', {
-          activeId: activeIdStr,
-          activeData,
-          draggedColumnId,
-          draggingColumnIds: Array.from(draggingColumnIds)
-        });
-        // Set draggedColumnId so column reordering logic can run
-        setDraggedColumnId(activeIdStr);
-        draggedColumnIdRef.current = activeIdStr; // Update ref for immediate access
-      }
-    } else if (!draggedColumnId && !draggedColumnIdRef.current && (draggingColumnIds.size > 0 || draggingColumnIdsRef.current.size > 0)) {
-      // Second check: Check if a column is being dragged via draggingColumnIds
-      const currentDraggingIds = draggingColumnIdsRef.current.size > 0 
-        ? draggingColumnIdsRef.current 
-        : draggingColumnIds;
-        
-      // Find the column that's being dragged - check if activeId matches a column ID
-      const matchingColumnId = Array.from(currentDraggingIds).find(colId => {
-        return colId === activeIdStr;
-      });
-      
-      if (matchingColumnId) {
-        debug.warn('CRITICAL: Detected column drag in handleDragEnd (missed in handleDragStart and handleDragOver)', {
-          activeId: activeIdStr,
-          matchingColumnId,
-          draggingColumnIds: Array.from(draggingColumnIds),
-          draggingColumnIdsRef: Array.from(draggingColumnIdsRef.current),
-          activeData
-        });
-        // Set draggedColumnId so column reordering logic can run
-        setDraggedColumnId(matchingColumnId);
-        draggedColumnIdRef.current = matchingColumnId; // Update ref for immediate access
-        // Don't process as task - this is a column drag
-        setActiveId(null);
-        setActiveColumnId(null);
-        setReorderedTasks({});
-      }
-    }
-    
-    // Clear timeout if it's still pending
-    if (delayedCheckTimeoutRef.current) {
-      clearTimeout(delayedCheckTimeoutRef.current);
-      delayedCheckTimeoutRef.current = null;
-    }
+    // Detect drag type using helper
+    const taskIds = new Set(tasks.map(t => String(t.id)));
+    const dragInfo = detectDragType(event, columnOrderIds, taskIds);
     
     // Use ref for immediate access to draggedColumnId (no state update delay)
     const currentDraggedColumnId = draggedColumnIdRef.current || draggedColumnId;
     
-    // Check if this is the last column being dragged
-    const isLastColumn = currentDraggedColumnId && orderedColumns.length > 0 && orderedColumns[orderedColumns.length - 1]?.id === currentDraggedColumnId;
-    const activeColumnIndex = currentDraggedColumnId ? columnOrder.indexOf(currentDraggedColumnId) : -1;
+    // If it's a column drag but draggedColumnId wasn't set, set it now
+    if (dragInfo.type === 'column' && dragInfo.orderId && !currentDraggedColumnId) {
+      debug.warn('Column drag detected in handleDragEnd (missed in handleDragStart)', {
+        dragInfo,
+        draggedColumnId,
+      });
+      setDraggedColumnId(dragInfo.orderId);
+      draggedColumnIdRef.current = dragInfo.orderId;
+      lastTargetColumnIdRef.current = null;
+    }
+    
+    // Use the detected or existing draggedColumnId
+    const finalDraggedColumnId = currentDraggedColumnId || (dragInfo.type === 'column' && dragInfo.orderId ? dragInfo.orderId : null);
     
     debug.dnd('Drag ended', { 
-      activeId: active.id, 
-      overId: over?.id, 
-      draggedColumnId,
-      draggedColumnIdRef: draggedColumnIdRef.current,
-      currentDraggedColumnId,
-      draggingColumnIds: Array.from(draggingColumnIds),
-      isLastColumn,
-      activeColumnIndex,
-      totalColumns: orderedColumns.length,
-      columnOrderLength: columnOrder.length,
-      overDataType: over?.data?.current?.type,
-      overData: over?.data?.current
+      activeId: active.id,
+      dragType: dragInfo.type,
+      draggedColumnId: finalDraggedColumnId,
+      overId: over?.id,
     });
     
     // Clear dragging column IDs on drag end
     setDraggingColumnIds(new Set());
     draggingColumnIdsRef.current = new Set();
     
-    // Handle column reordering - use ref for immediate access
-    if (currentDraggedColumnId) {
-      const activeColumnId = currentDraggedColumnId;
+    // Handle column reordering
+    if (finalDraggedColumnId) {
+      const activeOrderId = finalDraggedColumnId; // This is now an order ID
       debug.dnd('handleDragEnd: Processing column drag end', {
-        activeColumnId,
-        isLastColumn,
-        activeColumnIndex,
+        activeOrderId,
         over: over ? { id: over.id, data: over.data?.current } : null,
-        columnOrder,
-        orderedColumns: orderedColumns.map(c => c.id),
-        containerScrollLeft: columnsContainerRef.current?.scrollLeft
       });
       
       setDraggedColumnId(null);
-      draggedColumnIdRef.current = null; // Clear ref
+      draggedColumnIdRef.current = null;
       setActiveColumnId(null);
+      resetDragDimensions();
       
       if (over && availableStatuses) {
-        debug.dnd('handleDragEnd: Has over target and availableStatuses', {
-          overId: over.id,
-          overDataType: over.data?.current?.type,
-          overData: over.data?.current,
-          availableStatuses: availableStatuses.map(s => s.id)
-        });
-        let overId: string | null = null;
+        // Extract target column using helper
+        const { orderId: overOrderId } = extractTargetColumn(
+          String(over.id),
+          over.data.current,
+          columnOrderIds,
+          orderIdToStatusIdMap,
+          availableStatuses,
+          tasks
+        );
         
-        // Check if we dropped directly on a column (status ID)
-        if (typeof over.id === 'string' && availableStatuses.some(s => s.id === over.id)) {
-          overId = over.id;
-          debug.dnd('Drag ended: Found overId from over.id', { overId, activeColumnId, isLastColumn });
-        } else {
-          // Check if we dropped on something inside a column - look at the data
-          const overData = over.data.current;
-          debug.dnd('Drag ended: Checking overData for overId', { overData, overDataType: overData?.type, overDataColumn: overData?.column, isLastColumn });
-          if (overData?.type === 'column' && overData?.column) {
-            overId = overData.column;
-            debug.dnd('Drag ended: Found overId from overData.column', { overId, activeColumnId, isLastColumn });
-          } else {
-            // Try to find the column from the over.id by checking if it's a task or other element
-            // that belongs to a column
-            debug.dnd('Drag ended: Could not find overId from overData, trying alternative methods', { 
-              overId: over.id, 
-              overDataType: overData?.type,
-              availableStatuses: availableStatuses.map(s => s.id)
-            });
-            
-            // If over.id is a string, check if it matches any status ID
-            if (typeof over.id === 'string') {
-              const matchingStatus = availableStatuses.find(s => s.id === over.id);
-              if (matchingStatus) {
-                overId = matchingStatus.id;
-                debug.dnd('Drag ended: Found overId by matching over.id with status', { overId, activeColumnId });
-              }
-            }
-          }
+        // Use last valid target as fallback if needed
+        const lastTargetOrderId = lastTargetColumnIdRef.current;
+        let finalOverOrderId = overOrderId || lastTargetOrderId || activeOrderId;
+        
+        // Validate finalOverOrderId
+        if (finalOverOrderId && !columnOrderIds.includes(finalOverOrderId)) {
+          finalOverOrderId = activeOrderId;
         }
         
-        debug.dnd('Drag ended: Final overId check', { 
-          overId, 
-          activeColumnId, 
-          overIdValid: overId && availableStatuses.some(s => s.id === overId),
-          isLastColumn,
-          overIdIndex: overId ? columnOrder.indexOf(overId) : -1,
-          activeColumnIndex: columnOrder.indexOf(activeColumnId),
-          columnOrderLength: columnOrder.length,
-          orderedColumnsLength: orderedColumns.length,
-          containerScrollLeft: columnsContainerRef.current?.scrollLeft,
-          containerScrollWidth: columnsContainerRef.current?.scrollWidth,
-          containerClientWidth: columnsContainerRef.current?.clientWidth
-        });
-        
-        if (overId && overId !== activeColumnId && availableStatuses.some(s => s.id === overId)) {
-          // Ensure columnOrder is initialized (use current ordered columns if columnOrder is empty)
-          let currentOrder = columnOrder;
-          debug.dnd('Drag ended: Starting column reorder logic', {
-            currentOrderLength: currentOrder.length,
-            activeColumnId,
-            overId,
-            isLastColumn
-          });
+        // Reorder using order IDs
+        if (finalOverOrderId && finalOverOrderId !== activeOrderId && columnOrderIds.includes(finalOverOrderId) && columnOrderIds.includes(activeOrderId)) {
+          // Ensure columnOrderIds is initialized
+          let currentOrderIds = columnOrderIds;
+          let currentMapping = orderIdToStatusIdMap;
           
-          if (currentOrder.length === 0 && availableStatuses) {
+          if (currentOrderIds.length === 0 && availableStatuses) {
             // Try to load from localStorage first
             debug.dnd('Column order is empty, trying to load from localStorage', { activeProjectId });
             const savedOrder = loadColumnOrderFromStorage(activeProjectId);
             if (savedOrder && savedOrder.length > 0) {
-              // Validate saved order
-              const validStatusIds = new Set(availableStatuses.map(s => s.id));
-              const validOrder = savedOrder.filter(id => validStatusIds.has(id));
+              // Validate saved order - convert to strings for comparison
+              const validStatusIds = new Set(availableStatuses.map(s => String(s.id)));
+              const validOrder = savedOrder.filter(id => validStatusIds.has(String(id))).map(id => String(id));
               if (validOrder.length > 0) {
-                currentOrder = validOrder;
-                debug.dnd('Loaded column order from localStorage', { currentOrder });
-              } else {
-                // Fallback to default order
-                const sortedStatuses = [...availableStatuses].sort((a, b) => {
-                  if (a.is_default && !b.is_default) return -1;
-                  if (!a.is_default && b.is_default) return 1;
-                  return a.name.localeCompare(b.name);
+                // Convert status IDs to order IDs
+                const { orderIds, mapping } = createOrderIdsFromStatusIds(validOrder);
+                currentOrderIds = orderIds;
+                currentMapping = mapping;
+                debug.dnd('Loaded column order from localStorage and converted to order IDs', { 
+                  statusIds: validOrder, 
+                  orderIds: currentOrderIds,
+                  mappingSize: currentMapping.size
                 });
-                currentOrder = sortedStatuses.map(s => s.id);
-                debug.dnd('Using default column order (saved order invalid)', { currentOrder });
+              } else {
+                // Fallback to default order (sorted by status ID) - convert IDs to strings
+                const sortedStatuses = [...availableStatuses].sort((a, b) => {
+                  const aId = typeof a.id === 'number' ? a.id : Number(a.id);
+                  const bId = typeof b.id === 'number' ? b.id : Number(b.id);
+                  
+                  // If both are valid numbers, compare numerically
+                  if (!isNaN(aId) && !isNaN(bId)) {
+                    return aId - bId;
+                  }
+                  
+                  // Otherwise, compare as strings
+                  return String(a.id).localeCompare(String(b.id));
+                });
+                const statusIds = sortedStatuses.map(s => String(s.id));
+                const { orderIds, mapping } = createOrderIdsFromStatusIds(statusIds);
+                currentOrderIds = orderIds;
+                currentMapping = mapping;
+                debug.dnd('Using default column order (saved order invalid, sorted by status ID)', { 
+                  statusIds,
+                  orderIds: currentOrderIds,
+                  mappingSize: currentMapping.size
+                });
               }
             } else {
-              // No saved order, use default
+              // No saved order, use default (sorted by status ID) - convert IDs to strings
               const sortedStatuses = [...availableStatuses].sort((a, b) => {
-                if (a.is_default && !b.is_default) return -1;
-                if (!a.is_default && b.is_default) return 1;
-                return a.name.localeCompare(b.name);
+                const aId = typeof a.id === 'number' ? a.id : Number(a.id);
+                const bId = typeof b.id === 'number' ? b.id : Number(b.id);
+                
+                // If both are valid numbers, compare numerically
+                if (!isNaN(aId) && !isNaN(bId)) {
+                  return aId - bId;
+                }
+                
+                // Otherwise, compare as strings
+                return String(a.id).localeCompare(String(b.id));
               });
-              currentOrder = sortedStatuses.map(s => s.id);
-              debug.dnd('Using default column order (no saved order)', { currentOrder });
+              const statusIds = sortedStatuses.map(s => String(s.id));
+              const { orderIds, mapping } = createOrderIdsFromStatusIds(statusIds);
+              currentOrderIds = orderIds;
+              currentMapping = mapping;
+              debug.dnd('Using default column order (no saved order, sorted by status ID)', { 
+                statusIds,
+                orderIds: currentOrderIds,
+                mappingSize: currentMapping.size
+              });
             }
-            setColumnOrder(currentOrder);
+            // Update state with the new order IDs and mapping
+            setColumnOrderIds(currentOrderIds);
+            setOrderIdToStatusIdMap(currentMapping);
+            // Also update legacy columnOrder for backward compatibility
+            const statusIds = getStatusIdsFromOrderIds(currentOrderIds, currentMapping);
+            setColumnOrder(statusIds);
           }
           
-          const oldIndex = currentOrder.indexOf(activeColumnId);
-          const newIndex = currentOrder.indexOf(overId);
+          // Use order IDs for index calculation
+          const oldIndex = currentOrderIds.indexOf(activeOrderId);
+          const newIndex = currentOrderIds.indexOf(finalOverOrderId);
           
           debug.dnd('Column reordering: Index calculation', {
             oldIndex,
             newIndex,
-            activeColumnId,
-            overId,
-            currentOrder,
-            currentOrderLength: currentOrder.length,
-            isLastColumn,
-            isMovingToLast: newIndex === currentOrder.length - 1,
-            isMovingFromLast: oldIndex === currentOrder.length - 1,
-            activeColumnInOrder: currentOrder.includes(activeColumnId),
-            overIdInOrder: currentOrder.includes(overId),
-            containerScrollLeft: columnsContainerRef.current?.scrollLeft
+            activeOrderId,
+            finalOverOrderId,
+            currentOrderIdsLength: currentOrderIds.length,
           });
           
           if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-            const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
-            debug.dnd('Column reordering: Success - calling arrayMove', { 
+            const newOrderIds = arrayMove(currentOrderIds, oldIndex, newIndex);
+            debug.dnd('Column reordering: Success', { 
               oldIndex, 
               newIndex, 
-              activeColumnId, 
-              overId, 
-              currentOrder, 
-              newOrder,
-              activeProjectId,
-              newOrderLength: newOrder.length,
-              isLastColumn,
-              movedFromIndex: oldIndex,
-              movedToIndex: newIndex,
-              beforeMove: currentOrder.map((id, idx) => ({ id, idx })),
-              afterMove: newOrder.map((id, idx) => ({ id, idx }))
+              activeOrderId,
+              finalOverOrderId,
+              newOrderIdsLength: newOrderIds.length,
             });
-            setColumnOrder(newOrder);
+            
+            // Update state with new order IDs
+            setColumnOrderIds(newOrderIds);
+            
+            // Convert order IDs back to status IDs for localStorage and legacy columnOrder
+            const newStatusIds = getStatusIdsFromOrderIds(newOrderIds, currentMapping);
+            setColumnOrder(newStatusIds);
+            
             // Save immediately after reordering (don't wait for useEffect)
-            if (activeProjectId && newOrder.length > 0) {
-              debug.dnd('Calling saveColumnOrderToStorage', { activeProjectId, newOrder });
-              saveColumnOrderToStorage(activeProjectId, newOrder);
-              debug.dnd('Column reordered and saved', { from: oldIndex, to: newIndex, activeColumnId, overId, newOrder });
+            if (activeProjectId && newStatusIds.length > 0) {
+              debug.dnd('Calling saveColumnOrderToStorage with status IDs', { activeProjectId, newStatusIds, newOrderIds });
+              saveColumnOrderToStorage(activeProjectId, newStatusIds);
+              debug.dnd('Column reordered and saved', { 
+                from: oldIndex, 
+                to: newIndex, 
+                activeOrderId,
+                finalOverOrderId,
+              });
+              // Clear the last target column ref after successful reorder
+              lastTargetColumnIdRef.current = null;
             } else {
               debug.dnd('Column reordered but not saved (missing projectId or empty order)', { 
                 activeProjectId, 
-                newOrder, 
-                newOrderLength: newOrder.length,
+                newStatusIds, 
+                newOrderIds,
+                newStatusIdsLength: newStatusIds.length,
                 hasProjectId: !!activeProjectId,
-                hasOrder: newOrder.length > 0
+                hasOrder: newStatusIds.length > 0
               });
             }
           } else {
             debug.dnd('Column reorder skipped (invalid indices)', { 
               oldIndex, 
               newIndex, 
-              activeColumnId, 
-              overId, 
-              currentOrder,
-              isLastColumn,
+              activeOrderId,
+              finalOverOrderId,
               reason: oldIndex === -1 ? 'oldIndex not found' : newIndex === -1 ? 'newIndex not found' : 'indices are the same',
-              activeColumnInOrder: currentOrder.includes(activeColumnId),
-              overIdInOrder: currentOrder.includes(overId),
-              currentOrderDetails: currentOrder.map((id, idx) => ({ id, idx, isActive: id === activeColumnId, isOver: id === overId }))
             });
           }
         } else {
-          debug.dnd('Column reorder skipped: Invalid overId or conditions not met', {
-            overId,
-            activeColumnId,
-            overIdValid: overId && availableStatuses.some(s => s.id === overId),
-            isSameColumn: overId === activeColumnId,
-            isLastColumn,
-            over: over ? { id: over.id, data: over.data?.current } : null
+          debug.dnd('Column reorder skipped: Invalid conditions', {
+            finalOverOrderId,
+            activeOrderId,
           });
+          lastTargetColumnIdRef.current = null;
         }
       } else {
         debug.dnd('Column reorder skipped: No over target or availableStatuses', {
           hasOver: !!over,
           hasAvailableStatuses: !!availableStatuses,
-          isLastColumn,
-          over: over ? { id: over.id, data: over.data?.current } : null
         });
+        // Clear the last target column ref since reordering was skipped
+        lastTargetColumnIdRef.current = null;
       }
       return;
     }
     
     // Handle task dragging
-    // CRITICAL: First check if this is actually a column drag that wasn't detected in handleDragStart
-    // This can happen if the drag starts from a child element or if handleDragStart failed to detect it
-    // Note: activeData and activeIdStr are already defined above, so we use those
-    
-    // If active data has type 'column', it's definitely a column drag - DO NOT process as task
-    if (activeData?.type === 'column') {
+    // If this was detected as a column drag, don't process as task
+    if (dragInfo.type === 'column') {
       debug.warn('Column drag detected in handleDragEnd but draggedColumnId was not set! This should not happen.', { 
-        activeId: activeIdStr, 
-        activeData,
+        dragInfo,
         draggedColumnId,
-        availableStatuses: availableStatuses?.map(s => s.id)
       });
-      // Don't process as task - just reset state and return
-      setActiveId(null);
-      setActiveColumnId(null);
-      setReorderedTasks({});
+      clearTaskDragState();
       return;
     }
     
-    // Also check if the activeIdStr matches a column ID (status ID) - if so, it's a column drag
-    if (availableStatuses && availableStatuses.some(s => String(s.id) === activeIdStr)) {
-      // Check if it's also a task ID - if not, it's definitely a column
-      const isTaskId = tasks.some(t => String(t.id) === activeIdStr);
-      if (!isTaskId) {
-        debug.warn('Column drag detected in handleDragEnd by ID check but draggedColumnId was not set! This should not happen.', { 
-          activeId: activeIdStr, 
-          activeData,
-          draggedColumnId,
-          isTaskId
-        });
-        // Don't process as task - just reset state and return
-        setActiveId(null);
-        setActiveColumnId(null);
-        setReorderedTasks({});
-        return;
-      }
-    }
-    
-    // Only proceed with task dragging if we're certain it's not a column
-    // If we're not sure, don't process it
-    if (!activeIdStr || activeIdStr === 'undefined' || activeIdStr === 'null') {
-      debug.warn('Invalid activeId in handleDragEnd, skipping task drag processing', { activeId: activeIdStr, activeData });
-      setActiveId(null);
-      setActiveColumnId(null);
-      setReorderedTasks({});
+    // Only proceed with task dragging if we're certain it's a task
+    const activeIdStr = dragInfo.id;
+    if (!activeIdStr || activeIdStr === 'undefined' || activeIdStr === 'null' || dragInfo.type !== 'task') {
+      debug.warn('Invalid or non-task drag in handleDragEnd, skipping task drag processing', { 
+        activeId: activeIdStr, 
+        dragInfo 
+      });
+      clearTaskDragState();
       return;
     }
     
     // Now handle task dragging - we've confirmed it's not a column drag
-    setActiveId(null);
-    setActiveColumnId(null);
-    setReorderedTasks({});
+    clearTaskDragState();
 
     if (!over) {
       debug.dnd('No drop target, cancelling task drag');
@@ -1665,60 +1700,55 @@ export function SprintBoardView() {
       return;
     }
 
-    // Determine which column we're dropping into
-    // Column IDs are now status IDs, so we can directly use them
-    let targetColumnId: string | null = null;
+    // Determine which column we're dropping into using helper function
+    const { orderId: overOrderId, statusId: targetColumnId } = extractTargetColumn(
+      overId,
+      over.data.current,
+      columnOrderIds,
+      orderIdToStatusIdMap,
+      availableStatuses,
+      tasks
+    );
     
-    // Check if we dropped on a top/bottom drop zone
-    if (typeof overId === 'string' && (overId.endsWith('-top-drop') || overId.endsWith('-bottom-drop'))) {
-      // Extract the column ID from the drop zone ID
-      const columnId = overId.replace(/-top-drop$/, '').replace(/-bottom-drop$/, '');
-      if (availableStatuses?.some(s => s.id === columnId)) {
-        targetColumnId = columnId;
-      }
-    } else if (availableStatuses) {
-      // Check if we dropped directly on a column (status ID)
-      const droppedOnStatus = availableStatuses.find(status => status.id === overId);
-      if (droppedOnStatus) {
-        targetColumnId = droppedOnStatus.id;
-      } else {
-        // Check if we're over something inside a column - look at the data
-        const overData = over.data.current;
-        if (overData?.type === 'column' && overData?.column) {
-          targetColumnId = overData.column;
-        } else {
-          // We dropped on a task, find which status that task belongs to
-          // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
-          const droppedOnTask = tasks.find(t => String(t.id) === String(overId));
-          if (droppedOnTask) {
-            const taskStatus = availableStatuses.find(status => {
-              const taskStatusLower = (droppedOnTask.status || "").toLowerCase();
-              const statusNameLower = status.name.toLowerCase();
-              return taskStatusLower === statusNameLower || 
-                     taskStatusLower.includes(statusNameLower) || 
-                     statusNameLower.includes(taskStatusLower);
-            });
-            if (taskStatus) {
-              targetColumnId = taskStatus.id;
-            }
-          }
-        }
-      }
-    }
+    debug.dnd('Task drag: Target column extracted', { overId, overOrderId, targetColumnId });
 
     if (!targetColumnId || !availableStatuses) {
-      debug.dnd('Could not determine target column');
+      debug.error('Could not determine target column', { 
+        targetColumnId, 
+        hasAvailableStatuses: !!availableStatuses,
+        overId,
+        overOrderId,
+        over: over ? { id: over.id, data: over.data?.current } : null
+      });
       return;
     }
 
     // Find the status corresponding to the target column ID
-    const targetStatus = availableStatuses.find(status => status.id === targetColumnId);
+    const targetStatus = availableStatuses.find(status => String(status.id) === String(targetColumnId));
     if (!targetStatus) {
-      debug.warn('Cannot find status for column ID', { targetColumnId });
+      debug.error('Cannot find status for column ID', { 
+        targetColumnId, 
+        availableStatuses: availableStatuses.map(s => ({ id: s.id, name: s.name })),
+        overId,
+        overOrderId
+      });
+      toast.error('Invalid status', {
+        description: `The target status could not be found.`,
+        duration: 4000,
+      });
       return;
     }
 
     const newStatus = targetStatus.name;
+    
+    if (!newStatus) {
+      debug.error('Target status has no name', { targetStatus, targetColumnId });
+      toast.error('Invalid status', {
+        description: `The target status is invalid.`,
+        duration: 4000,
+      });
+      return;
+    }
 
     debug.dnd('Moving task', { from: task.status, to: newStatus, statusId: targetColumnId });
 
@@ -1751,56 +1781,69 @@ export function SprintBoardView() {
     
     // Handle the update and catch errors to show toast notification instead of console error
     try {
+        // Validate inputs before attempting update
+        if (!activeId || activeId === 'undefined' || activeId === 'null') {
+          debug.error('Invalid task ID for update', { activeId, taskId: task?.id });
+          toast.error('Invalid task', {
+            description: 'Cannot update task: invalid task ID.',
+            duration: 4000,
+          });
+          return;
+        }
+        
+        if (!statusValue || statusValue.trim() === '') {
+          debug.error('Invalid status value for update', { statusValue, newStatus, targetStatus });
+          toast.error('Invalid status', {
+            description: 'Cannot update task: invalid status value.',
+            duration: 4000,
+          });
+          return;
+        }
+        
         // Get the original task status before update
         const originalTask = tasks.find(t => String(t.id) === String(activeId));
+        if (!originalTask) {
+          debug.error('Task not found for update', { activeId, taskIds: tasks.map(t => String(t.id)).slice(0, 5) });
+          toast.error('Task not found', {
+            description: 'Cannot update task: task not found in current list.',
+            duration: 4000,
+          });
+          return;
+        }
+        
         const originalStatus = originalTask?.status || 'No status';
+        
+        debug.task('Calling handleUpdateTask', { 
+          taskId: activeId, 
+          statusValue, 
+          targetColumnId,
+          originalStatus,
+          newStatus
+        });
         
         const result = await handleUpdateTask(activeId, { 
           status: statusValue,
         });
         
+        if (!result) {
+          debug.error('handleUpdateTask returned null/undefined', { activeId, statusValue });
+          toast.error('Update failed', {
+            description: 'The task update did not return a result. Please try again.',
+            duration: 4000,
+          });
+          return;
+        }
+        
         // Get the actual status returned from OpenProject/JIRA
         const actualStatus = result?.status || null;
         
-        // Normalize status values for comparison (handle null, undefined, empty string, "No status", etc.)
-        const normalizeStatusForComparison = (status: string | null | undefined): string => {
-          if (!status) return '';
-          const normalized = status.toLowerCase().trim();
-          // Treat "new", "no status", empty string as the same
-          if (normalized === '' || normalized === 'new' || normalized === 'no status' || normalized === 'none') {
-            return '';
-          }
-          return normalized;
-        };
         
-        // Also try to match status by checking if it's in the available statuses
-        // This handles cases where the status name might be slightly different
-        const findMatchingStatusId = (statusName: string | null | undefined): string | null => {
-          if (!statusName || !availableStatuses) return null;
-          const normalized = normalizeStatusForComparison(statusName);
-          // First try exact match
-          let matching = availableStatuses.find(s => {
-            const sNormalized = normalizeStatusForComparison(s.name);
-            return sNormalized === normalized;
-          });
-          // If no exact match, try partial match
-          if (!matching) {
-            matching = availableStatuses.find(s => {
-              const sNormalized = normalizeStatusForComparison(s.name);
-              return sNormalized.includes(normalized) || normalized.includes(sNormalized);
-            });
-          }
-          const foundId = matching?.id || null;
-          debug.task('findMatchingStatusId', { statusName, normalized, foundId, matchingStatus: matching?.name });
-          return foundId;
-        };
-        
-        const actualStatusNormalized = normalizeStatusForComparison(actualStatus);
-        const expectedStatusNormalized = normalizeStatusForComparison(newStatus);
-        const originalStatusNormalized = normalizeStatusForComparison(originalStatus);
+        const actualStatusNormalized = normalizeStatus(actualStatus);
+        const expectedStatusNormalized = normalizeStatus(newStatus);
+        const originalStatusNormalized = normalizeStatus(originalStatus);
         
         // Check if the actual status matches the target column ID
-        const actualStatusId = findMatchingStatusId(actualStatus);
+        const actualStatusId = findMatchingStatusId(actualStatus, availableStatuses);
         const statusMatchesTargetColumn = actualStatusId === targetColumnId;
         
         debug.task('Status ID matching', {
@@ -1939,34 +1982,24 @@ export function SprintBoardView() {
         
         // Note: handleUpdateTask already refreshes the task list, so we don't need to do it again here
       } catch (err) {
-        // Catch and handle the error - show toast notification instead of console error
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        let userFriendlyMessage = 'Failed to update task status';
-        let description = errorMessage;
+        // Use helper function to format error message
+        const { message: userFriendlyMessage, description } = formatTaskUpdateError(err);
         
-        // Make OpenProject permission errors more user-friendly
-        if (errorMessage.includes('no valid transition exists') || 
-            errorMessage.includes('no valid transition')) {
-          userFriendlyMessage = 'Status transition not allowed';
-          description = 'You do not have permission to change the task status from the current status to the target status based on your role. Please contact your administrator or try a different status transition.';
-        } else if (errorMessage.includes('Status is invalid')) {
-          userFriendlyMessage = 'Status change not allowed';
-          description = 'This status change is not allowed. The status transition may be restricted by your role permissions or workflow rules.';
-        } else if (errorMessage.includes('workflow') || errorMessage.includes('transition')) {
-          userFriendlyMessage = 'Workflow restriction';
-          description = 'This status transition is not allowed by the workflow rules. Please try a different status or contact your administrator.';
-        }
-        
-        // Only log to debug if enabled (not to console.error to avoid noise)
+        // Log detailed error information for debugging
         debug.error('Error updating task status', { 
-          errorMessage, 
+          error: err,
+          errorMessage: err instanceof Error ? err.message : String(err),
+          errorStack: err instanceof Error ? err.stack : undefined,
           userFriendlyMessage, 
           description,
           taskId: activeId,
-          targetStatus: newStatus
+          task: task ? { id: task.id, title: task.title, status: task.status } : null,
+          targetStatus: newStatus,
+          targetColumnId,
+          statusValue,
         });
         
-        // Show toast notification - this is the primary way to inform the user
+        // Show toast notification
         toast.error(userFriendlyMessage, {
           description: description,
           duration: 6000,
@@ -2137,14 +2170,9 @@ export function SprintBoardView() {
       return matches;
     });
     
-    // If we have reordered tasks for this column, use them (but filter out the active dragging task)
+    // If we have reordered tasks for this column, use them (includes placeholder when applicable)
     const reordered = reorderedTasks[statusId];
     if (reordered) {
-      // Filter out active task if it's being dragged (it will be shown in DragOverlay)
-      if (activeId) {
-        // Convert to string for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
-        return reordered.filter(t => String(t.id) !== String(activeId));
-      }
       return reordered;
     }
     
@@ -2213,6 +2241,8 @@ export function SprintBoardView() {
     return `sprint-board-column-order-${projectId}`;
   };
 
+  // Helper functions for Column Order ID system are now imported from helpers
+
   const getVisibilityStorageKey = (projectId: string | null) => {
     if (!projectId) return null;
     return `sprint-board-column-visibility-${projectId}`;
@@ -2268,6 +2298,40 @@ export function SprintBoardView() {
     }
   }, []);
 
+  // Helper function to reset column order to default (sorted by status ID)
+  const resetColumnOrderToDefault = useCallback((projectId: string | null, statuses: typeof availableStatuses) => {
+    if (!statuses || statuses.length === 0) return;
+    
+    // Sort by status ID (numeric if possible, otherwise string)
+    const sortedStatuses = [...statuses].sort((a, b) => {
+      const aId = typeof a.id === 'number' ? a.id : Number(a.id);
+      const bId = typeof b.id === 'number' ? b.id : Number(b.id);
+      
+      // If both are valid numbers, compare numerically
+      if (!isNaN(aId) && !isNaN(bId)) {
+        return aId - bId;
+      }
+      
+      // Otherwise, compare as strings
+      return String(a.id).localeCompare(String(b.id));
+    });
+    
+    const defaultOrder = sortedStatuses.map(s => s.id);
+    
+    // Clear localStorage for this project
+    if (projectId && typeof window !== 'undefined') {
+      const key = getStorageKey(projectId);
+      if (key) {
+        localStorage.removeItem(key);
+        debug.storage('Reset column order: Cleared localStorage', { projectId, key, defaultOrder });
+      }
+    }
+    
+    // Set the default order
+    setColumnOrder(defaultOrder);
+    debug.storage('Reset column order to default (sorted by status ID)', { projectId, defaultOrder });
+  }, []);
+
   // Track the last loaded project ID to avoid re-loading on every render
   const [lastLoadedProjectId, setLastLoadedProjectId] = useState<string | null>(null);
   // Track if we're currently loading from localStorage to avoid saving during initial load
@@ -2288,31 +2352,60 @@ export function SprintBoardView() {
           const validOrder = savedOrder.filter(id => validStatusIds.has(id));
           
           // Add any missing statuses (new statuses that weren't in the saved order)
+          // Sort missing statuses by ID (numeric if possible, otherwise string)
           const missingStatuses = availableStatuses
             .filter(s => !validOrder.includes(s.id))
             .sort((a, b) => {
-              if (a.is_default && !b.is_default) return -1;
-              if (!a.is_default && b.is_default) return 1;
-              return a.name.localeCompare(b.name);
+              const aId = typeof a.id === 'number' ? a.id : Number(a.id);
+              const bId = typeof b.id === 'number' ? b.id : Number(b.id);
+              
+              // If both are valid numbers, compare numerically
+              if (!isNaN(aId) && !isNaN(bId)) {
+                return aId - bId;
+              }
+              
+              // Otherwise, compare as strings
+              return String(a.id).localeCompare(String(b.id));
             });
           
           const finalOrder = [...validOrder, ...missingStatuses.map(s => s.id)];
+          
+          // Create order IDs from status IDs
+          const { orderIds, mapping } = createOrderIdsFromStatusIds(finalOrder.map(id => String(id)));
+          setColumnOrderIds(orderIds);
+          setOrderIdToStatusIdMap(mapping);
+          
+          // Also set legacy columnOrder for backward compatibility
           setColumnOrder(finalOrder);
           setLastLoadedProjectId(activeProjectId);
-          debug.storage('Loaded column order from localStorage', { projectId: activeProjectId, finalOrder });
+          debug.storage('Loaded column order from localStorage', { projectId: activeProjectId, finalOrder, orderIds });
           // Reset loading flag after a brief delay to allow state to settle
           setTimeout(() => setIsLoadingFromStorage(false), 100);
         } else {
-          // No saved order, use default (sorted by default first, then name)
+          // No saved order, use default (sorted by status ID)
           const sortedStatuses = [...availableStatuses].sort((a, b) => {
-            if (a.is_default && !b.is_default) return -1;
-            if (!a.is_default && b.is_default) return 1;
-            return a.name.localeCompare(b.name);
+            const aId = typeof a.id === 'number' ? a.id : Number(a.id);
+            const bId = typeof b.id === 'number' ? b.id : Number(b.id);
+            
+            // If both are valid numbers, compare numerically
+            if (!isNaN(aId) && !isNaN(bId)) {
+              return aId - bId;
+            }
+            
+            // Otherwise, compare as strings
+            return String(a.id).localeCompare(String(b.id));
           });
-          const defaultOrder = sortedStatuses.map(s => s.id);
+          const defaultOrder = sortedStatuses.map(s => String(s.id));
+          
+          // Create order IDs from status IDs
+          const { orderIds, mapping } = createOrderIdsFromStatusIds(defaultOrder);
+          setColumnOrderIds(orderIds);
+          setOrderIdToStatusIdMap(mapping);
+          
+          // Also set legacy columnOrder for backward compatibility
           setColumnOrder(defaultOrder);
           setLastLoadedProjectId(activeProjectId);
-          debug.storage('Using default column order', { defaultOrder });
+          debug.storage('Using default column order (sorted by status ID)', { defaultOrder, orderIds });
           // Reset loading flag after a brief delay to allow state to settle
           setTimeout(() => setIsLoadingFromStorage(false), 100);
         }
@@ -2347,16 +2440,71 @@ export function SprintBoardView() {
     } else if (!activeProjectId && lastLoadedProjectId) {
       // Clear column order and visibility when no project is selected
       setColumnOrder([]);
+      setColumnOrderIds([]);
+      setOrderIdToStatusIdMap(new Map());
       setVisibleColumns(new Set());
       setLastLoadedProjectId(null);
     }
-  }, [availableStatuses, activeProjectId, lastLoadedProjectId, loadColumnOrderFromStorage]);
+  }, [availableStatuses, activeProjectId, lastLoadedProjectId, loadColumnOrderFromStorage, createOrderIdsFromStatusIds]);
 
-  // Save column order to localStorage whenever it changes (but not during initial load)
+  // Reset column order to default (sorted by status ID) when flag is set or on first load
   useEffect(() => {
-    debug.storage('useEffect for columnOrder change triggered', { 
+    if (availableStatuses && availableStatuses.length > 0 && activeProjectId) {
+      // Check if reset flag is set in localStorage
+      const resetFlag = typeof window !== 'undefined' ? localStorage.getItem('sprint-board-reset-column-order') : null;
+      if (resetFlag === 'true') {
+        // Reset the column order
+        resetColumnOrderToDefault(activeProjectId, availableStatuses);
+        // Clear the flag
+        localStorage.removeItem('sprint-board-reset-column-order');
+        debug.storage('Column order reset triggered by flag', { projectId: activeProjectId });
+      } else {
+        // Check if we need to do a one-time reset for this project (migration to ID-based sorting)
+        const resetVersionKey = `sprint-board-column-order-reset-v2-${activeProjectId}`;
+        const hasReset = typeof window !== 'undefined' ? localStorage.getItem(resetVersionKey) : null;
+        if (!hasReset) {
+          // First time loading with new ID-based sorting, reset the order
+          resetColumnOrderToDefault(activeProjectId, availableStatuses);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(resetVersionKey, 'true');
+          }
+          debug.storage('Column order reset to ID-based sorting (one-time migration)', { projectId: activeProjectId });
+        }
+      }
+    }
+  }, [availableStatuses, activeProjectId, resetColumnOrderToDefault]);
+
+  // Expose reset function to window for manual testing
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).resetSprintBoardColumnOrder = () => {
+        if (availableStatuses && availableStatuses.length > 0 && activeProjectId) {
+          resetColumnOrderToDefault(activeProjectId, availableStatuses);
+          console.log('Column order reset to default (sorted by status ID)');
+        } else {
+          console.warn('Cannot reset column order: no statuses or project ID');
+        }
+      };
+      // Also expose a function to set the reset flag
+      (window as any).setSprintBoardResetFlag = () => {
+        localStorage.setItem('sprint-board-reset-column-order', 'true');
+        console.log('Reset flag set. Refresh the page to reset column order.');
+      };
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete (window as any).resetSprintBoardColumnOrder;
+        delete (window as any).setSprintBoardResetFlag;
+      }
+    };
+  }, [availableStatuses, activeProjectId, resetColumnOrderToDefault]);
+
+  // Save column order to localStorage whenever columnOrderIds changes (but not during initial load)
+  // NEW: Convert order IDs to status IDs before saving
+  useEffect(() => {
+    debug.storage('useEffect for columnOrderIds change triggered', { 
       isLoadingFromStorage, 
-      columnOrderLength: columnOrder.length, 
+      columnOrderIdsLength: columnOrderIds.length, 
       activeProjectId, 
       availableStatusesLength: availableStatuses?.length 
     });
@@ -2367,44 +2515,52 @@ export function SprintBoardView() {
       return;
     }
     
-    if (columnOrder.length > 0 && activeProjectId && availableStatuses) {
-      // Save if we have valid statuses in the order (less strict condition)
-      // This ensures the order is saved even if not all statuses are present yet
-      const statusIds = new Set(availableStatuses.map(s => s.id));
-      const orderHasValidStatuses = columnOrder.length > 0 && columnOrder.some(id => statusIds.has(id));
+    if (columnOrderIds.length > 0 && activeProjectId && availableStatuses && orderIdToStatusIdMap.size > 0) {
+      // Convert order IDs to status IDs before saving
+      const statusIdsToSave = getStatusIdsFromOrderIds(columnOrderIds, orderIdToStatusIdMap);
+      
+      // Validate that all status IDs exist in availableStatuses
+      const statusIds = new Set(availableStatuses.map(s => String(s.id)));
+      const orderHasValidStatuses = statusIdsToSave.length > 0 && statusIdsToSave.some(id => statusIds.has(id));
       
       debug.storage('Checking if should save', { 
         orderHasValidStatuses, 
-        columnOrder, 
+        columnOrderIds,
+        statusIdsToSave, 
         statusIds: Array.from(statusIds),
-        allOrderIdsAreValid: columnOrder.every(id => statusIds.has(id))
+        allOrderIdsAreValid: statusIdsToSave.every(id => statusIds.has(id))
       });
       
       if (orderHasValidStatuses) {
         // Only save if all statuses in the order are valid (but don't require all statuses to be in the order)
-        const allOrderIdsAreValid = columnOrder.every(id => statusIds.has(id));
+        const allOrderIdsAreValid = statusIdsToSave.every(id => statusIds.has(id));
         if (allOrderIdsAreValid) {
-          debug.storage('Calling saveColumnOrderToStorage from useEffect', { activeProjectId, columnOrder });
-          saveColumnOrderToStorage(activeProjectId, columnOrder);
-          debug.storage('Saved column order via useEffect (backup)', { activeProjectId, columnOrder });
+          debug.storage('Calling saveColumnOrderToStorage from useEffect', { activeProjectId, statusIdsToSave, columnOrderIds });
+          saveColumnOrderToStorage(activeProjectId, statusIdsToSave);
+          debug.storage('Saved column order via useEffect (backup)', { activeProjectId, statusIdsToSave, columnOrderIds });
+          
+          // Also update legacy columnOrder for backward compatibility
+          setColumnOrder(statusIdsToSave);
         } else {
           debug.storage('Not saving: some order IDs are invalid', { 
-            columnOrder, 
+            columnOrderIds,
+            statusIdsToSave, 
             statusIds: Array.from(statusIds),
-            invalidIds: columnOrder.filter(id => !statusIds.has(id))
+            invalidIds: statusIdsToSave.filter(id => !statusIds.has(id))
           });
         }
       } else {
-        debug.storage('Not saving: no valid statuses in order', { columnOrder, statusIds: Array.from(statusIds) });
+        debug.storage('Not saving: no valid statuses in order', { columnOrderIds, statusIdsToSave, statusIds: Array.from(statusIds) });
       }
     } else {
       debug.storage('Not saving: missing requirements', { 
-        columnOrderLength: columnOrder.length, 
+        columnOrderIdsLength: columnOrderIds.length, 
         activeProjectId, 
-        availableStatusesLength: availableStatuses?.length 
+        availableStatusesLength: availableStatuses?.length,
+        mappingSize: orderIdToStatusIdMap.size
       });
     }
-  }, [columnOrder, activeProjectId, availableStatuses, isLoadingFromStorage, saveColumnOrderToStorage]);
+  }, [columnOrderIds, activeProjectId, availableStatuses, isLoadingFromStorage, saveColumnOrderToStorage, orderIdToStatusIdMap, getStatusIdsFromOrderIds]);
 
   // Convert Set to sorted array for stable comparison in useEffect
   const visibleColumnsArray = useMemo(() => {
@@ -2444,10 +2600,13 @@ export function SprintBoardView() {
   }, [columnOrder, draggedColumnId, activeColumnId]);
 
   // Apply column order and visibility to columns
+  // NEW: Use order IDs for ordering, but keep status IDs for task operations
   const orderedColumns = useMemo(() => {
     debug.column('Computing orderedColumns', { 
       columnsLength: columns.length, 
       visibleColumnsSize: visibleColumns.size, 
+      columnOrderIdsLength: columnOrderIds.length,
+      columnOrderIds,
       columnOrderLength: columnOrder.length,
       columnOrder,
       draggedColumnId,
@@ -2458,12 +2617,13 @@ export function SprintBoardView() {
     let visibleCols = columns;
     if (visibleColumns.size > 0) {
       // Check if any of the visibleColumns IDs actually match current columns
-      const columnIds = new Set(columns.map(col => col.id));
-      const hasMatchingVisibleColumns = Array.from(visibleColumns).some(id => columnIds.has(id));
+      // Convert to strings for comparison (OpenProject uses numeric IDs, JIRA uses string IDs)
+      const columnIds = new Set(columns.map(col => String(col.id)));
+      const hasMatchingVisibleColumns = Array.from(visibleColumns).some(id => columnIds.has(String(id)));
       
       if (hasMatchingVisibleColumns) {
-        // Filter by visibility only if we have matching IDs
-        visibleCols = columns.filter(col => visibleColumns.has(col.id));
+        // Filter by visibility only if we have matching IDs - convert to strings for comparison
+        visibleCols = columns.filter(col => visibleColumns.has(String(col.id)));
         debug.column('After visibility filter', { 
           visibleColsLength: visibleCols.length, 
           visibleColumnsSize: visibleColumns.size 
@@ -2478,39 +2638,74 @@ export function SprintBoardView() {
       }
     }
     
-    // Then apply order
-    if (columnOrder.length === 0) {
-      debug.column('No column order, returning visible columns', { visibleColsLength: visibleCols.length });
-      return visibleCols;
+    // Then apply order using order IDs
+    if (columnOrderIds.length === 0) {
+      debug.column('No column order IDs, returning visible columns', { visibleColsLength: visibleCols.length });
+      // If no order IDs, return columns with order IDs set to status IDs (fallback)
+      return visibleCols.map(col => ({
+        ...col,
+        orderId: String(col.id) // Fallback: use status ID as order ID
+      }));
     }
     
-    // Create a map for quick lookup
-    const columnMap = new Map(visibleCols.map(col => [col.id, col]));
+    // Create a map from status ID to column for quick lookup
+    const columnMap = new Map(visibleCols.map(col => [String(col.id), col]));
     
-    // Return columns in the order specified by columnOrder
-    const ordered = columnOrder
-      .map(id => columnMap.get(id))
-      .filter((col): col is typeof columns[0] => col !== undefined);
+    // Map order IDs to columns via status IDs
+    const ordered = columnOrderIds
+      .map(orderId => {
+        const statusId = getStatusIdFromOrderId(orderId, orderIdToStatusIdMap);
+        if (!statusId) return null;
+        const col = columnMap.get(statusId);
+        if (!col) return null;
+        return {
+          ...col,
+          orderId, // Include order ID for dragging
+        };
+      })
+      .filter((col): col is typeof columns[0] & { orderId: string } => col !== null);
     
     // Add any visible columns that weren't in the order (new statuses)
-    const orderedIds = new Set(columnOrder);
-    const newColumns = visibleCols.filter(col => !orderedIds.has(col.id));
+    const orderedStatusIds = new Set(ordered.map(col => String(col.id)));
+    const newColumns = visibleCols
+      .filter(col => !orderedStatusIds.has(String(col.id)))
+      .map(col => ({
+        ...col,
+        orderId: String(col.id) // Fallback: use status ID as order ID
+      }));
     
     const result = [...ordered, ...newColumns];
     debug.column('Final orderedColumns', { 
       resultLength: result.length, 
       orderedLength: ordered.length, 
       newColumnsLength: newColumns.length,
-      result: result.map(c => ({ id: c.id, title: c.title })),
+      result: result.map(c => ({ id: c.id, orderId: (c as any).orderId, title: c.title })),
+      columnOrderIds,
       columnOrder,
       draggedColumnId,
       containerScrollLeft: columnsContainerRef.current?.scrollLeft
     });
     return result;
-  }, [columns, columnOrder, visibleColumns, draggedColumnId]);
+  }, [columns, columnOrderIds, columnOrder, visibleColumns, draggedColumnId, orderIdToStatusIdMap, getStatusIdFromOrderId]);
 
   // Use tasks instead of filteredTasks to ensure we can always find the dragged task
   const activeTask = activeId ? tasks.find(t => String(t.id) === String(activeId)) : null;
+
+  const activeColumnOverlay = useMemo(() => {
+    if (!draggedColumnId) {
+      return null;
+    }
+
+    const targetId = String(draggedColumnId);
+
+    return (
+      orderedColumns.find((column) => {
+        const orderId = (column as any).orderId ? String((column as any).orderId) : null;
+        const statusId = String(column.id);
+        return orderId === targetId || statusId === targetId;
+      }) || null
+    );
+  }, [draggedColumnId, orderedColumns]);
 
   // Show loading state only if we don't have the essential data yet
   // Allow rendering if we have tasks, even if statuses are still loading (optimistic rendering)
@@ -2781,7 +2976,7 @@ export function SprintBoardView() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={customCollisionDetection}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
@@ -2820,9 +3015,11 @@ export function SprintBoardView() {
                       onTaskClick={handleTaskClick}
                       activeColumnId={activeColumnId}
                       activeId={activeId}
-                      isDraggingColumn={draggedColumnId === column.id}
+                      isDraggingColumn={draggedColumnId === (column as any).orderId || draggedColumnId === column.id}
                       isAnyColumnDragging={!!draggedColumnId}
                       onColumnDragStateChange={handleColumnDragStateChange}
+                      orderId={(column as any).orderId} // NEW: Pass order ID for dragging
+                      placeholderHeight={dragDimensions.taskHeight}
                     />
                   </div>
           ))}
@@ -2835,8 +3032,28 @@ export function SprintBoardView() {
           );
         })()}
 
-        <DragOverlay>
-          {activeTask ? <TaskCard task={activeTask} onClick={() => {}} isColumnDragging={false} /> : null}
+        <DragOverlay
+          dropAnimation={{
+            duration: 220,
+            easing: 'cubic-bezier(0.2, 0, 0, 1)',
+            dragSourceOpacity: 0.25,
+          }}
+        >
+          {activeColumnOverlay ? (
+            <ColumnDragPreview
+              column={{ id: String(activeColumnOverlay.id), title: activeColumnOverlay.title }}
+              tasks={(activeColumnOverlay as any).tasks || []}
+              width={dragDimensions.columnWidth}
+              height={dragDimensions.columnHeight}
+              taskHeight={dragDimensions.taskHeight}
+            />
+          ) : activeTask ? (
+            <TaskDragPreview
+              task={activeTask}
+              width={dragDimensions.taskWidth}
+              height={dragDimensions.taskHeight}
+            />
+          ) : null}
         </DragOverlay>
       </DndContext>
 

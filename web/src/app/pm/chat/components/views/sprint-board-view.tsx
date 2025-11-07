@@ -339,7 +339,7 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
   // - When this column itself is being dragged, highlight the column (regardless of target)
   // - When dragging a task, highlight whichever column is the current drop target
   const isColumnBeingDragged = Boolean(isDraggingColumn);
-  const isTaskTarget = !isColumnBeingDragged && (isOver || isOverTop || isOverBottom || activeColumnId === column.id);
+  const isTaskTarget = !isAnyColumnDragging && (isOver || isOverTop || isOverBottom || activeColumnId === column.id);
   const isActive = isColumnBeingDragged || isTaskTarget;
 
   // Auto-scroll when dragging over the column near edges

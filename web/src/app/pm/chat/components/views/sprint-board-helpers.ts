@@ -116,6 +116,10 @@ export function extractTargetColumn(
   if (overId.endsWith('-top-drop') || overId.endsWith('-bottom-drop')) {
     orderId = overId.replace(/-top-drop$/, '').replace(/-bottom-drop$/, '');
   }
+  // Handle main column dropzone (empty column area)
+  else if (overId.endsWith('-dropzone')) {
+    orderId = overId.replace(/-dropzone$/, '');
+  }
   // Check if it's a direct order ID
   else if (overId.startsWith('order-') && columnOrderIds.includes(overId)) {
     orderId = overId;

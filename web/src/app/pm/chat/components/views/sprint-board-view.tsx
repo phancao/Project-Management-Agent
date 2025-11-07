@@ -2995,9 +2995,14 @@ export function SprintBoardView() {
               columnOrderLength: columnOrder.length 
             });
           }
+          const sortableColumnItems = orderedColumns.map(col => {
+            const orderId = (col as any).orderId ?? String(col.id);
+            return orderId;
+          });
+
           return orderedColumns.length > 0 ? (
             <SortableContext 
-              items={orderedColumns.map(col => col.id)} 
+              items={sortableColumnItems} 
               strategy={horizontalListSortingStrategy}
             >
               <div 
@@ -3007,22 +3012,25 @@ export function SprintBoardView() {
                   scrollBehavior: 'smooth',
                 }}
               >
-                {orderedColumns.map((column) => (
-                  <div key={column.id} className="flex-shrink-0 w-80 h-full">
-                    <SortableColumn 
-                      column={{ id: column.id, title: column.title }} 
-                      tasks={column.tasks || []} 
-                      onTaskClick={handleTaskClick}
-                      activeColumnId={activeColumnId}
-                      activeId={activeId}
-                      isDraggingColumn={draggedColumnId === (column as any).orderId || draggedColumnId === column.id}
-                      isAnyColumnDragging={!!draggedColumnId}
-                      onColumnDragStateChange={handleColumnDragStateChange}
-                      orderId={(column as any).orderId} // NEW: Pass order ID for dragging
-                      placeholderHeight={dragDimensions.taskHeight}
-                    />
-                  </div>
-          ))}
+                {orderedColumns.map((column) => {
+                  const orderId = (column as any).orderId ?? String(column.id);
+                  return (
+                    <div key={orderId} className="flex-shrink-0 w-80 h-full">
+                      <SortableColumn 
+                        column={{ id: column.id, title: column.title }} 
+                        tasks={column.tasks || []} 
+                        onTaskClick={handleTaskClick}
+                        activeColumnId={activeColumnId}
+                        activeId={activeId}
+                        isDraggingColumn={draggedColumnId === (column as any).orderId || draggedColumnId === column.id}
+                        isAnyColumnDragging={!!draggedColumnId}
+                        onColumnDragStateChange={handleColumnDragStateChange}
+                        orderId={orderId} // Use order ID for dragging
+                        placeholderHeight={dragDimensions.taskHeight}
+                      />
+                    </div>
+                  );
+                })}
         </div>
             </SortableContext>
           ) : (

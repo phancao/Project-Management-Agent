@@ -40,6 +40,7 @@ import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMLoading } from "../../../context/pm-loading-context";
 import { useProjectData } from "../../../hooks/use-project-data";
 import { debug } from "../../../utils/debug";
+import { traceSprintBoardEvent, isSprintBoardTraceEnabled } from "../../../utils/sprintboard-trace";
 
 import {
   createOrderIdsFromStatusIds,
@@ -48,6 +49,7 @@ import {
   formatTaskUpdateError,
   getStatusIdFromOrderId,
   getStatusIdsFromOrderIds,
+  getOrderId,
   normalizeStatus,
   type DragInfo,
 } from "./sprint-board-helpers";
@@ -153,28 +155,39 @@ function TaskDragPreview({ task, measurements }: { task: BoardTask | null; measu
 function ColumnDragPreview({ column, tasks, measurements }: { column: { id: string; title: string } | null; tasks: BoardTask[]; measurements: DragMeasurements }) {
   if (!column) return null;
 
+  const previewTasks = tasks.slice(0, 3);
+
   return (
     <div
-      className="pointer-events-none rounded-xl shadow-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden"
+      className="pointer-events-none relative"
       style={{
         width: measurements.columnWidth ? `${measurements.columnWidth}px` : "20rem",
         height: measurements.columnHeight ? `${measurements.columnHeight}px` : undefined,
       }}
     >
-      <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-800">
-        <div className="flex items-center gap-2">
-          <GripHorizontal className="w-4 h-4 text-gray-400" />
-          <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-100">{column.title}</h3>
-        </div>
-        <span className="text-xs text-gray-500 dark:text-gray-300">{tasks.length}</span>
-      </div>
-      <div className="p-3 space-y-2">
-        {tasks.slice(0, 3).map((task) => (
-          <div key={task.id} className="p-2 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs text-gray-700 dark:text-gray-300">
-            {task.title}
+      <div className="absolute top-0 left-0 right-0">
+        <div className="rounded-xl shadow-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-800">
+            <div className="flex items-center gap-2">
+              <GripHorizontal className="w-4 h-4 text-gray-400" />
+              <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-100">{column.title}</h3>
+            </div>
+            <span className="text-xs text-gray-500 dark:text-gray-300">{tasks.length}</span>
           </div>
-        ))}
-        {tasks.length === 0 && <div className="text-xs text-gray-400">No tasks</div>}
+          <div className="p-3 space-y-2">
+            {previewTasks.map((task) => (
+              <div key={task.id} className="p-2 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs text-gray-700 dark:text-gray-300">
+                {task.title}
+              </div>
+            ))}
+            {tasks.length === 0 && <div className="text-xs text-gray-400">No tasks</div>}
+            {tasks.length > 3 && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                +{tasks.length - 3} more
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -267,7 +280,7 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, activeColumnId, a
  * -----------------------------------------------------------------------------------------------*/
 
 export function SprintBoardView() {
-  const { activeProjectId, projectIdForData: projectIdForTasks } = useProjectData();
+  const { activeProjectId, projectIdForData: projectIdForTasks, activeProject } = useProjectData();
   const { state: loadingState, setTasksState } = usePMLoading();
 
   const previousProjectIdRef = useRef<string | null>(activeProjectId ?? null);
@@ -376,6 +389,14 @@ export function SprintBoardView() {
 
   const [isLoadingFromStorage, setIsLoadingFromStorage] = useState(false);
   const [lastLoadedProjectId, setLastLoadedProjectId] = useState<string | null>(null);
+  const datasetDebugKeyRef = useRef<string | null>(null);
+  const logTaskDragEvent = useCallback(
+    (event: string, payload: Record<string, unknown>) => {
+      if (!isSprintBoardTraceEnabled()) return;
+      traceSprintBoardEvent(event, payload);
+    },
+    []
+  );
 
   const getStorageKey = useCallback((projectId: string | null) => {
     if (!projectId) return null;
@@ -520,6 +541,96 @@ export function SprintBoardView() {
     }
   }, [visibleColumns, activeProjectId, availableStatuses, getVisibilityStorageKey, isLoadingFromStorage]);
 
+  useEffect(() => {
+    if (!availableStatuses || availableStatuses.length === 0) return;
+
+    const mappedStatusIds = new Set(
+      Array.from(orderIdToStatusIdMap.values()).map((value) => String(value))
+    );
+    const missingStatuses = availableStatuses.filter(
+      (status) => !mappedStatusIds.has(String(status.id))
+    );
+
+    if (missingStatuses.length === 0) return;
+
+    const nextMap = new Map(orderIdToStatusIdMap);
+    const nextOrderIds = [...columnOrderIds];
+    const nextColumnOrder = [...columnOrder];
+
+    missingStatuses.forEach((status) => {
+      const statusId = String(status.id);
+      const newOrderId = getOrderId(nextMap.size);
+      nextMap.set(newOrderId, statusId);
+      nextOrderIds.push(newOrderId);
+      nextColumnOrder.push(statusId);
+    });
+
+    setOrderIdToStatusIdMap(nextMap);
+    setColumnOrderIds(nextOrderIds);
+    setColumnOrder(nextColumnOrder);
+  }, [availableStatuses, orderIdToStatusIdMap, columnOrderIds, columnOrder]);
+
+  useEffect(() => {
+    if (!availableStatuses || availableStatuses.length === 0) return;
+
+    const statusIds = new Set(availableStatuses.map((status) => String(status.id)));
+    const mappedStatusIds = new Set(Array.from(orderIdToStatusIdMap.values()).map((value) => String(value)));
+
+    const missingStatusIds = Array.from(statusIds).filter((id) => !mappedStatusIds.has(id));
+    const extraStatusIds = Array.from(mappedStatusIds).filter((id) => !statusIds.has(id));
+    const hasOrderIds = columnOrderIds.length > 0;
+
+    if (missingStatusIds.length > 0 || extraStatusIds.length > 0 || !hasOrderIds) {
+      if (isSprintBoardTraceEnabled()) {
+        traceSprintBoardEvent("debug:column-order-reset", {
+          projectId: activeProjectId,
+          projectName: activeProject?.name ?? null,
+          provider: (activeProject as any)?.provider ?? null,
+          reason: {
+            missingStatusIds,
+            extraStatusIds,
+            hasOrderIds,
+          },
+          currentOrderIds: columnOrderIds,
+          currentMapping: Array.from(orderIdToStatusIdMap.entries()),
+        });
+      }
+
+      resetColumnOrderToDefault(activeProjectId ?? null, availableStatuses);
+    }
+  }, [availableStatuses, orderIdToStatusIdMap, columnOrderIds, activeProjectId, activeProject, resetColumnOrderToDefault]);
+
+  useEffect(() => {
+    if (!availableStatuses || availableStatuses.length === 0) return;
+
+    const statuses = availableStatuses;
+
+    const statusIds = statuses.map((status) => String(status.id));
+    const statusIdSet = new Set(statusIds);
+    const mappedStatusIds = Array.from(orderIdToStatusIdMap.values()).map((value) => String(value));
+
+    const missingStatus = statusIds.some((id) => !mappedStatusIds.includes(id));
+    const extraStatus = mappedStatusIds.some((id) => !statusIdSet.has(id));
+    const hasOrderIds = columnOrderIds.length > 0;
+
+    if (missingStatus || extraStatus || !hasOrderIds) {
+      if (isSprintBoardTraceEnabled()) {
+        traceSprintBoardEvent("debug:column-order-reset", {
+          projectId: activeProjectId,
+          reason: {
+            missingStatus,
+            extraStatus,
+            hasOrderIds,
+          },
+          statuses: statusIds,
+          mappedStatusIds,
+          columnOrderIds,
+        });
+      }
+      resetColumnOrderToDefault(activeProjectId ?? null, statuses);
+    }
+  }, [availableStatuses, orderIdToStatusIdMap, columnOrderIds, activeProjectId, resetColumnOrderToDefault]);
+
   const filteredTasks = useMemo(() => {
     if (loading && (!tasks || tasks.length === 0)) return [];
     if (!tasks || tasks.length === 0) return [];
@@ -606,6 +717,117 @@ export function SprintBoardView() {
     return orderedColumns.find((column) => column.orderId === draggedColumnId) ?? null;
   }, [draggedColumnId, orderedColumns]);
 
+  useEffect(() => {
+    if (!isSprintBoardTraceEnabled()) return;
+    if (!activeProjectId) return;
+
+    traceSprintBoardEvent("debug:column-render", {
+      projectId: activeProjectId,
+      projectName: activeProject?.name ?? null,
+      provider: (activeProject as any)?.provider ?? null,
+      columnCount: orderedColumns.length,
+      columnOrderIds,
+      visibleColumns: Array.from(visibleColumns),
+      mappedStatusIds: Array.from(orderIdToStatusIdMap.entries()),
+      columns: orderedColumns.map((column) => ({
+        orderId: column.orderId,
+        statusId: column.id,
+        title: column.title,
+        taskCount: column.tasks.length,
+      })),
+    });
+  }, [
+    orderedColumns,
+    columnOrderIds,
+    visibleColumns,
+    orderIdToStatusIdMap,
+    activeProjectId,
+    activeProject,
+  ]);
+
+  useEffect(() => {
+    if (!isSprintBoardTraceEnabled()) return;
+    if (!activeProjectId) return;
+    if (loading || statusesLoading) return;
+    const statuses = availableStatuses ?? [];
+    if (statuses.length === 0) return;
+
+    const snapshotKey = `${activeProjectId}:${tasks.length}:${statuses.length}`;
+    if (datasetDebugKeyRef.current === snapshotKey) return;
+    datasetDebugKeyRef.current = snapshotKey;
+
+    const statusBuckets = statuses.map((status) => ({
+      statusId: String(status.id),
+      statusName: status.name,
+      normalizedKey: normalizeStatus(status.name),
+      isDefault: Boolean(status.is_default),
+      taskIds: [] as string[],
+    }));
+
+    const normalizedIndex = new Map<string, number[]>();
+    statusBuckets.forEach((bucket, index) => {
+      const key = bucket.normalizedKey;
+      const existing = normalizedIndex.get(key);
+      if (existing) {
+        existing.push(index);
+      } else {
+        normalizedIndex.set(key, [index]);
+      }
+    });
+
+    const defaultIndex = statusBuckets.findIndex((bucket) => bucket.isDefault);
+    const unmatchedTasks: { id: string; status: string | null | undefined }[] = [];
+
+    tasks.forEach((task) => {
+      const normalizedTaskStatus = normalizeStatus(task.status);
+      let targetIndex: number | undefined;
+
+      const matchingIndices = normalizedIndex.get(normalizedTaskStatus);
+      if (matchingIndices && matchingIndices.length > 0) {
+        targetIndex = matchingIndices[0];
+      } else if (!normalizedTaskStatus && defaultIndex >= 0) {
+        targetIndex = defaultIndex;
+      }
+
+      if (targetIndex !== undefined) {
+        const targetBucket = statusBuckets[targetIndex];
+        if (targetBucket) {
+          targetBucket.taskIds.push(String(task.id));
+        } else {
+          unmatchedTasks.push({ id: String(task.id), status: task.status });
+        }
+      } else {
+        unmatchedTasks.push({ id: String(task.id), status: task.status });
+      }
+    });
+
+    const statusSummary = statusBuckets.map((bucket) => ({
+      statusId: bucket.statusId,
+      statusName: bucket.statusName,
+      isDefault: bucket.isDefault,
+      taskCount: bucket.taskIds.length,
+      sampleTaskIds: bucket.taskIds.slice(0, 5),
+    }));
+
+    traceSprintBoardEvent("debug:task-status-distribution", {
+      projectId: activeProjectId,
+      projectName: activeProject?.name ?? null,
+      provider: (activeProject as any)?.provider ?? null,
+      tasksCount: tasks.length,
+      statusesCount: statuses.length,
+      statusSummary,
+      unmatchedCount: unmatchedTasks.length,
+      unmatchedSample: unmatchedTasks.slice(0, 10),
+    });
+  }, [
+    activeProjectId,
+    activeProject,
+    tasks,
+    availableStatuses,
+    loading,
+    statusesLoading,
+  ]);
+
   const taskIdsSet = useMemo(() => new Set(tasks.map((task) => String(task.id))), [tasks]);
 
   const handleDragStart = useCallback(
@@ -622,6 +844,20 @@ export function SprintBoardView() {
           if (columnEl instanceof HTMLElement) {
             const rect = columnEl.getBoundingClientRect();
             setDragMeasurements((prev) => ({ ...prev, columnWidth: rect.width, columnHeight: rect.height }));
+            if (isSprintBoardTraceEnabled()) {
+              const column = orderedColumns.find((entry) => entry.orderId === info.orderId);
+              traceSprintBoardEvent("debug:column-measurement", {
+                projectId: activeProjectId,
+                projectName: activeProject?.name ?? null,
+                provider: (activeProject as any)?.provider ?? null,
+                orderId: info.orderId,
+                statusId: column?.id ?? null,
+                title: column?.title ?? null,
+                taskCount: column?.tasks.length ?? null,
+                width: rect.width,
+                height: rect.height,
+              });
+            }
           }
         } catch (err) {
           debug.warn("Failed to measure column", err);
@@ -639,7 +875,13 @@ export function SprintBoardView() {
         }
       }
     },
-    [columnOrderIds, taskIdsSet]
+    [
+      columnOrderIds,
+      taskIdsSet,
+      orderedColumns,
+      activeProjectId,
+      activeProject,
+    ]
   );
 
   const handleTaskDragOver = useCallback(
@@ -653,24 +895,33 @@ export function SprintBoardView() {
       const activeTask = tasks.find((task) => String(task.id) === String(active.id));
       if (!activeTask) return;
 
-      const { statusId: targetStatusId } = extractTargetColumn(
+      const extraction = extractTargetColumn(
         String(over.id),
         over.data.current,
         columnOrderIds,
         orderIdToStatusIdMap,
         availableStatuses,
-        tasks
+        tasks,
+        (stage, details) => {
+          logTaskDragEvent('task-drag:extract-debug', {
+            projectId: activeProjectId,
+            stage,
+            ...details,
+          });
+        }
       );
+      const targetColumnId = extraction.statusId;
+      const targetOrderId = extraction.orderId;
 
-      if (!targetStatusId) {
+      if (!targetColumnId) {
         setActiveColumnId(null);
         return;
       }
 
-      setActiveColumnId(String(targetStatusId));
+      setActiveColumnId(String(targetColumnId));
 
       const sourceStatus = availableStatuses.find((status) => normalizeStatus(status.name) === normalizeStatus(activeTask.status));
-      const targetStatus = availableStatuses.find((status) => String(status.id) === String(targetStatusId));
+      const targetStatus = availableStatuses.find((status) => String(status.id) === String(targetColumnId));
       if (!targetStatus) return;
 
       const baseTargetTasks = filteredTasks
@@ -693,9 +944,9 @@ export function SprintBoardView() {
       if (overTaskIndex >= 0) newTargetTasks.splice(overTaskIndex, 0, placeholderTask);
       else newTargetTasks.push(placeholderTask);
 
-      const updated: Record<string, BoardTask[]> = { [targetStatusId]: newTargetTasks };
+      const updated: Record<string, BoardTask[]> = { [targetColumnId]: newTargetTasks };
 
-      if (sourceStatus && sourceStatus.id !== targetStatusId) {
+      if (sourceStatus && sourceStatus.id !== targetColumnId) {
         updated[sourceStatus.id] = filteredTasks
           .filter((task) => {
             if (String(task.id) === String(active.id)) return false;
@@ -758,6 +1009,7 @@ export function SprintBoardView() {
         if (activeProjectId && statusIds.length > 0) {
           saveColumnOrderToStorage(activeProjectId, statusIds);
         }
+
       }
     },
     [columnOrderIds, orderIdToStatusIdMap, activeProjectId, saveColumnOrderToStorage]
@@ -823,43 +1075,123 @@ export function SprintBoardView() {
       setActiveColumnId(null);
       setActiveId(null);
 
-      if (!over || dragInfo.type !== "task") return;
+      if (!over || dragInfo.type !== "task") {
+        logTaskDragEvent("task-drag:ignored", {
+          projectId: activeProjectId,
+          reason: !over ? "no-over" : "not-task",
+          dragType: dragInfo.type,
+        });
+        return;
+      }
       const overId = String(over.id);
 
-      const { statusId: targetColumnId } = extractTargetColumn(
+      const extraction = extractTargetColumn(
         overId,
         over.data.current,
         columnOrderIds,
         orderIdToStatusIdMap,
         availableStatuses ?? [],
-        tasks
+        tasks,
+        (stage, details) => {
+          logTaskDragEvent('task-drag:extract-debug', {
+            projectId: activeProjectId,
+            stage,
+            ...details,
+          });
+        }
       );
+      const targetColumnId = extraction.statusId;
+      const targetOrderId = extraction.orderId;
 
-      if (!targetColumnId || !availableStatuses) return;
+      if (!targetColumnId || !availableStatuses) {
+        logTaskDragEvent("task-drag:ignored", {
+          projectId: activeProjectId,
+          taskId: dragInfo.id,
+          reason: !targetColumnId ? "no-target-column" : "no-statuses",
+          overId,
+          availableStatusesCount: availableStatuses?.length ?? 0,
+          columnOrderIds,
+          orderMapping: Array.from(orderIdToStatusIdMap.entries()),
+          extraction,
+        });
+        return;
+      }
 
       const task = tasks.find((t) => String(t.id) === dragInfo.id);
-      if (!task) return;
+      if (!task) {
+        logTaskDragEvent("task-drag:ignored", {
+          projectId: activeProjectId,
+          reason: "task-not-found",
+          taskId: dragInfo.id,
+        });
+        return;
+      }
 
       const targetStatus = availableStatuses.find((status) => String(status.id) === String(targetColumnId));
-      if (!targetStatus) return;
+      if (!targetStatus) {
+        logTaskDragEvent("task-drag:ignored", {
+          projectId: activeProjectId,
+          reason: "target-status-not-found",
+          taskId: dragInfo.id,
+          targetColumnId,
+          availableStatuses: availableStatuses.map((status) => ({ id: String(status.id), name: status.name })),
+        });
+        return;
+      }
 
       const newStatus = targetStatus.name;
-      if (!newStatus || newStatus === task.status) return;
+      if (!newStatus || newStatus === task.status) {
+        logTaskDragEvent("task-drag:ignored", {
+          projectId: activeProjectId,
+          reason: !newStatus ? "empty-status" : "status-unchanged",
+          taskId: dragInfo.id,
+          currentStatus: task.status,
+          targetStatusName: newStatus,
+        });
+        return;
+      }
 
       const targetStatusExists = availableStatuses.some((status) => String(status.id) === String(targetColumnId));
-      if (!targetStatusExists) return;
+      if (!targetStatusExists) {
+        logTaskDragEvent("task-drag:ignored", {
+          projectId: activeProjectId,
+          reason: "target-status-not-in-list",
+          taskId: dragInfo.id,
+          targetColumnId,
+          targetOrderId,
+        });
+        return;
+      }
 
       const statusValue = newStatus;
 
       try {
         if (!dragInfo.id || dragInfo.id === "undefined" || dragInfo.id === "null") {
           toast.error("Invalid task", { description: "Cannot update task: invalid task ID." });
+          logTaskDragEvent("task-drag:error", {
+            projectId: activeProjectId,
+            reason: "invalid-task-id",
+            taskId: dragInfo.id,
+          });
           return;
         }
+
+        logTaskDragEvent("task-drag:update", {
+          projectId: activeProjectId,
+          taskId: dragInfo.id,
+          fromStatus: task.status,
+          toStatus: statusValue,
+          targetStatusId: targetStatus.id,
+        });
 
         const result = await handleUpdateTask(dragInfo.id, { status: statusValue });
         if (!result) {
           toast.error("Update failed", { description: "The task update did not return a result." });
+          logTaskDragEvent("task-drag:update", {
+            projectId: activeProjectId,
+            taskId: dragInfo.id,
+            outcome: "no-result",
+          });
           return;
         }
 
@@ -871,6 +1203,13 @@ export function SprintBoardView() {
           toast.error("Status update failed", {
             description: `The task status remains "${task.status}". This may be due to workflow restrictions or permissions.`,
           });
+          logTaskDragEvent("task-drag:update", {
+            projectId: activeProjectId,
+            taskId: dragInfo.id,
+            outcome: "status-unchanged",
+            serverStatus: result.status,
+            originalStatus: task.status,
+          });
           return;
         }
 
@@ -878,18 +1217,37 @@ export function SprintBoardView() {
           toast.error("Status update partially successful", {
             description: `Task status changed to "${result.status}" instead of "${newStatus}". Workflow rules may apply.`,
           });
+          logTaskDragEvent("task-drag:update", {
+            projectId: activeProjectId,
+            taskId: dragInfo.id,
+            outcome: "status-mismatch",
+            serverStatus: result.status,
+            expectedStatus: newStatus,
+          });
           return;
         }
 
         toast.success("Task status updated", {
           description: `Task moved to "${newStatus}"`,
         });
+        logTaskDragEvent("task-drag:update", {
+          projectId: activeProjectId,
+          taskId: dragInfo.id,
+          outcome: "success",
+          serverStatus: result.status,
+        });
       } catch (err) {
         const { message, description } = formatTaskUpdateError(err);
         toast.error(message, { description });
+        logTaskDragEvent("task-drag:update", {
+          projectId: activeProjectId,
+          taskId: dragInfo.id,
+          outcome: "error",
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     },
-    [availableStatuses, columnOrderIds, orderIdToStatusIdMap, tasks, handleUpdateTask]
+    [availableStatuses, columnOrderIds, orderIdToStatusIdMap, tasks, handleUpdateTask, activeProjectId, logTaskDragEvent]
   );
 
   const handleDragEnd = useCallback(
@@ -927,10 +1285,8 @@ export function SprintBoardView() {
     [columnOrderIds, taskIdsSet, applyColumnReorder, finishTaskDrag, availableStatuses, orderIdToStatusIdMap, tasks]
   );
 
-  const [isTaskModalOpenState, setIsTaskModalOpenState] = useState(false);
-
   useEffect(() => {
-    if (selectedTask) setIsTaskModalOpenState(true);
+    if (selectedTask) setIsTaskModalOpen(true);
   }, [selectedTask]);
 
   const handleTaskClick = (task: Task) => {
@@ -1131,9 +1487,9 @@ export function SprintBoardView() {
 
       <TaskDetailsModal
         task={selectedTask}
-        open={isTaskModalOpenState}
+        open={isTaskModalOpen}
         onClose={() => {
-          setIsTaskModalOpenState(false);
+          setIsTaskModalOpen(false);
           setSelectedTask(null);
         }}
         onUpdate={handleUpdateTaskForModal}

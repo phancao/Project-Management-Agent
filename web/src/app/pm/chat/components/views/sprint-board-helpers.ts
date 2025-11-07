@@ -107,52 +107,80 @@ export function extractTargetColumn(
   overData: any,
   columnOrderIds: string[],
   orderIdToStatusIdMap: Map<string, string>,
-  availableStatuses: Array<{ id: string | number }>,
-  tasks: Task[]
+  availableStatuses: Array<{ id: string | number; name?: string }>,
+  tasks: Task[],
+  debug?: (stage: string, details: Record<string, unknown>) => void
 ): { orderId: string | null; statusId: string | null } {
   let orderId: string | null = null;
-  
-  // Check if it's a drop zone
+
+  const log = (stage: string, details: Record<string, unknown>) => {
+    if (debug) debug(stage, { overId, ...details });
+  };
+
   if (overId.endsWith('-top-drop') || overId.endsWith('-bottom-drop')) {
     orderId = overId.replace(/-top-drop$/, '').replace(/-bottom-drop$/, '');
-  }
-  // Handle main column dropzone (empty column area)
-  else if (overId.endsWith('-dropzone')) {
+    log('dropzone-top-bottom', { orderId });
+  } else if (overId.endsWith('-dropzone')) {
     orderId = overId.replace(/-dropzone$/, '');
-  }
-  // Check if it's a direct order ID
-  else if (overId.startsWith('order-') && columnOrderIds.includes(overId)) {
+    log('dropzone-empty', { orderId });
+  } else if (overId.startsWith('order-') && columnOrderIds.includes(overId)) {
     orderId = overId;
-  }
-  // Check overData
-  else if (overData?.type === 'column') {
+    log('direct-order', { orderId });
+  } else if (overData?.type === 'column') {
     if (overData.orderId && columnOrderIds.includes(overData.orderId)) {
       orderId = overData.orderId;
-    } else if (overData.statusId) {
+      log('overdata-order', { orderId });
+    } else if (overData.statusId !== undefined && overData.statusId !== null) {
       orderId = getOrderIdFromStatusId(String(overData.statusId), orderIdToStatusIdMap);
+      log('overdata-status', { orderId, statusId: overData.statusId });
     } else if (overData.column && columnOrderIds.includes(overData.column)) {
       orderId = overData.column;
+      log('overdata-column', { orderId });
     }
-  }
-  // Check if dropped on a task
-  else {
-    const droppedTask = tasks.find(t => String(t.id) === overId);
+  } else {
+    const droppedTask = tasks.find((task) => String(task.id) === overId);
     if (droppedTask && droppedTask.status) {
-      const taskStatus = availableStatuses.find(s => {
-        const taskStatusLower = (droppedTask.status || "").toLowerCase();
-        const statusNameLower = s.name.toLowerCase();
-        return taskStatusLower === statusNameLower || 
-               taskStatusLower.includes(statusNameLower) || 
-               statusNameLower.includes(taskStatusLower);
+      const normalizedTaskStatus = normalizeStatus(droppedTask.status);
+
+      const taskStatus = availableStatuses.find((status) => {
+        const normalizedStatusName = status && (status as any).name
+          ? normalizeStatus(String((status as any).name))
+          : '';
+        const normalizedStatusId = normalizeStatus(String(status.id));
+        return (
+          normalizedTaskStatus === normalizedStatusName ||
+          normalizedTaskStatus === normalizedStatusId ||
+          String(status.id) === droppedTask.status
+        );
       });
+
       if (taskStatus) {
         orderId = getOrderIdFromStatusId(String(taskStatus.id), orderIdToStatusIdMap);
+        log('task-match', {
+          taskId: droppedTask.id,
+          taskStatus: droppedTask.status,
+          matchedStatusId: taskStatus.id,
+          orderId,
+        });
+      } else {
+        log('task-no-match', {
+          taskId: droppedTask.id,
+          taskStatus: droppedTask.status,
+          normalizedTaskStatus,
+          availableStatusesSummary: availableStatuses.map((status) => ({
+            id: status.id,
+            name: (status as any)?.name ?? null,
+          })),
+        });
       }
+    } else {
+      log('task-not-found', {});
     }
   }
-  
+
   const statusId = orderId ? getStatusIdFromOrderId(orderId, orderIdToStatusIdMap) : null;
-  
+  log('final', { orderId, statusId });
+
   return { orderId, statusId };
 }
 
@@ -161,11 +189,18 @@ export function extractTargetColumn(
  */
 export function normalizeStatus(status: string | null | undefined): string {
   if (!status) return '';
-  const normalized = status.toLowerCase().trim();
+  const normalized = status
+    .toLowerCase()
+    .replace(/[\s_\-]+/g, '')
+    .trim();
   if (normalized === '' || normalized === 'new' || normalized === 'no status' || normalized === 'none') {
     return '';
   }
   return normalized;
+}
+
+export function isSameStatus(a: string | null | undefined, b: string | null | undefined): boolean {
+  return normalizeStatus(a) === normalizeStatus(b);
 }
 
 export function findMatchingStatusId(

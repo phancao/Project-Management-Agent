@@ -335,12 +335,12 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
     prevItemsLengthRef.current = sortableItems.length;
   }, [sortableItems.length]);
   
-  // Only show active state for task dragging, not column dragging
-  // When dragging a column, we only highlight if this is the target column (activeColumnId)
-  // When dragging a task, we show highlight based on droppable zones
-  const isActive = isDraggingColumn 
-    ? activeColumnId === column.id  // For column dragging, only highlight target column
-    : (isOver || isOverTop || isOverBottom || activeColumnId === column.id);  // For task dragging, use droppable zones
+  // Highlight logic:
+  // - When this column itself is being dragged, highlight the column (regardless of target)
+  // - When dragging a task, highlight whichever column is the current drop target
+  const isColumnBeingDragged = Boolean(isDraggingColumn);
+  const isTaskTarget = !isColumnBeingDragged && (isOver || isOverTop || isOverBottom || activeColumnId === column.id);
+  const isActive = isColumnBeingDragged || isTaskTarget;
 
   // Auto-scroll when dragging over the column near edges
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -446,9 +446,11 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       
       <div 
         className={`flex items-center justify-between p-3 rounded-t-lg transition-colors ${
-          isActive && !isDraggingColumn
-            ? 'bg-blue-100 dark:bg-blue-900' 
-            : 'bg-gray-100 dark:bg-gray-800'
+          isColumnBeingDragged
+            ? 'bg-blue-200 dark:bg-blue-900'
+            : isTaskTarget
+              ? 'bg-blue-100 dark:bg-blue-900/80'
+              : 'bg-gray-100 dark:bg-gray-800'
         }`}
         data-column-id={column.id}
         data-order-id={dragId}
@@ -479,9 +481,11 @@ function SortableColumn({ column, tasks, onTaskClick, activeColumnId, activeId, 
       <div 
         ref={droppableContainerRef}
         className={`flex-1 rounded-b-lg p-3 min-h-0 border-2 overflow-y-auto transition-all duration-200 ${
-          isActive && !isDraggingColumn
-            ? 'bg-blue-50 dark:bg-blue-950 border-blue-500 dark:border-blue-500' 
-            : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+          isColumnBeingDragged
+            ? 'bg-blue-100/60 dark:bg-blue-900/40 border-blue-400 dark:border-blue-500'
+            : isTaskTarget
+              ? 'bg-blue-50 dark:bg-blue-950 border-blue-500 dark:border-blue-500'
+              : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
         }`}
         style={{
           overscrollBehavior: 'contain',

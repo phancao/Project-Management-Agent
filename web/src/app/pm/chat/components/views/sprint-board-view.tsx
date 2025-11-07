@@ -215,7 +215,7 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, activeColumnId, a
   const isActive = draggedColumnId === orderId || activeColumnId === column.id;
 
   return (
-    <div ref={setNodeRef} style={columnStyle} data-order-id={orderId} className="w-80">
+    <div ref={setNodeRef} style={columnStyle} data-order-id={orderId} className="w-80 shrink-0">
       <div
         className={`flex items-center justify-between px-3 py-2 rounded-t-lg border-b ${
           isActive

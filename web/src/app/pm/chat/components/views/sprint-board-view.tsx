@@ -43,7 +43,6 @@ import {
   findMatchingStatusId,
   formatTaskUpdateError,
   type DragInfo,
-  arraysEqual,
 } from "./sprint-board-helpers";
 
 type DragMeasurements = {

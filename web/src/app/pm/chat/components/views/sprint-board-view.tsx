@@ -3011,7 +3011,7 @@ export function SprintBoardView() {
   );
 }
 
-const arraysEqual = useCallback((a: string[], b: string[]) => {
+const arraysEqual = (a: string[], b: string[]) => {
   if (a.length !== b.length) {
     return false;
   }
@@ -3021,4 +3021,4 @@ const arraysEqual = useCallback((a: string[], b: string[]) => {
     }
   }
   return true;
-}, []);
+};

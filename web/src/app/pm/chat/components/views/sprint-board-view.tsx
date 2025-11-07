@@ -665,19 +665,6 @@ export function SprintBoardView() {
     columnWidth: null,
     columnHeight: null,
   });
-  const [columnOrderPreview, setColumnOrderPreview] = useState<string[] | null>(null);
-
-  const arraysEqual = (a: string[], b: string[]) => {
-    if (a.length !== b.length) {
-      return false;
-    }
-    for (let i = 0; i < a.length; i += 1) {
-      if (a[i] !== b[i]) {
-        return false;
-      }
-    }
-    return true;
-  };
 
   const resetDragDimensions = useCallback(() => {
     setDragDimensions({
@@ -1225,7 +1212,6 @@ export function SprintBoardView() {
       } catch (error) {
         debug.warn('Failed to measure column width', { error, dragInfo });
       }
-      setColumnOrderPreview([...columnOrderIds]);
       setDraggedColumnId(dragInfo.orderId);
       draggedColumnIdRef.current = dragInfo.orderId;
       lastTargetColumnIdRef.current = null;
@@ -1244,7 +1230,6 @@ export function SprintBoardView() {
       setActiveId(dragInfo.id);
       setDraggedColumnId(null);
       draggedColumnIdRef.current = null;
-      setColumnOrderPreview(null);
     } else {
       // Unknown - default to task drag
       debug.warn('Could not determine drag type, defaulting to task drag', { dragInfo });
@@ -1253,7 +1238,6 @@ export function SprintBoardView() {
       draggedColumnIdRef.current = null;
       lastTargetColumnIdRef.current = null;
       setReorderedTasks({});
-      setColumnOrderPreview(null);
     }
   };
 
@@ -1264,7 +1248,6 @@ export function SprintBoardView() {
     if (draggedColumnId) {
       if (!over || !availableStatuses) {
         setActiveColumnId(null);
-        setColumnOrderPreview(null);
         return;
       }
       
@@ -1280,22 +1263,12 @@ export function SprintBoardView() {
       
       // Visual feedback: highlight target column
       if (overOrderId && overOrderId !== activeOrderId && columnOrderIds.includes(overOrderId)) {
-        const currentOrderIds = columnOrderPreview ?? columnOrderIds;
-        const currentIndex = currentOrderIds.indexOf(activeOrderId);
-        const newIndex = currentOrderIds.indexOf(overOrderId);
-        if (currentIndex !== -1 && newIndex !== -1 && currentIndex !== newIndex) {
-          const previewOrder = arrayMove(currentOrderIds, currentIndex, newIndex);
-          if (!columnOrderPreview || !arraysEqual(previewOrder, columnOrderPreview)) {
-            setColumnOrderPreview(previewOrder);
-          }
-        }
         const overStatusId = getStatusIdFromOrderId(overOrderId, orderIdToStatusIdMap);
         if (overStatusId) {
           setActiveColumnId(overStatusId);
         }
         lastTargetColumnIdRef.current = overOrderId;
       } else {
-        setColumnOrderPreview(null);
         setActiveColumnId(null);
       }
       return;

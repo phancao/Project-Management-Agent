@@ -665,6 +665,8 @@ export function SprintBoardView() {
     columnWidth: null,
     columnHeight: null,
   });
+  const draggedColumnOriginalIndexRef = useRef<number | null>(null);
+  const [columnHoverIndex, setColumnHoverIndex] = useState<number | null>(null);
 
   const resetDragDimensions = useCallback(() => {
     setDragDimensions({
@@ -683,6 +685,8 @@ export function SprintBoardView() {
     setActiveId(null);
     setActiveColumnId(null);
     setReorderedTasks({});
+    setColumnHoverIndex(null);
+    draggedColumnOriginalIndexRef.current = null;
     resetDragDimensions();
   }, [resetDragDimensions]);
   
@@ -1212,6 +1216,9 @@ export function SprintBoardView() {
       } catch (error) {
         debug.warn('Failed to measure column width', { error, dragInfo });
       }
+      const originalIndex = columnOrderIds.indexOf(dragInfo.orderId);
+      draggedColumnOriginalIndexRef.current = originalIndex >= 0 ? originalIndex : null;
+      setColumnHoverIndex(originalIndex >= 0 ? originalIndex : null);
       setDraggedColumnId(dragInfo.orderId);
       draggedColumnIdRef.current = dragInfo.orderId;
       lastTargetColumnIdRef.current = null;
@@ -1230,14 +1237,18 @@ export function SprintBoardView() {
       setActiveId(dragInfo.id);
       setDraggedColumnId(null);
       draggedColumnIdRef.current = null;
+      draggedColumnOriginalIndexRef.current = null;
+      setColumnHoverIndex(null);
     } else {
       // Unknown - default to task drag
       debug.warn('Could not determine drag type, defaulting to task drag', { dragInfo });
       setActiveId(dragInfo.id);
       setDraggedColumnId(null);
       draggedColumnIdRef.current = null;
+      draggedColumnOriginalIndexRef.current = null;
       lastTargetColumnIdRef.current = null;
       setReorderedTasks({});
+      setColumnHoverIndex(null);
     }
   };
 
@@ -1246,29 +1257,43 @@ export function SprintBoardView() {
     
     // Handle column reordering
     if (draggedColumnId) {
-      if (!over || !availableStatuses) {
+      const originalIndex = draggedColumnOriginalIndexRef.current;
+      if (!over || !availableStatuses || originalIndex == null) {
         setActiveColumnId(null);
+        setColumnHoverIndex(null);
         return;
       }
       
-      const activeOrderId = draggedColumnId;
+      const { id: overIdValue, data: overData } = over;
       const { orderId: overOrderId } = extractTargetColumn(
-        String(over.id),
-        over.data.current,
+        String(overIdValue),
+        overData?.current,
         columnOrderIds,
         orderIdToStatusIdMap,
         availableStatuses,
         tasks
       );
       
-      // Visual feedback: highlight target column
-      if (overOrderId && overOrderId !== activeOrderId && columnOrderIds.includes(overOrderId)) {
+      if (overOrderId && columnOrderIds.includes(overOrderId)) {
+        let targetIndex = columnOrderIds.indexOf(overOrderId);
+        const position = overData?.current?.position as 'top' | 'bottom' | undefined;
+        if (position === 'bottom') {
+          targetIndex += 1;
+        }
+        if (targetIndex > originalIndex) {
+          targetIndex -= 1;
+        }
+        targetIndex = Math.max(0, Math.min(targetIndex, columnOrderIds.length - 1));
+        if (columnHoverIndex !== targetIndex) {
+          setColumnHoverIndex(targetIndex);
+        }
         const overStatusId = getStatusIdFromOrderId(overOrderId, orderIdToStatusIdMap);
         if (overStatusId) {
           setActiveColumnId(overStatusId);
         }
         lastTargetColumnIdRef.current = overOrderId;
       } else {
+        setColumnHoverIndex(null);
         setActiveColumnId(null);
       }
       return;
@@ -1470,7 +1495,7 @@ export function SprintBoardView() {
     
     // Handle column reordering
     if (finalDraggedColumnId) {
-      const activeOrderId = finalDraggedColumnId; // This is now an order ID
+      const activeOrderId = finalDraggedColumnId;
       debug.dnd('handleDragEnd: Processing column drag end', {
         activeOrderId,
         over: over ? { id: over.id, data: over.data?.current } : null,
@@ -1480,182 +1505,41 @@ export function SprintBoardView() {
       draggedColumnIdRef.current = null;
       setActiveColumnId(null);
       resetDragDimensions();
-      
-      if (over && availableStatuses) {
-        // Extract target column using helper
-        const { orderId: overOrderId } = extractTargetColumn(
-          String(over.id),
-          over.data.current,
-          columnOrderIds,
-          orderIdToStatusIdMap,
-          availableStatuses,
-          tasks
-        );
-        
-        // Use last valid target as fallback if needed
-        const lastTargetOrderId = lastTargetColumnIdRef.current;
-        let finalOverOrderId = overOrderId || lastTargetOrderId || activeOrderId;
-        
-        // Validate finalOverOrderId
-        if (finalOverOrderId && !columnOrderIds.includes(finalOverOrderId)) {
-          finalOverOrderId = activeOrderId;
-        }
-        
-        // Reorder using order IDs
-        if (finalOverOrderId && finalOverOrderId !== activeOrderId && columnOrderIds.includes(finalOverOrderId) && columnOrderIds.includes(activeOrderId)) {
-          // Ensure columnOrderIds is initialized
-          let currentOrderIds = columnOrderIds;
-          let currentMapping = orderIdToStatusIdMap;
-          
-          if (currentOrderIds.length === 0 && availableStatuses) {
-            // Try to load from localStorage first
-            debug.dnd('Column order is empty, trying to load from localStorage', { activeProjectId });
-            const savedOrder = loadColumnOrderFromStorage(activeProjectId);
-            if (savedOrder && savedOrder.length > 0) {
-              // Validate saved order - convert to strings for comparison
-              const validStatusIds = new Set(availableStatuses.map(s => String(s.id)));
-              const validOrder = savedOrder.filter(id => validStatusIds.has(String(id))).map(id => String(id));
-              if (validOrder.length > 0) {
-                // Convert status IDs to order IDs
-                const { orderIds, mapping } = createOrderIdsFromStatusIds(validOrder);
-                currentOrderIds = orderIds;
-                currentMapping = mapping;
-                debug.dnd('Loaded column order from localStorage and converted to order IDs', { 
-                  statusIds: validOrder, 
-                  orderIds: currentOrderIds,
-                  mappingSize: currentMapping.size
-                });
-              } else {
-                // Fallback to default order (sorted by status ID) - convert IDs to strings
-                const sortedStatuses = [...availableStatuses].sort((a, b) => {
-                  const aId = typeof a.id === 'number' ? a.id : Number(a.id);
-                  const bId = typeof b.id === 'number' ? b.id : Number(b.id);
-                  
-                  // If both are valid numbers, compare numerically
-                  if (!isNaN(aId) && !isNaN(bId)) {
-                    return aId - bId;
-                  }
-                  
-                  // Otherwise, compare as strings
-                  return String(a.id).localeCompare(String(b.id));
-                });
-                const statusIds = sortedStatuses.map(s => String(s.id));
-                const { orderIds, mapping } = createOrderIdsFromStatusIds(statusIds);
-                currentOrderIds = orderIds;
-                currentMapping = mapping;
-                debug.dnd('Using default column order (saved order invalid, sorted by status ID)', { 
-                  statusIds,
-                  orderIds: currentOrderIds,
-                  mappingSize: currentMapping.size
-                });
-              }
-            } else {
-              // No saved order, use default (sorted by status ID) - convert IDs to strings
-              const sortedStatuses = [...availableStatuses].sort((a, b) => {
-                const aId = typeof a.id === 'number' ? a.id : Number(a.id);
-                const bId = typeof b.id === 'number' ? b.id : Number(b.id);
-                
-                // If both are valid numbers, compare numerically
-                if (!isNaN(aId) && !isNaN(bId)) {
-                  return aId - bId;
-                }
-                
-                // Otherwise, compare as strings
-                return String(a.id).localeCompare(String(b.id));
-              });
-              const statusIds = sortedStatuses.map(s => String(s.id));
-              const { orderIds, mapping } = createOrderIdsFromStatusIds(statusIds);
-              currentOrderIds = orderIds;
-              currentMapping = mapping;
-              debug.dnd('Using default column order (no saved order, sorted by status ID)', { 
-                statusIds,
-                orderIds: currentOrderIds,
-                mappingSize: currentMapping.size
-              });
-            }
-            // Update state with the new order IDs and mapping
-            setColumnOrderIds(currentOrderIds);
-            setOrderIdToStatusIdMap(currentMapping);
-            // Also update legacy columnOrder for backward compatibility
-            const statusIds = getStatusIdsFromOrderIds(currentOrderIds, currentMapping);
-            setColumnOrder(statusIds);
-          }
-          
-          // Use order IDs for index calculation
-          const oldIndex = currentOrderIds.indexOf(activeOrderId);
-          const newIndex = currentOrderIds.indexOf(finalOverOrderId);
-          
-          debug.dnd('Column reordering: Index calculation', {
-            oldIndex,
-            newIndex,
-            activeOrderId,
-            finalOverOrderId,
-            currentOrderIdsLength: currentOrderIds.length,
-          });
-          
-          if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-            const newOrderIds = arrayMove(currentOrderIds, oldIndex, newIndex);
-            debug.dnd('Column reordering: Success', { 
-              oldIndex, 
-              newIndex, 
-              activeOrderId,
-              finalOverOrderId,
-              newOrderIdsLength: newOrderIds.length,
-            });
-            
-            // Update state with new order IDs
-            setColumnOrderIds(newOrderIds);
-            
-            // Convert order IDs back to status IDs for localStorage and legacy columnOrder
-            const newStatusIds = getStatusIdsFromOrderIds(newOrderIds, currentMapping);
-            setColumnOrder(newStatusIds);
-            
-            // Save immediately after reordering (don't wait for useEffect)
-            if (activeProjectId && newStatusIds.length > 0) {
-              debug.dnd('Calling saveColumnOrderToStorage with status IDs', { activeProjectId, newStatusIds, newOrderIds });
-              saveColumnOrderToStorage(activeProjectId, newStatusIds);
-              debug.dnd('Column reordered and saved', { 
-                from: oldIndex, 
-                to: newIndex, 
-                activeOrderId,
-                finalOverOrderId,
-              });
-              // Clear the last target column ref after successful reorder
-              lastTargetColumnIdRef.current = null;
-            } else {
-              debug.dnd('Column reordered but not saved (missing projectId or empty order)', { 
-                activeProjectId, 
-                newStatusIds, 
-                newOrderIds,
-                newStatusIdsLength: newStatusIds.length,
-                hasProjectId: !!activeProjectId,
-                hasOrder: newStatusIds.length > 0
-              });
-            }
-          } else {
-            debug.dnd('Column reorder skipped (invalid indices)', { 
-              oldIndex, 
-              newIndex, 
-              activeOrderId,
-              finalOverOrderId,
-              reason: oldIndex === -1 ? 'oldIndex not found' : newIndex === -1 ? 'newIndex not found' : 'indices are the same',
-            });
-          }
-        } else {
-          debug.dnd('Column reorder skipped: Invalid conditions', {
-            finalOverOrderId,
-            activeOrderId,
-          });
-          lastTargetColumnIdRef.current = null;
+
+      const originalIndex = draggedColumnOriginalIndexRef.current;
+      draggedColumnOriginalIndexRef.current = null;
+      const hoverIndex = columnHoverIndex;
+      setColumnHoverIndex(null);
+
+      if (
+        originalIndex != null &&
+        hoverIndex != null &&
+        hoverIndex !== originalIndex &&
+        columnOrderIds.length > 0
+      ) {
+        const newOrderIds = arrayMove(columnOrderIds, originalIndex, hoverIndex);
+        debug.dnd('Column reordering: Success', {
+          originalIndex,
+          hoverIndex,
+          activeOrderId,
+          newOrderIdsLength: newOrderIds.length,
+        });
+
+        setColumnOrderIds(newOrderIds);
+        const newStatusIds = getStatusIdsFromOrderIds(newOrderIds, orderIdToStatusIdMap);
+        setColumnOrder(newStatusIds);
+
+        if (activeProjectId && newStatusIds.length > 0) {
+          saveColumnOrderToStorage(activeProjectId, newStatusIds);
         }
       } else {
-        debug.dnd('Column reorder skipped: No over target or availableStatuses', {
-          hasOver: !!over,
-          hasAvailableStatuses: !!availableStatuses,
+        debug.dnd('Column reorder skipped', {
+          originalIndex,
+          hoverIndex,
         });
-        // Clear the last target column ref since reordering was skipped
-        lastTargetColumnIdRef.current = null;
       }
+
+      lastTargetColumnIdRef.current = null;
       return;
     }
     

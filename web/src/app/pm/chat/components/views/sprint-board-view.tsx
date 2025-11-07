@@ -666,8 +666,9 @@ export function SprintBoardView() {
     columnHeight: null,
   });
   const draggedColumnOriginalIndexRef = useRef<number | null>(null);
-  const [columnHoverIndex, setColumnHoverIndex] = useState<number | null>(null);
-
+  const draggedColumnOriginalOrderRef = useRef<string[] | null>(null);
+  const [columnOrderPreview, setColumnOrderPreview] = useState<string[] | null>(null);
+  
   const resetDragDimensions = useCallback(() => {
     setDragDimensions({
       taskWidth: null,
@@ -685,7 +686,8 @@ export function SprintBoardView() {
     setActiveId(null);
     setActiveColumnId(null);
     setReorderedTasks({});
-    setColumnHoverIndex(null);
+    setColumnOrderPreview(null);
+    draggedColumnOriginalOrderRef.current = null;
     draggedColumnOriginalIndexRef.current = null;
     resetDragDimensions();
   }, [resetDragDimensions]);
@@ -1216,9 +1218,11 @@ export function SprintBoardView() {
       } catch (error) {
         debug.warn('Failed to measure column width', { error, dragInfo });
       }
-      const originalIndex = columnOrderIds.indexOf(dragInfo.orderId);
+      const originalOrder = [...columnOrderIds];
+      draggedColumnOriginalOrderRef.current = originalOrder;
+      const originalIndex = originalOrder.indexOf(dragInfo.orderId);
       draggedColumnOriginalIndexRef.current = originalIndex >= 0 ? originalIndex : null;
-      setColumnHoverIndex(originalIndex >= 0 ? originalIndex : null);
+      setColumnOrderPreview(originalOrder);
       setDraggedColumnId(dragInfo.orderId);
       draggedColumnIdRef.current = dragInfo.orderId;
       lastTargetColumnIdRef.current = null;
@@ -1238,7 +1242,8 @@ export function SprintBoardView() {
       setDraggedColumnId(null);
       draggedColumnIdRef.current = null;
       draggedColumnOriginalIndexRef.current = null;
-      setColumnHoverIndex(null);
+      draggedColumnOriginalOrderRef.current = null;
+      setColumnOrderPreview(null);
     } else {
       // Unknown - default to task drag
       debug.warn('Could not determine drag type, defaulting to task drag', { dragInfo });
@@ -1246,9 +1251,10 @@ export function SprintBoardView() {
       setDraggedColumnId(null);
       draggedColumnIdRef.current = null;
       draggedColumnOriginalIndexRef.current = null;
+      draggedColumnOriginalOrderRef.current = null;
       lastTargetColumnIdRef.current = null;
       setReorderedTasks({});
-      setColumnHoverIndex(null);
+      setColumnOrderPreview(null);
     }
   };
 
@@ -1257,10 +1263,20 @@ export function SprintBoardView() {
     
     // Handle column reordering
     if (draggedColumnId) {
+      const originalOrder = draggedColumnOriginalOrderRef.current;
       const originalIndex = draggedColumnOriginalIndexRef.current;
-      if (!over || !availableStatuses || originalIndex == null) {
+
+      if (!originalOrder || originalIndex == null) {
+        setColumnOrderPreview(null);
         setActiveColumnId(null);
-        setColumnHoverIndex(null);
+        return;
+      }
+
+      if (!over || !availableStatuses) {
+        if (!columnOrderPreview || !arraysEqual(columnOrderPreview, originalOrder)) {
+          setColumnOrderPreview([...originalOrder]);
+        }
+        setActiveColumnId(null);
         return;
       }
 
@@ -1268,42 +1284,52 @@ export function SprintBoardView() {
       const { orderId: overOrderId } = extractTargetColumn(
         String(overIdValue),
         overData?.current,
-        columnOrderIds,
+        originalOrder,
         orderIdToStatusIdMap,
         availableStatuses,
         tasks
       );
 
-      if (overOrderId) {
-        if (overOrderId === draggedColumnId) {
-          setColumnHoverIndex(originalIndex);
-          setActiveColumnId(null);
-          return;
+      if (!overOrderId) {
+        if (!columnOrderPreview || !arraysEqual(columnOrderPreview, originalOrder)) {
+          setColumnOrderPreview([...originalOrder]);
         }
-
-        const withoutDragged = columnOrderIds.filter(id => id !== draggedColumnId);
-        const baseIndex = withoutDragged.indexOf(overOrderId);
-
-        if (baseIndex >= 0) {
-          const position = overData?.current?.position as 'top' | 'bottom' | undefined;
-          let targetIndex = position === 'bottom' ? baseIndex + 1 : baseIndex;
-          targetIndex = Math.max(0, Math.min(targetIndex, withoutDragged.length));
-
-          if (columnHoverIndex !== targetIndex) {
-            setColumnHoverIndex(targetIndex);
-          }
-
-          const overStatusId = getStatusIdFromOrderId(overOrderId, orderIdToStatusIdMap);
-          if (overStatusId) {
-            setActiveColumnId(overStatusId);
-          }
-          lastTargetColumnIdRef.current = overOrderId;
-          return;
-        }
+        setActiveColumnId(null);
+        return;
       }
 
-      setColumnHoverIndex(null);
-      setActiveColumnId(null);
+      if (overOrderId === draggedColumnId) {
+        if (!columnOrderPreview || !arraysEqual(columnOrderPreview, originalOrder)) {
+          setColumnOrderPreview([...originalOrder]);
+        }
+        setActiveColumnId(null);
+        lastTargetColumnIdRef.current = null;
+        return;
+      }
+
+      const overIndex = originalOrder.indexOf(overOrderId);
+      if (overIndex === -1) {
+        if (!columnOrderPreview || !arraysEqual(columnOrderPreview, originalOrder)) {
+          setColumnOrderPreview([...originalOrder]);
+        }
+        setActiveColumnId(null);
+        return;
+      }
+
+      const position = overData?.current?.position as 'top' | 'bottom' | undefined;
+      let targetIndex = position === 'bottom' ? overIndex + 1 : overIndex;
+      targetIndex = Math.max(0, Math.min(targetIndex, originalOrder.length));
+
+      const previewOrder = arrayMove(originalOrder, originalIndex, targetIndex);
+      if (!columnOrderPreview || !arraysEqual(columnOrderPreview, previewOrder)) {
+        setColumnOrderPreview(previewOrder);
+      }
+
+      const overStatusId = getStatusIdFromOrderId(overOrderId, orderIdToStatusIdMap);
+      if (overStatusId) {
+        setActiveColumnId(overStatusId);
+      }
+      lastTargetColumnIdRef.current = overOrderId;
       return;
     }
     
@@ -1512,52 +1538,38 @@ export function SprintBoardView() {
       setDraggedColumnId(null);
       draggedColumnIdRef.current = null;
       setActiveColumnId(null);
+
+      const originalOrder = draggedColumnOriginalOrderRef.current;
+      const previewOrder = columnOrderPreview || originalOrder || columnOrderIds;
+
+      draggedColumnOriginalOrderRef.current = null;
+      draggedColumnOriginalIndexRef.current = null;
+      setColumnOrderPreview(null);
       resetDragDimensions();
 
-      const originalIndex = draggedColumnOriginalIndexRef.current;
-      draggedColumnOriginalIndexRef.current = null;
-      const hoverIndex = columnHoverIndex;
-      setColumnHoverIndex(null);
+      if (!originalOrder) {
+        debug.warn('Column drag end without original order reference');
+        lastTargetColumnIdRef.current = null;
+        return;
+      }
 
-      if (
-        originalIndex != null &&
-        hoverIndex != null &&
-        columnOrderIds.length > 0
-      ) {
-        const withoutDragged = columnOrderIds.filter(id => id !== finalDraggedColumnId);
-        const clampedIndex = Math.max(0, Math.min(hoverIndex, withoutDragged.length));
-        const newOrderIds = [
-          ...withoutDragged.slice(0, clampedIndex),
-          finalDraggedColumnId,
-          ...withoutDragged.slice(clampedIndex),
-        ];
+      if (!arraysEqual(previewOrder, columnOrderIds)) {
+        debug.dnd('Column reordering: Success', {
+          activeOrderId,
+          newOrderIdsLength: previewOrder.length,
+          previewOrder,
+        });
 
-        if (!arraysEqual(newOrderIds, columnOrderIds)) {
-          debug.dnd('Column reordering: Success', {
-            originalIndex,
-            hoverIndex: clampedIndex,
-            activeOrderId,
-            newOrderIdsLength: newOrderIds.length,
-          });
+        setColumnOrderIds(previewOrder);
+        const newStatusIds = getStatusIdsFromOrderIds(previewOrder, orderIdToStatusIdMap);
+        setColumnOrder(newStatusIds);
 
-          setColumnOrderIds(newOrderIds);
-          const newStatusIds = getStatusIdsFromOrderIds(newOrderIds, orderIdToStatusIdMap);
-          setColumnOrder(newStatusIds);
-
-          if (activeProjectId && newStatusIds.length > 0) {
-            saveColumnOrderToStorage(activeProjectId, newStatusIds);
-          }
-        } else {
-          debug.dnd('Column reorder skipped: resulting order unchanged', {
-            originalIndex,
-            hoverIndex: clampedIndex,
-          });
+        if (activeProjectId && newStatusIds.length > 0) {
+          saveColumnOrderToStorage(activeProjectId, newStatusIds);
         }
       } else {
-        debug.dnd('Column reorder skipped: missing indices', {
-          originalIndex,
-          hoverIndex,
-          hasOrderIds: columnOrderIds.length > 0,
+        debug.dnd('Column reorder skipped: resulting order unchanged', {
+          previewOrder,
         });
       }
 
@@ -2512,35 +2524,15 @@ export function SprintBoardView() {
   // Apply column order and visibility to columns
   // NEW: Use order IDs for ordering, but keep status IDs for task operations
   const orderedColumns = useMemo(() => {
-    const originalIndex = draggedColumnOriginalIndexRef.current;
-    let effectiveOrderIds = columnOrderIds;
-
-    if (
-      draggedColumnId !== null &&
-      originalIndex !== null &&
-      originalIndex !== undefined &&
-      columnHoverIndex !== null &&
-      columnHoverIndex !== undefined
-    ) {
-      const withoutDragged = columnOrderIds.filter(id => id !== draggedColumnId);
-      const clampedIndex = Math.max(0, Math.min(columnHoverIndex, withoutDragged.length));
-      const previewOrder = [
-        ...withoutDragged.slice(0, clampedIndex),
-        draggedColumnId,
-        ...withoutDragged.slice(clampedIndex),
-      ];
-      effectiveOrderIds = previewOrder;
-    }
+    const effectiveOrderIds = columnOrderPreview || columnOrderIds;
 
     debug.column('Computing orderedColumns', {
       columnsLength: columns.length,
       visibleColumnsSize: visibleColumns.size,
       effectiveOrderIdsLength: effectiveOrderIds.length,
       columnOrderIds,
-      columnHoverIndex,
-      originalIndex,
-      columnOrderLength: columnOrder.length,
       columnOrder,
+      columnOrderPreview,
       draggedColumnId,
       columns: columns.map(c => ({ id: c.id, title: c.title }))
     });
@@ -2571,7 +2563,7 @@ export function SprintBoardView() {
     }
     
     // Then apply order using order IDs
-    if (columnOrderIds.length === 0) {
+    if (effectiveOrderIds.length === 0) {
       debug.column('No column order IDs, returning visible columns', { visibleColsLength: visibleCols.length });
       // If no order IDs, return columns with order IDs set to status IDs (fallback)
       return visibleCols.map(col => ({
@@ -2584,7 +2576,7 @@ export function SprintBoardView() {
     const columnMap = new Map(visibleCols.map(col => [String(col.id), col]));
     
     // Map order IDs to columns via status IDs
-    const ordered = columnOrderIds
+    const ordered = effectiveOrderIds
       .map(orderId => {
         const statusId = getStatusIdFromOrderId(orderId, orderIdToStatusIdMap);
         if (!statusId) return null;
@@ -2614,11 +2606,12 @@ export function SprintBoardView() {
       result: result.map(c => ({ id: c.id, orderId: (c as any).orderId, title: c.title })),
       columnOrderIds,
       columnOrder,
+      columnOrderPreview,
       draggedColumnId,
       containerScrollLeft: columnsContainerRef.current?.scrollLeft
     });
     return result;
-  }, [columns, columnOrderIds, columnOrder, visibleColumns, draggedColumnId, orderIdToStatusIdMap, getStatusIdFromOrderId, draggedColumnOriginalIndexRef.current, columnHoverIndex]);
+  }, [columns, columnOrderIds, columnOrderPreview, columnOrder, visibleColumns, draggedColumnId, orderIdToStatusIdMap, getStatusIdFromOrderId]);
 
   // Use tasks instead of filteredTasks to ensure we can always find the dragged task
   const activeTask = activeId ? tasks.find(t => String(t.id) === String(activeId)) : null;
@@ -2720,7 +2713,7 @@ export function SprintBoardView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-4">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sprint Board</h2>
           {availableStatuses && availableStatuses.length > 0 && (
@@ -2741,7 +2734,7 @@ export function SprintBoardView() {
       </div>
 
       {/* Filters */}
-      <Card className="p-4 mb-4 flex-shrink-0">
+      <Card className="p-4 mb-4 shrink-0">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
@@ -2947,7 +2940,7 @@ export function SprintBoardView() {
                 {orderedColumns.map((column) => {
                   const orderId = (column as any).orderId ?? String(column.id);
                   return (
-                    <div key={orderId} className="flex-shrink-0 w-80 h-full">
+                    <div key={orderId} className="shrink-0 w-80 h-full">
                       <SortableColumn 
                         column={{ id: column.id, title: column.title }} 
                         tasks={column.tasks || []} 

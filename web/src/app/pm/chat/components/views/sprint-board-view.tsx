@@ -658,20 +658,6 @@ export function SprintBoardView() {
   const draggedColumnIdRef = useRef<string | null>(null);
   // Track the last valid target column ID during drag to provide stability
   const lastTargetColumnIdRef = useRef<string | null>(null);
-  // Track original column order during drag so we can restore when needed
-  const originalColumnOrderRef = useRef<string[] | null>(null);
-
-  const arraysEqual = (a: string[], b: string[]) => {
-    if (a.length !== b.length) {
-      return false;
-    }
-    for (let i = 0; i < a.length; i += 1) {
-      if (a[i] !== b[i]) {
-        return false;
-      }
-    }
-    return true;
-  };
   // Track measured dimensions for overlays so they can match source size
   const [dragDimensions, setDragDimensions] = useState<DragMeasurements>({
     taskWidth: null,
@@ -1226,9 +1212,6 @@ export function SprintBoardView() {
       } catch (error) {
         debug.warn('Failed to measure column width', { error, dragInfo });
       }
-      if (!originalColumnOrderRef.current) {
-        originalColumnOrderRef.current = [...columnOrderIds];
-      }
       setDraggedColumnId(dragInfo.orderId);
       draggedColumnIdRef.current = dragInfo.orderId;
       lastTargetColumnIdRef.current = null;
@@ -1265,9 +1248,6 @@ export function SprintBoardView() {
     if (draggedColumnId) {
       if (!over || !availableStatuses) {
         setActiveColumnId(null);
-        if (originalColumnOrderRef.current && !arraysEqual(columnOrderIds, originalColumnOrderRef.current)) {
-          setColumnOrderIds([...originalColumnOrderRef.current]);
-        }
         return;
       }
       
@@ -1283,23 +1263,12 @@ export function SprintBoardView() {
       
       // Visual feedback: highlight target column
       if (overOrderId && overOrderId !== activeOrderId && columnOrderIds.includes(overOrderId)) {
-        const currentIndex = columnOrderIds.indexOf(activeOrderId);
-        const newIndex = columnOrderIds.indexOf(overOrderId);
-        if (currentIndex !== -1 && newIndex !== -1) {
-          const previewOrder = arrayMove(columnOrderIds, currentIndex, newIndex);
-          if (!arraysEqual(previewOrder, columnOrderIds)) {
-            setColumnOrderIds(previewOrder);
-          }
-        }
         const overStatusId = getStatusIdFromOrderId(overOrderId, orderIdToStatusIdMap);
         if (overStatusId) {
           setActiveColumnId(overStatusId);
         }
         lastTargetColumnIdRef.current = overOrderId;
       } else {
-        if (originalColumnOrderRef.current && !arraysEqual(columnOrderIds, originalColumnOrderRef.current)) {
-          setColumnOrderIds([...originalColumnOrderRef.current]);
-        }
         setActiveColumnId(null);
       }
       return;
@@ -1511,7 +1480,6 @@ export function SprintBoardView() {
       draggedColumnIdRef.current = null;
       setActiveColumnId(null);
       resetDragDimensions();
-      originalColumnOrderRef.current = null;
       
       if (over && availableStatuses) {
         // Extract target column using helper

@@ -7,17 +7,20 @@ import { Suspense } from "react";
 
 import { DashboardView } from "../chat/components/views/dashboard-view";
 import { PMHeader } from "../components/pm-header";
+import { PMLoadingProvider } from "../context/pm-loading-context";
+import { PMLoadingManager } from "../components/pm-loading-manager";
 
 function OverviewPageContent() {
   return (
-    <>
+    <PMLoadingProvider>
+      <PMLoadingManager />
       <PMHeader />
       <div className="flex h-screen w-screen flex-col bg-gray-50 dark:bg-gray-900 pt-16">
         <div className="flex-1 overflow-auto p-6">
           <DashboardView />
         </div>
       </div>
-    </>
+    </PMLoadingProvider>
   );
 }
 

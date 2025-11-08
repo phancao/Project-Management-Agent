@@ -203,3 +203,30 @@ export function useCFDChart(projectId: string | null, sprintId?: string, daysBac
   });
 }
 
+/**
+ * Hook to fetch Cycle Time / Control Chart data
+ */
+export function useCycleTimeChart(projectId: string | null, sprintId?: string, daysBack: number = 60) {
+  return useQuery({
+    queryKey: ["analytics", "cycleTime", projectId, sprintId, daysBack],
+    queryFn: async () => {
+      if (!projectId) throw new Error("Project ID is required");
+      
+      const params = new URLSearchParams();
+      if (sprintId) params.append("sprint_id", sprintId);
+      params.append("days_back", daysBack.toString());
+      
+      const url = resolveServiceURL(`analytics/projects/${projectId}/cycle-time?${params.toString()}`);
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch cycle time chart: ${response.statusText}`);
+      }
+      
+      return response.json() as Promise<ChartResponse>;
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+

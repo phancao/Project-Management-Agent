@@ -830,26 +830,40 @@ export function BacklogView() {
     
     // Handle epic removal (drop on "no-epic" zone)
     if (overId === "no-epic") {
-      if (!draggedTask.epic_id) return; // Already has no epic
+      console.log('[handleDragEnd] Removing epic from task:', taskId, 'current epic_id:', draggedTask.epic_id);
+      
+      if (!draggedTask.epic_id) {
+        console.log('[handleDragEnd] Task already has no epic, skipping');
+        return; // Already has no epic
+      }
       
       try {
         // Use dedicated remove-epic endpoint
         const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/remove-epic`);
+        console.log('[handleDragEnd] Calling remove-epic endpoint:', url);
+        
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
         
+        console.log('[handleDragEnd] Remove epic response status:', response.status);
+        
         if (!response.ok) {
           const errorText = await response.text();
+          console.error('[handleDragEnd] Remove epic error:', errorText);
           throw new Error(errorText || `Failed to remove epic: ${response.status}`);
         }
+        
+        const result = await response.json();
+        console.log('[handleDragEnd] Remove epic result:', result);
         
         toast.success("Epic removed from task", {
           description: `${draggedTask.title} is no longer assigned to an epic.`
         });
         
         // Trigger full refresh
+        console.log('[handleDragEnd] Triggering pm_refresh event');
         window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
       } catch (error) {
         console.error("Failed to remove task from epic:", error);

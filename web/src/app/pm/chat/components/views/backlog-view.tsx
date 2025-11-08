@@ -957,9 +957,16 @@ export function BacklogView() {
 
     const taskId = active.id as string;
     const overId = over.id as string;
+    const draggedTask = tasks.find(t => String(t.id) === String(taskId));
+
+    if (!draggedTask) return;
 
     // Check if dropped on backlog (move to backlog)
     if (overId === "backlog") {
+      // Skip if already in backlog (no sprint assigned)
+      if (!draggedTask.sprint_id) {
+        return;
+      }
       try {
         await handleMoveTaskToBacklog(taskId);
       } catch (error) {
@@ -974,12 +981,20 @@ export function BacklogView() {
       
       // Handle "all" or "none" epic drops - remove from epic
       if (epicId === "all" || epicId === "none") {
+        // Skip if already has no epic
+        if (!draggedTask.epic_id) {
+          return;
+        }
         try {
           await handleRemoveTaskFromEpic(taskId);
         } catch (error) {
           console.error("Failed to remove task from epic:", error);
         }
       } else {
+        // Skip if already in this epic
+        if (String(draggedTask.epic_id) === String(epicId)) {
+          return;
+        }
         // Assign to epic using dedicated API endpoint
         try {
           await handleAssignTaskToEpic(taskId, epicId);
@@ -994,6 +1009,11 @@ export function BacklogView() {
     if (typeof overId === "string" && overId.startsWith("sprint-")) {
       const sprintId = overId.replace("sprint-", "");
       
+      // Skip if already in this sprint
+      if (String(draggedTask.sprint_id) === String(sprintId)) {
+        return;
+      }
+
       try {
         await handleAssignTaskToSprint(taskId, sprintId);
       } catch (error) {

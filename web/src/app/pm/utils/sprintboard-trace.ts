@@ -1,69 +1,36 @@
-const STORAGE_KEY = "pm:sprintboard:trace";
+/*
+ * Sprint board tracing is fully disabled. The module keeps the same API
+ * surface so existing imports continue to work, but every function is a no-op.
+ */
 
-let traceEnabled = false;
-
-const readInitialSetting = () => {
-  if (typeof window === "undefined") {
-    return process.env.NODE_ENV === "development";
-  }
-
-  try {
-    const storedValue = window.localStorage.getItem(STORAGE_KEY);
-    if (storedValue === null) {
-      const defaultValue = process.env.NODE_ENV === "development";
-      if (defaultValue) window.localStorage.setItem(STORAGE_KEY, "true");
-      return defaultValue;
-    }
-    return storedValue === "true";
-  } catch {
-    return process.env.NODE_ENV === "development";
-  }
+export const setSprintBoardTraceEnabled = (_value: boolean) => {
+  // no-op
 };
 
-const persistSetting = (value: boolean) => {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, value ? "true" : "false");
-  } catch {
-    // ignore persistence issues
-  }
+export const isSprintBoardTraceEnabled = () => false;
+
+export const traceSprintBoardEvent = (_event: string, _payload: Record<string, unknown>) => {
+  // no-op
 };
 
-traceEnabled = readInitialSetting();
-
-export const setSprintBoardTraceEnabled = (value: boolean) => {
-  traceEnabled = value;
-  persistSetting(value);
-};
-
-export const isSprintBoardTraceEnabled = () => traceEnabled;
-
-export const traceSprintBoardEvent = (event: string, payload: Record<string, unknown>) => {
-  if (!traceEnabled) return;
-
-  const timestamp = new Date().toISOString();
-  const label = `[SprintBoardTrace][${timestamp}] ${event}`;
-
-  if (typeof console.groupCollapsed === "function") {
-    console.groupCollapsed(label);
-    console.log(payload);
-    console.groupEnd();
-    return;
-  }
-
-  console.log(label, payload);
-};
-
-if (typeof window !== "undefined") {
-  (window as typeof window & {
+declare global {
+  interface Window {
     __sprintBoardTrace?: {
       enable: () => void;
       disable: () => void;
       status: () => boolean;
     };
-  }).__sprintBoardTrace = {
-    enable: () => setSprintBoardTraceEnabled(true),
-    disable: () => setSprintBoardTraceEnabled(false),
-    status: () => isSprintBoardTraceEnabled(),
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.__sprintBoardTrace = {
+    enable: () => {
+      /* no-op */
+    },
+    disable: () => {
+      /* no-op */
+    },
+    status: () => false,
   };
 }

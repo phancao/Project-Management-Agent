@@ -2846,6 +2846,7 @@ async def pm_delete_provider(provider_id: str):
 
 from src.analytics.service import AnalyticsService
 from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
+from database.orm_models import PMProviderConnection
 
 
 def get_analytics_service(project_id: str, db) -> AnalyticsService:

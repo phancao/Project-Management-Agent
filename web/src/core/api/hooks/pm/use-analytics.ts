@@ -261,3 +261,30 @@ export function useWorkDistributionChart(
   });
 }
 
+/**
+ * Hook to fetch Issue Trend Analysis chart data
+ */
+export function useIssueTrendChart(projectId: string | null, daysBack: number = 30, sprintId?: string) {
+  return useQuery({
+    queryKey: ["analytics", "issueTrend", projectId, daysBack, sprintId],
+    queryFn: async () => {
+      if (!projectId) throw new Error("Project ID is required");
+      
+      const params = new URLSearchParams();
+      params.append("days_back", daysBack.toString());
+      if (sprintId) params.append("sprint_id", sprintId);
+      
+      const url = resolveServiceURL(`analytics/projects/${projectId}/issue-trend?${params.toString()}`);
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch issue trend chart: ${response.statusText}`);
+      }
+      
+      return response.json() as Promise<ChartResponse>;
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+

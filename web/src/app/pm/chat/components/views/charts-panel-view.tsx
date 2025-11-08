@@ -11,6 +11,7 @@ import { SprintReportView } from "./sprint-report-view";
 import { CFDView } from "./cfd-view";
 import { CycleTimeView } from "./cycle-time-view";
 import { WorkDistributionView } from "./work-distribution-view";
+import { IssueTrendView } from "./issue-trend-view";
 
 export function ChartsPanelView() {
   const [activeTab, setActiveTab] = useState("burndown");
@@ -37,6 +38,9 @@ export function ChartsPanelView() {
           <TabsTrigger value="work-distribution" className="px-4 py-2">
             🥧 Distribution
           </TabsTrigger>
+          <TabsTrigger value="issue-trend" className="px-4 py-2">
+            📊 Trend
+          </TabsTrigger>
         </TabsList>
 
         <div className="flex-1 overflow-auto">
@@ -62,6 +66,10 @@ export function ChartsPanelView() {
 
           <TabsContent value="work-distribution" className="mt-0 h-full">
             <WorkDistributionView />
+          </TabsContent>
+
+          <TabsContent value="issue-trend" className="mt-0 h-full">
+            <IssueTrendView />
           </TabsContent>
         </div>
       </Tabs>

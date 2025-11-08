@@ -1118,6 +1118,15 @@ export function SprintBoardView() {
       // Use status ID instead of name for the API call
       const statusValue = String(targetStatus.id);
 
+      console.log('[DRAG DEBUG] About to update task status:', {
+        taskId: dragInfo.id,
+        currentStatus: task.status,
+        targetStatusName: newStatus,
+        targetStatusId: targetStatus.id,
+        statusValue,
+        targetStatus,
+      });
+
       try {
         if (!dragInfo.id || dragInfo.id === "undefined" || dragInfo.id === "null") {
           toast.error("Invalid task", { description: "Cannot update task: invalid task ID." });
@@ -1190,6 +1199,12 @@ export function SprintBoardView() {
           serverStatus: result.status,
         });
       } catch (err) {
+        console.error('[DRAG DEBUG] Task update failed:', {
+          error: err,
+          taskId: dragInfo.id,
+          statusValue,
+          targetStatus,
+        });
         const { message, description } = formatTaskUpdateError(err);
         toast.error(message, { description });
         logTaskDragEvent("task-drag:update", {

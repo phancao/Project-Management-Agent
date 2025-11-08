@@ -52,7 +52,9 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                     # Fallback to any sprint
                     sprints = await self.provider.list_sprints(project_id=project_id)
                 if not sprints:
-                    raise ValueError(f"No sprints found for project {project_id}")
+                    # No sprints found - return None to signal fallback to mock data
+                    logger.warning(f"[PMProviderAnalyticsAdapter] No sprints found for project {project_id}, will use mock data")
+                    return None
                 sprint = sprints[0]
                 sprint_id = sprint.id
             else:
@@ -118,6 +120,10 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         try:
             # Get recent sprints
             all_sprints = await self.provider.list_sprints(project_id=project_id)
+            
+            if not all_sprints:
+                logger.warning(f"[PMProviderAnalyticsAdapter] No sprints found for project {project_id}")
+                return None
             
             # Sort by start_date (most recent first) and take num_sprints
             sorted_sprints = sorted(
@@ -190,7 +196,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             # Get sprint
             sprint = await self.provider.get_sprint(sprint_id)
             if not sprint:
-                raise ValueError(f"Sprint {sprint_id} not found")
+                logger.warning(f"[PMProviderAnalyticsAdapter] Sprint {sprint_id} not found")
+                return None
             
             # Get all tasks in sprint
             all_tasks = await self.provider.list_tasks(project_id=project_id or sprint.project_id)

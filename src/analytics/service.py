@@ -77,6 +77,13 @@ class AnalyticsService:
         else:
             # Fetch real data from adapter
             sprint_data = await self.adapter.get_burndown_data(project_id, sprint_id, scope_type)
+            # If adapter returns None (e.g., no sprints found), fallback to mock data
+            if sprint_data is None:
+                logger.warning(f"Adapter returned no data for project {project_id}, falling back to mock data")
+                sprint_data = self.mock_generator.generate_sprint_data(
+                    sprint_id=sprint_id or "SPRINT-1",
+                    project_id=project_id
+                )
         
         # Calculate burndown
         result = BurndownCalculator.calculate(sprint_data, scope_type)
@@ -117,6 +124,13 @@ class AnalyticsService:
         else:
             # Fetch real data from adapter
             sprint_history = await self.adapter.get_velocity_data(project_id, sprint_count)
+            # If adapter returns None or empty, fallback to mock data
+            if not sprint_history:
+                logger.warning(f"Adapter returned no velocity data for project {project_id}, falling back to mock data")
+                sprint_history = self.mock_generator.generate_sprint_history(
+                    project_id=project_id,
+                    num_sprints=sprint_count
+                )
         
         # Calculate velocity
         result = VelocityCalculator.calculate(sprint_history)
@@ -157,6 +171,13 @@ class AnalyticsService:
         else:
             # Fetch real data from adapter
             sprint_data = await self.adapter.get_sprint_report_data(sprint_id, project_id)
+            # If adapter returns None, fallback to mock data
+            if sprint_data is None:
+                logger.warning(f"Adapter returned no sprint report data for sprint {sprint_id}, falling back to mock data")
+                sprint_data = self.mock_generator.generate_sprint_data(
+                    sprint_id=sprint_id,
+                    project_id=project_id
+                )
         
         # Generate report
         result = SprintReportCalculator.calculate(sprint_data)

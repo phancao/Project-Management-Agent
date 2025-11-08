@@ -52,6 +52,7 @@ interface DragState {
   type: DragType;
   id: string | null;
   sourceSprintId?: string | null;
+  overTaskId?: string | null;
 }
 
 /* ============================================================================
@@ -235,7 +236,8 @@ function SprintSection({
   onTaskClick, 
   epicsMap,
   isOver,
-  draggedTaskId
+  draggedTaskId,
+  overTaskId
 }: { 
   sprint: { id: string; name: string; start_date?: string; end_date?: string; status: string }; 
   tasks: Task[]; 
@@ -243,6 +245,7 @@ function SprintSection({
   epicsMap?: Map<string, Epic>;
   isOver?: boolean;
   draggedTaskId?: string | null;
+  overTaskId?: string | null;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -339,16 +342,22 @@ function SprintSection({
           ) : (
             <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
-                {tasks.map((task) => (
-                  <TaskCard 
-                    key={task.id} 
-                    task={task} 
-                    onClick={() => onTaskClick(task)} 
-                    epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
-                    isDragging={draggedTaskId === task.id}
-                  />
+                {tasks.map((task, index) => (
+                  <div key={task.id}>
+                    {isOver && overTaskId === task.id && (
+                      <div className="mb-2 border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
+                        Drop here
+                      </div>
+                    )}
+                    <TaskCard 
+                      task={task} 
+                      onClick={() => onTaskClick(task)} 
+                      epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
+                      isDragging={draggedTaskId === task.id}
+                    />
+                  </div>
                 ))}
-                {isOver && (
+                {isOver && !overTaskId && (
                   <div className="border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
                     Drop here
                   </div>
@@ -371,13 +380,15 @@ function BacklogSection({
   onTaskClick, 
   epicsMap,
   isOver,
-  draggedTaskId
+  draggedTaskId,
+  overTaskId
 }: { 
   tasks: Task[]; 
   onTaskClick: (task: Task) => void; 
   epicsMap?: Map<string, Epic>;
   isOver?: boolean;
   draggedTaskId?: string | null;
+  overTaskId?: string | null;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -430,15 +441,21 @@ function BacklogSection({
             <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
                 {tasks.map((task) => (
-                  <TaskCard 
-                    key={task.id} 
-                    task={task} 
-                    onClick={() => onTaskClick(task)} 
-                    epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
-                    isDragging={draggedTaskId === task.id}
-                  />
+                  <div key={task.id}>
+                    {isOver && overTaskId === task.id && (
+                      <div className="mb-2 border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
+                        Drop here
+                      </div>
+                    )}
+                    <TaskCard 
+                      task={task} 
+                      onClick={() => onTaskClick(task)} 
+                      epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
+                      isDragging={draggedTaskId === task.id}
+                    />
+                  </div>
                 ))}
-                {isOver && (
+                {isOver && !overTaskId && (
                   <div className="border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
                     Drop here to remove from sprint
                   </div>
@@ -465,6 +482,7 @@ export function BacklogView() {
   const [selectedEpic, setSelectedEpic] = useState<string | null>(null);
   const [dragState, setDragState] = useState<DragState>({ type: null, id: null });
   const [overSprintId, setOverSprintId] = useState<string | null>(null);
+  const [overTaskId, setOverTaskId] = useState<string | null>(null);
   
   const { activeProjectId, activeProject, projectIdForData: projectIdForSprints } = useProjectData();
   const { state: loadingState, setTasksState } = usePMLoading();
@@ -682,6 +700,7 @@ export function BacklogView() {
     const { over } = event;
     if (!over) {
       setOverSprintId(null);
+      setOverTaskId(null);
       return;
     }
 
@@ -690,11 +709,13 @@ export function BacklogView() {
     // Direct drop zone
     if (overId.startsWith('sprint-')) {
       setOverSprintId(overId.replace('sprint-', ''));
+      setOverTaskId(null);
       return;
     }
     
     if (overId === 'backlog') {
       setOverSprintId('backlog');
+      setOverTaskId(null);
       return;
     }
     
@@ -704,6 +725,7 @@ export function BacklogView() {
       const task = tasks.find(t => String(t.id) === taskId);
       
       if (task) {
+        setOverTaskId(taskId);
         if (task.sprint_id) {
           setOverSprintId(String(task.sprint_id));
         } else {
@@ -714,12 +736,14 @@ export function BacklogView() {
     }
     
     setOverSprintId(null);
+    setOverTaskId(null);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setDragState({ type: null, id: null });
     setOverSprintId(null);
+    setOverTaskId(null);
 
     if (!over || dragState.type !== 'task' || !dragState.id) return;
 
@@ -898,6 +922,7 @@ export function BacklogView() {
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
                           draggedTaskId={dragState.id}
+                          overTaskId={overSprintId === sprint.id ? overTaskId : null}
                         />
                       ))}
                   </div>
@@ -920,6 +945,7 @@ export function BacklogView() {
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
                           draggedTaskId={dragState.id}
+                          overTaskId={overSprintId === sprint.id ? overTaskId : null}
                         />
                       ))}
                   </div>
@@ -936,6 +962,7 @@ export function BacklogView() {
                     epicsMap={epicsMap}
                     isOver={overSprintId === 'backlog'}
                     draggedTaskId={dragState.id}
+                    overTaskId={overSprintId === 'backlog' ? overTaskId : null}
                   />
                 </div>
 
@@ -956,6 +983,7 @@ export function BacklogView() {
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
                           draggedTaskId={dragState.id}
+                          overTaskId={overSprintId === sprint.id ? overTaskId : null}
                         />
                       ))}
                   </div>

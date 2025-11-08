@@ -26,6 +26,7 @@ from src.tools import (
     get_web_search_tool,
     python_repl_tool,
 )
+from src.tools.analytics_tools import get_analytics_tools
 from src.tools.search import LoggedTavilySearch
 from src.utils.context_manager import ContextManager, validate_message_content
 from src.utils.json_utils import repair_json_output, sanitize_tool_response
@@ -1002,6 +1003,16 @@ async def researcher_node(
     except Exception as e:
         logger.warning(f"[researcher_node] Could not add PM tools: {e}")
     
+    # Add Analytics tools for project insights
+    try:
+        analytics_tools = get_analytics_tools()
+        if analytics_tools:
+            tools.extend(analytics_tools)
+            logger.info(f"[researcher_node] Added {len(analytics_tools)} analytics tools to researcher agent")
+            logger.debug(f"[researcher_node] Analytics tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in analytics_tools]}")
+    except Exception as e:
+        logger.warning(f"[researcher_node] Could not add analytics tools: {e}")
+    
     logger.info(f"[researcher_node] Researcher tools count: {len(tools)}")
     logger.debug(f"[researcher_node] Researcher tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in tools]}")
     
@@ -1031,6 +1042,16 @@ async def coder_node(
             logger.debug(f"[coder_node] PM tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in pm_tools]}")
     except Exception as e:
         logger.warning(f"[coder_node] Could not add PM tools: {e}")
+    
+    # Add Analytics tools for data analysis
+    try:
+        analytics_tools = get_analytics_tools()
+        if analytics_tools:
+            tools.extend(analytics_tools)
+            logger.info(f"[coder_node] Added {len(analytics_tools)} analytics tools to coder agent")
+            logger.debug(f"[coder_node] Analytics tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in analytics_tools]}")
+    except Exception as e:
+        logger.warning(f"[coder_node] Could not add analytics tools: {e}")
     
     return await _setup_and_execute_agent_step(
         state,

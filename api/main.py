@@ -802,14 +802,100 @@ async def search_knowledge(
     return {"query": query, "results": []}
 
 # Analytics endpoints
+from src.analytics.service import AnalyticsService
+
+# Initialize analytics service
+analytics_service = AnalyticsService(data_source="mock")
+
+@app.get("/api/analytics/projects/{project_id}/burndown")
+async def get_burndown_chart(
+    project_id: str,
+    sprint_id: Optional[str] = None,
+    scope_type: str = "story_points",
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get burndown chart for a sprint.
+    
+    Query Parameters:
+    - sprint_id: Sprint identifier (optional, uses current sprint if not provided)
+    - scope_type: What to measure - "story_points", "tasks", or "hours"
+    """
+    try:
+        chart_data = analytics_service.get_burndown_chart(
+            project_id=project_id,
+            sprint_id=sprint_id,
+            scope_type=scope_type
+        )
+        return chart_data.dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/projects/{project_id}/velocity")
+async def get_velocity_chart(
+    project_id: str,
+    sprint_count: int = 6,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get velocity chart showing team performance over recent sprints.
+    
+    Query Parameters:
+    - sprint_count: Number of recent sprints to include (default: 6)
+    """
+    try:
+        chart_data = analytics_service.get_velocity_chart(
+            project_id=project_id,
+            sprint_count=sprint_count
+        )
+        return chart_data.dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/sprints/{sprint_id}/report")
+async def get_sprint_report(
+    sprint_id: str,
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get comprehensive sprint summary report.
+    
+    Query Parameters:
+    - project_id: Project identifier
+    """
+    try:
+        report = analytics_service.get_sprint_report(
+            sprint_id=sprint_id,
+            project_id=project_id
+        )
+        return report.dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/projects/{project_id}/summary")
+async def get_project_summary(
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get high-level project summary with key metrics"""
+    try:
+        summary = analytics_service.get_project_summary(project_id=project_id)
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/analytics/projects/{project_id}/metrics")
 async def get_project_metrics(
     project_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get project metrics and analytics"""
-    # TODO: Implement metrics calculation
-    return {"project_id": project_id, "metrics": {}}
+    """Get project metrics and analytics (legacy endpoint)"""
+    try:
+        summary = analytics_service.get_project_summary(project_id=project_id)
+        return {"project_id": project_id, "metrics": summary}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Intent feedback endpoint for self-learning
 @app.post("/api/intent/feedback")

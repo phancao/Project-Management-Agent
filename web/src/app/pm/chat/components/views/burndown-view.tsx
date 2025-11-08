@@ -6,34 +6,30 @@
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Card } from "~/components/ui/card";
-import { useMyTasks } from "~/core/api/hooks/pm/use-tasks";
+import { useBurndownChart } from "~/core/api/hooks/pm/use-analytics";
+import { useActiveProject } from "~/core/api/hooks/pm/use-projects";
 
 export function BurndownView() {
-  const { tasks, loading, error } = useMyTasks();
+  const { activeProject } = useActiveProject();
+  const { data: chartData, isLoading: loading, error } = useBurndownChart(activeProject?.id || null);
 
-  // Calculate burndown data from tasks
-  const totalHours = tasks.reduce((sum, t) => sum + (t.estimated_hours ?? 0), 0);
-  const completedHours = tasks
-    .filter(t => t.status && (t.status.toLowerCase().includes("done") || t.status.toLowerCase().includes("completed")))
-    .reduce((sum, t) => sum + (t.estimated_hours ?? 0), 0);
-  const remainingHours = totalHours - completedHours;
+  // Transform chart data for Recharts
+  const burndownData = chartData?.series[0]?.data.map((point, index) => {
+    const actualPoint = chartData.series[1]?.data[index];
+    return {
+      day: point.label || new Date(point.date!).toLocaleDateString(),
+      ideal: point.value,
+      actual: actualPoint?.value || 0,
+    };
+  }) || [];
 
-  // Generate dummy burndown data for visualization
-  const days = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7", "Day 8", "Day 9", "Day 10"];
-  const idealBurndown = days.map((_, i) => totalHours * (1 - i / days.length));
-  const actualBurndown = days.map((_, i) => {
-    if (i < 2) return totalHours * 0.95;
-    if (i < 4) return totalHours * 0.85;
-    if (i < 6) return totalHours * 0.70;
-    if (i < 8) return totalHours * 0.45;
-    return totalHours * 0.20;
-  });
-  
-  const burndownData = days.map((day, i) => ({
-    day,
-    ideal: idealBurndown[i],
-    actual: actualBurndown[i],
-  }));
+  // Extract metadata
+  const metadata = chartData?.metadata || {};
+  const totalScope = metadata.total_scope || 0;
+  const remaining = metadata.remaining || 0;
+  const completed = metadata.completed || 0;
+  const completionPercentage = metadata.completion_percentage || 0;
+  const onTrack = metadata.on_track || false;
 
   if (loading) {
     return (
@@ -55,31 +51,36 @@ export function BurndownView() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Burndown Chart</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{chartData?.title || "Burndown Chart"}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Sprint Overview - {tasks.length} tasks
+            {activeProject?.name || "Project"} - Sprint Progress
           </p>
         </div>
+        {onTrack !== undefined && (
+          <div className={`px-3 py-1 rounded-full text-sm font-medium ${onTrack ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}`}>
+            {onTrack ? '✓ On Track' : '⚠ Behind Schedule'}
+          </div>
+        )}
       </div>
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
-          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Estimated</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalHours.toFixed(1)}h</div>
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Scope</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalScope.toFixed(1)} pts</div>
         </Card>
         <Card className="p-4">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Completed</div>
-          <div className="text-2xl font-bold text-green-600">{completedHours.toFixed(1)}h</div>
+          <div className="text-2xl font-bold text-green-600">{completed.toFixed(1)} pts</div>
         </Card>
         <Card className="p-4">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Remaining</div>
-          <div className="text-2xl font-bold text-orange-600">{remainingHours.toFixed(1)}h</div>
+          <div className="text-2xl font-bold text-orange-600">{remaining.toFixed(1)} pts</div>
         </Card>
         <Card className="p-4">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Progress</div>
           <div className="text-2xl font-bold text-blue-600">
-            {totalHours > 0 ? ((completedHours / totalHours) * 100).toFixed(0) : 0}%
+            {completionPercentage.toFixed(0)}%
           </div>
         </Card>
       </div>
@@ -128,30 +129,32 @@ export function BurndownView() {
         </ResponsiveContainer>
       </Card>
 
-      {/* Task Breakdown */}
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Task Breakdown</h3>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">To Do</div>
-            <div className="text-3xl font-bold text-gray-700 dark:text-gray-300">
-              {tasks.filter(t => !t.status || t.status === "None" || t.status.toLowerCase().includes("todo")).length}
+      {/* Scope Changes */}
+      {metadata.scope_changes && (
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Scope Changes</h3>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Added</div>
+              <div className="text-3xl font-bold text-blue-600">
+                +{metadata.scope_changes.added || 0}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Removed</div>
+              <div className="text-3xl font-bold text-red-600">
+                -{metadata.scope_changes.removed || 0}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Net Change</div>
+              <div className={`text-3xl font-bold ${(metadata.scope_changes.net || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {(metadata.scope_changes.net || 0) >= 0 ? '+' : ''}{metadata.scope_changes.net || 0}
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">In Progress</div>
-            <div className="text-3xl font-bold text-orange-600">
-              {tasks.filter(t => t.status?.toLowerCase().includes("progress")).length}
-            </div>
-          </div>
-          <div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Done</div>
-            <div className="text-3xl font-bold text-green-600">
-              {tasks.filter(t => t.status && (t.status.toLowerCase().includes("done") || t.status.toLowerCase().includes("completed"))).length}
-            </div>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }

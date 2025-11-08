@@ -104,6 +104,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
 
   const isOverview = pathname?.includes('/overview') ?? false;
   const isChat = pathname?.includes('/chat') ?? false;
+  const isCharts = pathname?.includes('/charts') ?? false;
 
   // Auto-select first project if no project is selected (only on Project Management page)
   useEffect(() => {
@@ -143,6 +144,15 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                 className={isChat ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}
               >
                 Project Management
+              </Button>
+            </Link>
+            <Link href="/pm/charts">
+              <Button
+                variant={isCharts ? "default" : "ghost"}
+                size="sm"
+                className={isCharts ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}
+              >
+                📊 Charts
               </Button>
             </Link>
           </div>

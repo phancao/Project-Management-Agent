@@ -112,7 +112,7 @@ export function extractTargetColumn(
   debug?: (stage: string, details: Record<string, unknown>) => void
 ): { orderId: string | null; statusId: string | null } {
   let orderId: string | null = null;
-
+  
   const log = (stage: string, details: Record<string, unknown>) => {
     if (debug) debug(stage, { overId, ...details });
   };
@@ -177,10 +177,10 @@ export function extractTargetColumn(
       log('task-not-found', {});
     }
   }
-
+  
   const statusId = orderId ? getStatusIdFromOrderId(orderId, orderIdToStatusIdMap) : null;
   log('final', { orderId, statusId });
-
+  
   return { orderId, statusId };
 }
 

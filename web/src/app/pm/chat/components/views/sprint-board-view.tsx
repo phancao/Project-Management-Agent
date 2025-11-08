@@ -1069,6 +1069,18 @@ export function SprintBoardView() {
 
       const targetStatus = availableStatuses.find((status) => String(status.id) === String(targetColumnId));
       if (!targetStatus) {
+        console.error('[DRAG DEBUG] Target status not found!', {
+          targetColumnId,
+          targetColumnIdType: typeof targetColumnId,
+          availableStatuses: availableStatuses.map((status) => ({ 
+            id: status.id, 
+            idType: typeof status.id,
+            idString: String(status.id),
+            name: status.name 
+          })),
+          extraction,
+          overId,
+        });
         logTaskDragEvent("task-drag:ignored", {
           projectId: activeProjectId,
           reason: "target-status-not-found",

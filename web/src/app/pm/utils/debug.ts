@@ -8,7 +8,7 @@
  * methods are no-ops so the existing debug noise is fully silenced.
  */
 
-export type DebugCategory =
+export type DebugCategory = 
   | 'time'
   | 'api'
   | 'filter'
@@ -64,8 +64,8 @@ interface DebugAPI {
   isEnabled: (category: DebugCategory) => boolean;
   getConfig: () => Readonly<DebugConfig>;
   reloadConfig: () => void;
-}
-
+    }
+    
 const debugImpl: DebugAPI = {
   time: noop,
   timeStart: noop,

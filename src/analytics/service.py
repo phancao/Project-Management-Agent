@@ -12,6 +12,7 @@ from src.analytics.mock_data import MockDataGenerator
 from src.analytics.calculators.burndown import BurndownCalculator
 from src.analytics.calculators.velocity import VelocityCalculator
 from src.analytics.calculators.sprint_report import SprintReportCalculator
+from src.analytics.calculators.cfd import calculate_cfd
 
 
 class AnalyticsService:
@@ -242,6 +243,57 @@ class AnalyticsService:
             "data": data,
             "timestamp": datetime.now()
         }
+    
+    def get_cfd_chart(
+        self,
+        project_id: str,
+        sprint_id: Optional[str] = None,
+        days_back: int = 30
+    ) -> ChartResponse:
+        """
+        Get Cumulative Flow Diagram for a project or sprint.
+        
+        Args:
+            project_id: Project identifier
+            sprint_id: Sprint identifier (if None, uses date range)
+            days_back: Number of days to look back (default: 30)
+        
+        Returns:
+            ChartResponse with CFD data
+        """
+        cache_key = f"cfd_{project_id}_{sprint_id}_{days_back}"
+        cached = self._get_from_cache(cache_key)
+        if cached:
+            return cached
+        
+        # Get data based on source
+        if self.data_source == "mock":
+            # Generate mock CFD data
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days_back)
+            
+            # Generate work items with status history
+            work_items = self.mock_generator.generate_cfd_data(
+                num_items=50,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            # Calculate CFD
+            chart = calculate_cfd(
+                work_items=work_items,
+                start_date=start_date,
+                end_date=end_date,
+                statuses=["To Do", "In Progress", "In Review", "Done"]
+            )
+        else:
+            # TODO: Implement real data adapters
+            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for CFD")
+        
+        # Cache result
+        self._set_cache(cache_key, chart)
+        
+        return chart
     
     def clear_cache(self):
         """Clear all cached data"""

@@ -2838,3 +2838,96 @@ async def pm_delete_provider(provider_id: str):
     except Exception as e:
         logger.error(f"Failed to delete provider: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Analytics Endpoints
+# ============================================================================
+
+from src.analytics.service import AnalyticsService
+
+# Initialize analytics service
+analytics_service = AnalyticsService(data_source="mock")
+
+
+@app.get("/api/analytics/projects/{project_id}/burndown")
+async def get_burndown_chart(
+    project_id: str,
+    sprint_id: Optional[str] = None,
+    scope_type: str = "story_points"
+):
+    """Get burndown chart for a project/sprint"""
+    try:
+        chart = analytics_service.get_burndown_chart(
+            project_id=project_id,
+            sprint_id=sprint_id,
+            scope_type=scope_type  # type: ignore
+        )
+        return chart.model_dump()
+    except Exception as e:
+        logger.error(f"Failed to get burndown chart: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/projects/{project_id}/velocity")
+async def get_velocity_chart(
+    project_id: str,
+    sprint_count: int = 6
+):
+    """Get velocity chart for a project"""
+    try:
+        chart = analytics_service.get_velocity_chart(
+            project_id=project_id,
+            sprint_count=sprint_count
+        )
+        return chart.model_dump()
+    except Exception as e:
+        logger.error(f"Failed to get velocity chart: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/sprints/{sprint_id}/report")
+async def get_sprint_report(
+    sprint_id: str,
+    project_id: str
+):
+    """Get comprehensive sprint report"""
+    try:
+        report = analytics_service.get_sprint_report(
+            sprint_id=sprint_id,
+            project_id=project_id
+        )
+        return report.model_dump()
+    except Exception as e:
+        logger.error(f"Failed to get sprint report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/projects/{project_id}/summary")
+async def get_project_summary(project_id: str):
+    """Get project analytics summary"""
+    try:
+        summary = analytics_service.get_project_summary(project_id=project_id)
+        return summary
+    except Exception as e:
+        logger.error(f"Failed to get project summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/projects/{project_id}/cfd")
+async def get_cfd_chart(
+    project_id: str,
+    sprint_id: Optional[str] = None,
+    days_back: int = 30
+):
+    """Get Cumulative Flow Diagram for a project/sprint"""
+    try:
+        chart = analytics_service.get_cfd_chart(
+            project_id=project_id,
+            sprint_id=sprint_id,
+            days_back=days_back
+        )
+        return chart.model_dump()
+    except Exception as e:
+        logger.error(f"Failed to get CFD chart: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -490,3 +490,81 @@ def get_mock_trends(days_back: int = 90) -> List[TrendDataPoint]:
     generator = MockDataGenerator()
     return generator.generate_trend_data(days_back=days_back)
 
+
+def generate_cfd_data(
+    self,
+    num_items: int = 50,
+    start_date: datetime = None,
+    end_date: datetime = None
+) -> List[Dict]:
+    """
+    Generate mock work items with status history for CFD.
+    
+    Args:
+        num_items: Number of work items to generate
+        start_date: Start date for the period
+        end_date: End date for the period
+    
+    Returns:
+        List of work items with status history
+    """
+    if start_date is None:
+        start_date = datetime.now() - timedelta(days=30)
+    if end_date is None:
+        end_date = datetime.now()
+    
+    statuses = ["To Do", "In Progress", "In Review", "Done"]
+    work_items = []
+    
+    for i in range(num_items):
+        # Random creation date within the period
+        days_offset = random.randint(0, (end_date - start_date).days)
+        created_date = start_date + timedelta(days=days_offset)
+        
+        # Generate status history
+        status_history = []
+        current_date = created_date
+        current_status_index = 0
+        
+        status_history.append({
+            "date": current_date.isoformat(),
+            "status": statuses[current_status_index]
+        })
+        
+        # Progress through statuses
+        while current_status_index < len(statuses) - 1 and current_date < end_date:
+            # Random days to next status (1-7 days)
+            days_in_status = random.randint(1, 7)
+            current_date += timedelta(days=days_in_status)
+            
+            if current_date > end_date:
+                break
+            
+            # Sometimes skip a status or stay in current status
+            if random.random() < 0.7:  # 70% chance to progress
+                current_status_index += 1
+                status_history.append({
+                    "date": current_date.isoformat(),
+                    "status": statuses[current_status_index]
+                })
+        
+        # Determine completion date
+        completion_date = None
+        if current_status_index == len(statuses) - 1:
+            completion_date = current_date.isoformat()
+        
+        work_items.append({
+            "id": f"ITEM-{i+1}",
+            "created_date": created_date.isoformat(),
+            "completion_date": completion_date,
+            "status": statuses[current_status_index],
+            "status_history": status_history,
+            "start_date": created_date.isoformat()
+        })
+    
+    return work_items
+
+
+# Add method to MockDataGenerator class
+MockDataGenerator.generate_cfd_data = generate_cfd_data
+

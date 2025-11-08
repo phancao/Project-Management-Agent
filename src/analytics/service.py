@@ -183,7 +183,18 @@ class AnalyticsService:
                 )
             else:
                 # Convert dict to SprintData object
-                sprint_data = SprintData(**sprint_data_dict)
+                # Adapter returns {"sprint": {...}, "tasks": [...], ...}
+                # Need to flatten it for SprintData model
+                sprint_info = sprint_data_dict.get("sprint", {})
+                sprint_data = SprintData(
+                    id=sprint_info.get("id"),
+                    name=sprint_info.get("name"),
+                    project_id=sprint_info.get("project_id", project_id),
+                    start_date=sprint_info.get("start_date"),
+                    end_date=sprint_info.get("end_date"),
+                    status=sprint_info.get("status", "active"),
+                    work_items=sprint_data_dict.get("tasks", []),
+                )
         
         # Generate report
         result = SprintReportCalculator.calculate(sprint_data)

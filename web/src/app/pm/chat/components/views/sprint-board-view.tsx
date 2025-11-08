@@ -202,9 +202,10 @@ type SortableColumnProps = {
   tasks: BoardTask[];
   onTaskClick: (task: Task) => void;
   draggedColumnId: string | null;
+  hoveredColumnId: string | null;
 };
 
-function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId }: SortableColumnProps) {
+function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId, hoveredColumnId }: SortableColumnProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: orderId,
     data: {
@@ -226,6 +227,7 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId }
   } as const;
 
   const isActive = draggedColumnId === orderId;
+  const isHovered = hoveredColumnId === column.id;
 
   return (
     <div ref={setNodeRef} style={columnStyle} data-order-id={orderId} className="w-80 shrink-0">
@@ -252,10 +254,12 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId }
       <div
         ref={setColumnDropRef}
         className={`rounded-b-lg border-l border-r border-b ${
-          isActive
+          isHovered
+            ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-400 dark:ring-blue-500"
+            : isActive
             ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30"
             : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
-        } p-3 space-y-2 min-h-24 transition-colors`}
+        } p-3 space-y-2 min-h-24 transition-all`}
       >
         <SortableContext items={tasks.map((task) => String(task.id))} strategy={verticalListSortingStrategy}>
           {tasks.length === 0 ? (
@@ -290,6 +294,7 @@ export function SprintBoardView() {
   const [epicFilter, setEpicFilter] = useState<string | null>(null);
   const [sprintFilter, setSprintFilter] = useState<string | null>(null);
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
+  const [hoveredColumnId, setHoveredColumnId] = useState<string | null>(null);
 
   const [columnOrderIds, setColumnOrderIds] = useState<string[]>([]);
   const [orderIdToStatusIdMap, setOrderIdToStatusIdMap] = useState<Map<string, string>>(new Map());
@@ -875,10 +880,36 @@ export function SprintBoardView() {
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
-      // Simplified - let dnd-kit handle the visual reordering automatically
-      // No custom placeholder management needed
+      const { over, active } = event;
+      
+      // Track which column is being hovered for visual feedback
+      if (over && active) {
+        const dragInfo = detectDragType(event, columnOrderIds, taskIdsSet);
+        
+        if (dragInfo.type === "task") {
+          // Extract the target column from the over element
+          const extraction = extractTargetColumn(
+            String(over.id),
+            over.data.current,
+            columnOrderIds,
+            orderIdToStatusIdMap,
+            availableStatuses ?? [],
+            tasks
+          );
+          
+          if (extraction.statusId) {
+            setHoveredColumnId(String(extraction.statusId));
+          } else {
+            setHoveredColumnId(null);
+          }
+        } else {
+          setHoveredColumnId(null);
+        }
+      } else {
+        setHoveredColumnId(null);
+      }
     },
-    []
+    [columnOrderIds, taskIdsSet, orderIdToStatusIdMap, availableStatuses, tasks]
   );
 
   const applyColumnReorder = useCallback(
@@ -983,6 +1014,7 @@ export function SprintBoardView() {
     async (dragInfo: DragInfo, event: DragEndEvent) => {
       const { over } = event;
       setActiveId(null);
+      setHoveredColumnId(null);
 
       if (!over || dragInfo.type !== "task") {
         logTaskDragEvent("task-drag:ignored", {
@@ -1167,6 +1199,7 @@ export function SprintBoardView() {
         const { over } = event;
         setDraggedColumnId(null);
         setActiveId(null);
+        setHoveredColumnId(null);
 
         if (!over) return;
 
@@ -1376,6 +1409,7 @@ export function SprintBoardView() {
                   tasks={column.tasks as BoardTask[]}
                   onTaskClick={handleTaskClick}
                   draggedColumnId={draggedColumnId}
+                  hoveredColumnId={hoveredColumnId}
                 />
               ))}
             </div>

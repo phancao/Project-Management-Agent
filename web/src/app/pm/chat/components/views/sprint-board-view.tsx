@@ -311,9 +311,7 @@ export function SprintBoardView() {
       setColumnOrder([]);
       setOrderIdToStatusIdMap(new Map<string, string>());
       setVisibleColumns(new Set<string>());
-      setReorderedTasks({});
       setDraggedColumnId(null);
-      setActiveColumnId(null);
       setActiveId(null);
     }
 
@@ -984,8 +982,6 @@ export function SprintBoardView() {
   const finishTaskDrag = useCallback(
     async (dragInfo: DragInfo, event: DragEndEvent) => {
       const { over } = event;
-      setReorderedTasks({});
-      setActiveColumnId(null);
       setActiveId(null);
 
       if (!over || dragInfo.type !== "task") {

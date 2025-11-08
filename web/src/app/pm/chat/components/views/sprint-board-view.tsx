@@ -831,7 +831,6 @@ export function SprintBoardView() {
 
       if (info.type === "column" && info.orderId) {
         setDraggedColumnId(info.orderId);
-        setActiveColumnId(null);
 
         try {
           const columnEl = document.querySelector(`[data-order-id="${info.orderId}"]`);

@@ -183,9 +183,18 @@ class PMHandler:
         Raises:
             ValueError: If provider_id format is invalid or provider not found
         """
-        # Check if this is a mock project
+        # Check if this is a mock project - return MockPMProvider
         if self.is_mock_project(project_id):
-            raise ValueError("Mock project does not support task operations. Please select a real project.")
+            from src.pm_providers.mock_provider import MockPMProvider
+            from src.pm_providers.models import PMProviderConfig
+            
+            logger.info(f"[PMHandler] Using MockPMProvider for project: {project_id}")
+            config = PMProviderConfig(
+                provider_type="mock",
+                base_url="mock://demo",
+                api_key="mock-key"
+            )
+            return MockPMProvider(config)
         
         if ":" not in project_id:
             raise ValueError(f"Invalid project_id format: {project_id}")

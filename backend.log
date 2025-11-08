@@ -1,211 +1,25 @@
 INFO:     Will watch for changes in these directories: ['/Volumes/Data 1/Project/Project-Management-Agent']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [53348] using StatReload
+INFO:     Started reloader process [62066] using StatReload
 Checkpoint saver is disabled
-INFO:     Started server process [53363]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-Failed to get CFD chart: can't compare offset-naive and offset-aware datetimes
-Traceback (most recent call last):
-  File "/Volumes/Data 1/Project/Project-Management-Agent/src/server/app.py", line 3019, in get_cfd_chart
-    chart = await analytics_service.get_cfd_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Volumes/Data 1/Project/Project-Management-Agent/src/analytics/service.py", line 339, in get_cfd_chart
-    chart = calculate_cfd(
-            ^^^^^^^^^^^^^^
-  File "/Volumes/Data 1/Project/Project-Management-Agent/src/analytics/calculators/cfd.py", line 54, in calculate_cfd
-    item_status = _get_status_on_date(item, date)
-                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Volumes/Data 1/Project/Project-Management-Agent/src/analytics/calculators/cfd.py", line 174, in _get_status_on_date
-    if change_date <= date:
-       ^^^^^^^^^^^^^^^^^^^
-TypeError: can't compare offset-naive and offset-aware datetimes
-INFO:     127.0.0.1:49986 - "GET /api/analytics/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/cfd?days_back=30 HTTP/1.1" 500 Internal Server Error
-Failed to get CFD chart: can't compare offset-naive and offset-aware datetimes
-Traceback (most recent call last):
-  File "/Volumes/Data 1/Project/Project-Management-Agent/src/server/app.py", line 3019, in get_cfd_chart
-    chart = await analytics_service.get_cfd_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Volumes/Data 1/Project/Project-Management-Agent/src/analytics/service.py", line 339, in get_cfd_chart
-    chart = calculate_cfd(
-            ^^^^^^^^^^^^^^
-  File "/Volumes/Data 1/Project/Project-Management-Agent/src/analytics/calculators/cfd.py", line 54, in calculate_cfd
-    item_status = _get_status_on_date(item, date)
-                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Volumes/Data 1/Project/Project-Management-Agent/src/analytics/calculators/cfd.py", line 174, in _get_status_on_date
-    if change_date <= date:
-       ^^^^^^^^^^^^^^^^^^^
-TypeError: can't compare offset-naive and offset-aware datetimes
-INFO:     127.0.0.1:49986 - "GET /api/analytics/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/cfd?days_back=30 HTTP/1.1" 500 Internal Server Error
-WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [53363]
-Checkpoint saver is disabled
-INFO:     Started server process [55094]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [55094]
-Checkpoint saver is disabled
-INFO:     Started server process [55257]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [55257]
-Checkpoint saver is disabled
-INFO:     Started server process [55476]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     127.0.0.1:50077 - "OPTIONS /api/pm/providers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50079 - "GET /api/pm/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50077 - "GET /api/pm/providers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50079 - "GET /api/config HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50081 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50083 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50085 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50087 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/sprints HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50077 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/tasks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50079 - "GET /api/pm/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50081 - "GET /api/config HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50083 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50085 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50087 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50077 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/sprints HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50079 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/tasks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50081 - "GET /api/pm/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50083 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50085 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50087 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50077 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/sprints HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50079 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/users HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50081 - "GET /api/pm/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50083 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50085 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50087 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50077 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/users HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50081 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50083 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50085 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50083 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50085 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50224 - "GET /api/pm/projects HTTP/1.1" 200 OK
-WARNING:  StatReload detected changes in 'src/server/app.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [55476]
-Checkpoint saver is disabled
-INFO:     Started server process [57584]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'src/server/app.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [57584]
-Checkpoint saver is disabled
-INFO:     Started server process [57697]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'src/server/app.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [57697]
-Checkpoint saver is disabled
-INFO:     Started server process [57820]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [57820]
-Checkpoint saver is disabled
-INFO:     Started server process [58095]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [58095]
-Checkpoint saver is disabled
-INFO:     Started server process [58271]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     127.0.0.1:50376 - "GET /api/pm/providers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50378 - "GET /api/pm/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50380 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50382 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50384 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/sprints HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50376 - "GET /api/config HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50378 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/tasks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50380 - "GET /api/pm/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50382 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50384 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50376 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/sprints HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50378 - "GET /api/config HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50380 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/tasks HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50382 - "GET /api/pm/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50384 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50376 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50378 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/sprints HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50380 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/users HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50382 - "GET /api/pm/projects HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50384 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50376 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50378 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/users HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50382 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/statuses?entity_type=task HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50384 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/priorities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50384 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/a4a1f985-f386-40e0-9576-8aa0d80e3747%3A2/epics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/mock%3Ademo/statuses?entity_type=task HTTP/1.1" 400 Bad Request
-ValueError listing priorities for mock:demo: Invalid provider ID format: mock
-INFO:     127.0.0.1:50384 - "GET /api/pm/projects/mock%3Ademo/priorities HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50382 - "GET /api/pm/projects/mock%3Ademo/epics HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/mock%3Ademo/sprints HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50382 - "GET /api/pm/projects/mock%3Ademo/epics HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/mock%3Ademo/statuses?entity_type=task HTTP/1.1" 400 Bad Request
-ValueError listing priorities for mock:demo: Invalid provider ID format: mock
-INFO:     127.0.0.1:50382 - "GET /api/pm/projects/mock%3Ademo/priorities HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/mock%3Ademo/epics HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50382 - "GET /api/pm/projects/mock%3Ademo/users HTTP/1.1" 503 Service Unavailable
-INFO:     127.0.0.1:50386 - "GET /api/pm/projects/mock%3Ademo/tasks HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50384 - "GET /api/pm/projects/mock%3Ademo/sprints HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50378 - "GET /api/pm/projects/mock%3Ademo/epics HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50376 - "GET /api/pm/projects/mock%3Ademo/statuses?entity_type=task HTTP/1.1" 400 Bad Request
-2025-11-09 00:31:41,915 - src.server.app - INFO - Listing priorities for project_id: mock:demo
-2025-11-09 00:31:41,915 - src.server.app - ERROR - ValueError listing priorities for mock:demo: Invalid provider ID format: mock
-INFO:     127.0.0.1:50380 - "GET /api/pm/projects/mock%3Ademo/priorities HTTP/1.1" 400 Bad Request
-WARNING:  StatReload detected changes in 'src/server/pm_handler.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [58271]
-Checkpoint saver is disabled
-INFO:     Started server process [59903]
+INFO:     Started server process [62081]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 WARNING:  StatReload detected changes in 'src/server/pm_handler.py'. Reloading...
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [59903]
+INFO:     Finished server process [62081]
 Checkpoint saver is disabled
-INFO:     Started server process [61540]
+INFO:     Started server process [66862]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/server/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [66862]
+Checkpoint saver is disabled
+INFO:     Started server process [67025]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.

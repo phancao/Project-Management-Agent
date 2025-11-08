@@ -2862,10 +2862,20 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         AnalyticsService configured with real data adapter
     """
     try:
-        # Check if this is the Mock Project
+        # Check if this is the Mock Project - use MockPMProvider
         if project_id.startswith("mock:"):
-            logger.info(f"[Analytics] Using mock data for Mock Project: {project_id}")
-            return AnalyticsService(data_source="mock")
+            logger.info(f"[Analytics] Using MockPMProvider for project: {project_id}")
+            from src.pm_providers.mock_provider import MockPMProvider
+            from src.pm_providers.models import PMProviderConfig
+            
+            config = PMProviderConfig(
+                provider_type="mock",
+                base_url="mock://demo",
+                api_key="mock-key"
+            )
+            mock_provider = MockPMProvider(config)
+            adapter = PMProviderAnalyticsAdapter(mock_provider)
+            return AnalyticsService(data_source="real", adapter=adapter)
         
         # Parse project ID to get provider UUID
         if ":" not in project_id:

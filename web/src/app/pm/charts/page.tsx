@@ -29,7 +29,7 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function ChartsPage() {
+function ChartsPageContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project");
   const { projects } = useProjects();
@@ -38,8 +38,7 @@ export default function ChartsPage() {
   const [activeTab, setActiveTab] = useState("overview");
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <PMLoadingProvider>
+    <PMLoadingProvider>
       <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-900">
         <PMHeader />
         <PMLoadingManager />
@@ -246,6 +245,13 @@ export default function ChartsPage() {
         </main>
       </div>
     </PMLoadingProvider>
+  );
+}
+
+export default function ChartsPage() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ChartsPageContent />
     </QueryClientProvider>
   );
 }

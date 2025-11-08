@@ -955,8 +955,18 @@ export function SprintBoardView() {
       const overTaskIndex = overTaskId ? baseTargetTasks.findIndex((task) => String(task.id) === String(overTaskId)) : -1;
 
       const newTargetTasks: BoardTask[] = [...baseTargetTasks];
-      if (overTaskIndex >= 0) newTargetTasks.splice(overTaskIndex, 0, placeholderTask);
-      else newTargetTasks.push(placeholderTask);
+      if (overTaskIndex >= 0) {
+        // Check if cursor is in the bottom half of the hovered task
+        const overRect = over.rect;
+        const cursorY = event.activatorEvent && 'clientY' in event.activatorEvent ? event.activatorEvent.clientY : 0;
+        const isBottomHalf = overRect && cursorY > (overRect.top + overRect.height / 2);
+        
+        // Insert after if in bottom half, before if in top half
+        const insertIndex = isBottomHalf ? overTaskIndex + 1 : overTaskIndex;
+        newTargetTasks.splice(insertIndex, 0, placeholderTask);
+      } else {
+        newTargetTasks.push(placeholderTask);
+      }
 
       const updated: Record<string, BoardTask[]> = { [targetColumnId]: newTargetTasks };
 

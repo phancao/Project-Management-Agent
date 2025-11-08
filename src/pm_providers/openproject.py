@@ -414,41 +414,42 @@ class OpenProjectProvider(BasePMProvider):
                     if current_wp.status_code == 200:
                         current_data = current_wp.json()
                         
-                        # Check if changeParent action is available
-                        change_parent_link = current_data.get("_links", {}).get("changeParent", {})
-                        if change_parent_link and change_parent_link.get("href"):
-                            change_url = change_parent_link["href"]
-                            if not change_url.startswith("http"):
-                                change_url = f"{self.base_url}{change_url}"
-                            
-                            # POST to changeParent with empty body to remove parent
-                            logger.info(f"[EPIC REMOVAL] Calling changeParent endpoint: {change_url}")
-                            change_resp = requests.post(
-                                change_url,
-                                headers=self.headers,
-                                json={},  # Empty body to remove parent
-                                timeout=10
-                            )
-                            
-                            if change_resp.status_code in [200, 204]:
-                                logger.info(f"[EPIC REMOVAL] Successfully removed parent from task {task_id}")
-                                # Return the updated task
-                                if change_resp.text:
-                                    return self._parse_task(change_resp.json())
-                                else:
-                                    # Fetch the updated task
-                                    updated_task = await self.get_task(task_id)
-                                    if updated_task:
-                                        return updated_task
+                        # Get current lockVersion
+                        lock_version = current_data.get('lockVersion')
+                        logger.info(f"[EPIC REMOVAL] Current lockVersion: {lock_version}")
+                        
+                        # According to OpenProject API docs, to remove a link, set href to null
+                        # Try: {"lockVersion": X, "_links": {"parent": {"href": null}}}
+                        removal_payload = {
+                            "lockVersion": lock_version,
+                            "_links": {
+                                "parent": {"href": None}
+                            }
+                        }
+                        
+                        logger.info(f"[EPIC REMOVAL] Attempting removal with payload: {removal_payload}")
+                        
+                        change_resp = requests.patch(
+                            url,  # Use the regular work package URL
+                            headers=self.headers,
+                            json=removal_payload,
+                            timeout=10
+                        )
+                        
+                        if change_resp.status_code in [200, 204]:
+                            logger.info(f"[EPIC REMOVAL] Successfully removed parent from task {task_id}")
+                            # Return the updated task
+                            if change_resp.text:
+                                return self._parse_task(change_resp.json())
                             else:
-                                error_text = change_resp.text
-                                logger.error(f"[EPIC REMOVAL] changeParent failed with status {change_resp.status_code}: {error_text}")
-                                raise ValueError(f"Failed to remove parent: {error_text}")
+                                # Fetch the updated task
+                                updated_task = await self.get_task(task_id)
+                                if updated_task:
+                                    return updated_task
                         else:
-                            logger.warning(f"[EPIC REMOVAL] changeParent link not available for task {task_id}")
-                            # If changeParent is not available, the task might not have a parent
-                            # Just return the current task
-                            return self._parse_task(current_data)
+                            error_text = change_resp.text
+                            logger.error(f"[EPIC REMOVAL] PATCH failed with status {change_resp.status_code}: {error_text}")
+                            raise ValueError(f"Failed to remove parent: {error_text}")
                     else:
                         logger.error(f"[EPIC REMOVAL] Failed to get current task {task_id}: {current_wp.status_code}")
                         raise ValueError(f"Failed to get task for parent removal: {current_wp.status_code}")

@@ -1069,18 +1069,6 @@ export function SprintBoardView() {
 
       const targetStatus = availableStatuses.find((status) => String(status.id) === String(targetColumnId));
       if (!targetStatus) {
-        console.error('[DRAG DEBUG] Target status not found!', {
-          targetColumnId,
-          targetColumnIdType: typeof targetColumnId,
-          availableStatuses: availableStatuses.map((status) => ({ 
-            id: status.id, 
-            idType: typeof status.id,
-            idString: String(status.id),
-            name: status.name 
-          })),
-          extraction,
-          overId,
-        });
         logTaskDragEvent("task-drag:ignored", {
           projectId: activeProjectId,
           reason: "target-status-not-found",
@@ -1117,15 +1105,6 @@ export function SprintBoardView() {
 
       // Use status ID instead of name for the API call
       const statusValue = String(targetStatus.id);
-
-      console.log('[DRAG DEBUG] About to update task status:', {
-        taskId: dragInfo.id,
-        currentStatus: task.status,
-        targetStatusName: newStatus,
-        targetStatusId: targetStatus.id,
-        statusValue,
-        targetStatus,
-      });
 
       try {
         if (!dragInfo.id || dragInfo.id === "undefined" || dragInfo.id === "null") {
@@ -1199,12 +1178,6 @@ export function SprintBoardView() {
           serverStatus: result.status,
         });
       } catch (err) {
-        console.error('[DRAG DEBUG] Task update failed:', {
-          error: err,
-          taskId: dragInfo.id,
-          statusValue,
-          targetStatus,
-        });
         const { message, description } = formatTaskUpdateError(err);
         toast.error(message, { description });
         logTaskDragEvent("task-drag:update", {

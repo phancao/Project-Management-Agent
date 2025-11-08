@@ -250,6 +250,20 @@ class OpenProjectProvider(BasePMProvider):
             # Status can be either an ID or a name - need to resolve it
             status_value = updates["status"]
             payload["_links"] = payload.get("_links", {})
+            
+            # First, check what status transitions are allowed for this work package
+            try:
+                current_wp = requests.get(url, headers=self.headers, timeout=10)
+                if current_wp.status_code == 200:
+                    current_data = current_wp.json()
+                    allowed_statuses = current_data.get("_links", {}).get("status", {}).get("allowedValues", [])
+                    if allowed_statuses:
+                        logger.info(f"Allowed status transitions for task {task_id}: {[s.get('title') for s in allowed_statuses]}")
+                        allowed_status_ids = [s.get("href", "").split("/")[-1] for s in allowed_statuses if s.get("href")]
+                        logger.info(f"Allowed status IDs: {allowed_status_ids}")
+            except Exception as e:
+                logger.warning(f"Could not fetch allowed status transitions: {e}")
+            
             # If it's a numeric string or number, use it as ID
             if str(status_value).isdigit():
                 # Verify the status exists before trying to use it

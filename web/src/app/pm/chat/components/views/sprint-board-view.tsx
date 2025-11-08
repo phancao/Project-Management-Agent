@@ -13,8 +13,9 @@ import {
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
+  type Modifier,
 } from "@dnd-kit/core";
-import { closestCorners, snapCenterToCursor } from "@dnd-kit/core";
+import { closestCorners } from "@dnd-kit/core";
 import { useDroppable } from "@dnd-kit/core";
 import { useSortable, SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -41,6 +42,15 @@ import { usePMLoading } from "../../../context/pm-loading-context";
 import { useProjectData } from "../../../hooks/use-project-data";
 import { debug } from "../../../utils/debug";
 import { traceSprintBoardEvent, isSprintBoardTraceEnabled } from "../../../utils/sprintboard-trace";
+
+// Custom modifier to center the drag overlay on the cursor
+const snapCenterToCursor: Modifier = ({ transform }) => {
+  return {
+    ...transform,
+    x: transform.x - 0,
+    y: transform.y - 20, // Offset to center vertically
+  };
+};
 
 import {
   createOrderIdsFromStatusIds,

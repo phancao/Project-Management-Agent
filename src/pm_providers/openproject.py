@@ -405,39 +405,22 @@ class OpenProjectProvider(BasePMProvider):
                     "href": f"/api/v3/work_packages/{epic_id}"
                 }
             else:
-                # To remove parent in OpenProject, we need to use the changeParent link
-                # However, since we can't easily determine if current parent is an epic,
-                # we'll try to set parent to None (may not work in all cases)
-                # Alternative: Use changeParent link with empty href
-                # For now, we'll try setting parent to an empty dict which might work
+                # Remove parent (epic) - need to get lockVersion first
                 try:
-                    # Try to use changeParent link if available
+                    # Get current work package to ensure we have lockVersion
                     current_wp = requests.get(url, headers=self.headers, timeout=10)
                     if current_wp.status_code == 200:
                         current_data = current_wp.json()
-                        change_parent_link = current_data.get("_links", {}).get("changeParent")
-                        if change_parent_link and change_parent_link.get("href"):
-                            # Use changeParent link to remove parent
-                            change_url = change_parent_link["href"]
-                            if not change_url.startswith("http"):
-                                change_url = f"{self.base_url}{change_url}"
-                            # POST to changeParent with null parent
-                            change_resp = requests.post(
-                                change_url,
-                                headers=self.headers,
-                                json={"parent": None},
-                                timeout=10
-                            )
-                            if change_resp.status_code in [200, 204]:
-                                logger.info(f"Removed parent from work package {task_id}")
-                                return self._parse_task(change_resp.json() if change_resp.text else current_data)
+                        current_lock_version = current_data.get('lockVersion')
+                        if current_lock_version is not None:
+                            payload["lockVersion"] = current_lock_version
+                        # Set parent to empty dict to remove it
+                        payload["_links"]["parent"] = {}
+                        logger.info(f"Removing parent from work package {task_id} with lockVersion {current_lock_version}")
                 except Exception as e:
-                    logger.warning(
-                        f"Could not remove parent via changeParent link: {e}. "
-                        "Parent may still be set."
-                    )
-                # Fallback: try setting parent to empty dict
-                payload["_links"]["parent"] = {}
+                    logger.warning(f"Could not get lockVersion for parent removal: {e}")
+                    # Try anyway with empty dict
+                    payload["_links"]["parent"] = {}
         if "sprint_id" in updates:
             # Sprint assignment via version link
             payload["_links"] = payload.get("_links", {})

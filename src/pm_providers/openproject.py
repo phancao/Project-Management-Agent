@@ -256,11 +256,22 @@ class OpenProjectProvider(BasePMProvider):
                 current_wp = requests.get(url, headers=self.headers, timeout=10)
                 if current_wp.status_code == 200:
                     current_data = current_wp.json()
+                    current_status = current_data.get("_links", {}).get("status", {}).get("title", "Unknown")
                     allowed_statuses = current_data.get("_links", {}).get("status", {}).get("allowedValues", [])
                     if allowed_statuses:
-                        logger.info(f"Allowed status transitions for task {task_id}: {[s.get('title') for s in allowed_statuses]}")
+                        allowed_names = [s.get("title", "Unknown") for s in allowed_statuses]
                         allowed_status_ids = [s.get("href", "").split("/")[-1] for s in allowed_statuses if s.get("href")]
-                        logger.info(f"Allowed status IDs: {allowed_status_ids}")
+                        logger.info(f"[STATUS WORKFLOW] Task {task_id} current status: '{current_status}'")
+                        logger.info(f"[STATUS WORKFLOW] Allowed transitions: {allowed_names}")
+                        logger.info(f"[STATUS WORKFLOW] Allowed status IDs: {allowed_status_ids}")
+                        logger.info(f"[STATUS WORKFLOW] Requested status ID: {status_value}")
+                        
+                        # Check if the requested status is in the allowed list
+                        if str(status_value) not in allowed_status_ids:
+                            logger.warning(f"[STATUS WORKFLOW] WARNING: Status ID {status_value} is NOT in the allowed transitions list!")
+                            logger.warning(f"[STATUS WORKFLOW] This transition may fail due to workflow restrictions.")
+                    else:
+                        logger.warning(f"[STATUS WORKFLOW] No allowedValues found for status transitions")
             except Exception as e:
                 logger.warning(f"Could not fetch allowed status transitions: {e}")
             

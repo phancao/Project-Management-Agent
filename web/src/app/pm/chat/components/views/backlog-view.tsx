@@ -22,6 +22,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar } from "lucide-react";
 import { useMemo, useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
@@ -807,8 +808,14 @@ export function BacklogView() {
       
       try {
         await handleUpdateTask(taskId, { epic_id: epicId });
+        toast.success("Task assigned to epic", {
+          description: `${draggedTask.title} has been assigned to the epic.`
+        });
       } catch (error) {
         console.error("Failed to assign task to epic:", error);
+        toast.error("Failed to assign task to epic", {
+          description: error instanceof Error ? error.message : "Unknown error"
+        });
       }
       return;
     }
@@ -819,8 +826,14 @@ export function BacklogView() {
       
       try {
         await handleUpdateTask(taskId, { epic_id: null });
+        toast.success("Epic removed from task", {
+          description: `${draggedTask.title} is no longer assigned to an epic.`
+        });
       } catch (error) {
         console.error("Failed to remove task from epic:", error);
+        toast.error("Failed to remove epic from task", {
+          description: error instanceof Error ? error.message : "Unknown error"
+        });
       }
       return;
     }
@@ -846,8 +859,14 @@ export function BacklogView() {
       if (!draggedTask.sprint_id) return; // Already in backlog
       try {
         await handleMoveTaskToBacklog(taskId);
+        toast.success("Task moved to backlog", {
+          description: `${draggedTask.title} has been moved to the backlog.`
+        });
       } catch (error) {
         console.error("Failed to move task to backlog:", error);
+        toast.error("Failed to move task to backlog", {
+          description: error instanceof Error ? error.message : "Unknown error"
+        });
       }
       return;
     }
@@ -857,8 +876,15 @@ export function BacklogView() {
 
     try {
       await handleAssignTaskToSprint(taskId, targetSprintId);
+      const targetSprint = sprints.find(s => String(s.id) === targetSprintId);
+      toast.success("Task assigned to sprint", {
+        description: `${draggedTask.title} has been assigned to ${targetSprint?.name || 'sprint'}.`
+      });
     } catch (error) {
       console.error("Failed to assign task to sprint:", error);
+      toast.error("Failed to assign task to sprint", {
+        description: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 

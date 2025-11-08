@@ -146,7 +146,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                 Project Management
               </Button>
             </Link>
-            <Link href="/pm/charts">
+            <Link href={`/pm/charts${selectedProject ? `?project=${selectedProject}` : ''}`}>
               <Button
                 variant={isCharts ? "default" : "ghost"}
                 size="sm"

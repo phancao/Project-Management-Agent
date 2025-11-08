@@ -12,12 +12,16 @@ import { SprintReportView } from "../chat/components/views/sprint-report-view";
 import { PMHeader } from "../components/pm-header";
 import { PMLoadingProvider } from "../context/pm-loading-context";
 import { PMLoadingManager } from "../components/pm-loading-manager";
-import { useActiveProject } from "~/core/api/hooks/pm/use-projects";
+import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { useProjectSummary } from "~/core/api/hooks/pm/use-analytics";
+import { useSearchParams } from "next/navigation";
 
 export default function ChartsPage() {
-  const { activeProject } = useActiveProject();
-  const { data: summary } = useProjectSummary(activeProject?.id || null);
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("project");
+  const { projects } = useProjects();
+  const activeProject = projects.find(p => p.id === projectId);
+  const { data: summary } = useProjectSummary(projectId);
   const [activeTab, setActiveTab] = useState("overview");
 
   return (

@@ -1,6 +1,6 @@
 // Analytics API hooks for fetching chart data
 import { useQuery } from "@tanstack/react-query";
-import { resolveServiceURL } from "~/lib/utils";
+import { resolveServiceURL } from "~/core/api/resolve-service-url";
 
 // Types based on backend analytics models
 export interface ChartDataPoint {

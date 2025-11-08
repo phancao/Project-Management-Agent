@@ -5,19 +5,20 @@
 
 import { Card } from "~/components/ui/card";
 import { useSprintReport } from "~/core/api/hooks/pm/use-analytics";
-import { useActiveProject } from "~/core/api/hooks/pm/use-projects";
 import { useSprints } from "~/core/api/hooks/pm/use-sprints";
+import { useSearchParams } from "next/navigation";
 
 export function SprintReportView() {
-  const { activeProject } = useActiveProject();
-  const { sprints } = useSprints(activeProject?.id || null);
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("project");
+  const { sprints } = useSprints(projectId);
   
   // Get the most recent active or completed sprint
   const currentSprint = sprints?.find(s => s.status === "active") || sprints?.[0];
   
   const { data: report, isLoading: loading, error } = useSprintReport(
     currentSprint?.id || null,
-    activeProject?.id || null
+    projectId
   );
 
   if (loading) {

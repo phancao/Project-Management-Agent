@@ -7,11 +7,13 @@ import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, X
 
 import { Card } from "~/components/ui/card";
 import { useBurndownChart } from "~/core/api/hooks/pm/use-analytics";
-import { useActiveProject } from "~/core/api/hooks/pm/use-projects";
+import { useProjects } from "~/core/api/hooks/pm/use-projects";
+import { useSearchParams } from "next/navigation";
 
 export function BurndownView() {
-  const { activeProject } = useActiveProject();
-  const { data: chartData, isLoading: loading, error } = useBurndownChart(activeProject?.id || null);
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("project");
+  const { data: chartData, isLoading: loading, error } = useBurndownChart(projectId);
 
   // Transform chart data for Recharts
   const burndownData = chartData?.series[0]?.data.map((point, index) => {
@@ -53,7 +55,7 @@ export function BurndownView() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{chartData?.title || "Burndown Chart"}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {activeProject?.name || "Project"} - Sprint Progress
+            Sprint Progress
           </p>
         </div>
         {onTrack !== undefined && (

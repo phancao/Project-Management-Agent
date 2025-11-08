@@ -7,11 +7,12 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 
 import { Card } from "~/components/ui/card";
 import { useVelocityChart } from "~/core/api/hooks/pm/use-analytics";
-import { useActiveProject } from "~/core/api/hooks/pm/use-projects";
+import { useSearchParams } from "next/navigation";
 
 export function VelocityView() {
-  const { activeProject } = useActiveProject();
-  const { data: chartData, isLoading: loading, error } = useVelocityChart(activeProject?.id || null, 6);
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("project");
+  const { data: chartData, isLoading: loading, error } = useVelocityChart(projectId, 6);
 
   // Transform chart data for Recharts
   const velocityData = chartData?.series[0]?.data.map((point, index) => {
@@ -66,7 +67,7 @@ export function VelocityView() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{chartData?.title || "Team Velocity"}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {activeProject?.name || "Project"} - Last {velocityData.length} Sprints
+            Last {velocityData.length} Sprints
           </p>
         </div>
         <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${getTrendColor()} bg-gray-100 dark:bg-gray-800`}>

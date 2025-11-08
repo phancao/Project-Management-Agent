@@ -7,11 +7,12 @@ import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, X
 
 import { Card } from "~/components/ui/card";
 import { useCFDChart } from "~/core/api/hooks/pm/use-analytics";
-import { useActiveProject } from "~/core/api/hooks/pm/use-projects";
+import { useSearchParams } from "next/navigation";
 
 export function CFDView() {
-  const { activeProject } = useActiveProject();
-  const { data: chartData, isLoading: loading, error } = useCFDChart(activeProject?.id || null, undefined, 30);
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("project");
+  const { data: chartData, isLoading: loading, error } = useCFDChart(projectId, undefined, 30);
 
   // Transform chart data for Recharts (stacked area chart)
   const cfdData = chartData?.series[0]?.data.map((point, index) => {
@@ -60,7 +61,7 @@ export function CFDView() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{chartData?.title || "Cumulative Flow Diagram"}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {activeProject?.name || "Project"} - Last 30 Days
+            Last 30 Days
           </p>
         </div>
         {bottlenecks.length > 0 && (

@@ -207,6 +207,11 @@ function EpicSidebar({
     return tasks.filter(t => !t.epic_id).length;
   }, [tasks]);
 
+  const { setNodeRef: setNoEpicRef } = useDroppable({
+    id: 'no-epic',
+    data: { type: 'no-epic' }
+  });
+
   return (
     <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -254,7 +259,14 @@ function EpicSidebar({
 
         {tasksWithoutEpic > 0 && (
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="p-2 text-sm text-gray-500 dark:text-gray-400">
+            <div 
+              ref={setNoEpicRef}
+              className={`p-2 text-sm rounded transition-colors ${
+                overEpicId === 'no-epic'
+                  ? "bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 ring-2 ring-orange-400"
+                  : "text-gray-500 dark:text-gray-400"
+              }`}
+            >
               {tasksWithoutEpic} {tasksWithoutEpic === 1 ? 'issue' : 'issues'} without epic
             </div>
           </div>
@@ -729,6 +741,14 @@ export function BacklogView() {
       return;
     }
     
+    // No epic drop zone
+    if (overId === 'no-epic') {
+      setOverEpicId('no-epic');
+      setOverSprintId(null);
+      setOverTaskId(null);
+      return;
+    }
+    
     // Direct drop zone
     if (overId.startsWith('sprint-')) {
       setOverSprintId(overId.replace('sprint-', ''));
@@ -789,6 +809,18 @@ export function BacklogView() {
         await handleUpdateTask(taskId, { epic_id: epicId });
       } catch (error) {
         console.error("Failed to assign task to epic:", error);
+      }
+      return;
+    }
+    
+    // Handle epic removal (drop on "no-epic" zone)
+    if (overId === "no-epic") {
+      if (!draggedTask.epic_id) return; // Already has no epic
+      
+      try {
+        await handleUpdateTask(taskId, { epic_id: null });
+      } catch (error) {
+        console.error("Failed to remove task from epic:", error);
       }
       return;
     }

@@ -250,31 +250,6 @@ class OpenProjectProvider(BasePMProvider):
             # Status can be either an ID or a name - need to resolve it
             status_value = updates["status"]
             payload["_links"] = payload.get("_links", {})
-            
-            # First, check what status transitions are allowed for this work package
-            try:
-                current_wp = requests.get(url, headers=self.headers, timeout=10)
-                if current_wp.status_code == 200:
-                    current_data = current_wp.json()
-                    current_status = current_data.get("_links", {}).get("status", {}).get("title", "Unknown")
-                    allowed_statuses = current_data.get("_links", {}).get("status", {}).get("allowedValues", [])
-                    if allowed_statuses:
-                        allowed_names = [s.get("title", "Unknown") for s in allowed_statuses]
-                        allowed_status_ids = [s.get("href", "").split("/")[-1] for s in allowed_statuses if s.get("href")]
-                        logger.info(f"[STATUS WORKFLOW] Task {task_id} current status: '{current_status}'")
-                        logger.info(f"[STATUS WORKFLOW] Allowed transitions: {allowed_names}")
-                        logger.info(f"[STATUS WORKFLOW] Allowed status IDs: {allowed_status_ids}")
-                        logger.info(f"[STATUS WORKFLOW] Requested status ID: {status_value}")
-                        
-                        # Check if the requested status is in the allowed list
-                        if str(status_value) not in allowed_status_ids:
-                            logger.warning(f"[STATUS WORKFLOW] WARNING: Status ID {status_value} is NOT in the allowed transitions list!")
-                            logger.warning(f"[STATUS WORKFLOW] This transition may fail due to workflow restrictions.")
-                    else:
-                        logger.warning(f"[STATUS WORKFLOW] No allowedValues found for status transitions")
-            except Exception as e:
-                logger.warning(f"Could not fetch allowed status transitions: {e}")
-            
             # If it's a numeric string or number, use it as ID
             if str(status_value).isdigit():
                 # Verify the status exists before trying to use it
@@ -432,7 +407,7 @@ class OpenProjectProvider(BasePMProvider):
             else:
                 # Remove parent (epic) - OpenProject requires using the changeParent action
                 # We need to handle this separately, not through the normal update flow
-                logger.info(f"[EPIC REMOVAL] Removing parent from task {task_id} using changeParent action")
+                logger.info(f"Removing parent from task {task_id} using changeParent action")
                 try:
                     # Get current work package to access changeParent link
                     current_wp = requests.get(url, headers=self.headers, timeout=10)
@@ -441,7 +416,7 @@ class OpenProjectProvider(BasePMProvider):
                         
                         # Get current lockVersion
                         lock_version = current_data.get('lockVersion')
-                        logger.info(f"[EPIC REMOVAL] Current lockVersion: {lock_version}")
+                        logger.info(f"Current lockVersion: {lock_version}")
                         
                         # According to OpenProject API docs, to remove a link, set href to null
                         # Try: {"lockVersion": X, "_links": {"parent": {"href": null}}}
@@ -452,7 +427,7 @@ class OpenProjectProvider(BasePMProvider):
                             }
                         }
                         
-                        logger.info(f"[EPIC REMOVAL] Attempting removal with payload: {removal_payload}")
+                        logger.info(f"Attempting removal with payload: {removal_payload}")
                         
                         change_resp = requests.patch(
                             url,  # Use the regular work package URL
@@ -462,7 +437,7 @@ class OpenProjectProvider(BasePMProvider):
                         )
                         
                         if change_resp.status_code in [200, 204]:
-                            logger.info(f"[EPIC REMOVAL] Successfully removed parent from task {task_id}")
+                            logger.info(f"Successfully removed parent from task {task_id}")
                             # Return the updated task
                             if change_resp.text:
                                 return self._parse_task(change_resp.json())
@@ -473,13 +448,13 @@ class OpenProjectProvider(BasePMProvider):
                                     return updated_task
                         else:
                             error_text = change_resp.text
-                            logger.error(f"[EPIC REMOVAL] PATCH failed with status {change_resp.status_code}: {error_text}")
+                            logger.error(f"PATCH failed with status {change_resp.status_code}: {error_text}")
                             raise ValueError(f"Failed to remove parent: {error_text}")
                     else:
-                        logger.error(f"[EPIC REMOVAL] Failed to get current task {task_id}: {current_wp.status_code}")
+                        logger.error(f"Failed to get current task {task_id}: {current_wp.status_code}")
                         raise ValueError(f"Failed to get task for parent removal: {current_wp.status_code}")
                 except Exception as e:
-                    logger.error(f"[EPIC REMOVAL] Error removing parent: {e}")
+                    logger.error(f"Error removing parent: {e}")
                     raise ValueError(f"Failed to remove parent from task: {str(e)}")
         if "sprint_id" in updates:
             # Sprint assignment via version link
@@ -646,9 +621,7 @@ class OpenProjectProvider(BasePMProvider):
             logger.warning(f"Could not get current task for lockVersion: {e}")
             form_payload = payload
         
-        logger.info(f"[NEW CODE PATH] Validating update via form endpoint with payload: {form_payload}")
-        logger.info(f"[EPIC REMOVAL DEBUG] Original updates dict: {updates}")
-        logger.info(f"[EPIC REMOVAL DEBUG] Payload _links: {payload.get('_links', {})}")
+        logger.info(f"Validating update via form endpoint with payload: {form_payload}")
         
         # Retry form endpoint if we get 409 (lockVersion conflict)
         form_max_retries = 2
@@ -774,8 +747,6 @@ class OpenProjectProvider(BasePMProvider):
         
         # Now perform the actual update with validated payload
         logger.info(f"Updating task {task_id} with validated payload: {validated_payload}")
-        if "_links" in validated_payload:
-            logger.info(f"Validated payload _links: {validated_payload['_links']}")
         
         # Retry logic for 409 conflicts (lockVersion mismatch)
         max_retries = 2
@@ -843,7 +814,6 @@ class OpenProjectProvider(BasePMProvider):
                 
                 # Success!
                 updated_data = response.json()
-                logger.info(f"[EPIC REMOVAL DEBUG] PATCH response for task {task_id}: parent link = {updated_data.get('_links', {}).get('parent')}")
                 break  # Exit retry loop on success
                 
             except ValueError:
@@ -869,7 +839,6 @@ class OpenProjectProvider(BasePMProvider):
         updated_task = await self.get_task(task_id)
         if updated_task:
             logger.info(f"Task {task_id} status after update: {updated_task.status} (original: {original_status})")
-            logger.info(f"[EPIC REMOVAL DEBUG] Task {task_id} epic_id after update: {updated_task.epic_id}")
             
             # Verify that the status actually changed if we were trying to update it
             if "status" in updates and original_status is not None:

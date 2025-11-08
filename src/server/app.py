@@ -2854,29 +2854,29 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
     Get analytics service configured for the project's PM provider.
     
     Args:
-        project_id: Project ID (format: "provider_id:project_id")
+        project_id: Project ID (format: "uuid:project_key" or just "project_id")
         db: Database session
     
     Returns:
         AnalyticsService configured with real data adapter
     """
     try:
-        # Parse project ID to get provider
+        # Parse project ID to get provider UUID
         if ":" not in project_id:
             # Fallback to mock data if project ID format is invalid
             logger.warning(f"Invalid project ID format: {project_id}, using mock data")
             return AnalyticsService(data_source="mock")
         
-        provider_id, _ = project_id.split(":", 1)
+        provider_uuid, _ = project_id.split(":", 1)
         
-        # Get PM provider from database
+        # Get PM provider from database using UUID
         provider_conn = db.query(PMProviderConnection).filter(
-            PMProviderConnection.id == int(provider_id),
+            PMProviderConnection.uuid == provider_uuid,
             PMProviderConnection.is_active.is_(True)
         ).first()
         
         if not provider_conn:
-            logger.warning(f"Provider {provider_id} not found, using mock data")
+            logger.warning(f"Provider with UUID {provider_uuid} not found, using mock data")
             return AnalyticsService(data_source="mock")
         
         # Create PM handler for this provider
@@ -2885,6 +2885,8 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         
         # Create analytics adapter
         adapter = PMProviderAnalyticsAdapter(provider_instance)
+        
+        logger.info(f"[Analytics] Created analytics service with real data for project {project_id}")
         
         # Return analytics service with real data
         return AnalyticsService(data_source="real", adapter=adapter)

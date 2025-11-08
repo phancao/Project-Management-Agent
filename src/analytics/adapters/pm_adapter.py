@@ -34,6 +34,20 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         """
         self.provider = provider
     
+    def _extract_project_key(self, project_id: str) -> str:
+        """
+        Extract the project key from a composite project ID.
+        
+        Args:
+            project_id: Either "provider_uuid:project_key" or just "project_key"
+        
+        Returns:
+            The project key portion
+        """
+        if ":" in project_id:
+            return project_id.split(":", 1)[1]
+        return project_id
+    
     async def get_burndown_data(
         self,
         project_id: str,
@@ -64,7 +78,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 raise ValueError(f"Sprint {sprint_id} not found")
             
             # Get all tasks in the sprint
-            all_tasks = await self.provider.list_tasks(project_id=project_id)
+            project_key = self._extract_project_key(project_id)
+            all_tasks = await self.provider.list_tasks(project_id=project_key)
             sprint_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
             
             logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks in sprint {sprint_id}")
@@ -139,9 +154,11 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             
             velocity_data = []
             
+            project_key = self._extract_project_key(project_id)
+            
             for sprint in sorted_sprints:
                 # Get tasks for this sprint
-                all_tasks = await self.provider.list_tasks(project_id=project_id)
+                all_tasks = await self.provider.list_tasks(project_id=project_key)
                 sprint_tasks = [t for t in all_tasks if t.sprint_id == sprint.id]
                 
                 # Calculate planned and completed
@@ -200,7 +217,9 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 return None
             
             # Get all tasks in sprint
-            all_tasks = await self.provider.list_tasks(project_id=project_id or sprint.project_id)
+            proj_id = project_id or sprint.project_id
+            project_key = self._extract_project_key(proj_id)
+            all_tasks = await self.provider.list_tasks(project_id=project_key)
             sprint_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
             
             # Get team members (unique assignees)
@@ -260,7 +279,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         
         try:
             # Get tasks
-            all_tasks = await self.provider.list_tasks(project_id=project_id)
+            project_key = self._extract_project_key(project_id)
+            all_tasks = await self.provider.list_tasks(project_id=project_key)
             
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
@@ -340,7 +360,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         
         try:
             # Get tasks
-            all_tasks = await self.provider.list_tasks(project_id=project_id)
+            project_key = self._extract_project_key(project_id)
+            all_tasks = await self.provider.list_tasks(project_id=project_key)
             
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
@@ -406,7 +427,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         
         try:
             # Get tasks
-            all_tasks = await self.provider.list_tasks(project_id=project_id)
+            project_key = self._extract_project_key(project_id)
+            all_tasks = await self.provider.list_tasks(project_id=project_key)
             
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
@@ -458,7 +480,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         
         try:
             # Get tasks
-            all_tasks = await self.provider.list_tasks(project_id=project_id)
+            project_key = self._extract_project_key(project_id)
+            all_tasks = await self.provider.list_tasks(project_id=project_key)
             
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]

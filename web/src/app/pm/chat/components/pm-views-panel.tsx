@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { cn } from "~/lib/utils";
 
 import { BacklogView } from "./views/backlog-view";
-import { BurndownView } from "./views/burndown-view";
+import { ChartsPanelView } from "./views/charts-panel-view";
 import { SprintBoardView } from "./views/sprint-board-view";
 import { TeamAssignmentsView } from "./views/team-assignments-view";
 import { TimelineView } from "./views/timeline-view";
@@ -73,7 +73,7 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
       <div className="flex-1 overflow-auto p-4">
         {activeView === "backlog" && <BacklogView />}
         {activeView === "board" && <SprintBoardView />}
-        {activeView === "charts" && <BurndownView />}
+        {activeView === "charts" && <ChartsPanelView />}
         {activeView === "timeline" && <TimelineView />}
         {activeView === "team" && <TeamAssignmentsView />}
       </div>

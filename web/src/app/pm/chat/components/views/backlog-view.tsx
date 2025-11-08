@@ -608,23 +608,6 @@ export function BacklogView() {
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
   }, [projectIdForSprints]);
 
-  const handleAssignTaskToEpic = useCallback(async (taskId: string, epicId: string) => {
-    if (!projectIdForSprints) throw new Error('No project selected');
-    
-    const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}`);
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ epic_id: epicId }),
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || `Failed to assign task to epic: ${response.status}`);
-    }
-    
-    window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
-  }, [projectIdForSprints]);
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
@@ -803,7 +786,7 @@ export function BacklogView() {
       if (String(draggedTask.epic_id) === epicId) return; // Already in this epic
       
       try {
-        await handleAssignTaskToEpic(taskId, epicId);
+        await handleUpdateTask(taskId, { epic_id: epicId });
       } catch (error) {
         console.error("Failed to assign task to epic:", error);
       }

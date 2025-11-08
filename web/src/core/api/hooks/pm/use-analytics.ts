@@ -176,3 +176,30 @@ export function useProjectSummary(projectId: string | null) {
   });
 }
 
+/**
+ * Hook to fetch CFD (Cumulative Flow Diagram) chart data
+ */
+export function useCFDChart(projectId: string | null, sprintId?: string, daysBack: number = 30) {
+  return useQuery({
+    queryKey: ["analytics", "cfd", projectId, sprintId, daysBack],
+    queryFn: async () => {
+      if (!projectId) throw new Error("Project ID is required");
+      
+      const params = new URLSearchParams();
+      if (sprintId) params.append("sprint_id", sprintId);
+      params.append("days_back", daysBack.toString());
+      
+      const url = resolveServiceURL(`analytics/projects/${projectId}/cfd?${params.toString()}`);
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch CFD chart: ${response.statusText}`);
+      }
+      
+      return response.json() as Promise<ChartResponse>;
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+

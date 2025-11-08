@@ -833,10 +833,24 @@ export function BacklogView() {
       if (!draggedTask.epic_id) return; // Already has no epic
       
       try {
-        await handleUpdateTask(taskId, { epic_id: null });
+        // Use dedicated remove-epic endpoint
+        const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/remove-epic`);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `Failed to remove epic: ${response.status}`);
+        }
+        
         toast.success("Epic removed from task", {
           description: `${draggedTask.title} is no longer assigned to an epic.`
         });
+        
+        // Trigger full refresh
+        window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
       } catch (error) {
         console.error("Failed to remove task from epic:", error);
         toast.error("Failed to remove epic from task", {

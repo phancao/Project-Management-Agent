@@ -2913,7 +2913,7 @@ async def get_burndown_chart(
         
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = analytics_service.get_burndown_chart(
+            chart = await analytics_service.get_burndown_chart(
                 project_id=project_id,
                 sprint_id=sprint_id,
                 scope_type=scope_type  # type: ignore
@@ -2943,7 +2943,7 @@ async def get_velocity_chart(
         
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = analytics_service.get_velocity_chart(
+            chart = await analytics_service.get_velocity_chart(
                 project_id=project_id,
                 sprint_count=sprint_count
             )
@@ -2970,7 +2970,7 @@ async def get_sprint_report(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            report = analytics_service.get_sprint_report(sprint_id=sprint_id, project_id=project_id)
+            report = await analytics_service.get_sprint_report(sprint_id=sprint_id, project_id=project_id)
             return report.model_dump()
         finally:
             try:
@@ -3016,7 +3016,7 @@ async def get_cfd_chart(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = analytics_service.get_cfd_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
+            chart = await analytics_service.get_cfd_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
             return chart.model_dump()
         finally:
             try:
@@ -3041,7 +3041,7 @@ async def get_cycle_time_chart(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = analytics_service.get_cycle_time_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
+            chart = await analytics_service.get_cycle_time_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
             return chart.model_dump()
         finally:
             try:
@@ -3066,7 +3066,7 @@ async def get_work_distribution_chart(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = analytics_service.get_work_distribution_chart(project_id=project_id, dimension=dimension, sprint_id=sprint_id)
+            chart = await analytics_service.get_work_distribution_chart(project_id=project_id, dimension=dimension, sprint_id=sprint_id)
             return chart.model_dump()
         finally:
             try:
@@ -3091,7 +3091,7 @@ async def get_issue_trend_chart(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = analytics_service.get_issue_trend_chart(project_id=project_id, days_back=days_back, sprint_id=sprint_id)
+            chart = await analytics_service.get_issue_trend_chart(project_id=project_id, days_back=days_back, sprint_id=sprint_id)
             return chart.model_dump()
         finally:
             try:

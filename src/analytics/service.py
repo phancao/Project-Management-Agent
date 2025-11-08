@@ -44,21 +44,7 @@ class AnalyticsService:
         if data_source == "real" and not adapter:
             raise ValueError("Analytics adapter is required when data_source is 'real'")
     
-    def _run_async(self, coro):
-        """Helper to run async functions in sync context"""
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        if loop.is_running():
-            # If loop is already running, create a new one
-            loop = asyncio.new_event_loop()
-        
-        return loop.run_until_complete(coro)
-    
-    def get_burndown_chart(
+    async def get_burndown_chart(
         self,
         project_id: str,
         sprint_id: Optional[str] = None,
@@ -90,9 +76,7 @@ class AnalyticsService:
             )
         else:
             # Fetch real data from adapter
-            sprint_data = self._run_async(
-                self.adapter.get_burndown_data(project_id, sprint_id, scope_type)
-            )
+            sprint_data = await self.adapter.get_burndown_data(project_id, sprint_id, scope_type)
         
         # Calculate burndown
         result = BurndownCalculator.calculate(sprint_data, scope_type)
@@ -102,7 +86,7 @@ class AnalyticsService:
         
         return result
     
-    def get_velocity_chart(
+    async def get_velocity_chart(
         self,
         project_id: str,
         sprint_count: int = 6
@@ -132,9 +116,7 @@ class AnalyticsService:
             )
         else:
             # Fetch real data from adapter
-            sprint_history = self._run_async(
-                self.adapter.get_velocity_data(project_id, sprint_count)
-            )
+            sprint_history = await self.adapter.get_velocity_data(project_id, sprint_count)
         
         # Calculate velocity
         result = VelocityCalculator.calculate(sprint_history)
@@ -144,7 +126,7 @@ class AnalyticsService:
         
         return result
     
-    def get_sprint_report(
+    async def get_sprint_report(
         self,
         sprint_id: str,
         project_id: str
@@ -174,9 +156,7 @@ class AnalyticsService:
             )
         else:
             # Fetch real data from adapter
-            sprint_data = self._run_async(
-                self.adapter.get_sprint_report_data(sprint_id, project_id)
-            )
+            sprint_data = await self.adapter.get_sprint_report_data(sprint_id, project_id)
         
         # Generate report
         result = SprintReportCalculator.calculate(sprint_data)
@@ -273,7 +253,7 @@ class AnalyticsService:
             "timestamp": datetime.now()
         }
     
-    def get_cfd_chart(
+    async def get_cfd_chart(
         self,
         project_id: str,
         sprint_id: Optional[str] = None,
@@ -317,9 +297,7 @@ class AnalyticsService:
             )
         else:
             # Fetch real data from adapter
-            cfd_data = self._run_async(
-                self.adapter.get_cfd_data(project_id, sprint_id, days_back)
-            )
+            cfd_data = await self.adapter.get_cfd_data(project_id, sprint_id, days_back)
             chart = calculate_cfd(
                 work_items=cfd_data["work_items"],
                 start_date=cfd_data["start_date"],
@@ -332,7 +310,7 @@ class AnalyticsService:
         
         return chart
     
-    def get_cycle_time_chart(
+    async def get_cycle_time_chart(
         self,
         project_id: str,
         sprint_id: Optional[str] = None,
@@ -371,9 +349,7 @@ class AnalyticsService:
             chart = calculate_cycle_time(work_items=work_items)
         else:
             # Fetch real data from adapter
-            work_items = self._run_async(
-                self.adapter.get_cycle_time_data(project_id, sprint_id, days_back)
-            )
+            work_items = await self.adapter.get_cycle_time_data(project_id, sprint_id, days_back)
             chart = calculate_cycle_time(work_items=work_items)
         
         # Cache result
@@ -381,7 +357,7 @@ class AnalyticsService:
         
         return chart
     
-    def get_work_distribution_chart(
+    async def get_work_distribution_chart(
         self,
         project_id: str,
         dimension: str = "assignee",
@@ -415,9 +391,7 @@ class AnalyticsService:
             )
         else:
             # Fetch real data from adapter
-            work_items = self._run_async(
-                self.adapter.get_work_distribution_data(project_id, sprint_id)
-            )
+            work_items = await self.adapter.get_work_distribution_data(project_id, sprint_id)
             chart = calculate_work_distribution(
                 work_items=work_items,
                 dimension=dimension
@@ -428,7 +402,7 @@ class AnalyticsService:
         
         return chart
     
-    def get_issue_trend_chart(
+    async def get_issue_trend_chart(
         self,
         project_id: str,
         days_back: int = 30,
@@ -470,9 +444,7 @@ class AnalyticsService:
             )
         else:
             # Fetch real data from adapter
-            trend_data = self._run_async(
-                self.adapter.get_issue_trend_data(project_id, days_back, sprint_id)
-            )
+            trend_data = await self.adapter.get_issue_trend_data(project_id, days_back, sprint_id)
             chart = calculate_issue_trend(
                 work_items=trend_data["work_items"],
                 start_date=trend_data["start_date"],

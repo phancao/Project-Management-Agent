@@ -566,18 +566,25 @@ export function BacklogView() {
     const url = new URL(resolveServiceURL(`pm/tasks/${taskId}`));
     url.searchParams.set('project_id', projectIdForSprints);
     
+    console.log('[handleUpdateTask] Updating task:', taskId, 'with updates:', updates);
+    
     const response = await fetch(url.toString(), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
     
+    console.log('[handleUpdateTask] Response status:', response.status);
+    
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[handleUpdateTask] Error response:', errorText);
       throw new Error(errorText || `Failed to update task: ${response.status}`);
     }
     
     const result = await response.json();
+    console.log('[handleUpdateTask] Result:', result);
+    
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask({ ...selectedTask, ...result });
     }

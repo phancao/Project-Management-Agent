@@ -652,3 +652,73 @@ def generate_cycle_time_data(
 # Add method to MockDataGenerator class
 MockDataGenerator.generate_cycle_time_data = generate_cycle_time_data
 
+
+def generate_work_distribution_data(
+    self,
+    num_items: int = 50
+) -> List[Dict]:
+    """
+    Generate mock work items for distribution analysis.
+    
+    Args:
+        num_items: Number of work items to generate
+    
+    Returns:
+        List of work items with assignee, priority, type, status, story_points
+    """
+    assignees = ["Alice Johnson", "Bob Smith", "Carol Davis", "David Wilson", "Eve Martinez", "Unassigned"]
+    priorities = ["High", "Medium", "Low"]
+    types = ["Story", "Bug", "Task", "Feature"]
+    statuses = ["To Do", "In Progress", "In Review", "Done"]
+    
+    work_items = []
+    
+    for i in range(num_items):
+        # Weighted random selection for more realistic distribution
+        assignee = random.choices(
+            assignees,
+            weights=[20, 18, 15, 12, 10, 5],  # Some people have more work
+            k=1
+        )[0]
+        
+        priority = random.choices(
+            priorities,
+            weights=[20, 60, 20],  # Most items are medium priority
+            k=1
+        )[0]
+        
+        item_type = random.choices(
+            types,
+            weights=[40, 25, 25, 10],  # More stories than bugs
+            k=1
+        )[0]
+        
+        status = random.choices(
+            statuses,
+            weights=[30, 25, 15, 30],  # Mix of statuses
+            k=1
+        )[0]
+        
+        # Story points (1, 2, 3, 5, 8)
+        story_points = random.choices(
+            [1, 2, 3, 5, 8],
+            weights=[10, 30, 35, 20, 5],
+            k=1
+        )[0]
+        
+        work_items.append({
+            "id": f"ITEM-{i+1}",
+            "title": f"{item_type} {i+1}",
+            "assignee": assignee,
+            "priority": priority,
+            "type": item_type,
+            "status": status,
+            "story_points": story_points,
+        })
+    
+    return work_items
+
+
+# Add method to MockDataGenerator class
+MockDataGenerator.generate_work_distribution_data = generate_work_distribution_data
+

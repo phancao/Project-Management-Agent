@@ -14,6 +14,7 @@ from src.analytics.calculators.velocity import VelocityCalculator
 from src.analytics.calculators.sprint_report import SprintReportCalculator
 from src.analytics.calculators.cfd import calculate_cfd
 from src.analytics.calculators.cycle_time import calculate_cycle_time
+from src.analytics.calculators.work_distribution import calculate_work_distribution
 
 
 class AnalyticsService:
@@ -336,6 +337,47 @@ class AnalyticsService:
         else:
             # TODO: Implement real data adapters
             raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for cycle time")
+        
+        # Cache result
+        self._set_cache(cache_key, chart)
+        
+        return chart
+    
+    def get_work_distribution_chart(
+        self,
+        project_id: str,
+        dimension: str = "assignee",
+        sprint_id: Optional[str] = None
+    ) -> ChartResponse:
+        """
+        Get Work Distribution chart for a project.
+        
+        Args:
+            project_id: Project identifier
+            dimension: One of 'assignee', 'priority', 'type', 'status'
+            sprint_id: Sprint identifier (optional filter)
+        
+        Returns:
+            ChartResponse with work distribution data
+        """
+        cache_key = f"work_distribution_{project_id}_{dimension}_{sprint_id}"
+        cached = self._get_from_cache(cache_key)
+        if cached:
+            return cached
+        
+        # Get data based on source
+        if self.data_source == "mock":
+            # Generate mock work distribution data
+            work_items = self.mock_generator.generate_work_distribution_data(num_items=50)
+            
+            # Calculate distribution
+            chart = calculate_work_distribution(
+                work_items=work_items,
+                dimension=dimension
+            )
+        else:
+            # TODO: Implement real data adapters
+            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for work distribution")
         
         # Cache result
         self._set_cache(cache_key, chart)

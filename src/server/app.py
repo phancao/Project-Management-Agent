@@ -2950,3 +2950,22 @@ async def get_cycle_time_chart(
     except Exception as e:
         logger.error(f"Failed to get cycle time chart: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/projects/{project_id}/work-distribution")
+async def get_work_distribution_chart(
+    project_id: str,
+    dimension: str = "assignee",
+    sprint_id: Optional[str] = None
+):
+    """Get Work Distribution chart for a project"""
+    try:
+        chart = analytics_service.get_work_distribution_chart(
+            project_id=project_id,
+            dimension=dimension,
+            sprint_id=sprint_id
+        )
+        return chart.model_dump()
+    except Exception as e:
+        logger.error(f"Failed to get work distribution chart: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

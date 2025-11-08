@@ -244,3 +244,62 @@ INFO:     127.0.0.1:62543 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818
 INFO:     127.0.0.1:62543 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
 INFO:     127.0.0.1:62539 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
 INFO:     127.0.0.1:62642 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62762 - "GET /api/pm/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62764 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62767 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62768 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62771 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62772 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62762 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62764 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62767 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62768 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62771 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62772 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62762 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/burndown?scope_type=story_points HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62764 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62767 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62768 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62771 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62772 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62762 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62764 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62767 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62768 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62768 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/velocity?sprint_count=6 HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'src/analytics/mock_data.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [94183]
+Checkpoint saver is disabled
+INFO:     Started server process [6908]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [6908]
+Checkpoint saver is disabled
+INFO:     Started server process [7084]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [7084]
+Checkpoint saver is disabled
+INFO:     Started server process [7382]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/server/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [7382]
+Checkpoint saver is disabled
+INFO:     Started server process [7613]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

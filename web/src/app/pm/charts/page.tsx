@@ -4,6 +4,7 @@
 "use client";
 
 import { useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Card } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { BurndownView } from "../chat/components/views/burndown-view";
@@ -16,6 +17,16 @@ import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { useProjectSummary } from "~/core/api/hooks/pm/use-analytics";
 import { useSearchParams } from "next/navigation";
 
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
+
 export default function ChartsPage() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project");
@@ -25,7 +36,8 @@ export default function ChartsPage() {
   const [activeTab, setActiveTab] = useState("overview");
 
   return (
-    <PMLoadingProvider>
+    <QueryClientProvider client={queryClient}>
+      <PMLoadingProvider>
       <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-900">
         <PMHeader />
         <PMLoadingManager />
@@ -200,6 +212,7 @@ export default function ChartsPage() {
         </main>
       </div>
     </PMLoadingProvider>
+    </QueryClientProvider>
   );
 }
 

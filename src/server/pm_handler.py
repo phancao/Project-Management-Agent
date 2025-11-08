@@ -60,6 +60,19 @@ class PMHandler:
         self.single_provider = single_provider
         self._mode = "single" if single_provider else "multi"
     
+    @staticmethod
+    def is_mock_project(project_id: str) -> bool:
+        """
+        Check if a project ID is for the Mock Project.
+        
+        Args:
+            project_id: Project ID to check
+            
+        Returns:
+            True if this is a mock project, False otherwise
+        """
+        return project_id.startswith("mock:")
+    
     @classmethod
     def from_single_provider(
         cls, 
@@ -170,6 +183,10 @@ class PMHandler:
         Raises:
             ValueError: If provider_id format is invalid or provider not found
         """
+        # Check if this is a mock project
+        if self.is_mock_project(project_id):
+            raise ValueError("Mock project does not support task operations. Please select a real project.")
+        
         if ":" not in project_id:
             raise ValueError(f"Invalid project_id format: {project_id}")
         

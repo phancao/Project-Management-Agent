@@ -722,3 +722,63 @@ def generate_work_distribution_data(
 # Add method to MockDataGenerator class
 MockDataGenerator.generate_work_distribution_data = generate_work_distribution_data
 
+
+def generate_issue_trend_data(
+    self,
+    num_items: int = 100,
+    start_date: datetime = None,
+    end_date: datetime = None
+) -> List[Dict]:
+    """
+    Generate mock work items for issue trend analysis.
+    
+    Args:
+        num_items: Number of work items to generate
+        start_date: Start date for the period
+        end_date: End date for the period
+    
+    Returns:
+        List of work items with created_date and completion_date
+    """
+    if start_date is None:
+        start_date = datetime.now() - timedelta(days=30)
+    if end_date is None:
+        end_date = datetime.now()
+    
+    work_items = []
+    types = ["Story", "Bug", "Task", "Feature"]
+    
+    total_days = (end_date - start_date).days
+    
+    for i in range(num_items):
+        # Random creation date within the range
+        days_offset = random.randint(0, total_days)
+        created_date = start_date + timedelta(days=days_offset)
+        
+        # Some items are resolved, some are not
+        completion_date = None
+        if random.random() < 0.6:  # 60% are resolved
+            # Resolved 1-14 days after creation
+            days_to_resolve = random.randint(1, 14)
+            potential_completion = created_date + timedelta(days=days_to_resolve)
+            
+            # Only set completion if it's within the date range
+            if potential_completion <= end_date:
+                completion_date = potential_completion.isoformat()
+        
+        item_type = random.choice(types)
+        
+        work_items.append({
+            "id": f"ITEM-{i+1}",
+            "title": f"{item_type} {i+1}",
+            "type": item_type,
+            "created_date": created_date.isoformat(),
+            "completion_date": completion_date,
+        })
+    
+    return work_items
+
+
+# Add method to MockDataGenerator class
+MockDataGenerator.generate_issue_trend_data = generate_issue_trend_data
+

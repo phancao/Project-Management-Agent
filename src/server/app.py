@@ -2969,3 +2969,22 @@ async def get_work_distribution_chart(
     except Exception as e:
         logger.error(f"Failed to get work distribution chart: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/projects/{project_id}/issue-trend")
+async def get_issue_trend_chart(
+    project_id: str,
+    days_back: int = 30,
+    sprint_id: Optional[str] = None
+):
+    """Get Issue Trend Analysis chart for a project"""
+    try:
+        chart = analytics_service.get_issue_trend_chart(
+            project_id=project_id,
+            days_back=days_back,
+            sprint_id=sprint_id
+        )
+        return chart.model_dump()
+    except Exception as e:
+        logger.error(f"Failed to get issue trend chart: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

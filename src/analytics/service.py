@@ -15,6 +15,7 @@ from src.analytics.calculators.sprint_report import SprintReportCalculator
 from src.analytics.calculators.cfd import calculate_cfd
 from src.analytics.calculators.cycle_time import calculate_cycle_time
 from src.analytics.calculators.work_distribution import calculate_work_distribution
+from src.analytics.calculators.issue_trend import calculate_issue_trend
 
 
 class AnalyticsService:
@@ -378,6 +379,55 @@ class AnalyticsService:
         else:
             # TODO: Implement real data adapters
             raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for work distribution")
+        
+        # Cache result
+        self._set_cache(cache_key, chart)
+        
+        return chart
+    
+    def get_issue_trend_chart(
+        self,
+        project_id: str,
+        days_back: int = 30,
+        sprint_id: Optional[str] = None
+    ) -> ChartResponse:
+        """
+        Get Issue Trend Analysis chart for a project.
+        
+        Args:
+            project_id: Project identifier
+            days_back: Number of days to look back (default: 30)
+            sprint_id: Sprint identifier (optional filter)
+        
+        Returns:
+            ChartResponse with issue trend data
+        """
+        cache_key = f"issue_trend_{project_id}_{days_back}_{sprint_id}"
+        cached = self._get_from_cache(cache_key)
+        if cached:
+            return cached
+        
+        # Get data based on source
+        if self.data_source == "mock":
+            # Generate mock issue trend data
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days_back)
+            
+            work_items = self.mock_generator.generate_issue_trend_data(
+                num_items=100,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            # Calculate trend
+            chart = calculate_issue_trend(
+                work_items=work_items,
+                start_date=start_date,
+                end_date=end_date
+            )
+        else:
+            # TODO: Implement real data adapters
+            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for issue trend")
         
         # Cache result
         self._set_cache(cache_key, chart)

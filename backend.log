@@ -318,3 +318,39 @@ INFO:     127.0.0.1:63042 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a
 INFO:     127.0.0.1:63032 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63140 - "GET /api/config HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63140 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/work-distribution?dimension=assignee HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'src/analytics/mock_data.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [7613]
+Checkpoint saver is disabled
+INFO:     Started server process [10587]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [10587]
+Checkpoint saver is disabled
+INFO:     Started server process [10728]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [10728]
+Checkpoint saver is disabled
+INFO:     Started server process [10966]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/server/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [10966]
+Checkpoint saver is disabled
+INFO:     Started server process [11153]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

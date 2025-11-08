@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import asyncio
 import logging
 
-from src.analytics.models import ChartResponse, SprintReport
+from src.analytics.models import ChartResponse, SprintReport, SprintData
 
 logger = logging.getLogger(__name__)
 from src.analytics.mock_data import MockDataGenerator
@@ -173,14 +173,17 @@ class AnalyticsService:
             )
         else:
             # Fetch real data from adapter
-            sprint_data = await self.adapter.get_sprint_report_data(sprint_id, project_id)
+            sprint_data_dict = await self.adapter.get_sprint_report_data(sprint_id, project_id)
             # If adapter returns None, fallback to mock data
-            if sprint_data is None:
+            if sprint_data_dict is None:
                 logger.warning(f"Adapter returned no sprint report data for sprint {sprint_id}, falling back to mock data")
                 sprint_data = self.mock_generator.generate_sprint_data(
                     sprint_id=sprint_id,
                     project_id=project_id
                 )
+            else:
+                # Convert dict to SprintData object
+                sprint_data = SprintData(**sprint_data_dict)
         
         # Generate report
         result = SprintReportCalculator.calculate(sprint_data)

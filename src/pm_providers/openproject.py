@@ -405,10 +405,10 @@ class OpenProjectProvider(BasePMProvider):
                     "href": f"/api/v3/work_packages/{epic_id}"
                 }
             else:
-                # Remove parent (epic) - set to empty dict
+                # Remove parent (epic) - set to null
                 # Note: lockVersion will be handled later in the update flow
-                payload["_links"]["parent"] = {}
-                logger.info(f"[EPIC REMOVAL] Setting parent to empty dict for task {task_id}")
+                payload["_links"]["parent"] = None
+                logger.info(f"[EPIC REMOVAL] Setting parent to null for task {task_id}")
         if "sprint_id" in updates:
             # Sprint assignment via version link
             payload["_links"] = payload.get("_links", {})

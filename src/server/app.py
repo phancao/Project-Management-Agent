@@ -2862,11 +2862,16 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         AnalyticsService configured with real data adapter
     """
     try:
+        # Check if this is the Mock Project
+        if project_id.startswith("mock:"):
+            logger.info(f"[Analytics] Using mock data for Mock Project: {project_id}")
+            return AnalyticsService(data_source="mock")
+        
         # Parse project ID to get provider UUID
         if ":" not in project_id:
-            # Fallback to mock data if project ID format is invalid
-            logger.warning(f"Invalid project ID format: {project_id}, using mock data")
-            return AnalyticsService(data_source="mock")
+            # Invalid format - return empty data, not mock
+            logger.warning(f"Invalid project ID format: {project_id}, returning empty data")
+            return AnalyticsService(data_source="real", adapter=None)
         
         provider_uuid, _ = project_id.split(":", 1)
         
@@ -2877,8 +2882,8 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         ).first()
         
         if not provider_conn:
-            logger.warning(f"Provider with UUID {provider_uuid} not found, using mock data")
-            return AnalyticsService(data_source="mock")
+            logger.warning(f"Provider with UUID {provider_uuid} not found, returning empty data")
+            return AnalyticsService(data_source="real", adapter=None)
         
         # Create PM handler for this provider
         pm_handler = PMHandler.from_db_session(db)
@@ -2894,8 +2899,8 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
     
     except Exception as e:
         logger.error(f"Error creating analytics service for project {project_id}: {e}", exc_info=True)
-        # Fallback to mock data on error
-        return AnalyticsService(data_source="mock")
+        # Return empty data on error (no mock fallback)
+        return AnalyticsService(data_source="real", adapter=None)
 
 
 @app.get("/api/analytics/projects/{project_id}/burndown")

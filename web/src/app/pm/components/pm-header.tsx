@@ -172,6 +172,22 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                   )}
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Mock Project for demo/testing */}
+                  <SelectItem key="mock-project" value="mock:demo">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                        DEMO
+                      </span>
+                      <span>Mock Project (Demo Data)</span>
+                    </div>
+                  </SelectItem>
+                  
+                  {/* Separator */}
+                  {projects.length > 0 && (
+                    <div className="my-1 h-px bg-gray-200 dark:bg-gray-700" />
+                  )}
+                  
+                  {/* Real projects */}
                   {projects.map(project => {
                     const providerType = getProviderType(project.id);
                     return (

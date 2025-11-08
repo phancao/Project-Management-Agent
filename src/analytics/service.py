@@ -36,7 +36,7 @@ class AnalyticsService:
         
         Args:
             data_source: Data source to use ("mock" or "real")
-            adapter: Optional analytics adapter for fetching real data
+            adapter: Optional analytics adapter for fetching real data (None = empty data)
         """
         self.data_source = data_source
         self.mock_generator = MockDataGenerator()
@@ -44,8 +44,7 @@ class AnalyticsService:
         self._cache: Dict[str, Any] = {}
         self._cache_ttl = 300  # 5 minutes
         
-        if data_source == "real" and not adapter:
-            raise ValueError("Analytics adapter is required when data_source is 'real'")
+        # Note: adapter can be None when data_source is "real" - this means return empty data
     
     async def get_burndown_chart(
         self,
@@ -78,6 +77,16 @@ class AnalyticsService:
                 project_id=project_id
             )
         else:
+            # Check if adapter is available
+            if not self.adapter:
+                logger.info(f"No adapter available for project {project_id}, returning empty chart")
+                return ChartResponse(
+                    chart_type="burndown",
+                    title="Sprint Burndown",
+                    data=[],
+                    metadata={"message": "No data source configured for this project."}
+                )
+            
             # Fetch real data from adapter
             sprint_data = await self.adapter.get_burndown_data(project_id, sprint_id, scope_type)
             # If adapter returns None (e.g., no sprints found), return empty chart

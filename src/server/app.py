@@ -2848,7 +2848,7 @@ from src.analytics.service import AnalyticsService
 from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
 
 
-def get_analytics_service(project_id: str, db: Session) -> AnalyticsService:
+def get_analytics_service(project_id: str, db) -> AnalyticsService:
     """
     Get analytics service configured for the project's PM provider.
     
@@ -2898,18 +2898,28 @@ def get_analytics_service(project_id: str, db: Session) -> AnalyticsService:
 async def get_burndown_chart(
     project_id: str,
     sprint_id: Optional[str] = None,
-    scope_type: str = "story_points",
-    db: Session = Depends(get_db)
+    scope_type: str = "story_points"
 ):
     """Get burndown chart for a project/sprint"""
     try:
-        analytics_service = get_analytics_service(project_id, db)
-        chart = analytics_service.get_burndown_chart(
-            project_id=project_id,
-            sprint_id=sprint_id,
-            scope_type=scope_type  # type: ignore
-        )
-        return chart.model_dump()
+        from database.connection import get_db_session
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            chart = analytics_service.get_burndown_chart(
+                project_id=project_id,
+                sprint_id=sprint_id,
+                scope_type=scope_type  # type: ignore
+            )
+            return chart.model_dump()
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
     except Exception as e:
         logger.error(f"Failed to get burndown chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2918,17 +2928,27 @@ async def get_burndown_chart(
 @app.get("/api/analytics/projects/{project_id}/velocity")
 async def get_velocity_chart(
     project_id: str,
-    sprint_count: int = 6,
-    db: Session = Depends(get_db)
+    sprint_count: int = 6
 ):
     """Get velocity chart for a project"""
     try:
-        analytics_service = get_analytics_service(project_id, db)
-        chart = analytics_service.get_velocity_chart(
-            project_id=project_id,
-            sprint_count=sprint_count
-        )
-        return chart.model_dump()
+        from database.connection import get_db_session
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            chart = analytics_service.get_velocity_chart(
+                project_id=project_id,
+                sprint_count=sprint_count
+            )
+            return chart.model_dump()
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
     except Exception as e:
         logger.error(f"Failed to get velocity chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2937,29 +2957,43 @@ async def get_velocity_chart(
 @app.get("/api/analytics/sprints/{sprint_id}/report")
 async def get_sprint_report(
     sprint_id: str,
-    project_id: str,
-    db: Session = Depends(get_db)
+    project_id: str
 ):
     """Get comprehensive sprint report"""
     try:
-        analytics_service = get_analytics_service(project_id, db)
-        report = analytics_service.get_sprint_report(
-            sprint_id=sprint_id,
-            project_id=project_id
-        )
-        return report.model_dump()
+        from database.connection import get_db_session
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            report = analytics_service.get_sprint_report(sprint_id=sprint_id, project_id=project_id)
+            return report.model_dump()
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
     except Exception as e:
         logger.error(f"Failed to get sprint report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/analytics/projects/{project_id}/summary")
-async def get_project_summary(project_id: str, db: Session = Depends(get_db)):
+async def get_project_summary(project_id: str):
     """Get project analytics summary"""
     try:
-        analytics_service = get_analytics_service(project_id, db)
-        summary = analytics_service.get_project_summary(project_id=project_id)
-        return summary
+        from database.connection import get_db_session
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            summary = analytics_service.get_project_summary(project_id=project_id)
+            return summary
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
     except Exception as e:
         logger.error(f"Failed to get project summary: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2969,18 +3003,22 @@ async def get_project_summary(project_id: str, db: Session = Depends(get_db)):
 async def get_cfd_chart(
     project_id: str,
     sprint_id: Optional[str] = None,
-    days_back: int = 30,
-    db: Session = Depends(get_db)
+    days_back: int = 30
 ):
     """Get Cumulative Flow Diagram for a project/sprint"""
     try:
-        analytics_service = get_analytics_service(project_id, db)
-        chart = analytics_service.get_cfd_chart(
-            project_id=project_id,
-            sprint_id=sprint_id,
-            days_back=days_back
-        )
-        return chart.model_dump()
+        from database.connection import get_db_session
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            chart = analytics_service.get_cfd_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
+            return chart.model_dump()
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
     except Exception as e:
         logger.error(f"Failed to get CFD chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2990,18 +3028,22 @@ async def get_cfd_chart(
 async def get_cycle_time_chart(
     project_id: str,
     sprint_id: Optional[str] = None,
-    days_back: int = 60,
-    db: Session = Depends(get_db)
+    days_back: int = 60
 ):
     """Get Cycle Time / Control Chart for a project/sprint"""
     try:
-        analytics_service = get_analytics_service(project_id, db)
-        chart = analytics_service.get_cycle_time_chart(
-            project_id=project_id,
-            sprint_id=sprint_id,
-            days_back=days_back
-        )
-        return chart.model_dump()
+        from database.connection import get_db_session
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            chart = analytics_service.get_cycle_time_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
+            return chart.model_dump()
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
     except Exception as e:
         logger.error(f"Failed to get cycle time chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -3011,18 +3053,22 @@ async def get_cycle_time_chart(
 async def get_work_distribution_chart(
     project_id: str,
     dimension: str = "assignee",
-    sprint_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    sprint_id: Optional[str] = None
 ):
     """Get Work Distribution chart for a project"""
     try:
-        analytics_service = get_analytics_service(project_id, db)
-        chart = analytics_service.get_work_distribution_chart(
-            project_id=project_id,
-            dimension=dimension,
-            sprint_id=sprint_id
-        )
-        return chart.model_dump()
+        from database.connection import get_db_session
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            chart = analytics_service.get_work_distribution_chart(project_id=project_id, dimension=dimension, sprint_id=sprint_id)
+            return chart.model_dump()
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
     except Exception as e:
         logger.error(f"Failed to get work distribution chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -3032,18 +3078,22 @@ async def get_work_distribution_chart(
 async def get_issue_trend_chart(
     project_id: str,
     days_back: int = 30,
-    sprint_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    sprint_id: Optional[str] = None
 ):
     """Get Issue Trend Analysis chart for a project"""
     try:
-        analytics_service = get_analytics_service(project_id, db)
-        chart = analytics_service.get_issue_trend_chart(
-            project_id=project_id,
-            days_back=days_back,
-            sprint_id=sprint_id
-        )
-        return chart.model_dump()
+        from database.connection import get_db_session
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            chart = analytics_service.get_issue_trend_chart(project_id=project_id, days_back=days_back, sprint_id=sprint_id)
+            return chart.model_dump()
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
     except Exception as e:
         logger.error(f"Failed to get issue trend chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

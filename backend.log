@@ -303,3 +303,18 @@ Checkpoint saver is disabled
 INFO:     Started server process [7613]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+INFO:     127.0.0.1:63032 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63036 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63038 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63040 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63042 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63036 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63038 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63040 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63042 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/burndown?scope_type=story_points HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63140 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63140 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/work-distribution?dimension=assignee HTTP/1.1" 200 OK

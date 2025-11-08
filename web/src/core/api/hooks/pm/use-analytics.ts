@@ -230,3 +230,34 @@ export function useCycleTimeChart(projectId: string | null, sprintId?: string, d
   });
 }
 
+/**
+ * Hook to fetch Work Distribution chart data
+ */
+export function useWorkDistributionChart(
+  projectId: string | null, 
+  dimension: "assignee" | "priority" | "type" | "status" = "assignee",
+  sprintId?: string
+) {
+  return useQuery({
+    queryKey: ["analytics", "workDistribution", projectId, dimension, sprintId],
+    queryFn: async () => {
+      if (!projectId) throw new Error("Project ID is required");
+      
+      const params = new URLSearchParams();
+      params.append("dimension", dimension);
+      if (sprintId) params.append("sprint_id", sprintId);
+      
+      const url = resolveServiceURL(`analytics/projects/${projectId}/work-distribution?${params.toString()}`);
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch work distribution chart: ${response.statusText}`);
+      }
+      
+      return response.json() as Promise<ChartResponse>;
+    },
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+

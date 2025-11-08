@@ -138,17 +138,20 @@ function TaskDragPreview({ task, measurements }: { task: BoardTask | null; measu
 
   return (
     <div
-      className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex items-center gap-2"
+      className="p-3 bg-white dark:bg-gray-800 rounded-lg border-2 border-blue-400 shadow-2xl opacity-95"
       style={{
-        width: measurements.taskWidth ? `${measurements.taskWidth}px` : undefined,
-        height: measurements.taskHeight ? `${measurements.taskHeight}px` : undefined,
+        width: measurements.taskWidth ? `${measurements.taskWidth}px` : 'auto',
+        maxWidth: '24rem',
       }}
     >
-      <GripVertical className="w-4 h-4 text-gray-400" />
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm text-gray-900 dark:text-gray-100 line-clamp-1">{task.title}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">Task</div>
+      <div className="font-medium text-sm text-gray-900 dark:text-white line-clamp-2">
+        {task.title}
       </div>
+      {task.priority && (
+        <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+          {task.priority}
+        </span>
+      )}
     </div>
   );
 }

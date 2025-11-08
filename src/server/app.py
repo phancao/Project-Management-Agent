@@ -2845,19 +2845,65 @@ async def pm_delete_provider(provider_id: str):
 # ============================================================================
 
 from src.analytics.service import AnalyticsService
+from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
 
-# Initialize analytics service
-analytics_service = AnalyticsService(data_source="mock")
+
+def get_analytics_service(project_id: str, db: Session) -> AnalyticsService:
+    """
+    Get analytics service configured for the project's PM provider.
+    
+    Args:
+        project_id: Project ID (format: "provider_id:project_id")
+        db: Database session
+    
+    Returns:
+        AnalyticsService configured with real data adapter
+    """
+    try:
+        # Parse project ID to get provider
+        if ":" not in project_id:
+            # Fallback to mock data if project ID format is invalid
+            logger.warning(f"Invalid project ID format: {project_id}, using mock data")
+            return AnalyticsService(data_source="mock")
+        
+        provider_id, _ = project_id.split(":", 1)
+        
+        # Get PM provider from database
+        provider_conn = db.query(PMProviderConnection).filter(
+            PMProviderConnection.id == int(provider_id),
+            PMProviderConnection.is_active.is_(True)
+        ).first()
+        
+        if not provider_conn:
+            logger.warning(f"Provider {provider_id} not found, using mock data")
+            return AnalyticsService(data_source="mock")
+        
+        # Create PM handler for this provider
+        pm_handler = PMHandler.from_db_session(db)
+        provider_instance = pm_handler._create_provider_instance(provider_conn)
+        
+        # Create analytics adapter
+        adapter = PMProviderAnalyticsAdapter(provider_instance)
+        
+        # Return analytics service with real data
+        return AnalyticsService(data_source="real", adapter=adapter)
+    
+    except Exception as e:
+        logger.error(f"Error creating analytics service for project {project_id}: {e}", exc_info=True)
+        # Fallback to mock data on error
+        return AnalyticsService(data_source="mock")
 
 
 @app.get("/api/analytics/projects/{project_id}/burndown")
 async def get_burndown_chart(
     project_id: str,
     sprint_id: Optional[str] = None,
-    scope_type: str = "story_points"
+    scope_type: str = "story_points",
+    db: Session = Depends(get_db)
 ):
     """Get burndown chart for a project/sprint"""
     try:
+        analytics_service = get_analytics_service(project_id, db)
         chart = analytics_service.get_burndown_chart(
             project_id=project_id,
             sprint_id=sprint_id,
@@ -2865,52 +2911,57 @@ async def get_burndown_chart(
         )
         return chart.model_dump()
     except Exception as e:
-        logger.error(f"Failed to get burndown chart: {e}")
+        logger.error(f"Failed to get burndown chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/analytics/projects/{project_id}/velocity")
 async def get_velocity_chart(
     project_id: str,
-    sprint_count: int = 6
+    sprint_count: int = 6,
+    db: Session = Depends(get_db)
 ):
     """Get velocity chart for a project"""
     try:
+        analytics_service = get_analytics_service(project_id, db)
         chart = analytics_service.get_velocity_chart(
             project_id=project_id,
             sprint_count=sprint_count
         )
         return chart.model_dump()
     except Exception as e:
-        logger.error(f"Failed to get velocity chart: {e}")
+        logger.error(f"Failed to get velocity chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/analytics/sprints/{sprint_id}/report")
 async def get_sprint_report(
     sprint_id: str,
-    project_id: str
+    project_id: str,
+    db: Session = Depends(get_db)
 ):
     """Get comprehensive sprint report"""
     try:
+        analytics_service = get_analytics_service(project_id, db)
         report = analytics_service.get_sprint_report(
             sprint_id=sprint_id,
             project_id=project_id
         )
         return report.model_dump()
     except Exception as e:
-        logger.error(f"Failed to get sprint report: {e}")
+        logger.error(f"Failed to get sprint report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/analytics/projects/{project_id}/summary")
-async def get_project_summary(project_id: str):
+async def get_project_summary(project_id: str, db: Session = Depends(get_db)):
     """Get project analytics summary"""
     try:
+        analytics_service = get_analytics_service(project_id, db)
         summary = analytics_service.get_project_summary(project_id=project_id)
         return summary
     except Exception as e:
-        logger.error(f"Failed to get project summary: {e}")
+        logger.error(f"Failed to get project summary: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2918,10 +2969,12 @@ async def get_project_summary(project_id: str):
 async def get_cfd_chart(
     project_id: str,
     sprint_id: Optional[str] = None,
-    days_back: int = 30
+    days_back: int = 30,
+    db: Session = Depends(get_db)
 ):
     """Get Cumulative Flow Diagram for a project/sprint"""
     try:
+        analytics_service = get_analytics_service(project_id, db)
         chart = analytics_service.get_cfd_chart(
             project_id=project_id,
             sprint_id=sprint_id,
@@ -2929,7 +2982,7 @@ async def get_cfd_chart(
         )
         return chart.model_dump()
     except Exception as e:
-        logger.error(f"Failed to get CFD chart: {e}")
+        logger.error(f"Failed to get CFD chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2937,10 +2990,12 @@ async def get_cfd_chart(
 async def get_cycle_time_chart(
     project_id: str,
     sprint_id: Optional[str] = None,
-    days_back: int = 60
+    days_back: int = 60,
+    db: Session = Depends(get_db)
 ):
     """Get Cycle Time / Control Chart for a project/sprint"""
     try:
+        analytics_service = get_analytics_service(project_id, db)
         chart = analytics_service.get_cycle_time_chart(
             project_id=project_id,
             sprint_id=sprint_id,
@@ -2948,7 +3003,7 @@ async def get_cycle_time_chart(
         )
         return chart.model_dump()
     except Exception as e:
-        logger.error(f"Failed to get cycle time chart: {e}")
+        logger.error(f"Failed to get cycle time chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2956,10 +3011,12 @@ async def get_cycle_time_chart(
 async def get_work_distribution_chart(
     project_id: str,
     dimension: str = "assignee",
-    sprint_id: Optional[str] = None
+    sprint_id: Optional[str] = None,
+    db: Session = Depends(get_db)
 ):
     """Get Work Distribution chart for a project"""
     try:
+        analytics_service = get_analytics_service(project_id, db)
         chart = analytics_service.get_work_distribution_chart(
             project_id=project_id,
             dimension=dimension,
@@ -2967,7 +3024,7 @@ async def get_work_distribution_chart(
         )
         return chart.model_dump()
     except Exception as e:
-        logger.error(f"Failed to get work distribution chart: {e}")
+        logger.error(f"Failed to get work distribution chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2975,10 +3032,12 @@ async def get_work_distribution_chart(
 async def get_issue_trend_chart(
     project_id: str,
     days_back: int = 30,
-    sprint_id: Optional[str] = None
+    sprint_id: Optional[str] = None,
+    db: Session = Depends(get_db)
 ):
     """Get Issue Trend Analysis chart for a project"""
     try:
+        analytics_service = get_analytics_service(project_id, db)
         chart = analytics_service.get_issue_trend_chart(
             project_id=project_id,
             days_back=days_back,
@@ -2986,5 +3045,5 @@ async def get_issue_trend_chart(
         )
         return chart.model_dump()
     except Exception as e:
-        logger.error(f"Failed to get issue trend chart: {e}")
+        logger.error(f"Failed to get issue trend chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

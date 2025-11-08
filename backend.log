@@ -65,3 +65,25 @@ Checkpoint saver is disabled
 INFO:     Started server process [89621]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+INFO:     127.0.0.1:61612 - "GET /api/pm/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61614 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61616 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61618 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61620 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61622 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61612 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61620 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61618 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61616 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61614 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61622 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61612 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61620 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61618 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61616 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/burndown?scope_type=story_points HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61614 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61622 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/epics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61612 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61620 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/priorities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61618 - "GET /api/pm/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61616 - "GET /api/pm/projects HTTP/1.1" 200 OK

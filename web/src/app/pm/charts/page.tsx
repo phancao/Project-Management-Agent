@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { BurndownView } from "../chat/components/views/burndown-view";
 import { VelocityView } from "../chat/components/views/velocity-view";
 import { SprintReportView } from "../chat/components/views/sprint-report-view";
+import { CFDView } from "../chat/components/views/cfd-view";
+import { CycleTimeView } from "../chat/components/views/cycle-time-view";
 import { PMHeader } from "../components/pm-header";
 import { PMLoadingProvider } from "../context/pm-loading-context";
 import { PMLoadingManager } from "../components/pm-loading-manager";
@@ -114,11 +116,13 @@ export default function ChartsPage() {
 
             {/* Charts Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+              <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="burndown">Burndown</TabsTrigger>
                 <TabsTrigger value="velocity">Velocity</TabsTrigger>
                 <TabsTrigger value="sprint-report">Sprint Report</TabsTrigger>
+                <TabsTrigger value="cfd">CFD</TabsTrigger>
+                <TabsTrigger value="cycle-time">Cycle Time</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
@@ -158,8 +162,8 @@ export default function ChartsPage() {
 
                 {/* Quick Actions */}
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Available Charts</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                     <button
                       onClick={() => setActiveTab("sprint-report")}
                       className="p-4 text-left border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
@@ -192,6 +196,28 @@ export default function ChartsPage() {
                         Review team performance and capacity
                       </div>
                     </button>
+
+                    <button
+                      onClick={() => setActiveTab("cfd")}
+                      className="p-4 text-left border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
+                    >
+                      <div className="text-2xl mb-2">📈</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">Cumulative Flow</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Visualize work flow and identify bottlenecks
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab("cycle-time")}
+                      className="p-4 text-left border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
+                    >
+                      <div className="text-2xl mb-2">⏱️</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">Cycle Time</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Track delivery speed and predictability
+                      </div>
+                    </button>
                   </div>
                 </Card>
               </TabsContent>
@@ -206,6 +232,14 @@ export default function ChartsPage() {
 
               <TabsContent value="sprint-report">
                 <SprintReportView />
+              </TabsContent>
+
+              <TabsContent value="cfd">
+                <CFDView />
+              </TabsContent>
+
+              <TabsContent value="cycle-time">
+                <CycleTimeView />
               </TabsContent>
             </Tabs>
           </div>

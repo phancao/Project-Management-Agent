@@ -6,10 +6,21 @@
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { PMHeader } from "../components/pm-header";
 import { PMLoadingProvider } from "../context/pm-loading-context";
 import { PMLoadingManager } from "../components/pm-loading-manager";
+
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const Main = dynamic(() => import("./main"), {
   ssr: false,
@@ -30,16 +41,18 @@ function ChatPageContent() {
   };
 
   return (
-    <PMLoadingProvider>
-      <PMLoadingManager />
-      {/* Section 1: Floating Header */}
-      <PMHeader selectedProjectId={selectedProjectId} onProjectChange={handleProjectChange} />
-      
-      {/* Section 2: Left Pane + Section 3: Upper Body + Content Area */}
-      <div className="flex h-screen w-screen justify-center overscroll-none bg-gray-50 dark:bg-gray-900 pt-16">
-        <Main />
-      </div>
-    </PMLoadingProvider>
+    <QueryClientProvider client={queryClient}>
+      <PMLoadingProvider>
+        <PMLoadingManager />
+        {/* Section 1: Floating Header */}
+        <PMHeader selectedProjectId={selectedProjectId} onProjectChange={handleProjectChange} />
+        
+        {/* Section 2: Left Pane + Section 3: Upper Body + Content Area */}
+        <div className="flex h-screen w-screen justify-center overscroll-none bg-gray-50 dark:bg-gray-900 pt-16">
+          <Main />
+        </div>
+      </PMLoadingProvider>
+    </QueryClientProvider>
   );
 }
 

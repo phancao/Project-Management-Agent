@@ -2931,3 +2931,22 @@ async def get_cfd_chart(
     except Exception as e:
         logger.error(f"Failed to get CFD chart: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/projects/{project_id}/cycle-time")
+async def get_cycle_time_chart(
+    project_id: str,
+    sprint_id: Optional[str] = None,
+    days_back: int = 60
+):
+    """Get Cycle Time / Control Chart for a project/sprint"""
+    try:
+        chart = analytics_service.get_cycle_time_chart(
+            project_id=project_id,
+            sprint_id=sprint_id,
+            days_back=days_back
+        )
+        return chart.model_dump()
+    except Exception as e:
+        logger.error(f"Failed to get cycle time chart: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

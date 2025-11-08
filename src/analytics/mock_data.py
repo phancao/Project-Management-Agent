@@ -568,3 +568,87 @@ def generate_cfd_data(
 # Add method to MockDataGenerator class
 MockDataGenerator.generate_cfd_data = generate_cfd_data
 
+
+def generate_cycle_time_data(
+    self,
+    num_items: int = 50,
+    start_date: datetime = None,
+    end_date: datetime = None
+) -> List[Dict]:
+    """
+    Generate mock work items with cycle time data.
+    
+    Args:
+        num_items: Number of work items to generate
+        start_date: Start date for the period
+        end_date: End date for the period
+    
+    Returns:
+        List of work items with start_date, completion_date, and cycle time
+    """
+    if start_date is None:
+        start_date = datetime.now() - timedelta(days=60)
+    if end_date is None:
+        end_date = datetime.now()
+    
+    work_items = []
+    item_types = ["story", "bug", "task", "feature"]
+    
+    task_titles = [
+        "Implement user authentication",
+        "Fix API endpoint bug",
+        "Update database schema",
+        "Refactor UI component",
+        "Add error handling",
+        "Remove deprecated code",
+        "Optimize database query",
+        "Fix performance issue",
+        "Update documentation",
+        "Add test coverage",
+        "Implement data validation",
+        "Fix security vulnerability",
+        "Update dependencies",
+        "Refactor business logic",
+        "Add logging",
+    ]
+    
+    for i in range(num_items):
+        # Random completion date within the range
+        days_offset = random.randint(0, (end_date - start_date).days)
+        completion_date = start_date + timedelta(days=days_offset)
+        
+        # Generate cycle time with realistic distribution
+        # Most items: 1-7 days, some outliers: 8-30 days
+        if random.random() < 0.8:  # 80% normal items
+            cycle_time_days = random.randint(1, 7)
+        else:  # 20% slower items
+            cycle_time_days = random.randint(8, 30)
+        
+        item_start_date = completion_date - timedelta(days=cycle_time_days)
+        
+        # Ensure start date is not before the period start
+        if item_start_date < start_date:
+            item_start_date = start_date
+            cycle_time_days = (completion_date - item_start_date).days
+        
+        item_type = random.choice(item_types)
+        title = random.choice(task_titles)
+        
+        work_items.append({
+            "id": f"ITEM-{i+1}",
+            "title": f"{title} #{i+1}",
+            "type": item_type,
+            "start_date": item_start_date.isoformat(),
+            "completion_date": completion_date.isoformat(),
+            "cycle_time_days": cycle_time_days,
+        })
+    
+    # Sort by completion date
+    work_items.sort(key=lambda x: x["completion_date"])
+    
+    return work_items
+
+
+# Add method to MockDataGenerator class
+MockDataGenerator.generate_cycle_time_data = generate_cycle_time_data
+

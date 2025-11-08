@@ -13,6 +13,7 @@ from src.analytics.calculators.burndown import BurndownCalculator
 from src.analytics.calculators.velocity import VelocityCalculator
 from src.analytics.calculators.sprint_report import SprintReportCalculator
 from src.analytics.calculators.cfd import calculate_cfd
+from src.analytics.calculators.cycle_time import calculate_cycle_time
 
 
 class AnalyticsService:
@@ -289,6 +290,52 @@ class AnalyticsService:
         else:
             # TODO: Implement real data adapters
             raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for CFD")
+        
+        # Cache result
+        self._set_cache(cache_key, chart)
+        
+        return chart
+    
+    def get_cycle_time_chart(
+        self,
+        project_id: str,
+        sprint_id: Optional[str] = None,
+        days_back: int = 60
+    ) -> ChartResponse:
+        """
+        Get Cycle Time / Control Chart for a project or sprint.
+        
+        Args:
+            project_id: Project identifier
+            sprint_id: Sprint identifier (if None, uses date range)
+            days_back: Number of days to look back (default: 60)
+        
+        Returns:
+            ChartResponse with cycle time data
+        """
+        cache_key = f"cycle_time_{project_id}_{sprint_id}_{days_back}"
+        cached = self._get_from_cache(cache_key)
+        if cached:
+            return cached
+        
+        # Get data based on source
+        if self.data_source == "mock":
+            # Generate mock cycle time data
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days_back)
+            
+            # Generate work items with cycle time
+            work_items = self.mock_generator.generate_cycle_time_data(
+                num_items=50,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            # Calculate cycle time metrics
+            chart = calculate_cycle_time(work_items=work_items)
+        else:
+            # TODO: Implement real data adapters
+            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for cycle time")
         
         # Cache result
         self._set_cache(cache_key, chart)

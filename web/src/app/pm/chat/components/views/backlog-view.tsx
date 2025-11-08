@@ -328,6 +328,11 @@ function SprintSection({ sprint, tasks, onTaskClick, epicsMap }: { sprint: { id:
                 epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
               />
             ))}
+            {isOver && (
+              <div className="border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
+                Drop here
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -371,6 +376,11 @@ function BacklogSection({ tasks, onTaskClick, epicsMap }: { tasks: Task[]; onTas
                 epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
               />
             ))}
+            {isOver && (
+              <div className="border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
+                Drop here to remove from sprint
+              </div>
+            )}
           </div>
         )}
       </div>

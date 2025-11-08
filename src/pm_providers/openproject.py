@@ -398,17 +398,63 @@ class OpenProjectProvider(BasePMProvider):
                 payload["_links"]["assignee"] = None
         if "epic_id" in updates:
             # Epic assignment via parent relationship
-            payload["_links"] = payload.get("_links", {})
             epic_id = updates["epic_id"]
             if epic_id:
+                payload["_links"] = payload.get("_links", {})
                 payload["_links"]["parent"] = {
                     "href": f"/api/v3/work_packages/{epic_id}"
                 }
             else:
-                # Remove parent (epic) - set to null
-                # Note: lockVersion will be handled later in the update flow
-                payload["_links"]["parent"] = None
-                logger.info(f"[EPIC REMOVAL] Setting parent to null for task {task_id}")
+                # Remove parent (epic) - OpenProject requires using the changeParent action
+                # We need to handle this separately, not through the normal update flow
+                logger.info(f"[EPIC REMOVAL] Removing parent from task {task_id} using changeParent action")
+                try:
+                    # Get current work package to access changeParent link
+                    current_wp = requests.get(url, headers=self.headers, timeout=10)
+                    if current_wp.status_code == 200:
+                        current_data = current_wp.json()
+                        
+                        # Check if changeParent action is available
+                        change_parent_link = current_data.get("_links", {}).get("changeParent", {})
+                        if change_parent_link and change_parent_link.get("href"):
+                            change_url = change_parent_link["href"]
+                            if not change_url.startswith("http"):
+                                change_url = f"{self.base_url}{change_url}"
+                            
+                            # POST to changeParent with empty body to remove parent
+                            logger.info(f"[EPIC REMOVAL] Calling changeParent endpoint: {change_url}")
+                            change_resp = requests.post(
+                                change_url,
+                                headers=self.headers,
+                                json={},  # Empty body to remove parent
+                                timeout=10
+                            )
+                            
+                            if change_resp.status_code in [200, 204]:
+                                logger.info(f"[EPIC REMOVAL] Successfully removed parent from task {task_id}")
+                                # Return the updated task
+                                if change_resp.text:
+                                    return self._parse_task(change_resp.json())
+                                else:
+                                    # Fetch the updated task
+                                    updated_task = await self.get_task(task_id)
+                                    if updated_task:
+                                        return updated_task
+                            else:
+                                error_text = change_resp.text
+                                logger.error(f"[EPIC REMOVAL] changeParent failed with status {change_resp.status_code}: {error_text}")
+                                raise ValueError(f"Failed to remove parent: {error_text}")
+                        else:
+                            logger.warning(f"[EPIC REMOVAL] changeParent link not available for task {task_id}")
+                            # If changeParent is not available, the task might not have a parent
+                            # Just return the current task
+                            return self._parse_task(current_data)
+                    else:
+                        logger.error(f"[EPIC REMOVAL] Failed to get current task {task_id}: {current_wp.status_code}")
+                        raise ValueError(f"Failed to get task for parent removal: {current_wp.status_code}")
+                except Exception as e:
+                    logger.error(f"[EPIC REMOVAL] Error removing parent: {e}")
+                    raise ValueError(f"Failed to remove parent from task: {str(e)}")
         if "sprint_id" in updates:
             # Sprint assignment via version link
             payload["_links"] = payload.get("_links", {})

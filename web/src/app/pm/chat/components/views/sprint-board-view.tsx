@@ -1103,8 +1103,8 @@ export function SprintBoardView() {
         return;
       }
 
-      // Use status ID instead of name for the API call
-      const statusValue = String(targetStatus.id);
+      // Use status name for the API call (OpenProject will resolve it)
+      const statusValue = newStatus;
 
       try {
         if (!dragInfo.id || dragInfo.id === "undefined" || dragInfo.id === "null") {

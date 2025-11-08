@@ -14,7 +14,7 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { closestCorners } from "@dnd-kit/core";
+import { closestCorners, snapCenterToCursor } from "@dnd-kit/core";
 import { useDroppable } from "@dnd-kit/core";
 import { useSortable, SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -138,7 +138,7 @@ function TaskDragPreview({ task, measurements }: { task: BoardTask | null; measu
 
   return (
     <div
-      className="p-3 bg-white dark:bg-gray-800 rounded-lg border-2 border-blue-400 shadow-2xl opacity-95"
+      className="p-3 bg-white dark:bg-gray-800 rounded-lg border-2 border-blue-400 shadow-2xl opacity-95 cursor-grabbing"
       style={{
         width: measurements.taskWidth ? `${measurements.taskWidth}px` : 'auto',
         maxWidth: '24rem',
@@ -1480,7 +1480,7 @@ export function SprintBoardView() {
           </SortableContext>
         )}
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
           {draggedColumnId && activeColumnOverlay ? (
             <ColumnDragPreview column={{ id: activeColumnOverlay.id, title: activeColumnOverlay.title }} tasks={activeColumnOverlay.tasks} measurements={dragMeasurements} />
           ) : activeId ? (

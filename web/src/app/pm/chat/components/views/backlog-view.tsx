@@ -582,9 +582,10 @@ export function BacklogView() {
       setSelectedTask({ ...selectedTask, ...result });
     }
     
-    refreshTasks(false);
+    // Trigger full refresh using the same event as sprint assignment
+    window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
     return result;
-  }, [projectIdForSprints, selectedTask, refreshTasks]);
+  }, [projectIdForSprints, selectedTask]);
 
   const handleAssignTaskToSprint = useCallback(async (taskId: string, sprintId: string) => {
     if (!projectIdForSprints) throw new Error('No project selected');

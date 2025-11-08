@@ -2869,9 +2869,9 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         
         provider_uuid, _ = project_id.split(":", 1)
         
-        # Get PM provider from database using UUID
+        # Get PM provider from database using UUID (id field is UUID type)
         provider_conn = db.query(PMProviderConnection).filter(
-            PMProviderConnection.uuid == provider_uuid,
+            PMProviderConnection.id == provider_uuid,
             PMProviderConnection.is_active.is_(True)
         ).first()
         

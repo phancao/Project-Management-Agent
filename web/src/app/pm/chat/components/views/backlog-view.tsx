@@ -686,13 +686,34 @@ export function BacklogView() {
     }
 
     const overId = String(over.id);
+    
+    // Direct drop zone
     if (overId.startsWith('sprint-')) {
       setOverSprintId(overId.replace('sprint-', ''));
-    } else if (overId === 'backlog') {
-      setOverSprintId('backlog');
-    } else {
-      setOverSprintId(null);
+      return;
     }
+    
+    if (overId === 'backlog') {
+      setOverSprintId('backlog');
+      return;
+    }
+    
+    // If hovering over a task, find which sprint it belongs to
+    if (overId.startsWith('task-')) {
+      const taskId = overId.replace('task-', '');
+      const task = tasks.find(t => String(t.id) === taskId);
+      
+      if (task) {
+        if (task.sprint_id) {
+          setOverSprintId(String(task.sprint_id));
+        } else {
+          setOverSprintId('backlog');
+        }
+        return;
+      }
+    }
+    
+    setOverSprintId(null);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -707,9 +728,25 @@ export function BacklogView() {
     const draggedTask = tasks.find(t => String(t.id) === taskId);
     if (!draggedTask) return;
 
-    // Handle drop on backlog
+    let targetSprintId: string | null = null;
+
+    // Determine target sprint
     if (overId === "backlog") {
-      if (!draggedTask.sprint_id) return;
+      targetSprintId = null; // Moving to backlog
+    } else if (overId.startsWith("sprint-")) {
+      targetSprintId = overId.replace("sprint-", "");
+    } else if (overId.startsWith("task-")) {
+      // Dropped on another task - find which sprint it belongs to
+      const targetTaskId = overId.replace("task-", "");
+      const targetTask = tasks.find(t => String(t.id) === targetTaskId);
+      if (targetTask) {
+        targetSprintId = targetTask.sprint_id ? String(targetTask.sprint_id) : null;
+      }
+    }
+
+    // Handle move to backlog
+    if (targetSprintId === null) {
+      if (!draggedTask.sprint_id) return; // Already in backlog
       try {
         await handleMoveTaskToBacklog(taskId);
       } catch (error) {
@@ -718,16 +755,13 @@ export function BacklogView() {
       return;
     }
 
-    // Handle drop on sprint
-    if (overId.startsWith("sprint-")) {
-      const sprintId = overId.replace("sprint-", "");
-      if (String(draggedTask.sprint_id) === sprintId) return;
+    // Handle move to sprint
+    if (String(draggedTask.sprint_id) === targetSprintId) return; // Already in this sprint
 
-      try {
-        await handleAssignTaskToSprint(taskId, sprintId);
-      } catch (error) {
-        console.error("Failed to assign task to sprint:", error);
-      }
+    try {
+      await handleAssignTaskToSprint(taskId, targetSprintId);
+    } catch (error) {
+      console.error("Failed to assign task to sprint:", error);
     }
   };
 

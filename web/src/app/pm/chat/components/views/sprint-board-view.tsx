@@ -1103,7 +1103,8 @@ export function SprintBoardView() {
         return;
       }
 
-      const statusValue = newStatus;
+      // Use status ID instead of name for the API call
+      const statusValue = String(targetStatus.id);
 
       try {
         if (!dragInfo.id || dragInfo.id === "undefined" || dragInfo.id === "null") {
@@ -1120,7 +1121,7 @@ export function SprintBoardView() {
           projectId: activeProjectId,
           taskId: dragInfo.id,
           fromStatus: task.status,
-          toStatus: statusValue,
+          toStatus: newStatus,
           targetStatusId: targetStatus.id,
         });
 

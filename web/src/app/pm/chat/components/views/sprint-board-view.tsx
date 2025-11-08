@@ -78,7 +78,7 @@ type DragMeasurements = {
   columnHeight: number | null;
 };
 
-type BoardTask = Task & { __placeholder?: boolean };
+type BoardTask = Task;
 
 function TaskCard({ task, onClick, disabled }: { task: BoardTask; onClick: () => void; disabled?: boolean }) {
   const taskId = String(task.id);
@@ -131,17 +131,6 @@ function TaskCard({ task, onClick, disabled }: { task: BoardTask; onClick: () =>
   );
 }
 
-function TaskPlaceholder({ height }: { height: number | null }) {
-  return (
-    <div
-      aria-hidden="true"
-      className="border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg flex items-center justify-center text-sm text-blue-500 dark:text-blue-200"
-      style={{ height: height ? `${height}px` : "4.5rem" }}
-    >
-      Drop here
-    </div>
-  );
-}
 
 function TaskDragPreview({ task, measurements }: { task: BoardTask | null; measurements: DragMeasurements }) {
   if (!task) return null;
@@ -212,13 +201,10 @@ type SortableColumnProps = {
   orderId: string;
   tasks: BoardTask[];
   onTaskClick: (task: Task) => void;
-  activeColumnId: string | null;
-  activeTaskId: string | null;
   draggedColumnId: string | null;
-  placeholderHeight: number | null;
 };
 
-function SortableColumn({ column, orderId, tasks, onTaskClick, activeColumnId, activeTaskId, draggedColumnId, placeholderHeight }: SortableColumnProps) {
+function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId }: SortableColumnProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: orderId,
     data: {
@@ -239,7 +225,7 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, activeColumnId, a
     zIndex: isDragging ? 5 : 1,
   } as const;
 
-  const isActive = draggedColumnId === orderId || activeColumnId === column.id;
+  const isActive = draggedColumnId === orderId;
 
   return (
     <div ref={setNodeRef} style={columnStyle} data-order-id={orderId} className="w-80 shrink-0">
@@ -272,16 +258,12 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, activeColumnId, a
         } p-3 space-y-2 min-h-24 transition-colors`}
       >
         <SortableContext items={tasks.map((task) => String(task.id))} strategy={verticalListSortingStrategy}>
-          {tasks.length === 0 && !activeTaskId ? (
+          {tasks.length === 0 ? (
             <div className="text-sm text-gray-400">No tasks</div>
           ) : (
-            tasks.map((task) =>
-              task.__placeholder ? (
-                <TaskPlaceholder key={task.id} height={placeholderHeight} />
-              ) : (
-                <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
-              )
-            )
+            tasks.map((task) => (
+              <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
+            ))
           )}
         </SortableContext>
       </div>
@@ -307,8 +289,6 @@ export function SprintBoardView() {
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [epicFilter, setEpicFilter] = useState<string | null>(null);
   const [sprintFilter, setSprintFilter] = useState<string | null>(null);
-  const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
-  const [reorderedTasks, setReorderedTasks] = useState<Record<string, BoardTask[]>>({});
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
 
   const [columnOrderIds, setColumnOrderIds] = useState<string[]>([]);
@@ -683,12 +663,9 @@ export function SprintBoardView() {
         })
         .map((task) => task) as BoardTask[];
 
-      const reorderedList = reorderedTasks[statusId];
-      if (reorderedList) return reorderedList;
-      if (activeId) return baseTasks.filter((task) => String(task.id) !== activeId);
       return baseTasks;
     },
-    [availableStatuses, filteredTasks, reorderedTasks, activeId]
+    [availableStatuses, filteredTasks]
   );
 
   const orderedColumns = useMemo(() => {
@@ -898,100 +875,12 @@ export function SprintBoardView() {
     ]
   );
 
-  const handleTaskDragOver = useCallback(
-    (event: DragOverEvent) => {
-      const { active, over } = event;
-      if (!over || !availableStatuses) {
-        setActiveColumnId(null);
-        return;
-      }
-
-      const activeTask = tasks.find((task) => String(task.id) === String(active.id));
-      if (!activeTask) return;
-
-      const extraction = extractTargetColumn(
-        String(over.id),
-        over.data.current,
-        columnOrderIds,
-        orderIdToStatusIdMap,
-        availableStatuses,
-        tasks,
-        (stage, details) => {
-          logTaskDragEvent('task-drag:extract-debug', {
-            projectId: activeProjectId,
-            stage,
-            ...details,
-          });
-        }
-      );
-      const targetColumnId = extraction.statusId;
-      const targetOrderId = extraction.orderId;
-
-      if (!targetColumnId) {
-        setActiveColumnId(null);
-        return;
-      }
-
-      setActiveColumnId(String(targetColumnId));
-
-      const sourceStatus = availableStatuses.find((status) => normalizeStatus(status.name) === normalizeStatus(activeTask.status));
-      const targetStatus = availableStatuses.find((status) => String(status.id) === String(targetColumnId));
-      if (!targetStatus) return;
-
-      const baseTargetTasks = filteredTasks
-        .filter((task) => {
-          if (String(task.id) === String(active.id)) return false;
-          return normalizeStatus(task.status) === normalizeStatus(targetStatus.name);
-        })
-        .map((task) => task) as BoardTask[];
-
-      const placeholderTask: Task & { __placeholder: boolean } = {
-        ...(activeTask as Task),
-        id: `placeholder-${String(active.id)}`,
-        __placeholder: true,
-      };
-
-      const overTaskId = tasks.find((task) => String(task.id) === String(over.id))?.id;
-      const overTaskIndex = overTaskId ? baseTargetTasks.findIndex((task) => String(task.id) === String(overTaskId)) : -1;
-
-      const newTargetTasks: BoardTask[] = [...baseTargetTasks];
-      if (overTaskIndex >= 0) {
-        // Check if cursor is in the bottom half of the hovered task
-        const overRect = over.rect;
-        const cursorY = event.activatorEvent && 'clientY' in event.activatorEvent ? event.activatorEvent.clientY : 0;
-        const isBottomHalf = overRect && cursorY > (overRect.top + overRect.height / 2);
-        
-        // Insert after if in bottom half, before if in top half
-        const insertIndex = isBottomHalf ? overTaskIndex + 1 : overTaskIndex;
-        newTargetTasks.splice(insertIndex, 0, placeholderTask);
-      } else {
-        newTargetTasks.push(placeholderTask);
-      }
-
-      const updated: Record<string, BoardTask[]> = { [targetColumnId]: newTargetTasks };
-
-      if (sourceStatus && sourceStatus.id !== targetColumnId) {
-        updated[sourceStatus.id] = filteredTasks
-          .filter((task) => {
-            if (String(task.id) === String(active.id)) return false;
-            return normalizeStatus(task.status) === normalizeStatus(sourceStatus.name);
-          })
-          .map((task) => task) as BoardTask[];
-      }
-
-      requestAnimationFrame(() => setReorderedTasks(updated));
-    },
-    [availableStatuses, filteredTasks, tasks, columnOrderIds, orderIdToStatusIdMap]
-  );
-
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
-      const info = detectDragType(event, columnOrderIds, taskIdsSet);
-      if (info.type === "task") {
-        handleTaskDragOver(event);
-      }
+      // Simplified - let dnd-kit handle the visual reordering automatically
+      // No custom placeholder management needed
     },
-    [columnOrderIds, taskIdsSet, handleTaskDragOver]
+    []
   );
 
   const applyColumnReorder = useCallback(
@@ -1490,10 +1379,7 @@ export function SprintBoardView() {
                   orderId={column.orderId}
                   tasks={column.tasks as BoardTask[]}
                   onTaskClick={handleTaskClick}
-                  activeColumnId={activeColumnId}
-                  activeTaskId={activeId}
                   draggedColumnId={draggedColumnId}
-                  placeholderHeight={dragMeasurements.taskHeight}
                 />
               ))}
             </div>

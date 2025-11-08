@@ -6,6 +6,7 @@ Orchestrates data fetching, calculation, and caching for all chart types.
 
 from typing import Optional, Literal, Dict, Any
 from datetime import datetime, timedelta
+import asyncio
 
 from src.analytics.models import ChartResponse, SprintReport
 from src.analytics.mock_data import MockDataGenerator
@@ -16,27 +17,46 @@ from src.analytics.calculators.cfd import calculate_cfd
 from src.analytics.calculators.cycle_time import calculate_cycle_time
 from src.analytics.calculators.work_distribution import calculate_work_distribution
 from src.analytics.calculators.issue_trend import calculate_issue_trend
+from src.analytics.adapters.base import BaseAnalyticsAdapter
 
 
 class AnalyticsService:
     """
     Main analytics service for generating charts and reports.
     
-    This service uses mock data by default, but is designed to be easily
-    extended with real data adapters for JIRA, OpenProject, etc.
+    This service can use either mock data or real data from PM providers.
     """
     
-    def __init__(self, data_source: str = "mock"):
+    def __init__(self, data_source: str = "mock", adapter: Optional[BaseAnalyticsAdapter] = None):
         """
         Initialize analytics service.
         
         Args:
-            data_source: Data source to use ("mock", "jira", "openproject")
+            data_source: Data source to use ("mock" or "real")
+            adapter: Optional analytics adapter for fetching real data
         """
         self.data_source = data_source
         self.mock_generator = MockDataGenerator()
+        self.adapter = adapter
         self._cache: Dict[str, Any] = {}
         self._cache_ttl = 300  # 5 minutes
+        
+        if data_source == "real" and not adapter:
+            raise ValueError("Analytics adapter is required when data_source is 'real'")
+    
+    def _run_async(self, coro):
+        """Helper to run async functions in sync context"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        if loop.is_running():
+            # If loop is already running, create a new one
+            loop = asyncio.new_event_loop()
+        
+        return loop.run_until_complete(coro)
     
     def get_burndown_chart(
         self,
@@ -69,8 +89,10 @@ class AnalyticsService:
                 project_id=project_id
             )
         else:
-            # TODO: Implement real data adapters
-            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented")
+            # Fetch real data from adapter
+            sprint_data = self._run_async(
+                self.adapter.get_burndown_data(project_id, sprint_id, scope_type)
+            )
         
         # Calculate burndown
         result = BurndownCalculator.calculate(sprint_data, scope_type)
@@ -109,8 +131,10 @@ class AnalyticsService:
                 num_sprints=sprint_count
             )
         else:
-            # TODO: Implement real data adapters
-            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented")
+            # Fetch real data from adapter
+            sprint_history = self._run_async(
+                self.adapter.get_velocity_data(project_id, sprint_count)
+            )
         
         # Calculate velocity
         result = VelocityCalculator.calculate(sprint_history)
@@ -149,8 +173,10 @@ class AnalyticsService:
                 project_id=project_id
             )
         else:
-            # TODO: Implement real data adapters
-            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented")
+            # Fetch real data from adapter
+            sprint_data = self._run_async(
+                self.adapter.get_sprint_report_data(sprint_id, project_id)
+            )
         
         # Generate report
         result = SprintReportCalculator.calculate(sprint_data)
@@ -290,8 +316,16 @@ class AnalyticsService:
                 statuses=["To Do", "In Progress", "In Review", "Done"]
             )
         else:
-            # TODO: Implement real data adapters
-            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for CFD")
+            # Fetch real data from adapter
+            cfd_data = self._run_async(
+                self.adapter.get_cfd_data(project_id, sprint_id, days_back)
+            )
+            chart = calculate_cfd(
+                work_items=cfd_data["work_items"],
+                start_date=cfd_data["start_date"],
+                end_date=cfd_data["end_date"],
+                statuses=cfd_data["statuses"]
+            )
         
         # Cache result
         self._set_cache(cache_key, chart)
@@ -336,8 +370,11 @@ class AnalyticsService:
             # Calculate cycle time metrics
             chart = calculate_cycle_time(work_items=work_items)
         else:
-            # TODO: Implement real data adapters
-            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for cycle time")
+            # Fetch real data from adapter
+            work_items = self._run_async(
+                self.adapter.get_cycle_time_data(project_id, sprint_id, days_back)
+            )
+            chart = calculate_cycle_time(work_items=work_items)
         
         # Cache result
         self._set_cache(cache_key, chart)
@@ -377,8 +414,14 @@ class AnalyticsService:
                 dimension=dimension
             )
         else:
-            # TODO: Implement real data adapters
-            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for work distribution")
+            # Fetch real data from adapter
+            work_items = self._run_async(
+                self.adapter.get_work_distribution_data(project_id, sprint_id)
+            )
+            chart = calculate_work_distribution(
+                work_items=work_items,
+                dimension=dimension
+            )
         
         # Cache result
         self._set_cache(cache_key, chart)
@@ -426,8 +469,15 @@ class AnalyticsService:
                 end_date=end_date
             )
         else:
-            # TODO: Implement real data adapters
-            raise NotImplementedError(f"Data source '{self.data_source}' not yet implemented for issue trend")
+            # Fetch real data from adapter
+            trend_data = self._run_async(
+                self.adapter.get_issue_trend_data(project_id, days_back, sprint_id)
+            )
+            chart = calculate_issue_trend(
+                work_items=trend_data["work_items"],
+                start_date=trend_data["start_date"],
+                end_date=trend_data["end_date"]
+            )
         
         # Cache result
         self._set_cache(cache_key, chart)

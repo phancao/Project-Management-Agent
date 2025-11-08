@@ -358,3 +358,84 @@ INFO:     127.0.0.1:63255 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a
 INFO:     127.0.0.1:63259 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/cfd?days_back=30 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63321 - "GET /api/config HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63329 - "GET /api/analytics/projects/fc9e2adf-476e-4432-907a-4a5818f90bbc%3ATS/issue-trend?days_back=30 HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [11153]
+Checkpoint saver is disabled
+INFO:     Started server process [17446]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [17446]
+Checkpoint saver is disabled
+INFO:     Started server process [17604]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [17604]
+Checkpoint saver is disabled
+INFO:     Started server process [17749]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [17749]
+Checkpoint saver is disabled
+INFO:     Started server process [18078]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18078]
+Checkpoint saver is disabled
+INFO:     Started server process [18283]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18283]
+Checkpoint saver is disabled
+INFO:     Started server process [18582]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18582]
+Checkpoint saver is disabled
+INFO:     Started server process [18758]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18758]
+Checkpoint saver is disabled
+INFO:     Started server process [18852]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'src/analytics/service.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18852]
+Checkpoint saver is disabled
+INFO:     Started server process [18986]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

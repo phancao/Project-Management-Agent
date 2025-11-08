@@ -405,22 +405,10 @@ class OpenProjectProvider(BasePMProvider):
                     "href": f"/api/v3/work_packages/{epic_id}"
                 }
             else:
-                # Remove parent (epic) - need to get lockVersion first
-                try:
-                    # Get current work package to ensure we have lockVersion
-                    current_wp = requests.get(url, headers=self.headers, timeout=10)
-                    if current_wp.status_code == 200:
-                        current_data = current_wp.json()
-                        current_lock_version = current_data.get('lockVersion')
-                        if current_lock_version is not None:
-                            payload["lockVersion"] = current_lock_version
-                        # Set parent to empty dict to remove it
-                        payload["_links"]["parent"] = {}
-                        logger.info(f"Removing parent from work package {task_id} with lockVersion {current_lock_version}")
-                except Exception as e:
-                    logger.warning(f"Could not get lockVersion for parent removal: {e}")
-                    # Try anyway with empty dict
-                    payload["_links"]["parent"] = {}
+                # Remove parent (epic) - set to empty dict
+                # Note: lockVersion will be handled later in the update flow
+                payload["_links"]["parent"] = {}
+                logger.info(f"[EPIC REMOVAL] Setting parent to empty dict for task {task_id}")
         if "sprint_id" in updates:
             # Sprint assignment via version link
             payload["_links"] = payload.get("_links", {})
@@ -587,6 +575,8 @@ class OpenProjectProvider(BasePMProvider):
             form_payload = payload
         
         logger.info(f"[NEW CODE PATH] Validating update via form endpoint with payload: {form_payload}")
+        logger.info(f"[EPIC REMOVAL DEBUG] Original updates dict: {updates}")
+        logger.info(f"[EPIC REMOVAL DEBUG] Payload _links: {payload.get('_links', {})}")
         
         # Retry form endpoint if we get 409 (lockVersion conflict)
         form_max_retries = 2
@@ -781,6 +771,7 @@ class OpenProjectProvider(BasePMProvider):
                 
                 # Success!
                 updated_data = response.json()
+                logger.info(f"[EPIC REMOVAL DEBUG] PATCH response for task {task_id}: parent link = {updated_data.get('_links', {}).get('parent')}")
                 break  # Exit retry loop on success
                 
             except ValueError:
@@ -806,6 +797,7 @@ class OpenProjectProvider(BasePMProvider):
         updated_task = await self.get_task(task_id)
         if updated_task:
             logger.info(f"Task {task_id} status after update: {updated_task.status} (original: {original_status})")
+            logger.info(f"[EPIC REMOVAL DEBUG] Task {task_id} epic_id after update: {updated_task.epic_id}")
             
             # Verify that the status actually changed if we were trying to update it
             if "status" in updates and original_status is not None:

@@ -78,7 +78,7 @@ function TaskCard({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
+    opacity: isDragging ? 0.5 : 1,
   };
 
   return (
@@ -236,8 +236,7 @@ function SprintSection({
   onTaskClick, 
   epicsMap,
   isOver,
-  draggedTaskId,
-  overTaskId
+  draggedTaskId
 }: { 
   sprint: { id: string; name: string; start_date?: string; end_date?: string; status: string }; 
   tasks: Task[]; 
@@ -245,7 +244,6 @@ function SprintSection({
   epicsMap?: Map<string, Epic>;
   isOver?: boolean;
   draggedTaskId?: string | null;
-  overTaskId?: string | null;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -343,25 +341,14 @@ function SprintSection({
             <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
                 {tasks.map((task, index) => (
-                  <div key={task.id}>
-                    {isOver && overTaskId === task.id && (
-                      <div className="mb-2 border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
-                        Drop here
-                      </div>
-                    )}
-                    <TaskCard 
-                      task={task} 
-                      onClick={() => onTaskClick(task)} 
-                      epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
-                      isDragging={draggedTaskId === task.id}
-                    />
-                  </div>
+                  <TaskCard 
+                    key={task.id}
+                    task={task} 
+                    onClick={() => onTaskClick(task)} 
+                    epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
+                    isDragging={draggedTaskId === task.id}
+                  />
                 ))}
-                {isOver && !overTaskId && (
-                  <div className="border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
-                    Drop here
-                  </div>
-                )}
               </div>
             </SortableContext>
           )}
@@ -380,15 +367,13 @@ function BacklogSection({
   onTaskClick, 
   epicsMap,
   isOver,
-  draggedTaskId,
-  overTaskId
+  draggedTaskId
 }: { 
   tasks: Task[]; 
   onTaskClick: (task: Task) => void; 
   epicsMap?: Map<string, Epic>;
   isOver?: boolean;
   draggedTaskId?: string | null;
-  overTaskId?: string | null;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -441,25 +426,14 @@ function BacklogSection({
             <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
                 {tasks.map((task) => (
-                  <div key={task.id}>
-                    {isOver && overTaskId === task.id && (
-                      <div className="mb-2 border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
-                        Drop here
-                      </div>
-                    )}
-                    <TaskCard 
-                      task={task} 
-                      onClick={() => onTaskClick(task)} 
-                      epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
-                      isDragging={draggedTaskId === task.id}
-                    />
-                  </div>
+                  <TaskCard 
+                    key={task.id}
+                    task={task} 
+                    onClick={() => onTaskClick(task)} 
+                    epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
+                    isDragging={draggedTaskId === task.id}
+                  />
                 ))}
-                {isOver && !overTaskId && (
-                  <div className="border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-center text-sm text-blue-600 dark:text-blue-300 font-medium">
-                    Drop here to remove from sprint
-                  </div>
-                )}
               </div>
             </SortableContext>
           )}
@@ -922,7 +896,6 @@ export function BacklogView() {
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
                           draggedTaskId={dragState.id}
-                          overTaskId={overSprintId === sprint.id ? overTaskId : null}
                         />
                       ))}
                   </div>
@@ -945,7 +918,6 @@ export function BacklogView() {
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
                           draggedTaskId={dragState.id}
-                          overTaskId={overSprintId === sprint.id ? overTaskId : null}
                         />
                       ))}
                   </div>
@@ -962,7 +934,6 @@ export function BacklogView() {
                     epicsMap={epicsMap}
                     isOver={overSprintId === 'backlog'}
                     draggedTaskId={dragState.id}
-                    overTaskId={overSprintId === 'backlog' ? overTaskId : null}
                   />
                 </div>
 
@@ -983,7 +954,6 @@ export function BacklogView() {
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
                           draggedTaskId={dragState.id}
-                          overTaskId={overSprintId === sprint.id ? overTaskId : null}
                         />
                       ))}
                   </div>

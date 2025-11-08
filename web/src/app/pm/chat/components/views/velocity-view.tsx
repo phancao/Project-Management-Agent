@@ -167,6 +167,21 @@ export function VelocityView() {
           </div>
         </div>
       </Card>
+
+      {/* Explanation */}
+      <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">⚡ What is a Velocity Chart?</h3>
+        <p className="text-sm text-gray-700 dark:text-gray-300">
+          Velocity measures how much work a team completes in each sprint. It compares <strong>committed points</strong> (planned work) 
+          with <strong>completed points</strong> (actual delivery). Use this chart to:
+        </p>
+        <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
+          <li>Understand team capacity and plan future sprints more accurately</li>
+          <li>Track team performance trends over time</li>
+          <li>Identify if the team is over-committing or under-committing</li>
+          <li>Make data-driven decisions about sprint planning</li>
+        </ul>
+      </Card>
     </div>
   );
 }

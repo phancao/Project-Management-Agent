@@ -157,6 +157,21 @@ export function BurndownView() {
           </div>
         </Card>
       )}
+
+      {/* Explanation */}
+      <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📊 What is a Burndown Chart?</h3>
+        <p className="text-sm text-gray-700 dark:text-gray-300">
+          A burndown chart tracks the amount of work remaining in a sprint over time. The <strong>ideal line</strong> shows the expected 
+          progress if work is completed at a steady pace, while the <strong>actual line</strong> shows real progress. Use this chart to:
+        </p>
+        <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
+          <li>Monitor if the team is on track to complete the sprint goal</li>
+          <li>Identify if the team is ahead or behind schedule</li>
+          <li>Spot scope changes (when the actual line goes up)</li>
+          <li>Forecast sprint completion based on current velocity</li>
+        </ul>
+      </Card>
     </div>
   );
 }

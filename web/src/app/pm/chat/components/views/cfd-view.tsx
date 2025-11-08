@@ -227,6 +227,21 @@ export function CFDView() {
           </div>
         </Card>
       </div>
+
+      {/* Explanation */}
+      <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📈 What is a Cumulative Flow Diagram (CFD)?</h3>
+        <p className="text-sm text-gray-700 dark:text-gray-300">
+          A CFD shows the cumulative count of work items in each status over time. Each colored band represents a workflow stage, 
+          and the width of the band shows how many items are in that stage. Use this chart to:
+        </p>
+        <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
+          <li>Visualize work flow and identify bottlenecks (wide bands = too much WIP)</li>
+          <li>Monitor Work In Progress (WIP) limits and flow efficiency</li>
+          <li>Spot when work is piling up in certain stages</li>
+          <li>Predict delivery times based on historical flow rates</li>
+        </ul>
+      </Card>
     </div>
   );
 }

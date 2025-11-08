@@ -130,6 +130,49 @@ function TaskCard({
 }
 
 /* ============================================================================
+ * EPIC CARD (Droppable)
+ * ========================================================================= */
+
+function EpicCard({ 
+  epic, 
+  isSelected, 
+  taskCount, 
+  onClick,
+  isOver 
+}: { 
+  epic: Epic; 
+  isSelected: boolean; 
+  taskCount: number; 
+  onClick: () => void;
+  isOver?: boolean;
+}) {
+  const { setNodeRef } = useDroppable({
+    id: `epic-${epic.id}`,
+    data: { type: 'epic', epicId: epic.id }
+  });
+
+  return (
+    <button
+      ref={setNodeRef}
+      onClick={onClick}
+      className={`w-full text-left p-2 rounded transition-colors ${
+        isSelected
+          ? "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" 
+          : isOver
+          ? "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 ring-2 ring-green-400"
+          : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        {epic.color && <div className={`w-3 h-3 rounded ${epic.color} shrink-0`}></div>}
+        <span className="text-sm font-medium truncate flex-1">{epic.name}</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">{taskCount}</span>
+      </div>
+    </button>
+  );
+}
+
+/* ============================================================================
  * EPIC SIDEBAR
  * ========================================================================= */
 
@@ -138,13 +181,15 @@ function EpicSidebar({
   selectedEpic,
   tasks,
   projectId,
-  onEpicCreate
+  onEpicCreate,
+  overEpicId
 }: { 
   onEpicSelect: (epicId: string | null) => void;
   selectedEpic: string | null;
   tasks: Task[];
   projectId: string | null | undefined;
   onEpicCreate?: () => void;
+  overEpicId?: string | null;
 }) {
   const { epics, loading: epicsLoading } = useEpics(projectId);
 
@@ -191,21 +236,14 @@ function EpicSidebar({
         ) : epics.length > 0 ? (
           <div className="space-y-1">
             {epics.map((epic) => (
-              <button
+              <EpicCard
                 key={epic.id}
+                epic={epic}
+                isSelected={selectedEpic === epic.id}
+                taskCount={epicCounts.get(epic.id) || 0}
                 onClick={() => onEpicSelect(epic.id)}
-                className={`w-full text-left p-2 rounded transition-colors ${
-                  selectedEpic === epic.id
-                    ? "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" 
-                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  {epic.color && <div className={`w-3 h-3 rounded ${epic.color} shrink-0`}></div>}
-                  <span className="text-sm font-medium truncate flex-1">{epic.name}</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{epicCounts.get(epic.id) || 0}</span>
-                </div>
-              </button>
+                isOver={overEpicId === epic.id}
+              />
             ))}
           </div>
         ) : (
@@ -457,6 +495,7 @@ export function BacklogView() {
   const [dragState, setDragState] = useState<DragState>({ type: null, id: null });
   const [overSprintId, setOverSprintId] = useState<string | null>(null);
   const [overTaskId, setOverTaskId] = useState<string | null>(null);
+  const [overEpicId, setOverEpicId] = useState<string | null>(null);
   
   const { activeProjectId, activeProject, projectIdForData: projectIdForSprints } = useProjectData();
   const { state: loadingState, setTasksState } = usePMLoading();
@@ -569,6 +608,24 @@ export function BacklogView() {
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
   }, [projectIdForSprints]);
 
+  const handleAssignTaskToEpic = useCallback(async (taskId: string, epicId: string) => {
+    if (!projectIdForSprints) throw new Error('No project selected');
+    
+    const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}`);
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ epic_id: epicId }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `Failed to assign task to epic: ${response.status}`);
+    }
+    
+    window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
+  }, [projectIdForSprints]);
+
   // Filter tasks
   const filteredTasks = useMemo(() => {
     if (loading && (!tasks || tasks.length === 0)) return [];
@@ -675,21 +732,32 @@ export function BacklogView() {
     if (!over) {
       setOverSprintId(null);
       setOverTaskId(null);
+      setOverEpicId(null);
       return;
     }
 
     const overId = String(over.id);
     
+    // Epic drop zone
+    if (overId.startsWith('epic-')) {
+      setOverEpicId(overId.replace('epic-', ''));
+      setOverSprintId(null);
+      setOverTaskId(null);
+      return;
+    }
+    
     // Direct drop zone
     if (overId.startsWith('sprint-')) {
       setOverSprintId(overId.replace('sprint-', ''));
       setOverTaskId(null);
+      setOverEpicId(null);
       return;
     }
     
     if (overId === 'backlog') {
       setOverSprintId('backlog');
       setOverTaskId(null);
+      setOverEpicId(null);
       return;
     }
     
@@ -700,6 +768,7 @@ export function BacklogView() {
       
       if (task) {
         setOverTaskId(taskId);
+        setOverEpicId(null);
         if (task.sprint_id) {
           setOverSprintId(String(task.sprint_id));
         } else {
@@ -711,6 +780,7 @@ export function BacklogView() {
     
     setOverSprintId(null);
     setOverTaskId(null);
+    setOverEpicId(null);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -718,6 +788,7 @@ export function BacklogView() {
     setDragState({ type: null, id: null });
     setOverSprintId(null);
     setOverTaskId(null);
+    setOverEpicId(null);
 
     if (!over || dragState.type !== 'task' || !dragState.id) return;
 
@@ -725,6 +796,19 @@ export function BacklogView() {
     const taskId = dragState.id;
     const draggedTask = tasks.find(t => String(t.id) === taskId);
     if (!draggedTask) return;
+
+    // Handle epic assignment
+    if (overId.startsWith("epic-")) {
+      const epicId = overId.replace("epic-", "");
+      if (String(draggedTask.epic_id) === epicId) return; // Already in this epic
+      
+      try {
+        await handleAssignTaskToEpic(taskId, epicId);
+      } catch (error) {
+        console.error("Failed to assign task to epic:", error);
+      }
+      return;
+    }
 
     let targetSprintId: string | null = null;
 
@@ -805,6 +889,7 @@ export function BacklogView() {
           onEpicCreate={() => {
             window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
           }}
+          overEpicId={overEpicId}
         />
 
         {/* Main Content Area */}

@@ -7,8 +7,11 @@ Orchestrates data fetching, calculation, and caching for all chart types.
 from typing import Optional, Literal, Dict, Any
 from datetime import datetime, timedelta
 import asyncio
+import logging
 
 from src.analytics.models import ChartResponse, SprintReport
+
+logger = logging.getLogger(__name__)
 from src.analytics.mock_data import MockDataGenerator
 from src.analytics.calculators.burndown import BurndownCalculator
 from src.analytics.calculators.velocity import VelocityCalculator

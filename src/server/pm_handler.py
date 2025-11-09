@@ -265,7 +265,34 @@ class PMHandler:
             return []
         
         all_projects = []
-        
+
+        # Always include Mock provider demo project for onboarding/demo usage
+        try:
+            from src.pm_providers.mock_provider import MockPMProvider
+            from src.pm_providers.models import PMProviderConfig
+
+            mock_provider = MockPMProvider(
+                PMProviderConfig(
+                    provider_type="mock",
+                    base_url="mock://demo",
+                    api_key="mock-key"
+                )
+            )
+            mock_projects = await mock_provider.list_projects()
+            for project in mock_projects:
+                all_projects.append({
+                    "id": f"mock:{project.id}",
+                    "name": project.name,
+                    "description": project.description or "",
+                    "status": (
+                        project.status.value
+                        if project.status and hasattr(project.status, "value")
+                        else str(project.status) if project.status else "None"
+                    ),
+                })
+        except Exception as mock_error:
+            logger.warning("Failed to load mock projects: %s", mock_error)
+
         for provider in providers:
             try:
                 provider_instance = self._create_provider_instance(provider)
@@ -555,43 +582,20 @@ class PMHandler:
             List of tasks for the project with assignee names mapped
         """
         # Parse project_id format: provider_id:actual_project_id
-        if ":" not in project_id:
-            raise ValueError(f"Invalid project_id format: {project_id}. Expected format: provider_id:project_id")
-        
-        parts = project_id.split(":", 1)
-        provider_id_str = parts[0]
-        actual_project_id = parts[1]
-        
-        from uuid import UUID
-        try:
-            provider_uuid = UUID(provider_id_str)
-        except ValueError:
-            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
-        
-        # Get provider from database
-        provider = self.db.query(PMProviderConnection).filter(
-            PMProviderConnection.id == provider_uuid,
-            PMProviderConnection.is_active.is_(True)
-        ).first()
-        
-        if not provider:
-            raise ValueError(f"Provider not found: {provider_id_str}")
-        
-        logger.info(
-            f"Using provider: id={provider.id}, "
-            f"type={provider.provider_type}, "
-            f"base_url={provider.base_url}, "
-            f"project_id={actual_project_id}"
+        provider_instance = self._get_provider_for_project(project_id)
+        actual_project_id = (
+            project_id.split(":", 1)[1]
+            if ":" in project_id
+            else project_id
         )
-        
-        # Create provider instance
-        provider_instance = self._create_provider_instance(provider)
         
         # Fetch projects for name mapping
         projects = await provider_instance.list_projects()
         project_map = {p.id: p.name for p in projects}
         
         # Fetch tasks
+        provider_type = getattr(getattr(provider_instance, "config", None), "provider_type", provider_instance.__class__.__name__)
+
         try:
             logger.info(
                 "=" * 80
@@ -599,7 +603,7 @@ class PMHandler:
             logger.info(
                 "CALLING PROVIDER list_tasks: "
                 "provider=%s, project_id=%s, actual_project_id=%s",
-                provider.provider_type, project_id, actual_project_id
+                provider_type, project_id, actual_project_id
             )
             logger.info("=" * 80)
             
@@ -616,18 +620,18 @@ class PMHandler:
         except NotImplementedError:
             logger.warning(
                 f"list_tasks not implemented for provider "
-                f"{provider.provider_type}"
+                f"{provider_type}"
             )
             raise ValueError(
                 f"list_tasks is not yet implemented for "
-                f"{provider.provider_type} provider"
+                f"{provider_type} provider"
             )
         except Exception as list_error:
             error_msg = str(list_error)
             logger.error(
                 f"Failed to list tasks for project {actual_project_id} "
-                f"from provider {provider_id_str} "
-                f"(type: {provider.provider_type}): {error_msg}"
+                f"from provider {project_id.split(':')[0]} "
+                f"(type: {provider_type}): {error_msg}"
             )
             import traceback
             logger.error(traceback.format_exc())
@@ -700,30 +704,12 @@ class PMHandler:
             List of sprints for the project
         """
         # Parse project_id format: provider_id:actual_project_id
-        if ":" not in project_id:
-            raise ValueError(f"Invalid project_id format: {project_id}. Expected format: provider_id:project_id")
-        
-        parts = project_id.split(":", 1)
-        provider_id_str = parts[0]
-        actual_project_id = parts[1]
-        
-        from uuid import UUID
-        try:
-            provider_uuid = UUID(provider_id_str)
-        except ValueError:
-            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
-        
-        # Get provider from database
-        provider = self.db.query(PMProviderConnection).filter(
-            PMProviderConnection.id == provider_uuid,
-            PMProviderConnection.is_active.is_(True)
-        ).first()
-        
-        if not provider:
-            raise ValueError(f"Provider not found: {provider_id_str}")
-        
-        # Create provider instance
-        provider_instance = self._create_provider_instance(provider)
+        provider_instance = self._get_provider_for_project(project_id)
+        actual_project_id = (
+            project_id.split(":", 1)[1]
+            if ":" in project_id
+            else project_id
+        )
         
         # Fetch sprints with optional state filter
         sprints = await provider_instance.list_sprints(
@@ -759,36 +745,25 @@ class PMHandler:
         Returns:
             List of epics for the project
         """
-        if ":" not in project_id:
-            raise ValueError(f"Invalid project_id format: {project_id}")
-        
-        parts = project_id.split(":", 1)
-        provider_id_str = parts[0]
-        actual_project_id = parts[1]
-        
-        from uuid import UUID
-        try:
-            provider_uuid = UUID(provider_id_str)
-        except ValueError:
-            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
-        
-        provider = self.db.query(PMProviderConnection).filter(
-            PMProviderConnection.id == provider_uuid,
-            PMProviderConnection.is_active.is_(True)
-        ).first()
-        
-        if not provider:
-            raise ValueError(f"Provider not found: {provider_id_str}")
-        
-        provider_instance = self._create_provider_instance(provider)
-        
+        provider_instance = self._get_provider_for_project(project_id)
+        actual_project_id = (
+            project_id.split(":", 1)[1]
+            if ":" in project_id
+            else project_id
+        )
+
         try:
             epics = await provider_instance.list_epics(project_id=actual_project_id)
         except NotImplementedError:
-            raise ValueError(f"Epics not yet implemented for {provider.provider_type}")
+            provider_type = getattr(
+                getattr(provider_instance, "config", None),
+                "provider_type",
+                provider_instance.__class__.__name__
+            )
+            raise ValueError(f"Epics not yet implemented for {provider_type}")
         except Exception as e:
             raise ValueError(str(e))
-        
+
         return [
             {
                 "id": str(e.id),
@@ -1072,41 +1047,27 @@ class PMHandler:
         Returns:
             List of status objects with id, name, color, etc.
         """
-        if ":" not in project_id:
-            raise ValueError(f"Invalid project_id format: {project_id}")
-        
-        parts = project_id.split(":", 1)
-        provider_id_str = parts[0]
-        actual_project_id = parts[1]
-        
-        from uuid import UUID
-        try:
-            provider_uuid = UUID(provider_id_str)
-        except ValueError:
-            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
-        
-        provider = self.db.query(PMProviderConnection).filter(
-            PMProviderConnection.id == provider_uuid,
-            PMProviderConnection.is_active.is_(True)
-        ).first()
-        
-        if not provider:
-            raise ValueError(f"Provider not found: {provider_id_str}")
-        
-        provider_instance = self._create_provider_instance(provider)
-        
+        provider_instance = self._get_provider_for_project(project_id)
+        actual_project_id = (
+            project_id.split(":", 1)[1]
+            if ":" in project_id
+            else project_id
+        )
+
+        provider_type = getattr(getattr(provider_instance, "config", None), "provider_type", provider_instance.__class__.__name__)
+
         try:
             statuses = await provider_instance.list_statuses(
-                entity_type=entity_type,
-                project_id=actual_project_id
+                project_id=actual_project_id,
+                entity_type=entity_type
             )
         except NotImplementedError:
             raise ValueError(
-                f"Status list not yet implemented for {provider.provider_type}"
+                f"Status list not yet implemented for {provider_type}"
             )
         except Exception as e:
             raise ValueError(str(e))
-        
+
         return statuses
     
     async def list_project_priorities(
@@ -1124,40 +1085,26 @@ class PMHandler:
         Returns:
             List of priority objects with id, name, color, etc.
         """
-        if ":" not in project_id:
-            raise ValueError(f"Invalid project_id format: {project_id}")
-        
-        parts = project_id.split(":", 1)
-        provider_id_str = parts[0]
-        actual_project_id = parts[1]
-        
-        from uuid import UUID
-        try:
-            provider_uuid = UUID(provider_id_str)
-        except ValueError:
-            raise ValueError(f"Invalid provider ID format: {provider_id_str}")
-        
-        provider = self.db.query(PMProviderConnection).filter(
-            PMProviderConnection.id == provider_uuid,
-            PMProviderConnection.is_active.is_(True)
-        ).first()
-        
-        if not provider:
-            raise ValueError(f"Provider not found: {provider_id_str}")
-        
-        provider_instance = self._create_provider_instance(provider)
-        
+        provider_instance = self._get_provider_for_project(project_id)
+        actual_project_id = (
+            project_id.split(":", 1)[1]
+            if ":" in project_id
+            else project_id
+        )
+
+        provider_type = getattr(getattr(provider_instance, "config", None), "provider_type", provider_instance.__class__.__name__)
+
         try:
             priorities = await provider_instance.list_priorities(
                 project_id=actual_project_id
             )
         except NotImplementedError:
             raise ValueError(
-                f"Priority list not yet implemented for {provider.provider_type}"
+                f"Priority list not yet implemented for {provider_type}"
             )
         except Exception as e:
             raise ValueError(str(e))
-        
+
         return priorities
     
     async def assign_task_to_epic(self, project_id: str, task_id: str, epic_id: str) -> Dict[str, Any]:

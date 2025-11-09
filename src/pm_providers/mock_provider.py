@@ -18,7 +18,7 @@ from uuid import uuid4
 from .base import BasePMProvider
 from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
-    PMProviderConfig, PMStatus, PMPriority, PMStatusTransition, PMComment
+    PMProviderConfig, PMStatusTransition
 )
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ class MockPMProvider(BasePMProvider):
     def __init__(self, config: PMProviderConfig):
         """Initialize mock provider with configuration"""
         super().__init__(config)
+        self.provider_type = "mock"
         self._initialize_mock_data()
     
     def _initialize_mock_data(self):
@@ -69,29 +70,27 @@ class MockPMProvider(BasePMProvider):
             ),
         ]
         
-        # Mock statuses
+        # Mock statuses (match UI expectations)
         self.mock_statuses = [
-            PMStatus(id="1", name="To Do", category="todo"),
-            PMStatus(id="2", name="In Progress", category="in_progress"),
-            PMStatus(id="3", name="In Review", category="in_progress"),
-            PMStatus(id="4", name="Done", category="done"),
+            {"id": "todo", "name": "To Do", "category": "todo"},
+            {"id": "in_progress", "name": "In Progress", "category": "in_progress"},
+            {"id": "in_review", "name": "In Review", "category": "in_progress"},
+            {"id": "done", "name": "Done", "category": "done"},
         ]
         
-        # Mock priorities
+        # Mock priorities (match UI expectations)
         self.mock_priorities = [
-            PMPriority(id="1", name="Low"),
-            PMPriority(id="2", name="Medium"),
-            PMPriority(id="3", name="High"),
-            PMPriority(id="4", name="Critical"),
+            {"id": "low", "name": "Low", "color": "#3b82f6"},
+            {"id": "medium", "name": "Medium", "color": "#f59e0b"},
+            {"id": "high", "name": "High", "color": "#ef4444"},
+            {"id": "critical", "name": "Critical", "color": "#7c3aed"},
         ]
         
         # Mock project
         self.mock_project = PMProject(
             id="demo",
             name="Demo Project",
-            key="DEMO",
             description="A demo project with realistic mock data for presentations and testing",
-            lead=self.mock_users[0],
             created_at=datetime.now() - timedelta(days=90),
             updated_at=datetime.now()
         )
@@ -141,29 +140,26 @@ class MockPMProvider(BasePMProvider):
         self.mock_epics = [
             PMEpic(
                 id="epic-1",
-                key="DEMO-EPIC-1",
                 name="User Management",
                 description="Complete user management system with authentication and profiles",
                 project_id="demo",
-                status=self.mock_statuses[3],  # Done
+                status="done",
                 created_at=datetime.now() - timedelta(days=80)
             ),
             PMEpic(
                 id="epic-2",
-                key="DEMO-EPIC-2",
                 name="Project Management",
                 description="Core project management features including tasks, sprints, and boards",
                 project_id="demo",
-                status=self.mock_statuses[1],  # In Progress
+                status="in_progress",
                 created_at=datetime.now() - timedelta(days=60)
             ),
             PMEpic(
                 id="epic-3",
-                key="DEMO-EPIC-3",
                 name="Analytics & Reporting",
                 description="Advanced analytics, charts, and reporting capabilities",
                 project_id="demo",
-                status=self.mock_statuses[0],  # To Do
+                status="todo",
                 created_at=datetime.now() - timedelta(days=30)
             ),
         ]
@@ -172,70 +168,74 @@ class MockPMProvider(BasePMProvider):
         self.mock_tasks = self._generate_mock_tasks()
     
     def _generate_mock_tasks(self) -> List[PMTask]:
-        """Generate realistic mock tasks"""
-        tasks = []
-        task_templates = [
-            # Sprint 1 (Closed) - All done
-            ("DEMO-1", "Implement user authentication", "epic-1", "sprint-1", "4", 8, self.mock_users[0]),
-            ("DEMO-2", "Create login page UI", "epic-1", "sprint-1", "4", 5, self.mock_users[1]),
-            ("DEMO-3", "Setup JWT token system", "epic-1", "sprint-1", "4", 5, self.mock_users[2]),
-            ("DEMO-4", "Design dashboard layout", "epic-1", "sprint-1", "4", 8, self.mock_users[3]),
-            
-            # Sprint 2 (Closed) - All done
-            ("DEMO-5", "Create project CRUD operations", "epic-2", "sprint-2", "4", 13, self.mock_users[0]),
-            ("DEMO-6", "Implement task board view", "epic-2", "sprint-2", "4", 8, self.mock_users[1]),
-            ("DEMO-7", "Add drag and drop functionality", "epic-2", "sprint-2", "4", 8, self.mock_users[2]),
-            ("DEMO-8", "Setup sprint management", "epic-2", "sprint-2", "4", 13, self.mock_users[3]),
-            
-            # Sprint 3 (Active) - Mixed statuses
-            ("DEMO-9", "Design analytics dashboard", "epic-3", "sprint-3", "4", 5, self.mock_users[0]),
-            ("DEMO-10", "Implement burndown chart", "epic-3", "sprint-3", "4", 8, self.mock_users[1]),
-            ("DEMO-11", "Create velocity chart", "epic-3", "sprint-3", "3", 8, self.mock_users[2]),
-            ("DEMO-12", "Add CFD visualization", "epic-3", "sprint-3", "2", 5, self.mock_users[3]),
-            ("DEMO-13", "Implement cycle time chart", "epic-3", "sprint-3", "1", 5, self.mock_users[0]),
-            ("DEMO-14", "Create sprint report view", "epic-3", "sprint-3", "1", 8, self.mock_users[1]),
-            
-            # Backlog - No sprint
-            ("DEMO-15", "Add export to PDF feature", "epic-3", None, "1", 13, None),
-            ("DEMO-16", "Implement email notifications", "epic-2", None, "1", 8, None),
-            ("DEMO-17", "Create mobile responsive views", "epic-2", None, "1", 13, None),
-            ("DEMO-18", "Add dark mode support", None, None, "1", 5, None),
+        """Generate realistic mock tasks that align with the simplified PMTask model"""
+        status_map = {
+            "todo": "todo",
+            "in_progress": "in_progress",
+            "in_review": "in_review",
+            "done": "done",
+        }
+
+        priority_sequence = ["medium", "high", "medium", "critical"]
+
+        task_blueprints = [
+            # sprint_id, epic_id, status, hours, assignee_id, title
+            ("sprint-1", "epic-1", "done", 16, "user-1", "Implement user authentication"),
+            ("sprint-1", "epic-1", "done", 12, "user-2", "Create login page UI"),
+            ("sprint-1", "epic-1", "done", 10, "user-3", "Setup JWT token system"),
+            ("sprint-1", "epic-1", "done", 14, "user-4", "Design dashboard layout"),
+            ("sprint-2", "epic-2", "done", 20, "user-1", "Create project CRUD operations"),
+            ("sprint-2", "epic-2", "done", 12, "user-2", "Implement task board view"),
+            ("sprint-2", "epic-2", "done", 10, "user-3", "Add drag and drop functionality"),
+            ("sprint-2", "epic-2", "done", 18, "user-4", "Setup sprint management"),
+            ("sprint-3", "epic-3", "done", 10, "user-1", "Design analytics dashboard"),
+            ("sprint-3", "epic-3", "done", 12, "user-2", "Implement burndown chart"),
+            ("sprint-3", "epic-3", "in_review", 12, "user-3", "Create velocity chart"),
+            ("sprint-3", "epic-3", "in_progress", 8, "user-4", "Add CFD visualization"),
+            ("sprint-3", "epic-3", "todo", 8, "user-1", "Implement cycle time chart"),
+            ("sprint-3", "epic-3", "todo", 12, "user-2", "Create sprint report view"),
+            (None, "epic-3", "todo", 20, None, "Add export to PDF feature"),
+            (None, "epic-2", "todo", 16, None, "Implement email notifications"),
+            (None, "epic-2", "todo", 18, None, "Create mobile responsive views"),
+            (None, None, "todo", 10, None, "Add dark mode support"),
         ]
-        
-        for i, (key, title, epic_id, sprint_id, status_id, story_points, assignee) in enumerate(task_templates, 1):
-            status = next(s for s in self.mock_statuses if s.id == status_id)
-            epic = next((e for e in self.mock_epics if e.id == epic_id), None) if epic_id else None
-            
-            # Calculate dates based on sprint and status
-            created_date = datetime.now() - timedelta(days=60 - i * 2)
-            updated_date = datetime.now() - timedelta(days=random.randint(0, 10))
-            
-            # If task is done, set completion date
-            completion_date = None
-            if status.category == "done":
-                completion_date = created_date + timedelta(days=random.randint(3, 10))
-            
+
+        tasks: List[PMTask] = []
+        now = datetime.now()
+
+        for index, (sprint_id, epic_id, status_id, estimated_hours, assignee_id, title) in enumerate(task_blueprints, start=1):
+            created_at = now - timedelta(days=60 - index * 2)
+            updated_at = created_at + timedelta(days=random.randint(1, 10))
+            completed_at = None
+            if status_id == "done":
+                completed_at = updated_at + timedelta(days=1)
+
+            priority = priority_sequence[index % len(priority_sequence)]
+
             task = PMTask(
-                id=f"task-{i}",
-                key=key,
+                id=f"task-{index}",
                 title=title,
                 description=f"Detailed description for {title}",
+                status=status_map.get(status_id, status_id),
+                priority=priority,
                 project_id="demo",
-                status=status,
-                priority=self.mock_priorities[random.randint(0, 3)],
-                assignee=assignee,
-                reporter=self.mock_users[0],
-                epic=epic,
+                parent_task_id=None,
+                epic_id=epic_id,
+                assignee_id=assignee_id,
+                component_ids=None,
+                label_ids=None,
                 sprint_id=sprint_id,
-                story_points=story_points,
-                created_at=created_date,
-                updated_at=updated_date,
-                completion_date=completion_date,
-                labels=[],
-                components=[]
+                estimated_hours=float(estimated_hours),
+                actual_hours=None,
+                start_date=None,
+                due_date=None,
+                created_at=created_at,
+                updated_at=updated_at,
+                completed_at=completed_at,
+                raw_data={"key": f"DEMO-{index}"}
             )
             tasks.append(task)
-        
+
         return tasks
     
     # ==================== Project Operations ====================
@@ -283,7 +283,7 @@ class MockPMProvider(BasePMProvider):
             tasks = [t for t in tasks if t.project_id == project_id]
         
         if assignee_id:
-            tasks = [t for t in tasks if t.assignee and t.assignee.id == assignee_id]
+            tasks = [t for t in tasks if t.assignee_id == assignee_id]
         
         return tasks
     
@@ -296,7 +296,6 @@ class MockPMProvider(BasePMProvider):
         """Create a new task"""
         logger.info(f"[MockProvider] Creating task: {task.title}")
         task.id = f"task-{len(self.mock_tasks) + 1}"
-        task.key = f"DEMO-{len(self.mock_tasks) + 1}"
         task.created_at = datetime.now()
         task.updated_at = datetime.now()
         self.mock_tasks.append(task)
@@ -312,15 +311,9 @@ class MockPMProvider(BasePMProvider):
         # Update task fields
         for key, value in updates.items():
             if key == "status" and isinstance(value, str):
-                # Find status by name or ID
-                status = next((s for s in self.mock_statuses if s.name == value or s.id == value), None)
-                if status:
-                    task.status = status
-            elif key == "assignee_id" and value:
-                # Find user by ID
-                user = next((u for u in self.mock_users if u.id == value), None)
-                if user:
-                    task.assignee = user
+                task.status = value
+            elif key == "assignee_id":
+                task.assignee_id = value
             elif hasattr(task, key):
                 setattr(task, key, value)
         
@@ -402,7 +395,6 @@ class MockPMProvider(BasePMProvider):
         """Create a new epic"""
         logger.info(f"[MockProvider] Creating epic: {epic.name}")
         epic.id = f"epic-{len(self.mock_epics) + 1}"
-        epic.key = f"DEMO-EPIC-{len(self.mock_epics) + 1}"
         self.mock_epics.append(epic)
         return epic
     
@@ -444,7 +436,7 @@ class MockPMProvider(BasePMProvider):
     
     # ==================== Status Operations ====================
     
-    async def list_statuses(self, project_id: Optional[str] = None) -> List[PMStatus]:
+    async def list_statuses(self, project_id: Optional[str] = None, entity_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """List all statuses, optionally filtered by project"""
         logger.info(f"[MockProvider] Listing statuses (project={project_id})")
         return self.mock_statuses
@@ -452,19 +444,23 @@ class MockPMProvider(BasePMProvider):
     async def get_status_transitions(self, task_id: str) -> List[PMStatusTransition]:
         """Get available status transitions for a task"""
         logger.info(f"[MockProvider] Getting status transitions for task: {task_id}")
-        # Allow all transitions in mock mode
-        transitions = []
-        for status in self.mock_statuses:
-            transitions.append(PMStatusTransition(
-                id=status.id,
-                name=status.name,
-                to_status=status
-            ))
+        transitions: List[PMStatusTransition] = []
+        for source in self.mock_statuses:
+            for target in self.mock_statuses:
+                if source["id"] == target["id"]:
+                    continue
+                transitions.append(
+                    PMStatusTransition(
+                        from_status=source["id"],
+                        to_status=target["id"],
+                        name=f"Move to {target['name']}"
+                    )
+                )
         return transitions
     
     # ==================== Priority Operations ====================
     
-    async def list_priorities(self) -> List[PMPriority]:
+    async def list_priorities(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """List all priorities"""
         logger.info("[MockProvider] Listing priorities")
         return self.mock_priorities
@@ -482,22 +478,53 @@ class MockPMProvider(BasePMProvider):
         """List all labels, optionally filtered by project"""
         logger.info(f"[MockProvider] Listing labels (project={project_id})")
         return []  # No labels in mock data
-    
+
+    async def get_label(self, label_id: str) -> Optional[PMLabel]:
+        logger.info(f"[MockProvider] Getting label: {label_id}")
+        return next((label for label in [] if getattr(label, "id", None) == label_id), None)
+
+    async def create_label(self, label: PMLabel) -> PMLabel:
+        logger.info(f"[MockProvider] Creating label: {label.name}")
+        label.id = label.id or str(uuid4())
+        return label
+
+    async def update_label(self, label_id: str, updates: Dict[str, Any]) -> PMLabel:
+        logger.info(f"[MockProvider] Updating label: {label_id}")
+        label = await self.get_label(label_id)
+        if not label:
+            raise ValueError(f"Label not found: {label_id}")
+        for field, value in updates.items():
+            if hasattr(label, field):
+                setattr(label, field, value)
+        return label
+
+    async def delete_label(self, label_id: str) -> bool:
+        logger.info(f"[MockProvider] Deleting label: {label_id}")
+        return True
+
     # ==================== Comment Operations ====================
     
-    async def list_comments(self, task_id: str) -> List[PMComment]:
+    async def list_comments(self, task_id: str) -> List[Dict[str, Any]]:
         """List all comments for a task"""
         logger.info(f"[MockProvider] Listing comments for task: {task_id}")
         return []  # No comments in mock data
     
-    async def add_comment(self, task_id: str, body: str) -> PMComment:
+    async def add_comment(self, task_id: str, body: str) -> Dict[str, Any]:
         """Add a comment to a task"""
         logger.info(f"[MockProvider] Adding comment to task: {task_id}")
-        return PMComment(
-            id=str(uuid4()),
-            body=body,
-            author=self.mock_users[0],
-            created_at=datetime.now(),
-            updated_at=datetime.now()
-        )
+        return {
+            "id": str(uuid4()),
+            "body": body,
+            "author": {
+                "id": self.mock_users[0].id,
+                "name": self.mock_users[0].name,
+                "email": self.mock_users[0].email,
+            },
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+        }
+
+    async def health_check(self) -> bool:
+        logger.info("[MockProvider] Performing health check")
+        return True
 

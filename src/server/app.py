@@ -1525,153 +1525,53 @@ async def pm_list_users(request: Request, project_id: str):
         db = next(db_gen)
         
         try:
-            # Check if project_id has provider prefix (UUID:project_id format)
-            # Try to parse the part before colon as UUID to determine if it's a provider prefix
-            has_provider_prefix = False
-            provider = None
-            if ":" in project_id:
-                provider_part = project_id.split(":", 1)[0]
-                from uuid import UUID
-                from database.orm_models import PMProviderConnection
-                try:
-                    # If we can parse it as UUID, it might be a provider prefix
-                    provider_uuid = UUID(provider_part)
-                    # Check if this UUID exists as a provider
-                    provider = db.query(PMProviderConnection).filter(
-                        PMProviderConnection.id == provider_uuid,
-                        PMProviderConnection.is_active.is_(True)
-                    ).first()
-                    has_provider_prefix = provider is not None
-                    if has_provider_prefix:
-                        logger.info(f"[pm_list_users] Found provider-prefixed project: provider_id={provider_part}, provider_type={provider.provider_type}, username={provider.username}")
-                    else:
-                        logger.info(f"[pm_list_users] Project ID has UUID prefix but provider not found: provider_id={provider_part}")
-                except (ValueError, AttributeError) as e:
-                    # Not a valid UUID, so colon is part of project ID itself
-                    logger.info(f"[pm_list_users] Project ID colon is not a provider prefix (not a valid UUID): {e}")
-                    has_provider_prefix = False
-            
-            if not has_provider_prefix:
-                # Use global flow_manager (no provider prefix or colon is part of project ID)
-                from src.conversation.flow_manager import ConversationFlowManager
-                
-                global flow_manager
-                if flow_manager is None:
-                    flow_manager = ConversationFlowManager(db_session=db)
-                fm = flow_manager
-                
-                if not fm.pm_provider:
-                    raise HTTPException(
-                        status_code=503, detail="PM Provider not configured"
-                    )
-                
-                # Try to list users, but catch authentication errors
-                try:
-                    users = await fm.pm_provider.list_users(project_id=project_id)
-                except ValueError as ve:
-                    error_msg = str(ve)
-                    # For JIRA username/auth issues, return empty list instead of error
-                    if "JIRA requires email" in error_msg or "username" in error_msg.lower() or "api_token" in error_msg.lower():
-                        logger.warning(f"[pm_list_users] JIRA authentication issue (global provider), returning empty user list. Error: {error_msg}")
-                        return []
-                    raise
-                except Exception as e:
-                    error_msg = str(e)
-                    # For JIRA username/auth issues, return empty list instead of error
-                    if "JIRA requires" in error_msg or "username" in error_msg.lower():
-                        logger.warning(f"[pm_list_users] JIRA configuration issue (global provider), returning empty user list. Error: {error_msg}")
-                        return []
-                    logger.error(f"Error listing users from global provider: {e}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-                    raise HTTPException(status_code=500, detail=f"Failed to list users: {error_msg}")
-                
-                return [
-                    {
-                        "id": str(u.id),
-                        "name": u.name,
-                        "email": u.email or "",
-                        "username": u.username or "",
-                        "avatar_url": u.avatar_url or "",
-                    }
-                    for u in users
-                ]
-            
-            # Use PMHandler for provider-prefixed project IDs
-            # PMHandler's _get_provider_for_project will correctly handle username passing
-            provider_id, actual_project_id = project_id.split(":", 1)
-            
-            # First, let's check what's in the database
-            from uuid import UUID
-            from database.orm_models import PMProviderConnection
-            provider_uuid = UUID(provider_id)
-            provider_db = db.query(PMProviderConnection).filter(
-                PMProviderConnection.id == provider_uuid,
-                PMProviderConnection.is_active.is_(True)
-            ).first()
-            
-            if not provider_db:
-                raise HTTPException(
-                    status_code=404, detail="Provider not found"
-                )
-            
-            # Log what we got from the database
-            username_from_db = provider_db.username
-            logger.info(
-                f"[pm_list_users] Provider from DB: "
-                f"type={provider_db.provider_type}, "
-                f"username={username_from_db}, "
-                f"username_type={type(username_from_db).__name__}, "
-                f"has_username={bool(username_from_db)}, "
-                f"username_stripped={username_from_db.strip() if username_from_db else None}"
+            handler = PMHandler.from_db_session(db)
+            provider_instance = handler._get_provider_for_project(project_id)
+
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
             )
-            
-            # Check if JIRA provider requires username before creating the provider
-            # If username is missing, return empty list instead of error (non-blocking)
-            if provider_db.provider_type.lower() == "jira":
-                # Check both username and api_token - both are required for JIRA
-                username_str = str(username_from_db).strip() if username_from_db else ""
-                api_token_str = str(provider_db.api_token).strip() if provider_db.api_token else ""
-                
-                if not username_from_db or not username_str or not provider_db.api_token or not api_token_str:
-                    logger.warning(
-                        f"[pm_list_users] JIRA provider missing credentials: "
-                        f"provider_id={provider_id}, "
-                        f"provider_name={provider_db.name}, "
-                        f"has_username={bool(username_from_db and username_str)}, "
-                        f"has_api_token={bool(provider_db.api_token and api_token_str)}. "
-                        f"Returning empty user list. Please update the provider connection to include a username (email address) and API token."
-                    )
-                    # Return empty list instead of error - this allows the page to load
-                    return []
-            
-            # Use PMHandler to get the provider instance - it handles username correctly
-            pm_handler = PMHandler(db_session=db)
+
+            provider_type = getattr(
+                getattr(provider_instance, "config", None),
+                "provider_type",
+                provider_instance.__class__.__name__
+            )
+
             try:
-                provider_instance = pm_handler._get_provider_for_project(project_id)
-                logger.info(f"[pm_list_users] Got provider instance from PMHandler for project_id={project_id}")
-                user_objs = await provider_instance.list_users(project_id=actual_project_id)
+                user_objs = await provider_instance.list_users(
+                    project_id=actual_project_id
+                )
+            except NotImplementedError:
+                raise HTTPException(
+                    status_code=501,
+                    detail=f"User listing not yet implemented for {provider_type}"
+                )
             except ValueError as ve:
                 error_msg = str(ve)
-                logger.warning(f"[pm_list_users] ValueError when listing users: {error_msg}")
-                # For JIRA username/auth issues, return empty list instead of error
-                if "JIRA requires email" in error_msg or "username" in error_msg.lower() or "api_token" in error_msg.lower():
-                    logger.warning(f"[pm_list_users] JIRA authentication issue detected, returning empty user list. Error: {error_msg}")
+                if "JIRA requires" in error_msg or "username" in error_msg.lower() or "api_token" in error_msg.lower():
+                    logger.warning(
+                        "[pm_list_users] Provider authentication issue, returning empty list. Error: %s",
+                        error_msg
+                    )
                     return []
-                # For other ValueErrors, still raise an error
                 raise HTTPException(status_code=400, detail=error_msg)
             except Exception as e:
-                # Catch any other errors during provider creation or list_users
                 error_msg = str(e)
-                # For JIRA username/auth issues, return empty list instead of error
                 if "JIRA requires" in error_msg or "username" in error_msg.lower():
-                    logger.warning(f"[pm_list_users] JIRA configuration issue detected, returning empty user list. Error: {error_msg}")
+                    logger.warning(
+                        "[pm_list_users] Provider configuration issue, returning empty list. Error: %s",
+                        error_msg
+                    )
                     return []
-                logger.error(f"Error listing users: {e}")
+                logger.error(f"Failed to list users: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
-                raise HTTPException(status_code=500, detail=f"Failed to list users: {error_msg}")
-            users = [
+                raise HTTPException(status_code=500, detail=error_msg)
+
+            return [
                 {
                     "id": str(u.id),
                     "name": u.name,
@@ -1681,8 +1581,6 @@ async def pm_list_users(request: Request, project_id: str):
                 }
                 for u in user_objs
             ]
-            
-            return users
         finally:
             db.close()
     except ValueError as ve:
@@ -2120,6 +2018,7 @@ async def pm_list_statuses(
         
         try:
             handler = PMHandler.from_db_session(db)
+            logger.info(f"[pm_list_statuses] project_id={project_id}")
             statuses = await handler.list_project_statuses(project_id, entity_type)
             return {"statuses": statuses, "entity_type": entity_type}
         finally:

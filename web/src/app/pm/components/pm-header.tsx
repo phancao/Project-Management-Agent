@@ -63,6 +63,9 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   // Helper to get provider type from project ID
   const getProviderType = (projectId: string | undefined): string | null => {
     if (!projectId) return null;
+    if (projectId.startsWith("mock:")) {
+      return "mock";
+    }
     const parts = projectId.split(":");
     if (parts.length >= 2) {
       const providerId: string | undefined = parts[0];
@@ -79,7 +82,8 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
       jira: { label: "JIRA", color: "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200" },
       openproject: { label: "OP", color: "bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200" },
       clickup: { label: "CU", color: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" },
-    };
+      mock: { label: "DEMO", color: "bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200" },
+    } as const;
     const badge = config[providerType as keyof typeof config] || { 
       label: providerType.toUpperCase().slice(0, 2), 
       color: "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200" 
@@ -101,6 +105,16 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
     }
     return "";
   }, [selectedProjectId, projects]);
+
+  const mockProjects = useMemo(
+    () => projects.filter(project => project.id?.startsWith("mock:")),
+    [projects]
+  );
+
+  const realProjects = useMemo(
+    () => projects.filter(project => !project.id?.startsWith("mock:")),
+    [projects]
+  );
 
   const isOverview = pathname?.includes('/overview') ?? false;
   const isChat = pathname?.includes('/chat') ?? false;
@@ -157,13 +171,27 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                       {(() => {
                         const project = projects.find(p => p.id === selectedProject);
                         const providerType = getProviderType(selectedProject);
-                        return project ? (
+                        const isMockProject = selectedProject.startsWith("mock:");
+                        if (!project) {
+                          return (
+                            <span className="text-gray-500">No project selected</span>
+                          );
+                        }
+                        if (isMockProject) {
+                          return (
+                            <>
+                              <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                                DEMO
+                              </span>
+                              <span className="truncate">Mock Project (Demo Data)</span>
+                            </>
+                          );
+                        }
+                        return (
                           <>
                             {getProviderBadge(providerType)}
                             <span className="truncate">{project.name}</span>
                           </>
-                        ) : (
-                          <span className="text-gray-500">No project selected</span>
                         );
                       })()}
                     </div>
@@ -172,23 +200,22 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                   )}
                 </SelectTrigger>
                 <SelectContent>
-                  {/* Mock Project for demo/testing */}
-                  <SelectItem key="mock-project" value="mock:demo">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
-                        DEMO
-                      </span>
-                      <span>Mock Project (Demo Data)</span>
-                    </div>
-                  </SelectItem>
-                  
-                  {/* Separator */}
-                  {projects.length > 0 && (
+                  {mockProjects.map(project => (
+                    <SelectItem key={project.id} value={project.id}>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                          DEMO
+                        </span>
+                        <span>Mock Project (Demo Data)</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+
+                  {mockProjects.length > 0 && realProjects.length > 0 && (
                     <div className="my-1 h-px bg-gray-200 dark:bg-gray-700" />
                   )}
-                  
-                  {/* Real projects */}
-                  {projects.map(project => {
+
+                  {realProjects.map(project => {
                     const providerType = getProviderType(project.id);
                     return (
                       <SelectItem key={project.id} value={project.id}>

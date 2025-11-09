@@ -47,7 +47,7 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         if ":" in project_id:
             return project_id.split(":", 1)[1]
         return project_id
-    
+
     async def get_burndown_data(
         self,
         project_id: str,
@@ -435,6 +435,7 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             
             # Transform tasks
             work_items = []
+            assignee_name_cache: Dict[str, str] = {}
             for task in all_tasks:
                 # Extract story points
                 story_points = 0
@@ -449,12 +450,26 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                     task_type = task.raw_data["type"]
                 
                 # Get assignee name
-                assignee = task.assignee_id or "Unassigned"
-                
+                assignee_id = task.assignee_id
+                if assignee_id:
+                    if assignee_id not in assignee_name_cache:
+                        display_name = assignee_id
+                        try:
+                            user = await self.provider.get_user(assignee_id)
+                            if user and user.name:
+                                display_name = user.name
+                        except Exception:
+                            pass
+                        assignee_name_cache[assignee_id] = display_name
+                    assignee = assignee_name_cache[assignee_id]
+                else:
+                    assignee = "Unassigned"
+
                 work_items.append({
                     "id": task.id,
                     "title": task.title,
                     "assignee": assignee,
+                    "assignee_id": assignee_id,
                     "priority": task.priority or "Medium",
                     "type": task_type,
                     "status": task.status or "To Do",

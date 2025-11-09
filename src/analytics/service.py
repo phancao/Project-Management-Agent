@@ -1,15 +1,18 @@
-"""
-Analytics service - main entry point for chart generation.
+"""Analytics service - main entry point for chart generation."""
 
-Orchestrates data fetching, calculation, and caching for all chart types.
-"""
-
-from typing import Optional, Literal, Dict, Any
-from datetime import datetime, timedelta
-import asyncio
+from typing import Optional, Literal, Dict, Any, List
+from datetime import datetime, timedelta, date
 import logging
 
-from src.analytics.models import ChartResponse, SprintReport, SprintData
+from src.analytics.models import (
+    ChartResponse,
+    SprintReport,
+    SprintData,
+    WorkItem,
+    WorkItemType,
+    TaskStatus,
+    Priority,
+)
 
 logger = logging.getLogger(__name__)
 from src.analytics.mock_data import MockDataGenerator
@@ -99,7 +102,9 @@ class AnalyticsService:
                     metadata={"message": "No sprint data available. Please configure sprints in your project."}
                 )
         
-        # Calculate burndown
+        if not isinstance(sprint_data, SprintData):
+            sprint_data = self._payload_to_sprint_data(sprint_data, project_id)
+
         result = BurndownCalculator.calculate(sprint_data, scope_type)
         
         # Cache result
@@ -138,7 +143,6 @@ class AnalyticsService:
         else:
             # Fetch real data from adapter
             sprint_history = await self.adapter.get_velocity_data(project_id, sprint_count)
-            # If adapter returns None or empty, return empty chart
             if not sprint_history:
                 logger.info(f"No sprint history found for project {project_id}, returning empty chart")
                 return ChartResponse(
@@ -147,6 +151,12 @@ class AnalyticsService:
                     data=[],
                     metadata={"message": "No sprint history available. Please configure sprints in your project."}
                 )
+            sprint_history = [
+                self._payload_to_sprint_data(payload, project_id)
+                if not isinstance(payload, SprintData)
+                else payload
+                for payload in sprint_history
+            ]
         
         # Calculate velocity
         result = VelocityCalculator.calculate(sprint_history)
@@ -212,19 +222,13 @@ class AnalyticsService:
                     message="Sprint not found or no data available."
                 )
             else:
-                # Convert dict to SprintData object
-                # Adapter returns {"sprint": {...}, "tasks": [...], ...}
-                # Need to flatten it for SprintData model
-                sprint_info = sprint_data_dict.get("sprint", {})
-                sprint_data = SprintData(
-                    id=sprint_info.get("id"),
-                    name=sprint_info.get("name"),
-                    project_id=sprint_info.get("project_id", project_id),
-                    start_date=sprint_info.get("start_date"),
-                    end_date=sprint_info.get("end_date"),
-                    status=sprint_info.get("status", "active"),
-                    work_items=sprint_data_dict.get("tasks", []),
-                )
+                if isinstance(sprint_data_dict, SprintData):
+                    sprint_data = sprint_data_dict
+                else:
+                    sprint_data = self._payload_to_sprint_data(
+                        sprint_data_dict,
+                        project_id,
+                    )
         
         # Generate report
         result = SprintReportCalculator.calculate(sprint_data)
@@ -527,4 +531,141 @@ class AnalyticsService:
     def clear_cache(self):
         """Clear all cached data"""
         self._cache.clear()
+
+    @staticmethod
+    def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            if value.endswith("Z"):
+                fixed = value.replace("Z", "+00:00")
+                try:
+                    return datetime.fromisoformat(fixed)
+                except ValueError:
+                    return None
+            return None
+
+    @staticmethod
+    def _map_status(value: Optional[str]) -> TaskStatus:
+        text = (value or "").lower()
+        if "review" in text:
+            return TaskStatus.IN_REVIEW
+        if "progress" in text:
+            return TaskStatus.IN_PROGRESS
+        if any(word in text for word in ("done", "closed", "completed", "resolved")):
+            return TaskStatus.DONE
+        if "block" in text:
+            return TaskStatus.BLOCKED
+        return TaskStatus.TODO
+
+    @staticmethod
+    def _map_type(value: Optional[str]) -> WorkItemType:
+        text = (value or "").lower()
+        if "story" in text:
+            return WorkItemType.STORY
+        if "bug" in text:
+            return WorkItemType.BUG
+        if "epic" in text:
+            return WorkItemType.EPIC
+        if "sub" in text:
+            return WorkItemType.SUBTASK
+        return WorkItemType.TASK
+
+    @staticmethod
+    def _map_priority(value: Optional[str]) -> Priority:
+        text = (value or "").lower()
+        if text in {"critical", "highest"}:
+            return Priority.CRITICAL
+        if text == "high":
+            return Priority.HIGH
+        if text in {"low", "lowest"}:
+            return Priority.LOW
+        return Priority.MEDIUM
+
+    @staticmethod
+    def _map_sprint_status(value: Optional[str]) -> str:
+        text = (value or "").lower()
+        if "plan" in text:
+            return "planning"
+        if any(word in text for word in ("done", "closed", "completed")):
+            return "completed"
+        if "cancel" in text:
+            return "cancelled"
+        return "active"
+
+    @classmethod
+    def _dict_to_work_item(cls, data: Dict[str, Any]) -> WorkItem:
+        created = cls._parse_datetime(data.get("created_at"))
+        if not created:
+            created = datetime.utcnow()
+        completed = cls._parse_datetime(data.get("completed_at"))
+        return WorkItem(
+            id=str(data.get("id") or "unknown"),
+            title=str(data.get("title") or "Untitled"),
+            type=cls._map_type(data.get("type")),
+            status=cls._map_status(data.get("status")),
+            priority=cls._map_priority(data.get("priority")),
+            story_points=data.get("story_points"),
+            estimated_hours=data.get("estimated_hours"),
+            actual_hours=data.get("actual_hours"),
+            assigned_to=data.get("assigned_to"),
+            created_at=created,
+            completed_at=completed,
+        )
+
+    @classmethod
+    def _payload_to_sprint_data(
+        cls,
+        payload: Dict[str, Any],
+        project_id: str,
+    ) -> SprintData:
+        sprint_info = payload.get("sprint", {}) or {}
+        project = str(payload.get("project_id") or project_id)
+
+        start_dt = cls._parse_datetime(sprint_info.get("start_date"))
+        end_dt = cls._parse_datetime(sprint_info.get("end_date"))
+        start_date = start_dt.date() if start_dt else date.today()
+        end_date = end_dt.date() if end_dt else start_date
+
+        work_items = [
+            cls._dict_to_work_item(item)
+            for item in payload.get("tasks", [])
+        ]
+        added_items = [
+            cls._dict_to_work_item(item)
+            for item in payload.get("added_items", [])
+        ]
+        removed_items = [
+            cls._dict_to_work_item(item)
+            for item in payload.get("removed_items", [])
+        ]
+
+        planned = payload.get("planned_points")
+        if planned is None:
+            planned = sum(item.story_points or 0 for item in work_items)
+
+        completed = payload.get("completed_points")
+        if completed is None:
+            completed = sum(
+                item.story_points or 0
+                for item in work_items
+                if item.status == TaskStatus.DONE and item.completed_at
+            )
+
+        return SprintData(
+            id=str(sprint_info.get("id") or "unknown"),
+            name=str(sprint_info.get("name") or "Sprint"),
+            project_id=project,
+            start_date=start_date,
+            end_date=end_date,
+            status=cls._map_sprint_status(sprint_info.get("status")),
+            planned_points=planned,
+            completed_points=completed,
+            work_items=work_items,
+            added_items=added_items,
+            removed_items=removed_items,
+            team_members=payload.get("team_members", []),
+        )
 

@@ -2774,13 +2774,13 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
             )
             mock_provider = MockPMProvider(config)
             adapter = PMProviderAnalyticsAdapter(mock_provider)
-            return AnalyticsService(data_source="real", adapter=adapter)
+            return AnalyticsService(adapter=adapter)
         
         # Parse project ID to get provider UUID
         if ":" not in project_id:
             # Invalid format - return empty data, not mock
             logger.warning(f"Invalid project ID format: {project_id}, returning empty data")
-            return AnalyticsService(data_source="real", adapter=None)
+            return AnalyticsService()
         
         provider_uuid, _ = project_id.split(":", 1)
         
@@ -2792,7 +2792,7 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         
         if not provider_conn:
             logger.warning(f"Provider with UUID {provider_uuid} not found, returning empty data")
-            return AnalyticsService(data_source="real", adapter=None)
+            return AnalyticsService()
         
         # Create PM handler for this provider
         pm_handler = PMHandler.from_db_session(db)
@@ -2804,12 +2804,12 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         logger.info(f"[Analytics] Created analytics service with real data for project {project_id}")
         
         # Return analytics service with real data
-        return AnalyticsService(data_source="real", adapter=adapter)
+        return AnalyticsService(adapter=adapter)
     
     except Exception as e:
         logger.error(f"Error creating analytics service for project {project_id}: {e}", exc_info=True)
         # Return empty data on error (no mock fallback)
-        return AnalyticsService(data_source="real", adapter=None)
+        return AnalyticsService()
 
 
 @app.get("/api/analytics/projects/{project_id}/burndown")
@@ -2905,7 +2905,7 @@ async def get_project_summary(project_id: str):
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            summary = analytics_service.get_project_summary(project_id=project_id)
+            summary = await analytics_service.get_project_summary(project_id=project_id)
             return summary
         finally:
             try:

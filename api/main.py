@@ -803,9 +803,19 @@ async def search_knowledge(
 
 # Analytics endpoints
 from src.analytics.service import AnalyticsService
+from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
+from src.pm_providers.mock_provider import MockPMProvider
+from src.pm_providers.models import PMProviderConfig
 
 # Initialize analytics service
-analytics_service = AnalyticsService(data_source="mock")
+_mock_config = PMProviderConfig(
+    provider_type="mock",
+    base_url="mock://demo",
+    api_key="mock-key",
+)
+_mock_provider = MockPMProvider(_mock_config)
+_mock_adapter = PMProviderAnalyticsAdapter(_mock_provider)
+analytics_service = AnalyticsService(adapter=_mock_adapter)
 
 @app.get("/api/analytics/projects/{project_id}/burndown")
 async def get_burndown_chart(
@@ -822,12 +832,12 @@ async def get_burndown_chart(
     - scope_type: What to measure - "story_points", "tasks", or "hours"
     """
     try:
-        chart_data = analytics_service.get_burndown_chart(
+        chart_data = await analytics_service.get_burndown_chart(
             project_id=project_id,
             sprint_id=sprint_id,
             scope_type=scope_type
         )
-        return chart_data.dict()
+        return chart_data.model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -844,11 +854,11 @@ async def get_velocity_chart(
     - sprint_count: Number of recent sprints to include (default: 6)
     """
     try:
-        chart_data = analytics_service.get_velocity_chart(
+        chart_data = await analytics_service.get_velocity_chart(
             project_id=project_id,
             sprint_count=sprint_count
         )
-        return chart_data.dict()
+        return chart_data.model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -865,11 +875,11 @@ async def get_sprint_report(
     - project_id: Project identifier
     """
     try:
-        report = analytics_service.get_sprint_report(
+        report = await analytics_service.get_sprint_report(
             sprint_id=sprint_id,
             project_id=project_id
         )
-        return report.dict()
+        return report.model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -880,7 +890,7 @@ async def get_project_summary(
 ):
     """Get high-level project summary with key metrics"""
     try:
-        summary = analytics_service.get_project_summary(project_id=project_id)
+        summary = await analytics_service.get_project_summary(project_id=project_id)
         return summary
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -892,7 +902,7 @@ async def get_project_metrics(
 ):
     """Get project metrics and analytics (legacy endpoint)"""
     try:
-        summary = analytics_service.get_project_summary(project_id=project_id)
+        summary = await analytics_service.get_project_summary(project_id=project_id)
         return {"project_id": project_id, "metrics": summary}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

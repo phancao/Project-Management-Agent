@@ -9,14 +9,24 @@ from typing import Optional, Dict, Any
 import json
 
 from src.analytics.service import AnalyticsService
+from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
+from src.pm_providers.mock_provider import MockPMProvider
+from src.pm_providers.models import PMProviderConfig
 
 
-# Initialize analytics service with mock data
-_analytics_service = AnalyticsService(data_source="mock")
+# Initialize analytics service with provider-backed mock data
+_mock_config = PMProviderConfig(
+    provider_type="mock",
+    base_url="mock://demo",
+    api_key="mock-key",
+)
+_mock_provider = MockPMProvider(_mock_config)
+_mock_adapter = PMProviderAnalyticsAdapter(_mock_provider)
+_analytics_service = AnalyticsService(adapter=_mock_adapter)
 
 
 @tool
-def get_sprint_burndown(
+async def get_sprint_burndown(
     project_id: str,
     sprint_id: Optional[str] = None,
     scope_type: str = "story_points"
@@ -45,7 +55,7 @@ def get_sprint_burndown(
         - "How much work is remaining in this sprint?"
     """
     try:
-        chart_data = _analytics_service.get_burndown_chart(
+        chart_data = await _analytics_service.get_burndown_chart(
             project_id=project_id,
             sprint_id=sprint_id,
             scope_type=scope_type
@@ -73,7 +83,7 @@ def get_sprint_burndown(
 
 
 @tool
-def get_team_velocity(
+async def get_team_velocity(
     project_id: str,
     sprint_count: int = 6
 ) -> str:
@@ -101,7 +111,7 @@ def get_team_velocity(
         - "How many story points should we commit to in the next sprint?"
     """
     try:
-        chart_data = _analytics_service.get_velocity_chart(
+        chart_data = await _analytics_service.get_velocity_chart(
             project_id=project_id,
             sprint_count=sprint_count
         )
@@ -128,7 +138,7 @@ def get_team_velocity(
 
 
 @tool
-def get_sprint_report(
+async def get_sprint_report(
     sprint_id: str,
     project_id: str
 ) -> str:
@@ -160,7 +170,7 @@ def get_sprint_report(
         - "Prepare a sprint review for sprint 3"
     """
     try:
-        report = _analytics_service.get_sprint_report(
+        report = await _analytics_service.get_sprint_report(
             sprint_id=sprint_id,
             project_id=project_id
         )
@@ -184,7 +194,7 @@ def get_sprint_report(
 
 
 @tool
-def get_project_analytics_summary(project_id: str) -> str:
+async def get_project_analytics_summary(project_id: str) -> str:
     """
     Get a high-level analytics summary for a project.
     
@@ -210,7 +220,7 @@ def get_project_analytics_summary(project_id: str) -> str:
         - "Show me project health metrics"
     """
     try:
-        summary = _analytics_service.get_project_summary(project_id=project_id)
+        summary = await _analytics_service.get_project_summary(project_id=project_id)
         return json.dumps(summary, indent=2)
     except Exception as e:
         return json.dumps({"error": str(e)})

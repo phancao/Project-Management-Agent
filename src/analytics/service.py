@@ -6,6 +6,7 @@ import logging
 
 from src.analytics.models import (
     ChartResponse,
+    ChartType,
     SprintReport,
     SprintData,
     WorkItem,
@@ -16,7 +17,6 @@ from src.analytics.models import (
 from src.pm_providers.models import PMTask
 
 logger = logging.getLogger(__name__)
-from src.analytics.mock_data import MockDataGenerator
 from src.analytics.calculators.burndown import BurndownCalculator
 from src.analytics.calculators.velocity import VelocityCalculator
 from src.analytics.calculators.sprint_report import SprintReportCalculator
@@ -28,27 +28,18 @@ from src.analytics.adapters.base import BaseAnalyticsAdapter
 
 
 class AnalyticsService:
-    """
-    Main analytics service for generating charts and reports.
-    
-    This service can use either mock data or real data from PM providers.
-    """
-    
-    def __init__(self, data_source: str = "mock", adapter: Optional[BaseAnalyticsAdapter] = None):
+    """Main analytics service for generating charts and reports."""
+
+    def __init__(self, adapter: Optional[BaseAnalyticsAdapter] = None):
         """
         Initialize analytics service.
-        
+
         Args:
-            data_source: Data source to use ("mock" or "real")
-            adapter: Optional analytics adapter for fetching real data (None = empty data)
+            adapter: Analytics adapter for fetching data from the configured PM provider.
         """
-        self.data_source = data_source
-        self.mock_generator = MockDataGenerator()
         self.adapter = adapter
         self._cache: Dict[str, Any] = {}
         self._cache_ttl = 300  # 5 minutes
-        
-        # Note: adapter can be None when data_source is "real" - this means return empty data
     
     async def get_burndown_chart(
         self,
@@ -74,34 +65,26 @@ class AnalyticsService:
         if cached:
             return cached
         
-        # Get sprint data
-        if self.data_source == "mock":
-            sprint_data = self.mock_generator.generate_sprint_data(
-                sprint_id=sprint_id or "SPRINT-1",
-                project_id=project_id
+        if not self.adapter:
+            logger.info("No analytics adapter configured for project %s", project_id)
+            return ChartResponse(
+                chart_type=ChartType.BURNDOWN,
+                title="Sprint Burndown",
+                series=[],
+                metadata={"message": "No data source configured for this project."},
             )
-        else:
-            # Check if adapter is available
-            if not self.adapter:
-                logger.info(f"No adapter available for project {project_id}, returning empty chart")
-                return ChartResponse(
-                    chart_type="burndown",
-                    title="Sprint Burndown",
-                    data=[],
-                    metadata={"message": "No data source configured for this project."}
-                )
-            
-            # Fetch real data from adapter
-            sprint_data = await self.adapter.get_burndown_data(project_id, sprint_id, scope_type)
-            # If adapter returns None (e.g., no sprints found), return empty chart
-            if sprint_data is None:
-                logger.info(f"No sprint data found for project {project_id}, returning empty chart")
-                return ChartResponse(
-                    chart_type="burndown",
-                    title="Sprint Burndown",
-                    data=[],
-                    metadata={"message": "No sprint data available. Please configure sprints in your project."}
-                )
+
+        sprint_data = await self.adapter.get_burndown_data(project_id, sprint_id, scope_type)
+        if sprint_data is None:
+            logger.info("No sprint data found for project %s", project_id)
+            return ChartResponse(
+                chart_type=ChartType.BURNDOWN,
+                title="Sprint Burndown",
+                series=[],
+                metadata={
+                    "message": "No sprint data available. Please configure sprints in your project."
+                },
+            )
         
         if not isinstance(sprint_data, SprintData):
             sprint_data = self._payload_to_sprint_data(sprint_data, project_id)
@@ -135,29 +118,33 @@ class AnalyticsService:
         if cached:
             return cached
         
-        # Get sprint history
-        if self.data_source == "mock":
-            sprint_history = self.mock_generator.generate_sprint_history(
-                project_id=project_id,
-                num_sprints=sprint_count
+        if not self.adapter:
+            logger.info("No analytics adapter configured for project %s", project_id)
+            return ChartResponse(
+                chart_type=ChartType.VELOCITY,
+                title="Team Velocity",
+                series=[],
+                metadata={"message": "No data source configured for this project."},
             )
-        else:
-            # Fetch real data from adapter
-            sprint_history = await self.adapter.get_velocity_data(project_id, sprint_count)
-            if not sprint_history:
-                logger.info(f"No sprint history found for project {project_id}, returning empty chart")
-                return ChartResponse(
-                    chart_type="velocity",
-                    title="Team Velocity",
-                    data=[],
-                    metadata={"message": "No sprint history available. Please configure sprints in your project."}
-                )
-            sprint_history = [
-                self._payload_to_sprint_data(payload, project_id)
-                if not isinstance(payload, SprintData)
-                else payload
-                for payload in sprint_history
-            ]
+
+        sprint_history = await self.adapter.get_velocity_data(project_id, sprint_count)
+        if not sprint_history:
+            logger.info("No sprint history found for project %s", project_id)
+            return ChartResponse(
+                chart_type=ChartType.VELOCITY,
+                title="Team Velocity",
+                series=[],
+                metadata={
+                    "message": "No sprint history available. Please configure sprints in your project."
+                },
+            )
+
+        sprint_history = [
+            self._payload_to_sprint_data(payload, project_id)
+            if not isinstance(payload, SprintData)
+            else payload
+            for payload in sprint_history
+        ]
         
         # Calculate velocity
         result = VelocityCalculator.calculate(sprint_history)
@@ -189,47 +176,17 @@ class AnalyticsService:
         if cached:
             return cached
         
-        # Get sprint data
-        if self.data_source == "mock":
-            sprint_data = self.mock_generator.generate_sprint_data(
-                sprint_id=sprint_id,
-                project_id=project_id
-            )
+        if not self.adapter:
+            raise ValueError("Analytics adapter not configured for this project.")
+
+        sprint_data_payload = await self.adapter.get_sprint_report_data(sprint_id, project_id)
+        if sprint_data_payload is None:
+            raise ValueError(f"Sprint {sprint_id} not found or no data available.")
+
+        if isinstance(sprint_data_payload, SprintData):
+            sprint_data = sprint_data_payload
         else:
-            # Fetch real data from adapter
-            sprint_data_dict = await self.adapter.get_sprint_report_data(sprint_id, project_id)
-            # If adapter returns None, return empty report
-            if sprint_data_dict is None:
-                logger.info(f"No sprint data found for sprint {sprint_id}, returning empty report")
-                from datetime import date
-                return SprintReport(
-                    sprint_id=sprint_id,
-                    sprint_name="Unknown Sprint",
-                    start_date=date.today(),
-                    end_date=date.today(),
-                    status="unknown",
-                    duration_days=0,
-                    planned_points=0,
-                    completed_points=0,
-                    completion_percentage=0,
-                    planned_tasks=0,
-                    completed_tasks=0,
-                    incomplete_tasks=0,
-                    added_tasks=0,
-                    removed_tasks=0,
-                    team_members=[],
-                    tasks_by_status={},
-                    tasks_by_assignee={},
-                    message="Sprint not found or no data available."
-                )
-            else:
-                if isinstance(sprint_data_dict, SprintData):
-                    sprint_data = sprint_data_dict
-                else:
-                    sprint_data = self._payload_to_sprint_data(
-                        sprint_data_dict,
-                        project_id,
-                    )
+            sprint_data = self._payload_to_sprint_data(sprint_data_payload, project_id)
         
         # Generate report
         result = SprintReportCalculator.calculate(sprint_data)
@@ -239,73 +196,106 @@ class AnalyticsService:
         
         return result
     
-    def get_project_summary(
-        self,
-        project_id: str
-    ) -> Dict[str, Any]:
+    async def get_project_summary(self, project_id: str) -> Dict[str, Any]:
         """
-        Get high-level project summary with key metrics.
-        
+        Get high-level project summary with key metrics sourced from the provider.
+
         Args:
             project_id: Project identifier
-        
+
         Returns:
             Dictionary with project summary
         """
         cache_key = f"project_summary_{project_id}"
-        
-        # Check cache
         cached = self._get_from_cache(cache_key)
         if cached:
             return cached
-        
-        # Get recent sprints for summary
-        sprint_history = self.mock_generator.generate_sprint_history(
-            project_id=project_id,
-            num_sprints=3
-        )
-        
-        if not sprint_history:
-            return {
+
+        if not self.adapter:
+            raise ValueError("Analytics adapter not configured for this project.")
+
+        velocity_payloads = await self.adapter.get_velocity_data(project_id, sprint_count=3)
+        if not velocity_payloads:
+            summary = {
                 "project_id": project_id,
-                "error": "No sprint data available"
+                "error": "No sprint data available",
             }
-        
-        # Calculate summary metrics
-        latest_sprint = sprint_history[-1]
-        velocity_chart = VelocityCalculator.calculate(sprint_history)
-        
-        total_items = sum(len(sprint.work_items) for sprint in sprint_history)
+            self._set_cache(cache_key, summary)
+            return summary
+
+        sprints: List[SprintData] = [
+            self._payload_to_sprint_data(payload, project_id)
+            if not isinstance(payload, SprintData)
+            else payload
+            for payload in velocity_payloads
+        ]
+        velocity_chart = VelocityCalculator.calculate(sprints)
+
+        latest_payload = velocity_payloads[-1]
+        latest_sprint_id = None
+        if isinstance(latest_payload, dict):
+            latest_sprint_id = latest_payload.get("sprint_id") or latest_payload.get("id")
+        elif isinstance(latest_payload, SprintData):
+            latest_sprint_id = latest_payload.id
+
+        latest_report: Optional[SprintData] = None
+        if latest_sprint_id:
+            try:
+                sprint_report_payload = await self.adapter.get_sprint_report_data(
+                    latest_sprint_id, project_id
+                )
+                if isinstance(sprint_report_payload, SprintData):
+                    latest_report = sprint_report_payload
+                elif sprint_report_payload:
+                    latest_report = self._payload_to_sprint_data(sprint_report_payload, project_id)
+            except Exception as exc:  # pragma: no cover - best effort logging
+                logger.warning(
+                    "Failed to fetch detailed sprint report for %s: %s",
+                    latest_sprint_id,
+                    exc,
+                )
+
+        if latest_report is None and sprints:
+            latest_report = sprints[-1]
+
+        total_items = sum(len(sprint.work_items) for sprint in sprints)
         completed_items = sum(
-            len([item for item in sprint.work_items if item.status.value == "done"])
-            for sprint in sprint_history
+            len([item for item in sprint.work_items if item.status == TaskStatus.DONE])
+            for sprint in sprints
         )
-        
+
+        team_size = len(latest_report.team_members) if latest_report else 0
+        progress = 0.0
+        if latest_report and latest_report.planned_points:
+            progress = (
+                (latest_report.completed_points or 0) / latest_report.planned_points * 100
+            )
+
         summary = {
             "project_id": project_id,
             "current_sprint": {
-                "id": latest_sprint.id,
-                "name": latest_sprint.name,
-                "status": latest_sprint.status,
-                "progress": round((latest_sprint.completed_points or 0) / (latest_sprint.planned_points or 1) * 100, 1)
+                "id": latest_report.id if latest_report else latest_sprint_id,
+                "name": latest_report.name if latest_report else latest_sprint_id,
+                "status": latest_report.status if latest_report else "unknown",
+                "progress": round(progress, 1) if progress else 0,
             },
             "velocity": {
                 "average": velocity_chart.metadata.get("average_velocity", 0),
                 "latest": velocity_chart.metadata.get("latest_velocity", 0),
-                "trend": velocity_chart.metadata.get("trend", "stable")
+                "trend": velocity_chart.metadata.get("trend", "stable"),
             },
             "overall_stats": {
                 "total_items": total_items,
                 "completed_items": completed_items,
-                "completion_rate": round(completed_items / total_items * 100, 1) if total_items > 0 else 0
+                "completion_rate": round(completed_items / total_items * 100, 1)
+                if total_items > 0
+                else 0,
             },
-            "team_size": len(latest_sprint.team_members),
-            "generated_at": datetime.now().isoformat()
+            "team_size": team_size,
+            "recent_trends": velocity_chart.metadata.get("velocity_by_sprint", []),
         }
-        
-        # Cache result
+
         self._set_cache(cache_key, summary)
-        
         return summary
     
     def _get_from_cache(self, key: str) -> Optional[Any]:
@@ -348,35 +338,22 @@ class AnalyticsService:
         if cached:
             return cached
         
-        # Get data based on source
-        if self.data_source == "mock":
-            # Generate mock CFD data
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days_back)
-            
-            # Generate work items with status history
-            work_items = self.mock_generator.generate_cfd_data(
-                num_items=50,
-                start_date=start_date,
-                end_date=end_date
+        if not self.adapter:
+            logger.info("No analytics adapter configured for project %s", project_id)
+            return ChartResponse(
+                chart_type=ChartType.CFD,
+                title="Cumulative Flow Diagram",
+                series=[],
+                metadata={"message": "No data source configured for this project."},
             )
-            
-            # Calculate CFD
-            chart = calculate_cfd(
-                work_items=work_items,
-                start_date=start_date,
-                end_date=end_date,
-                statuses=["To Do", "In Progress", "In Review", "Done"]
-            )
-        else:
-            # Fetch real data from adapter
-            cfd_data = await self.adapter.get_cfd_data(project_id, sprint_id, days_back)
-            chart = calculate_cfd(
-                work_items=cfd_data["work_items"],
-                start_date=cfd_data["start_date"],
-                end_date=cfd_data["end_date"],
-                statuses=cfd_data["statuses"]
-            )
+
+        cfd_data = await self.adapter.get_cfd_data(project_id, sprint_id, days_back)
+        chart = calculate_cfd(
+            work_items=cfd_data["work_items"],
+            start_date=cfd_data["start_date"],
+            end_date=cfd_data["end_date"],
+            statuses=cfd_data["statuses"],
+        )
         
         # Cache result
         self._set_cache(cache_key, chart)
@@ -405,25 +382,17 @@ class AnalyticsService:
         if cached:
             return cached
         
-        # Get data based on source
-        if self.data_source == "mock":
-            # Generate mock cycle time data
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days_back)
-            
-            # Generate work items with cycle time
-            work_items = self.mock_generator.generate_cycle_time_data(
-                num_items=50,
-                start_date=start_date,
-                end_date=end_date
+        if not self.adapter:
+            logger.info("No analytics adapter configured for project %s", project_id)
+            return ChartResponse(
+                chart_type=ChartType.CYCLE_TIME,
+                title="Cycle Time",
+                series=[],
+                metadata={"message": "No data source configured for this project."},
             )
-            
-            # Calculate cycle time metrics
-            chart = calculate_cycle_time(work_items=work_items)
-        else:
-            # Fetch real data from adapter
-            work_items = await self.adapter.get_cycle_time_data(project_id, sprint_id, days_back)
-            chart = calculate_cycle_time(work_items=work_items)
+
+        work_items = await self.adapter.get_cycle_time_data(project_id, sprint_id, days_back)
+        chart = calculate_cycle_time(work_items=work_items)
         
         # Cache result
         self._set_cache(cache_key, chart)
@@ -452,23 +421,17 @@ class AnalyticsService:
         if cached:
             return cached
         
-        # Get data based on source
-        if self.data_source == "mock":
-            # Generate mock work distribution data
-            work_items = self.mock_generator.generate_work_distribution_data(num_items=50)
-            
-            # Calculate distribution
-            chart = calculate_work_distribution(
-                work_items=work_items,
-                dimension=dimension
+        if not self.adapter:
+            logger.info("No analytics adapter configured for project %s", project_id)
+            return ChartResponse(
+                chart_type=ChartType.DISTRIBUTION,
+                title="Work Distribution",
+                series=[],
+                metadata={"message": "No data source configured for this project."},
             )
-        else:
-            # Fetch real data from adapter
-            work_items = await self.adapter.get_work_distribution_data(project_id, sprint_id)
-            chart = calculate_work_distribution(
-                work_items=work_items,
-                dimension=dimension
-            )
+
+        work_items = await self.adapter.get_work_distribution_data(project_id, sprint_id)
+        chart = calculate_work_distribution(work_items=work_items, dimension=dimension)
         
         # Cache result
         self._set_cache(cache_key, chart)
@@ -497,32 +460,21 @@ class AnalyticsService:
         if cached:
             return cached
         
-        # Get data based on source
-        if self.data_source == "mock":
-            # Generate mock issue trend data
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days_back)
-            
-            work_items = self.mock_generator.generate_issue_trend_data(
-                num_items=100,
-                start_date=start_date,
-                end_date=end_date
+        if not self.adapter:
+            logger.info("No analytics adapter configured for project %s", project_id)
+            return ChartResponse(
+                chart_type=ChartType.TREND,
+                title="Issue Trend",
+                series=[],
+                metadata={"message": "No data source configured for this project."},
             )
-            
-            # Calculate trend
-            chart = calculate_issue_trend(
-                work_items=work_items,
-                start_date=start_date,
-                end_date=end_date
-            )
-        else:
-            # Fetch real data from adapter
-            trend_data = await self.adapter.get_issue_trend_data(project_id, days_back, sprint_id)
-            chart = calculate_issue_trend(
-                work_items=trend_data["work_items"],
-                start_date=trend_data["start_date"],
-                end_date=trend_data["end_date"]
-            )
+
+        trend_data = await self.adapter.get_issue_trend_data(project_id, days_back, sprint_id)
+        chart = calculate_issue_trend(
+            work_items=trend_data["work_items"],
+            start_date=trend_data["start_date"],
+            end_date=trend_data["end_date"],
+        )
         
         # Cache result
         self._set_cache(cache_key, chart)
@@ -657,6 +609,15 @@ class AnalyticsService:
         project_id: str,
     ) -> SprintData:
         sprint_info = payload.get("sprint", {}) or {}
+        if not sprint_info:
+            sprint_info = {
+                "id": payload.get("sprint_id") or payload.get("id"),
+                "name": payload.get("name"),
+                "project_id": payload.get("project_id"),
+                "start_date": payload.get("start_date"),
+                "end_date": payload.get("end_date"),
+                "status": payload.get("status"),
+            }
         project = str(payload.get("project_id") or project_id)
 
         start_dt = cls._parse_datetime(sprint_info.get("start_date"))

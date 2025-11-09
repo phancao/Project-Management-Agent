@@ -57,14 +57,16 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         """Fetch burndown data from PM provider"""
         logger.info(f"[PMProviderAnalyticsAdapter] Fetching burndown data: project={project_id}, sprint={sprint_id}")
         
+        project_key = self._extract_project_key(project_id)
+
         try:
             # Get sprint info
             if not sprint_id:
                 # Get active sprint
-                sprints = await self.provider.list_sprints(project_id=project_id, state="active")
+                sprints = await self.provider.list_sprints(project_id=project_key, state="active")
                 if not sprints:
                     # Fallback to any sprint
-                    sprints = await self.provider.list_sprints(project_id=project_id)
+                    sprints = await self.provider.list_sprints(project_id=project_key)
                 if not sprints:
                     # No sprints found - return None to signal fallback to mock data
                     logger.warning(f"[PMProviderAnalyticsAdapter] No sprints found for project {project_id}, will use mock data")
@@ -78,7 +80,6 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 raise ValueError(f"Sprint {sprint_id} not found")
             
             # Get all tasks in the sprint
-            project_key = self._extract_project_key(project_id)
             all_tasks = await self.provider.list_tasks(project_id=project_key)
             sprint_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
             
@@ -132,9 +133,11 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         """Fetch velocity data from PM provider"""
         logger.info(f"[PMProviderAnalyticsAdapter] Fetching velocity data: project={project_id}, num_sprints={num_sprints}")
         
+        project_key = self._extract_project_key(project_id)
+
         try:
             # Get recent sprints
-            all_sprints = await self.provider.list_sprints(project_id=project_id)
+            all_sprints = await self.provider.list_sprints(project_id=project_key)
             
             if not all_sprints:
                 logger.warning(f"[PMProviderAnalyticsAdapter] No sprints found for project {project_id}")
@@ -154,11 +157,9 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             
             velocity_data = []
             
-            project_key = self._extract_project_key(project_id)
+            all_tasks = await self.provider.list_tasks(project_id=project_key)
             
             for sprint in sorted_sprints:
-                # Get tasks for this sprint
-                all_tasks = await self.provider.list_tasks(project_id=project_key)
                 sprint_tasks = [t for t in all_tasks if t.sprint_id == sprint.id]
                 
                 # Calculate planned and completed
@@ -186,6 +187,7 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                         completed_count += 1
                 
                 velocity_data.append({
+                    "sprint_id": sprint.id,
                     "name": sprint.name,
                     "start_date": sprint.start_date.isoformat() if sprint.start_date else None,
                     "end_date": sprint.end_date.isoformat() if sprint.end_date else None,

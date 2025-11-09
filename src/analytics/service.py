@@ -1,6 +1,6 @@
 """Analytics service - main entry point for chart generation."""
 
-from typing import Optional, Literal, Dict, Any, List
+from typing import Optional, Literal, Dict, Any, List, Union
 from datetime import datetime, timedelta, date
 import logging
 
@@ -13,6 +13,7 @@ from src.analytics.models import (
     TaskStatus,
     Priority,
 )
+from src.pm_providers.models import PMTask
 
 logger = logging.getLogger(__name__)
 from src.analytics.mock_data import MockDataGenerator
@@ -533,9 +534,13 @@ class AnalyticsService:
         self._cache.clear()
 
     @staticmethod
-    def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+    def _parse_datetime(value: Optional[Union[str, datetime, date]]) -> Optional[datetime]:
         if not value:
             return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, date):
+            return datetime.combine(value, datetime.min.time())
         try:
             return datetime.fromisoformat(value)
         except ValueError:
@@ -548,7 +553,9 @@ class AnalyticsService:
             return None
 
     @staticmethod
-    def _map_status(value: Optional[str]) -> TaskStatus:
+    def _map_status(value: Optional[Union[str, TaskStatus]]) -> TaskStatus:
+        if isinstance(value, TaskStatus):
+            return value
         text = (value or "").lower()
         if "review" in text:
             return TaskStatus.IN_REVIEW
@@ -561,7 +568,9 @@ class AnalyticsService:
         return TaskStatus.TODO
 
     @staticmethod
-    def _map_type(value: Optional[str]) -> WorkItemType:
+    def _map_type(value: Optional[Union[str, WorkItemType]]) -> WorkItemType:
+        if isinstance(value, WorkItemType):
+            return value
         text = (value or "").lower()
         if "story" in text:
             return WorkItemType.STORY
@@ -574,7 +583,9 @@ class AnalyticsService:
         return WorkItemType.TASK
 
     @staticmethod
-    def _map_priority(value: Optional[str]) -> Priority:
+    def _map_priority(value: Optional[Union[str, Priority]]) -> Priority:
+        if isinstance(value, Priority):
+            return value
         text = (value or "").lower()
         if text in {"critical", "highest"}:
             return Priority.CRITICAL
@@ -596,7 +607,31 @@ class AnalyticsService:
         return "active"
 
     @classmethod
-    def _dict_to_work_item(cls, data: Dict[str, Any]) -> WorkItem:
+    def _to_work_item(cls, data: Union[Dict[str, Any], WorkItem, PMTask]) -> WorkItem:
+        if isinstance(data, WorkItem):
+            return data
+
+        if isinstance(data, PMTask):
+            raw = data.raw_data or {}
+            story_points = raw.get("storyPoints")
+            if story_points is None and data.estimated_hours:
+                story_points = data.estimated_hours / 8
+            created = cls._parse_datetime(data.created_at) or datetime.utcnow()
+            completed = cls._parse_datetime(data.completed_at)
+            return WorkItem(
+                id=str(data.id or "unknown"),
+                title=str(data.title or "Untitled"),
+                type=cls._map_type(raw.get("type")),
+                status=cls._map_status(data.status),
+                priority=cls._map_priority(data.priority),
+                story_points=story_points,
+                estimated_hours=data.estimated_hours,
+                actual_hours=data.actual_hours,
+                assigned_to=data.assignee_id,
+                created_at=created,
+                completed_at=completed,
+            )
+
         created = cls._parse_datetime(data.get("created_at"))
         if not created:
             created = datetime.utcnow()
@@ -630,15 +665,15 @@ class AnalyticsService:
         end_date = end_dt.date() if end_dt else start_date
 
         work_items = [
-            cls._dict_to_work_item(item)
+            cls._to_work_item(item)
             for item in payload.get("tasks", [])
         ]
         added_items = [
-            cls._dict_to_work_item(item)
+            cls._to_work_item(item)
             for item in payload.get("added_items", [])
         ]
         removed_items = [
-            cls._dict_to_work_item(item)
+            cls._to_work_item(item)
             for item in payload.get("removed_items", [])
         ]
 

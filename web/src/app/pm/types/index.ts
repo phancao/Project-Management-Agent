@@ -25,7 +25,7 @@ export interface Task {
   assignee_id?: string;
   project_name?: string;
   sprint_id?: string | null;
-  epic_id?: string;
+  epic_id?: string | null;
   project_id?: string;
 }
 

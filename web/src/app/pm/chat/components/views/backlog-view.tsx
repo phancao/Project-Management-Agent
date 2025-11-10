@@ -31,8 +31,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMLoading } from "../../../context/pm-loading-context";
 import { useSprints, type Sprint as SprintSummary } from "~/core/api/hooks/pm/use-sprints";
-import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useTasks } from "~/core/api/hooks/pm/use-tasks";
+import type { Task } from "~/app/pm/types";
 import { useEpics, type Epic } from "~/core/api/hooks/pm/use-epics";
 import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
@@ -80,8 +80,8 @@ function SortableSprintSection(props: SortableSprintSectionProps) {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.85 : undefined,
-    position: isDragging ? "relative" : undefined,
-    pointerEvents: isDragging ? "none" : undefined,
+    position: isDragging ? ("relative" as const) : undefined,
+    pointerEvents: isDragging ? ("none" as const) : undefined,
   };
 
   useEffect(() => {
@@ -106,6 +106,43 @@ function SortableSprintSection(props: SortableSprintSectionProps) {
         dragHandleProps={{ attributes, listeners }}
         isSorting={isDragging}
       />
+    </div>
+  );
+}
+
+interface SprintCategoryDropZoneProps {
+  category: SprintStatusCategory;
+  title: string;
+  descriptionWhenIdle: string;
+  descriptionWhenDragging: string;
+  isSprintDragging: boolean;
+}
+
+function SprintCategoryDropZone({
+  category,
+  title,
+  descriptionWhenIdle,
+  descriptionWhenDragging,
+  isSprintDragging,
+}: SprintCategoryDropZoneProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `sprint-category-${category}`,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={[
+        "rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors duration-150",
+        isOver
+          ? "border-blue-400 bg-blue-50 text-blue-600 dark:border-blue-500 dark:bg-blue-900/20 dark:text-blue-200"
+          : "border-gray-300 bg-gray-50 text-gray-500 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-400",
+      ].join(" ")}
+    >
+      <div className="text-sm font-medium text-gray-600 dark:text-gray-300">{title}</div>
+      <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        {isSprintDragging ? descriptionWhenDragging : descriptionWhenIdle}
+      </div>
     </div>
   );
 }
@@ -625,6 +662,7 @@ export function BacklogView() {
   const [overEpicId, setOverEpicId] = useState<string | null>(null);
   const [sprintCategoryOverrides, setSprintCategoryOverrides] = useState<Record<string, SprintStatusCategory>>({});
   const lastSprintHoverIdRef = useRef<string | null>(null);
+  const lastSprintCategoryRef = useRef<SprintStatusCategory | null>(null);
   const { activeProjectId, activeProject, projectIdForData: projectIdForSprints } = useProjectData();
   const { state: loadingState, setTasksState } = usePMLoading();
   
@@ -637,6 +675,14 @@ export function BacklogView() {
   
   const shouldLoadTasks = loadingState.canLoadTasks && projectIdForSprints;
   const { tasks: allTasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
+
+  const normalizedTasksForFiltering = useMemo<Task[]>(() => {
+    if (!allTasks) return [];
+    return allTasks.map((task) => ({
+      ...task,
+      sprint_id: task.sprint_id ?? null,
+    })) as Task[];
+  }, [allTasks]);
   
   useEffect(() => {
     if (shouldLoadTasks) {
@@ -647,7 +693,7 @@ export function BacklogView() {
   }, [shouldLoadTasks, loading, error, allTasks, setTasksState, projectIdForSprints]);
   
   const { tasks } = useTaskFiltering({
-    allTasks,
+    allTasks: normalizedTasksForFiltering,
     projectId: projectIdForSprints,
     activeProject,
     loading,
@@ -1003,6 +1049,9 @@ export function BacklogView() {
       logSprintDnd("Drag start (sprint)", { sprintId });
       setDragState({ type: 'sprint', id: sprintId });
       lastSprintHoverIdRef.current = sprintId;
+    const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
+    const sprint = reference.find((item) => String(item.id) === sprintId);
+    lastSprintCategoryRef.current = sprint ? resolveSprintCategory(sprint) : null;
     }
   };
 
@@ -1022,10 +1071,22 @@ export function BacklogView() {
         const targetSprintId = overId.replace("sprint-", "");
         setOverSprintId(targetSprintId);
         lastSprintHoverIdRef.current = targetSprintId;
+      const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
+      const targetSprint = reference.find((item) => String(item.id) === targetSprintId);
+      lastSprintCategoryRef.current = targetSprint ? resolveSprintCategory(targetSprint) : lastSprintCategoryRef.current;
         logSprintDnd("Drag over sprint (reorder)", {
           sprintId: dragState.id,
           targetSprintId,
         });
+    } else if (overId.startsWith("sprint-category-")) {
+      const category = overId.replace("sprint-category-", "") as SprintStatusCategory;
+      setOverSprintId(null);
+      lastSprintHoverIdRef.current = null;
+      lastSprintCategoryRef.current = category;
+      logSprintDnd("Drag over sprint category drop zone", {
+        sprintId: dragState.id,
+        category,
+      });
       } else {
         logSprintDnd("Drag over non-sprint while dragging sprint", {
           sprintId: dragState.id,
@@ -1113,15 +1174,25 @@ export function BacklogView() {
 
     if (!over) {
       logSprintDnd("Drag end without target", { dragType: currentDragState.type });
+      lastSprintCategoryRef.current = null;
       return;
     }
 
     if (currentDragState.type === 'sprint' && currentDragState.id) {
       const overId = String(over.id);
       let targetSprintId: string | null = null;
+      let targetCategory: SprintStatusCategory | null = null;
+
       if (overId.startsWith("sprint-")) {
         targetSprintId = overId.replace("sprint-", "");
         lastSprintHoverIdRef.current = targetSprintId;
+      } else if (overId.startsWith("sprint-category-")) {
+        targetCategory = overId.replace("sprint-category-", "") as SprintStatusCategory;
+        lastSprintHoverIdRef.current = null;
+        logSprintDnd("Sprint drag ended on category drop zone", {
+          sprintId: currentDragState.id,
+          category: targetCategory,
+        });
       } else if (previousOverSprintId) {
         targetSprintId = previousOverSprintId;
         logSprintDnd("Sprint drag using last hovered target", {
@@ -1129,37 +1200,66 @@ export function BacklogView() {
           targetSprintId,
           overId,
         });
-      } else if (previousOverSprintId) {
-        targetSprintId = previousOverSprintId;
+      } else if (lastSprintCategoryRef.current) {
+        targetCategory = lastSprintCategoryRef.current;
+        logSprintDnd("Sprint drag using last hovered category", {
+          sprintId: currentDragState.id,
+          category: targetCategory,
+          overId,
+        });
       } else {
-        logSprintDnd("Sprint drag ended over non-sprint target", {
+        logSprintDnd("Sprint drag ended without identifiable target", {
           sprintId: currentDragState.id,
           overId,
         });
         return;
       }
 
-      const orderedSource = orderedSprints.length > 0 ? orderedSprints : sprints;
-      const sourceSprint = orderedSource.find((s) => String(s.id) === currentDragState.id);
-
-      if (targetSprintId === currentDragState.id) {
-        logSprintDnd("Sprint drag ended on same sprint", { sprintId: currentDragState.id });
-        return;
+      if (!targetSprintId && lastSprintHoverIdRef.current) {
+        targetSprintId = lastSprintHoverIdRef.current;
       }
 
-      const targetSprint = orderedSource.find((s) => String(s.id) === targetSprintId);
+      const orderedSource = orderedSprints.length > 0 ? orderedSprints : sprints;
+      const sourceSprint = orderedSource.find((s) => String(s.id) === currentDragState.id);
+      const targetSprint = targetSprintId
+        ? orderedSource.find((s) => String(s.id) === targetSprintId)
+        : null;
 
-      if (!sourceSprint || !targetSprint) {
-        logSprintDnd("Sprint drag end failed to resolve sprints", {
+      if (!sourceSprint) {
+        logSprintDnd("Sprint drag end missing source sprint", {
           sourceSprintId: currentDragState.id,
           targetSprintId,
         });
         return;
       }
 
+      if (targetSprintId === currentDragState.id && (!targetCategory || targetCategory === resolveSprintCategory(sourceSprint))) {
+        logSprintDnd("Sprint drag ended on same sprint", { sprintId: currentDragState.id });
+        return;
+      }
+
+      if (!targetSprint && !targetCategory) {
+        logSprintDnd("Sprint drag missing target resolution", {
+          sourceSprintId: sourceSprint.id,
+          targetSprintId,
+        });
+        return;
+      }
+
+      if (!targetCategory && targetSprint) {
+        targetCategory = resolveSprintCategory(targetSprint);
+      }
+
+      if (!targetCategory && lastSprintCategoryRef.current) {
+        targetCategory = lastSprintCategoryRef.current;
+      }
+
+      if (!targetCategory) {
+        targetCategory = resolveSprintCategory(sourceSprint);
+      }
+
       const resolvedSourceCategory = resolveSprintCategory(sourceSprint);
-      const resolvedTargetCategory = resolveSprintCategory(targetSprint);
-      const desiredCategory = resolvedTargetCategory;
+      const desiredCategory = targetCategory;
       const actualSourceCategory = getSprintStatusCategory(sourceSprint.status);
 
       setSprintOrder((previous) => {
@@ -1192,10 +1292,10 @@ export function BacklogView() {
           next[category] = list;
         };
 
-        if (resolvedSourceCategory === resolvedTargetCategory) {
-          insertIntoCategory(resolvedSourceCategory, targetSprint.id);
-        } else {
+        if (targetSprint) {
           insertIntoCategory(desiredCategory, targetSprint.id);
+        } else {
+          insertIntoCategory(desiredCategory, null);
         }
 
         logSprintDnd("Sprint drag applied ordering change", {
@@ -1219,6 +1319,7 @@ export function BacklogView() {
       });
 
       lastSprintHoverIdRef.current = null;
+      lastSprintCategoryRef.current = null;
       return;
     }
 
@@ -1468,52 +1569,72 @@ export function BacklogView() {
             ) : (
               <div className="max-w-5xl mx-auto">
                 {/* Active sprints */}
-                {activeSprints.length > 0 && (
+                {(activeSprints.length > 0 || dragState.type === 'sprint') && (
                   <div className="mb-6">
                     <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-1">
                       Active Sprints
                     </h2>
-                    <SortableContext
-                      items={activeSprints.map((sprint) => `sprint-${sprint.id}`)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {activeSprints.map((sprint) => (
-                        <SortableSprintSection
-                          key={sprint.id}
-                          sprint={sprint}
-                          tasks={tasksInSprints[sprint.id] ?? []}
-                          onTaskClick={handleTaskClick}
-                          epicsMap={epicsMap}
-                          isOver={overSprintId === sprint.id}
-                          draggedTaskId={draggedTaskId}
-                        />
-                      ))}
-                    </SortableContext>
+                    {activeSprints.length > 0 ? (
+                      <SortableContext
+                        items={activeSprints.map((sprint) => `sprint-${sprint.id}`)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {activeSprints.map((sprint) => (
+                          <SortableSprintSection
+                            key={sprint.id}
+                            sprint={sprint}
+                            tasks={tasksInSprints[sprint.id] ?? []}
+                            onTaskClick={handleTaskClick}
+                            epicsMap={epicsMap}
+                            isOver={overSprintId === sprint.id}
+                            draggedTaskId={draggedTaskId}
+                          />
+                        ))}
+                      </SortableContext>
+                    ) : (
+                      <SprintCategoryDropZone
+                        category="active"
+                        title="No active sprints"
+                        descriptionWhenIdle="There are currently no active sprints."
+                        descriptionWhenDragging="Drop a sprint here to move it into the Active group."
+                        isSprintDragging={dragState.type === 'sprint'}
+                      />
+                    )}
                   </div>
                 )}
                 
                 {/* Future sprints */}
-                {futureSprints.length > 0 && (
+                {(futureSprints.length > 0 || dragState.type === 'sprint') && (
                   <div className="mb-6">
                     <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-1">
                       Future Sprints
                     </h2>
-                    <SortableContext
-                      items={futureSprints.map((sprint) => `sprint-${sprint.id}`)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {futureSprints.map((sprint) => (
-                        <SortableSprintSection
-                          key={sprint.id}
-                          sprint={sprint}
-                          tasks={tasksInSprints[sprint.id] ?? []}
-                          onTaskClick={handleTaskClick}
-                          epicsMap={epicsMap}
-                          isOver={overSprintId === sprint.id}
-                          draggedTaskId={draggedTaskId}
-                        />
-                      ))}
-                    </SortableContext>
+                    {futureSprints.length > 0 ? (
+                      <SortableContext
+                        items={futureSprints.map((sprint) => `sprint-${sprint.id}`)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {futureSprints.map((sprint) => (
+                          <SortableSprintSection
+                            key={sprint.id}
+                            sprint={sprint}
+                            tasks={tasksInSprints[sprint.id] ?? []}
+                            onTaskClick={handleTaskClick}
+                            epicsMap={epicsMap}
+                            isOver={overSprintId === sprint.id}
+                            draggedTaskId={draggedTaskId}
+                          />
+                        ))}
+                      </SortableContext>
+                    ) : (
+                      <SprintCategoryDropZone
+                        category="future"
+                        title="No future sprints"
+                        descriptionWhenIdle="There are no upcoming sprints scheduled."
+                        descriptionWhenDragging="Drop a sprint here to plan it for the future."
+                        isSprintDragging={dragState.type === 'sprint'}
+                      />
+                    )}
                   </div>
                 )}
                 
@@ -1532,52 +1653,72 @@ export function BacklogView() {
                 </div>
                 
                 {/* Closed sprints */}
-                {closedSprints.length > 0 && (
+                {(closedSprints.length > 0 || dragState.type === 'sprint') && (
                   <div className="mb-6">
                     <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-1">
                       Closed Sprints
                     </h2>
-                    <SortableContext
-                      items={closedSprints.map((sprint) => `sprint-${sprint.id}`)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {closedSprints.map((sprint) => (
-                        <SortableSprintSection
-                          key={sprint.id}
-                          sprint={sprint}
-                          tasks={tasksInSprints[sprint.id] ?? []}
-                          onTaskClick={handleTaskClick}
-                          epicsMap={epicsMap}
-                          isOver={overSprintId === sprint.id}
-                          draggedTaskId={draggedTaskId}
-                        />
-                      ))}
-                    </SortableContext>
+                    {closedSprints.length > 0 ? (
+                      <SortableContext
+                        items={closedSprints.map((sprint) => `sprint-${sprint.id}`)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {closedSprints.map((sprint) => (
+                          <SortableSprintSection
+                            key={sprint.id}
+                            sprint={sprint}
+                            tasks={tasksInSprints[sprint.id] ?? []}
+                            onTaskClick={handleTaskClick}
+                            epicsMap={epicsMap}
+                            isOver={overSprintId === sprint.id}
+                            draggedTaskId={draggedTaskId}
+                          />
+                        ))}
+                      </SortableContext>
+                    ) : (
+                      <SprintCategoryDropZone
+                        category="closed"
+                        title="No closed sprints"
+                        descriptionWhenIdle="No sprints have been closed yet."
+                        descriptionWhenDragging="Drop a sprint here to move it into the Closed group."
+                        isSprintDragging={dragState.type === 'sprint'}
+                      />
+                    )}
                   </div>
                 )}
 
                 {/* Other sprints */}
-                {otherSprints.length > 0 && (
+                {(otherSprints.length > 0 || dragState.type === 'sprint') && (
                   <div className="mb-6">
                     <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-1">
                       Other Sprints
                     </h2>
-                    <SortableContext
-                      items={otherSprints.map((sprint) => `sprint-${sprint.id}`)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {otherSprints.map((sprint) => (
-                        <SortableSprintSection
-                          key={sprint.id}
-                          sprint={sprint}
-                          tasks={tasksInSprints[sprint.id] ?? []}
-                  onTaskClick={handleTaskClick}
-                  epicsMap={epicsMap}
-                          isOver={overSprintId === sprint.id}
-                          draggedTaskId={draggedTaskId}
-                />
-                      ))}
-                    </SortableContext>
+                    {otherSprints.length > 0 ? (
+                      <SortableContext
+                        items={otherSprints.map((sprint) => `sprint-${sprint.id}`)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {otherSprints.map((sprint) => (
+                          <SortableSprintSection
+                            key={sprint.id}
+                            sprint={sprint}
+                            tasks={tasksInSprints[sprint.id] ?? []}
+                            onTaskClick={handleTaskClick}
+                            epicsMap={epicsMap}
+                            isOver={overSprintId === sprint.id}
+                            draggedTaskId={draggedTaskId}
+                          />
+                        ))}
+                      </SortableContext>
+                    ) : (
+                      <SprintCategoryDropZone
+                        category="other"
+                        title="No uncategorized sprints"
+                        descriptionWhenIdle="There are no sprints in the Other group."
+                        descriptionWhenDragging="Drop a sprint here to move it into the Other group."
+                        isSprintDragging={dragState.type === 'sprint'}
+                      />
+                    )}
                   </div>
                 )}
               </div>

@@ -23,6 +23,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar } from "lucide-react";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { useRef } from "react";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 
 import { Button } from "~/components/ui/button";
@@ -621,6 +622,7 @@ export function BacklogView() {
   const [overSprintId, setOverSprintId] = useState<string | null>(null);
   const [overTaskId, setOverTaskId] = useState<string | null>(null);
   const [overEpicId, setOverEpicId] = useState<string | null>(null);
+  const lastSprintHoverIdRef = useRef<string | null>(null);
   
   const { activeProjectId, activeProject, projectIdForData: projectIdForSprints } = useProjectData();
   const { state: loadingState, setTasksState } = usePMLoading();
@@ -976,6 +978,7 @@ export function BacklogView() {
       const sprintId = activeId.replace('sprint-', '');
       logSprintDnd("Drag start (sprint)", { sprintId });
       setDragState({ type: 'sprint', id: sprintId });
+      lastSprintHoverIdRef.current = sprintId;
     }
   };
 
@@ -994,12 +997,12 @@ export function BacklogView() {
       if (overId.startsWith("sprint-")) {
         const targetSprintId = overId.replace("sprint-", "");
         setOverSprintId(targetSprintId);
+        lastSprintHoverIdRef.current = targetSprintId;
         logSprintDnd("Drag over sprint (reorder)", {
           sprintId: dragState.id,
           targetSprintId,
         });
       } else {
-        setOverSprintId(null);
         logSprintDnd("Drag over non-sprint while dragging sprint", {
           sprintId: dragState.id,
           overId,
@@ -1078,7 +1081,7 @@ export function BacklogView() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { over } = event;
     const currentDragState = dragState;
-    const previousOverSprintId = overSprintId;
+    const previousOverSprintId = overSprintId ?? lastSprintHoverIdRef.current;
     setDragState({ type: null, id: null });
     setOverSprintId(null);
     setOverTaskId(null);
@@ -1095,6 +1098,7 @@ export function BacklogView() {
       let dropOverBacklog = false;
       if (overId.startsWith("sprint-")) {
         targetSprintId = overId.replace("sprint-", "");
+        lastSprintHoverIdRef.current = targetSprintId;
       } else if (previousOverSprintId) {
         targetSprintId = previousOverSprintId;
         dropOverBacklog = overId === "backlog";
@@ -1199,6 +1203,7 @@ export function BacklogView() {
         };
       });
 
+      lastSprintHoverIdRef.current = null;
       return;
     }
 

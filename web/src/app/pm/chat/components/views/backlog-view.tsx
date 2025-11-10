@@ -132,10 +132,9 @@ const createEmptySprintOrder = (): SprintOrderState => ({
   other: [],
 });
 
-const isDev = process.env.NODE_ENV !== "production";
 const logSprintDnd = (...args: unknown[]) => {
-  if (isDev) {
-    console.debug("[Backlog][SprintDND]", ...args);
+  if (typeof window !== "undefined") {
+    console.log("[Backlog][SprintDND]", ...args);
   }
 };
 

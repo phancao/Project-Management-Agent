@@ -1083,11 +1083,9 @@ export function BacklogView() {
     if (currentDragState.type === 'sprint' && currentDragState.id) {
       const overId = String(over.id);
       let targetSprintId: string | null = null;
-      let dropOverSprint = false;
       let dropOverBacklog = false;
       if (overId.startsWith("sprint-")) {
         targetSprintId = overId.replace("sprint-", "");
-        dropOverSprint = true;
       } else if (previousOverSprintId) {
         targetSprintId = previousOverSprintId;
         dropOverBacklog = overId === "backlog";
@@ -1107,16 +1105,6 @@ export function BacklogView() {
       }
 
       const sourceSprint = sprints.find((s) => String(s.id) === currentDragState.id);
-
-      if (dropOverBacklog && sourceSprint) {
-        const sourceCategory = getSprintStatusCategory(sourceSprint.status);
-        if (sourceCategory === "active") {
-          logSprintDnd("Sprint drag ended over backlog, ignoring for active sprint", {
-            sprintId: currentDragState.id,
-          });
-          return;
-        }
-      }
 
       if (targetSprintId === currentDragState.id) {
         logSprintDnd("Sprint drag ended on same sprint", { sprintId: currentDragState.id });

@@ -876,6 +876,13 @@ export function BacklogView() {
     });
   }, [orderedSprints, sprints, epicFilteredTasks]);
 
+  const draggedTaskId = dragState.type === 'task' ? dragState.id : null;
+
+  const draggedTask = useMemo(() => {
+    if (!draggedTaskId) return null;
+    return tasks.find((task) => String(task.id) === draggedTaskId);
+  }, [draggedTaskId, tasks]);
+
   const availableStatuses = useMemo(() => {
     if (availableStatusesFromBackend && availableStatusesFromBackend.length > 0) {
       return availableStatusesFromBackend.map(status => ({
@@ -1335,7 +1342,7 @@ export function BacklogView() {
                           onTaskClick={handleTaskClick}
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
-                          draggedTaskId={dragState.type === 'task' ? dragState.id : null}
+                          draggedTaskId={draggedTaskId}
                         />
                       ))}
                     </SortableContext>
@@ -1360,7 +1367,7 @@ export function BacklogView() {
                           onTaskClick={handleTaskClick}
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
-                          draggedTaskId={dragState.type === 'task' ? dragState.id : null}
+                          draggedTaskId={draggedTaskId}
                         />
                       ))}
                     </SortableContext>
@@ -1399,7 +1406,7 @@ export function BacklogView() {
                           onTaskClick={handleTaskClick}
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
-                          draggedTaskId={dragState.type === 'task' ? dragState.id : null}
+                          draggedTaskId={draggedTaskId}
                         />
                       ))}
                     </SortableContext>
@@ -1424,7 +1431,7 @@ export function BacklogView() {
                           onTaskClick={handleTaskClick}
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
-                          draggedTaskId={dragState.type === 'task' ? dragState.id : null}
+                          draggedTaskId={draggedTaskId}
                         />
                       ))}
                     </SortableContext>

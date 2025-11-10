@@ -16,14 +16,12 @@ import {
 import { 
   SortableContext, 
   useSortable, 
-  verticalListSortingStrategy,
-  arrayMove 
+  verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar } from "lucide-react";
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { useRef } from "react";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 
 import { Button } from "~/components/ui/button";
@@ -625,8 +623,8 @@ export function BacklogView() {
   const [overSprintId, setOverSprintId] = useState<string | null>(null);
   const [overTaskId, setOverTaskId] = useState<string | null>(null);
   const [overEpicId, setOverEpicId] = useState<string | null>(null);
+  const [sprintCategoryOverrides, setSprintCategoryOverrides] = useState<Record<string, SprintStatusCategory>>({});
   const lastSprintHoverIdRef = useRef<string | null>(null);
-  
   const { activeProjectId, activeProject, projectIdForData: projectIdForSprints } = useProjectData();
   const { state: loadingState, setTasksState } = usePMLoading();
   
@@ -656,6 +654,29 @@ export function BacklogView() {
   });
   
   const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
+
+  useEffect(() => {
+    if (!sprints) return;
+    const ids = new Set(sprints.map((s) => s.id));
+    setSprintCategoryOverrides((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      Object.keys(next).forEach((id) => {
+        if (!ids.has(id)) {
+          delete next[id];
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+  }, [sprints]);
+
+  const resolveSprintCategory = useCallback(
+    (sprint: SprintSummary): SprintStatusCategory => {
+      return sprintCategoryOverrides[sprint.id] ?? getSprintStatusCategory(sprint.status);
+    },
+    [sprintCategoryOverrides]
+  );
   const { epics } = useEpics(projectIdForSprints ?? undefined);
   const { statuses: availableStatusesFromBackend } = useStatuses(projectIdForSprints ?? undefined, "task");
   const { priorities: availablePrioritiesFromBackend } = usePriorities(projectIdForSprints ?? undefined);
@@ -805,7 +826,7 @@ export function BacklogView() {
       };
 
       sprints.forEach((sprint) => {
-        const category = getSprintStatusCategory(sprint.status);
+        const category = resolveSprintCategory(sprint);
         grouped[category].push(sprint);
       });
 
@@ -846,7 +867,7 @@ export function BacklogView() {
 
       return changed ? next : previous;
     });
-  }, [sprints]);
+  }, [sprints, resolveSprintCategory]);
 
   const orderedSprints = useMemo(() => {
     if (!sprints || sprints.length === 0) return [];
@@ -859,7 +880,7 @@ export function BacklogView() {
     };
 
     sprints.forEach((sprint) => {
-      const category = getSprintStatusCategory(sprint.status);
+      const category = resolveSprintCategory(sprint);
       grouped[category].push(sprint);
     });
 
@@ -884,23 +905,23 @@ export function BacklogView() {
     });
 
     return result;
-  }, [sprints, sprintOrder]);
+  }, [sprints, sprintOrder, resolveSprintCategory]);
 
   const activeSprints = useMemo(
-    () => orderedSprints.filter((sprint) => getSprintStatusCategory(sprint.status) === "active"),
-    [orderedSprints]
+    () => orderedSprints.filter((sprint) => resolveSprintCategory(sprint) === "active"),
+    [orderedSprints, resolveSprintCategory]
   );
   const futureSprints = useMemo(
-    () => orderedSprints.filter((sprint) => getSprintStatusCategory(sprint.status) === "future"),
-    [orderedSprints]
+    () => orderedSprints.filter((sprint) => resolveSprintCategory(sprint) === "future"),
+    [orderedSprints, resolveSprintCategory]
   );
   const closedSprints = useMemo(
-    () => orderedSprints.filter((sprint) => getSprintStatusCategory(sprint.status) === "closed"),
-    [orderedSprints]
+    () => orderedSprints.filter((sprint) => resolveSprintCategory(sprint) === "closed"),
+    [orderedSprints, resolveSprintCategory]
   );
   const otherSprints = useMemo(
-    () => orderedSprints.filter((sprint) => getSprintStatusCategory(sprint.status) === "other"),
-    [orderedSprints]
+    () => orderedSprints.filter((sprint) => resolveSprintCategory(sprint) === "other"),
+    [orderedSprints, resolveSprintCategory]
   );
 
   const tasksInSprints = useMemo(() => {
@@ -1098,13 +1119,11 @@ export function BacklogView() {
     if (currentDragState.type === 'sprint' && currentDragState.id) {
       const overId = String(over.id);
       let targetSprintId: string | null = null;
-      let dropOverBacklog = false;
       if (overId.startsWith("sprint-")) {
         targetSprintId = overId.replace("sprint-", "");
         lastSprintHoverIdRef.current = targetSprintId;
       } else if (previousOverSprintId) {
         targetSprintId = previousOverSprintId;
-        dropOverBacklog = overId === "backlog";
         logSprintDnd("Sprint drag using last hovered target", {
           sprintId: currentDragState.id,
           targetSprintId,
@@ -1138,73 +1157,65 @@ export function BacklogView() {
         return;
       }
 
-      const sourceCategory = getSprintStatusCategory(sourceSprint.status);
-      const targetCategory = getSprintStatusCategory(targetSprint.status);
-
-      if (sourceCategory !== targetCategory) {
-        toast.info("Sprints can only be rearranged within the same status group.");
-        logSprintDnd("Sprint drag blocked due to category mismatch", {
-          sourceSprintId: sourceSprint.id,
-          targetSprintId,
-          sourceCategory,
-          targetCategory,
-        });
-        return;
-      }
+      const resolvedSourceCategory = resolveSprintCategory(sourceSprint);
+      const resolvedTargetCategory = resolveSprintCategory(targetSprint);
+      const desiredCategory = resolvedTargetCategory;
+      const actualSourceCategory = getSprintStatusCategory(sourceSprint.status);
 
       setSprintOrder((previous) => {
-        const idsInCategory = (sprints ?? [])
-          .filter((sprint) => getSprintStatusCategory(sprint.status) === sourceCategory)
-          .sort((a, b) => getSprintTimestamp(b) - getSprintTimestamp(a))
-          .map((sprint) => sprint.id);
-
-        const existingGroup = previous[sourceCategory] ?? [];
-        const preserved = existingGroup.filter((id) => idsInCategory.includes(id));
-        const missing = idsInCategory.filter((id) => !preserved.includes(id));
-        const combined = [...preserved, ...missing];
-        logSprintDnd("Sprint drag recalculated group positions", {
-          category: sourceCategory,
-          idsInCategory,
-          preserved,
-          missing,
-        });
-
-        const sourceIndex = combined.indexOf(sourceSprint.id);
-        const targetIndex = combined.indexOf(targetSprint.id);
-
-        if (sourceIndex === -1 || targetIndex === -1) {
-          if (missing.length > 0) {
-            return {
-              ...previous,
-              [sourceCategory]: combined,
-            };
-          }
-          return previous;
-        }
-
-        const reordered = arrayMove(combined, sourceIndex, targetIndex);
-
-        const previousGroup = previous[sourceCategory] ?? [];
-        const groupUnchanged =
-          reordered.length === previousGroup.length &&
-          reordered.every((id, index) => id === previousGroup[index]);
-
-        if (groupUnchanged && missing.length === 0) {
-          logSprintDnd("Sprint drag resulted in no ordering change", {
-            category: sourceCategory,
-            reordered,
-          });
-          return previous;
-        }
-
-        logSprintDnd("Sprint drag applied new ordering", {
-          category: sourceCategory,
-          reordered,
-        });
-        return {
-          ...previous,
-          [sourceCategory]: reordered,
+        const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
+        const next: SprintOrderState = {
+          active: [],
+          future: [],
+          closed: [],
+          other: [],
         };
+
+        reference.forEach((sprint) => {
+          if (String(sprint.id) === String(sourceSprint.id)) {
+            return;
+          }
+          const category = resolveSprintCategory(sprint);
+          next[category] = [...(next[category] ?? []), sprint.id];
+        });
+
+        const insertIntoCategory = (category: SprintStatusCategory, afterId?: string | null) => {
+          const existing = next[category] ?? [];
+          const list = existing.filter((id) => id !== sourceSprint.id);
+          if (afterId) {
+            const targetIndex = list.indexOf(afterId);
+            const insertIndex = targetIndex === -1 ? list.length : targetIndex + 1;
+            list.splice(insertIndex, 0, sourceSprint.id);
+          } else {
+            list.push(sourceSprint.id);
+          }
+          next[category] = list;
+        };
+
+        if (resolvedSourceCategory === resolvedTargetCategory) {
+          insertIntoCategory(resolvedSourceCategory, targetSprint.id);
+        } else {
+          insertIntoCategory(desiredCategory, targetSprint.id);
+        }
+
+        logSprintDnd("Sprint drag applied ordering change", {
+          sourceSprintId: sourceSprint.id,
+          targetSprintId,
+          sourceCategory: resolvedSourceCategory,
+          targetCategory: desiredCategory,
+        });
+
+        return next;
+      });
+
+      setSprintCategoryOverrides((previous) => {
+        const next = { ...previous };
+        if (desiredCategory === actualSourceCategory) {
+          delete next[sourceSprint.id];
+        } else {
+          next[sourceSprint.id] = desiredCategory;
+        }
+        return next;
       });
 
       lastSprintHoverIdRef.current = null;

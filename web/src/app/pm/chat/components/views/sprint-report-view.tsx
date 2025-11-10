@@ -3,23 +3,125 @@
 
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
 import { Card } from "~/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useSprintReport } from "~/core/api/hooks/pm/use-analytics";
 import { useSprints } from "~/core/api/hooks/pm/use-sprints";
-import { useSearchParams } from "next/navigation";
 
 export function SprintReportView() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const projectId = searchParams?.get("project");
-  const { sprints } = useSprints(projectId);
-  
-  // Get the most recent active or completed sprint
-  const currentSprint = sprints?.find(s => s.status === "active") || sprints?.[0];
+  const sprintParam = searchParams?.get("sprint");
+
+  const {
+    sprints,
+    loading: sprintsLoading,
+    error: sprintsError,
+  } = useSprints(projectId ?? "");
+
+  const sortedSprints = useMemo(() => {
+    if (!sprints) return [];
+
+    const normalizeStatus = (status?: string) => (status || "").toLowerCase();
+    const statusPriority = (status?: string) => {
+      const value = normalizeStatus(status);
+      if (["active", "in_progress", "ongoing"].includes(value)) return 0;
+      if (["future", "planned", "planning"].includes(value)) return 1;
+      return 2; // completed/closed or unknown
+    };
+
+    const dateValue = (value?: string) => {
+      if (!value) return Number.MIN_SAFE_INTEGER;
+      const time = new Date(value).getTime();
+      return Number.isNaN(time) ? Number.MIN_SAFE_INTEGER : time;
+    };
+
+    return [...sprints].sort((a, b) => {
+      const statusDiff = statusPriority(a.status) - statusPriority(b.status);
+      if (statusDiff !== 0) return statusDiff;
+
+      const aDate = Math.max(dateValue(a.start_date), dateValue(a.end_date));
+      const bDate = Math.max(dateValue(b.start_date), dateValue(b.end_date));
+
+      return bDate - aDate; // Newest first within the same status bucket
+    });
+  }, [sprints]);
+
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sortedSprints.length) {
+      setSelectedSprintId(null);
+      return;
+    }
+
+    setSelectedSprintId((current) => {
+      if (current && sortedSprints.some((s) => s.id === current)) {
+        return current;
+      }
+      if (sprintParam && sortedSprints.some((s) => s.id === sprintParam)) {
+        return sprintParam;
+      }
+      return sortedSprints[0].id;
+    });
+  }, [sortedSprints, sprintParam]);
   
   const { data: report, isLoading: loading, error } = useSprintReport(
-    currentSprint?.id || null,
+    selectedSprintId,
     projectId
   );
+
+  const handleSprintChange = (value: string) => {
+    setSelectedSprintId(value);
+    if (!searchParams) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("sprint", value);
+    if (projectId) {
+      params.set("project", projectId);
+    }
+    router.replace(`${pathname}?${params.toString()}`);
+  };
+
+  if (sprintsError) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-red-500">Failed to load sprints: {sprintsError.message}</div>
+      </div>
+    );
+  }
+
+  if (!projectId) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-500 dark:text-gray-400">Select a project to view sprint reports.</div>
+      </div>
+    );
+  }
+
+  if (sprintsLoading || (!selectedSprintId && sortedSprints.length > 0)) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-500 dark:text-gray-400">Loading sprints...</div>
+      </div>
+    );
+  }
+
+  if (!sortedSprints.length) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-500 dark:text-gray-400">
+          No sprints found for this project. Create or activate a sprint to view the report.
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -52,15 +154,52 @@ export function SprintReportView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{report.sprint_name} Report</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {new Date(report.duration.start).toLocaleDateString()} - {new Date(report.duration.end).toLocaleDateString()} ({report.duration.days} days)
           </p>
         </div>
-        <div className={`px-3 py-1 rounded-full text-sm font-medium ${completionRate >= 90 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : completionRate >= 70 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
-          {completionRate.toFixed(0)}% Complete
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <Select value={selectedSprintId ?? undefined} onValueChange={handleSprintChange}>
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="Select sprint" />
+            </SelectTrigger>
+            <SelectContent>
+              {sortedSprints.map((sprint) => {
+                const normalizedStatus = (sprint.status || "").toLowerCase();
+                const statusLabel =
+                  normalizedStatus === "active"
+                    ? "Active"
+                    : normalizedStatus === "future"
+                    ? "Planned"
+                    : normalizedStatus === "planning"
+                    ? "Planning"
+                    : normalizedStatus === "closed" || normalizedStatus === "completed"
+                    ? "Completed"
+                    : sprint.status || "Unknown";
+
+                return (
+                  <SelectItem key={sprint.id} value={sprint.id}>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium">{sprint.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {statusLabel}
+                        {sprint.start_date
+                          ? ` • ${new Date(sprint.start_date).toLocaleDateString()}`
+                          : ""}
+                      </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+
+          <div className={`px-3 py-1 rounded-full text-sm font-medium ${completionRate >= 90 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : completionRate >= 70 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
+            {completionRate.toFixed(0)}% Complete
+          </div>
         </div>
       </div>
 

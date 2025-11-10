@@ -981,13 +981,23 @@ export function BacklogView() {
     }
 
     if (dragState.type === 'sprint') {
-      setOverSprintId(null);
+      const overId = String(over.id);
+      if (overId.startsWith("sprint-")) {
+        const targetSprintId = overId.replace("sprint-", "");
+        setOverSprintId(targetSprintId);
+        logSprintDnd("Drag over sprint (reorder)", {
+          sprintId: dragState.id,
+          targetSprintId,
+        });
+      } else {
+        setOverSprintId(null);
+        logSprintDnd("Drag over non-sprint while dragging sprint", {
+          sprintId: dragState.id,
+          overId,
+        });
+      }
       setOverTaskId(null);
       setOverEpicId(null);
-      logSprintDnd("Drag over ignored (sprint over)", {
-        sprintId: dragState.id,
-        overId: String(over.id),
-      });
       return;
     }
 
@@ -1059,6 +1069,7 @@ export function BacklogView() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { over } = event;
     const currentDragState = dragState;
+    const previousOverSprintId = overSprintId;
     setDragState({ type: null, id: null });
     setOverSprintId(null);
     setOverTaskId(null);
@@ -1071,7 +1082,17 @@ export function BacklogView() {
 
     if (currentDragState.type === 'sprint' && currentDragState.id) {
       const overId = String(over.id);
-      if (!overId.startsWith("sprint-")) {
+      let targetSprintId: string | null = null;
+      if (overId.startsWith("sprint-")) {
+        targetSprintId = overId.replace("sprint-", "");
+      } else if (previousOverSprintId) {
+        targetSprintId = previousOverSprintId;
+        logSprintDnd("Sprint drag using last hovered target", {
+          sprintId: currentDragState.id,
+          targetSprintId,
+          overId,
+        });
+      } else {
         logSprintDnd("Sprint drag ended over non-sprint target", {
           sprintId: currentDragState.id,
           overId,
@@ -1079,7 +1100,6 @@ export function BacklogView() {
         return;
       }
 
-      const targetSprintId = overId.replace("sprint-", "");
       if (targetSprintId === currentDragState.id) {
         logSprintDnd("Sprint drag ended on same sprint", { sprintId: currentDragState.id });
         return;

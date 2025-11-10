@@ -1174,6 +1174,7 @@ export function BacklogView() {
     }
 
     if (dragState.type === 'sprint') {
+      const currentSprintId = dragState.id as string;
       const overId = String(over.id);
       const overData = over.data.current as
         | { sortable?: { containerId?: string } }
@@ -1181,15 +1182,29 @@ export function BacklogView() {
 
       const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
 
+      const sourceSprintFull = reference.find((item) => String(item.id) === currentSprintId);
+      const sourceCategory = sourceSprintFull ? resolveSprintCategory(sourceSprintFull) : null;
+
+      const getCategoryIds = (category: SprintStatusCategory | null) => {
+        if (!category) return [];
+        return reference
+          .filter((item) => resolveSprintCategory(item) === category)
+          .map((item) => String(item.id));
+      };
+
+      const derivePosition = (targetId: string | null, category: SprintStatusCategory | null) => {
+        if (!targetId || !category) return "after";
+        const ids = getCategoryIds(category);
+        const sourceIdx = ids.indexOf(currentSprintId);
+        const targetIdx = ids.indexOf(targetId);
+        if (sourceIdx === -1 || targetIdx === -1) {
+          return sourceCategory === category ? "after" : "after";
+        }
+        return sourceIdx > targetIdx ? "before" : "after";
+      };
+
       const activeRect = (event.active.rect.current.translated ??
         event.active.rect.current) as ClientRect | null;
-
-      const computePosition = (targetRect?: ClientRect | null): "before" | "after" => {
-        if (!activeRect || !targetRect) return "after";
-        const activeCenter = activeRect.top + activeRect.height / 2;
-        const targetCenter = targetRect.top + targetRect.height / 2;
-        return activeCenter <= targetCenter ? "before" : "after";
-      };
 
       const resolveContainerSprintId = () => {
         const containerId = overData?.sortable?.containerId;
@@ -1231,7 +1246,18 @@ export function BacklogView() {
         });
         const targetSprint = reference.find((item) => String(item.id) === targetSprintId);
         const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
-        const position = computePosition(over.rect as ClientRect | null);
+        const position = derivePosition(targetSprintId, category);
+
+        if (targetSprintId === currentSprintId) {
+          setSprintPlaceholder({
+            category: category ?? null,
+            targetSprintId,
+            position,
+            atEnd: false,
+          });
+          return;
+        }
+
         setSprintPlaceholder({
           category: category ?? null,
           targetSprintId,
@@ -1253,7 +1279,7 @@ export function BacklogView() {
         if (containerSprintId) {
           const targetSprint = reference.find((item) => String(item.id) === containerSprintId);
           const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
-          const position = computePosition(over.rect as ClientRect | null);
+          const position = derivePosition(containerSprintId, category);
           setSprintPlaceholder({
             category: category ?? null,
             targetSprintId: containerSprintId,
@@ -1554,7 +1580,7 @@ export function BacklogView() {
         activeSortable.containerId === overSortable.containerId;
 
       setSprintOrder((previous) => {
-        const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
+      const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
         const categoryLists: Record<SprintStatusCategory, string[]> = {
           active: [],
           future: [],

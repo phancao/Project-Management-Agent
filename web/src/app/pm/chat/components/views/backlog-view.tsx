@@ -1026,7 +1026,11 @@ export function BacklogView() {
   const activeSprintId = isSprintDragging ? dragState.id : null;
 
   const renderSprintsWithPlaceholder = useCallback(
-    (categorySprints: SprintSummary[], category: SprintStatusCategory) => {
+    (
+      categorySprints: SprintSummary[],
+      category: SprintStatusCategory,
+      sprintRectMap: Map<string, DOMRect>
+    ) => {
       const nodes: ReactNode[] = [];
 
       const placeholderIndex = (() => {
@@ -1045,9 +1049,15 @@ export function BacklogView() {
         if (targetIndex === -1) {
           return sprintPlaceholder.position === "before" ? 0 : categorySprints.length;
         }
-        return sprintPlaceholder.position === "before"
-          ? targetIndex
-          : targetIndex + 1;
+        const targetRect = sprintRectMap.get(sprintPlaceholder.targetSprintId);
+        if (
+          targetRect &&
+          sprintPlaceholder.position === "after" &&
+          targetRect.bottom - targetRect.top < 56 /* approx header height */
+        ) {
+          return targetIndex + 1;
+        }
+        return sprintPlaceholder.position === "before" ? targetIndex : targetIndex + 1;
       })();
 
       categorySprints.forEach((sprint, index) => {
@@ -1977,7 +1987,7 @@ export function BacklogView() {
                         items={activeSprints.map((sprint) => `sprint-${sprint.id}`)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {renderSprintsWithPlaceholder(activeSprints, "active")}
+                        {renderSprintsWithPlaceholder(activeSprints, "active", new Map())}
                       </SortableContext>
                     ) : isSprintDragging ? (
                       overSprintCategory === "active" ? (
@@ -2006,7 +2016,7 @@ export function BacklogView() {
                         items={futureSprints.map((sprint) => `sprint-${sprint.id}`)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {renderSprintsWithPlaceholder(futureSprints, "future")}
+                        {renderSprintsWithPlaceholder(futureSprints, "future", new Map())}
                       </SortableContext>
                     ) : isSprintDragging ? (
                       overSprintCategory === "future" ? (
@@ -2049,7 +2059,7 @@ export function BacklogView() {
                         items={closedSprints.map((sprint) => `sprint-${sprint.id}`)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {renderSprintsWithPlaceholder(closedSprints, "closed")}
+                        {renderSprintsWithPlaceholder(closedSprints, "closed", new Map())}
                       </SortableContext>
                     ) : isSprintDragging ? (
                       overSprintCategory === "closed" ? (
@@ -2078,7 +2088,7 @@ export function BacklogView() {
                         items={otherSprints.map((sprint) => `sprint-${sprint.id}`)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {renderSprintsWithPlaceholder(otherSprints, "other")}
+                        {renderSprintsWithPlaceholder(otherSprints, "other", new Map())}
                       </SortableContext>
                     ) : isSprintDragging ? (
                       overSprintCategory === "other" ? (

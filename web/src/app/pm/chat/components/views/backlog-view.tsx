@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar } from "lucide-react";
+import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar, Loader2 } from "lucide-react";
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
@@ -441,6 +441,8 @@ interface SprintSectionProps {
     listeners?: SyntheticListenerMap;
   };
   isSorting?: boolean;
+  onAddTask?: (sprintId: string) => void;
+  creatingTask?: boolean;
 }
 
 function SprintSection({ 
@@ -451,7 +453,9 @@ function SprintSection({
   isOver,
   draggedTaskId,
   dragHandleProps,
-  isSorting
+  isSorting,
+  onAddTask,
+  creatingTask
 }: SprintSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -550,9 +554,23 @@ function SprintSection({
               ) : (
                 <>
                   <p className="mb-2">No tasks in this sprint</p>
-                  <Button variant="outline" size="sm">
-                    <Plus className="w-4 h-4 mr-1" />
-                    Add task
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onAddTask?.(sprint.id)}
+                    disabled={creatingTask}
+                  >
+                    {creatingTask ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Creating…
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add task
+                      </>
+                    )}
                   </Button>
                 </>
             )}
@@ -686,6 +704,7 @@ export function BacklogView() {
     atEnd: false,
   });
   const [overSprintCategory, setOverSprintCategory] = useState<SprintStatusCategory | null>(null);
+  const [creatingTaskForSprint, setCreatingTaskForSprint] = useState<string | null>(null);
   const lastSprintHoverIdRef = useRef<string | null>(null);
   const lastSprintCategoryRef = useRef<SprintStatusCategory | null>(null);
   const { activeProjectId, activeProject, projectIdForData: projectIdForSprints } = useProjectData();
@@ -821,6 +840,49 @@ export function BacklogView() {
     
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
   }, [projectIdForSprints]);
+
+  const handleCreateTaskForSprint = useCallback(async (sprintId: string) => {
+    if (!projectIdForSprints) {
+      toast.error("Select a project before adding tasks.");
+      return;
+    }
+
+    try {
+      setCreatingTaskForSprint(sprintId);
+      const response = await fetch(resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "New Task",
+          description: "",
+          priority: "medium",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Failed to create task (status ${response.status})`);
+      }
+
+      const data = await response.json();
+      const newTaskId = data?.id;
+      if (!newTaskId) {
+        throw new Error("Task created without an ID.");
+      }
+
+      await handleAssignTaskToSprint(newTaskId, sprintId);
+      await refreshTasks();
+      toast.success("Task created", {
+        description: "A new task was added to the sprint.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to create task:", error);
+      toast.error("Failed to create task", { description: message });
+    } finally {
+      setCreatingTaskForSprint(null);
+    }
+  }, [projectIdForSprints, handleAssignTaskToSprint, refreshTasks]);
 
   const handleMoveTaskToBacklog = useCallback(async (taskId: string) => {
     if (!projectIdForSprints) throw new Error('No project selected');
@@ -1028,8 +1090,7 @@ export function BacklogView() {
   const renderSprintsWithPlaceholder = useCallback(
     (
       categorySprints: SprintSummary[],
-      category: SprintStatusCategory,
-      sprintRectMap: Map<string, DOMRect>
+      category: SprintStatusCategory
     ) => {
       const nodes: ReactNode[] = [];
 
@@ -1066,6 +1127,8 @@ export function BacklogView() {
             epicsMap={epicsMap}
             isOver={dragState.type !== 'sprint' && overSprintId === sprint.id}
             draggedTaskId={draggedTaskId}
+            onAddTask={handleCreateTaskForSprint}
+            creatingTask={creatingTaskForSprint === sprint.id}
           />
         );
       });
@@ -1085,6 +1148,8 @@ export function BacklogView() {
       sprintPlaceholder,
       overSprintId,
       tasksInSprints,
+      handleCreateTaskForSprint,
+      creatingTaskForSprint,
     ]
   );
 
@@ -2019,7 +2084,7 @@ export function BacklogView() {
                         items={activeSprints.map((sprint) => `sprint-${sprint.id}`)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {renderSprintsWithPlaceholder(activeSprints, "active", new Map())}
+                        {renderSprintsWithPlaceholder(activeSprints, "active")}
                       </SortableContext>
                     ) : isSprintDragging ? (
                       overSprintCategory === "active" ? (
@@ -2048,7 +2113,7 @@ export function BacklogView() {
                         items={futureSprints.map((sprint) => `sprint-${sprint.id}`)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {renderSprintsWithPlaceholder(futureSprints, "future", new Map())}
+                        {renderSprintsWithPlaceholder(futureSprints, "future")}
                       </SortableContext>
                     ) : isSprintDragging ? (
                       overSprintCategory === "future" ? (
@@ -2091,7 +2156,7 @@ export function BacklogView() {
                         items={closedSprints.map((sprint) => `sprint-${sprint.id}`)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {renderSprintsWithPlaceholder(closedSprints, "closed", new Map())}
+                        {renderSprintsWithPlaceholder(closedSprints, "closed")}
                       </SortableContext>
                     ) : isSprintDragging ? (
                       overSprintCategory === "closed" ? (
@@ -2120,7 +2185,7 @@ export function BacklogView() {
                         items={otherSprints.map((sprint) => `sprint-${sprint.id}`)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {renderSprintsWithPlaceholder(otherSprints, "other", new Map())}
+                        {renderSprintsWithPlaceholder(otherSprints, "other")}
                       </SortableContext>
                     ) : isSprintDragging ? (
                       overSprintCategory === "other" ? (

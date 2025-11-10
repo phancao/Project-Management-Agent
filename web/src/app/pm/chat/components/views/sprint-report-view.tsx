@@ -163,10 +163,10 @@ export function SprintReportView() {
         </div>
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
           <Select value={selectedSprintId ?? undefined} onValueChange={handleSprintChange}>
-            <SelectTrigger className="min-w-[20rem]">
-              <SelectValue placeholder="Select sprint" />
+            <SelectTrigger className="min-w-[20rem] max-w-full pr-10 text-left">
+              <SelectValue placeholder="Select sprint" className="truncate" />
             </SelectTrigger>
-            <SelectContent className="min-w-[20rem]">
+            <SelectContent className="min-w-[20rem] max-w-xl">
               {sortedSprints.map((sprint) => {
                 const normalizedStatus = (sprint.status || "").toLowerCase();
                 const statusLabel =
@@ -183,8 +183,8 @@ export function SprintReportView() {
                 return (
                   <SelectItem key={sprint.id} value={sprint.id}>
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-medium">{sprint.name}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="font-medium truncate">{sprint.name}</span>
+                      <span className="text-xs text-muted-foreground truncate">
                         {statusLabel}
                         {sprint.start_date
                           ? ` • ${new Date(sprint.start_date).toLocaleDateString()}`

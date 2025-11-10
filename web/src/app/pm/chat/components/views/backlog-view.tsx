@@ -1335,7 +1335,7 @@ export function BacklogView() {
                           onTaskClick={handleTaskClick}
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
-                          draggedTaskId={draggedTaskId}
+                          draggedTaskId={dragState.type === 'task' ? dragState.id : null}
                         />
                       ))}
                     </SortableContext>
@@ -1360,7 +1360,7 @@ export function BacklogView() {
                           onTaskClick={handleTaskClick}
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
-                          draggedTaskId={draggedTaskId}
+                          draggedTaskId={dragState.type === 'task' ? dragState.id : null}
                         />
                       ))}
                     </SortableContext>
@@ -1399,7 +1399,7 @@ export function BacklogView() {
                           onTaskClick={handleTaskClick}
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
-                          draggedTaskId={draggedTaskId}
+                          draggedTaskId={dragState.type === 'task' ? dragState.id : null}
                         />
                       ))}
                     </SortableContext>
@@ -1424,7 +1424,7 @@ export function BacklogView() {
                           onTaskClick={handleTaskClick}
                           epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
-                          draggedTaskId={draggedTaskId}
+                          draggedTaskId={dragState.type === 'task' ? dragState.id : null}
                         />
                       ))}
                     </SortableContext>

@@ -1120,14 +1120,15 @@ export function BacklogView() {
         return;
       }
 
-      const sourceSprint = sprints.find((s) => String(s.id) === currentDragState.id);
+      const orderedSource = orderedSprints.length > 0 ? orderedSprints : sprints;
+      const sourceSprint = orderedSource.find((s) => String(s.id) === currentDragState.id);
 
       if (targetSprintId === currentDragState.id) {
         logSprintDnd("Sprint drag ended on same sprint", { sprintId: currentDragState.id });
         return;
       }
 
-      const targetSprint = sprints.find((s) => String(s.id) === targetSprintId);
+      const targetSprint = orderedSource.find((s) => String(s.id) === targetSprintId);
 
       if (!sourceSprint || !targetSprint) {
         logSprintDnd("Sprint drag end failed to resolve sprints", {

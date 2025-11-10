@@ -16,7 +16,8 @@ import {
 import { 
   SortableContext, 
   useSortable, 
-  verticalListSortingStrategy
+  verticalListSortingStrategy,
+  arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar } from "lucide-react";
@@ -675,7 +676,7 @@ export function BacklogView() {
   
   const shouldLoadTasks = loadingState.canLoadTasks && projectIdForSprints;
   const { tasks: allTasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
-
+  
   const normalizedTasksForFiltering = useMemo<Task[]>(() => {
     if (!allTasks) return [];
     return allTasks.map((task) => ({
@@ -1262,9 +1263,17 @@ export function BacklogView() {
       const desiredCategory = targetCategory;
       const actualSourceCategory = getSprintStatusCategory(sourceSprint.status);
 
+      const activeRect = (event.active.rect.current.translated ??
+        event.active.rect.current) as DOMRect | null;
+      const overRect = over.rect as DOMRect | null;
+      const isBelowOverItem =
+        !!activeRect && !!overRect && activeRect.top > overRect.top + overRect.height / 2;
+      const activeSortable = (event.active.data.current as { sortable?: { index: number } } | undefined)?.sortable;
+      const overSortable = (over.data.current as { sortable?: { index: number } } | undefined)?.sortable;
+
       setSprintOrder((previous) => {
         const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
-        const next: SprintOrderState = {
+        const categoryLists: Record<SprintStatusCategory, string[]> = {
           active: [],
           future: [],
           closed: [],
@@ -1272,30 +1281,86 @@ export function BacklogView() {
         };
 
         reference.forEach((sprint) => {
-          if (String(sprint.id) === String(sourceSprint.id)) {
-            return;
-          }
           const category = resolveSprintCategory(sprint);
-          next[category] = [...(next[category] ?? []), sprint.id];
+          categoryLists[category] = [...categoryLists[category], sprint.id];
         });
 
-        const insertIntoCategory = (category: SprintStatusCategory, afterId?: string | null) => {
-          const existing = next[category] ?? [];
-          const list = existing.filter((id) => id !== sourceSprint.id);
-          if (afterId) {
-            const targetIndex = list.indexOf(afterId);
-            const insertIndex = targetIndex === -1 ? list.length : targetIndex + 1;
-            list.splice(insertIndex, 0, sourceSprint.id);
-          } else {
-            list.push(sourceSprint.id);
+        ORDERED_STATUS_CATEGORIES.forEach((category) => {
+          categoryLists[category] = categoryLists[category].filter((id, index, arr) => arr.indexOf(id) === index);
+        });
+
+        const sourceList = categoryLists[resolvedSourceCategory];
+        if (!sourceList.includes(sourceSprint.id)) {
+          sourceList.push(sourceSprint.id);
+        }
+
+        const sourceIndex = sourceList.indexOf(sourceSprint.id);
+
+        if (desiredCategory === resolvedSourceCategory && targetSprint) {
+          const currentList = categoryLists[resolvedSourceCategory];
+
+          if (!activeSortable || !overSortable) {
+            logSprintDnd("Sprint drag missing sortable metadata for same-category reorder", {
+              sourceSprintId: sourceSprint.id,
+              targetSprintId,
+            });
+            return previous;
           }
-          next[category] = list;
+
+          const oldIndex = activeSortable.index;
+          const modifier = isBelowOverItem ? 1 : 0;
+          const newIndex = overSortable.index + modifier;
+          const clampedNewIndex = Math.max(0, Math.min(newIndex, currentList.length - 1));
+          const reordered = arrayMove(currentList, oldIndex, clampedNewIndex);
+          categoryLists[resolvedSourceCategory] = reordered;
+        } else {
+          categoryLists[resolvedSourceCategory] = categoryLists[resolvedSourceCategory].filter(
+            (id) => id !== sourceSprint.id
+          );
+
+          const targetList = categoryLists[desiredCategory];
+          const insertIndex = targetSprint
+            ? (() => {
+                const targetIdx = targetList.indexOf(targetSprint.id);
+                if (targetIdx === -1) {
+                  return targetList.length;
+                }
+                if (!overSortable) {
+                  return targetIdx + (isBelowOverItem ? 1 : 0);
+                }
+                const modifier = isBelowOverItem ? 1 : 0;
+                return overSortable.index + modifier;
+              })()
+            : targetList.length;
+
+          const adjustedInsertIndex = Math.max(0, Math.min(insertIndex, targetList.length));
+          const nextTargetList = [...targetList];
+          nextTargetList.splice(adjustedInsertIndex, 0, sourceSprint.id);
+          categoryLists[desiredCategory] = nextTargetList;
+        }
+
+        const next: SprintOrderState = {
+          active: categoryLists.active,
+          future: categoryLists.future,
+          closed: categoryLists.closed,
+          other: categoryLists.other,
         };
 
-        if (targetSprint) {
-          insertIntoCategory(desiredCategory, targetSprint.id);
-        } else {
-          insertIntoCategory(desiredCategory, null);
+        const stateUnchanged = ORDERED_STATUS_CATEGORIES.every((category) => {
+          const prevGroup = previous[category] ?? [];
+          const nextGroup = next[category] ?? [];
+          return (
+            prevGroup.length === nextGroup.length &&
+            prevGroup.every((id, index) => id === nextGroup[index])
+          );
+        });
+
+        if (stateUnchanged) {
+          logSprintDnd("Sprint drag resulted in no ordering change (state unchanged)", {
+            sourceSprintId: sourceSprint.id,
+            desiredCategory,
+          });
+          return previous;
         }
 
         logSprintDnd("Sprint drag applied ordering change", {
@@ -1303,6 +1368,7 @@ export function BacklogView() {
           targetSprintId,
           sourceCategory: resolvedSourceCategory,
           targetCategory: desiredCategory,
+          lists: next,
         });
 
         return next;
@@ -1581,15 +1647,15 @@ export function BacklogView() {
                       >
                         {activeSprints.map((sprint) => (
                           <SortableSprintSection
-                            key={sprint.id}
-                            sprint={sprint}
-                            tasks={tasksInSprints[sprint.id] ?? []}
-                            onTaskClick={handleTaskClick}
-                            epicsMap={epicsMap}
+                          key={sprint.id}
+                          sprint={sprint}
+                          tasks={tasksInSprints[sprint.id] ?? []}
+                          onTaskClick={handleTaskClick}
+                          epicsMap={epicsMap}
                             isOver={overSprintId === sprint.id}
                             draggedTaskId={draggedTaskId}
-                          />
-                        ))}
+                        />
+                      ))}
                       </SortableContext>
                     ) : (
                       <SprintCategoryDropZone
@@ -1616,15 +1682,15 @@ export function BacklogView() {
                       >
                         {futureSprints.map((sprint) => (
                           <SortableSprintSection
-                            key={sprint.id}
-                            sprint={sprint}
-                            tasks={tasksInSprints[sprint.id] ?? []}
-                            onTaskClick={handleTaskClick}
-                            epicsMap={epicsMap}
+                          key={sprint.id}
+                          sprint={sprint}
+                          tasks={tasksInSprints[sprint.id] ?? []}
+                          onTaskClick={handleTaskClick}
+                          epicsMap={epicsMap}
                             isOver={overSprintId === sprint.id}
                             draggedTaskId={draggedTaskId}
-                          />
-                        ))}
+                        />
+                      ))}
                       </SortableContext>
                     ) : (
                       <SprintCategoryDropZone
@@ -1665,15 +1731,15 @@ export function BacklogView() {
                       >
                         {closedSprints.map((sprint) => (
                           <SortableSprintSection
-                            key={sprint.id}
-                            sprint={sprint}
-                            tasks={tasksInSprints[sprint.id] ?? []}
-                            onTaskClick={handleTaskClick}
-                            epicsMap={epicsMap}
+                          key={sprint.id}
+                          sprint={sprint}
+                          tasks={tasksInSprints[sprint.id] ?? []}
+                          onTaskClick={handleTaskClick}
+                          epicsMap={epicsMap}
                             isOver={overSprintId === sprint.id}
                             draggedTaskId={draggedTaskId}
-                          />
-                        ))}
+                        />
+                      ))}
                       </SortableContext>
                     ) : (
                       <SprintCategoryDropZone
@@ -1703,8 +1769,8 @@ export function BacklogView() {
                             key={sprint.id}
                             sprint={sprint}
                             tasks={tasksInSprints[sprint.id] ?? []}
-                            onTaskClick={handleTaskClick}
-                            epicsMap={epicsMap}
+                  onTaskClick={handleTaskClick}
+                  epicsMap={epicsMap}
                             isOver={overSprintId === sprint.id}
                             draggedTaskId={draggedTaskId}
                           />

@@ -61,7 +61,7 @@ type SortableSprintSectionProps = Omit<SprintSectionProps, "dragHandleProps" | "
 
 function SortableSprintSection(props: SortableSprintSectionProps) {
   const { sprint } = props;
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, over } = useSortable({
     id: `sprint-${sprint.id}`,
     data: { type: 'sprint', sprintId: sprint.id },
   });
@@ -87,6 +87,15 @@ function SortableSprintSection(props: SortableSprintSectionProps) {
       logSprintDnd("Dragging sprint", { sprintId: sprint.id });
     }
   }, [isDragging, sprint.id]);
+
+  useEffect(() => {
+    if (over?.id) {
+      logSprintDnd("Sortable sprint hovered over", {
+        sprintId: sprint.id,
+        overId: String(over.id),
+      });
+    }
+  }, [over?.id, sprint.id]);
 
   return (
     <div ref={setNodeRef} style={style}>

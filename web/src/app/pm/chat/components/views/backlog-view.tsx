@@ -1049,14 +1049,6 @@ export function BacklogView() {
         if (targetIndex === -1) {
           return sprintPlaceholder.position === "before" ? 0 : categorySprints.length;
         }
-        const targetRect = sprintRectMap.get(sprintPlaceholder.targetSprintId);
-        if (
-          targetRect &&
-          sprintPlaceholder.position === "after" &&
-          targetRect.bottom - targetRect.top < 56 /* approx header height */
-        ) {
-          return targetIndex + 1;
-        }
         return sprintPlaceholder.position === "before" ? targetIndex : targetIndex + 1;
       })();
 

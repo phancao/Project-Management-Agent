@@ -1604,9 +1604,9 @@ export function BacklogView() {
               const overIndex = overSortable.index;
               const activeIndex = activeSortable.index;
               if (activeIndex < targetIndex) {
-                newIndex = overIndex;
+                newIndex = placeholderPosition === "before" ? targetIndex : overIndex;
               } else if (activeIndex > targetIndex) {
-                newIndex = overIndex;
+                newIndex = placeholderPosition === "before" ? overIndex : overIndex + 1;
               } else {
                 newIndex = placeholderPosition === "before" ? targetIndex : targetIndex + 1;
               }
@@ -1618,7 +1618,7 @@ export function BacklogView() {
             typeof overSortable.index === "number" &&
             overSortable.index >= 0
           ) {
-            newIndex = overSortable.index;
+            newIndex = placeholderPosition === "before" ? overSortable.index : overSortable.index + 1;
           } else {
             newIndex = filteredList.length;
           }

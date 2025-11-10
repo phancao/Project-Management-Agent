@@ -66,11 +66,27 @@ function SortableSprintSection(props: SortableSprintSectionProps) {
     data: { type: 'sprint', sprintId: sprint.id },
   });
 
+  useEffect(() => {
+    logSprintDnd("Sortable sprint mounted", {
+      sprintId: sprint.id,
+      status: sprint.status,
+    });
+    return () => {
+      logSprintDnd("Sortable sprint unmounted", { sprintId: sprint.id });
+    };
+  }, [sprint.id, sprint.status]);
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.85 : undefined,
   };
+
+  useEffect(() => {
+    if (isDragging) {
+      logSprintDnd("Dragging sprint", { sprintId: sprint.id });
+    }
+  }, [isDragging, sprint.id]);
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -115,6 +131,13 @@ const createEmptySprintOrder = (): SprintOrderState => ({
   closed: [],
   other: [],
 });
+
+const isDev = process.env.NODE_ENV !== "production";
+const logSprintDnd = (...args: unknown[]) => {
+  if (isDev) {
+    console.debug("[Backlog][SprintDND]", ...args);
+  }
+};
 
 /* ============================================================================
  * TASK CARD COMPONENT
@@ -752,10 +775,15 @@ export function BacklogView() {
   useEffect(() => {
     if (!sprints || sprints.length === 0) {
       setSprintOrder(createEmptySprintOrder());
+      logSprintDnd("Reset sprint order (no sprints)");
       return;
     }
 
     setSprintOrder((previous) => {
+      logSprintDnd("Recalculating sprint order from provider data", {
+        total: sprints.length,
+      });
+
       const grouped: Record<SprintStatusCategory, SprintSummary[]> = {
         active: [],
         future: [],
@@ -792,6 +820,12 @@ export function BacklogView() {
           combined.some((id, index) => id !== existingOrder[index])
         ) {
           changed = true;
+          logSprintDnd("Updated sprint order for category", {
+            category,
+            combined,
+            preserved,
+            missing,
+          });
         }
 
         next[category] = combined;
@@ -838,6 +872,15 @@ export function BacklogView() {
 
     return result;
   }, [sprints, sprintOrder]);
+
+  useEffect(() => {
+    logSprintDnd("Ordered sprint buckets recalculated", {
+      active: activeSprints.map((s) => s.id),
+      future: futureSprints.map((s) => s.id),
+      closed: closedSprints.map((s) => s.id),
+      other: otherSprints.map((s) => s.id),
+    });
+  }, [activeSprints, futureSprints, closedSprints, otherSprints]);
 
   const activeSprints = useMemo(
     () => orderedSprints.filter((sprint) => getSprintStatusCategory(sprint.status) === "active"),
@@ -925,12 +968,14 @@ export function BacklogView() {
       const taskId = activeId.replace('task-', '');
       const task = tasks.find(t => String(t.id) === taskId);
       const sourceSprintId = task?.sprint_id ? String(task.sprint_id) : null;
+      logSprintDnd("Drag start (task)", { taskId, sourceSprintId });
       setDragState({ type: 'task', id: taskId, sourceSprintId });
       return;
     }
 
     if (activeId.startsWith('sprint-')) {
       const sprintId = activeId.replace('sprint-', '');
+      logSprintDnd("Drag start (sprint)", { sprintId });
       setDragState({ type: 'sprint', id: sprintId });
     }
   };
@@ -941,6 +986,7 @@ export function BacklogView() {
       setOverSprintId(null);
       setOverTaskId(null);
       setOverEpicId(null);
+      logSprintDnd("Drag over cleared (no target)");
       return;
     }
 
@@ -948,6 +994,10 @@ export function BacklogView() {
       setOverSprintId(null);
       setOverTaskId(null);
       setOverEpicId(null);
+      logSprintDnd("Drag over ignored (sprint over)", {
+        sprintId: dragState.id,
+        overId: String(over.id),
+      });
       return;
     }
 
@@ -958,6 +1008,7 @@ export function BacklogView() {
       setOverEpicId(overId.replace('epic-', ''));
       setOverSprintId(null);
       setOverTaskId(null);
+      logSprintDnd("Drag over epic", { epicId: overId.replace('epic-', '') });
       return;
     }
     
@@ -966,6 +1017,7 @@ export function BacklogView() {
       setOverEpicId('no-epic');
       setOverSprintId(null);
       setOverTaskId(null);
+      logSprintDnd("Drag over no-epic zone");
       return;
     }
     
@@ -974,6 +1026,7 @@ export function BacklogView() {
       setOverSprintId(overId.replace('sprint-', ''));
       setOverTaskId(null);
       setOverEpicId(null);
+      logSprintDnd("Drag over sprint body", { sprintId: overId.replace('sprint-', '') });
       return;
     }
     
@@ -981,6 +1034,7 @@ export function BacklogView() {
       setOverSprintId('backlog');
       setOverTaskId(null);
       setOverEpicId(null);
+      logSprintDnd("Drag over backlog");
       return;
     }
     
@@ -994,8 +1048,13 @@ export function BacklogView() {
         setOverEpicId(null);
         if (task.sprint_id) {
           setOverSprintId(String(task.sprint_id));
+          logSprintDnd("Drag over task in sprint", {
+            taskId,
+            sprintId: String(task.sprint_id),
+          });
       } else {
           setOverSprintId('backlog');
+          logSprintDnd("Drag over task in backlog", { taskId });
         }
         return;
       }
@@ -1004,6 +1063,7 @@ export function BacklogView() {
     setOverSprintId(null);
     setOverTaskId(null);
     setOverEpicId(null);
+    logSprintDnd("Drag over: no matching target", { overId });
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -1015,17 +1075,23 @@ export function BacklogView() {
     setOverEpicId(null);
 
     if (!over) {
+      logSprintDnd("Drag end without target", { dragType: currentDragState.type });
       return;
     }
 
     if (currentDragState.type === 'sprint' && currentDragState.id) {
       const overId = String(over.id);
       if (!overId.startsWith("sprint-")) {
+        logSprintDnd("Sprint drag ended over non-sprint target", {
+          sprintId: currentDragState.id,
+          overId,
+        });
         return;
       }
 
       const targetSprintId = overId.replace("sprint-", "");
       if (targetSprintId === currentDragState.id) {
+        logSprintDnd("Sprint drag ended on same sprint", { sprintId: currentDragState.id });
         return;
       }
 
@@ -1033,6 +1099,10 @@ export function BacklogView() {
       const targetSprint = sprints.find((s) => String(s.id) === targetSprintId);
 
       if (!sourceSprint || !targetSprint) {
+        logSprintDnd("Sprint drag end failed to resolve sprints", {
+          sourceSprintId: currentDragState.id,
+          targetSprintId,
+        });
         return;
       }
 
@@ -1041,6 +1111,12 @@ export function BacklogView() {
 
       if (sourceCategory !== targetCategory) {
         toast.info("Sprints can only be rearranged within the same status group.");
+        logSprintDnd("Sprint drag blocked due to category mismatch", {
+          sourceSprintId: sourceSprint.id,
+          targetSprintId,
+          sourceCategory,
+          targetCategory,
+        });
         return;
       }
 
@@ -1054,6 +1130,12 @@ export function BacklogView() {
         const preserved = existingGroup.filter((id) => idsInCategory.includes(id));
         const missing = idsInCategory.filter((id) => !preserved.includes(id));
         const combined = [...preserved, ...missing];
+        logSprintDnd("Sprint drag recalculated group positions", {
+          category: sourceCategory,
+          idsInCategory,
+          preserved,
+          missing,
+        });
 
         const sourceIndex = combined.indexOf(sourceSprint.id);
         const targetIndex = combined.indexOf(targetSprint.id);
@@ -1076,9 +1158,17 @@ export function BacklogView() {
           reordered.every((id, index) => id === previousGroup[index]);
 
         if (groupUnchanged && missing.length === 0) {
+          logSprintDnd("Sprint drag resulted in no ordering change", {
+            category: sourceCategory,
+            reordered,
+          });
           return previous;
         }
 
+        logSprintDnd("Sprint drag applied new ordering", {
+          category: sourceCategory,
+          reordered,
+        });
         return {
           ...previous,
           [sourceCategory]: reordered,
@@ -1089,6 +1179,7 @@ export function BacklogView() {
     }
 
     if (currentDragState.type !== 'task' || !currentDragState.id) {
+      logSprintDnd("Drag end ignored (non-task)", { dragType: currentDragState.type });
       return;
     }
 
@@ -1107,6 +1198,7 @@ export function BacklogView() {
         toast.success("Task assigned to epic", {
           description: `${draggedTask.title} has been assigned to the epic.`
         });
+        logSprintDnd("Task assigned to epic via drag", { taskId, epicId });
       } catch (error) {
         console.error("Failed to assign task to epic:", error);
         toast.error("Failed to assign task to epic", {
@@ -1149,6 +1241,7 @@ export function BacklogView() {
         toast.success("Epic removed from task", {
           description: `${draggedTask.title} is no longer assigned to an epic.`
         });
+        logSprintDnd("Epic removed via drag", { taskId });
         
         // Trigger full refresh
         console.log('[handleDragEnd] Triggering pm_refresh event');
@@ -1186,6 +1279,7 @@ export function BacklogView() {
         toast.success("Task moved to backlog", {
           description: `${draggedTask.title} has been moved to the backlog.`
         });
+        logSprintDnd("Task moved to backlog via drag", { taskId });
         } catch (error) {
         console.error("Failed to move task to backlog:", error);
         toast.error("Failed to move task to backlog", {
@@ -1203,6 +1297,11 @@ export function BacklogView() {
       const targetSprint = sprints.find(s => String(s.id) === targetSprintId);
       toast.success("Task assigned to sprint", {
         description: `${draggedTask.title} has been assigned to ${targetSprint?.name || 'sprint'}.`
+      });
+      logSprintDnd("Task assigned to sprint via drag", {
+        taskId,
+        targetSprintId,
+        sourceSprintId: currentDragState.sourceSprintId ?? null,
       });
       } catch (error) {
         console.error("Failed to assign task to sprint:", error);
@@ -1428,11 +1527,11 @@ export function BacklogView() {
                           key={sprint.id}
                           sprint={sprint}
                           tasks={tasksInSprints[sprint.id] ?? []}
-                          onTaskClick={handleTaskClick}
-                          epicsMap={epicsMap}
+                  onTaskClick={handleTaskClick}
+                  epicsMap={epicsMap}
                           isOver={overSprintId === sprint.id}
                           draggedTaskId={draggedTaskId}
-                        />
+                />
                       ))}
                     </SortableContext>
                   </div>

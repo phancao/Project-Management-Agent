@@ -78,9 +78,12 @@ function SortableSprintSection(props: SortableSprintSectionProps) {
   }, [sprint.id, sprint.status]);
 
   const style = {
+    zIndex: isDragging ? 50 : undefined,
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.85 : undefined,
+    position: isDragging ? "relative" : undefined,
+    pointerEvents: isDragging ? "none" : undefined,
   };
 
   useEffect(() => {

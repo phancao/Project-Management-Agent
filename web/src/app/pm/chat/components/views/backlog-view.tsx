@@ -16,8 +16,7 @@ import {
 import { 
   SortableContext, 
   useSortable, 
-  verticalListSortingStrategy,
-  arrayMove
+  verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar } from "lucide-react";
@@ -1163,6 +1162,15 @@ export function BacklogView() {
       return;
     }
 
+    if (dragState.type !== 'sprint' && sprintPlaceholder.category !== null) {
+      setSprintPlaceholder({
+        category: null,
+        targetSprintId: null,
+        position: "after",
+        atEnd: false,
+      });
+    }
+
     if (dragState.type === 'sprint') {
       const overId = String(over.id);
       const overData = over.data.current as
@@ -1381,22 +1389,23 @@ export function BacklogView() {
     const { over } = event;
     const currentDragState = dragState;
     const previousOverSprintId = overSprintId ?? lastSprintHoverIdRef.current;
+    const placeholderState = sprintPlaceholder;
     setDragState({ type: null, id: null });
     setOverSprintId(null);
     setOverTaskId(null);
     setOverEpicId(null);
-    setSprintPlaceholder({
-      category: null,
-      targetSprintId: null,
-      position: "after",
-      atEnd: false,
-    });
     setOverSprintCategory(null);
 
     if (!over) {
       logSprintDnd("Drag end without target", { dragType: currentDragState.type });
       lastSprintCategoryRef.current = null;
       setOverSprintCategory(null);
+      setSprintPlaceholder({
+        category: null,
+        targetSprintId: null,
+        position: "after",
+        atEnd: false,
+      });
       return;
     }
 
@@ -1519,11 +1528,26 @@ export function BacklogView() {
       }
 
       const resolvedSourceCategory = resolveSprintCategory(sourceSprint);
-      const desiredCategory = targetCategory;
+      let desiredCategory = targetCategory;
       const actualSourceCategory = getSprintStatusCategory(sourceSprint.status);
 
-      const activeSortable = (event.active.data.current as { sortable?: { index: number } } | undefined)?.sortable;
-      const overSortable = (over.data.current as { sortable?: { index: number } } | undefined)?.sortable;
+      if (placeholderState.category) {
+        desiredCategory = placeholderState.category;
+      }
+
+      const placeholderTargetSprintId =
+        placeholderState.targetSprintId && placeholderState.targetSprintId !== currentDragState.id
+          ? placeholderState.targetSprintId
+          : targetSprintId;
+      const placeholderPosition = placeholderState.position;
+      const placeholderAtEnd = placeholderState.atEnd;
+
+      const activeSortable = (event.active.data.current as { sortable?: { index: number; containerId?: string } } | undefined)?.sortable;
+      const overSortable = (over.data.current as { sortable?: { index: number; containerId?: string } } | undefined)?.sortable;
+      const sameContainer =
+        !!activeSortable?.containerId &&
+        !!overSortable?.containerId &&
+        activeSortable.containerId === overSortable.containerId;
 
       setSprintOrder((previous) => {
         const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
@@ -1552,23 +1576,45 @@ export function BacklogView() {
 
         const sourceIndex = sourceList.indexOf(sourceSprint.id);
 
-        if (desiredCategory === resolvedSourceCategory && targetSprint) {
-          const currentList = [...sourceList];
-          const oldIndex =
-            activeSortable && typeof activeSortable.index === "number" && activeSortable.index >= 0
-              ? activeSortable.index
-              : sourceIndex;
-          let newIndex =
-            overSortable && typeof overSortable.index === "number" && overSortable.index >= 0
-              ? overSortable.index
-              : currentList.indexOf(targetSprint.id);
+        if (desiredCategory === resolvedSourceCategory) {
+          const filteredList = sourceList.filter((id) => id !== sourceSprint.id);
 
-          if (newIndex === -1) {
-            newIndex = currentList.length - 1;
+          let newIndex: number;
+
+          if (placeholderAtEnd && placeholderState.category === resolvedSourceCategory) {
+            newIndex = filteredList.length;
+          } else if (placeholderTargetSprintId) {
+            const targetIndex = filteredList.indexOf(placeholderTargetSprintId);
+            if (targetIndex === -1) {
+              newIndex = filteredList.length;
+            } else {
+              newIndex = placeholderPosition === "before" ? targetIndex : targetIndex + 1;
+            }
+          } else if (targetSprint && filteredList.includes(targetSprint.id)) {
+            const targetIndex = filteredList.indexOf(targetSprint.id);
+            if (sameContainer && activeSortable && typeof activeSortable.index === "number" && activeSortable.index >= 0) {
+              const activeIndex = activeSortable.index;
+              const overIndex =
+                overSortable && typeof overSortable.index === "number" && overSortable.index >= 0
+                  ? overSortable.index
+                  : targetIndex;
+              newIndex = activeIndex < overIndex ? overIndex : overIndex + 1;
+            } else {
+              newIndex = targetIndex + 1;
+            }
+          } else if (
+            overSortable &&
+            typeof overSortable.index === "number" &&
+            overSortable.index >= 0
+          ) {
+            newIndex = overSortable.index;
+          } else {
+            newIndex = filteredList.length;
           }
 
-          const reordered = arrayMove(currentList, oldIndex, newIndex);
-          categoryLists[resolvedSourceCategory] = reordered;
+          const boundedIndex = Math.max(0, Math.min(newIndex, filteredList.length));
+          filteredList.splice(boundedIndex, 0, sourceSprint.id);
+          categoryLists[resolvedSourceCategory] = filteredList;
         } else {
           const cleanedSourceList = sourceList.filter((id) => id !== sourceSprint.id);
           categoryLists[resolvedSourceCategory] = cleanedSourceList;
@@ -1578,14 +1624,23 @@ export function BacklogView() {
           );
           let insertIndex: number;
 
-          if (!targetSprint) {
+          if (placeholderAtEnd || (!placeholderTargetSprintId && !targetSprint)) {
             insertIndex = targetList.length;
-          } else {
+          } else if (placeholderTargetSprintId) {
+            const targetIdx = targetList.indexOf(placeholderTargetSprintId);
+            if (targetIdx === -1) {
+              insertIndex = targetList.length;
+            } else {
+              insertIndex = placeholderPosition === "before" ? targetIdx : targetIdx + 1;
+            }
+          } else if (targetSprint) {
             const sortableIndex =
               overSortable && typeof overSortable.index === "number" && overSortable.index >= 0
                 ? overSortable.index
                 : targetList.indexOf(targetSprint.id);
             insertIndex = sortableIndex === -1 ? targetList.length : sortableIndex;
+          } else {
+            insertIndex = targetList.length;
           }
 
           const boundedIndex = Math.max(0, Math.min(insertIndex, targetList.length));
@@ -1642,6 +1697,12 @@ export function BacklogView() {
       lastSprintHoverIdRef.current = null;
       lastSprintCategoryRef.current = null;
       setOverSprintCategory(null);
+      setSprintPlaceholder({
+        category: null,
+        targetSprintId: null,
+        position: "after",
+        atEnd: false,
+      });
       return;
     }
 

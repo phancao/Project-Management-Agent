@@ -749,26 +749,6 @@ export function BacklogView() {
     return filteredTasks.filter(task => task.epic_id === selectedEpic);
   }, [filteredTasks, selectedEpic, loading]);
 
-  const tasksInSprints = useMemo(() => {
-    const grouped: Record<string, Task[]> = {};
-    const sprintSource = orderedSprints.length > 0 ? orderedSprints : sprints;
-    sprintSource.forEach(sprint => {
-      grouped[sprint.id] = epicFilteredTasks.filter(task => 
-        task.sprint_id === sprint.id || String(task.sprint_id) === String(sprint.id)
-      );
-    });
-    return grouped;
-  }, [sprints, orderedSprints, epicFilteredTasks]);
-
-  const backlogTasks = useMemo(() => {
-    const sprintSource = orderedSprints.length > 0 ? orderedSprints : sprints;
-    const sprintIds = new Set(sprintSource.map(s => s.id));
-    return epicFilteredTasks.filter(task => {
-      if (!task.sprint_id) return true;
-      return !sprintIds.has(task.sprint_id) && !sprintIds.has(String(task.sprint_id));
-    });
-  }, [epicFilteredTasks, sprints, orderedSprints]);
-
   useEffect(() => {
     if (!sprints || sprints.length === 0) {
       setSprintOrder(createEmptySprintOrder());
@@ -875,6 +855,26 @@ export function BacklogView() {
     () => orderedSprints.filter((sprint) => getSprintStatusCategory(sprint.status) === "other"),
     [orderedSprints]
   );
+
+  const tasksInSprints = useMemo(() => {
+    const grouped: Record<string, Task[]> = {};
+    const sprintSource = orderedSprints.length > 0 ? orderedSprints : sprints;
+    sprintSource.forEach((sprint) => {
+      grouped[sprint.id] = epicFilteredTasks.filter(
+        (task) => task.sprint_id === sprint.id || String(task.sprint_id) === String(sprint.id)
+      );
+    });
+    return grouped;
+  }, [orderedSprints, sprints, epicFilteredTasks]);
+
+  const backlogTasks = useMemo(() => {
+    const sprintSource = orderedSprints.length > 0 ? orderedSprints : sprints;
+    const sprintIds = new Set(sprintSource.map((s) => s.id));
+    return epicFilteredTasks.filter((task) => {
+      if (!task.sprint_id) return true;
+      return !sprintIds.has(task.sprint_id) && !sprintIds.has(String(task.sprint_id));
+    });
+  }, [orderedSprints, sprints, epicFilteredTasks]);
 
   const availableStatuses = useMemo(() => {
     if (availableStatusesFromBackend && availableStatusesFromBackend.length > 0) {

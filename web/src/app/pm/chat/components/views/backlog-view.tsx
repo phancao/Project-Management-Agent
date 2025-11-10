@@ -856,6 +856,8 @@ export function BacklogView() {
           title: "New Task",
           description: "",
           priority: "medium",
+          status: "todo",
+          sprint_id: sprintId,
         }),
       });
 
@@ -866,11 +868,14 @@ export function BacklogView() {
 
       const data = await response.json();
       const newTaskId = data?.id;
+      const createdSprintId = data?.sprint_id;
       if (!newTaskId) {
         throw new Error("Task created without an ID.");
       }
 
-      await handleAssignTaskToSprint(newTaskId, sprintId);
+      if (createdSprintId !== sprintId) {
+        await handleAssignTaskToSprint(newTaskId, sprintId);
+      }
       await refreshTasks();
       toast.success("Task created", {
         description: "A new task was added to the sprint.",

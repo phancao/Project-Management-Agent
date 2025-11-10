@@ -62,6 +62,7 @@ from src.server.pm_provider_request import (
     ProjectImportRequest,
     ProviderUpdateRequest,
 )
+from pydantic import BaseModel
 from src.tools import VolcengineTTS
 from src.utils.json_utils import sanitize_args
 from src.utils.log_sanitizer import (
@@ -77,6 +78,21 @@ logger = logging.getLogger(__name__)
 # Configure Windows event loop policy for PostgreSQL compatibility
 # On Windows, psycopg requires a selector-based event loop,
 # not the default ProactorEventLoop
+# ====================
+# Request Models
+# ====================
+
+
+class PMTaskCreateRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    sprint_id: Optional[str] = None
+    assignee_id: Optional[str] = None
+    epic_id: Optional[str] = None
+    estimated_hours: Optional[float] = None
+
 if os.name == "nt":
     # WindowsSelectorEventLoopPolicy is available on Windows
     asyncio.set_event_loop_policy(
@@ -1284,6 +1300,51 @@ async def pm_list_projects(request: Request):
     except Exception as e:
         logger.error(f"Failed to list projects: {e}")
         import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pm/projects/{project_id}/tasks")
+async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
+    """Create a new task within the specified project"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+
+        db_gen = get_db_session()
+        db = next(db_gen)
+
+        try:
+            handler = PMHandler.from_db_session(db)
+            created_task = await handler.create_project_task(
+                project_id,
+                payload.model_dump(exclude_none=True),
+            )
+            return created_task
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        import re
+
+        status_match = re.match(r"\((\d{3})\)\s*(.+)", error_msg)
+        if status_match:
+            status_code = int(status_match.group(1))
+            detail = status_match.group(2)
+            raise HTTPException(status_code=status_code, detail=detail)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        if "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        if "not yet implemented" in error_msg:
+            raise HTTPException(status_code=501, detail=error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create task: {e}")
+        import traceback
+
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 

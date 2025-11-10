@@ -689,6 +689,81 @@ class PMHandler:
             result.append(task_dict)
         
         return result
+
+    async def create_project_task(
+        self,
+        project_id: str,
+        task_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Create a new task within the specified project.
+        """
+        provider_instance = self._get_provider_for_project(project_id)
+        provider_type = getattr(
+            getattr(provider_instance, "config", None),
+            "provider_type",
+            provider_instance.__class__.__name__,
+        )
+
+        actual_project_id = (
+            project_id.split(":", 1)[1]
+            if ":" in project_id
+            else project_id
+        )
+
+        title = task_data.get("title") or "New Task"
+        new_task = PMTask(
+            title=title,
+            description=task_data.get("description"),
+            priority=task_data.get("priority"),
+            status=task_data.get("status"),
+            project_id=actual_project_id,
+            sprint_id=task_data.get("sprint_id"),
+            assignee_id=task_data.get("assignee_id"),
+            epic_id=task_data.get("epic_id"),
+            estimated_hours=task_data.get("estimated_hours"),
+        )
+
+        try:
+            created = await provider_instance.create_task(new_task)
+        except NotImplementedError:
+            raise ValueError(
+                f"create_task is not yet implemented for {provider_type} provider"
+            )
+        except Exception as create_error:
+            logger.error(
+                "Failed to create task in project %s via provider %s: %s",
+                actual_project_id,
+                provider_type,
+                create_error,
+            )
+            raise
+
+        def _enum_to_str(value: Optional[Any]) -> Optional[str]:
+            if value is None:
+                return None
+            if hasattr(value, "value"):
+                return str(value.value)
+            return str(value)
+
+        return {
+            "id": str(created.id) if created.id else None,
+            "title": created.title,
+            "description": created.description,
+            "status": _enum_to_str(created.status),
+            "priority": _enum_to_str(created.priority),
+            "project_id": project_id,
+            "sprint_id": str(created.sprint_id) if created.sprint_id else None,
+            "assignee_id": str(created.assignee_id) if created.assignee_id else None,
+            "epic_id": str(created.epic_id) if created.epic_id else None,
+            "estimated_hours": created.estimated_hours,
+            "created_at": (
+                created.created_at.isoformat() if created.created_at else None
+            ),
+            "updated_at": (
+                created.updated_at.isoformat() if created.updated_at else None
+            ),
+        }
     
     async def list_project_sprints(
         self, project_id: str, state: Optional[str] = None

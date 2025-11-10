@@ -27,8 +27,10 @@ import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Textarea } from "~/components/ui/textarea";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMLoading } from "../../../context/pm-loading-context";
 import { useSprints, type Sprint as SprintSummary } from "~/core/api/hooks/pm/use-sprints";
@@ -442,7 +444,6 @@ interface SprintSectionProps {
   };
   isSorting?: boolean;
   onAddTask?: (sprintId: string) => void;
-  creatingTask?: boolean;
 }
 
 function SprintSection({ 
@@ -454,8 +455,7 @@ function SprintSection({
   draggedTaskId,
   dragHandleProps,
   isSorting,
-  onAddTask,
-  creatingTask
+  onAddTask
 }: SprintSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -558,19 +558,9 @@ function SprintSection({
                     variant="outline"
                     size="sm"
                     onClick={() => onAddTask?.(sprint.id)}
-                    disabled={creatingTask}
                   >
-                    {creatingTask ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Creating…
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4 mr-1" />
-                        Add task
-                      </>
-                    )}
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add task
                   </Button>
                 </>
             )}
@@ -704,7 +694,15 @@ export function BacklogView() {
     atEnd: false,
   });
   const [overSprintCategory, setOverSprintCategory] = useState<SprintStatusCategory | null>(null);
-  const [creatingTaskForSprint, setCreatingTaskForSprint] = useState<string | null>(null);
+  const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
+  const [createTaskSprintId, setCreateTaskSprintId] = useState<string | null>(null);
+  const [isSavingTask, setIsSavingTask] = useState(false);
+  const [createTaskForm, setCreateTaskForm] = useState({
+    title: "",
+    description: "",
+    status: "",
+    priority: "",
+  });
   const lastSprintHoverIdRef = useRef<string | null>(null);
   const lastSprintCategoryRef = useRef<SprintStatusCategory | null>(null);
   const { activeProjectId, activeProject, projectIdForData: projectIdForSprints } = useProjectData();
@@ -841,53 +839,155 @@ export function BacklogView() {
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
   }, [projectIdForSprints]);
 
-  const handleCreateTaskForSprint = useCallback(async (sprintId: string) => {
+  const availableStatuses = useMemo(() => {
+    if (availableStatusesFromBackend && availableStatusesFromBackend.length > 0) {
+      return availableStatusesFromBackend.map(status => ({
+        value: status.name.toLowerCase(),
+        label: status.name
+      }));
+    }
+    const statusMap = new Map<string, string>();
+    tasks.forEach(task => {
+      if (task.status) {
+        const lower = task.status.toLowerCase();
+        if (!statusMap.has(lower)) {
+          statusMap.set(lower, task.status);
+        }
+      }
+    });
+    return Array.from(statusMap.entries()).map(([value, label]) => ({
+      value,
+      label
+    }));
+  }, [availableStatusesFromBackend, tasks]);
+
+  const availablePriorities = useMemo(() => {
+    if (availablePrioritiesFromBackend && availablePrioritiesFromBackend.length > 0) {
+      return availablePrioritiesFromBackend.map(priority => ({
+        value: priority.name.toLowerCase(),
+        label: priority.name
+      }));
+    }
+    const priorityMap = new Map<string, string>();
+    tasks.forEach(task => {
+      if (task.priority) {
+        const lower = task.priority.toLowerCase();
+        if (!priorityMap.has(lower)) {
+          priorityMap.set(lower, task.priority);
+        }
+      }
+    });
+    return Array.from(priorityMap.entries()).map(([value, label]) => ({
+      value,
+      label
+    }));
+  }, [availablePrioritiesFromBackend, tasks]);
+
+  const defaultStatusValue = useMemo(() => {
+    if (availableStatuses.length === 0) return "todo";
+    const todo = availableStatuses.find(status => status.value === "todo");
+    return todo?.value ?? availableStatuses[0].value;
+  }, [availableStatuses]);
+
+  const defaultPriorityValue = useMemo(() => {
+    if (availablePriorities.length === 0) return "medium";
+    const medium = availablePriorities.find(priority => priority.value === "medium");
+    return medium?.value ?? availablePriorities[0].value;
+  }, [availablePriorities]);
+
+  const resetCreateTaskState = useCallback(() => {
+    setCreateTaskDialogOpen(false);
+    setCreateTaskSprintId(null);
+    setCreateTaskForm({
+      title: "",
+      description: "",
+      status: defaultStatusValue,
+      priority: defaultPriorityValue,
+    });
+    setIsSavingTask(false);
+  }, [defaultPriorityValue, defaultStatusValue]);
+
+  useEffect(() => {
+    // keep defaults in sync when provider data changes
+    setCreateTaskForm(prev => ({
+      ...prev,
+      status: prev.status || defaultStatusValue,
+      priority: prev.priority || defaultPriorityValue,
+    }));
+  }, [defaultPriorityValue, defaultStatusValue]);
+
+  const handleOpenCreateTaskDialog = useCallback((sprintId: string) => {
     if (!projectIdForSprints) {
       toast.error("Select a project before adding tasks.");
       return;
     }
 
+    setCreateTaskSprintId(sprintId);
+    setCreateTaskForm({
+      title: "",
+      description: "",
+      status: defaultStatusValue,
+      priority: defaultPriorityValue,
+    });
+    setCreateTaskDialogOpen(true);
+  }, [defaultPriorityValue, defaultStatusValue, projectIdForSprints]);
+
+  const handleConfirmCreateTask = useCallback(async () => {
+    if (!projectIdForSprints) {
+      toast.error("Select a project before adding tasks.");
+      return;
+    }
+    if (!createTaskSprintId) {
+      toast.error("Sprint context missing for new task.");
+      return;
+    }
+    const trimmedTitle = createTaskForm.title.trim();
+    if (!trimmedTitle) {
+      toast.error("Task title is required.", { description: "Please enter a title before creating the task." });
+      return;
+    }
+
+    setIsSavingTask(true);
     try {
-      setCreatingTaskForSprint(sprintId);
       const response = await fetch(resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "New Task",
-          description: "",
-          priority: "medium",
-          status: "todo",
-          sprint_id: sprintId,
+          title: trimmedTitle,
+          description: createTaskForm.description,
+          priority: createTaskForm.priority || undefined,
+          status: createTaskForm.status || undefined,
+          sprint_id: createTaskSprintId,
         }),
       });
-
+      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `Failed to create task (status ${response.status})`);
       }
 
-      const data = await response.json();
-      const newTaskId = data?.id;
-      const createdSprintId = data?.sprint_id;
-      if (!newTaskId) {
-        throw new Error("Task created without an ID.");
-      }
-
-      if (createdSprintId !== sprintId) {
-        await handleAssignTaskToSprint(newTaskId, sprintId);
-      }
       await refreshTasks();
+      window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
       toast.success("Task created", {
         description: "A new task was added to the sprint.",
       });
+      resetCreateTaskState();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       console.error("Failed to create task:", error);
       toast.error("Failed to create task", { description: message });
-    } finally {
-      setCreatingTaskForSprint(null);
+      setIsSavingTask(false);
     }
-  }, [projectIdForSprints, handleAssignTaskToSprint, refreshTasks]);
+  }, [
+    createTaskForm.description,
+    createTaskForm.priority,
+    createTaskForm.status,
+    createTaskForm.title,
+    createTaskSprintId,
+    projectIdForSprints,
+    refreshTasks,
+    resetCreateTaskState,
+  ]);
 
   const handleMoveTaskToBacklog = useCallback(async (taskId: string) => {
     if (!projectIdForSprints) throw new Error('No project selected');
@@ -1132,8 +1232,7 @@ export function BacklogView() {
             epicsMap={epicsMap}
             isOver={dragState.type !== 'sprint' && overSprintId === sprint.id}
             draggedTaskId={draggedTaskId}
-            onAddTask={handleCreateTaskForSprint}
-            creatingTask={creatingTaskForSprint === sprint.id}
+            onAddTask={handleOpenCreateTaskDialog}
           />
         );
       });
@@ -1153,44 +1252,9 @@ export function BacklogView() {
       sprintPlaceholder,
       overSprintId,
       tasksInSprints,
-      handleCreateTaskForSprint,
-      creatingTaskForSprint,
+      handleOpenCreateTaskDialog,
     ]
   );
-
-  const availableStatuses = useMemo(() => {
-    if (availableStatusesFromBackend && availableStatusesFromBackend.length > 0) {
-      return availableStatusesFromBackend.map(status => ({
-        value: status.name.toLowerCase(),
-        label: status.name
-      }));
-    }
-    const statusMap = new Map<string, string>();
-    tasks.forEach(task => {
-      if (task.status) {
-        const lower = task.status.toLowerCase();
-        if (!statusMap.has(lower)) statusMap.set(lower, task.status);
-      }
-    });
-    return Array.from(statusMap.entries()).map(([lower, original]) => ({ value: lower, label: original }));
-  }, [availableStatusesFromBackend, tasks]);
-
-  const availablePriorities = useMemo(() => {
-    if (availablePrioritiesFromBackend && availablePrioritiesFromBackend.length > 0) {
-      return availablePrioritiesFromBackend.map(priority => ({
-        value: priority.name.toLowerCase(),
-        label: priority.name
-      }));
-    }
-    const priorityMap = new Map<string, string>();
-    tasks.forEach(task => {
-      if (task.priority) {
-        const lower = task.priority.toLowerCase();
-        if (!priorityMap.has(lower)) priorityMap.set(lower, task.priority);
-      }
-    });
-    return Array.from(priorityMap.entries()).map(([lower, original]) => ({ value: lower, label: original }));
-  }, [availablePrioritiesFromBackend, tasks]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -1332,7 +1396,7 @@ export function BacklogView() {
             false,
             targetRect
           );
-      } else {
+    } else {
           setOverSprintCategory(null);
           applyPlaceholder(null, null, false);
         }
@@ -1701,7 +1765,7 @@ export function BacklogView() {
             const targetIndex = filteredList.indexOf(placeholderTargetSprintId);
             if (targetIndex === -1) {
               newIndex = filteredList.length;
-            } else {
+      } else {
               newIndex = placeholderPosition === "before" ? targetIndex : targetIndex + 1;
             }
           } else if (targetSprint && filteredList.includes(targetSprint.id)) {
@@ -2227,6 +2291,140 @@ export function BacklogView() {
           </div>
         ) : null}
       </DragOverlay>
+
+      <Dialog
+        open={createTaskDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (isSavingTask) {
+              return;
+            }
+            resetCreateTaskState();
+          } else {
+            setCreateTaskDialogOpen(true);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create Task</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                Title <span className="text-red-500">*</span>
+              </label>
+              <Input
+                value={createTaskForm.title}
+                onChange={(event) =>
+                  setCreateTaskForm((prev) => ({ ...prev, title: event.target.value }))
+                }
+                placeholder="Enter task title"
+                disabled={isSavingTask}
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                Description
+              </label>
+              <Textarea
+                value={createTaskForm.description}
+                onChange={(event) =>
+                  setCreateTaskForm((prev) => ({ ...prev, description: event.target.value }))
+                }
+                placeholder="Describe the task"
+                rows={4}
+                disabled={isSavingTask}
+              />
+            </div>
+
+            {(availableStatuses.length > 0 || availablePriorities.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {availableStatuses.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                      Status
+                    </label>
+                    <Select
+                      value={createTaskForm.status || defaultStatusValue}
+                      onValueChange={(value) =>
+                        setCreateTaskForm((prev) => ({ ...prev, status: value }))
+                      }
+                      disabled={isSavingTask}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableStatuses.map(({ value, label }) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {availablePriorities.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                      Priority
+                    </label>
+                    <Select
+                      value={createTaskForm.priority || defaultPriorityValue}
+                      onValueChange={(value) =>
+                        setCreateTaskForm((prev) => ({ ...prev, priority: value }))
+                      }
+                      disabled={isSavingTask}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availablePriorities.map(({ value, label }) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (isSavingTask) return;
+                resetCreateTaskState();
+              }}
+              disabled={isSavingTask}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmCreateTask}
+              disabled={isSavingTask || createTaskForm.title.trim().length === 0}
+            >
+              {isSavingTask ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating…
+                </>
+              ) : (
+                "Create task"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <TaskDetailsModal
         task={selectedTask}

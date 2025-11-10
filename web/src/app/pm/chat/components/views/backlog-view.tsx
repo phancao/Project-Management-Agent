@@ -1181,7 +1181,6 @@ export function BacklogView() {
         | undefined;
 
       const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
-
       const sourceSprintFull = reference.find((item) => String(item.id) === currentSprintId);
       const sourceCategory = sourceSprintFull ? resolveSprintCategory(sourceSprintFull) : null;
 
@@ -1192,19 +1191,19 @@ export function BacklogView() {
           .map((item) => String(item.id));
       };
 
-      const derivePosition = (targetId: string | null, category: SprintStatusCategory | null) => {
+      const computePosition = (
+        targetId: string | null,
+        category: SprintStatusCategory | null
+      ): "before" | "after" => {
         if (!targetId || !category) return "after";
         const ids = getCategoryIds(category);
         const sourceIdx = ids.indexOf(currentSprintId);
         const targetIdx = ids.indexOf(targetId);
         if (sourceIdx === -1 || targetIdx === -1) {
-          return sourceCategory === category ? "after" : "after";
+          return "after";
         }
-        return sourceIdx > targetIdx ? "before" : "after";
+        return targetIdx < sourceIdx ? "before" : "after";
       };
-
-      const activeRect = (event.active.rect.current.translated ??
-        event.active.rect.current) as ClientRect | null;
 
       const resolveContainerSprintId = () => {
         const containerId = overData?.sortable?.containerId;
@@ -1214,26 +1213,32 @@ export function BacklogView() {
         return null;
       };
 
+      const applyPlaceholder = (
+        category: SprintStatusCategory | null,
+        targetSprintId: string | null,
+        atEnd = false
+      ) => {
+        const position = computePosition(targetSprintId, category);
+        setSprintPlaceholder({
+          category,
+          targetSprintId,
+          position,
+          atEnd,
+        });
+      };
+
       const setHoverSprint = (sprintId: string | null) => {
         setOverSprintId(sprintId);
         lastSprintHoverIdRef.current = sprintId;
         if (sprintId) {
           const targetSprint = reference.find((item) => String(item.id) === sprintId);
           const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
-          lastSprintCategoryRef.current = category ?? lastSprintCategoryRef.current;
+          lastSprintCategoryRef.current = category ?? lastSprintCategoryRef.current ?? sourceCategory;
           setOverSprintCategory(category);
-          setSprintPlaceholder((previous) => ({
-            category: category ?? previous.category,
-            targetSprintId: sprintId,
-            position: previous.position,
-            atEnd: false,
-          }));
+          applyPlaceholder(category ?? lastSprintCategoryRef.current ?? sourceCategory ?? null, sprintId, false);
       } else {
           setOverSprintCategory(null);
-          setSprintPlaceholder((previous) => ({
-            ...previous,
-            targetSprintId: null,
-          }));
+          applyPlaceholder(null, null, false);
         }
       };
 
@@ -1246,24 +1251,13 @@ export function BacklogView() {
         });
         const targetSprint = reference.find((item) => String(item.id) === targetSprintId);
         const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
-        const position = derivePosition(targetSprintId, category);
 
         if (targetSprintId === currentSprintId) {
-          setSprintPlaceholder({
-            category: category ?? null,
-            targetSprintId,
-            position,
-            atEnd: false,
-          });
+          applyPlaceholder(category ?? sourceCategory ?? null, targetSprintId, false);
           return;
         }
 
-        setSprintPlaceholder({
-          category: category ?? null,
-          targetSprintId,
-          position,
-          atEnd: false,
-        });
+        applyPlaceholder(category ?? sourceCategory ?? null, targetSprintId, false);
       } else if (overId.startsWith("task-")) {
         const taskId = overId.replace("task-", "");
         const task = tasks.find((t) => String(t.id) === taskId);
@@ -1279,25 +1273,14 @@ export function BacklogView() {
         if (containerSprintId) {
           const targetSprint = reference.find((item) => String(item.id) === containerSprintId);
           const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
-          const position = derivePosition(containerSprintId, category);
-          setSprintPlaceholder({
-            category: category ?? null,
-            targetSprintId: containerSprintId,
-            position,
-            atEnd: false,
-          });
+          applyPlaceholder(category ?? sourceCategory ?? null, containerSprintId, false);
         }
       } else if (overId === "backlog") {
         setHoverSprint(null);
         logSprintDnd("Drag over backlog while dragging sprint", {
           sprintId: dragState.id,
         });
-        setSprintPlaceholder({
-          category: null,
-          targetSprintId: null,
-          position: "after",
-          atEnd: false,
-        });
+        applyPlaceholder(null, null, false);
       } else if (overId.startsWith("sprint-category-")) {
         const category = overId.replace("sprint-category-", "") as SprintStatusCategory;
         setHoverSprint(null);
@@ -1307,12 +1290,7 @@ export function BacklogView() {
           category,
         });
         setOverSprintCategory(category);
-        setSprintPlaceholder({
-          category,
-          targetSprintId: null,
-          position: "after",
-          atEnd: true,
-        });
+        applyPlaceholder(category, null, true);
       } else {
         const containerSprintId = resolveContainerSprintId();
         if (containerSprintId) {
@@ -1324,24 +1302,14 @@ export function BacklogView() {
           });
           const targetSprint = reference.find((item) => String(item.id) === containerSprintId);
           const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
-          setSprintPlaceholder({
-            category: category ?? null,
-            targetSprintId: containerSprintId,
-            position: "after",
-            atEnd: false,
-          });
+          applyPlaceholder(category ?? sourceCategory ?? null, containerSprintId, false);
         } else {
           setHoverSprint(null);
           logSprintDnd("Drag over non-sprint while dragging sprint", {
             sprintId: dragState.id,
             overId,
           });
-          setSprintPlaceholder({
-            category: null,
-            targetSprintId: null,
-            position: "after",
-            atEnd: false,
-          });
+          applyPlaceholder(null, null, false);
         }
       }
       setOverTaskId(null);

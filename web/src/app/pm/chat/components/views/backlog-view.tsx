@@ -1263,19 +1263,6 @@ export function BacklogView() {
       const desiredCategory = targetCategory;
       const actualSourceCategory = getSprintStatusCategory(sourceSprint.status);
 
-      const activeRect = (event.active.rect.current.translated ??
-        event.active.rect.current) as ClientRect | null;
-      const overRect = over.rect as ClientRect | null;
-      const activeCenterY =
-        activeRect && typeof activeRect.top === "number" && typeof activeRect.height === "number"
-          ? activeRect.top + activeRect.height / 2
-          : null;
-      const overCenterY =
-        overRect && typeof overRect.top === "number" && typeof overRect.height === "number"
-          ? overRect.top + overRect.height / 2
-          : null;
-      const isBelowOverItem =
-        activeCenterY !== null && overCenterY !== null ? activeCenterY > overCenterY : false;
       const activeSortable = (event.active.data.current as { sortable?: { index: number } } | undefined)?.sortable;
       const overSortable = (over.data.current as { sortable?: { index: number } } | undefined)?.sortable;
 
@@ -1297,7 +1284,9 @@ export function BacklogView() {
           categoryLists[category] = categoryLists[category].filter((id, index, arr) => arr.indexOf(id) === index);
         });
 
-        const sourceList = categoryLists[resolvedSourceCategory];
+        const sourceList = categoryLists[resolvedSourceCategory].filter(
+          (id, index, arr) => arr.indexOf(id) === index
+        );
         if (!sourceList.includes(sourceSprint.id)) {
           sourceList.push(sourceSprint.id);
         }
@@ -1305,56 +1294,44 @@ export function BacklogView() {
         const sourceIndex = sourceList.indexOf(sourceSprint.id);
 
         if (desiredCategory === resolvedSourceCategory && targetSprint) {
-          const currentList = categoryLists[resolvedSourceCategory];
+          const currentList = [...sourceList];
+          const oldIndex =
+            activeSortable && typeof activeSortable.index === "number" && activeSortable.index >= 0
+              ? activeSortable.index
+              : sourceIndex;
+          let newIndex =
+            overSortable && typeof overSortable.index === "number" && overSortable.index >= 0
+              ? overSortable.index
+              : currentList.indexOf(targetSprint.id);
 
-          if (!activeSortable || !overSortable) {
-            logSprintDnd("Sprint drag missing sortable metadata for same-category reorder", {
-              sourceSprintId: sourceSprint.id,
-              targetSprintId,
-            });
-            return previous;
+          if (newIndex === -1) {
+            newIndex = currentList.length - 1;
           }
 
-          const oldIndex = activeSortable.index;
-          const overIndex = overSortable.index;
-
-          if (oldIndex === -1 || overIndex === -1) {
-            logSprintDnd("Sprint drag unable to resolve indices for same-category reorder", {
-              oldIndex,
-              overIndex,
-              category: resolvedSourceCategory,
-            });
-            return previous;
-          }
-
-          const isActiveBeforeOver = oldIndex < overIndex;
-          const modifier = isBelowOverItem ? 1 : 0;
-          const targetIndex = overIndex + (isActiveBeforeOver ? modifier - 1 : modifier);
-          const boundedIndex = Math.max(0, Math.min(targetIndex, currentList.length - 1));
-          const reordered = arrayMove(currentList, oldIndex, boundedIndex);
+          const reordered = arrayMove(currentList, oldIndex, newIndex);
           categoryLists[resolvedSourceCategory] = reordered;
         } else {
-          categoryLists[resolvedSourceCategory] = categoryLists[resolvedSourceCategory].filter(
-            (id) => id !== sourceSprint.id
+          const cleanedSourceList = sourceList.filter((id) => id !== sourceSprint.id);
+          categoryLists[resolvedSourceCategory] = cleanedSourceList;
+
+          const targetList = categoryLists[desiredCategory].filter(
+            (id, index, arr) => arr.indexOf(id) === index
           );
+          let insertIndex: number;
 
-          const targetList = categoryLists[desiredCategory];
-          const insertIndex = (() => {
-            if (!targetSprint) {
-              return targetList.length;
-            }
-            const fallbackTargetIdx = targetList.indexOf(targetSprint.id);
-            const targetIdx = overSortable ? overSortable.index : fallbackTargetIdx;
-            if (targetIdx === -1) {
-              return targetList.length;
-            }
-            const modifier = isBelowOverItem ? 1 : 0;
-            return targetIdx + modifier;
-          })();
+          if (!targetSprint) {
+            insertIndex = targetList.length;
+          } else {
+            const sortableIndex =
+              overSortable && typeof overSortable.index === "number" && overSortable.index >= 0
+                ? overSortable.index
+                : targetList.indexOf(targetSprint.id);
+            insertIndex = sortableIndex === -1 ? targetList.length : sortableIndex;
+          }
 
-          const adjustedInsertIndex = Math.max(0, Math.min(insertIndex, targetList.length));
+          const boundedIndex = Math.max(0, Math.min(insertIndex, targetList.length));
           const nextTargetList = [...targetList];
-          nextTargetList.splice(adjustedInsertIndex, 0, sourceSprint.id);
+          nextTargetList.splice(boundedIndex, 0, sourceSprint.id);
           categoryLists[desiredCategory] = nextTargetList;
         }
 

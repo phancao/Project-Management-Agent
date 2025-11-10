@@ -163,10 +163,10 @@ export function SprintReportView() {
         </div>
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
           <Select value={selectedSprintId ?? undefined} onValueChange={handleSprintChange}>
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="min-w-[20rem]">
               <SelectValue placeholder="Select sprint" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="min-w-[20rem]">
               {sortedSprints.map((sprint) => {
                 const normalizedStatus = (sprint.status || "").toLowerCase();
                 const statusLabel =

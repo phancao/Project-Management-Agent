@@ -1068,31 +1068,79 @@ export function BacklogView() {
 
     if (dragState.type === 'sprint') {
       const overId = String(over.id);
+      const overData = over.data.current as
+        | { sortable?: { containerId?: string } }
+        | undefined;
+
+      const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
+
+      const resolveContainerSprintId = () => {
+        const containerId = overData?.sortable?.containerId;
+        if (containerId && containerId.startsWith("sprint-")) {
+          return containerId.replace("sprint-", "");
+        }
+        return null;
+      };
+
+      const setHoverSprint = (sprintId: string | null) => {
+        setOverSprintId(sprintId);
+        lastSprintHoverIdRef.current = sprintId;
+        if (sprintId) {
+          const targetSprint = reference.find((item) => String(item.id) === sprintId);
+          lastSprintCategoryRef.current = targetSprint
+            ? resolveSprintCategory(targetSprint)
+            : lastSprintCategoryRef.current;
+        }
+      };
+
       if (overId.startsWith("sprint-")) {
         const targetSprintId = overId.replace("sprint-", "");
-        setOverSprintId(targetSprintId);
-        lastSprintHoverIdRef.current = targetSprintId;
-      const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
-      const targetSprint = reference.find((item) => String(item.id) === targetSprintId);
-      lastSprintCategoryRef.current = targetSprint ? resolveSprintCategory(targetSprint) : lastSprintCategoryRef.current;
+        setHoverSprint(targetSprintId);
         logSprintDnd("Drag over sprint (reorder)", {
           sprintId: dragState.id,
           targetSprintId,
         });
-    } else if (overId.startsWith("sprint-category-")) {
-      const category = overId.replace("sprint-category-", "") as SprintStatusCategory;
-      setOverSprintId(null);
-      lastSprintHoverIdRef.current = null;
-      lastSprintCategoryRef.current = category;
-      logSprintDnd("Drag over sprint category drop zone", {
-        sprintId: dragState.id,
-        category,
-      });
-      } else {
-        logSprintDnd("Drag over non-sprint while dragging sprint", {
+      } else if (overId.startsWith("task-")) {
+        const taskId = overId.replace("task-", "");
+        const task = tasks.find((t) => String(t.id) === taskId);
+        const containerSprintId = task?.sprint_id
+          ? String(task.sprint_id)
+          : resolveContainerSprintId();
+        setHoverSprint(containerSprintId);
+        logSprintDnd("Drag over task while dragging sprint", {
           sprintId: dragState.id,
-          overId,
+          taskId,
+          containerSprintId,
         });
+      } else if (overId === "backlog") {
+        setHoverSprint(null);
+        logSprintDnd("Drag over backlog while dragging sprint", {
+          sprintId: dragState.id,
+        });
+      } else if (overId.startsWith("sprint-category-")) {
+        const category = overId.replace("sprint-category-", "") as SprintStatusCategory;
+        setHoverSprint(null);
+        lastSprintCategoryRef.current = category;
+        logSprintDnd("Drag over sprint category drop zone", {
+          sprintId: dragState.id,
+          category,
+        });
+      } else {
+        const containerSprintId = resolveContainerSprintId();
+        if (containerSprintId) {
+          setHoverSprint(containerSprintId);
+          logSprintDnd("Drag over nested sprint container", {
+            sprintId: dragState.id,
+            containerSprintId,
+            overId,
+          });
+        } else {
+          setHoverSprint(null);
+          logSprintDnd("Drag over non-sprint while dragging sprint", {
+            sprintId: dragState.id,
+            overId,
+          });
+        }
       }
       setOverTaskId(null);
       setOverEpicId(null);
@@ -1181,18 +1229,45 @@ export function BacklogView() {
 
     if (currentDragState.type === 'sprint' && currentDragState.id) {
       const overId = String(over.id);
+      const overData = over.data.current as
+        | { sortable?: { containerId?: string } }
+        | undefined;
       let targetSprintId: string | null = null;
       let targetCategory: SprintStatusCategory | null = null;
 
       if (overId.startsWith("sprint-")) {
         targetSprintId = overId.replace("sprint-", "");
         lastSprintHoverIdRef.current = targetSprintId;
+      } else if (overId.startsWith("task-")) {
+        const taskId = overId.replace("task-", "");
+        const task = tasks.find((t) => String(t.id) === taskId);
+        targetSprintId = task?.sprint_id ? String(task.sprint_id) : null;
+        if (!targetSprintId) {
+          const containerId = overData?.sortable?.containerId;
+          if (containerId && containerId.startsWith("sprint-")) {
+            targetSprintId = containerId.replace("sprint-", "");
+          }
+        }
+        if (targetSprintId) {
+          logSprintDnd("Sprint drag ended over task container", {
+            sprintId: currentDragState.id,
+            taskId,
+            targetSprintId,
+          });
+        }
       } else if (overId.startsWith("sprint-category-")) {
         targetCategory = overId.replace("sprint-category-", "") as SprintStatusCategory;
         lastSprintHoverIdRef.current = null;
         logSprintDnd("Sprint drag ended on category drop zone", {
           sprintId: currentDragState.id,
           category: targetCategory,
+        });
+      } else if (overId === "backlog") {
+        targetSprintId = null;
+        lastSprintHoverIdRef.current = null;
+        lastSprintCategoryRef.current = null;
+        logSprintDnd("Sprint drag ended over backlog area", {
+          sprintId: currentDragState.id,
         });
       } else if (previousOverSprintId) {
         targetSprintId = previousOverSprintId;
@@ -1218,6 +1293,17 @@ export function BacklogView() {
 
       if (!targetSprintId && lastSprintHoverIdRef.current) {
         targetSprintId = lastSprintHoverIdRef.current;
+      }
+      if (!targetCategory && !targetSprintId) {
+        const containerId = overData?.sortable?.containerId;
+        if (containerId && containerId.startsWith("sprint-")) {
+          targetSprintId = containerId.replace("sprint-", "");
+          logSprintDnd("Sprint drag resolved target from containerId", {
+            sprintId: currentDragState.id,
+            targetSprintId,
+            overId,
+          });
+        }
       }
 
       const orderedSource = orderedSprints.length > 0 ? orderedSprints : sprints;

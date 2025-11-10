@@ -1211,7 +1211,7 @@ export function BacklogView() {
             position: previous.position,
             atEnd: false,
           }));
-        } else {
+      } else {
           setOverSprintCategory(null);
           setSprintPlaceholder((previous) => ({
             ...previous,
@@ -1605,15 +1605,17 @@ export function BacklogView() {
             ) {
               const overIndex = overSortable.index;
               const activeIndex = activeSortable.index;
-              if (activeIndex < targetIndex) {
-                newIndex = placeholderPosition === "before" ? targetIndex : overIndex;
-              } else if (activeIndex > targetIndex) {
+              if (placeholderTargetSprintId) {
+                newIndex = placeholderPosition === "before" ? targetIndex : targetIndex + 1;
+              } else if (sourceIndex > targetIndex) {
+                newIndex = placeholderPosition === "before" ? targetIndex : targetIndex + 1;
+              } else if (sourceIndex < targetIndex) {
                 newIndex = placeholderPosition === "before" ? overIndex : overIndex + 1;
               } else {
                 newIndex = placeholderPosition === "before" ? targetIndex : targetIndex + 1;
               }
             } else {
-              newIndex = targetIndex + 1;
+              newIndex = sourceIndex > targetIndex ? targetIndex : targetIndex + 1;
             }
           } else if (
             overSortable &&

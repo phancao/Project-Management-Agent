@@ -1197,7 +1197,76 @@ class JIRAProvider(BasePMProvider):
             raise ValueError(f"Failed to list sprints: {str(e)}")
     
     async def get_sprint(self, sprint_id: str) -> Optional[PMSprint]:
-        raise NotImplementedError("JIRA provider not yet implemented")
+        """
+        Fetch a single sprint by ID using the JIRA Agile API.
+
+        JIRA API: /rest/agile/1.0/sprint/{sprintId}
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        url = f"{self.base_url}/rest/agile/1.0/sprint/{sprint_id}"
+
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+        except requests.exceptions.RequestException as exc:
+            logger.error("Error retrieving JIRA sprint %s: %s", sprint_id, exc, exc_info=True)
+            raise ValueError(f"Failed to fetch sprint {sprint_id}: {exc}") from exc
+
+        if response.status_code == 404:
+            logger.info("JIRA sprint %s not found", sprint_id)
+            return None
+
+        response.raise_for_status()
+        sprint_data = response.json()
+
+        # Attempt to enrich with project context by inspecting the origin board.
+        project_id: Optional[str] = None
+        origin_board_id = sprint_data.get("originBoardId")
+
+        if origin_board_id:
+            board_url = f"{self.base_url}/rest/agile/1.0/board/{origin_board_id}"
+            try:
+                board_resp = requests.get(board_url, headers=self.headers, timeout=10)
+                if board_resp.status_code == 200:
+                    board_data = board_resp.json()
+                    location = board_data.get("location") or {}
+                    project_id = (
+                        location.get("projectKey")
+                        or location.get("projectId")
+                        or board_data.get("location", {}).get("projectKey")
+                    )
+                    if not project_id:
+                        project_keys = board_data.get("projectKeys")
+                        if isinstance(project_keys, list) and project_keys:
+                            project_id = project_keys[0]
+                else:
+                    logger.warning(
+                        "Unable to resolve project for sprint %s via board %s: status=%s",
+                        sprint_id,
+                        origin_board_id,
+                        board_resp.status_code,
+                    )
+            except requests.exceptions.RequestException as exc:
+                logger.warning(
+                    "Failed to fetch board %s for sprint %s: %s",
+                    origin_board_id,
+                    sprint_id,
+                    exc,
+                )
+
+        return PMSprint(
+            id=str(sprint_data.get("id")),
+            name=sprint_data.get("name", ""),
+            project_id=str(project_id) if project_id else None,
+            start_date=self._parse_date(sprint_data.get("startDate")),
+            end_date=self._parse_date(sprint_data.get("endDate")),
+            status=sprint_data.get("state"),
+            goal=sprint_data.get("goal"),
+            created_at=self._parse_datetime(sprint_data.get("createdDate")),
+            updated_at=self._parse_datetime(sprint_data.get("updatedDate")),
+            raw_data=sprint_data,
+        )
     
     async def create_sprint(self, sprint: PMSprint) -> PMSprint:
         raise NotImplementedError("JIRA provider not yet implemented")

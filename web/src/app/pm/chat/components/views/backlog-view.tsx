@@ -1191,6 +1191,9 @@ export function BacklogView() {
           .map((item) => String(item.id));
       };
 
+      const activeRect = (event.active?.rect?.current?.translated ??
+        event.active?.rect?.current) as ClientRect | null;
+
       const pointerRelativePosition = (targetRect?: ClientRect | null): "before" | "after" => {
         if (!activeRect || !targetRect) return "after";
         const activeCenter = activeRect.top + activeRect.height / 2;
@@ -1210,7 +1213,16 @@ export function BacklogView() {
         if (sourceIdx === -1 || targetIdx === -1) {
           return pointerRelativePosition(targetRect);
         }
-        return targetIdx < sourceIdx ? "before" : "after";
+        if (!targetRect) {
+          return targetIdx < sourceIdx ? "before" : "after";
+        }
+        if (sourceIdx > targetIdx) {
+          return "before";
+        }
+        if (sourceIdx < targetIdx) {
+          return pointerRelativePosition(targetRect);
+        }
+        return pointerRelativePosition(targetRect);
       };
 
       const resolveContainerSprintId = () => {

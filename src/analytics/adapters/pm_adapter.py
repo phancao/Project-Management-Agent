@@ -48,48 +48,6 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             return project_id.split(":", 1)[1]
         return project_id
 
-    async def _fetch_sprint(
-        self,
-        project_id: Optional[str],
-        sprint_id: str,
-    ) -> Optional[PMSprint]:
-        """Fetch a single sprint, falling back to list_sprints if direct lookup unsupported."""
-        try:
-            sprint = await self.provider.get_sprint(sprint_id)
-            if sprint:
-                return sprint
-        except NotImplementedError:
-            pass
-        except Exception as exc:  # pragma: no cover - diagnostic logging
-            logger.warning(
-                "[PMProviderAnalyticsAdapter] get_sprint failed for %s: %s",
-                sprint_id,
-                exc,
-            )
-
-        sprints = None
-        try:
-            if project_id:
-                project_key = self._extract_project_key(project_id)
-                try:
-                    sprints = await self.provider.list_sprints(project_id=project_key)
-                except TypeError:
-                    sprints = await self.provider.list_sprints(project_id=project_key)
-            if sprints is None:
-                sprints = await self.provider.list_sprints()
-        except Exception as exc:  # pragma: no cover - diagnostic logging
-            logger.warning(
-                "[PMProviderAnalyticsAdapter] list_sprints fallback failed for project %s: %s",
-                project_id,
-                exc,
-            )
-            return None
-
-        for sprint in sprints or []:
-            if sprint.id == sprint_id:
-                return sprint
-        return None
-
     async def get_burndown_data(
         self,
         project_id: str,
@@ -105,14 +63,9 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             # Get sprint info
             if not sprint_id:
                 # Get active sprint
-                try:
-                    sprints = await self.provider.list_sprints(
-                        project_id=project_key, state="active"
-                    )
-                except TypeError:
-                    sprints = await self.provider.list_sprints(project_id=project_key)
-                except Exception:
-                    sprints = await self.provider.list_sprints(project_id=project_key)
+                sprints = await self.provider.list_sprints(
+                    project_id=project_key, state="active"
+                )
                 if not sprints:
                     # Fallback to any sprint
                     sprints = await self.provider.list_sprints(project_id=project_key)
@@ -123,7 +76,23 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 sprint = sprints[0]
                 sprint_id = sprint.id
             else:
-                sprint = await self._fetch_sprint(project_id, sprint_id)
+                try:
+                    sprint = await self.provider.get_sprint(sprint_id)
+                except NotImplementedError as exc:
+                    provider_name = getattr(
+                        getattr(self.provider, "config", None), "provider_type", self.provider.__class__.__name__
+                    )
+                    raise NotImplementedError(
+                        f"Sprint lookup not supported for provider '{provider_name}'. "
+                        "Sprint analytics require get_sprint implementation."
+                    ) from exc
+                except Exception as exc:
+                    logger.warning(
+                        "[PMProviderAnalyticsAdapter] get_sprint failed for %s: %s",
+                        sprint_id,
+                        exc,
+                    )
+                    raise
             
             if not sprint:
                 raise ValueError(f"Sprint {sprint_id} not found")
@@ -262,7 +231,16 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         
         try:
             # Get sprint
-            sprint = await self._fetch_sprint(project_id, sprint_id)
+            try:
+                sprint = await self.provider.get_sprint(sprint_id)
+            except NotImplementedError as exc:
+                provider_name = getattr(
+                    getattr(self.provider, "config", None), "provider_type", self.provider.__class__.__name__
+                )
+                raise NotImplementedError(
+                    f"Sprint lookup not supported for provider '{provider_name}'. "
+                    "Sprint analytics require get_sprint implementation."
+                ) from exc
             if not sprint:
                 logger.warning(f"[PMProviderAnalyticsAdapter] Sprint {sprint_id} not found")
                 return None

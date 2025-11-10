@@ -150,6 +150,8 @@ async def send_message(
             user_id=current_user.get("user_id")
         )
         return ChatResponse(**response)
+    except NotImplementedError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -452,6 +454,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 "X-Accel-Buffering": "no"
             }
         )
+    except NotImplementedError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -533,6 +537,8 @@ async def create_project(
             created_at=new_project.created_at,
             updated_at=new_project.updated_at
         )
+    except NotImplementedError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -563,6 +569,8 @@ async def list_projects(
             )
             for p in projects
         ]
+    except NotImplementedError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -589,6 +597,8 @@ async def get_project(
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
+    except NotImplementedError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

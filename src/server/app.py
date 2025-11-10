@@ -2891,6 +2891,9 @@ async def get_sprint_report(
                 next(db_gen)
             except StopIteration:
                 pass
+    except NotImplementedError as e:
+        logger.warning("Sprint report unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get sprint report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2912,6 +2915,9 @@ async def get_project_summary(project_id: str):
                 next(db_gen)
             except StopIteration:
                 pass
+    except NotImplementedError as e:
+        logger.warning("Project summary unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get project summary: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2937,6 +2943,9 @@ async def get_cfd_chart(
                 next(db_gen)
             except StopIteration:
                 pass
+    except NotImplementedError as e:
+        logger.warning("CFD chart unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get CFD chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2962,6 +2971,9 @@ async def get_cycle_time_chart(
                 next(db_gen)
             except StopIteration:
                 pass
+    except NotImplementedError as e:
+        logger.warning("Cycle time chart unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get cycle time chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2987,6 +2999,9 @@ async def get_work_distribution_chart(
                 next(db_gen)
             except StopIteration:
                 pass
+    except NotImplementedError as e:
+        logger.warning("Work distribution chart unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get work distribution chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -3012,6 +3027,9 @@ async def get_issue_trend_chart(
                 next(db_gen)
             except StopIteration:
                 pass
+    except NotImplementedError as e:
+        logger.warning("Issue trend chart unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get issue trend chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

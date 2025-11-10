@@ -758,74 +758,6 @@ export function BacklogView() {
     setIsModalOpen(true);
   };
 
-  const isSprintDragging = dragState.type === 'sprint' && !!dragState.id;
-  const activeSprintId = isSprintDragging ? dragState.id : null;
-
-  const renderSprintsWithPlaceholder = useCallback(
-    (categorySprints: SprintSummary[], category: SprintStatusCategory) => {
-      const nodes: ReactNode[] = [];
-
-      const normalizedOverSprintId = overSprintId ? String(overSprintId) : null;
-      const normalizedActiveSprintId = activeSprintId ? String(activeSprintId) : null;
-
-      const placeholderIndex = (() => {
-        if (!isSprintDragging || overSprintCategory !== category) {
-          return -1;
-        }
-        if (
-          normalizedOverSprintId &&
-          normalizedOverSprintId !== normalizedActiveSprintId
-        ) {
-          const index = categorySprints.findIndex(
-            (s) => String(s.id) === normalizedOverSprintId
-          );
-          if (index !== -1) {
-            return index;
-          }
-        }
-        if (!normalizedOverSprintId) {
-          return categorySprints.length;
-        }
-        return -1;
-      })();
-
-      categorySprints.forEach((sprint, index) => {
-        if (placeholderIndex === index) {
-          nodes.push(<SprintDropPlaceholder key={`placeholder-${category}-${index}`} />);
-        }
-
-        nodes.push(
-          <SortableSprintSection
-            key={sprint.id}
-            sprint={sprint}
-            tasks={tasksInSprints[sprint.id] ?? []}
-            onTaskClick={handleTaskClick}
-            epicsMap={epicsMap}
-            isOver={dragState.type !== 'sprint' && overSprintId === sprint.id}
-            draggedTaskId={draggedTaskId}
-          />
-        );
-      });
-
-      if (placeholderIndex === categorySprints.length) {
-        nodes.push(<SprintDropPlaceholder key={`placeholder-${category}-end`} />);
-      }
-
-      return nodes;
-    },
-    [
-      activeSprintId,
-      dragState.type,
-      draggedTaskId,
-      epicsMap,
-      handleTaskClick,
-      isSprintDragging,
-      overSprintCategory,
-      overSprintId,
-      tasksInSprints,
-    ]
-  );
-
   const handleUpdateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
     if (!projectIdForSprints) throw new Error("Project ID is required");
       
@@ -1077,6 +1009,74 @@ export function BacklogView() {
     if (!draggedTaskId) return null;
     return tasks.find((task) => String(task.id) === draggedTaskId);
   }, [draggedTaskId, tasks]);
+
+  const isSprintDragging = dragState.type === 'sprint' && !!dragState.id;
+  const activeSprintId = isSprintDragging ? dragState.id : null;
+
+  const renderSprintsWithPlaceholder = useCallback(
+    (categorySprints: SprintSummary[], category: SprintStatusCategory) => {
+      const nodes: ReactNode[] = [];
+
+      const normalizedOverSprintId = overSprintId ? String(overSprintId) : null;
+      const normalizedActiveSprintId = activeSprintId ? String(activeSprintId) : null;
+
+      const placeholderIndex = (() => {
+        if (!isSprintDragging || overSprintCategory !== category) {
+          return -1;
+        }
+        if (
+          normalizedOverSprintId &&
+          normalizedOverSprintId !== normalizedActiveSprintId
+        ) {
+          const index = categorySprints.findIndex(
+            (s) => String(s.id) === normalizedOverSprintId
+          );
+          if (index !== -1) {
+            return index;
+          }
+        }
+        if (!normalizedOverSprintId) {
+          return categorySprints.length;
+        }
+        return -1;
+      })();
+
+      categorySprints.forEach((sprint, index) => {
+        if (placeholderIndex === index) {
+          nodes.push(<SprintDropPlaceholder key={`placeholder-${category}-${index}`} />);
+        }
+
+        nodes.push(
+          <SortableSprintSection
+            key={sprint.id}
+            sprint={sprint}
+            tasks={tasksInSprints[sprint.id] ?? []}
+            onTaskClick={handleTaskClick}
+            epicsMap={epicsMap}
+            isOver={dragState.type !== 'sprint' && overSprintId === sprint.id}
+            draggedTaskId={draggedTaskId}
+          />
+        );
+      });
+
+      if (placeholderIndex === categorySprints.length) {
+        nodes.push(<SprintDropPlaceholder key={`placeholder-${category}-end`} />);
+      }
+
+      return nodes;
+    },
+    [
+      activeSprintId,
+      dragState.type,
+      draggedTaskId,
+      epicsMap,
+      handleTaskClick,
+      isSprintDragging,
+      overSprintCategory,
+      overSprintId,
+      tasksInSprints,
+    ]
+  );
 
   const availableStatuses = useMemo(() => {
     if (availableStatusesFromBackend && availableStatusesFromBackend.length > 0) {

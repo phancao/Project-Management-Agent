@@ -1264,10 +1264,18 @@ export function BacklogView() {
       const actualSourceCategory = getSprintStatusCategory(sourceSprint.status);
 
       const activeRect = (event.active.rect.current.translated ??
-        event.active.rect.current) as DOMRect | null;
-      const overRect = over.rect as DOMRect | null;
+        event.active.rect.current) as ClientRect | null;
+      const overRect = over.rect as ClientRect | null;
+      const activeCenterY =
+        activeRect && typeof activeRect.top === "number" && typeof activeRect.height === "number"
+          ? activeRect.top + activeRect.height / 2
+          : null;
+      const overCenterY =
+        overRect && typeof overRect.top === "number" && typeof overRect.height === "number"
+          ? overRect.top + overRect.height / 2
+          : null;
       const isBelowOverItem =
-        !!activeRect && !!overRect && activeRect.top > overRect.top + overRect.height / 2;
+        activeCenterY !== null && overCenterY !== null ? activeCenterY > overCenterY : false;
       const activeSortable = (event.active.data.current as { sortable?: { index: number } } | undefined)?.sortable;
       const overSortable = (over.data.current as { sortable?: { index: number } } | undefined)?.sortable;
 
@@ -1308,10 +1316,22 @@ export function BacklogView() {
           }
 
           const oldIndex = activeSortable.index;
+          const overIndex = overSortable.index;
+
+          if (oldIndex === -1 || overIndex === -1) {
+            logSprintDnd("Sprint drag unable to resolve indices for same-category reorder", {
+              oldIndex,
+              overIndex,
+              category: resolvedSourceCategory,
+            });
+            return previous;
+          }
+
+          const isActiveBeforeOver = oldIndex < overIndex;
           const modifier = isBelowOverItem ? 1 : 0;
-          const newIndex = overSortable.index + modifier;
-          const clampedNewIndex = Math.max(0, Math.min(newIndex, currentList.length - 1));
-          const reordered = arrayMove(currentList, oldIndex, clampedNewIndex);
+          const targetIndex = overIndex + (isActiveBeforeOver ? modifier - 1 : modifier);
+          const boundedIndex = Math.max(0, Math.min(targetIndex, currentList.length - 1));
+          const reordered = arrayMove(currentList, oldIndex, boundedIndex);
           categoryLists[resolvedSourceCategory] = reordered;
         } else {
           categoryLists[resolvedSourceCategory] = categoryLists[resolvedSourceCategory].filter(
@@ -1319,19 +1339,18 @@ export function BacklogView() {
           );
 
           const targetList = categoryLists[desiredCategory];
-          const insertIndex = targetSprint
-            ? (() => {
-                const targetIdx = targetList.indexOf(targetSprint.id);
-                if (targetIdx === -1) {
-                  return targetList.length;
-                }
-                if (!overSortable) {
-                  return targetIdx + (isBelowOverItem ? 1 : 0);
-                }
-                const modifier = isBelowOverItem ? 1 : 0;
-                return overSortable.index + modifier;
-              })()
-            : targetList.length;
+          const insertIndex = (() => {
+            if (!targetSprint) {
+              return targetList.length;
+            }
+            const fallbackTargetIdx = targetList.indexOf(targetSprint.id);
+            const targetIdx = overSortable ? overSortable.index : fallbackTargetIdx;
+            if (targetIdx === -1) {
+              return targetList.length;
+            }
+            const modifier = isBelowOverItem ? 1 : 0;
+            return targetIdx + modifier;
+          })();
 
           const adjustedInsertIndex = Math.max(0, Math.min(insertIndex, targetList.length));
           const nextTargetList = [...targetList];

@@ -1592,28 +1592,31 @@ export function BacklogView() {
             }
           } else if (targetSprint && filteredList.includes(targetSprint.id)) {
             const targetIndex = filteredList.indexOf(targetSprint.id);
-            if (sameContainer && activeSortable && typeof activeSortable.index === "number" && activeSortable.index >= 0) {
+            if (
+              sameContainer &&
+              activeSortable &&
+              typeof activeSortable.index === "number" &&
+              activeSortable.index >= 0 &&
+              overSortable &&
+              typeof overSortable.index === "number" &&
+              overSortable.index >= 0
+            ) {
               const activeIndex = activeSortable.index;
               const overIndex =
                 overSortable && typeof overSortable.index === "number" && overSortable.index >= 0
                   ? overSortable.index
                   : targetIndex;
-              newIndex = activeIndex < overIndex ? overIndex : overIndex + 1;
+              if (activeIndex < targetIndex) {
+                newIndex = overIndex;
+              } else if (activeIndex > targetIndex) {
+                newIndex = overIndex;
+              } else {
+                newIndex = overIndex;
+              }
             } else {
               newIndex = targetIndex + 1;
             }
-          } else if (
-            overSortable &&
-            typeof overSortable.index === "number" &&
-            overSortable.index >= 0
-          ) {
-            newIndex = overSortable.index;
-          } else {
-            newIndex = filteredList.length;
-          }
-
-          const boundedIndex = Math.max(0, Math.min(newIndex, filteredList.length));
-          filteredList.splice(boundedIndex, 0, sourceSprint.id);
+          filteredList.splice(newIndex, 0, sourceSprint.id);
           categoryLists[resolvedSourceCategory] = filteredList;
         } else {
           const cleanedSourceList = sourceList.filter((id) => id !== sourceSprint.id);

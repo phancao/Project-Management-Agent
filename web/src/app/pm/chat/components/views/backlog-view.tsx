@@ -1179,6 +1179,16 @@ export function BacklogView() {
 
       const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
 
+      const activeRect = (event.active.rect.current.translated ??
+        event.active.rect.current) as ClientRect | null;
+
+      const computePosition = (targetRect?: ClientRect | null): "before" | "after" => {
+        if (!activeRect || !targetRect) return "after";
+        const activeCenter = activeRect.top + activeRect.height / 2;
+        const targetCenter = targetRect.top + targetRect.height / 2;
+        return activeCenter <= targetCenter ? "before" : "after";
+      };
+
       const resolveContainerSprintId = () => {
         const containerId = overData?.sortable?.containerId;
         if (containerId && containerId.startsWith("sprint-")) {
@@ -1210,16 +1220,6 @@ export function BacklogView() {
         }
       };
 
-      const computeIsAfter = () => {
-        const activeRect = (event.active.rect.current.translated ??
-          event.active.rect.current) as ClientRect | null;
-        const overRect = over.rect as ClientRect | null;
-        if (!activeRect || !overRect) return false;
-        const activeCenter = activeRect.top + activeRect.height / 2;
-        const overCenter = overRect.top + overRect.height / 2;
-        return activeCenter > overCenter;
-      };
-
       if (overId.startsWith("sprint-")) {
         const targetSprintId = overId.replace("sprint-", "");
         setHoverSprint(targetSprintId);
@@ -1229,10 +1229,11 @@ export function BacklogView() {
         });
         const targetSprint = reference.find((item) => String(item.id) === targetSprintId);
         const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
+        const position = computePosition(over.rect as ClientRect | null);
         setSprintPlaceholder({
           category: category ?? null,
           targetSprintId,
-          position: computeIsAfter() ? "after" : "before",
+          position,
           atEnd: false,
         });
       } else if (overId.startsWith("task-")) {
@@ -1250,10 +1251,11 @@ export function BacklogView() {
         if (containerSprintId) {
           const targetSprint = reference.find((item) => String(item.id) === containerSprintId);
           const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
+          const position = computePosition(over.rect as ClientRect | null);
           setSprintPlaceholder({
             category: category ?? null,
             targetSprintId: containerSprintId,
-            position: "after",
+            position,
             atEnd: false,
           });
         }

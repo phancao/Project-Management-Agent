@@ -873,15 +873,6 @@ export function BacklogView() {
     return result;
   }, [sprints, sprintOrder]);
 
-  useEffect(() => {
-    logSprintDnd("Ordered sprint buckets recalculated", {
-      active: activeSprints.map((s) => s.id),
-      future: futureSprints.map((s) => s.id),
-      closed: closedSprints.map((s) => s.id),
-      other: otherSprints.map((s) => s.id),
-    });
-  }, [activeSprints, futureSprints, closedSprints, otherSprints]);
-
   const activeSprints = useMemo(
     () => orderedSprints.filter((sprint) => getSprintStatusCategory(sprint.status) === "active"),
     [orderedSprints]

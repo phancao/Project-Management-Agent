@@ -15,6 +15,7 @@ working with a single provider or aggregating across multiple providers.
 """
 
 import logging
+from datetime import date
 from typing import List, Optional, Dict, Any, Union
 from sqlalchemy.orm import Session
 
@@ -22,7 +23,7 @@ from database.orm_models import PMProviderConnection
 from src.pm_providers.factory import create_pm_provider
 from src.pm_providers.base import BasePMProvider
 from src.pm_providers.builder import build_pm_provider
-from src.pm_providers.models import PMTask, PMProject
+from src.pm_providers.models import PMTask, PMProject, PMSprint
 
 logger = logging.getLogger(__name__)
 
@@ -1263,6 +1264,165 @@ class PMHandler:
         project_name = project.name if project else "Unknown"
         
         return self._task_to_dict(updated_task, project_name)
+
+    async def get_project_timeline(self, project_id: str) -> Dict[str, Any]:
+        """
+        Assemble timeline (sprints + tasks) for a project with scheduling metadata.
+        """
+        provider_instance = self._get_provider_for_project(project_id)
+        actual_project_id = (
+            project_id.split(":", 1)[1]
+            if ":" in project_id
+            else project_id
+        )
+
+        provider_type = getattr(
+            getattr(provider_instance, "config", None),
+            "provider_type",
+            provider_instance.__class__.__name__,
+        )
+
+        try:
+            project = await provider_instance.get_project(actual_project_id)
+        except NotImplementedError:
+            project = None
+        project_name = project.name if project else actual_project_id
+
+        try:
+            sprints = await provider_instance.list_sprints(project_id=actual_project_id)
+        except NotImplementedError:
+            raise ValueError(f"Timeline not yet implemented for {provider_type} provider (missing sprint support)")
+        except Exception as exc:
+            raise ValueError(str(exc))
+
+        try:
+            tasks = await provider_instance.list_tasks(project_id=actual_project_id)
+        except NotImplementedError:
+            raise ValueError(f"Timeline not yet implemented for {provider_type} provider (missing task support)")
+        except Exception as exc:
+            raise ValueError(str(exc))
+
+        sprint_lookup: Dict[str, PMSprint] = {}
+        scheduled_sprints: List[Dict[str, Any]] = []
+        unscheduled_sprints: List[Dict[str, Any]] = []
+
+        def _compute_duration_days(start: Optional[date], end: Optional[date]) -> Optional[int]:
+            if not start or not end:
+                return None
+            delta = (end - start).days
+            if delta < 0:
+                return None
+            return max(delta, 1)
+
+        for sprint in sprints:
+            sprint_id = str(sprint.id)
+            sprint_lookup[sprint_id] = sprint
+
+            has_start = isinstance(sprint.start_date, date)
+            has_end = isinstance(sprint.end_date, date)
+            duration_days = _compute_duration_days(sprint.start_date, sprint.end_date)
+            is_scheduled = bool(has_start and has_end and duration_days is not None)
+
+            if not has_start and not has_end:
+                missing_reason = "missing_start_end"
+            elif not has_start:
+                missing_reason = "missing_start"
+            elif not has_end:
+                missing_reason = "missing_end"
+            elif duration_days is None:
+                missing_reason = "invalid_range"
+            else:
+                missing_reason = None
+
+            payload = {
+                "id": sprint_id,
+                "name": sprint.name,
+                "start_date": sprint.start_date.isoformat() if has_start else None,
+                "end_date": sprint.end_date.isoformat() if has_end else None,
+                "status": (
+                    sprint.status.value
+                    if hasattr(sprint.status, "value")
+                    else str(sprint.status) if sprint.status else None
+                ),
+                "goal": sprint.goal,
+                "duration_days": duration_days,
+                "is_scheduled": is_scheduled,
+                "missing_reason": missing_reason,
+            }
+
+            if is_scheduled:
+                scheduled_sprints.append(payload)
+            else:
+                unscheduled_sprints.append(payload)
+
+        assignee_map: Dict[str, str] = {}
+        for task in tasks:
+            if task.assignee_id and str(task.assignee_id) not in assignee_map:
+                try:
+                    user = await provider_instance.get_user(str(task.assignee_id))
+                except Exception:
+                    user = None
+                if user:
+                    assignee_map[str(task.assignee_id)] = (
+                        user.name or user.username or user.email or str(user.id)
+                    )
+
+        scheduled_tasks: List[Dict[str, Any]] = []
+        unscheduled_tasks: List[Dict[str, Any]] = []
+
+        for task in tasks:
+            task_dict = self._task_to_dict(task, project_name)
+            sprint_id = str(task.sprint_id) if task.sprint_id else None
+            sprint = sprint_lookup.get(sprint_id) if sprint_id else None
+
+            if sprint:
+                task_dict["sprint_name"] = sprint.name
+                task_dict["sprint_start_date"] = sprint.start_date.isoformat() if sprint.start_date else None
+                task_dict["sprint_end_date"] = sprint.end_date.isoformat() if sprint.end_date else None
+            else:
+                task_dict["sprint_name"] = None
+                task_dict["sprint_start_date"] = None
+                task_dict["sprint_end_date"] = None
+
+            assignee_id = task_dict.get("assignee_id")
+            task_dict["assigned_to"] = assignee_map.get(str(assignee_id)) if assignee_id else None
+
+            has_start = bool(task.start_date)
+            has_end = bool(task.due_date)
+            duration_days = _compute_duration_days(task.start_date, task.due_date)
+            is_scheduled = bool(has_start and has_end and duration_days is not None)
+
+            if not has_start and not has_end:
+                missing_reason = "missing_start_end"
+            elif not has_start:
+                missing_reason = "missing_start"
+            elif not has_end:
+                missing_reason = "missing_end"
+            elif duration_days is None:
+                missing_reason = "invalid_range"
+            else:
+                missing_reason = None
+
+            task_dict["duration_days"] = duration_days
+            task_dict["is_scheduled"] = is_scheduled
+            task_dict["missing_reason"] = missing_reason
+
+            if is_scheduled:
+                scheduled_tasks.append(task_dict)
+            else:
+                unscheduled_tasks.append(task_dict)
+
+        return {
+            "project_id": project_id,
+            "project_key": actual_project_id,
+            "project_name": project_name,
+            "sprints": scheduled_sprints,
+            "tasks": scheduled_tasks,
+            "unscheduled": {
+                "sprints": unscheduled_sprints,
+                "tasks": unscheduled_tasks,
+            },
+        }
     
     def _task_to_dict(self, task: PMTask, project_name: str) -> Dict[str, Any]:
         """Convert PMTask to dictionary with project_name"""

@@ -1461,6 +1461,48 @@ async def pm_list_tasks(request: Request, project_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/pm/projects/{project_id}/timeline")
+async def pm_project_timeline(project_id: str):
+    """Return sprint + task scheduling data for timeline views."""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+
+        db_gen = get_db_session()
+        db = next(db_gen)
+
+        try:
+            handler = PMHandler.from_db_session(db)
+            timeline = await handler.get_project_timeline(project_id)
+            return timeline
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        import re
+
+        status_match = re.match(r"\((\d{3})\)\s*(.+)", error_msg)
+        if status_match:
+            status_code = int(status_match.group(1))
+            detail = status_match.group(2)
+            raise HTTPException(status_code=status_code, detail=detail)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        if "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        if "not yet implemented" in error_msg:
+            raise HTTPException(status_code=501, detail=error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to load project timeline: {e}")
+        import traceback
+
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/pm/tasks/my")
 async def pm_list_my_tasks(request: Request):
     """List tasks assigned to current user across all active PM providers"""

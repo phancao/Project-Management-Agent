@@ -3,13 +3,23 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertCircle,
   CalendarRange,
   ListChecks,
   Users,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell,
+} from "recharts";
 
 import { Badge } from "~/components/ui/badge";
 import { Card } from "~/components/ui/card";
@@ -23,13 +33,14 @@ import {
 import { Skeleton } from "~/components/ui/skeleton";
 
 import { useProjectData } from "../../../hooks/use-project-data";
-import { useSprints, type Sprint } from "~/core/api/hooks/pm/use-sprints";
-import { useTasks, type Task } from "~/core/api/hooks/pm/use-tasks";
-import { useEpics, type Epic } from "~/core/api/hooks/pm/use-epics";
-import { useUsers } from "~/core/api/hooks/pm/use-users";
+import {
+  useTimeline,
+  type ProjectTimelineResponse,
+  type TimelineSprint,
+  type TimelineTask,
+} from "~/core/api/hooks/pm/use-timeline";
 
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
-const MIN_BAR_PERCENT = 2;
 const UNASSIGNED_KEY = "__unassigned__";
 
 const shortDateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -43,52 +54,6 @@ const longDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
 });
 
-type TimelineItemType = "sprint" | "task";
-
-type TimelineItem = {
-  id: string;
-  label: string;
-  subLabel?: string;
-  type: TimelineItemType;
-  startDate: Date;
-  endDate: Date;
-  color: string;
-  status?: string;
-  statusLabel?: string;
-  statusValue?: string;
-  sprintId?: string | null;
-  sprintName?: string | null;
-  assigneeKey?: string | null;
-  assigneeName?: string | null;
-  tooltip?: string;
-};
-
-type MissingSprintInfo = {
-  sprint: Sprint;
-  reason: "missing_start" | "missing_end" | "invalid_range";
-};
-
-type MissingTaskInfo = {
-  task: Task;
-  reason: "missing_start" | "missing_end" | "invalid_range";
-};
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function addDays(date: Date, days: number) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-function parseDate(value?: string | null): Date | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
 function formatDateShort(date: Date) {
   return shortDateFormatter.format(date);
 }
@@ -97,8 +62,16 @@ function formatDateLong(date: Date) {
   return longDateFormatter.format(date);
 }
 
-function formatDateRange(start: Date, end: Date) {
-  return `${formatDateLong(start)} → ${formatDateLong(end)}`;
+function addDays(base: Date, days: number) {
+  const next = new Date(base);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function parseISO(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function formatStatusLabel(value?: string | null) {
@@ -107,31 +80,20 @@ function formatStatusLabel(value?: string | null) {
     .toLowerCase()
     .split(/[\s_]+/)
     .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
 }
 
-function describeMissingSprint(reason: MissingSprintInfo["reason"]) {
+function describeMissing(reason?: string | null) {
   switch (reason) {
     case "missing_start":
       return "Start date missing";
     case "missing_end":
       return "End date missing";
+    case "missing_start_end":
+      return "Start and end dates missing";
     case "invalid_range":
       return "End date occurs before the start date";
-    default:
-      return "Date information missing";
-  }
-}
-
-function describeMissingTask(reason: MissingTaskInfo["reason"]) {
-  switch (reason) {
-    case "missing_start":
-      return "Start date missing";
-    case "missing_end":
-      return "Due date missing";
-    case "invalid_range":
-      return "Due date occurs before the start date";
     default:
       return "Date information missing";
   }
@@ -164,402 +126,217 @@ const TASK_PRIORITY_COLORS: Record<string, string> = {
   lowest: "#06b6d4",
 };
 
-function getTaskColor(task: Task) {
-  const status = task.status?.toLowerCase() ?? "";
-  const priority = task.priority?.toLowerCase() ?? "";
-
-  if (status in TASK_STATUS_COLORS) {
-    return TASK_STATUS_COLORS[status];
-  }
-  if (priority in TASK_PRIORITY_COLORS) {
-    return TASK_PRIORITY_COLORS[priority];
-  }
-
-  return "#6366f1";
-}
-
-function getSprintColor(sprint: Sprint) {
+function getSprintColor(sprint: TimelineSprint) {
   const status = sprint.status?.toLowerCase() ?? "";
   return SPRINT_STATUS_COLORS[status] ?? SPRINT_STATUS_COLORS.default;
 }
 
-interface TimelineChartProps {
-  items: TimelineItem[];
-  minDate: Date;
-  maxDate: Date;
-  todayPercent: number | null;
+function getTaskColor(task: TimelineTask) {
+  const status = task.status?.toLowerCase() ?? "";
+  const priority = task.priority?.toLowerCase() ?? "";
+  if (status && TASK_STATUS_COLORS[status]) return TASK_STATUS_COLORS[status];
+  if (priority && TASK_PRIORITY_COLORS[priority]) return TASK_PRIORITY_COLORS[priority];
+  return "#6366f1";
 }
 
-function TimelineChart({ items, minDate, maxDate, todayPercent }: TimelineChartProps) {
-  const totalRange = Math.max(maxDate.getTime() - minDate.getTime(), DAY_IN_MS);
+type ChartDatum = {
+  key: string;
+  name: string;
+  startOffset: number;
+  duration: number;
+  color: string;
+  details: Record<string, string | null | undefined>;
+};
+
+function buildChartData<T extends TimelineSprint | TimelineTask>(
+  items: T[],
+  getStart: (item: T) => Date | null,
+  getEnd: (item: T) => Date | null,
+  getColor: (item: T) => string,
+  getDetails: (item: T, start: Date, end: Date) => Record<string, string | null | undefined>,
+) {
+  const scheduled = items.filter((item) => item.is_scheduled);
+  if (scheduled.length === 0) {
+    return { data: [] as ChartDatum[], minDate: null as Date | null, totalDays: 0 };
+  }
+
+  const startValues: number[] = [];
+  const endValues: number[] = [];
+
+  scheduled.forEach((item) => {
+    const start = getStart(item);
+    const end = getEnd(item);
+    if (!start || !end) return;
+    startValues.push(start.getTime());
+    endValues.push(end.getTime());
+  });
+
+  if (startValues.length === 0 || endValues.length === 0) {
+    return { data: [] as ChartDatum[], minDate: null, totalDays: 0 };
+  }
+
+  const minDate = addDays(new Date(Math.min(...startValues)), -1);
+  const maxDate = addDays(new Date(Math.max(...endValues)), 1);
+  const totalDays = Math.max(1, Math.round((maxDate.getTime() - minDate.getTime()) / DAY_IN_MS));
+
+  const data = scheduled.map((item) => {
+    const start = getStart(item)!;
+    const end = getEnd(item)!;
+    const startOffset = Math.max(0, Math.round((start.getTime() - minDate.getTime()) / DAY_IN_MS));
+    const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / DAY_IN_MS) || 1);
+
+    return {
+      key: (item as any).id as string,
+      name: ("name" in item ? item.name : (item as any).title) as string,
+      startOffset,
+      duration,
+      color: getColor(item),
+      details: getDetails(item, start, end),
+    };
+  });
+
+  return { data, minDate, totalDays };
+}
+
+function TimelineTooltip({
+  active,
+  payload,
+  minDate,
+}: {
+  active?: boolean;
+  payload?: any[];
+  minDate: Date;
+}) {
+  if (!active || !payload?.length) return null;
+  const datum = payload[payload.length - 1]?.payload as ChartDatum | undefined;
+  if (!datum) return null;
+
+  const start = addDays(minDate, datum.startOffset);
+  const end = addDays(minDate, datum.startOffset + datum.duration);
 
   return (
-    <div className="space-y-3">
-      {items.map((item) => {
-        const startOffset = item.startDate.getTime() - minDate.getTime();
-        const endTime = Math.max(item.endDate.getTime(), item.startDate.getTime());
-        const endOffset = endTime - minDate.getTime();
-
-        let leftPercent = clamp((startOffset / totalRange) * 100, 0, 100);
-        let widthPercent = clamp(((endOffset - startOffset) / totalRange) * 100, MIN_BAR_PERCENT, 100);
-
-        if (leftPercent + widthPercent > 100) {
-          widthPercent = Math.max(MIN_BAR_PERCENT, 100 - leftPercent);
-        }
-
-        const rangeLabel = formatDateRange(item.startDate, item.endDate);
-
-        return (
-          <div
-            key={`${item.type}-${item.id}`}
-            className="grid grid-cols-[220px_minmax(0,1fr)_150px] items-center gap-4 rounded-md border border-transparent p-2 hover:border-gray-200 hover:bg-gray-50 dark:hover:border-gray-700 dark:hover:bg-gray-800/40 transition-colors"
-          >
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {item.label}
-                </span>
-                {item.type === "task" && item.statusLabel ? (
-                  <Badge variant="outline" className="text-[11px] capitalize">
-                    {item.statusLabel}
-                  </Badge>
-                ) : null}
-                {item.type === "sprint" ? (
-                  <Badge variant="outline" className="text-[11px] capitalize">
-                    Sprint
-                  </Badge>
-                ) : null}
-              </div>
-              {item.subLabel ? (
-                <div className="text-xs text-gray-500 dark:text-gray-400">{item.subLabel}</div>
-              ) : null}
-            </div>
-            <div className="relative h-8 rounded bg-gray-100 dark:bg-gray-800" title={item.tooltip ?? rangeLabel}>
-              {todayPercent !== null ? (
-                <div
-                  aria-hidden
-                  className="absolute top-0 bottom-0 w-[2px] bg-rose-500/80 dark:bg-rose-400/80 pointer-events-none"
-                  style={{ left: `${clamp(todayPercent, 0, 100)}%` }}
-                />
-              ) : null}
-              <div
-                className="absolute top-1 bottom-1 flex items-center overflow-hidden rounded text-xs font-medium text-white shadow-sm"
-                style={{
-                  left: `${leftPercent}%`,
-                  width: `${widthPercent}%`,
-                  backgroundColor: item.color,
-                }}
-              >
-                <span className="px-2 truncate">{item.type === "task" ? formatStatusLabel(item.status) : item.statusLabel}</span>
-              </div>
-            </div>
-            <div className="text-xs font-medium text-right text-gray-500 dark:text-gray-400">
-              {rangeLabel}
-            </div>
+    <div className="rounded-md border border-gray-200 bg-white p-3 text-xs shadow-md dark:border-gray-700 dark:bg-gray-900">
+      <div className="font-semibold text-gray-900 dark:text-gray-100">{datum.name}</div>
+      <div className="mt-1 text-gray-600 dark:text-gray-300">
+        {formatDateLong(start)} → {formatDateLong(end)} ({datum.duration} days)
+      </div>
+      {Object.entries(datum.details)
+        .filter(([, value]) => value)
+        .map(([key, value]) => (
+          <div key={key} className="mt-1 text-gray-500 dark:text-gray-400">
+            <span className="font-medium capitalize">{key.replace(/_/g, " ")}:</span>{" "}
+            <span>{value}</span>
           </div>
-        );
-      })}
+        ))}
     </div>
   );
 }
 
-export function TimelineView() {
-  const { activeProject, projectIdForData, projectsLoading } = useProjectData();
-  const projectId = projectIdForData ?? "";
-
-  const { sprints, loading: sprintsLoading, error: sprintsError } = useSprints(projectId);
-  const { tasks, loading: tasksLoading, error: tasksError } = useTasks(projectIdForData ?? undefined);
-  const { epics } = useEpics(projectIdForData);
-  const { users } = useUsers(projectIdForData ?? undefined);
-
+function TimelineContent({
+  timeline,
+  timelineError,
+  activeProjectName,
+}: {
+  timeline: ProjectTimelineResponse | null;
+  timelineError: Error | null;
+  activeProjectName: string | null;
+}) {
   const [sprintFilter, setSprintFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
 
-  useEffect(() => {
-    setSprintFilter("all");
-    setStatusFilter("all");
-    setAssigneeFilter("all");
-  }, [projectIdForData]);
-
-  const userMap = useMemo(() => {
-    const map = new Map<string, string>();
-    users.forEach((user) => {
-      map.set(user.id, user.name || user.username || user.email || user.id);
-    });
-    return map;
-  }, [users]);
-
-  const sprintMap = useMemo(() => {
-    const map = new Map<string, Sprint>();
-    sprints.forEach((sprint) => {
-      map.set(sprint.id, sprint);
-    });
-    return map;
-  }, [sprints]);
-
-  const epicMap = useMemo(() => {
-    const map = new Map<string, Epic>();
-    epics.forEach((epic) => {
-      map.set(epic.id, epic);
-    });
-    return map;
-  }, [epics]);
-
-  const timeline = useMemo(() => {
-    const timelineItems: TimelineItem[] = [];
-    const missingSprints: MissingSprintInfo[] = [];
-    const missingTasks: MissingTaskInfo[] = [];
-
-    sprints.forEach((sprint) => {
-      const start = parseDate(sprint.start_date);
-      const end = parseDate(sprint.end_date);
-
-      if (!start && !end) {
-        missingSprints.push({ sprint, reason: "missing_start" });
-        missingSprints.push({ sprint, reason: "missing_end" });
-        return;
-      }
-
-      if (!start) {
-        missingSprints.push({ sprint, reason: "missing_start" });
-        return;
-      }
-
-      if (!end) {
-        missingSprints.push({ sprint, reason: "missing_end" });
-        return;
-      }
-
-      if (end.getTime() < start.getTime()) {
-        missingSprints.push({ sprint, reason: "invalid_range" });
-        return;
-      }
-
-      timelineItems.push({
-        id: sprint.id,
-        label: sprint.name,
-        type: "sprint",
-        startDate: start,
-        endDate: end,
-        color: getSprintColor(sprint),
-        status: sprint.status,
-        statusValue: sprint.status?.toLowerCase(),
-        statusLabel: formatStatusLabel(sprint.status),
-        sprintId: sprint.id,
-        sprintName: sprint.name,
-        tooltip: `Sprint ${sprint.name} • ${formatDateRange(start, end)}`,
-      });
-    });
-
-    tasks.forEach((task) => {
-      const start = parseDate(task.start_date);
-      const end = parseDate(task.due_date);
-
-      if (!start && !end) {
-        missingTasks.push({ task, reason: "missing_start" });
-        missingTasks.push({ task, reason: "missing_end" });
-        return;
-      }
-
-      if (!start) {
-        missingTasks.push({ task, reason: "missing_start" });
-        return;
-      }
-
-      if (!end) {
-        missingTasks.push({ task, reason: "missing_end" });
-        return;
-      }
-
-      if (end.getTime() < start.getTime()) {
-        missingTasks.push({ task, reason: "invalid_range" });
-        return;
-      }
-
-      const sprint = task.sprint_id ? sprintMap.get(task.sprint_id) : undefined;
-      const epic = task.epic_id ? epicMap.get(task.epic_id) : undefined;
-      const statusValue = task.status?.toLowerCase() ?? "unknown";
-      const assigneeKey = task.assignee_id ?? (task.assigned_to ? `name:${task.assigned_to}` : UNASSIGNED_KEY);
-      const assigneeName =
-        task.assigned_to ||
-        (task.assignee_id ? userMap.get(task.assignee_id) ?? task.assignee_id : null) ||
-        null;
-
-      const subLabelParts: string[] = [];
-      if (sprint?.name) subLabelParts.push(`Sprint: ${sprint.name}`);
-      if (epic?.name) subLabelParts.push(`Epic: ${epic.name}`);
-      subLabelParts.push(`Assignee: ${assigneeName ?? "Unassigned"}`);
-
-      timelineItems.push({
-        id: task.id,
-        label: task.title,
-        type: "task",
-        startDate: start,
-        endDate: end,
-        color: getTaskColor(task),
-        status: task.status,
-        statusValue,
-        statusLabel: formatStatusLabel(task.status),
-        sprintId: task.sprint_id ?? null,
-        sprintName: sprint?.name ?? null,
-        assigneeKey,
-        assigneeName,
-        subLabel: subLabelParts.join(" • "),
-        tooltip: [
-          task.title,
-          `Status: ${formatStatusLabel(task.status)}`,
-          sprint?.name ? `Sprint: ${sprint.name}` : null,
-          epic?.name ? `Epic: ${epic.name}` : null,
-          `Assignee: ${assigneeName ?? "Unassigned"}`,
-          `Duration: ${formatDateRange(start, end)}`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      });
-    });
-
-    const sortedItems = timelineItems.sort(
-      (a, b) => a.startDate.getTime() - b.startDate.getTime()
-    );
-
-    const dates = sortedItems.flatMap((item) => [
-      item.startDate.getTime(),
-      item.endDate.getTime(),
-    ]);
-
-    if (dates.length === 0) {
-      return {
-        sprintItems: [] as TimelineItem[],
-        taskItems: [] as TimelineItem[],
-        minDate: null as Date | null,
-        maxDate: null as Date | null,
-        missingSprints,
-        missingTasks,
-      };
-    }
-
-    const minDate = addDays(new Date(Math.min(...dates)), -2);
-    const maxDate = addDays(new Date(Math.max(...dates)), 2);
-
-    return {
-      sprintItems: sortedItems.filter((item) => item.type === "sprint"),
-      taskItems: sortedItems.filter((item) => item.type === "task"),
-      minDate,
-      maxDate,
-      missingSprints,
-      missingTasks,
-    };
-  }, [sprints, tasks, sprintMap, epicMap, userMap]);
-
-  const statusOptions = useMemo(() => {
-    const values = new Map<string, string>();
-    tasks.forEach((task) => {
-      if (!task.status) return;
-      const value = task.status.toLowerCase();
-      if (!values.has(value)) {
-        values.set(value, formatStatusLabel(task.status));
-      }
-    });
-    return Array.from(values.entries()).map(([value, label]) => ({ value, label }));
-  }, [tasks]);
+  const scheduledSprints = timeline?.sprints ?? [];
+  const scheduledTasks = timeline?.tasks ?? [];
+  const unscheduledSprints = timeline?.unscheduled?.sprints ?? [];
+  const unscheduledTasks = timeline?.unscheduled?.tasks ?? [];
 
   const sprintOptions = useMemo(() => {
-    return sprints.map((sprint) => ({
-      value: sprint.id,
-      label: sprint.name,
-    }));
-  }, [sprints]);
+    const map = new Map<string, string>();
+    scheduledTasks.forEach((task) => {
+      if (task.sprint_id && task.sprint_name) {
+        map.set(task.sprint_id, task.sprint_name);
+      }
+    });
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+  }, [scheduledTasks]);
+
+  const statusOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    scheduledTasks.forEach((task) => {
+      if (!task.status) return;
+      const value = task.status.toLowerCase();
+      if (!map.has(value)) {
+        map.set(value, formatStatusLabel(task.status));
+      }
+    });
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+  }, [scheduledTasks]);
 
   const assigneeOptions = useMemo(() => {
     const map = new Map<string, string>();
-    tasks.forEach((task) => {
+    scheduledTasks.forEach((task) => {
       const key = task.assignee_id ?? (task.assigned_to ? `name:${task.assigned_to}` : UNASSIGNED_KEY);
-      const name =
-        task.assigned_to ||
-        (task.assignee_id ? userMap.get(task.assignee_id) ?? task.assignee_id : null) ||
-        null;
-
+      const label = task.assigned_to ?? task.assignee_id ?? "Unassigned";
       if (!map.has(key)) {
-        map.set(key, name ?? "Unassigned");
+        map.set(key, label);
       }
     });
-
     if (!map.has(UNASSIGNED_KEY)) {
       map.set(UNASSIGNED_KEY, "Unassigned");
     }
-
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
-  }, [tasks, userMap]);
+  }, [scheduledTasks]);
 
-  const filteredTaskItems = useMemo(() => {
-    let items = timeline.taskItems;
-    if (sprintFilter !== "all") {
-      items = items.filter((item) => item.sprintId === sprintFilter);
-    }
-    if (statusFilter !== "all") {
-      items = items.filter((item) => item.statusValue === statusFilter);
-    }
-    if (assigneeFilter !== "all") {
-      if (assigneeFilter === UNASSIGNED_KEY) {
-        items = items.filter((item) => !item.assigneeKey || item.assigneeKey === UNASSIGNED_KEY);
-      } else {
-        items = items.filter((item) => item.assigneeKey === assigneeFilter);
+  const filteredTasks = useMemo(() => {
+    return scheduledTasks.filter((task) => {
+      if (sprintFilter !== "all" && task.sprint_id !== sprintFilter) return false;
+      if (statusFilter !== "all" && (task.status?.toLowerCase() ?? "") !== statusFilter) return false;
+      if (assigneeFilter !== "all") {
+        if (assigneeFilter === UNASSIGNED_KEY) {
+          if (task.assignee_id || task.assigned_to) return false;
+        } else if (
+          task.assignee_id !== assigneeFilter &&
+          `name:${task.assigned_to}` !== assigneeFilter
+        ) {
+          return false;
+        }
       }
-    }
-    return items;
-  }, [timeline.taskItems, sprintFilter, statusFilter, assigneeFilter]);
+      return true;
+    });
+  }, [scheduledTasks, sprintFilter, statusFilter, assigneeFilter]);
 
-  const unscheduledTaskCount = timeline.missingTasks.length;
-  const unscheduledTasksToDisplay = timeline.missingTasks.slice(0, 6);
-  const remainingUnscheduleCount = Math.max(0, unscheduledTaskCount - unscheduledTasksToDisplay.length);
-
-  const timelineRangeDays =
-    timeline.minDate && timeline.maxDate
-      ? Math.max(1, Math.round((timeline.maxDate.getTime() - timeline.minDate.getTime()) / DAY_IN_MS))
-      : null;
-
-  const today = new Date();
-  const todayPercent =
-    timeline.minDate &&
-    timeline.maxDate &&
-    today >= timeline.minDate &&
-    today <= timeline.maxDate
-      ? ((today.getTime() - timeline.minDate.getTime()) /
-          (timeline.maxDate.getTime() - timeline.minDate.getTime())) *
-        100
-      : null;
-
-  const isLoading =
-    projectsLoading ||
-    (!!projectIdForData && (sprintsLoading || tasksLoading));
-
-  const combinedErrors = [sprintsError, tasksError].filter(Boolean) as Error[];
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-36 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
+  const sprintChart = useMemo(() => {
+    return buildChartData(
+      scheduledSprints,
+      (sprint) => parseISO(sprint.start_date),
+      (sprint) => parseISO(sprint.end_date),
+      getSprintColor,
+      (sprint, start, end) => ({
+        status: formatStatusLabel(sprint.status),
+        goal: sprint.goal,
+        start_date: formatDateLong(start),
+        end_date: formatDateLong(end),
+      }),
     );
-  }
+  }, [scheduledSprints]);
 
-  if (!projectIdForData) {
-    return (
-      <Card className="p-6">
-        <div className="space-y-2 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            Timeline
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Select a project from the header to view its delivery timeline.
-          </p>
-        </div>
-      </Card>
+  const taskChart = useMemo(() => {
+    return buildChartData(
+      filteredTasks,
+      (task) => parseISO(task.start_date),
+      (task) => parseISO(task.due_date),
+      getTaskColor,
+      (task, start, end) => ({
+        status: formatStatusLabel(task.status),
+        sprint: task.sprint_name ?? "—",
+        assignee: task.assigned_to ?? "Unassigned",
+        start_date: formatDateLong(start),
+        due_date: formatDateLong(end),
+      }),
     );
-  }
+  }, [filteredTasks]);
+
+  const unscheduledTaskPreview = unscheduledTasks.slice(0, 6);
 
   return (
     <div className="space-y-6">
@@ -567,34 +344,15 @@ export function TimelineView() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Timeline</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {activeProject ? activeProject.name : "Selected project"} •{" "}
-            {timeline.minDate && timeline.maxDate
-              ? `${formatDateLong(timeline.minDate)} → ${formatDateLong(timeline.maxDate)}`
-              : "No scheduled items yet"}
+            {activeProjectName ?? "Selected project"}
           </p>
         </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          The timeline updates automatically when tasks or sprints change.
-        </div>
+        {timelineError ? (
+          <Badge variant="destructive" className="text-xs">
+            {timelineError.message}
+          </Badge>
+        ) : null}
       </div>
-
-      {combinedErrors.length > 0 ? (
-        <Card className="border border-rose-300 bg-rose-50/80 dark:border-rose-500/40 dark:bg-rose-500/10 p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-            <div>
-              <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">
-                We couldn't load everything for the timeline.
-              </p>
-              <ul className="mt-2 space-y-1 text-sm text-rose-600 dark:text-rose-200">
-                {combinedErrors.map((err, index) => (
-                  <li key={index}>{err.message}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </Card>
-      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="p-4">
@@ -604,14 +362,10 @@ export function TimelineView() {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Scheduled Sprints
+                Scheduled sprints
               </p>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {timeline.sprintItems.length}
-                <span className="text-sm font-normal text-gray-400 dark:text-gray-500">
-                  {" "}
-                  / {sprints.length}
-                </span>
+                {scheduledSprints.length}
               </p>
             </div>
           </div>
@@ -623,14 +377,10 @@ export function TimelineView() {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Tasks on the timeline
+                Tasks on timeline
               </p>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {timeline.taskItems.length}
-                <span className="text-sm font-normal text-gray-400 dark:text-gray-500">
-                  {" "}
-                  / {tasks.length}
-                </span>
+                {scheduledTasks.length}
               </p>
             </div>
           </div>
@@ -642,10 +392,10 @@ export function TimelineView() {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Unscheduled Tasks
+                Unscheduled tasks
               </p>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {unscheduledTaskCount}
+                {unscheduledTasks.length}
               </p>
             </div>
           </div>
@@ -657,62 +407,63 @@ export function TimelineView() {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Timeline Span
+                Timeline coverage
               </p>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {timelineRangeDays ? `${timelineRangeDays} days` : "—"}
+                {Math.max(sprintChart.totalDays, taskChart.totalDays) || "—"}{" "}
+                {Math.max(sprintChart.totalDays, taskChart.totalDays) ? "days" : ""}
               </p>
             </div>
           </div>
         </Card>
       </div>
 
-      {(timeline.missingSprints.length > 0 || timeline.missingTasks.length > 0) && (
-        <Card className="border border-amber-300 bg-amber-50/60 dark:border-amber-500/40 dark:bg-amber-950/30 p-5">
+      {unscheduledSprints.length > 0 || unscheduledTasks.length > 0 ? (
+        <Card className="border border-amber-300 bg-amber-50/70 p-5 dark:border-amber-500/40 dark:bg-amber-950/30">
           <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-300 mt-0.5" />
+            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
             <div>
               <p className="text-sm font-semibold text-amber-700 dark:text-amber-200">
-                Some items are missing schedule information
+                Some work items are missing schedule information
               </p>
-              <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-200/80">
-                Add start and due dates to include them in the timeline.
+              <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-200/70">
+                Add start and end dates to include them in the Gantt chart.
               </p>
 
-              {timeline.missingSprints.length > 0 ? (
+              {unscheduledSprints.length > 0 ? (
                 <div className="mt-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">
-                    Sprints missing dates ({timeline.missingSprints.length})
+                    Sprints ({unscheduledSprints.length})
                   </p>
                   <ul className="mt-1 space-y-1 text-sm text-amber-700 dark:text-amber-100">
-                    {timeline.missingSprints.slice(0, 4).map(({ sprint, reason }) => (
+                    {unscheduledSprints.slice(0, 4).map((sprint) => (
                       <li key={sprint.id}>
-                        <span className="font-medium">{sprint.name}</span> — {describeMissingSprint(reason)}
+                        <span className="font-medium">{sprint.name}</span> — {describeMissing(sprint.missing_reason)}
                       </li>
                     ))}
-                    {timeline.missingSprints.length > 4 ? (
+                    {unscheduledSprints.length > 4 ? (
                       <li className="text-xs text-amber-600/80 dark:text-amber-200/70">
-                        + {timeline.missingSprints.length - 4} more sprints
+                        + {unscheduledSprints.length - 4} more sprints
                       </li>
                     ) : null}
                   </ul>
                 </div>
               ) : null}
 
-              {timeline.missingTasks.length > 0 ? (
+              {unscheduledTasks.length > 0 ? (
                 <div className="mt-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">
-                    Tasks missing dates ({timeline.missingTasks.length})
+                    Tasks ({unscheduledTasks.length})
                   </p>
                   <ul className="mt-1 space-y-1 text-sm text-amber-700 dark:text-amber-100">
-                    {unscheduledTasksToDisplay.map(({ task, reason }) => (
+                    {unscheduledTaskPreview.map((task) => (
                       <li key={task.id}>
-                        <span className="font-medium">{task.title}</span> — {describeMissingTask(reason)}
+                        <span className="font-medium">{task.title}</span> — {describeMissing(task.missing_reason)}
                       </li>
                     ))}
-                    {remainingUnscheduleCount > 0 ? (
+                    {unscheduledTasks.length > unscheduledTaskPreview.length ? (
                       <li className="text-xs text-amber-600/80 dark:text-amber-200/70">
-                        + {remainingUnscheduleCount} more tasks
+                        + {unscheduledTasks.length - unscheduledTaskPreview.length} more tasks
                       </li>
                     ) : null}
                   </ul>
@@ -721,9 +472,9 @@ export function TimelineView() {
             </div>
           </div>
         </Card>
-      )}
+      ) : null}
 
-      <Card className="p-6 space-y-5">
+      <Card className="space-y-5 p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Sprint schedule</h3>
@@ -747,26 +498,42 @@ export function TimelineView() {
           </div>
         </div>
 
-        {timeline.sprintItems.length === 0 ? (
+        {sprintChart.data.length === 0 || !sprintChart.minDate ? (
           <div className="rounded border border-dashed border-gray-300 bg-gray-50 py-12 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900">
-            No sprints have scheduling information yet.
+            No sprints have complete scheduling information yet.
           </div>
-        ) : timeline.minDate && timeline.maxDate ? (
-          <TimelineChart
-            items={timeline.sprintItems}
-            minDate={timeline.minDate}
-            maxDate={timeline.maxDate}
-            todayPercent={todayPercent}
-          />
-        ) : null}
+        ) : (
+          <ResponsiveContainer width="100%" height={Math.max(280, sprintChart.data.length * 48)}>
+            <BarChart
+              data={sprintChart.data}
+              layout="vertical"
+              margin={{ top: 16, right: 24, left: 200, bottom: 16 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis
+                type="number"
+                domain={[0, sprintChart.totalDays]}
+                tickFormatter={(value) => formatDateShort(addDays(sprintChart.minDate!, Number(value)))}
+              />
+              <YAxis type="category" dataKey="name" width={200} />
+              <Tooltip content={<TimelineTooltip minDate={sprintChart.minDate!} />} />
+              <Bar dataKey="startOffset" stackId="sprint" fill="transparent" isAnimationActive={false} />
+              <Bar dataKey="duration" stackId="sprint" radius={[0, 4, 4, 0]}>
+                {sprintChart.data.map((datum) => (
+                  <Cell key={datum.key} fill={datum.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </Card>
 
-      <Card className="p-6 space-y-5">
+      <Card className="space-y-5 p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Task schedule</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Tasks with start and due dates appear here. Use the filters to focus on a sprint, status, or assignee.
+              Tasks with start and due dates appear here. Use the filters to focus on specific sprints, statuses, or assignees.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -820,23 +587,80 @@ export function TimelineView() {
           </div>
         </div>
 
-        {timeline.taskItems.length === 0 ? (
-          <div className="rounded border border-dashed border-gray-300 bg-gray-50 py-12 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900">
-            No tasks have start and due dates yet. Schedule tasks to visualise their delivery window.
+        {timelineError ? (
+          <div className="rounded border border-rose-200 bg-rose-50 py-10 text-center text-sm text-rose-600 dark:border-rose-500/40 dark:bg-rose-950/30 dark:text-rose-200">
+            Failed to load timeline: {timelineError.message}
           </div>
-        ) : filteredTaskItems.length === 0 ? (
+        ) : taskChart.data.length === 0 || !taskChart.minDate ? (
           <div className="rounded border border-dashed border-gray-300 bg-gray-50 py-12 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900">
-            No tasks match the current filters.
+            No tasks match the current filters or have complete scheduling information.
           </div>
-        ) : timeline.minDate && timeline.maxDate ? (
-          <TimelineChart
-            items={filteredTaskItems}
-            minDate={timeline.minDate}
-            maxDate={timeline.maxDate}
-            todayPercent={todayPercent}
-          />
-        ) : null}
+        ) : (
+          <ResponsiveContainer width="100%" height={Math.max(320, taskChart.data.length * 48)}>
+            <BarChart
+              data={taskChart.data}
+              layout="vertical"
+              margin={{ top: 16, right: 24, left: 220, bottom: 16 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis
+                type="number"
+                domain={[0, taskChart.totalDays]}
+                tickFormatter={(value) => formatDateShort(addDays(taskChart.minDate!, Number(value)))}
+              />
+              <YAxis type="category" dataKey="name" width={220} />
+              <Tooltip content={<TimelineTooltip minDate={taskChart.minDate!} />} />
+              <Bar dataKey="startOffset" stackId="task" fill="transparent" isAnimationActive={false} />
+              <Bar dataKey="duration" stackId="task" radius={[0, 4, 4, 0]}>
+                {taskChart.data.map((datum) => (
+                  <Cell key={datum.key} fill={datum.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </Card>
     </div>
   );
 }
+
+export function TimelineView() {
+  const { activeProject, projectIdForData, projectsLoading } = useProjectData();
+  const {
+    timeline,
+    loading: timelineLoading,
+    error: timelineError,
+  } = useTimeline(projectIdForData);
+
+  if (!projectIdForData) {
+    return (
+      <Card className="p-6 text-center">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Timeline</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Select a project from the header to view its Gantt chart.
+        </p>
+      </Card>
+    );
+  }
+
+  const isLoading = projectsLoading || timelineLoading;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <TimelineContent
+      timeline={timeline}
+      timelineError={timelineError}
+      activeProjectName={activeProject?.name ?? null}
+    />
+  );
+}
+

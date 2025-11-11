@@ -212,6 +212,23 @@ class MockPMProvider(BasePMProvider):
 
             priority = priority_sequence[index % len(priority_sequence)]
 
+            start_date = None
+            due_date = None
+            if sprint_id:
+                sprint = next((s for s in self.mock_sprints if s.id == sprint_id), None)
+                if sprint and sprint.start_date and sprint.end_date:
+                    sprint_duration = max((sprint.end_date - sprint.start_date).days, 1)
+                    start_offset = min(index % sprint_duration, sprint_duration - 1)
+                    start_date = sprint.start_date + timedelta(days=start_offset)
+                    due_offset = min(start_offset + max(1, sprint_duration // 2), sprint_duration)
+                    due_date = sprint.start_date + timedelta(days=due_offset)
+                    if due_date > sprint.end_date:
+                        due_date = sprint.end_date
+            if start_date is None or due_date is None:
+                base_start = (now - timedelta(days=45 - index * 2)).date()
+                start_date = base_start
+                due_date = base_start + timedelta(days=5 + (index % 4))
+
             task = PMTask(
                 id=f"task-{index}",
                 title=title,
@@ -227,8 +244,8 @@ class MockPMProvider(BasePMProvider):
                 sprint_id=sprint_id,
                 estimated_hours=float(estimated_hours),
                 actual_hours=None,
-                start_date=None,
-                due_date=None,
+                start_date=start_date,
+                due_date=due_date,
                 created_at=created_at,
                 updated_at=updated_at,
                 completed_at=completed_at,

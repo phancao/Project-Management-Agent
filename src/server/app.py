@@ -93,6 +93,10 @@ class PMTaskCreateRequest(BaseModel):
     epic_id: Optional[str] = None
     estimated_hours: Optional[float] = None
 
+
+class TaskAssignmentRequest(BaseModel):
+    assignee_id: Optional[str] = None
+
 if os.name == "nt":
     # WindowsSelectorEventLoopPolicy is available on Windows
     asyncio.set_event_loop_policy(
@@ -1993,6 +1997,47 @@ async def pm_assign_task_to_sprint(request: Request, project_id: str, task_id: s
     except Exception as e:
         logger.error(f"Failed to assign task to sprint: {e}")
         import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pm/projects/{project_id}/tasks/{task_id}/assign-user")
+async def pm_assign_task_to_user(project_id: str, task_id: str, payload: TaskAssignmentRequest):
+    """Assign or unassign a task to a user"""
+    try:
+        from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
+
+        db_gen = get_db_session()
+        db = next(db_gen)
+
+        try:
+            handler = PMHandler.from_db_session(db)
+            return await handler.assign_task_to_user(project_id, task_id, payload.assignee_id)
+        finally:
+            db.close()
+    except ValueError as ve:
+        error_msg = str(ve)
+        import re
+
+        status_match = re.match(r"\((\d{3})\)\s*(.+)", error_msg)
+        if status_match:
+            status_code = int(status_match.group(1))
+            detail = status_match.group(2)
+            raise HTTPException(status_code=status_code, detail=detail)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        if "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        if "not yet implemented" in error_msg:
+            raise HTTPException(status_code=501, detail=error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to assign task: {e}")
+        import traceback
+
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 

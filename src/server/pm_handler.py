@@ -1265,6 +1265,39 @@ class PMHandler:
         
         return self._task_to_dict(updated_task, project_name)
 
+    async def assign_task_to_user(
+        self,
+        project_id: str,
+        task_id: str,
+        assignee_id: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Assign a task to a user (assignee).
+        """
+        provider_instance = self._get_provider_for_project(project_id)
+        actual_project_id = (
+            project_id.split(":", 1)[1]
+            if ":" in project_id
+            else project_id
+        )
+
+        try:
+            updated_task = await provider_instance.update_task(task_id, {"assignee_id": assignee_id})
+        except NotImplementedError:
+            provider_type = getattr(
+                getattr(provider_instance, "config", None),
+                "provider_type",
+                provider_instance.__class__.__name__,
+            )
+            raise ValueError(f"Task assignment not yet implemented for {provider_type}")
+        except Exception as update_exc:
+            raise ValueError(str(update_exc))
+
+        project = await provider_instance.get_project(actual_project_id)
+        project_name = project.name if project else "Unknown"
+
+        return self._task_to_dict(updated_task, project_name)
+
     async def get_project_timeline(self, project_id: str) -> Dict[str, Any]:
         """
         Assemble timeline (sprints + tasks) for a project with scheduling metadata.

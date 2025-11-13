@@ -247,6 +247,62 @@ CREATE TABLE project_sync_mappings (
     UNIQUE(internal_project_id, provider_connection_id)
 );
 
+-- Mock provider persistence tables
+CREATE TABLE IF NOT EXISTS mock_projects (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS mock_users (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
+    role VARCHAR(100),
+    avatar_url VARCHAR(512),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS mock_sprints (
+    id VARCHAR(64) PRIMARY KEY,
+    project_id VARCHAR(64) REFERENCES mock_projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    start_date DATE,
+    end_date DATE,
+    goal TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS mock_epics (
+    id VARCHAR(64) PRIMARY KEY,
+    project_id VARCHAR(64) REFERENCES mock_projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    status VARCHAR(32),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS mock_tasks (
+    id VARCHAR(64) PRIMARY KEY,
+    project_id VARCHAR(64) REFERENCES mock_projects(id) ON DELETE CASCADE,
+    sprint_id VARCHAR(64) REFERENCES mock_sprints(id) ON DELETE SET NULL,
+    epic_id VARCHAR(64) REFERENCES mock_epics(id) ON DELETE SET NULL,
+    assignee_id VARCHAR(64) REFERENCES mock_users(id) ON DELETE SET NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    status VARCHAR(32) NOT NULL DEFAULT 'todo',
+    priority VARCHAR(32) NOT NULL DEFAULT 'medium',
+    estimated_hours DECIMAL(10,2),
+    start_date DATE,
+    due_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
 -- Sample data
 INSERT INTO users (email, name, role) VALUES 
 ('admin@example.com', 'System Administrator', 'admin'),

@@ -73,7 +73,8 @@ def init_db():
         ResearchSession, KnowledgeBaseItem, ConversationSession, ConversationMessage,
         ProjectTemplate, ProjectMetric, IntentClassification, IntentFeedback,
         IntentMetric, LearnedIntentPattern, Sprint, SprintTask,
-        PMProviderConnection, ProjectSyncMapping
+        PMProviderConnection, ProjectSyncMapping,
+        MockProject, MockUser, MockSprint, MockEpic, MockTask
     )
     try:
         Base.metadata.create_all(bind=engine)

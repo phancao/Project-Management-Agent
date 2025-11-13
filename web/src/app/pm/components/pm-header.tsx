@@ -12,8 +12,10 @@ import { Suspense } from "react";
 import { toast } from "sonner";
 
 import { Button } from "~/components/ui/button";
+import { RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
+import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMLoading } from "../context/pm-loading-context";
 
 import { ThemeToggle } from "../../../components/deer-flow/theme-toggle";
@@ -32,9 +34,10 @@ interface PMHeaderProps {
 export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectChange }: PMHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { projects, loading: projectsLoading } = useProjects();
+  const { projects, loading: projectsLoading, refresh: refreshProjects } = useProjects();
   const { state: loadingState } = usePMLoading();
   const [providers, setProviders] = useState<Array<{ id: string; provider_type: string }>>([]);
+  const [regeneratingMockData, setRegeneratingMockData] = useState(false);
   
   const selectedProjectId = propSelectedProjectId || new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('project');
 
@@ -134,6 +137,42 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
     }
   };
 
+  const isMockProjectSelected = selectedProject?.startsWith("mock:") ?? false;
+
+  const handleRegenerateMockData = async () => {
+    if (regeneratingMockData) {
+      return;
+    }
+    setRegeneratingMockData(true);
+    try {
+      const response = await fetch(resolveServiceURL("pm/mock/regenerate"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `Request failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      const generatedAt = result?.metadata?.generated_at;
+      toast.success("Mock data regenerated", {
+        description: generatedAt ? `Generated at ${new Date(generatedAt).toLocaleString()}` : undefined,
+      });
+      refreshProjects();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error("Failed to regenerate mock data", {
+        description: message,
+      });
+    } finally {
+      setRegeneratingMockData(false);
+    }
+  };
+
   return (
     <>
       <ProviderManagementDialog />
@@ -228,6 +267,18 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                   })}
                 </SelectContent>
               </Select>
+              {isMockProjectSelected ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRegenerateMockData}
+                  disabled={regeneratingMockData}
+                  className="whitespace-nowrap"
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${regeneratingMockData ? "animate-spin" : ""}`} />
+                  {regeneratingMockData ? "Regenerating..." : "Regenerate mock data"}
+                </Button>
+              ) : null}
             </div>
           )}
         </div>

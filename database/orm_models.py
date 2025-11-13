@@ -4,7 +4,19 @@ SQLAlchemy ORM models for Project Management Agent
 These models match the database schema in database/schema.sql
 """
 
-from sqlalchemy import Column, String, Text, Integer, Float, DateTime, Boolean, ForeignKey, ARRAY, JSON, Date
+from sqlalchemy import (
+    Column,
+    String,
+    Text,
+    Integer,
+    Float,
+    DateTime,
+    Boolean,
+    ForeignKey,
+    ARRAY,
+    JSON,
+    Date,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -195,6 +207,7 @@ class ConversationSession(Base):
 
 class ConversationMessage(Base):
     """Conversation message model"""
+
     __tablename__ = "conversation_messages"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -206,6 +219,101 @@ class ConversationMessage(Base):
 
     # Relationships
     session = relationship("ConversationSession", back_populates="messages")
+
+
+# ==================== Mock Provider Tables ====================
+
+
+class MockProject(Base):
+    """Project used by the MockPMProvider"""
+
+    __tablename__ = "mock_projects"
+
+    id = Column(String(64), primary_key=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    sprints = relationship("MockSprint", back_populates="project", cascade="all, delete-orphan")
+    epics = relationship("MockEpic", back_populates="project", cascade="all, delete-orphan")
+    tasks = relationship("MockTask", back_populates="project", cascade="all, delete-orphan")
+
+
+class MockUser(Base):
+    """Mock team member"""
+
+    __tablename__ = "mock_users"
+
+    id = Column(String(64), primary_key=True)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255))
+    role = Column(String(100))
+    avatar_url = Column(String(512))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    tasks = relationship("MockTask", back_populates="assignee")
+
+
+class MockSprint(Base):
+    """Mock sprint/iteration"""
+
+    __tablename__ = "mock_sprints"
+
+    id = Column(String(64), primary_key=True)
+    project_id = Column(String(64), ForeignKey("mock_projects.id", ondelete="CASCADE"))
+    name = Column(String(255), nullable=False)
+    status = Column(String(32), nullable=False)
+    start_date = Column(Date)
+    end_date = Column(Date)
+    goal = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("MockProject", back_populates="sprints")
+    tasks = relationship("MockTask", back_populates="sprint", cascade="all, delete-orphan")
+
+
+class MockEpic(Base):
+    """Mock epic/initiative"""
+
+    __tablename__ = "mock_epics"
+
+    id = Column(String(64), primary_key=True)
+    project_id = Column(String(64), ForeignKey("mock_projects.id", ondelete="CASCADE"))
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    status = Column(String(32))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("MockProject", back_populates="epics")
+    tasks = relationship("MockTask", back_populates="epic", cascade="all, delete-orphan")
+
+
+class MockTask(Base):
+    """Mock task/work item"""
+
+    __tablename__ = "mock_tasks"
+
+    id = Column(String(64), primary_key=True)
+    project_id = Column(String(64), ForeignKey("mock_projects.id", ondelete="CASCADE"))
+    sprint_id = Column(String(64), ForeignKey("mock_sprints.id", ondelete="SET NULL"), nullable=True)
+    epic_id = Column(String(64), ForeignKey("mock_epics.id", ondelete="SET NULL"), nullable=True)
+    assignee_id = Column(String(64), ForeignKey("mock_users.id", ondelete="SET NULL"), nullable=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text)
+    status = Column(String(32), nullable=False, default="todo")
+    priority = Column(String(32), nullable=False, default="medium")
+    estimated_hours = Column(Float)
+    start_date = Column(Date)
+    due_date = Column(Date)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime)
+
+    project = relationship("MockProject", back_populates="tasks")
+    sprint = relationship("MockSprint", back_populates="tasks")
+    epic = relationship("MockEpic", back_populates="tasks")
+    assignee = relationship("MockUser", back_populates="tasks")
 
 
 class ProjectTemplate(Base):

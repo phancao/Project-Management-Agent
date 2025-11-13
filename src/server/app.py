@@ -1308,6 +1308,23 @@ async def pm_list_projects(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/pm/mock/regenerate")
+async def pm_regenerate_mock_dataset():
+    """Regenerate the mock dataset served by MockPMProvider."""
+    from src.pm_providers.models import PMProviderConfig
+    from src.pm_providers.mock_provider import MockPMProvider
+
+    provider = MockPMProvider(
+        PMProviderConfig(
+            provider_type="mock",
+            base_url="mock://demo",
+            api_key="mock-key",
+        )
+    )
+    metadata = await provider.regenerate_mock_data()
+    return {"status": "ok", "metadata": metadata}
+
+
 @app.post("/api/pm/projects/{project_id}/tasks")
 async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
     """Create a new task within the specified project"""

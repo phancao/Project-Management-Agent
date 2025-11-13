@@ -1,547 +1,962 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 """
-Mock PM Provider - Returns realistic mock data for demos and testing
-
-This provider implements the BasePMProvider interface but returns
-generated mock data instead of connecting to a real PM system.
-Perfect for demos, presentations, and development.
+Mock PM Provider with persistent dataset generated via the WBS LLM.
 """
+
+from __future__ import annotations
 
 import logging
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta, date
 import random
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
+
+from sqlalchemy.orm import Session
+
+from database.connection import SessionLocal, get_db_engine
+from database.orm_models import Base, MockEpic, MockProject, MockSprint, MockTask, MockUser
+from src.handlers import WBSGenerator
+from src.llms.llm import get_llm_by_type
 
 from .base import BasePMProvider
 from .models import (
-    PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
-    PMProviderConfig, PMStatusTransition
+    PMComponent,
+    PMEpic,
+    PMLabel,
+    PMProject,
+    PMProviderConfig,
+    PMStatusTransition,
+    PMSprint,
+    PMTask,
+    PMUser,
 )
 
 logger = logging.getLogger(__name__)
 
 
 class MockPMProvider(BasePMProvider):
-    """
-    Mock PM Provider that returns realistic generated data.
-    
-    This provider implements all BasePMProvider methods but returns
-    mock data instead of making real API calls. It maintains consistent
-    data across calls within a session.
-    """
-    
+    """Projects, sprints, epics, and tasks backed by the mock database."""
+
+    PROJECT_ID = "demo"
+    PROJECT_NAME = "Mock Project (Demo Data)"
+    PROJECT_DESCRIPTION = (
+        "Demo dataset used across backlog, analytics, timeline, and team views."
+    )
+
+    DEFAULT_USERS: List[Dict[str, str]] = [
+        {
+            "id": "mock-user-1",
+            "name": "Alice Johnson",
+            "email": "alice@example.com",
+            "role": "Product Manager",
+            "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice",
+        },
+        {
+            "id": "mock-user-2",
+            "name": "Bob Smith",
+            "email": "bob@example.com",
+            "role": "Lead Engineer",
+            "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob",
+        },
+        {
+            "id": "mock-user-3",
+            "name": "Carol Williams",
+            "email": "carol@example.com",
+            "role": "UX Designer",
+            "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=Carol",
+        },
+        {
+            "id": "mock-user-4",
+            "name": "David Brown",
+            "email": "david@example.com",
+            "role": "QA Engineer",
+            "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=David",
+        },
+    ]
+
+    _schema_initialized: bool = False
+
     def __init__(self, config: PMProviderConfig):
-        """Initialize mock provider with configuration"""
         super().__init__(config)
         self.provider_type = "mock"
-        self._initialize_mock_data()
-    
-    def _initialize_mock_data(self):
-        """Initialize consistent mock data for the session"""
-        
-        # Mock users
-        self.mock_users = [
-            PMUser(
-                id="user-1",
-                name="Alice Johnson",
-                email="alice@example.com",
-                avatar_url="https://api.dicebear.com/7.x/avataaars/svg?seed=Alice"
-            ),
-            PMUser(
-                id="user-2",
-                name="Bob Smith",
-                email="bob@example.com",
-                avatar_url="https://api.dicebear.com/7.x/avataaars/svg?seed=Bob"
-            ),
-            PMUser(
-                id="user-3",
-                name="Carol Williams",
-                email="carol@example.com",
-                avatar_url="https://api.dicebear.com/7.x/avataaars/svg?seed=Carol"
-            ),
-            PMUser(
-                id="user-4",
-                name="David Brown",
-                email="david@example.com",
-                avatar_url="https://api.dicebear.com/7.x/avataaars/svg?seed=David"
-            ),
+        self._session_factory = SessionLocal
+        self._ensure_schema()
+        self._ensure_seed_data()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _session(self) -> Session:
+        return self._session_factory()
+
+    def _ensure_schema(self) -> None:
+        """Ensure required tables exist before accessing them."""
+        if getattr(self.__class__, "_schema_initialized", False):
+            return
+        engine = get_db_engine()
+        Base.metadata.create_all(
+            bind=engine,
+            tables=[
+                MockProject.__table__,
+                MockUser.__table__,
+                MockSprint.__table__,
+                MockEpic.__table__,
+                MockTask.__table__,
+            ],
+        )
+        self.__class__._schema_initialized = True
+
+    def _normalize_project_id(self, project_id: Optional[str]) -> str:
+        if not project_id:
+            return self.PROJECT_ID
+        return project_id.split(":", 1)[-1]
+
+    def _ensure_seed_data(self) -> None:
+        with self._session() as session:
+            project = session.get(MockProject, self.PROJECT_ID)
+            if not project:
+                project = MockProject(
+                    id=self.PROJECT_ID,
+                    name=self.PROJECT_NAME,
+                    description=self.PROJECT_DESCRIPTION,
+                )
+                session.add(project)
+
+            for user in self.DEFAULT_USERS:
+                if not session.get(MockUser, user["id"]):
+                    session.add(MockUser(**user))
+
+            session.commit()
+
+            has_tasks = (
+                session.query(MockTask.id)
+                .filter(MockTask.project_id == self.PROJECT_ID)
+                .first()
+            )
+            if not has_tasks:
+                self._seed_template_dataset(session)
+
+    def _seed_template_dataset(self, session: Session) -> None:
+        """Populate database with the legacy static dataset."""
+        today = date.today()
+
+        session.query(MockTask).filter_by(project_id=self.PROJECT_ID).delete()
+        session.query(MockEpic).filter_by(project_id=self.PROJECT_ID).delete()
+        session.query(MockSprint).filter_by(project_id=self.PROJECT_ID).delete()
+        session.commit()
+
+        sprints_data = [
+            {
+                "id": "sprint-1",
+                "name": "Sprint 1",
+                "status": "closed",
+                "start": today - timedelta(days=42),
+                "end": today - timedelta(days=28),
+                "goal": "Complete user authentication and basic dashboard",
+            },
+            {
+                "id": "sprint-2",
+                "name": "Sprint 2",
+                "status": "closed",
+                "start": today - timedelta(days=28),
+                "end": today - timedelta(days=14),
+                "goal": "Implement project management features",
+            },
+            {
+                "id": "sprint-3",
+                "name": "Sprint 3",
+                "status": "active",
+                "start": today - timedelta(days=14),
+                "end": today,
+                "goal": "Add analytics and reporting capabilities",
+            },
+            {
+                "id": "sprint-4",
+                "name": "Sprint 4",
+                "status": "future",
+                "start": today,
+                "end": today + timedelta(days=14),
+                "goal": "Performance optimization and bug fixes",
+            },
         ]
-        
-        # Mock statuses (match UI expectations)
-        self.mock_statuses = [
+
+        for sprint in sprints_data:
+            session.add(
+                MockSprint(
+                    id=sprint["id"],
+                    project_id=self.PROJECT_ID,
+                    name=sprint["name"],
+                    status=sprint["status"],
+                    start_date=sprint["start"],
+                    end_date=sprint["end"],
+                    goal=sprint["goal"],
+                )
+            )
+
+        epics_data = [
+            {
+                "id": "epic-1",
+                "name": "User Management",
+                "description": "Complete user management system with authentication and profiles",
+                "status": "done",
+            },
+            {
+                "id": "epic-2",
+                "name": "Project Management",
+                "description": "Core PM features including tasks, sprints, and boards",
+                "status": "in_progress",
+            },
+            {
+                "id": "epic-3",
+                "name": "Analytics & Reporting",
+                "description": "Advanced analytics, charts, and reporting capabilities",
+                "status": "todo",
+            },
+        ]
+
+        for epic in epics_data:
+            session.add(
+                MockEpic(
+                    id=epic["id"],
+                    project_id=self.PROJECT_ID,
+                    name=epic["name"],
+                    description=epic["description"],
+                    status=epic["status"],
+                )
+            )
+
+        def make_task(
+            task_id: str,
+            title: str,
+            description: str,
+            status: str,
+            priority: str,
+            sprint_id: Optional[str],
+            epic_id: Optional[str],
+            assignee_id: Optional[str],
+            estimated_hours: float,
+            start_offset: int = 0,
+            duration: int = 5,
+        ) -> MockTask:
+            sprint = next((s for s in sprints_data if s["id"] == sprint_id), None)
+            start_date = (
+                sprint["start"] + timedelta(days=start_offset) if sprint else today
+            )
+            due_date = (
+                min(start_date + timedelta(days=duration), sprint["end"])
+                if sprint
+                else start_date + timedelta(days=duration)
+            )
+            return MockTask(
+                id=task_id,
+                project_id=self.PROJECT_ID,
+                sprint_id=sprint_id,
+                epic_id=epic_id,
+                assignee_id=assignee_id,
+                title=title,
+                description=description,
+                status=status,
+                priority=priority,
+                estimated_hours=estimated_hours,
+                start_date=start_date,
+                due_date=due_date,
+            )
+
+        session.add_all(
+            [
+                make_task(
+                    "task-1",
+                    "Implement user authentication",
+                    "Implement user registration and login flow using JWT",
+                    "done",
+                    "high",
+                    "sprint-1",
+                    "epic-1",
+                    "mock-user-1",
+                    16,
+                ),
+                make_task(
+                    "task-2",
+                    "Create login page UI",
+                    "Design and implement responsive login and signup UI",
+                    "done",
+                    "medium",
+                    "sprint-1",
+                    "epic-1",
+                    "mock-user-2",
+                    12,
+                ),
+                make_task(
+                    "task-3",
+                    "Setup JWT token system",
+                    "Configure backend JWT authentication and refresh tokens",
+                    "done",
+                    "high",
+                    "sprint-1",
+                    "epic-1",
+                    "mock-user-3",
+                    10,
+                ),
+                make_task(
+                    "task-4",
+                    "Design dashboard layout",
+                    "Create dashboard layout with key metrics and filters",
+                    "done",
+                    "medium",
+                    "sprint-1",
+                    "epic-1",
+                    "mock-user-4",
+                    14,
+                ),
+                make_task(
+                    "task-5",
+                    "Create project CRUD operations",
+                    "Implement create/read/update/delete for projects",
+                    "done",
+                    "high",
+                    "sprint-2",
+                    "epic-2",
+                    "mock-user-1",
+                    20,
+                ),
+                make_task(
+                    "task-6",
+                    "Implement task board view",
+                    "Create Kanban board with drag and drop",
+                    "done",
+                    "medium",
+                    "sprint-2",
+                    "epic-2",
+                    "mock-user-2",
+                    12,
+                ),
+                make_task(
+                    "task-7",
+                    "Add drag and drop functionality",
+                    "Implement DnD behaviour for backlog and board",
+                    "done",
+                    "medium",
+                    "sprint-2",
+                    "epic-2",
+                    "mock-user-3",
+                    10,
+                ),
+                make_task(
+                    "task-8",
+                    "Setup sprint management",
+                    "Allow creating, editing, and starting sprints",
+                    "done",
+                    "high",
+                    "sprint-2",
+                    "epic-2",
+                    "mock-user-4",
+                    18,
+                ),
+                make_task(
+                    "task-9",
+                    "Design analytics dashboard",
+                    "Create initial layout for analytics dashboard",
+                    "done",
+                    "medium",
+                    "sprint-3",
+                    "epic-3",
+                    "mock-user-1",
+                    10,
+                ),
+                make_task(
+                    "task-10",
+                    "Implement burndown chart",
+                    "Implement burndown chart using real data",
+                    "done",
+                    "medium",
+                    "sprint-3",
+                    "epic-3",
+                    "mock-user-2",
+                    12,
+                ),
+                make_task(
+                    "task-11",
+                    "Create velocity chart",
+                    "Implement velocity chart with historical sprints",
+                    "in_review",
+                    "medium",
+                    "sprint-3",
+                    "epic-3",
+                    "mock-user-3",
+                    12,
+                ),
+                make_task(
+                    "task-12",
+                    "Add CFD visualization",
+                    "Implement CFD chart and data aggregation",
+                    "in_progress",
+                    "high",
+                    "sprint-3",
+                    "epic-3",
+                    "mock-user-4",
+                    8,
+                ),
+                make_task(
+                    "task-13",
+                    "Implement cycle time chart",
+                    "Add cycle time calculation and visualization",
+                    "todo",
+                    "medium",
+                    "sprint-3",
+                    "epic-3",
+                    "mock-user-1",
+                    8,
+                ),
+                make_task(
+                    "task-14",
+                    "Create sprint report view",
+                    "Implement sprint report view with key metrics",
+                    "todo",
+                    "medium",
+                    "sprint-3",
+                    "epic-3",
+                    "mock-user-2",
+                    12,
+                ),
+                make_task(
+                    "task-15",
+                    "Add export to PDF feature",
+                    "Allow exporting dashboards and reports to PDF",
+                    "todo",
+                    "low",
+                    None,
+                    "epic-3",
+                    None,
+                    20,
+                ),
+                make_task(
+                    "task-16",
+                    "Implement email notifications",
+                    "Send email updates for sprint changes and assignments",
+                    "todo",
+                    "medium",
+                    None,
+                    "epic-2",
+                    None,
+                    16,
+                ),
+                make_task(
+                    "task-17",
+                    "Create mobile responsive views",
+                    "Ensure key pages are responsive on mobile",
+                    "todo",
+                    "medium",
+                    None,
+                    "epic-2",
+                    None,
+                    18,
+                ),
+                make_task(
+                    "task-18",
+                    "Add dark mode support",
+                    "Implement dark mode toggle and theme",
+                    "todo",
+                    "low",
+                    None,
+                    None,
+                    None,
+                    10,
+                ),
+            ]
+        )
+        session.commit()
+
+    def _to_pm_project(self, project: MockProject) -> PMProject:
+        return PMProject(
+            id=project.id,
+            name=project.name,
+            description=project.description,
+            created_at=project.created_at,
+            updated_at=project.updated_at,
+        )
+
+    def _to_pm_user(self, user: MockUser) -> PMUser:
+        return PMUser(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            raw_data={"role": user.role},
+            avatar_url=user.avatar_url,
+        )
+
+    def _to_pm_sprint(self, sprint: MockSprint) -> PMSprint:
+        return PMSprint(
+            id=sprint.id,
+            name=sprint.name,
+            project_id=self.PROJECT_ID,
+            start_date=sprint.start_date,
+            end_date=sprint.end_date,
+            status=sprint.status,
+            goal=sprint.goal,
+            created_at=sprint.created_at,
+        )
+
+    def _to_pm_epic(self, epic: MockEpic) -> PMEpic:
+        return PMEpic(
+            id=epic.id,
+            name=epic.name,
+            description=epic.description,
+            project_id=self.PROJECT_ID,
+            status=epic.status,
+            created_at=epic.created_at,
+        )
+
+    def _to_pm_task(self, task: MockTask) -> PMTask:
+        return PMTask(
+            id=task.id,
+            title=task.title,
+            description=task.description,
+            status=task.status,
+            priority=task.priority,
+            project_id=self.PROJECT_ID,
+            epic_id=task.epic_id,
+            assignee_id=task.assignee_id,
+            sprint_id=task.sprint_id,
+            estimated_hours=float(task.estimated_hours) if task.estimated_hours is not None else None,
+            actual_hours=None,
+            start_date=task.start_date,
+            due_date=task.due_date,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+            completed_at=task.completed_at,
+            raw_data={"source": "mock"},
+        )
+
+    def _random_assignee(self, session: Session) -> Optional[str]:
+        user_ids = [row[0] for row in session.query(MockUser.id).all()]
+        return random.choice(user_ids) if user_ids else None
+
+    # ------------------------------------------------------------------
+    # BasePMProvider implementation
+    # ------------------------------------------------------------------
+
+    async def list_projects(self) -> List[PMProject]:
+        with self._session() as session:
+            project = session.get(MockProject, self.PROJECT_ID)
+            return [self._to_pm_project(project)] if project else []
+
+    async def get_project(self, project_id: str) -> Optional[PMProject]:
+        if project_id != self.PROJECT_ID:
+            return None
+        with self._session() as session:
+            project = session.get(MockProject, self.PROJECT_ID)
+            return self._to_pm_project(project) if project else None
+
+    async def create_project(self, project: PMProject) -> PMProject:
+        raise NotImplementedError("Mock project is predefined and cannot be created.")
+
+    async def update_project(self, project_id: str, updates: Dict[str, Any]) -> PMProject:
+        if project_id != self.PROJECT_ID:
+            raise ValueError("Unknown project")
+        with self._session() as session:
+            record = session.get(MockProject, self.PROJECT_ID)
+            if not record:
+                raise ValueError("Mock project not found")
+            for key, value in updates.items():
+                if hasattr(record, key):
+                    setattr(record, key, value)
+            session.commit()
+            session.refresh(record)
+            return self._to_pm_project(record)
+
+    async def delete_project(self, project_id: str) -> bool:
+        raise NotImplementedError("Mock project cannot be deleted.")
+
+    async def list_tasks(
+        self, project_id: Optional[str] = None, assignee_id: Optional[str] = None
+    ) -> List[PMTask]:
+        actual_project = self._normalize_project_id(project_id)
+        with self._session() as session:
+            query = session.query(MockTask).filter(MockTask.project_id == actual_project)
+            if assignee_id:
+                query = query.filter(MockTask.assignee_id == assignee_id)
+            tasks = query.order_by(MockTask.due_date, MockTask.title).all()
+            return [self._to_pm_task(t) for t in tasks]
+
+    async def get_task(self, task_id: str) -> Optional[PMTask]:
+        with self._session() as session:
+            record = session.get(MockTask, task_id)
+            return self._to_pm_task(record) if record else None
+
+    async def create_task(self, task: PMTask) -> PMTask:
+        actual_project = self._normalize_project_id(task.project_id)
+        with self._session() as session:
+            record = MockTask(
+                id=f"task-{uuid4().hex[:8]}",
+                project_id=actual_project,
+                sprint_id=task.sprint_id,
+                epic_id=task.epic_id,
+                assignee_id=task.assignee_id,
+                title=task.title,
+                description=task.description,
+                status=task.status or "todo",
+                priority=task.priority or "medium",
+                estimated_hours=task.estimated_hours,
+                start_date=task.start_date,
+                due_date=task.due_date,
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            return self._to_pm_task(record)
+
+    async def update_task(self, task_id: str, updates: Dict[str, Any]) -> PMTask:
+        with self._session() as session:
+            record = session.get(MockTask, task_id)
+            if not record:
+                raise ValueError(f"Task not found: {task_id}")
+            for key, value in updates.items():
+                if hasattr(record, key):
+                    setattr(record, key, value)
+            record.updated_at = datetime.utcnow()
+            session.commit()
+            session.refresh(record)
+            return self._to_pm_task(record)
+
+    async def delete_task(self, task_id: str) -> bool:
+        with self._session() as session:
+            deleted = session.query(MockTask).filter_by(id=task_id).delete()
+            session.commit()
+            return deleted > 0
+
+    async def list_sprints(
+        self, project_id: Optional[str] = None, state: Optional[str] = None
+    ) -> List[PMSprint]:
+        actual_project = self._normalize_project_id(project_id)
+        with self._session() as session:
+            query = session.query(MockSprint).filter(MockSprint.project_id == actual_project)
+            if state:
+                query = query.filter(MockSprint.status == state)
+            sprints = query.order_by(MockSprint.start_date).all()
+            return [self._to_pm_sprint(s) for s in sprints]
+
+    async def get_sprint(self, sprint_id: str) -> Optional[PMSprint]:
+        with self._session() as session:
+            sprint = session.get(MockSprint, sprint_id)
+            return self._to_pm_sprint(sprint) if sprint else None
+
+    async def create_sprint(self, sprint: PMSprint) -> PMSprint:
+        actual_project = self._normalize_project_id(sprint.project_id)
+        with self._session() as session:
+            record = MockSprint(
+                id=f"sprint-{uuid4().hex[:8]}",
+                project_id=actual_project,
+                name=sprint.name,
+                status=sprint.status or "future",
+                start_date=sprint.start_date,
+                end_date=sprint.end_date,
+                goal=sprint.goal,
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            return self._to_pm_sprint(record)
+
+    async def update_sprint(self, sprint_id: str, updates: Dict[str, Any]) -> PMSprint:
+        with self._session() as session:
+            record = session.get(MockSprint, sprint_id)
+            if not record:
+                raise ValueError(f"Sprint not found: {sprint_id}")
+            for key, value in updates.items():
+                if hasattr(record, key):
+                    setattr(record, key, value)
+            session.commit()
+            session.refresh(record)
+            return self._to_pm_sprint(record)
+
+    async def delete_sprint(self, sprint_id: str) -> bool:
+        with self._session() as session:
+            deleted = session.query(MockSprint).filter_by(id=sprint_id).delete()
+            session.commit()
+            return deleted > 0
+
+    async def list_epics(self, project_id: Optional[str] = None) -> List[PMEpic]:
+        actual_project = self._normalize_project_id(project_id)
+        with self._session() as session:
+            epics = (
+                session.query(MockEpic)
+                .filter(MockEpic.project_id == actual_project)
+                .order_by(MockEpic.created_at)
+                .all()
+            )
+            return [self._to_pm_epic(e) for e in epics]
+
+    async def get_epic(self, epic_id: str) -> Optional[PMEpic]:
+        with self._session() as session:
+            epic = session.get(MockEpic, epic_id)
+            return self._to_pm_epic(epic) if epic else None
+
+    async def create_epic(self, epic: PMEpic) -> PMEpic:
+        actual_project = self._normalize_project_id(epic.project_id)
+        with self._session() as session:
+            record = MockEpic(
+                id=f"epic-{uuid4().hex[:8]}",
+                project_id=actual_project,
+                name=epic.name,
+                description=epic.description,
+                status=epic.status or "todo",
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            return self._to_pm_epic(record)
+
+    async def update_epic(self, epic_id: str, updates: Dict[str, Any]) -> PMEpic:
+        with self._session() as session:
+            record = session.get(MockEpic, epic_id)
+            if not record:
+                raise ValueError(f"Epic not found: {epic_id}")
+            for key, value in updates.items():
+                if hasattr(record, key):
+                    setattr(record, key, value)
+            session.commit()
+            session.refresh(record)
+            return self._to_pm_epic(record)
+
+    async def delete_epic(self, epic_id: str) -> bool:
+        with self._session() as session:
+            deleted = session.query(MockEpic).filter_by(id=epic_id).delete()
+            session.commit()
+            return deleted > 0
+
+    async def list_users(self, project_id: Optional[str] = None) -> List[PMUser]:
+        with self._session() as session:
+            users = session.query(MockUser).order_by(MockUser.name).all()
+            return [self._to_pm_user(u) for u in users]
+
+    async def get_user(self, user_id: str) -> Optional[PMUser]:
+        with self._session() as session:
+            user = session.get(MockUser, user_id)
+            return self._to_pm_user(user) if user else None
+
+    async def get_current_user(self) -> PMUser:
+        users = await self.list_users()
+        return users[0] if users else PMUser(id="mock-system", name="Mock User")
+
+    async def list_statuses(
+        self, entity_type: str, project_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        return [
             {"id": "todo", "name": "To Do", "category": "todo"},
             {"id": "in_progress", "name": "In Progress", "category": "in_progress"},
             {"id": "in_review", "name": "In Review", "category": "in_progress"},
             {"id": "done", "name": "Done", "category": "done"},
         ]
-        
-        # Mock priorities (match UI expectations)
-        self.mock_priorities = [
+
+    async def get_status_transitions(self, task_id: str) -> List[PMStatusTransition]:
+        statuses = await self.list_statuses("task")
+        transitions: List[PMStatusTransition] = []
+        for source in statuses:
+            for target in statuses:
+                if source["id"] != target["id"]:
+                    transitions.append(
+                        PMStatusTransition(
+                            from_status=source["id"],
+                            to_status=target["id"],
+                            name=f"Move to {target['name']}",
+                        )
+                    )
+        return transitions
+
+    async def list_priorities(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        return [
             {"id": "low", "name": "Low", "color": "#3b82f6"},
             {"id": "medium", "name": "Medium", "color": "#f59e0b"},
             {"id": "high", "name": "High", "color": "#ef4444"},
             {"id": "critical", "name": "Critical", "color": "#7c3aed"},
         ]
-        
-        # Mock project
-        self.mock_project = PMProject(
-            id="demo",
-            name="Demo Project",
-            description="A demo project with realistic mock data for presentations and testing",
-            created_at=datetime.now() - timedelta(days=90),
-            updated_at=datetime.now()
-        )
-        
-        # Mock sprints
-        today = date.today()
-        self.mock_sprints = [
-            PMSprint(
-                id="sprint-1",
-                name="Sprint 1",
-                project_id="demo",
-                start_date=today - timedelta(days=42),
-                end_date=today - timedelta(days=28),
-                status="closed",
-                goal="Complete user authentication and basic dashboard"
-            ),
-            PMSprint(
-                id="sprint-2",
-                name="Sprint 2",
-                project_id="demo",
-                start_date=today - timedelta(days=28),
-                end_date=today - timedelta(days=14),
-                status="closed",
-                goal="Implement project management features"
-            ),
-            PMSprint(
-                id="sprint-3",
-                name="Sprint 3",
-                project_id="demo",
-                start_date=today - timedelta(days=14),
-                end_date=today,
-                status="active",
-                goal="Add analytics and reporting capabilities"
-            ),
-            PMSprint(
-                id="sprint-4",
-                name="Sprint 4",
-                project_id="demo",
-                start_date=today,
-                end_date=today + timedelta(days=14),
-                status="future",
-                goal="Performance optimization and bug fixes"
-            ),
-        ]
-        
-        # Mock epics
-        self.mock_epics = [
-            PMEpic(
-                id="epic-1",
-                name="User Management",
-                description="Complete user management system with authentication and profiles",
-                project_id="demo",
-                status="done",
-                created_at=datetime.now() - timedelta(days=80)
-            ),
-            PMEpic(
-                id="epic-2",
-                name="Project Management",
-                description="Core project management features including tasks, sprints, and boards",
-                project_id="demo",
-                status="in_progress",
-                created_at=datetime.now() - timedelta(days=60)
-            ),
-            PMEpic(
-                id="epic-3",
-                name="Analytics & Reporting",
-                description="Advanced analytics, charts, and reporting capabilities",
-                project_id="demo",
-                status="todo",
-                created_at=datetime.now() - timedelta(days=30)
-            ),
-        ]
-        
-        # Mock tasks
-        self.mock_tasks = self._generate_mock_tasks()
-    
-    def _generate_mock_tasks(self) -> List[PMTask]:
-        """Generate realistic mock tasks that align with the simplified PMTask model"""
-        status_map = {
-            "todo": "todo",
-            "in_progress": "in_progress",
-            "in_review": "in_review",
-            "done": "done",
-        }
 
-        priority_sequence = ["medium", "high", "medium", "critical"]
-
-        task_blueprints = [
-            # sprint_id, epic_id, status, hours, assignee_id, title
-            ("sprint-1", "epic-1", "done", 16, "user-1", "Implement user authentication"),
-            ("sprint-1", "epic-1", "done", 12, "user-2", "Create login page UI"),
-            ("sprint-1", "epic-1", "done", 10, "user-3", "Setup JWT token system"),
-            ("sprint-1", "epic-1", "done", 14, "user-4", "Design dashboard layout"),
-            ("sprint-2", "epic-2", "done", 20, "user-1", "Create project CRUD operations"),
-            ("sprint-2", "epic-2", "done", 12, "user-2", "Implement task board view"),
-            ("sprint-2", "epic-2", "done", 10, "user-3", "Add drag and drop functionality"),
-            ("sprint-2", "epic-2", "done", 18, "user-4", "Setup sprint management"),
-            ("sprint-3", "epic-3", "done", 10, "user-1", "Design analytics dashboard"),
-            ("sprint-3", "epic-3", "done", 12, "user-2", "Implement burndown chart"),
-            ("sprint-3", "epic-3", "in_review", 12, "user-3", "Create velocity chart"),
-            ("sprint-3", "epic-3", "in_progress", 8, "user-4", "Add CFD visualization"),
-            ("sprint-3", "epic-3", "todo", 8, "user-1", "Implement cycle time chart"),
-            ("sprint-3", "epic-3", "todo", 12, "user-2", "Create sprint report view"),
-            (None, "epic-3", "todo", 20, None, "Add export to PDF feature"),
-            (None, "epic-2", "todo", 16, None, "Implement email notifications"),
-            (None, "epic-2", "todo", 18, None, "Create mobile responsive views"),
-            (None, None, "todo", 10, None, "Add dark mode support"),
-        ]
-
-        tasks: List[PMTask] = []
-        now = datetime.now()
-
-        for index, (sprint_id, epic_id, status_id, estimated_hours, assignee_id, title) in enumerate(task_blueprints, start=1):
-            created_at = now - timedelta(days=60 - index * 2)
-            updated_at = created_at + timedelta(days=random.randint(1, 10))
-            completed_at = None
-            if status_id == "done":
-                completed_at = updated_at + timedelta(days=1)
-
-            priority = priority_sequence[index % len(priority_sequence)]
-
-            start_date = None
-            due_date = None
-            if sprint_id:
-                sprint = next((s for s in self.mock_sprints if s.id == sprint_id), None)
-                if sprint and sprint.start_date and sprint.end_date:
-                    sprint_duration = max((sprint.end_date - sprint.start_date).days, 1)
-                    start_offset = min(index % sprint_duration, sprint_duration - 1)
-                    start_date = sprint.start_date + timedelta(days=start_offset)
-                    due_offset = min(start_offset + max(1, sprint_duration // 2), sprint_duration)
-                    due_date = sprint.start_date + timedelta(days=due_offset)
-                    if due_date > sprint.end_date:
-                        due_date = sprint.end_date
-            if start_date is None or due_date is None:
-                base_start = (now - timedelta(days=45 - index * 2)).date()
-                start_date = base_start
-                due_date = base_start + timedelta(days=5 + (index % 4))
-
-            task = PMTask(
-                id=f"task-{index}",
-                title=title,
-                description=f"Detailed description for {title}",
-                status=status_map.get(status_id, status_id),
-                priority=priority,
-                project_id="demo",
-                parent_task_id=None,
-                epic_id=epic_id,
-                assignee_id=assignee_id,
-                component_ids=None,
-                label_ids=None,
-                sprint_id=sprint_id,
-                estimated_hours=float(estimated_hours),
-                actual_hours=None,
-                start_date=start_date,
-                due_date=due_date,
-                created_at=created_at,
-                updated_at=updated_at,
-                completed_at=completed_at,
-                raw_data={"key": f"DEMO-{index}"}
-            )
-            tasks.append(task)
-
-        return tasks
-    
-    # ==================== Project Operations ====================
-    
-    async def list_projects(self) -> List[PMProject]:
-        """List all projects"""
-        logger.info("[MockProvider] Listing projects")
-        return [self.mock_project]
-    
-    async def get_project(self, project_id: str) -> Optional[PMProject]:
-        """Get a single project by ID"""
-        logger.info(f"[MockProvider] Getting project: {project_id}")
-        if project_id == "demo":
-            return self.mock_project
-        return None
-    
-    async def create_project(self, project: PMProject) -> PMProject:
-        """Create a new project"""
-        logger.info(f"[MockProvider] Creating project: {project.name}")
-        project.id = str(uuid4())
-        return project
-    
-    async def update_project(self, project_id: str, updates: Dict[str, Any]) -> PMProject:
-        """Update an existing project"""
-        logger.info(f"[MockProvider] Updating project: {project_id}")
-        # Update mock project
-        for key, value in updates.items():
-            if hasattr(self.mock_project, key):
-                setattr(self.mock_project, key, value)
-        return self.mock_project
-    
-    async def delete_project(self, project_id: str) -> bool:
-        """Delete a project"""
-        logger.info(f"[MockProvider] Deleting project: {project_id}")
-        return True
-    
-    # ==================== Task Operations ====================
-    
-    async def list_tasks(self, project_id: Optional[str] = None, assignee_id: Optional[str] = None) -> List[PMTask]:
-        """List all tasks, optionally filtered by project and/or assignee"""
-        logger.info(f"[MockProvider] Listing tasks (project={project_id}, assignee={assignee_id})")
-        tasks = self.mock_tasks
-        
-        if project_id:
-            tasks = [t for t in tasks if t.project_id == project_id]
-        
-        if assignee_id:
-            tasks = [t for t in tasks if t.assignee_id == assignee_id]
-        
-        return tasks
-    
-    async def get_task(self, task_id: str) -> Optional[PMTask]:
-        """Get a single task by ID"""
-        logger.info(f"[MockProvider] Getting task: {task_id}")
-        return next((t for t in self.mock_tasks if t.id == task_id), None)
-    
-    async def create_task(self, task: PMTask) -> PMTask:
-        """Create a new task"""
-        logger.info(f"[MockProvider] Creating task: {task.title}")
-        task.id = f"task-{len(self.mock_tasks) + 1}"
-        task.created_at = datetime.now()
-        task.updated_at = datetime.now()
-        self.mock_tasks.append(task)
-        return task
-    
-    async def update_task(self, task_id: str, updates: Dict[str, Any]) -> PMTask:
-        """Update an existing task"""
-        logger.info(f"[MockProvider] Updating task: {task_id}")
-        task = next((t for t in self.mock_tasks if t.id == task_id), None)
-        if not task:
-            raise ValueError(f"Task not found: {task_id}")
-        
-        # Update task fields
-        for key, value in updates.items():
-            if key == "status" and isinstance(value, str):
-                task.status = value
-            elif key == "assignee_id":
-                task.assignee_id = value
-            elif hasattr(task, key):
-                setattr(task, key, value)
-        
-        task.updated_at = datetime.now()
-        return task
-    
-    async def delete_task(self, task_id: str) -> bool:
-        """Delete a task"""
-        logger.info(f"[MockProvider] Deleting task: {task_id}")
-        self.mock_tasks = [t for t in self.mock_tasks if t.id != task_id]
-        return True
-    
-    # ==================== Sprint Operations ====================
-    
-    async def list_sprints(
-        self, project_id: Optional[str] = None, state: Optional[str] = None
-    ) -> List[PMSprint]:
-        """List all sprints, optionally filtered by project"""
-        logger.info(f"[MockProvider] Listing sprints (project={project_id}, state={state})")
-        sprints = self.mock_sprints
-        
-        if project_id:
-            sprints = [s for s in sprints if s.project_id == project_id]
-        
-        if state:
-            sprints = [s for s in sprints if s.status == state]
-        
-        return sprints
-    
-    async def get_sprint(self, sprint_id: str) -> Optional[PMSprint]:
-        """Get a single sprint by ID"""
-        logger.info(f"[MockProvider] Getting sprint: {sprint_id}")
-        return next((s for s in self.mock_sprints if s.id == sprint_id), None)
-    
-    async def create_sprint(self, sprint: PMSprint) -> PMSprint:
-        """Create a new sprint"""
-        logger.info(f"[MockProvider] Creating sprint: {sprint.name}")
-        sprint.id = f"sprint-{len(self.mock_sprints) + 1}"
-        self.mock_sprints.append(sprint)
-        return sprint
-    
-    async def update_sprint(self, sprint_id: str, updates: Dict[str, Any]) -> PMSprint:
-        """Update an existing sprint"""
-        logger.info(f"[MockProvider] Updating sprint: {sprint_id}")
-        sprint = next((s for s in self.mock_sprints if s.id == sprint_id), None)
-        if not sprint:
-            raise ValueError(f"Sprint not found: {sprint_id}")
-        
-        for key, value in updates.items():
-            if hasattr(sprint, key):
-                setattr(sprint, key, value)
-        
-        return sprint
-    
-    async def delete_sprint(self, sprint_id: str) -> bool:
-        """Delete a sprint"""
-        logger.info(f"[MockProvider] Deleting sprint: {sprint_id}")
-        self.mock_sprints = [s for s in self.mock_sprints if s.id != sprint_id]
-        return True
-    
-    # ==================== Epic Operations ====================
-    
-    async def list_epics(self, project_id: Optional[str] = None) -> List[PMEpic]:
-        """List all epics, optionally filtered by project"""
-        logger.info(f"[MockProvider] Listing epics (project={project_id})")
-        epics = self.mock_epics
-        
-        if project_id:
-            epics = [e for e in epics if e.project_id == project_id]
-        
-        return epics
-    
-    async def get_epic(self, epic_id: str) -> Optional[PMEpic]:
-        """Get a single epic by ID"""
-        logger.info(f"[MockProvider] Getting epic: {epic_id}")
-        return next((e for e in self.mock_epics if e.id == epic_id), None)
-    
-    async def create_epic(self, epic: PMEpic) -> PMEpic:
-        """Create a new epic"""
-        logger.info(f"[MockProvider] Creating epic: {epic.name}")
-        epic.id = f"epic-{len(self.mock_epics) + 1}"
-        self.mock_epics.append(epic)
-        return epic
-    
-    async def update_epic(self, epic_id: str, updates: Dict[str, Any]) -> PMEpic:
-        """Update an existing epic"""
-        logger.info(f"[MockProvider] Updating epic: {epic_id}")
-        epic = next((e for e in self.mock_epics if e.id == epic_id), None)
-        if not epic:
-            raise ValueError(f"Epic not found: {epic_id}")
-        
-        for key, value in updates.items():
-            if hasattr(epic, key):
-                setattr(epic, key, value)
-        
-        return epic
-    
-    async def delete_epic(self, epic_id: str) -> bool:
-        """Delete an epic"""
-        logger.info(f"[MockProvider] Deleting epic: {epic_id}")
-        self.mock_epics = [e for e in self.mock_epics if e.id != epic_id]
-        return True
-    
-    # ==================== User Operations ====================
-    
-    async def list_users(self, project_id: Optional[str] = None) -> List[PMUser]:
-        """List all users, optionally filtered by project"""
-        logger.info(f"[MockProvider] Listing users (project={project_id})")
-        return self.mock_users
-    
-    async def get_user(self, user_id: str) -> Optional[PMUser]:
-        """Get a single user by ID"""
-        logger.info(f"[MockProvider] Getting user: {user_id}")
-        return next((u for u in self.mock_users if u.id == user_id), None)
-    
-    async def get_current_user(self) -> PMUser:
-        """Get the currently authenticated user"""
-        logger.info("[MockProvider] Getting current user")
-        return self.mock_users[0]  # Alice is the current user
-    
-    # ==================== Status Operations ====================
-    
-    async def list_statuses(self, project_id: Optional[str] = None, entity_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List all statuses, optionally filtered by project"""
-        logger.info(f"[MockProvider] Listing statuses (project={project_id})")
-        return self.mock_statuses
-    
-    async def get_status_transitions(self, task_id: str) -> List[PMStatusTransition]:
-        """Get available status transitions for a task"""
-        logger.info(f"[MockProvider] Getting status transitions for task: {task_id}")
-        transitions: List[PMStatusTransition] = []
-        for source in self.mock_statuses:
-            for target in self.mock_statuses:
-                if source["id"] == target["id"]:
-                    continue
-                transitions.append(
-                    PMStatusTransition(
-                        from_status=source["id"],
-                        to_status=target["id"],
-                        name=f"Move to {target['name']}"
-                    )
-                )
-        return transitions
-    
-    # ==================== Priority Operations ====================
-    
-    async def list_priorities(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List all priorities"""
-        logger.info("[MockProvider] Listing priorities")
-        return self.mock_priorities
-    
-    # ==================== Component Operations ====================
-    
     async def list_components(self, project_id: str) -> List[PMComponent]:
-        """List all components for a project"""
-        logger.info(f"[MockProvider] Listing components (project={project_id})")
-        return []  # No components in mock data
-    
-    # ==================== Label Operations ====================
-    
+        return []
+
     async def list_labels(self, project_id: Optional[str] = None) -> List[PMLabel]:
-        """List all labels, optionally filtered by project"""
-        logger.info(f"[MockProvider] Listing labels (project={project_id})")
-        return []  # No labels in mock data
+        return []
 
     async def get_label(self, label_id: str) -> Optional[PMLabel]:
-        logger.info(f"[MockProvider] Getting label: {label_id}")
-        return next((label for label in [] if getattr(label, "id", None) == label_id), None)
+        return None
 
     async def create_label(self, label: PMLabel) -> PMLabel:
-        logger.info(f"[MockProvider] Creating label: {label.name}")
         label.id = label.id or str(uuid4())
         return label
 
     async def update_label(self, label_id: str, updates: Dict[str, Any]) -> PMLabel:
-        logger.info(f"[MockProvider] Updating label: {label_id}")
-        label = await self.get_label(label_id)
-        if not label:
-            raise ValueError(f"Label not found: {label_id}")
-        for field, value in updates.items():
-            if hasattr(label, field):
-                setattr(label, field, value)
-        return label
+        raise NotImplementedError("Labels are not supported in mock dataset.")
 
     async def delete_label(self, label_id: str) -> bool:
-        logger.info(f"[MockProvider] Deleting label: {label_id}")
         return True
 
-    # ==================== Comment Operations ====================
-    
     async def list_comments(self, task_id: str) -> List[Dict[str, Any]]:
-        """List all comments for a task"""
-        logger.info(f"[MockProvider] Listing comments for task: {task_id}")
-        return []  # No comments in mock data
-    
+        return []
+
     async def add_comment(self, task_id: str, body: str) -> Dict[str, Any]:
-        """Add a comment to a task"""
-        logger.info(f"[MockProvider] Adding comment to task: {task_id}")
         return {
             "id": str(uuid4()),
             "body": body,
-            "author": {
-                "id": self.mock_users[0].id,
-                "name": self.mock_users[0].name,
-                "email": self.mock_users[0].email,
-            },
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
+            "author": {"id": "mock-user-1", "name": "Alice Johnson"},
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
         }
 
+    # ------------------------------------------------------------------
+    # Dataset regeneration via WBS LLM
+    # ------------------------------------------------------------------
+
+    async def regenerate_mock_data(self) -> Dict[str, Any]:
+        llm = get_llm_by_type("basic")
+        generator = WBSGenerator(llm=llm)
+
+        wbs_result = await generator.generate_wbs(
+            project_name=self.PROJECT_NAME,
+            project_description=self.PROJECT_DESCRIPTION,
+            project_domain="software",
+            breakdown_levels=3,
+            use_research=False,
+        )
+        wbs_structure = wbs_result.get("wbs_structure", {})
+        phases = wbs_structure.get("phases", [])
+        if not phases:
+            raise RuntimeError("LLM did not produce any phases for the WBS.")
+
+        with self._session() as session:
+            session.query(MockTask).filter_by(project_id=self.PROJECT_ID).delete()
+            session.query(MockEpic).filter_by(project_id=self.PROJECT_ID).delete()
+            session.query(MockSprint).filter_by(project_id=self.PROJECT_ID).delete()
+            session.commit()
+
+            for user in self.DEFAULT_USERS:
+                if not session.get(MockUser, user["id"]):
+                    session.add(MockUser(**user))
+            session.commit()
+
+            today = date.today()
+            phase_count = len(phases)
+            closed_count = max(phase_count - 2, 0)
+            active_index = closed_count if phase_count - closed_count > 0 else None
+
+            sprint_records: Dict[str, MockSprint] = {}
+            epic_records: Dict[tuple[str, str], MockEpic] = {}
+
+            for index, phase in enumerate(phases):
+                sprint_id = f"sprint-{uuid4().hex[:8]}"
+                if index < closed_count:
+                    status = "closed"
+                    end_date = today - timedelta(days=(closed_count - index) * 7)
+                    start_date = end_date - timedelta(days=13)
+                elif active_index is not None and index == active_index:
+                    status = "active"
+                    start_date = today - timedelta(days=7)
+                    end_date = today + timedelta(days=7)
+                else:
+                    status = "future"
+                    offset = index - (active_index + 1 if active_index is not None else closed_count)
+                    start_date = today + timedelta(days=14 * (offset + 1))
+                    end_date = start_date + timedelta(days=13)
+
+                sprint = MockSprint(
+                    id=sprint_id,
+                    project_id=self.PROJECT_ID,
+                    name=phase["title"],
+                    status=status,
+                    start_date=start_date,
+                    end_date=end_date,
+                    goal=phase.get("description", ""),
+                )
+                session.add(sprint)
+                sprint_records[phase["title"]] = sprint
+
+                for deliverable in phase.get("deliverables", []):
+                    epic_id = f"epic-{uuid4().hex[:8]}"
+                    epic_status = (
+                        "done" if status == "closed" else "in_progress" if status == "active" else "todo"
+                    )
+                    epic = MockEpic(
+                        id=epic_id,
+                        project_id=self.PROJECT_ID,
+                        name=deliverable["title"],
+                        description=deliverable.get("description", ""),
+                        status=epic_status,
+                    )
+                    session.add(epic)
+                    epic_records[(phase["title"], deliverable["title"])] = epic
+
+            session.commit()
+
+            user_ids = [row[0] for row in session.query(MockUser.id).all()]
+            if not user_ids:
+                raise RuntimeError("No mock users available to assign tasks.")
+
+            tasks_created = 0
+            for phase in phases:
+                sprint = sprint_records.get(phase["title"])
+                deliverables = phase.get("deliverables", [])
+                if not deliverables:
+                    deliverables = [{"title": f"{phase['title']} Deliverables", "tasks": []}]
+                    synthetic_epic = MockEpic(
+                        id=f"epic-{uuid4().hex[:8]}",
+                        project_id=self.PROJECT_ID,
+                        name=deliverables[0]["title"],
+                        description="Auto-generated epic from WBS phase",
+                        status=sprint.status if sprint else "todo",
+                    )
+                    session.add(synthetic_epic)
+                    session.commit()
+                    epic_records[(phase["title"], deliverables[0]["title"])] = synthetic_epic
+
+                for deliverable in deliverables:
+                    epic = epic_records.get((phase["title"], deliverable["title"]))
+                    for task in deliverable.get("tasks", []):
+                        tasks_created += 1
+                        sprint_status = sprint.status if sprint else "todo"
+                        task_status = (
+                            "done"
+                            if sprint_status == "closed"
+                            else "in_progress"
+                            if sprint_status == "active"
+                            else "todo"
+                        )
+
+                        estimated_hours = task.get("estimated_hours") or 8.0
+                        assignee_id = random.choice(user_ids)
+                        start_date = sprint.start_date if sprint else today
+                        due_date = sprint.end_date if sprint else start_date + timedelta(days=5)
+
+                        session.add(
+                            MockTask(
+                                id=f"task-{uuid4().hex[:8]}",
+                                project_id=self.PROJECT_ID,
+                                sprint_id=sprint.id if sprint else None,
+                                epic_id=epic.id if epic else None,
+                                assignee_id=assignee_id,
+                                title=task["title"],
+                                description=task.get("description", ""),
+                                status=task_status,
+                                priority=task.get("priority", "medium"),
+                                estimated_hours=estimated_hours,
+                                start_date=start_date,
+                                due_date=due_date,
+                            )
+                        )
+
+            session.commit()
+
+            return {
+                "project_id": self.PROJECT_ID,
+                "tasks": tasks_created,
+                "sprints": session.query(MockSprint)
+                .filter_by(project_id=self.PROJECT_ID)
+                .count(),
+                "epics": session.query(MockEpic)
+                .filter_by(project_id=self.PROJECT_ID)
+                .count(),
+                "users": session.query(MockUser).count(),
+                "generated_at": datetime.utcnow().isoformat(),
+            }
+
     async def health_check(self) -> bool:
-        logger.info("[MockProvider] Performing health check")
         return True
 

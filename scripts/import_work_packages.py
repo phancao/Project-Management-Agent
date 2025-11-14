@@ -1951,12 +1951,7 @@ def ensure_time_entries_for_task(
     counts_seen: Dict[
         Tuple[str, int, int, int], int
     ] = defaultdict(int)
-    # Track entries created in this call to prevent duplicates within same call
-    created_in_this_call: Dict[
-        Tuple[str, int, int, int], int
-    ] = defaultdict(int)
     # Track skip reasons for summary
-    skipped_already_created = 0
     skipped_already_exists = 0
 
     for order_index, log in logs_with_units:
@@ -2038,18 +2033,8 @@ def ensure_time_entries_for_task(
         )
         counts_seen[key] += 1
         existing_count = existing_counts.get(key, 0)
-        created_count = created_in_this_call.get(key, 0)
-        # If we've already created an entry for this key in this call, skip
-        # (same log appearing multiple times in aggregated.logs should only create one entry)
-        if created_count > 0:
-            skipped_already_created += 1
-            ui.info(
-                f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-                f"SKIPPED - Already created in this call (date={date_spent}, hours={units_value:.2f}h, "
-                f"user_id={log_user_id}, activity_id={activity_id}, wp_id={work_package_id})"
-            )
-            continue
         # Check if entry already exists in OpenProject
+        # Note: We allow duplicate entries from Excel (even if identical) to match Excel exactly
         if existing_count > 0:
             skipped_already_exists += 1
             ui.info(
@@ -2063,7 +2048,6 @@ def ensure_time_entries_for_task(
                 "  [logwork] Would log %.2f hour(s) on %s for '%s'."
                 % (units_value, date_spent, staged_task.subject)
             )
-            created_in_this_call[key] += 1
             missing_count += 1
             continue
         response = client.create_time_entry(
@@ -2089,9 +2073,9 @@ def ensure_time_entries_for_task(
                 order_index=order_index,
             )
         )
-        existing_counts[key] += 1
-        created_in_this_call[key] += 1
-        # Track created entry for potential future use
+        # Track created entry for potential future use (for idempotency on reruns)
+        # Note: We don't increment existing_counts here because we want to allow
+        # duplicate entries from Excel (even if identical) to match Excel exactly
         existing_entries.append(
             {
                 "spentOn": date_spent,
@@ -2114,7 +2098,6 @@ def ensure_time_entries_for_task(
     ui.info(
         f"  [logwork] Summary for '{staged_task.subject}': "
         f"Processed={total_processed}, Created={total_created}, "
-        f"Skipped(already_created)={skipped_already_created}, "
         f"Skipped(already_exists)={skipped_already_exists}"
     )
     
@@ -2628,6 +2611,7 @@ def analyze_missing_entries(
         # Pattern to match issue ID: "Type #ID: " or "Task #123: "
         pattern = r'^[^:]*#(\d+):\s*'
         match = re.match(pattern, row_task_full)
+        extracted_issue_id = None
         if match:
             extracted_issue_id = match.group(1)
             issue_key = (extracted_issue_id, row.project_name)
@@ -2636,8 +2620,14 @@ def analyze_missing_entries(
                 # Found match by issue_id, skip to time entry check
                 # (don't fall through to subject matching)
         
-        # If no match by issue_id, try exact match by subject
-        if wp_id is None:
+        # If we have an issue_id but didn't find a match, don't fall back to subject matching
+        # (different issue_ids = different tasks, even if they have the same subject)
+        if wp_id is None and extracted_issue_id:
+            # We have an issue_id but no match - this is a missing work package
+            # Don't try subject matching, just report it as missing
+            pass
+        # If no match by issue_id (and no issue_id in Excel row), try exact match by subject
+        elif wp_id is None:
             for key, wp_id_val in wp_subject_to_id.items():
                 if (key[0].strip() == row_task_full and
                         key[1] == row.project_name):
@@ -3026,6 +3016,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
 
     ui = ConsoleUI(auto_confirm=args.yes)
+    
+    # Set default cache path if not provided
+    if args.staging_cache is None:
+        args.staging_cache = Path("/tmp/staging-cache.json")
 
     # If --update-project-dates is set, run only that and exit
     if args.update_project_dates:
@@ -3106,6 +3100,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"and {resolved_users}/{len(staging.users)} users."
         )
         
+        # Load staging cache if available (for better work package matching)
+        staging_cache_path: Optional[Path] = args.staging_cache
+        if staging_cache_path and staging_cache_path.exists():
+            try:
+                with staging_cache_path.open("r", encoding="utf-8") as handle:
+                    cache_payload = json.load(handle)
+                cache_assignments = 0
+                for key, entry in cache_payload.items():
+                    staged_task = staging.tasks.get(key)
+                    if staged_task:
+                        wp_id = entry.get("openproject_id")
+                        if wp_id:
+                            staged_task.openproject_id = int(wp_id)
+                            cache_assignments += 1
+                if cache_assignments > 0:
+                    ui.info(
+                        f"  Loaded {cache_assignments} cached work package mapping(s) from '{staging_cache_path}'."
+                    )
+            except (OSError, json.JSONDecodeError) as exc:
+                ui.info(f"  Failed to load cache '{staging_cache_path}': {exc}")
+        
         # Check existing work packages (simplified version for analysis)
         ui.start_step("Check existing work packages")
         tasks_to_check = list(staging.tasks.values())
@@ -3154,22 +3169,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 except Exception:
                     pass
             
-            # Try matching by subject
+            # Try matching by subject (but only if we don't have an issue_id or if there's a unique match)
             if not matched:
                 try:
                     matches = client.search_work_packages(
                         project_id=project_id,
                         subject=staged_task.subject,
                     )
-                    for match in matches:
-                        if (
-                            match.get("subject", "").strip()
-                            == staged_task.subject.strip()
-                        ):
-                            staged_task.openproject_id = int(match["id"])
-                            matched = True
-                            matched_count += 1
-                            break
+                    matching_subjects = [
+                        m for m in matches
+                        if (m.get("subject", "").strip() == staged_task.subject.strip())
+                    ]
+                    # If we have an issue_id and multiple subject matches, don't match
+                    # (different issue_ids = different tasks, even if they have the same subject)
+                    if staged_task.issue_id and len(matching_subjects) > 1:
+                        # Can't disambiguate - skip matching
+                        pass
+                    elif matching_subjects:
+                        # Single match or no issue_id - use first match
+                        staged_task.openproject_id = int(matching_subjects[0]["id"])
+                        matched = True
+                        matched_count += 1
                 except Exception:
                     pass
             
@@ -3953,28 +3973,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if project_id is None:
                 continue
             matched = False
-            if staged_task.issue_id and staged_task.issue_id.isdigit():
-                existing_wp = client.get_work_package(
-                    int(staged_task.issue_id))
-                if existing_wp:
-                    project_link = (
-                        existing_wp.get("_links", {})
-                        .get("project", {})
-                        .get("href", "")
-                    )
-                    try:
-                        existing_project_id = int(project_link.split("/")[-1])
-                    except (ValueError, AttributeError):
-                        existing_project_id = None
-                    if existing_project_id == project_id:
-                        subject = (existing_wp.get("subject") or "").strip()
-                        if subject == staged_task.subject.strip():
-                            staged_task.openproject_id = int(existing_wp["id"])
-                            staged_task.existing_match_details = (
-                                "Matched existing work package by ID."
-                            )
-                            matched_by_id += 1
-                            matched = True
+            # Note: Excel issue_id is NOT the OpenProject work package ID
+            # We can't match by issue_id directly since OpenProject doesn't store it
+            # The staging cache maps issue_id -> work_package_id for future runs
+            # For now, we only match by subject (or use cache if available)
             if matched:
                 if idx % progress_interval == 0 or idx == total_tasks:
                     ui.progress(
@@ -4006,7 +4008,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         best_match = match
             
             # If we have an issue_id and multiple subject matches but no cache match,
-            # be conservative: don't match unless we're sure
+            # don't match to avoid incorrect associations
+            # (different issue_ids = different tasks, even if they have the same subject)
             if (staged_task.issue_id and 
                 len(matching_subjects) > 1 and 
                 best_match and 
@@ -4014,7 +4017,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                  reverse_cache.get(int(best_match["id"])) != staged_task.key)):
                 # We have an issue_id but couldn't find a cache match
                 # This means the work package might not have been created from this StagedTask
-                # Don't match to avoid incorrect associations
+                # Don't match - let it create a new work package instead
                 best_match = None
             
             if best_match:
@@ -4043,35 +4046,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             remaining=len(pending_tasks),
         )
         ui.complete_step(summary_msg)
-
-    if staging_cache_path is not None:
-        cache_payload = {
-            task.key: {
-                "openproject_id": task.openproject_id,
-                "existing_match_details": task.existing_match_details,
-            }
-            for task in staging.tasks.values()
-            if task.openproject_id is not None
-        }
-        try:
-            staging_cache_path.parent.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
-        try:
-            with staging_cache_path.open("w", encoding="utf-8") as handle:
-                json.dump(cache_payload, handle, indent=2)
-        except OSError as exc:
-            ui.info(
-                "Failed to write staging cache '%s': %s"
-                % (staging_cache_path, exc)
-            )
-        else:
-            ui.info(
-                "Saved staging cache with {count} entries to '{path}'.".format(
-                    count=len(cache_payload),
-                    path=staging_cache_path,
-                )
-            )
 
     imported_packages_map: Dict[int, ImportedWorkPackage] = {}
 
@@ -4176,6 +4150,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                             % (staged_project.name, required_type_id)
                         )
 
+            # Create new work package (each StagedTask with different issue_id is a different task)
             estimated_time = iso_duration_from_hours(
                 staged_task.aggregated.total_hours
             )
@@ -4206,6 +4181,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             created_count += 1
         ui.complete_step(f"Created {created_count} work package(s).")
+    
+    # Save staging cache after all work packages are created (both matched and newly created)
+    if staging_cache_path is not None:
+        cache_payload = {
+            task.key: {
+                "openproject_id": task.openproject_id,
+                "existing_match_details": task.existing_match_details,
+            }
+            for task in staging.tasks.values()
+            if task.openproject_id is not None
+        }
+        try:
+            staging_cache_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        try:
+            with staging_cache_path.open("w", encoding="utf-8") as handle:
+                json.dump(cache_payload, handle, indent=2)
+        except OSError as exc:
+            ui.info(
+                "Failed to write staging cache '%s': %s"
+                % (staging_cache_path, exc)
+            )
+        else:
+            ui.info(
+                "Saved staging cache with {count} entries to '{path}'.".format(
+                    count=len(cache_payload),
+                    path=staging_cache_path,
+                )
+            )
 
     ui.start_step("Log time entries")
     total_created_entries = 0

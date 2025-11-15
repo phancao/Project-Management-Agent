@@ -213,6 +213,7 @@ class ImportedTimeEntry:
     spent_on: Optional[str]
     units: Optional[float]
     order_index: int
+    user_id: Optional[int] = None  # User who logged the time (for updating logged_by)
 
 
 @dataclass
@@ -266,41 +267,173 @@ class WorkbookStaging:
     tasks: Dict[str, StagedTask]
 
 
+class Colors:
+    """ANSI color codes for terminal output."""
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    
+    # Text colors
+    BLACK = "\033[30m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+    
+    # Background colors
+    BG_BLACK = "\033[40m"
+    BG_RED = "\033[41m"
+    BG_GREEN = "\033[42m"
+    BG_YELLOW = "\033[43m"
+    BG_BLUE = "\033[44m"
+    BG_MAGENTA = "\033[45m"
+    BG_CYAN = "\033[46m"
+    BG_WHITE = "\033[47m"
+    
+    @staticmethod
+    def disable() -> None:
+        """Disable colors (for non-terminal output)."""
+        Colors.RESET = ""
+        Colors.BOLD = ""
+        Colors.DIM = ""
+        Colors.BLACK = Colors.RED = Colors.GREEN = Colors.YELLOW = ""
+        Colors.BLUE = Colors.MAGENTA = Colors.CYAN = Colors.WHITE = ""
+        Colors.BG_BLACK = Colors.BG_RED = Colors.BG_GREEN = Colors.BG_YELLOW = ""
+        Colors.BG_BLUE = Colors.BG_MAGENTA = Colors.BG_CYAN = Colors.BG_WHITE = ""
+
+
 class ConsoleUI:
-    def __init__(self, auto_confirm: bool = False) -> None:
+    """Enhanced console UI with beautiful formatting and colors."""
+    
+    def __init__(self, auto_confirm: bool = False, use_colors: bool = True) -> None:
         self.auto_confirm = auto_confirm
         self.step_index = 0
-
+        self.use_colors = use_colors and sys.stdout.isatty()
+        if not self.use_colors:
+            Colors.disable()
+    
+    def _colorize(self, text: str, color: str) -> str:
+        """Apply color to text if colors are enabled."""
+        if self.use_colors:
+            return f"{color}{text}{Colors.RESET}"
+        return text
+    
     def start_step(self, title: str) -> None:
+        """Start a new step with beautiful formatting."""
         self.step_index += 1
         stamp = dt.datetime.now().strftime("%H:%M:%S")
-        print(f"\n[{stamp}] Step {self.step_index}: {title}")
-
-    def info(self, message: str) -> None:
-        print(f"  {message}")
-
+        step_num = self._colorize(f"Step {self.step_index}", Colors.CYAN + Colors.BOLD)
+        timestamp = self._colorize(f"[{stamp}]", Colors.DIM)
+        title_colored = self._colorize(title, Colors.BOLD)
+        print(f"\n{timestamp} {step_num}: {title_colored}", flush=True)
+    
+    def info(self, message: str, level: str = "info") -> None:
+        """Print an info message with appropriate formatting."""
+        icons = {
+            "info": "ℹ",
+            "success": "✓",
+            "warning": "⚠",
+            "error": "✗",
+            "debug": "🔍",
+        }
+        colors_map = {
+            "info": Colors.BLUE,
+            "success": Colors.GREEN,
+            "warning": Colors.YELLOW,
+            "error": Colors.RED,
+            "debug": Colors.DIM,
+        }
+        icon = icons.get(level, "•")
+        color = colors_map.get(level, "")
+        icon_colored = self._colorize(icon, color)
+        print(f"  {icon_colored} {message}", flush=True)
+    
+    def success(self, message: str) -> None:
+        """Print a success message."""
+        self.info(message, "success")
+    
+    def warning(self, message: str) -> None:
+        """Print a warning message."""
+        self.info(message, "warning")
+    
+    def error(self, message: str) -> None:
+        """Print an error message."""
+        self.info(message, "error")
+    
+    def debug(self, message: str) -> None:
+        """Print a debug message."""
+        self.info(message, "debug")
+    
     def progress(self, current: int, total: int, label: str = "") -> None:
+        """Show progress with a beautiful progress bar."""
         percent = (current / total) * 100 if total else 100.0
         prefix = f"{label} " if label else ""
-        print(f"  {prefix}{current}/{total} ({percent:.1f}%)")
-
+        
+        # Create a simple progress bar
+        bar_width = 30
+        filled = int(bar_width * current / total) if total > 0 else bar_width
+        bar_colored = (
+            self._colorize("█" * filled, Colors.GREEN) +
+            self._colorize("░" * (bar_width - filled), Colors.DIM)
+        )
+        
+        percent_str = self._colorize(f"{percent:.1f}%", Colors.CYAN)
+        count_str = self._colorize(f"{current}/{total}", Colors.DIM)
+        
+        print(f"  {prefix}{bar_colored} {percent_str} {count_str}", flush=True)
+    
     def complete_step(self, message: str) -> None:
-        print(f"  ✔ {message}")
-
+        """Mark a step as complete with success styling."""
+        checkmark = self._colorize("✔", Colors.GREEN + Colors.BOLD)
+        message_colored = self._colorize(message, Colors.GREEN)
+        print(f"  {checkmark} {message_colored}", flush=True)
+    
     def skip_step(self, message: str) -> None:
-        print(f"  ↷ {message}")
-
+        """Mark a step as skipped with appropriate styling."""
+        arrow = self._colorize("↷", Colors.YELLOW)
+        message_colored = self._colorize(message, Colors.DIM)
+        print(f"  {arrow} {message_colored}", flush=True)
+    
     def ask_confirmation(self, prompt: str) -> bool:
+        """Ask for user confirmation with styled prompt."""
+        arrow = self._colorize("→", Colors.CYAN)
+        prompt_colored = self._colorize(prompt, Colors.BOLD)
+        
         if self.auto_confirm:
-            print(f"  → {prompt} [auto-yes]")
+            auto_yes = self._colorize("[auto-yes]", Colors.GREEN + Colors.DIM)
+            print(f"  {arrow} {prompt_colored} {auto_yes}", flush=True)
             return True
+        
         while True:
-            response = input(f"  → {prompt} [y/N]: ").strip().lower()
+            response = input(f"  {arrow} {prompt_colored} {self._colorize('[y/N]', Colors.DIM)}: ").strip().lower()
             if response in {"y", "yes"}:
                 return True
             if response in {"", "n", "no"}:
                 return False
-            print("  Please answer 'y' or 'n'.")
+            self.warning("Please answer 'y' or 'n'.")
+    
+    def section(self, title: str) -> None:
+        """Print a section header."""
+        title_colored = self._colorize(title, Colors.BOLD + Colors.CYAN)
+        print(f"\n  {title_colored}", flush=True)
+        print(f"  {self._colorize('─' * (len(title) + 2), Colors.DIM)}", flush=True)
+    
+    def table_header(self, *columns: str) -> None:
+        """Print a table header."""
+        header = "  ".join(columns)
+        header_colored = self._colorize(header, Colors.BOLD)
+        print(f"  {header_colored}", flush=True)
+        separator = "  ".join("-" * len(col) for col in columns)
+        separator_colored = self._colorize(separator, Colors.DIM)
+        print(f"  {separator_colored}", flush=True)
+    
+    def table_row(self, *columns: str) -> None:
+        """Print a table row."""
+        row = "  ".join(columns)
+        print(f"  {row}", flush=True)
 
 
 def _run_psql(sql: str, suppress_output: bool = True) -> None:
@@ -355,6 +488,240 @@ def _run_sql_statements(
             ui.info(f"  {description}: {chunk_num}/{chunks} chunk(s) ({len(chunk)} statement(s))")
         sql = "BEGIN;\n" + "\n".join(chunk) + "\nCOMMIT;\n"
         _run_psql(sql, suppress_output=True)
+
+
+def update_time_entry_logged_by_batch(
+    updates: List[Tuple[int, int]],
+    ui: Optional[ConsoleUI] = None,
+    dry_run: bool = False,
+) -> None:
+    """
+    Update the logged_by_id field for multiple time entries.
+    
+    Args:
+        updates: List of (time_entry_id, user_id) tuples
+        ui: Optional ConsoleUI for progress reporting
+        dry_run: If True, only report what would be done
+    """
+    if not updates:
+        if ui:
+            ui.info("No time entries to update.", "info")
+        return
+    
+    if dry_run:
+        if ui:
+            ui.info(
+                f"[DRY-RUN] Would update logged_by for {len(updates)} time entry(ies)",
+                "info"
+            )
+        return
+    
+    if ui:
+        ui.info(
+            f"Updating logged_by for {len(updates)} time entry(ies)...",
+            "info"
+        )
+    
+    # Build SQL update statements
+    update_statements = []
+    for entry_id, user_id in updates:
+        update_statements.append(
+            f"UPDATE time_entries "
+            f"SET logged_by_id={user_id} "
+            f"WHERE id={entry_id};"
+        )
+    
+    if update_statements:
+        _run_sql_statements(
+            update_statements,
+            chunk_size=200,
+            ui=ui,
+            description="Updating logged_by field",
+        )
+        if ui:
+            ui.complete_step(
+                f"Updated logged_by for {len(updates)} time entry(ies)."
+            )
+
+
+def update_time_entry_logged_by_from_excel(
+    workbook_path: Path,
+    client: OpenProjectClient,
+    staging: WorkbookStaging,
+    ui: ConsoleUI,
+    dry_run: bool = False,
+) -> int:
+    """
+    Update logged_by field for time entries by matching Excel data with OpenProject entries.
+    
+    This function:
+    1. Builds a map of (wp_id, date, hours, activity_id) -> user_id from Excel
+    2. Fetches all time entries from OpenProject
+    3. Matches entries and updates logged_by_id for entries that need it
+    
+    Args:
+        workbook_path: Path to the Excel workbook
+        client: OpenProject client
+        staging: Workbook staging data
+        ui: ConsoleUI for progress reporting
+        dry_run: If True, only report what would be done
+    
+    Returns:
+        Number of entries updated
+    """
+    import re
+    
+    # Load workbook rows
+    workbook_rows = parse_workbook(workbook_path)
+    
+    # Fetch users to build user_id_map
+    user_records = client.list_users()
+    user_id_map: Dict[str, Optional[int]] = {}
+    for user_name, record in user_records.items():
+        href = record["_links"]["self"]["href"]
+        user_id_map[normalize_person_name(user_name)] = int(href.split("/")[-1])
+    
+    # Build normalized activity lookup map
+    activity_lookup: Dict[str, int] = {}
+    try:
+        api_activities = client.list_time_entry_activities()
+        for normalized_name, activity_data in api_activities.items():
+            activity_lookup[normalized_name] = int(activity_data["id"])
+    except Exception:
+        pass
+    
+    try:
+        db_activities = fetch_time_entry_activities_from_db()
+        for raw_name, activity_id in db_activities.items():
+            normalized_name = normalize_activity_name(raw_name)
+            if normalized_name not in activity_lookup:
+                activity_lookup[normalized_name] = activity_id
+    except Exception:
+        pass
+    
+    # Build mapping: (work_package_id, spent_on, hours, activity_id) -> user_id from Excel
+    excel_time_entry_map: Dict[Tuple[int, str, float, int], int] = {}
+    
+    for row in workbook_rows:
+        if not row.units or row.units <= 0:
+            continue
+        if not row.date_spent:
+            continue
+        
+        # Find work package ID by matching task name
+        row_task_subject = row.work_package.strip()
+        # Try to extract subject if it has "Type #ID: Subject" format
+        match = re.match(r"^[^#]*#\d+:\s*(.+)$", row_task_subject)
+        if match:
+            row_task_subject = match.group(1).strip()
+        
+        staged_task = None
+        for task in staging.tasks.values():
+            if (task.project_name == row.project_name and
+                task.subject == row_task_subject):
+                staged_task = task
+                break
+        
+        if not staged_task or not staged_task.openproject_id:
+            continue
+        
+        wp_id = staged_task.openproject_id
+        
+        # Find activity ID
+        normalized_activity = normalize_activity_name(row.activity or "")
+        activity_id = activity_lookup.get(normalized_activity)
+        if not activity_id:
+            continue
+        
+        # Find user ID
+        normalized_user = normalize_person_name(row.user_name or "")
+        user_id = user_id_map.get(normalized_user)
+        if not user_id:
+            continue
+        
+        # Build key: (wp_id, spent_on, hours, activity_id)
+        hours = float(row.units)
+        key = (wp_id, row.date_spent, hours, activity_id)
+        excel_time_entry_map[key] = user_id
+    
+    if not excel_time_entry_map:
+        ui.info("No time entries found in Excel to match.", "info")
+        return 0
+    
+    # Fetch all time entries from OpenProject
+    all_time_entries = client.list_time_entries()
+    
+    # Match OpenProject time entries with Excel rows
+    logged_by_updates: List[Tuple[int, int]] = []
+    
+    for entry in all_time_entries:
+        wp_id = entry.get("_links", {}).get("workPackage", {}).get("href", "")
+        if not wp_id:
+            continue
+        try:
+            wp_id_int = int(wp_id.split("/")[-1])
+        except (ValueError, AttributeError):
+            continue
+        
+        spent_on = entry.get("spentOn", "")
+        hours = entry.get("hours", "")
+        if not spent_on or not hours:
+            continue
+        
+        # Parse hours (ISO 8601 duration to float)
+        try:
+            minutes = minutes_from_iso_duration(hours)
+            if minutes is None:
+                continue
+            hours_float = minutes / 60.0
+        except Exception:
+            continue
+        
+        activity_link = entry.get("_links", {}).get("activity", {}).get("href", "")
+        if not activity_link:
+            continue
+        try:
+            activity_id = int(activity_link.split("/")[-1])
+        except (ValueError, AttributeError):
+            continue
+        
+        # Build key and look up in Excel map
+        key = (wp_id_int, spent_on, hours_float, activity_id)
+        excel_user_id = excel_time_entry_map.get(key)
+        
+        if excel_user_id:
+            entry_id = int(entry["id"])
+            current_logged_by = entry.get("_links", {}).get("loggedBy", {}).get("href", "")
+            
+            # Check if update is needed
+            needs_update = False
+            
+            if current_logged_by:
+                try:
+                    current_user_id = int(current_logged_by.split("/")[-1])
+                    if current_user_id != excel_user_id:
+                        needs_update = True
+                except (ValueError, AttributeError):
+                    # Can't extract current user ID, assume needs update
+                    needs_update = True
+            else:
+                # No loggedBy link in API response, update via database
+                needs_update = True
+            
+            if needs_update:
+                logged_by_updates.append((entry_id, excel_user_id))
+    
+    # Update logged_by field
+    if logged_by_updates:
+        update_time_entry_logged_by_batch(
+            updates=logged_by_updates,
+            ui=ui,
+            dry_run=dry_run,
+        )
+        return len(logged_by_updates)
+    else:
+        ui.info("No time entries need logged_by update.", "info")
+        return 0
 
 
 def fetch_time_entry_activities_from_db() -> Dict[str, int]:
@@ -854,8 +1221,12 @@ class OpenProjectClient:
             payload["dueDate"] = due_date
         if estimated_time:
             payload["estimatedTime"] = estimated_time
-        if description:
+        if description is not None:
+            # Explicitly set description (even if empty string) to ensure it's blank
             payload["description"] = {"format": "markdown", "raw": description}
+        else:
+            # Explicitly set to empty string to ensure no default description is added
+            payload["description"] = {"format": "markdown", "raw": ""}
         resp = self._request(
             "POST",
             "/work_packages",
@@ -928,6 +1299,24 @@ class OpenProjectClient:
         if comment:
             payload["comment"] = {"format": "plain", "raw": comment}
         resp = self._request("POST", "/time_entries", data=json.dumps(payload))
+        return resp.json()
+
+    def update_time_entry_logged_by(
+        self,
+        time_entry_id: int,
+        logged_by_user_id: int,
+    ) -> dict:
+        """Update the 'logged by' field of a time entry to the specified user."""
+        payload = {
+            "_links": {
+                "loggedBy": {"href": f"{API_PREFIX}/users/{logged_by_user_id}"},
+            },
+        }
+        resp = self._request(
+            "PATCH",
+            f"/time_entries/{time_entry_id}",
+            data=json.dumps(payload),
+        )
         return resp.json()
 
     def list_time_entries(self) -> List[dict]:
@@ -1959,16 +2348,16 @@ def ensure_time_entries_for_task(
         # This is different from the work package assignee
         normalized_user = normalize_person_name(log.user_name) if log.user_name else ""
         if not normalized_user:
-            ui.info(
-                f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-                f"Skipping - missing user name"
+            # Only show critical errors (missing user) - these prevent import
+            ui.error(
+                f"Row {order_index + 1} for '{staged_task.subject}': Skipping - missing user name"
             )
             continue
         log_user_id = user_id_map.get(normalized_user)
         if log_user_id is None:
-            ui.info(
-                f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-                f"Skipping - unable to resolve user ID for '{log.user_name}'"
+            # Only show critical errors (unresolved user) - these prevent import
+            ui.error(
+                f"Row {order_index + 1} for '{staged_task.subject}': Skipping - unable to resolve user ID for '{log.user_name}'"
             )
             continue
         
@@ -1978,10 +2367,7 @@ def ensure_time_entries_for_task(
             # Try to use a default activity or the first available one
             if activity_id_lookup:
                 normalized_activity = next(iter(activity_id_lookup.keys()))
-                ui.info(
-                    f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-                    f"Missing activity, using default '{normalized_activity}'"
-                )
+                # Data quality issue - silently handled, no console output
             else:
                 raise OpenProjectError(
                     "No time entry activities available in OpenProject."
@@ -1992,38 +2378,20 @@ def ensure_time_entries_for_task(
                 "Time entry activity '%s' is not available in OpenProject."
                 % (log.activity or normalized_activity)
             )
-        # Handle invalid units - use 0 if invalid
-        original_units = log.units
+        # Handle invalid units - use 0 if invalid (silently handled)
         try:
             units_value = float(log.units) if log.units is not None else 0.0
-            if log.units is None:
-                ui.info(
-                    f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-                    f"Missing units, using 0.0"
-                )
         except (TypeError, ValueError):
             units_value = 0.0
-            ui.info(
-                f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-                f"Invalid units value '{original_units}', using 0.0"
-            )
-        # Ensure we have a valid date - use today if missing
+        # Ensure we have a valid date - use today if missing (silently handled)
         date_spent = log.date_spent
         if not date_spent:
             from datetime import date
             date_spent = date.today().isoformat()
-            ui.info(
-                f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-                f"Missing date, using today's date ({date_spent})"
-            )
         hours_iso = iso_duration_from_hours(units_value)
         if not hours_iso:
-            # Default to PT0H if conversion fails
+            # Default to PT0H if conversion fails (silently handled)
             hours_iso = "PT0H"
-            ui.info(
-                f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-                f"Failed to convert units to ISO duration, using PT0H"
-            )
         minutes_value = int(round(units_value * 60))
         key = (
             date_spent,
@@ -2037,16 +2405,13 @@ def ensure_time_entries_for_task(
         # Note: We allow duplicate entries from Excel (even if identical) to match Excel exactly
         if existing_count > 0:
             skipped_already_exists += 1
-            ui.info(
-                f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-                f"SKIPPED - Already exists in OpenProject (date={date_spent}, hours={units_value:.2f}h, "
-                f"user_id={log_user_id}, activity_id={activity_id}, wp_id={work_package_id}, count={existing_count})"
-            )
+            # Silently skip - will be shown in summary if needed
             continue
         if dry_run:
+            # Only show dry-run messages if explicitly requested
             ui.info(
-                "  [logwork] Would log %.2f hour(s) on %s for '%s'."
-                % (units_value, date_spent, staged_task.subject)
+                f"Would log {units_value:.2f} hour(s) on {date_spent} for '{staged_task.subject}'",
+                "info"
             )
             missing_count += 1
             continue
@@ -2060,17 +2425,19 @@ def ensure_time_entries_for_task(
             activity_id=activity_id,
         )
         entry_id = int(response["id"])
-        ui.info(
-            f"  [logwork] Row {order_index + 1} for '{staged_task.subject}': "
-            f"CREATED - Time entry ID={entry_id} (date={date_spent}, hours={units_value:.2f}h, "
-            f"user_id={log_user_id}, activity_id={activity_id}, wp_id={work_package_id})"
-        )
+        
+        # Update the "logged by" field will be handled in batch after all entries are created
+        # Store the entry_id and user_id for batch update
+        
+        # Individual time entry creation messages are too verbose - only log to debug file if needed
+        # Remove console logging to reduce noise - summary will be shown instead
         created_entries.append(
             ImportedTimeEntry(
                 id=entry_id,
                 spent_on=date_spent,
                 units=units_value,
                 order_index=order_index,
+                user_id=int(log_user_id),  # Store user_id for batch update of logged_by
             )
         )
         # Track created entry for potential future use (for idempotency on reruns)
@@ -2092,14 +2459,15 @@ def ensure_time_entries_for_task(
         )
         missing_count += 1
     
-    # Summary for this task
-    total_processed = len(logs_with_units)
-    total_created = len(created_entries)
-    ui.info(
-        f"  [logwork] Summary for '{staged_task.subject}': "
-        f"Processed={total_processed}, Created={total_created}, "
-        f"Skipped(already_exists)={skipped_already_exists}"
-    )
+    # Summary for this task - only show if there were skips or errors
+    # Otherwise, the progress bar and final summary are sufficient
+    # Only show task summary if there were issues (skipped entries or errors)
+    if skipped_already_exists > 0:
+        total_created = len(created_entries)
+        ui.info(
+            f"'{staged_task.subject}': Created={total_created}, Skipped={skipped_already_exists}",
+            "warning"
+        )
     
     return created_entries, missing_count
 
@@ -2114,26 +2482,13 @@ def _collect_packages_for_history_adjustment(
     for staged_task in staging.tasks.values():
         work_package_id = staged_task.openproject_id
         if work_package_id is None:
-            ui.info(
-                "  [history] Skipping '%s'; no work package ID resolved."
-                % staged_task.subject
-            )
             skip_reasons["no work package id"] += 1
             continue
         if work_package_id in packages_by_id:
-            ui.info(
-                "  [history] Skipping '%s'; already included. "
-                "Existing entry assumed imported earlier."
-                % staged_task.subject
-            )
             skip_reasons["already processed"] += 1
             continue
         staged_project = staging.projects.get(staged_task.project_name)
         if staged_project is None or staged_project.openproject_id is None:
-            ui.info(
-                "  [history] Skipping '%s'; project mapping missing."
-                % staged_task.subject
-            )
             skip_reasons["missing project mapping"] += 1
             continue
         logs_with_units = [
@@ -2142,10 +2497,6 @@ def _collect_packages_for_history_adjustment(
             if log.date_spent and log.units
         ]
         if not logs_with_units:
-            ui.info(
-                "  [history] Skipping '%s'; no workbook logs with units."
-                % staged_task.subject
-            )
             skip_reasons["no valid workbook logs"] += 1
             continue
         db_entries = fetch_time_entries_for_work_package_from_db(
@@ -2191,9 +2542,9 @@ def _collect_packages_for_history_adjustment(
             time_entries=imported_entries,
         )
     if skip_reasons:
-        ui.info("  [history] Skip summary:")
+        ui.debug("History adjustment skip summary:")
         for reason, count in sorted(skip_reasons.items()):
-            ui.info(f"    - {count} task(s): {reason}")
+            ui.debug(f"  • {count} task(s): {reason}")
     return list(packages_by_id.values())
 
 
@@ -2211,7 +2562,7 @@ class ImportVerification:
 def calculate_excel_totals(
     workbook_path: Path,
     staging: WorkbookStaging,
-    tracer: Optional["DebugTracer"] = None,
+    tracer: Optional[Any] = None,
 ) -> Tuple[float, int, Dict[str, float]]:
     """Calculate total hours and entry count from Excel workbook.
     
@@ -2379,7 +2730,7 @@ def verify_import(
     staging: WorkbookStaging,
     imported_packages: List[ImportedWorkPackage],
     ui: ConsoleUI,
-    tracer: Optional["DebugTracer"] = None,
+    tracer: Optional[Any] = None,
     created_time_entry_ids: Optional[Set[int]] = None,
 ) -> ImportVerification:
     """Verify import by comparing Excel totals with OpenProject totals.
@@ -2797,76 +3148,102 @@ def analyze_missing_entries(
     
     # Report findings
     if rows_without_wp:
-        ui.info(f"  ⚠️  Found {len(rows_without_wp)} Excel row(s) without matching work package:")
+        ui.warning(
+            f"Found {len(rows_without_wp)} Excel row(s) without matching work package:"
+        )
         for row in rows_without_wp[:10]:  # Show first 10
             ui.info(
-                f"    - {row['project']} / {row['task']} / "
-                f"{row['date']} / {row['hours']}h / {row['assignee']}"
+                f"  • {row['project']} / {row['task']} / "
+                f"{row['date']} / {row['hours']}h / {row['assignee']}",
+                "warning"
             )
         if len(rows_without_wp) > 10:
-            ui.info(f"    ... and {len(rows_without_wp) - 10} more")
+            ui.info(f"  ... and {len(rows_without_wp) - 10} more", "warning")
     
     if rows_without_user:
-        ui.info(f"  ⚠️  Found {len(rows_without_user)} Excel row(s) without matching user:")
+        ui.warning(
+            f"Found {len(rows_without_user)} Excel row(s) without matching user:"
+        )
         for row in rows_without_user[:10]:  # Show first 10
             ui.info(
-                f"    - {row['project']} / {row['task']} / "
-                f"{row['date']} / {row['hours']}h / {row['assignee']}"
+                f"  • {row['project']} / {row['task']} / "
+                f"{row['date']} / {row['hours']}h / {row['assignee']}",
+                "warning"
             )
         if len(rows_without_user) > 10:
-            ui.info(f"    ... and {len(rows_without_user) - 10} more")
+            ui.info(f"  ... and {len(rows_without_user) - 10} more", "warning")
     
     if missing_rows:
-        ui.info(f"  ⚠️  Found {len(missing_rows)} Excel row(s) without time entries:")
+        ui.warning(
+            f"Found {len(missing_rows)} Excel row(s) without time entries:"
+        )
         for row in missing_rows[:10]:  # Show first 10
             reason = row['reason']
             # Add detailed info if available
             if 'expected_key' in row and row['expected_key']:
                 exp = row['expected_key']
-                reason += f" [Looking for: {exp['hours']}h, user_id={exp['user_id']}, activity_id={exp['activity_id']}, wp_id={exp['wp_id']}]"
+                reason += (
+                    f" [Looking for: {exp['hours']}h, "
+                    f"user_id={exp['user_id']}, "
+                    f"activity_id={exp['activity_id']}, "
+                    f"wp_id={exp['wp_id']}]"
+                )
             if 'similar_entries' in row and row['similar_entries']:
-                sim_strs = [f"{s['hours']:.2f}h(act={s['activity_id']})" for s in row['similar_entries']]
+                sim_strs = [
+                    f"{s['hours']:.2f}h(act={s['activity_id']})"
+                    for s in row['similar_entries']
+                ]
                 reason += f" [Similar entries exist: {', '.join(sim_strs)}]"
             ui.info(
-                f"    - {row['project']} / {row['task']} / "
-                f"{row['date']} / {row['hours']}h / {row['assignee']} ({reason})"
+                f"  • {row['project']} / {row['task']} / "
+                f"{row['date']} / {row['hours']}h / {row['assignee']} ({reason})",
+                "warning"
             )
         if len(missing_rows) > 10:
-            ui.info(f"    ... and {len(missing_rows) - 10} more")
+            ui.info(f"  ... and {len(missing_rows) - 10} more", "warning")
     
     # Show activity_id usage summary
     if activity_ids_used_in_entries:
         activity_ids_in_lookup = set(activity_id_lookup.values())
-        ui.info("")
-        ui.info(f"  Activity ID Analysis:")
-        ui.info(f"    Activity IDs used in time entries: {sorted(activity_ids_used_in_entries)}")
-        ui.info(f"    Activity IDs in activity_id_lookup: {sorted(activity_ids_in_lookup)}")
+        ui.section("Activity ID Analysis")
+        ui.info(
+            f"Activity IDs used in time entries: {sorted(activity_ids_used_in_entries)}",
+            "info"
+        )
+        ui.info(
+            f"Activity IDs in activity_id_lookup: {sorted(activity_ids_in_lookup)}",
+            "info"
+        )
         missing_activity_ids = activity_ids_used_in_entries - activity_ids_in_lookup
         if missing_activity_ids:
-            ui.info(f"    ⚠️  Activity IDs used in entries but NOT in lookup: {sorted(missing_activity_ids)}")
+            ui.warning(
+                f"Activity IDs used in entries but NOT in lookup: "
+                f"{sorted(missing_activity_ids)}"
+            )
         extra_activity_ids = activity_ids_in_lookup - activity_ids_used_in_entries
         if extra_activity_ids:
-            ui.info(f"    ℹ️  Activity IDs in lookup but NOT used in entries: {sorted(extra_activity_ids)}")
+            ui.info(
+                f"Activity IDs in lookup but NOT used in entries: "
+                f"{sorted(extra_activity_ids)}",
+                "info"
+            )
     
     if not rows_without_wp and not rows_without_user and not missing_rows:
-        ui.info("  ✅ All Excel rows have corresponding time entries!")
+        ui.success("🎉 All Excel rows have corresponding time entries!")
 
 
 def report_verification(verification: ImportVerification, ui: ConsoleUI) -> None:
-    """Display verification report."""
-    ui.info("")
-    ui.info("  📊 Import Verification Summary:")
-    ui.info("  " + "=" * 60)
-    ui.info("")
+    """Display beautiful verification report."""
+    ui.section("📊 Import Verification Summary")
     
     excel_hours = verification.excel_total_hours
     excel_entries = verification.excel_total_entries
     op_hours = verification.openproject_total_hours
     op_entries = verification.openproject_total_entries
     
-    ui.info("  Overall Totals:")
-    ui.info(f"    Excel workbook:       {excel_entries:>6} entries,   {excel_hours:>10.2f} hours")
-    ui.info(f"    OpenProject:          {op_entries:>6} entries,   {op_hours:>10.2f} hours")
+    ui.info("Overall Totals:", "info")
+    ui.info(f"  Excel workbook:  {excel_entries:>6,} entries,  {excel_hours:>12,.2f} hours")
+    ui.info(f"  OpenProject:     {op_entries:>6,} entries,  {op_hours:>12,.2f} hours")
     ui.info("")
     
     entry_diff = excel_entries - op_entries
@@ -2874,35 +3251,43 @@ def report_verification(verification: ImportVerification, ui: ConsoleUI) -> None
     entry_diff_pct = (entry_diff / excel_entries * 100) if excel_entries > 0 else 0.0
     hours_diff_pct = (hours_diff / excel_hours * 100) if excel_hours > 0 else 0.0
     
-    ui.info("  Differences:")
-    ui.info(f"    Entries:              {entry_diff:>6} ({entry_diff_pct:+.2f}%)")
-    ui.info(f"    Hours:                 {hours_diff:>10.2f} hours ({hours_diff_pct:+.2f}%)")
+    ui.info("Differences:", "info")
+    diff_color = "success" if abs(entry_diff) < 1 and abs(hours_diff) < 0.01 else "warning"
+    ui.info(f"  Entries:  {entry_diff:>+6,} ({entry_diff_pct:+.2f}%)", diff_color)
+    ui.info(f"  Hours:    {hours_diff:>+12,.2f} hours ({hours_diff_pct:+.2f}%)", diff_color)
     ui.info("")
     
     if abs(entry_diff) < 1 and abs(hours_diff) < 0.01:
-        ui.info("  ✅ Import verification: PERFECT MATCH!")
+        ui.success("🎉 Import verification: PERFECT MATCH!")
     else:
-        ui.info("  ⚠️  Import verification: Differences detected")
+        ui.warning("⚠️  Import verification: Differences detected")
     ui.info("")
     
-    ui.info(f"  Work Packages Imported: {verification.work_package_count}")
+    ui.info(f"Work Packages Imported: {verification.work_package_count:,}", "info")
     ui.info("")
     
     if verification.project_comparison:
-        ui.info("  Per-Project Breakdown:")
-        ui.info("")
-        ui.info(f"    {'Project Name':<50} {'Excel Hours':>12} {'OP Hours':>12} {'Diff':>12}")
-        ui.info("    " + "-" * 86)
+        ui.section("Per-Project Breakdown")
+        ui.table_header(
+            "Project Name".ljust(50),
+            "Excel Hours".rjust(12),
+            "OP Hours".rjust(12),
+            "Diff".rjust(12)
+        )
         
         for project_name in sorted(verification.project_comparison.keys()):
             comp = verification.project_comparison[project_name]
             excel_h = comp["excel_hours"]
             op_h = comp["openproject_hours"]
             diff = excel_h - op_h
-            ui.info(f"    {project_name:<50} {excel_h:>12.2f} {op_h:>12.2f} {diff:>12.2f}")
-    
-    ui.info("")
-    ui.info("  " + "=" * 60)
+            diff_str = f"{diff:>+12.2f}"
+            ui.table_row(
+                project_name[:50].ljust(50),
+                f"{excel_h:>12.2f}",
+                f"{op_h:>12.2f}",
+                diff_str
+            )
+        ui.info("")
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -2991,6 +3376,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help=(
             "Run only the analysis step to check which Excel rows are missing "
             "time entries. Skips full import."
+        ),
+    )
+    parser.add_argument(
+        "--update-logged-by",
+        action="store_true",
+        help=(
+            "Update logged_by field for time entries based on Excel workbook. "
+            "Requires --workbook. Skips full import."
         ),
     )
 
@@ -3229,6 +3622,129 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
 
         ui.complete_step("Analysis completed.")
+        return 0
+
+    # If --update-logged-by is set, update logged_by field and exit
+    if args.update_logged_by:
+        if not args.workbook.exists():
+            print(
+                "Workbook not found: %s" % args.workbook,
+                file=sys.stderr,
+            )
+            return 1
+        
+        # Validate and load workbook
+        ui.start_step("Validate workbook")
+        validation_issues = validate_workbook(args.workbook, ui)
+        report_validation_issues(validation_issues, ui)
+        if validation_issues:
+            ui.info(
+                f"  Found {len(validation_issues)} validation issue(s). "
+                "Update will continue with defaults for invalid data."
+            )
+        ui.complete_step("Workbook validation completed.")
+
+        ui.start_step("Load workbook data")
+        workbook_rows = parse_workbook(args.workbook)
+        aggregated_tasks = aggregate_workbook_rows(workbook_rows)
+        for task in aggregated_tasks:
+            if not task.type_name:
+                task.type_name = args.default_type
+        if not aggregated_tasks:
+            ui.complete_step("No valid rows found in workbook. Nothing to do.")
+            return 0
+        staging = build_staging(aggregated_tasks)
+        ui.complete_step(
+            "Prepared %d unique tasks across %d projects and %d users."
+            % (
+                len(staging.tasks),
+                len(staging.projects),
+                len(staging.users),
+            )
+        )
+
+        # Connect to OpenProject
+        client = OpenProjectClient(server, token)
+        
+        # Load staging cache if available (for work package matching)
+        staging_cache_path: Optional[Path] = args.staging_cache or Path("/tmp/staging-cache.json")
+        if staging_cache_path and staging_cache_path.exists():
+            try:
+                with staging_cache_path.open("r", encoding="utf-8") as handle:
+                    cache_payload = json.load(handle)
+                cache_assignments = 0
+                for key, entry in cache_payload.items():
+                    staged_task = staging.tasks.get(key)
+                    if staged_task:
+                        wp_id = entry.get("openproject_id")
+                        if wp_id:
+                            staged_task.openproject_id = int(wp_id)
+                            cache_assignments += 1
+                if cache_assignments > 0:
+                    ui.info(
+                        f"  Loaded {cache_assignments} cached work package mapping(s)."
+                    )
+            except (OSError, json.JSONDecodeError) as exc:
+                ui.info(f"  Failed to load cache: {exc}")
+        
+        # Fetch projects and match work packages
+        ui.start_step("Fetch projects and match work packages")
+        project_records = client.list_projects()
+        for staged_project in staging.projects.values():
+            record = project_records.get(staged_project.name)
+            if record:
+                href = record["_links"]["self"]["href"]
+                staged_project.openproject_id = int(href.split("/")[-1])
+        
+        # Match work packages by subject
+        matched_count = 0
+        for staged_task in staging.tasks.values():
+            if staged_task.openproject_id:
+                matched_count += 1
+                continue
+            staged_project = staging.projects.get(staged_task.project_name)
+            if not staged_project or not staged_project.openproject_id:
+                continue
+            try:
+                matches = client.search_work_packages(
+                    project_id=staged_project.openproject_id,
+                    subject=staged_task.subject,
+                )
+                matching_subjects = [
+                    m for m in matches
+                    if (m.get("subject", "").strip() == staged_task.subject.strip())
+                ]
+                if matching_subjects:
+                    staged_task.openproject_id = int(matching_subjects[0]["id"])
+                    matched_count += 1
+            except Exception:
+                pass
+        ui.complete_step(f"Matched {matched_count} work package(s).")
+        
+        # Fetch users to build user_id_map
+        ui.start_step("Fetch users")
+        user_records = client.list_users()
+        user_id_map: Dict[str, Optional[int]] = {}
+        for user_name, record in user_records.items():
+            href = record["_links"]["self"]["href"]
+            user_id_map[normalize_person_name(user_name)] = int(href.split("/")[-1])
+        ui.complete_step(f"Fetched {len(user_id_map)} user(s).")
+        
+        # Update logged_by field using the reusable function
+        updated_count = update_time_entry_logged_by_from_excel(
+            workbook_path=args.workbook,
+            client=client,
+            staging=staging,
+            ui=ui,
+            dry_run=args.dry_run,
+        )
+        
+        if updated_count == 0:
+            ui.complete_step("No time entries need logged_by update.")
+        else:
+            ui.complete_step(
+                f"Updated logged_by for {updated_count} time entry(ies)."
+            )
         return 0
 
     if not args.workbook.exists():
@@ -4240,10 +4756,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ]
     total_log_tasks = len(loggable_tasks)
     if total_log_tasks:
-        ui.info(
-            "  [logwork] Verifying time entries for %s task(s)."
-            % total_log_tasks
-        )
+        ui.info(f"Verifying time entries for {total_log_tasks:,} task(s)", "info")
     # Calculate interval for 1% progress updates
     progress_interval = (
         max(1, total_log_tasks // 100) if total_log_tasks > 0 else None
@@ -4300,9 +4813,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             imported_packages_map[wp_id_int] = pkg
         pkg.time_entries.extend(created_entries)
         total_created_entries += len(created_entries)
-    ui.info(f"  Total logs processed: {total_log_tasks} tasks")
-    ui.info(f"  Total entries created: {total_created_entries}")
-    ui.info(f"  Total entries missing (would create): {total_missing_entries}")
+    ui.info(f"Total logs processed: {total_log_tasks:,} tasks", "info")
+    ui.success(f"Total entries created: {total_created_entries:,}")
+    if total_missing_entries > 0:
+        ui.info(f"Total entries missing (would create): {total_missing_entries:,}", "warning")
     if args.dry_run:
         if total_missing_entries:
             ui.skip_step(
@@ -4319,6 +4833,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
 
     imported_packages = list(imported_packages_map.values())
+
+    # Step 15.5: Update logged_by field for time entries
+    ui.start_step("Update time entry logged_by field")
+    if args.dry_run:
+        ui.skip_step("Dry-run: would update logged_by field for time entries.")
+    else:
+        updated_count = update_time_entry_logged_by_from_excel(
+            workbook_path=args.workbook,
+            client=client,
+            staging=staging,
+            ui=ui,
+            dry_run=False,
+        )
+        if updated_count == 0:
+            ui.skip_step("No time entries need logged_by update.")
+        else:
+            ui.complete_step(
+                f"Updated logged_by for {updated_count} time entry(ies)."
+            )
 
     ui.start_step("Adjust activity history")
     packages_dict = {pkg.work_package_id: pkg for pkg in imported_packages}

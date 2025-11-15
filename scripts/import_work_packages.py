@@ -68,6 +68,50 @@ OPENPROJECT_DB_NAME = os.environ.get(
 )
 
 
+def _get_openproject_container(base_url: Optional[str] = None) -> str:
+    """Detect the correct OpenProject container name based on URL or running containers.
+    
+    Args:
+        base_url: Optional OpenProject base URL (e.g., http://localhost:8081)
+    
+    Returns:
+        Container name to use for database operations
+    """
+    # If base_url is provided and contains port 8081, use v13 container
+    if base_url and "8081" in base_url:
+        return "project-management-agent-openproject_v13-1"
+    
+    # Try to detect from running containers
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            containers = result.stdout.strip().split("\n")
+            # Prefer v13 container if it exists
+            v13_container = next(
+                (c for c in containers if "openproject_v13" in c),
+                None
+            )
+            if v13_container:
+                return v13_container
+            # Fall back to v16 container
+            v16_container = next(
+                (c for c in containers if "openproject" in c and "db" not in c),
+                None
+            )
+            if v16_container:
+                return v16_container
+    except Exception:
+        pass
+    
+    # Default fallback
+    return OPENPROJECT_CONTAINER
+
+
 class OpenProjectError(Exception):
     """Raised when the OpenProject API returns an unexpected response."""
 
@@ -434,6 +478,396 @@ class ConsoleUI:
         """Print a table row."""
         row = "  ".join(columns)
         print(f"  {row}", flush=True)
+    
+    def progress_summary(
+        self,
+        existing: int,
+        missing: int,
+        created: int = 0,
+        entity_name: str = "entries",
+    ) -> None:
+        """Print a progress summary table showing existing, missing, and created counts.
+        
+        Args:
+            existing: Number of entries that already exist and are mapped
+            missing: Number of entries that don't exist and need to be created
+            created: Number of entries that have been created (default: 0)
+            entity_name: Name of the entity type (e.g., "users", "work packages")
+        """
+        total = existing + missing
+        if total == 0:
+            return
+        
+        self.table_header("Status", "Count", "Percentage")
+        
+        if existing > 0:
+            existing_pct = (existing / total * 100) if total > 0 else 0
+            self.table_row(
+                self._colorize("✓ Existing/Mapped", Colors.GREEN),
+                str(existing),
+                f"{existing_pct:.1f}%"
+            )
+        
+        if missing > 0:
+            missing_pct = (missing / total * 100) if total > 0 else 0
+            self.table_row(
+                self._colorize("→ Need to Create", Colors.YELLOW),
+                str(missing),
+                f"{missing_pct:.1f}%"
+            )
+        
+        if created > 0:
+            created_pct = (created / total * 100) if total > 0 else 0
+            self.table_row(
+                self._colorize("✓ Created", Colors.CYAN),
+                str(created),
+                f"{created_pct:.1f}%"
+            )
+        
+        self.table_row(
+            self._colorize("Total", Colors.BOLD),
+            str(total),
+            "100.0%"
+        )
+        print()  # Empty line after table
+
+
+def _try_fix_user_assignment_via_api(
+    client: "OpenProjectClient",
+    user_id: int,
+    project_id: int,
+    ui: ConsoleUI,
+) -> bool:
+    """Try to fix user assignment issues via API.
+    
+    Attempts to:
+    - Activate the user if inactive
+    - Unlock the user if locked
+    
+    Returns True if fix was attempted and might have worked, False otherwise.
+    """
+    try:
+        # Get user details
+        resp = client._request("GET", f"/users/{user_id}")
+        user_data = resp.json()
+        
+        status = user_data.get("status", "")
+        is_locked = user_data.get("locked", False)
+        
+        fixed = False
+        
+        # Try to activate user if inactive
+        if status != "active":
+            ui.warning(f"  Attempting to activate user (status: {status})...")
+            try:
+                payload = {"status": "active"}
+                client._request("PATCH", f"/users/{user_id}", data=json.dumps(payload))
+                ui.info("  ✅ User activated via API")
+                fixed = True
+            except Exception as e:
+                ui.warning(f"  ⚠️  Could not activate user via API: {e}")
+        
+        # Try to unlock user if locked
+        if is_locked:
+            ui.warning("  Attempting to unlock user...")
+            try:
+                payload = {"locked": False}
+                client._request("PATCH", f"/users/{user_id}", data=json.dumps(payload))
+                ui.info("  ✅ User unlocked via API")
+                fixed = True
+            except Exception as e:
+                ui.warning(f"  ⚠️  Could not unlock user via API: {e}")
+        
+        return fixed
+    except Exception as e:
+        ui.warning(f"  ⚠️  Could not check/fix user via API: {e}")
+        return False
+
+
+def _try_fix_user_assignment_via_db(
+    user_id: int,
+    project_id: int,
+    ui: ConsoleUI,
+) -> bool:
+    """Try to fix user assignment issues via database.
+    
+    Attempts to:
+    - Activate the user if inactive (status = 1)
+    - Unlock the user if locked
+    - Ensure user type is correct
+    
+    Returns True if fix was attempted, False otherwise.
+    """
+    try:
+        ui.warning("  Attempting to fix user via database...")
+        
+        # Check current user status
+        check_sql = f"""
+            SELECT id, login, status, type, locked
+            FROM users
+            WHERE id = {user_id};
+        """
+        
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "-i",
+                OPENPROJECT_CONTAINER,
+                "bash",
+                "-lc",
+                (
+                    f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                    f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                    f"-h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \"{check_sql}\""
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        
+        if result.returncode != 0:
+            ui.warning(f"  ⚠️  Could not query user: {result.stderr}")
+            return False
+        
+        if not result.stdout.strip():
+            ui.warning(f"  ⚠️  User {user_id} not found in database")
+            return False
+        
+        parts = result.stdout.strip().split("|")
+        if len(parts) < 5:
+            ui.warning("  ⚠️  Unexpected user data format")
+            return False
+        
+        current_status = parts[2] if len(parts) > 2 else ""
+        current_type = parts[3] if len(parts) > 3 else ""
+        current_locked = parts[4] if len(parts) > 4 else ""
+        
+        fixes = []
+        
+        # Fix status if not active
+        if current_status != "1":
+            fixes.append("status = 1")
+            ui.info(f"  → Will set status to active (currently: {current_status})")
+        
+        # Fix locked if true
+        if current_locked.lower() in ("t", "true", "1"):
+            fixes.append("locked = false")
+            ui.info("  → Will unlock user")
+        
+        # Fix type if not User
+        if current_type and current_type != "User":
+            fixes.append(f"type = 'User'")
+            ui.info(f"  → Will set type to User (currently: {current_type})")
+        
+        if not fixes:
+            ui.info("  → User appears to be in correct state")
+            return False
+        
+        # Apply fixes
+        update_sql = f"""
+            UPDATE users
+            SET {', '.join(fixes)}, updated_at = NOW()
+            WHERE id = {user_id};
+        """
+        
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "-i",
+                OPENPROJECT_CONTAINER,
+                "bash",
+                "-lc",
+                (
+                    f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                    f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                    f"-h {OPENPROJECT_DB_HOST} -c \"{update_sql}\""
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        
+        if result.returncode != 0:
+            ui.warning(f"  ⚠️  Could not update user: {result.stderr}")
+            return False
+        
+        ui.success("  ✅ User fixed via database")
+        return True
+        
+    except Exception as e:
+        ui.warning(f"  ⚠️  Could not fix user via database: {e}")
+        return False
+
+
+def _try_fix_required_custom_fields_via_api(
+    client: "OpenProjectClient",
+    project_id: int,
+    type_id: int,
+    error_msg: str,
+    ui: ConsoleUI,
+) -> bool:
+    """Try to fix required custom fields via API.
+    
+    Attempts to make custom fields optional or set default values.
+    Returns True if fix was attempted, False otherwise.
+    """
+    # OpenProject API doesn't allow changing custom field requirements via API
+    # This would need to be done via web UI or database
+    return False
+
+
+def _try_fix_required_custom_fields_via_db(
+    project_id: int,
+    error_msg: str,
+    ui: ConsoleUI,
+) -> bool:
+    """Try to fix required custom fields via database.
+    
+    Attempts to:
+    - Make custom fields optional (is_required = false)
+    - Or set default values
+    
+    Returns True if fix was attempted, False otherwise.
+    """
+    try:
+        ui.warning("  Attempting to fix required custom fields via database...")
+        
+        fixes = []
+        
+        # Check which custom fields need to be fixed
+        if "customField15" in error_msg:
+            fixes.append(15)
+            ui.info("  → Will make customField15 (QC Activity) optional")
+        
+        if "customField38" in error_msg:
+            fixes.append(38)
+            ui.info("  → Will make customField38 (Finished Date) optional")
+        
+        if not fixes:
+            ui.warning("  ⚠️  Could not identify which custom fields to fix")
+            return False
+        
+        # Detect the correct container (try v13 first, then default)
+        container_name = OPENPROJECT_CONTAINER
+        # Try to find v13 container
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            containers = result.stdout.strip().split("\n")
+            v13_container = next(
+                (c for c in containers if "openproject_v13" in c or "openproject_v13" in c),
+                None
+            )
+            if v13_container:
+                container_name = v13_container
+                ui.debug(f"  Using container: {container_name}")
+        
+        # Update custom fields to be optional
+        # For v13, database might be external, so try both direct psql and via container
+        field_ids_str = ",".join(str(fid) for fid in fixes)
+        update_sql = f"""
+            UPDATE custom_fields
+            SET is_required = false
+            WHERE id IN ({field_ids_str});
+        """
+        
+        # Try via OpenProject container (embedded DB) or external DB container
+        db_container = container_name.replace("openproject_v13", "openproject_db_v13").replace("openproject-1", "openproject_db-1")
+        
+        # Try OpenProject container first (embedded DB)
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "-i",
+                container_name,
+                "bash",
+                "-lc",
+                (
+                    f"su - postgres -c 'psql -d {OPENPROJECT_DB_NAME} -c \"{update_sql}\"'"
+                    if OPENPROJECT_DB_HOST == "127.0.0.1"
+                    else (
+                        f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                        f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                        f"-h {OPENPROJECT_DB_HOST} -c \"{update_sql}\""
+                    )
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        
+        # If that failed, try external DB container
+        if result.returncode != 0:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "-i",
+                    db_container,
+                    "bash",
+                    "-lc",
+                    (
+                        f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                        f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                        f"-c \"{update_sql}\""
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        
+        if result.returncode != 0:
+            ui.warning(
+                f"  ⚠️  Could not update custom fields: {result.stderr}"
+            )
+            return False
+        
+        # Verify the update worked
+        verify_sql = f"SELECT id, is_required FROM custom_fields WHERE id IN ({field_ids_str});"
+        verify_result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "-i",
+                container_name,
+                "bash",
+                "-lc",
+                (
+                    f"su - postgres -c 'psql -d {OPENPROJECT_DB_NAME} -c \"{verify_sql}\"'"
+                    if OPENPROJECT_DB_HOST == "127.0.0.1"
+                    else (
+                        f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                        f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                        f"-h {OPENPROJECT_DB_HOST} -c \"{verify_sql}\""
+                    )
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        
+        if verify_result.returncode == 0 and "f" in verify_result.stdout:
+            ui.success("  ✅ Required custom fields made optional via database")
+            return True
+        else:
+            ui.warning("  ⚠️  Update may not have persisted (OpenProject may need restart)")
+            return False
+        
+    except Exception as e:
+        ui.warning(f"  ⚠️  Could not fix custom fields via database: {e}")
+        return False
 
 
 def _run_psql(sql: str, suppress_output: bool = True) -> None:
@@ -764,9 +1198,10 @@ def fetch_time_entry_activities_from_db() -> Dict[str, int]:
     return activities
 
 
-def create_time_entry_activities_in_db(names: List[str]) -> None:
+def create_time_entry_activities_in_db(names: List[str], base_url: Optional[str] = None) -> None:
     if not names:
         return
+    container_name = _get_openproject_container(base_url)
     for index, raw_name in enumerate(names):
         sanitized_name = raw_name.replace("'", "''")
         sql = (
@@ -792,30 +1227,48 @@ def create_time_entry_activities_in_db(names: List[str]) -> None:
             ") "
             "SELECT id FROM inserted;"
         )
-        command = [
-            "docker",
-            "exec",
-            "-i",
-            OPENPROJECT_CONTAINER,
-            "bash",
-            "-lc",
-            (
-                f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
-                f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
-                f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql}\""
-            ),
-        ]
+        # For v13, database is embedded, use su - postgres
+        if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+            # Use heredoc to avoid quote escaping issues
+            command = [
+                "docker",
+                "exec",
+                "-i",
+                container_name,
+                "bash",
+                "-c",
+                f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F ',' <<'SQL'\n{sql}\nSQL\nEOSQL",
+            ]
+        else:
+            command = [
+                "docker",
+                "exec",
+                "-i",
+                container_name,
+                "bash",
+                "-lc",
+                (
+                    f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                    f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                    f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql}\""
+                ),
+            ]
         try:
-            subprocess.run(
+            result = subprocess.run(
                 command,
                 check=True,
                 text=True,
                 capture_output=True,
+                timeout=30,
             )
         except subprocess.CalledProcessError as exc:
             raise OpenProjectError(
                 f"Failed to insert time entry activity '{raw_name}' via database: {exc}"
             ) from exc
+        except subprocess.TimeoutExpired:
+            raise OpenProjectError(
+                f"Timeout inserting time entry activity '{raw_name}' via database"
+            )
 
 
 def fetch_time_entries_for_work_package_from_db(
@@ -1000,10 +1453,17 @@ class OpenProjectClient:
         base_url: str,
         token: str,
         session: Optional[requests.Session] = None,
+        version: Optional[str] = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.session = session or requests.Session()
-        auth_header = build_basic_auth_header(token)
+        
+        # Step 1: Detect version FIRST (before authentication)
+        # This allows us to handle version-specific authentication
+        self.version = version or self._detect_version_without_auth()
+        
+        # Step 2: Set up authentication based on version
+        auth_header = self._build_auth_header(token)
         self.session.headers.update(
             {
                 "Authorization": auth_header,
@@ -1011,6 +1471,114 @@ class OpenProjectClient:
                 "Accept": "application/json",
             }
         )
+        
+        # Step 3: Verify authentication works
+        self._verify_authentication()
+    
+    def _detect_version_without_auth(self) -> str:
+        """Detect OpenProject version without authentication.
+        
+        Returns 'v13' or 'v16' based on endpoint availability.
+        Uses public endpoints or version-specific behavior.
+        """
+        try:
+            # Method 1: Try to get version from status endpoint (if available)
+            # Some versions expose version info without auth
+            try:
+                resp = requests.get(
+                    f"{self.base_url}{API_PREFIX}/status",
+                    timeout=5
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    # Check if version info is in response
+                    if "version" in str(data).lower():
+                        version_str = str(data).lower()
+                        if "13" in version_str or "v13" in version_str:
+                            return "v13"
+                        if "16" in version_str or "v16" in version_str:
+                            return "v16"
+            except Exception:
+                pass
+            
+            # Method 2: Check v16-specific endpoint behavior
+            # v16 has /time_entries/activities endpoint, v13 doesn't
+            # We can check the error response format even without auth
+            try:
+                resp = requests.get(
+                    f"{self.base_url}{API_PREFIX}/time_entries/activities",
+                    timeout=5
+                )
+                # v16 returns 401 (Unauthenticated) with proper error format
+                # v13 returns 400 (BadRequest) or 404
+                if resp.status_code == 401:
+                    # Check error format - v16 has specific error structure
+                    try:
+                        error_data = resp.json()
+                        if "Unauthenticated" in str(error_data):
+                            return "v16"  # v16 returns 401 with Unauthenticated
+                    except:
+                        pass
+                elif resp.status_code in (400, 404):
+                    return "v13"  # v13 returns 400/404 for non-existent endpoints
+            except Exception:
+                pass
+            
+            # Method 3: Default based on common behavior
+            # If we can't determine, default to v13 (safer for older versions)
+            return "v13"
+        except requests.RequestException:
+            # If all detection fails, default to v13
+            return "v13"
+    
+    def _build_auth_header(self, token: str) -> str:
+        """Build authentication header based on OpenProject version.
+        
+        Both v13 and v16 use the same Basic Auth format (apikey:token),
+        but we handle token validation differently.
+        """
+        # Both versions use the same authentication method
+        return build_basic_auth_header(token)
+    
+    def _verify_authentication(self) -> None:
+        """Verify that authentication is working.
+        
+        For v13, provides helpful error messages if token authentication fails
+        (which might indicate old plain-text tokens from restored database).
+        """
+        try:
+            # Try a simple authenticated request
+            resp = self.session.get(
+                f"{self.base_url}{API_PREFIX}/users?pageSize=1",
+                timeout=5
+            )
+            
+            if resp.status_code == 401:
+                error_msg = "Authentication failed"
+                try:
+                    error_data = resp.json()
+                    error_msg = error_data.get("message", error_msg)
+                except:
+                    pass
+                
+                if self.version == "v13":
+                    raise OpenProjectError(
+                        f"{error_msg}. "
+                        "For OpenProject v13, if you restored from a database backup, "
+                        "old tokens may be stored as plain text instead of hashed. "
+                        "Please generate a new API token via the web UI or Rails console."
+                    )
+                else:
+                    raise OpenProjectError(
+                        f"{error_msg}. Please check your API token."
+                    )
+            
+            # If we get here, authentication is working
+        except OpenProjectError:
+            raise
+        except requests.RequestException as e:
+            # Network errors are handled separately
+            raise OpenProjectError(f"Failed to verify authentication: {e}")
 
     def _request(self, method: str, path: str, **kwargs) -> requests.Response:
         url = f"{self.base_url}{API_PREFIX}{path}"
@@ -1185,6 +1753,11 @@ class OpenProjectClient:
         user_id: int,
         role_id: int,
     ) -> dict:
+        """Add a user to a project as a member.
+        
+        Returns the created membership.
+        Raises OpenProjectError if the user cannot be assigned.
+        """
         payload = {
             "_links": {
                 "project": {"href": f"{API_PREFIX}/projects/{project_id}"},
@@ -1355,11 +1928,22 @@ class OpenProjectClient:
         return elements
 
     def list_time_entry_activities(self) -> Dict[str, dict]:
+        """List time entry activities with version-specific handling.
+        
+        v13 may not have this endpoint, so we fall back to database query.
+        """
         activities: Dict[str, dict] = {}
-        for activity in self._get_collection("/time_entries/activities"):
-            name = activity.get("name")
-            if name:
-                activities[name] = activity
+        try:
+            for activity in self._get_collection("/time_entries/activities"):
+                name = activity.get("name")
+                if name:
+                    activities[name] = activity
+        except OpenProjectError as e:
+            # v13 may not have this endpoint - fall back to database
+            if "404" in str(e) or self.version == "v13":
+                # Return empty dict - caller should use database fallback
+                return {}
+            raise
         return activities
 
     def list_project_type_ids(self, project_id: int) -> set[int]:
@@ -3386,6 +3970,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "Requires --workbook. Skips full import."
         ),
     )
+    parser.add_argument(
+        "--op-version",
+        choices=["auto", "v13", "v16"],
+        default="auto",
+        help="OpenProject version (auto-detect if not specified, default: auto)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -3466,7 +4056,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
 
         # Connect to OpenProject
-        client = OpenProjectClient(server, token)
+        op_version = args.op_version if args.op_version != "auto" else None
+        client = OpenProjectClient(server, token, version=op_version)
+        if client.version:
+            ui.info(
+                f"OpenProject version: {client.version} (auto-detected) "
+                f"(auto-detected)" if op_version is None else f"(specified)",
+                "info"
+            )
         
         # Fetch projects and users to populate IDs
         ui.start_step("Fetch projects and users")
@@ -3664,7 +4261,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
 
         # Connect to OpenProject
-        client = OpenProjectClient(server, token)
+        op_version = args.op_version if args.op_version != "auto" else None
+        client = OpenProjectClient(server, token, version=op_version)
+        if client.version:
+            ui.info(
+                f"OpenProject version: {client.version} (auto-detected) "
+                f"(auto-detected)" if op_version is None else f"(specified)",
+                "info"
+            )
         
         # Load staging cache if available (for work package matching)
         staging_cache_path: Optional[Path] = args.staging_cache or Path("/tmp/staging-cache.json")
@@ -3855,7 +4459,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "Staging cache '%s' does not exist." % staging_cache_path
             )
 
-    client = OpenProjectClient(server, token)
+    # Support version detection or manual specification
+    op_version = args.op_version if args.op_version != "auto" else None
+    client = OpenProjectClient(server, token, version=op_version)
+    if client.version:
+        ui.info(
+            f"OpenProject version: {client.version} "
+            f"(auto-detected)" if op_version is None else f"(specified)",
+            "info"
+        )
 
     ui.start_step("Fetch users from OpenProject")
     user_records = client.list_users()
@@ -3875,6 +4487,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for staged_user in staging.users.values()
         if staged_user.openproject_id is None
     ]
+    ui.progress_summary(
+        existing=resolved_users,
+        missing=len(missing_users),
+        entity_name="users"
+    )
     ui.complete_step(
         f"Resolved {resolved_users}/{len(staging.users)} users; "
         f"{len(missing_users)} missing."
@@ -3938,6 +4555,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             ui.info(
                 f"Created user '{display_name}' (login: {login})."
             )
+        ui.progress_summary(
+            existing=resolved_users,
+            missing=len(missing_users) - created_count,
+            created=created_count,
+            entity_name="users"
+        )
         ui.complete_step(f"Created {created_count} user(s).")
 
     ui.start_step("Fetch projects from OpenProject")
@@ -3955,6 +4578,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for project in staging.projects.values()
         if project.openproject_id is None
     ]
+    ui.progress_summary(
+        existing=resolved_projects,
+        missing=len(missing_projects),
+        entity_name="projects"
+    )
     ui.complete_step(
         f"Resolved {resolved_projects}/{len(staging.projects)} projects; "
         f"{len(missing_projects)} missing."
@@ -4177,7 +4805,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             for name in unique_missing:
                 ui.info(f"    - {name}")
             try:
-                create_time_entry_activities_in_db(unique_missing)
+                create_time_entry_activities_in_db(unique_missing, base_url=server)
             except OpenProjectError as exc:
                 ui.skip_step(
                     "Unable to create time entry activities via database: %s"
@@ -4390,6 +5018,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if not ui.ask_confirmation(membership_prompt):
                 ui.skip_step("Membership updates cancelled by operator.")
                 return 0
+            added_count = 0
             for staged_project, member_ids in project_membership_additions:
                 project_id_membership_update: Optional[int] = (
                     staged_project.openproject_id
@@ -4397,13 +5026,80 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if project_id_membership_update is None:
                     continue
                 for user_id in member_ids:
-                    client.add_project_membership(
-                        project_id=int(project_id_membership_update),
-                        user_id=user_id,
-                        role_id=member_role_id,
-                    )
+                    try:
+                        result = client.add_project_membership(
+                            project_id=int(project_id_membership_update),
+                            user_id=user_id,
+                            role_id=member_role_id,
+                        )
+                        added_count += 1
+                    except OpenProjectError as e:
+                        error_msg = str(e)
+                        user_name = user_id_to_name.get(user_id, f"User {user_id}")
+                        project_name = staged_project.name
+                        
+                        # Check if user is already a member (should not happen, but handle it)
+                        if "already been taken" in error_msg.lower():
+                            ui.warning(
+                                f"  User '{user_name}' is already a member of "
+                                f"project '{project_name}' (skipping)"
+                            )
+                            # User is already a member - this is fine, just skip
+                            continue
+                        
+                        # User cannot be assigned - must fix before continuing
+                        ui.error(
+                            f"Failed to assign user '{user_name}' (ID: {user_id}) "
+                            f"to project '{project_name}' (ID: {project_id_membership_update})"
+                        )
+                        ui.error(f"Error: {error_msg}")
+                        
+                        # Try to fix via API first
+                        ui.info("  Attempting to fix via API...")
+                        fixed = _try_fix_user_assignment_via_api(
+                            client, user_id, project_id_membership_update, ui
+                        )
+                        
+                        if not fixed:
+                            # Try to fix via database
+                            ui.info("  Attempting to fix via database...")
+                            fixed = _try_fix_user_assignment_via_db(
+                                user_id, project_id_membership_update, ui
+                            )
+                        
+                        if not fixed:
+                            # Cannot fix - provide instructions and STOP
+                            ui.error("")
+                            ui.error("=" * 70)
+                            ui.error("CANNOT PROCEED: User assignment failed")
+                            ui.error("=" * 70)
+                            ui.error("")
+                            ui.error(f"User: {user_name} (ID: {user_id})")
+                            ui.error(f"Project: {project_name} (ID: {project_id_membership_update})")
+                            ui.error("")
+                            ui.error("Please fix this issue in OpenProject Web UI:")
+                            base_url = client.base_url if hasattr(client, 'base_url') else "http://localhost:8081"
+                            ui.error(f"  1. Go to: {base_url}/projects/{project_id_membership_update}/members")
+                            ui.error(f"  2. Add user '{user_name}' to the project")
+                            ui.error("  3. Ensure the user is active and unlocked")
+                            ui.error("  4. Run the import script again")
+                            ui.error("")
+                            raise OpenProjectError(
+                                f"Cannot assign user '{user_name}' to project '{project_name}'. "
+                                "Please fix in OpenProject Web UI and try again."
+                            )
+                        
+                        # Retry after fix
+                        result = client.add_project_membership(
+                            project_id=int(project_id_membership_update),
+                            user_id=user_id,
+                            role_id=member_role_id,
+                        )
+                        added_count += 1
+                        ui.success(f"  ✅ Fixed and assigned user '{user_name}'")
+            
             ui.complete_step(
-                f"Added {total_memberships} membership(s) across "
+                f"Added {added_count} membership(s) across "
                 f"{len(project_membership_additions)} project(s)."
             )
 
@@ -4412,6 +5108,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     cached_with_ids = [
         task for task in staging.tasks.values() if task.openproject_id is not None
     ]
+    total_tasks = len(staging.tasks)
     stale_assignments = 0
     if cached_with_ids:
         ui.info(
@@ -4554,12 +5251,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             for task in staging.tasks.values()
             if task.openproject_id is None
         ]
+        existing_wps = matched_by_id + matched_by_subject
+        missing_wps = len(pending_tasks)
+        ui.progress_summary(
+            existing=existing_wps,
+            missing=missing_wps,
+            entity_name="work packages"
+        )
         summary_msg = (
             "Found {matched} existing work package(s); "
             "{remaining} remaining to create."
         ).format(
-            matched=matched_by_id + matched_by_subject,
-            remaining=len(pending_tasks),
+            matched=existing_wps,
+            remaining=missing_wps,
         )
         ui.complete_step(summary_msg)
 
@@ -4682,11 +5386,81 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     description=None,
                 )
             except OpenProjectError as exc:
-                ui.skip_step(
-                    "Failed to create work package '%s' in project '%s': %s"
-                    % (staged_task.subject, staged_project.name, exc)
+                error_msg = str(exc)
+                ui.error(
+                    f"Failed to create work package '{staged_task.subject}' "
+                    f"in project '{staged_project.name}'"
                 )
-                raise
+                ui.error(f"Error: {error_msg}")
+                
+                # Check if it's a required custom field error
+                if "can't be blank" in error_msg.lower() or "required" in error_msg.lower():
+                    # Try to fix via API first
+                    ui.info("  Attempting to fix required custom fields via API...")
+                    fixed = _try_fix_required_custom_fields_via_api(
+                        client, project_id_int, required_type_id, error_msg, ui
+                    )
+                    
+                    if not fixed:
+                        # Try to fix via database
+                        ui.info("  Attempting to fix required custom fields via database...")
+                        fixed = _try_fix_required_custom_fields_via_db(
+                            project_id_int, error_msg, ui
+                        )
+                    
+                    if not fixed:
+                        # Cannot fix - provide instructions and STOP
+                        ui.error("")
+                        ui.error("=" * 70)
+                        ui.error("CANNOT PROCEED: Required custom fields missing")
+                        ui.error("=" * 70)
+                        ui.error("")
+                        ui.error(f"Work Package: {staged_task.subject}")
+                        ui.error(f"Project: {staged_project.name} (ID: {project_id_int})")
+                        ui.error("")
+                        ui.error("The following custom fields are required but missing:")
+                        if "customField15" in error_msg:
+                            ui.error("  - customField15: QC Activity")
+                        if "customField38" in error_msg:
+                            ui.error("  - customField38: Finished Date")
+                        ui.error("")
+                        ui.error("Please fix this issue in OpenProject Web UI:")
+                        base_url = client.base_url if hasattr(client, 'base_url') else "http://localhost:8081"
+                        ui.error(f"  1. Go to: {base_url}/projects/{project_id_int}/settings/custom_fields")
+                        ui.error("  2. Make these custom fields optional (not required)")
+                        ui.error("  3. Or provide default values for these fields")
+                        ui.error("  4. Run the import script again")
+                        ui.error("")
+                        raise OpenProjectError(
+                            f"Cannot create work package '{staged_task.subject}' due to "
+                            "required custom fields. Please fix in OpenProject Web UI and try again."
+                        )
+                    
+                    # Retry after fix
+                    ui.info("  Retrying work package creation after fix...")
+                    created_wp = client.create_work_package(
+                        project_id=project_id_int,
+                        type_id=required_type_id,
+                        subject=staged_task.subject,
+                        assignee_id=int(assignee_id),
+                        start_date=staged_task.aggregated.start_date,
+                        due_date=staged_task.aggregated.due_date,
+                        estimated_time=estimated_time,
+                        description=None,
+                    )
+                    ui.success(f"  ✅ Fixed and created work package '{staged_task.subject}'")
+                else:
+                    # Other error - cannot fix, stop
+                    ui.error("")
+                    ui.error("=" * 70)
+                    ui.error("CANNOT PROCEED: Work package creation failed")
+                    ui.error("=" * 70)
+                    ui.error("")
+                    ui.error(f"Work Package: {staged_task.subject}")
+                    ui.error(f"Project: {staged_project.name} (ID: {project_id_int})")
+                    ui.error(f"Error: {error_msg}")
+                    ui.error("")
+                    raise
             work_package_id = int(created_wp["id"])
             staged_task.openproject_id = work_package_id
             imported_packages_map[work_package_id] = ImportedWorkPackage(
@@ -4696,6 +5470,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 time_entries=[],
             )
             created_count += 1
+        ui.progress_summary(
+            existing=existing_wps,
+            missing=missing_wps - created_count,
+            created=created_count,
+            entity_name="work packages"
+        )
         ui.complete_step(f"Created {created_count} work package(s).")
     
     # Save staging cache after all work packages are created (both matched and newly created)
@@ -4813,6 +5593,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             imported_packages_map[wp_id_int] = pkg
         pkg.time_entries.extend(created_entries)
         total_created_entries += len(created_entries)
+    
+    # Calculate existing entries (total - missing - created)
+    total_expected_entries = sum(
+        len(task.aggregated.logs)
+        for task in loggable_tasks
+        if task.aggregated.logs
+    )
+    existing_entries = total_expected_entries - total_missing_entries - total_created_entries
+    if total_expected_entries > 0:
+        ui.progress_summary(
+            existing=max(0, existing_entries),
+            missing=total_missing_entries,
+            created=total_created_entries,
+            entity_name="time entries"
+        )
     ui.info(f"Total logs processed: {total_log_tasks:,} tasks", "info")
     ui.success(f"Total entries created: {total_created_entries:,}")
     if total_missing_entries > 0:

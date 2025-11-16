@@ -1090,8 +1090,6 @@ def _run_sql_statements(
     total = len(statements)
     chunks = (total + chunk_size - 1) // chunk_size
     processed = 0
-    if ui and total:
-        ui.progress(0, total, description)
     for i in range(0, total, chunk_size):
         chunk = statements[i:i + chunk_size]
         chunk_num = (i // chunk_size) + 1

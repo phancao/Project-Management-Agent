@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import requests
-import time
+import time as time_module
 
 
 API_PREFIX = "/api/v3"
@@ -655,7 +655,7 @@ def _format_duration(seconds: float) -> str:
 def _print_total_duration(ui: ConsoleUI, start_ts: float) -> None:
     """Print the total elapsed time since start_ts."""
     try:
-        elapsed = max(0.0, time.time() - start_ts)
+        elapsed = max(0.0, time_module.time() - start_ts)
         hhmmss = _format_duration(elapsed)
         minutes = elapsed / 60.0
         ui.section("⏱ Total Duration")

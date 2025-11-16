@@ -5318,9 +5318,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             existing_logins.add(login)
             existing_emails.add(email)
             created_count += 1
-            ui.info(
-                f"Created user '{display_name}' (login: {login})."
-            )
+            _write_debug_log("info", f"[user-create] name='{display_name}' login='{login}' id={staged_user.openproject_id}")
         ui.progress_summary(
             existing=resolved_users,
             missing=len(missing_users) - created_count,
@@ -5384,10 +5382,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             created = client.create_project(staged_project.name)
             project_records[staged_project.name] = created
             staged_project.openproject_id = int(created["id"])
-            ui.info(
-                "Created project '%s' (ID %s)."
-                % (staged_project.name, staged_project.openproject_id)
-            )
+            _write_debug_log("info", f"[project-create] name='{staged_project.name}' id={staged_project.openproject_id}")
             try:
                 client.enable_project_module(staged_project.openproject_id, "backlogs")
             except OpenProjectError as exc:

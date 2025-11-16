@@ -4690,7 +4690,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     DEBUG_LOG_PATH = args.debug_log
     ui = ConsoleUI(auto_confirm=args.yes)
     # Start wall-clock timer for whole process
-    _process_start_ts = time.time()
+    _process_start_ts = time_module.time()
     # Configure verification source for Step 20
     global VERIFICATION_SOURCE
     VERIFICATION_SOURCE = args.verification_source

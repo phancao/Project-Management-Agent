@@ -5235,6 +5235,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             if isinstance(login, str) and login
         }
+        existing_emails: set[str] = {
+            email
+            for email in (
+                record.get("email") for record in user_records.values()
+            )
+            if isinstance(email, str) and email
+        }
         created_count = 0
         sorted_missing = sorted(
             missing_users,
@@ -5249,7 +5256,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if users_progress_interval and (idx_u % users_progress_interval == 0 or idx_u == total_to_create_users):
                 ui.progress(idx_u, total_to_create_users, "Creating users")
             login = build_unique_username(staged_user.full_name, existing_logins)
-            email = f"{login}@{email_domain}"
+            # Ensure email uniqueness alongside username
+            base_email_local = login
+            email_local = base_email_local
+            suffix = 1
+            while f\"{email_local}@{email_domain}\" in existing_emails:
+                suffix += 1
+                email_local = f\"{base_email_local}{suffix}\"
+            email = f\"{email_local}@{email_domain}\"
             password = secrets.token_urlsafe(12)
             try:
                 created_user = client.create_user(
@@ -5273,6 +5287,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             normalized_user_records[staged_user.normalized_name] = created_user
             user_records[display_name] = created_user
             existing_logins.add(login)
+            existing_emails.add(email)
             created_count += 1
             ui.info(
                 f"Created user '{display_name}' (login: {login})."

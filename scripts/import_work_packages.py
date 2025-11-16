@@ -44,6 +44,7 @@ import requests
 
 
 API_PREFIX = "/api/v3"
+CURRENT_OP_VERSION: Optional[str] = None
 DEFAULT_CREATION_TIME = time(9, 0, tzinfo=timezone.utc)
 DEFAULT_LOG_TIME = time(9, 0, tzinfo=timezone.utc)
 OPENPROJECT_CONTAINER = os.environ.get(
@@ -66,6 +67,82 @@ OPENPROJECT_DB_NAME = os.environ.get(
     "OPENPROJECT_DB_NAME",
     "openproject",
 )
+
+# Global toggle for verification source (Step 20)
+VERIFICATION_SOURCE: str = "auto"
+# Default path for time entry cache (persists created entries between runs)
+DEFAULT_TIME_ENTRY_CACHE = Path("/tmp/op_time_entry_cache.json")
+# Global debug log file (optional; if set, detailed logs are duplicated to this file)
+DEBUG_LOG_PATH: Optional[Path] = None
+
+def _write_debug_log(level: str, message: str) -> None:
+    """Append a line to the debug log if configured."""
+    global DEBUG_LOG_PATH
+    if not DEBUG_LOG_PATH:
+        return
+    try:
+        stamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Strip ANSI colors if any
+        ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+        plain = ansi_escape.sub("", message)
+        with DEBUG_LOG_PATH.open("a", encoding="utf-8") as fh:
+            fh.write(f"[{stamp}] [{level.upper()}] {plain}\n")
+    except Exception:
+        # Never fail the main flow due to logging
+        pass
+
+def _fetch_counts_from_db(base_url: Optional[str], ui: Optional[ConsoleUI] = None) -> Dict[str, int]:
+    container_name = _get_openproject_container(base_url)
+    sql = """
+        SELECT
+          (SELECT COUNT(*) FROM projects) AS projects,
+          (SELECT COUNT(*) FROM users) AS users,
+          (SELECT COUNT(*) FROM work_packages) AS work_packages;
+    """
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        command = [
+            "docker", "exec", "-i", container_name, "bash", "-c",
+            f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{sql}\nSQL\nEOSQL",
+        ]
+    else:
+        command = [
+            "docker", "exec", "-i", container_name, "bash", "-lc",
+            (
+                f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                f"-h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \"{sql}\""
+            ),
+        ]
+    try:
+        result = subprocess.run(command, check=True, text=True, capture_output=True, timeout=30)
+        line = result.stdout.strip().splitlines()[-1] if result.stdout else ""
+        parts = line.split("|") if line else []
+        projects = int(parts[0]) if len(parts) >= 1 and parts[0].isdigit() else 0
+        users = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 0
+        work_packages = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 0
+        return {"projects": projects, "users": users, "work_packages": work_packages}
+    except Exception as exc:
+        if ui:
+            ui.info(f"  Failed DB counts, will fallback to API: {exc}")
+        return {}
+
+def _fetch_counts_from_api(client: "OpenProjectClient") -> Dict[str, int]:
+    projects = len(client.list_projects())
+    users = len(client.list_users())
+    # List all work packages using the generic collection
+    try:
+        work_packages = sum(1 for _ in client._get_collection("/work_packages"))
+    except Exception:
+        work_packages = 0
+    return {"projects": projects, "users": users, "work_packages": work_packages}
+
+def get_openproject_counts(client: "OpenProjectClient", ui: Optional[ConsoleUI] = None) -> Dict[str, int]:
+    # Prefer DB on v13
+    if client.version == "v13":
+        counts = _fetch_counts_from_db(getattr(client, "base_url", None), ui)
+        if counts:
+            return counts
+    return _fetch_counts_from_api(client)
 
 
 def _get_openproject_container(base_url: Optional[str] = None) -> str:
@@ -358,6 +435,29 @@ class ConsoleUI:
         self.use_colors = use_colors and sys.stdout.isatty()
         if not self.use_colors:
             Colors.disable()
+        # Step explanations to display once at step start
+        self.step_explanations: Dict[str, str] = {
+            "Clean caches and logs": "Remove local caches and previous logs to ensure a clean run.",
+            "Validate workbook": "Sanity-check the Excel file structure and content before import.",
+            "Load workbook data": "Parse Excel rows into normalized staging structures (users, projects, tasks).",
+            "Load staging cache": "Load previously saved work package mappings to speed up matching.",
+            "Fetch users from OpenProject": "Fetch users from API and map staged users to existing OpenProject users.",
+            "Create missing users": "Create users that are referenced in Excel but do not exist in OpenProject.",
+            "Fetch projects from OpenProject": "Fetch projects and map staged projects to existing OpenProject projects.",
+            "Create missing projects": "Create projects that are referenced in Excel but do not exist in OpenProject.",
+            "Fetch work package types": "Fetch type catalog to resolve type IDs required for work package creation.",
+            "Inspect project configuration": "Load per-project settings like allowed type IDs and lock versions.",
+            "Validate time entry activities": "Ensure time entry activities exist; create missing ones if needed.",
+            "Ensure project type permissions": "Enable required work package types per project when missing.",
+            "Ensure project memberships": "Add users to projects so they can be assigned and log time.",
+            "Check existing work packages": "Match staged tasks to existing work packages (by issue ID or subject).",
+            "Create new work packages": "Create any work packages that were not matched to existing ones.",
+            "Log time entries": "Create missing time entries per Excel rows, skipping those already present.",
+            "Update time entry logged_by field": "Correct the 'logged by' user for time entries via DB batch update.",
+            "Adjust activity history": "Align created_at/updated_at for work packages and time entries in journals.",
+            "Update project creation dates": "Set project created_at to earliest related work or log date for accuracy.",
+            "Verify import": "Compare Excel totals with OpenProject totals and report differences.",
+        }
     
     def _colorize(self, text: str, color: str) -> str:
         """Apply color to text if colors are enabled."""
@@ -373,6 +473,10 @@ class ConsoleUI:
         timestamp = self._colorize(f"[{stamp}]", Colors.DIM)
         title_colored = self._colorize(title, Colors.BOLD)
         print(f"\n{timestamp} {step_num}: {title_colored}", flush=True)
+        # Print a brief explanation for this step if available
+        explanation = self.step_explanations.get(title)
+        if explanation:
+            self.info(f"  {explanation}", "info")
     
     def info(self, message: str, level: str = "info") -> None:
         """Print an info message with appropriate formatting."""
@@ -394,6 +498,8 @@ class ConsoleUI:
         color = colors_map.get(level, "")
         icon_colored = self._colorize(icon, color)
         print(f"  {icon_colored} {message}", flush=True)
+        # Duplicate detailed line to debug log file if configured
+        _write_debug_log(level, message)
     
     def success(self, message: str) -> None:
         """Print a success message."""
@@ -498,36 +604,40 @@ class ConsoleUI:
         if total == 0:
             return
         
-        self.table_header("Status", "Count", "Percentage")
+        # Fixed-width columns to keep alignment consistent
+        status_w = 18
+        count_w = 7
+        pct_w = 10
+        self.table_header("Status".ljust(status_w), "Count".rjust(count_w), "Percentage".rjust(pct_w))
         
         if existing > 0:
             existing_pct = (existing / total * 100) if total > 0 else 0
             self.table_row(
-                self._colorize("✓ Existing/Mapped", Colors.GREEN),
-                str(existing),
-                f"{existing_pct:.1f}%"
+                self._colorize("✓ Existing/Mapped", Colors.GREEN).ljust(status_w),
+                f"{existing:>{count_w},d}",
+                f"{existing_pct:>{pct_w}.1f}%"
             )
         
         if missing > 0:
             missing_pct = (missing / total * 100) if total > 0 else 0
             self.table_row(
-                self._colorize("→ Need to Create", Colors.YELLOW),
-                str(missing),
-                f"{missing_pct:.1f}%"
+                self._colorize("→ Need to Create", Colors.YELLOW).ljust(status_w),
+                f"{missing:>{count_w},d}",
+                f"{missing_pct:>{pct_w}.1f}%"
             )
         
         if created > 0:
             created_pct = (created / total * 100) if total > 0 else 0
             self.table_row(
-                self._colorize("✓ Created", Colors.CYAN),
-                str(created),
-                f"{created_pct:.1f}%"
+                self._colorize("✓ Created", Colors.CYAN).ljust(status_w),
+                f"{created:>{count_w},d}",
+                f"{created_pct:>{pct_w}.1f}%"
             )
         
         self.table_row(
-            self._colorize("Total", Colors.BOLD),
-            str(total),
-            "100.0%"
+            self._colorize("Total", Colors.BOLD).ljust(status_w),
+            f"{total:>{count_w},d}",
+            f"{100.0:>{pct_w}.1f}%"
         )
         print()  # Empty line after table
 
@@ -872,19 +982,38 @@ def _try_fix_required_custom_fields_via_db(
 
 def _run_psql(sql: str, suppress_output: bool = True) -> None:
     """Run SQL statements via psql, optionally suppressing verbose output."""
-    command = [
-        "docker",
-        "exec",
-        "-i",
-        OPENPROJECT_CONTAINER,
-        "bash",
-        "-lc",
-        (
-            f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
-            f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
-            f"-h {OPENPROJECT_DB_HOST} <<'SQL'\n{sql}\nSQL"
-        ),
-    ]
+    container_name = _get_openproject_container()
+    # Prefer embedded Postgres invocation for v13 (or when using 127.0.0.1 inside app container)
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-c",
+            (
+                f"su - postgres <<'EOSQL'\n"
+                f"psql -v ON_ERROR_STOP=1 -d {OPENPROJECT_DB_NAME} <<'SQL'\n"
+                f"{sql}\n"
+                f"SQL\n"
+                f"EOSQL"
+            ),
+        ]
+    else:
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-lc",
+            (
+                f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                f"psql -v ON_ERROR_STOP=1 -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                f"-h {OPENPROJECT_DB_HOST} <<'SQL'\n{sql}\nSQL"
+            ),
+        ]
     result = subprocess.run(
         command,
         check=True,
@@ -915,6 +1044,9 @@ def _run_sql_statements(
         return
     total = len(statements)
     chunks = (total + chunk_size - 1) // chunk_size
+    processed = 0
+    if ui and total:
+        ui.progress(0, total, description)
     for i in range(0, total, chunk_size):
         chunk = statements[i:i + chunk_size]
         chunk_num = (i // chunk_size) + 1
@@ -922,6 +1054,9 @@ def _run_sql_statements(
             ui.info(f"  {description}: {chunk_num}/{chunks} chunk(s) ({len(chunk)} statement(s))")
         sql = "BEGIN;\n" + "\n".join(chunk) + "\nCOMMIT;\n"
         _run_psql(sql, suppress_output=True)
+        processed += len(chunk)
+        if ui:
+            ui.progress(min(processed, total), total, description)
 
 
 def update_time_entry_logged_by_batch(
@@ -956,25 +1091,60 @@ def update_time_entry_logged_by_batch(
             "info"
         )
     
-    # Build SQL update statements
-    update_statements = []
+    # Build SQL update statements.
+    # Update whichever column represents the "logged by" user in this OP version.
+    # Strategy:
+    # - If time_entries.logged_by_id exists, set it to user_id
+    # - If time_entries.created_by_id exists, set it to user_id (author of the time entry)
+    # - Always ensure time_entries.user_id is set to user_id (person who logged the time)
+    # - Also update journals.user_id for the corresponding TimeEntry journal rows
+    update_statements: List[str] = []
     for entry_id, user_id in updates:
-        update_statements.append(
-            f"UPDATE time_entries "
-            f"SET logged_by_id={user_id} "
-            f"WHERE id={entry_id};"
-        )
-    
+        stmt = f"""
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name='time_entries' AND column_name='logged_by_id'
+  ) THEN
+    UPDATE time_entries SET logged_by_id = {user_id} WHERE id = {entry_id};
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name='time_entries' AND column_name='created_by_id'
+  ) THEN
+    UPDATE time_entries SET created_by_id = {user_id} WHERE id = {entry_id};
+  END IF;
+  -- Ensure the time entry is attributed to the correct user
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name='time_entries' AND column_name='user_id'
+  ) THEN
+    UPDATE time_entries SET user_id = {user_id} WHERE id = {entry_id};
+  END IF;
+  -- Update journal author for this time entry
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name='journals' AND column_name='user_id'
+  ) THEN
+    UPDATE journals
+      SET user_id = {user_id}
+      WHERE journable_type='TimeEntry' AND journable_id={entry_id};
+  END IF;
+END $$;
+"""
+        update_statements.append(stmt)
+
     if update_statements:
         _run_sql_statements(
             update_statements,
-            chunk_size=200,
+            chunk_size=50,  # smaller chunks due to DO blocks
             ui=ui,
-            description="Updating logged_by field",
+            description="Updating logged_by/author/user for time entries",
         )
         if ui:
             ui.complete_step(
-                f"Updated logged_by for {len(updates)} time entry(ies)."
+                f"Updated logged_by/author/user for {len(updates)} time entry(ies)."
             )
 
 
@@ -984,6 +1154,7 @@ def update_time_entry_logged_by_from_excel(
     staging: WorkbookStaging,
     ui: ConsoleUI,
     dry_run: bool = False,
+    source: str = "auto",
 ) -> int:
     """
     Update logged_by field for time entries by matching Excel data with OpenProject entries.
@@ -1082,13 +1253,90 @@ def update_time_entry_logged_by_from_excel(
         ui.info("No time entries found in Excel to match.", "info")
         return 0
     
-    # Fetch all time entries from OpenProject
-    all_time_entries = client.list_time_entries()
+    # Decide source (db/api/auto) and fetch entries scoped to staging WPs
+    if source == "auto":
+        use_db = (client.version == "v13")
+    else:
+        use_db = (source == "db")
+    target_wp_ids: Set[int] = {
+        int(task.openproject_id)
+        for task in staging.tasks.values()
+        if task.openproject_id is not None
+    }
+    ui.info("  Fetching time entries from OpenProject...")
+    all_time_entries: List[dict] = []
+    if use_db:
+        total_wps = len(target_wp_ids)
+        if total_wps:
+            ui.progress(0, total_wps, "Fetching time entries (DB)")
+        interval = max(1, total_wps // 100) if total_wps > 0 else None
+        for idx_wp, wp_id in enumerate(sorted(target_wp_ids), start=1):
+            try:
+                entries = fetch_time_entries_for_work_package_from_db(wp_id, ui=None, base_url=client.base_url if hasattr(client, "base_url") else None)
+                for e in entries:
+                    if "_links" not in e:
+                        e["_links"] = {}
+                    e["_links"].setdefault("workPackage", {"href": f"/api/v3/work_packages/{wp_id}"})
+                all_time_entries.extend(entries)
+            except Exception as exc:
+                _write_debug_log("debug", f"[logged_by] DB fetch failed for WP {wp_id}: {exc}")
+            if interval and (idx_wp % interval == 0 or idx_wp == total_wps):
+                ui.progress(idx_wp, total_wps, "Fetching time entries (DB)")
+        if not all_time_entries:
+            ui.info("  [fallback] No DB entries found; falling back to API listing")
+            use_db = False
+    if not use_db:
+        page_size = 200
+        offset = 1
+        seen_count = 0
+        total_entries_api: Optional[int] = None
+        ui.progress(0, 1, "Fetching time entries (API)")
+        while True:
+            params = {"offset": offset, "pageSize": page_size}
+            resp = client._request("GET", "/time_entries", params=params)
+            payload = resp.json()
+            if total_entries_api is None:
+                try:
+                    total_entries_api = int(payload.get("total")) if payload.get("total") is not None else None
+                except Exception:
+                    total_entries_api = None
+            elements = payload.get("_embedded", {}).get("elements", []) or []
+            if target_wp_ids:
+                for e in elements:
+                    wp_href = (e.get("_links", {}).get("workPackage", {}) or {}).get("href")
+                    if not wp_href:
+                        continue
+                    try:
+                        wp_id = int(wp_href.split("/")[-1])
+                    except Exception:
+                        continue
+                    if wp_id in target_wp_ids:
+                        all_time_entries.append(e)
+            else:
+                all_time_entries.extend(elements)
+            seen_count += len(elements)
+            if total_entries_api and total_entries_api > 0:
+                ui.progress(min(seen_count, total_entries_api), total_entries_api, "Fetching time entries (API)")
+            else:
+                ui.progress(min(offset, 100), 100, "Fetching time entries (API)")
+            next_link = payload.get("_links", {}).get("nextByOffset")
+            if not elements or not next_link:
+                break
+            offset += 1
+    total_entries = len(all_time_entries)
+    ui.info(f"  Found {total_entries:,} time entry(ies) to check")
     
     # Match OpenProject time entries with Excel rows
+    ui.info("  Matching time entries with Excel data...")
     logged_by_updates: List[Tuple[int, int]] = []
     
-    for entry in all_time_entries:
+    # Show progress while matching
+    if total_entries:
+        ui.progress(0, total_entries, "Matching time entries")
+    progress_interval = max(1, total_entries // 100) if total_entries > 0 else None
+    for idx, entry in enumerate(all_time_entries, start=1):
+        if progress_interval and (idx % progress_interval == 0 or idx == total_entries):
+            ui.progress(idx, total_entries, "Matching time entries")
         wp_id = entry.get("_links", {}).get("workPackage", {}).get("href", "")
         if not wp_id:
             continue
@@ -1098,17 +1346,26 @@ def update_time_entry_logged_by_from_excel(
             continue
         
         spent_on = entry.get("spentOn", "")
-        hours = entry.get("hours", "")
+        hours_val = entry.get("hours", "")
         if not spent_on or not hours:
             continue
         
         # Parse hours (ISO 8601 duration to float)
+        hours_float: Optional[float] = None
         try:
-            minutes = minutes_from_iso_duration(hours)
-            if minutes is None:
-                continue
-            hours_float = minutes / 60.0
+            if isinstance(hours_val, (int, float)):
+                hours_float = float(hours_val)
+            elif isinstance(hours_val, str):
+                # Try ISO-8601 first
+                mins = minutes_from_iso_duration(hours_val)
+                if mins is not None:
+                    hours_float = mins / 60.0
+                else:
+                    # Fallback: parse numeric string
+                    hours_float = float(hours_val)
         except Exception:
+            hours_float = None
+        if hours_float is None:
             continue
         
         activity_link = entry.get("_links", {}).get("activity", {}).get("href", "")
@@ -1145,6 +1402,9 @@ def update_time_entry_logged_by_from_excel(
             if needs_update:
                 logged_by_updates.append((entry_id, excel_user_id))
     
+    if logged_by_updates:
+        ui.info(f"  Found {len(logged_by_updates):,} time entry(ies) that need logged_by update")
+    
     # Update logged_by field
     if logged_by_updates:
         update_time_entry_logged_by_batch(
@@ -1158,32 +1418,48 @@ def update_time_entry_logged_by_from_excel(
         return 0
 
 
-def fetch_time_entry_activities_from_db() -> Dict[str, int]:
+def fetch_time_entry_activities_from_db(base_url: Optional[str] = None) -> Dict[str, int]:
+    container_name = _get_openproject_container(base_url)
     sql = (
         "SELECT id, name FROM enumerations "
         "WHERE type = 'TimeEntryActivity' AND active = TRUE;"
     )
-    command = [
-        "docker",
-        "exec",
-        "-i",
-        OPENPROJECT_CONTAINER,
-        "bash",
-        "-lc",
-        (
-            f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
-            f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
-            f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql}\""
-        ),
-    ]
+    
+    # For v13, database is embedded, use su - postgres
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-c",
+            f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F ',' <<'SQL'\n{sql}\nSQL\nEOSQL",
+        ]
+    else:
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-lc",
+            (
+                f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql}\""
+            ),
+        ]
+    
     try:
         result = subprocess.run(
             command,
             check=True,
             text=True,
             capture_output=True,
+            timeout=30,
         )
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return {}
     activities: Dict[str, int] = {}
     for line in result.stdout.splitlines():
@@ -1274,65 +1550,105 @@ def create_time_entry_activities_in_db(names: List[str], base_url: Optional[str]
 def fetch_time_entries_for_work_package_from_db(
     work_package_id: int,
     ui: Optional[ConsoleUI] = None,
-) -> List[Tuple[int, Optional[str]]]:
-    if ui:
-        ui.info(
-            "    [history] Querying time entries for work package %s"
-            % work_package_id
+    base_url: Optional[str] = None,
+) -> List[dict]:
+    """Fetch time entries for a work package from database in API-like format.
+    
+    Returns a list of dicts with the same structure as API responses for matching.
+    """
+    container_name = _get_openproject_container(base_url)
+    # On v13 embedded DB, time_entries are linked by work_package_id only.
+    # Some versions may have entity_type/entity_id, but v13 lacks te.entity_id.
+    if CURRENT_OP_VERSION == "v13":
+        where_clause = f"te.work_package_id = {int(work_package_id)}"
+    else:
+        # For v16 and newer schemas that may include entity_type/entity_id
+        where_clause = (
+            f"(te.work_package_id = {int(work_package_id)} "
+            f"OR (COALESCE(te.entity_type,'') = 'WorkPackage' AND COALESCE(te.entity_id,0) = {int(work_package_id)}))"
         )
     sql = (
-        "SELECT id, spent_on FROM time_entries "
-        f"WHERE (work_package_id = {int(work_package_id)} "
-        "   OR (entity_type = 'WorkPackage' AND entity_id = "
-        f"{int(work_package_id)})) "
-        "ORDER BY spent_on ASC, id ASC;"
+        "SELECT "
+        "    te.id, "
+        "    te.spent_on, "
+        "    te.hours, "
+        "    te.user_id, "
+        "    te.activity_id "
+        "FROM time_entries te "
+        f"WHERE {where_clause} "
+        "ORDER BY te.spent_on ASC NULLS LAST, te.id ASC;"
     )
-    command = [
-        "docker",
-        "exec",
-        "-i",
-        OPENPROJECT_CONTAINER,
-        "bash",
-        "-lc",
-        (
-            f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
-            f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
-            f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql}\""
-        ),
-    ]
+    
+    # For v13, database is embedded, use su - postgres
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-c",
+            f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{sql}\nSQL\nEOSQL",
+        ]
+    else:
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-lc",
+            (
+                f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                f"-h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \"{sql}\""
+            ),
+        ]
+    
     try:
         result = subprocess.run(
             command,
             check=True,
             text=True,
             capture_output=True,
+            timeout=30,
         )
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         if ui:
-            ui.info(
-                "    [history] Failed to query time entries for work package %s"
-                % work_package_id
+            ui.debug(
+                f"    [history] Failed to query time entries for WP {work_package_id}: {exc}"
             )
         return []
-    entries: List[Tuple[int, Optional[str]]] = []
+    
+    entries: List[dict] = []
     for line in result.stdout.splitlines():
         stripped = line.strip()
         if not stripped:
             continue
-        parts = stripped.split(",", 1)
-        if not parts:
+        parts = stripped.split("|")
+        if len(parts) < 5:
             continue
         try:
             entry_id = int(parts[0])
-        except ValueError:
+            spent_on = parts[1] if parts[1] else None
+            hours = parts[2] if parts[2] else None
+            user_id = int(parts[3]) if parts[3] and parts[3].isdigit() else None
+            activity_id = int(parts[4]) if parts[4] and parts[4].isdigit() else None
+        except (ValueError, IndexError):
             continue
-        spent_on = parts[1] if len(parts) > 1 and parts[1] else None
-        entries.append((entry_id, spent_on))
-    if ui:
-        ui.info(
-            "    [history] Retrieved %s time entrie(s) for work package %s"
-            % (len(entries), work_package_id)
-        )
+        
+        # Convert to API-like format for matching
+        entry = {
+            "id": entry_id,
+            "spentOn": spent_on,
+            "hours": hours,
+            "_links": {
+                "user": {"href": f"{API_PREFIX}/users/{user_id}"} if user_id else {},
+                "activity": {"href": f"{API_PREFIX}/time_entries/activities/{activity_id}"} if activity_id else {},
+            }
+        }
+        entries.append(entry)
+    
     return entries
 
 
@@ -1461,6 +1777,9 @@ class OpenProjectClient:
         # Step 1: Detect version FIRST (before authentication)
         # This allows us to handle version-specific authentication
         self.version = version or self._detect_version_without_auth()
+        # Expose detected version globally for helpers that don't receive client
+        global CURRENT_OP_VERSION
+        CURRENT_OP_VERSION = self.version
         
         # Step 2: Set up authentication based on version
         auth_header = self._build_auth_header(token)
@@ -1582,7 +1901,26 @@ class OpenProjectClient:
 
     def _request(self, method: str, path: str, **kwargs) -> requests.Response:
         url = f"{self.base_url}{API_PREFIX}{path}"
-        response = self.session.request(method, url, **kwargs)
+        # Basic retry for transient connection drops during long operations
+        max_attempts = 5
+        backoff = 1.0
+        last_exc: Optional[Exception] = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = self.session.request(method, url, **kwargs)
+                break
+            except Exception as e:  # requests exceptions
+                last_exc = e
+                print(f"  Retry {attempt}/{max_attempts} after connection error: {e}", flush=True)
+                time_sleep = min(10.0, backoff)
+                try:
+                    import time as _t
+                    _t.sleep(time_sleep)
+                except Exception:
+                    pass
+                backoff *= 2
+        else:
+            raise OpenProjectError(f"Failed to call {method} {url}: {last_exc}")
         if response.status_code >= 400:
             message = (
                 f"{method} {url} failed with status "
@@ -1594,11 +1932,29 @@ class OpenProjectClient:
     def _get_collection(self, path: str) -> Iterable[dict]:
         offset = 1
         page_size = 100
+        seen_count = 0
+        total_count: Optional[int] = None
         while True:
             params = {"offset": offset, "pageSize": page_size}
             resp = self._request("GET", path, params=params)
             payload = resp.json()
+            # Determine total for percentage logging (if provided by API)
+            if path == "/time_entries" and total_count is None:
+                try:
+                    total_count = int(payload.get("total")) if payload.get("total") is not None else None
+                except Exception:
+                    total_count = None
             elements = payload.get("_embedded", {}).get("elements", [])
+            # Stream progress for long-running time entries fetches
+            if path == "/time_entries":
+                if total_count and total_count > 0:
+                    seen_count += len(elements or [])
+                    pct = max(0.0, min(100.0, (seen_count / float(total_count)) * 100.0))
+                    print(f"  Fetching time entries: {pct:.1f}% (page {offset})", flush=True)
+                    _write_debug_log("debug", f"fetch_time_entries progress {pct:.1f}% (page {offset}, batch={len(elements or [])})")
+                else:
+                    print(f"  Fetching time entries: page {offset}", flush=True)
+                    _write_debug_log("debug", f"fetch_time_entries page {offset} (batch={len(elements or [])})")
             for elem in elements:
                 yield elem
             if not elements:
@@ -2443,15 +2799,32 @@ def scan_and_update_all_project_dates(
     client: OpenProjectClient,
     dry_run: bool,
     ui: ConsoleUI,
+    limit_project_ids: Optional[Set[int]] = None,
 ) -> None:
-    """Scan all projects and update their creation dates based on earliest work package/time entry."""
-    ui.info("  Scanning all projects for earliest work package/time entry dates...")
+    """Scan projects and update their creation dates based on earliest work package/time entry.
     
-    # Get all projects
+    When limit_project_ids is provided, only those projects are scanned/updated.
+    """
+    target_scope = "selected" if limit_project_ids else "all"
+    ui.info(f"  Scanning {target_scope} projects for earliest work package/time entry dates...")
+    
+    # Get projects
     ui.info("  Fetching project list from OpenProject...")
-    projects = client.list_projects()
-    if not projects:
+    all_projects = client.list_projects()
+    if not all_projects:
         ui.info("  No projects found.")
+        return
+    # Optionally limit to the provided set
+    if limit_project_ids:
+        projects = {
+            name: rec
+            for name, rec in all_projects.items()
+            if isinstance(rec.get("id"), int) and rec["id"] in limit_project_ids
+        }
+    else:
+        projects = all_projects
+    if not projects:
+        ui.info("  No target projects in scope.")
         return
     ui.info(f"  Found {len(projects)} project(s).")
     
@@ -2482,19 +2855,33 @@ def scan_and_update_all_project_dates(
         ) < '9999-12-31'::date;
     """.format(",".join(project_ids))
     
-    command = [
-        "docker",
-        "exec",
-        "-i",
-        OPENPROJECT_CONTAINER,
-        "bash",
-        "-lc",
-        (
-            f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
-            f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
-            f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql}\""
-        ),
-    ]
+    # Determine correct container and invocation (embedded v13 uses local postgres user)
+    container_name = _get_openproject_container(client.base_url if hasattr(client, "base_url") else None)
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        # Use su - postgres with heredoc to avoid quoting issues
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-c",
+            f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F ',' <<'SQL'\n{sql}\nSQL\nEOSQL",
+        ]
+    else:
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-lc",
+            (
+                f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql}\""
+            ),
+        ]
     
     ui.info("  Executing database query (this may take a moment)...")
     try:
@@ -2503,7 +2890,7 @@ def scan_and_update_all_project_dates(
             check=True,
             text=True,
             capture_output=True,
-            timeout=60,  # 60 second timeout
+            timeout=180,  # allow a bit more time for large datasets
         )
         ui.info("  Processing query results...")
         for line in result.stdout.splitlines():
@@ -2543,6 +2930,7 @@ def scan_and_update_all_project_dates(
         )
         # Update each project separately to avoid exclusion constraint conflicts
         updated_count = 0
+        total_projects_to_update = len(project_earliest_dates)
         for idx, (project_id, earliest_date) in enumerate(project_earliest_dates.items(), 1):
             project_name = next(
                 (p.get("name", f"Project {project_id}") 
@@ -2591,14 +2979,17 @@ def scan_and_update_all_project_dates(
                     description=f"Updating project '{project_name}' journal",
                 )
                 updated_count += 1
-                ui.info(
-                    f"  [{idx}/{len(project_earliest_dates)}] "
-                    f"✔ Updated '{project_name}' (earliest: {earliest_date.isoformat()})"
+                # Percentage progress for Step 19
+                ui.progress(idx, total_projects_to_update, "Updating project dates")
+                # Reduce console noise; write detail only to debug log
+                _write_debug_log(
+                    "debug",
+                    f"[project_dates] {idx}/{len(project_earliest_dates)} Updated '{project_name}' (earliest: {earliest_date.isoformat()})",
                 )
             except Exception as exc:
-                ui.info(
-                    f"  [{idx}/{len(project_earliest_dates)}] "
-                    f"⚠️  Failed to update project '{project_name}' journal: {exc}"
+                _write_debug_log(
+                    "debug",
+                    f"[project_dates] {idx}/{len(project_earliest_dates)} Failed '{project_name}': {exc}",
                 )
         ui.info(
             f"  ✔ Successfully updated {updated_count}/{len(project_earliest_dates)} project creation date(s)."
@@ -3060,6 +3451,7 @@ def _collect_packages_for_history_adjustment(
     staging: WorkbookStaging,
     existing_packages: Dict[int, ImportedWorkPackage],
     ui: ConsoleUI,
+    base_url: Optional[str] = None,
 ) -> List[ImportedWorkPackage]:
     packages_by_id = dict(existing_packages)
     skip_reasons: Dict[str, int] = defaultdict(int)
@@ -3086,24 +3478,14 @@ def _collect_packages_for_history_adjustment(
         db_entries = fetch_time_entries_for_work_package_from_db(
             int(work_package_id),
             ui=ui,
+            base_url=base_url,
         )
         if not db_entries:
-            ui.info(
-                "  Skipping history adjustment for '%s'; no time entries "
-                "found in database." % staged_task.subject
-            )
+            _write_debug_log("debug", f"[history] skip '{staged_task.subject}': no DB time entries")
             skip_reasons["no db time entries"] += 1
             continue
         if len(db_entries) != len(logs_with_units):
-            ui.info(
-                "  Skipping history adjustment for '%s'; workbook has %s "
-                "log(s) but database has %s time entrie(s)."
-                % (
-                    staged_task.subject,
-                    len(logs_with_units),
-                    len(db_entries),
-                )
-            )
+            _write_debug_log("debug", f"[history] skip '{staged_task.subject}': workbook logs={len(logs_with_units)} db entries={len(db_entries)}")
             skip_reasons["log/count mismatch"] += 1
             continue
         imported_entries: List[ImportedTimeEntry] = []
@@ -3194,17 +3576,176 @@ def calculate_openproject_totals(
     Returns:
         (total_hours, total_entries, project_hours_dict)
     """
+    # Choose source for verification totals (DB vs API)
+    # Fast path for v13/embedded DB: aggregate directly from database to avoid huge API pagination
+    try:
+        container_name = _get_openproject_container(client.base_url if hasattr(client, "base_url") else None)
+    except Exception:
+        container_name = _get_openproject_container()
+    # Decide based on flag
+    source_decision = VERIFICATION_SOURCE or "auto"
+    if source_decision == "auto":
+        use_db = ("v13" in container_name) and (created_time_entry_ids is None or len(created_time_entry_ids) == 0)
+    elif source_decision == "db":
+        # Force DB aggregation regardless of created_time_entry_ids presence
+        use_db = True
+    else:
+        use_db = False
+    ui.info(f"Using verification source: {'db' if use_db else 'api'}", "info")
+    # Unified fetch method banner for Step 20
+    if use_db:
+        ui.info("Fetching time entries from OpenProject using Database", "info")
+    else:
+        ui.info("Fetching time entries from OpenProject using API", "info")
+    if use_db:
+        # Build project id -> name from staging
+        project_id_to_name: Dict[int, str] = {}
+        for staged_project in staging.projects.values():
+            if staged_project.openproject_id:
+                project_id_to_name[int(staged_project.openproject_id)] = staged_project.name
+        # Collect relevant work package ids
+        wp_ids: Set[int] = set()
+        for pkg in imported_packages:
+            try:
+                wp_ids.add(int(pkg.work_package_id))
+            except Exception:
+                continue
+        # If no new imports this run, include all staged work packages
+        if not wp_ids:
+            for task in staging.tasks.values():
+                if task.openproject_id is not None:
+                    try:
+                        wp_ids.add(int(task.openproject_id))
+                    except Exception:
+                        continue
+        else:
+            ui.info("  Fetching time entries from OpenProject using Database...", "info")
+            ids_csv = ",".join(str(i) for i in sorted(wp_ids))
+            # Aggregate hours and entries by project for the selected work packages
+            if CURRENT_OP_VERSION == "v13":
+                where_clause = f"te.work_package_id IN ({ids_csv})"
+            else:
+                where_clause = (
+                    f"(te.work_package_id IN ({ids_csv}) "
+                    f"OR (COALESCE(te.entity_type,'') = 'WorkPackage' AND COALESCE(te.entity_id,0) IN ({ids_csv})))"
+                )
+            sql = f"""
+                SELECT
+                  te.project_id,
+                  COALESCE(SUM(te.hours), 0) AS total_hours,
+                  COUNT(*) AS total_entries
+                FROM time_entries te
+                WHERE {where_clause}
+                GROUP BY te.project_id
+            """
+            # Run query via embedded DB
+            if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+                command = [
+                    "docker",
+                    "exec",
+                    "-i",
+                    container_name,
+                    "bash",
+                    "-c",
+                    f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{sql}\nSQL\nEOSQL",
+                ]
+            else:
+                command = [
+                    "docker",
+                    "exec",
+                    "-i",
+                    container_name,
+                    "bash",
+                    "-lc",
+                    (
+                        f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                        f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                        f"-h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \"{sql}\""
+                    ),
+                ]
+            try:
+                result = subprocess.run(
+                    command,
+                    check=True,
+                    text=True,
+                    capture_output=True,
+                    timeout=180,
+                )
+            except Exception as exc:
+                # If forced DB verification, do not fall back to API
+                if source_decision == "db":
+                    ui.info(f"  DB aggregation failed: {exc}")
+                    return 0.0, 0, {}
+                ui.info(f"  DB fast path failed, falling back to API: {exc}")
+            else:
+                total_hours = 0.0
+                total_entries = 0
+                project_hours: Dict[str, float] = defaultdict(float)
+                project_rows = 0
+                for line in result.stdout.splitlines():
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+                    parts = stripped.split("|")
+                    if len(parts) < 3:
+                        continue
+                    try:
+                        project_id = int(parts[0]) if parts[0] else None
+                        hours_val = float(parts[1]) if parts[1] else 0.0
+                        entries_val = int(parts[2]) if parts[2] else 0
+                    except (ValueError, TypeError):
+                        continue
+                    name = project_id_to_name.get(project_id, f"Project {project_id}")
+                    total_hours += hours_val
+                    total_entries += entries_val
+                    project_hours[name] += hours_val
+                    project_rows += 1
+                ui.info(
+                    f"[source=DB] Aggregated {total_entries:,} entry(ies) across {project_rows:,} project row(s)",
+                    "info",
+                )
+                return total_hours, total_entries, dict(project_hours)
+        # If we intended to use DB and have not returned by now, respect forced DB mode
+        if source_decision == "db":
+            return 0.0, 0, {}
+
     total_hours = 0.0
     total_entries = 0
     project_hours: Dict[str, float] = defaultdict(float)
     
     # Get all time entries from OpenProject
-    ui.info("  Fetching time entries from OpenProject...")
+    ui.info("  Fetching time entries from OpenProject using API...", "info")
+    # Unified progress bar fetch (avoid per-page console spam)
+    all_time_entries: List[dict] = []
     try:
-        all_time_entries = client.list_time_entries()
+        page_size = 100
+        offset = 1
+        seen_count = 0
+        total_from_api: Optional[int] = None
+        ui.progress(0, 1, "Fetching time entries")  # show bar start
+        while True:
+            resp = client._request("GET", "/time_entries", params={"offset": offset, "pageSize": page_size})
+            payload = resp.json()
+            if total_from_api is None:
+                try:
+                    total_from_api = int(payload.get("total")) if payload.get("total") is not None else None
+                except Exception:
+                    total_from_api = None
+            elements = payload.get("_embedded", {}).get("elements", []) or []
+            all_time_entries.extend(elements)
+            seen_count += len(elements)
+            if total_from_api and total_from_api > 0:
+                ui.progress(min(seen_count, total_from_api), total_from_api, "Fetching time entries")
+            else:
+                ui.progress(min(offset, 100), 100, "Fetching time entries")
+            next_link = payload.get("_links", {}).get("nextByOffset")
+            if not elements or not next_link:
+                break
+            offset += 1
     except OpenProjectError as exc:
         ui.info(f"  Error fetching time entries: {exc}")
         return 0.0, 0, {}
+    ui.info(f"[source=API] Loaded {len(all_time_entries):,} time entry record(s) from API for verification", "info")
     
     # Create a mapping from work package ID to project name
     # Use the project from the imported work package, not from the time entry
@@ -3238,7 +3779,11 @@ def calculate_openproject_totals(
                     continue
         
         # Fetch work packages to get their projects
-        for wp_id in all_wp_ids:
+        total_wp_to_fetch = len(all_wp_ids)
+        if total_wp_to_fetch:
+            ui.progress(0, total_wp_to_fetch, "Building WP→Project map")
+        wp_progress_interval = max(1, total_wp_to_fetch // 100) if total_wp_to_fetch > 0 else None
+        for idx_wp, wp_id in enumerate(all_wp_ids, start=1):
             try:
                 wp = client.get_work_package(wp_id)
                 if wp:
@@ -3252,16 +3797,28 @@ def calculate_openproject_totals(
                                 project_id, f"Project {project_id}"
                             )
                             wp_id_to_project_name[wp_id] = project_name
+                            # reduce console noise; write detail to debug log only
+                            _write_debug_log("debug", f"[wp_map] wp={wp_id} -> project_id={project_id} ({project_name})")
                         except (ValueError, AttributeError):
                             continue
             except OpenProjectError:
                 continue
+            # update progress every 1% (or last item)
+            if wp_progress_interval and (idx_wp % wp_progress_interval == 0 or idx_wp == total_wp_to_fetch):
+                ui.progress(idx_wp, total_wp_to_fetch, "Building WP→Project map")
     
     imported_wp_ids = set(wp_id_to_project_name.keys())
     
     ui.info(f"  Processing {len(all_time_entries)} time entry(ies)...")
     
-    for entry in all_time_entries:
+    # Progress for processing entries
+    total_entries_to_process = len(all_time_entries)
+    if total_entries_to_process:
+        ui.progress(0, total_entries_to_process, "Processing time entries")
+    process_interval = max(1, total_entries_to_process // 100) if total_entries_to_process > 0 else None
+    for idx_te, entry in enumerate(all_time_entries, start=1):
+        if process_interval and (idx_te % process_interval == 0 or idx_te == total_entries_to_process):
+            ui.progress(idx_te, total_entries_to_process, "Processing time entries")
         # If filtering by created time entry IDs, check if this entry is in the set
         if created_time_entry_ids is not None:
             entry_id = entry.get("id")
@@ -3392,12 +3949,28 @@ def analyze_missing_entries(
                 issue_key = (staged_task.issue_id.strip(), staged_task.project_name)
                 wp_issue_id_to_id[issue_key] = staged_task.openproject_id
     
-    # Get all time entries from OpenProject
-    try:
-        all_time_entries = client.list_time_entries()
-    except OpenProjectError as exc:
-        ui.info(f"  Error fetching time entries: {exc}")
-        return
+    # Get all time entries from OpenProject (respect verification source to avoid slow API pagination)
+    all_time_entries: List[dict] = []
+    if VERIFICATION_SOURCE == "db":
+        ui.info("  Fetching time entries for analysis using Database...")
+        for wp_id in sorted(staged_wp_ids):
+            try:
+                all_time_entries.extend(
+                    fetch_time_entries_for_work_package_from_db(
+                        wp_id,
+                        ui=None,
+                        base_url=client.base_url if hasattr(client, "base_url") else None,
+                    )
+                )
+            except Exception as exc:
+                ui.info(f"    Failed DB fetch for WP {wp_id}: {exc}")
+                continue
+    else:
+        try:
+            all_time_entries = client.list_time_entries()
+        except OpenProjectError as exc:
+            ui.info(f"  Error fetching time entries: {exc}")
+            return
     
     # Filter to only entries for staged work packages
     all_time_entries = [
@@ -3499,7 +4072,7 @@ def analyze_missing_entries(
     except OpenProjectError as exc:
         if "status 404" in str(exc):
             ui.info("  Fetching activities from database (API returned 404)...")
-            db_records = fetch_time_entry_activities_from_db()
+            db_records = fetch_time_entry_activities_from_db(base_url=getattr(client, "base_url", None))
             for name, activity_id in db_records.items():
                 normalized_name = normalize_activity_name(name)
                 if normalized_name:
@@ -3885,6 +4458,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Path to the Excel workbook to import.",
     )
     parser.add_argument(
+        "--time-entry-cache",
+        type=Path,
+        default=DEFAULT_TIME_ENTRY_CACHE,
+        help="Path to a JSON cache of created time entries to allow resume without duplicates.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help=(
@@ -3976,6 +4555,53 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default="auto",
         help="OpenProject version (auto-detect if not specified, default: auto)",
     )
+    parser.add_argument(
+        "--time-entry-source",
+        choices=["auto", "db", "api"],
+        default="auto",
+        help=(
+            "Source to read existing time entries when logging (Step 17). "
+            "'db' = read per work-package directly from database; "
+            "'api' = list via API and filter; "
+            "'auto' = choose 'db' on v13, otherwise 'api'."
+        ),
+    )
+    parser.add_argument(
+        "--verification-source",
+        choices=["auto", "db", "api"],
+        default="auto",
+        help=(
+            "Source to read time entries for verification (Step 20). "
+            "'db' = aggregate directly from database; "
+            "'api' = list via API; "
+            "'auto' = choose 'db' on v13 (without created-ID filter), otherwise 'api'."
+        ),
+    )
+    parser.add_argument(
+        "--logged-by-source",
+        choices=["auto", "db", "api"],
+        default="auto",
+        help=(
+            "Source to read time entries for Step 16 (logged_by updates). "
+            "'db' = query per work package from database; "
+            "'api' = list all via API; "
+            "'auto' = choose 'db' on v13 with API fallback, otherwise 'api'."
+        ),
+    )
+    parser.add_argument(
+        "--clean-cache-and-logs",
+        action="store_true",
+        help=(
+            "Delete local staging cache and import logs before running. "
+            "Removes /tmp/staging-cache.json (or --staging-cache) and /tmp/op_import_run*.log"
+        ),
+    )
+    parser.add_argument(
+        "--debug-log",
+        type=Path,
+        default=Path("/tmp/op_import_debug.log"),
+        help="Path to write a detailed debug log for this run.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -3998,11 +4624,63 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("API token is required.", file=sys.stderr)
         return 1
 
+    # Configure debug logging path
+    global DEBUG_LOG_PATH
+    DEBUG_LOG_PATH = args.debug_log
     ui = ConsoleUI(auto_confirm=args.yes)
+    # Configure verification source for Step 20
+    global VERIFICATION_SOURCE
+    VERIFICATION_SOURCE = args.verification_source
     
     # Set default cache path if not provided
     if args.staging_cache is None:
         args.staging_cache = Path("/tmp/staging-cache.json")
+
+    # Optional cleanup of cache and logs
+    if args.clean_cache_and_logs:
+        ui.start_step("Clean caches and logs")
+        removed_any = False
+        # Remove staging cache
+        try:
+            if args.staging_cache and args.staging_cache.exists():
+                args.staging_cache.unlink()
+                ui.info(f"Removed cache: {args.staging_cache}")
+                removed_any = True
+        except Exception as exc:
+            ui.warning(f"Could not remove cache '{args.staging_cache}': {exc}")
+        # Remove time-entry cache
+        try:
+            te_cache = args.time_entry_cache or DEFAULT_TIME_ENTRY_CACHE
+            if te_cache and Path(te_cache).exists():
+                Path(te_cache).unlink()
+                ui.info(f"Removed cache: {te_cache}")
+                removed_any = True
+        except Exception as exc:
+            ui.warning(f"Could not remove cache '{te_cache}': {exc}")
+        # Remove import logs
+        try:
+            import glob as _glob
+            for log_path in _glob.glob("/tmp/op_import_run*.log"):
+                try:
+                    Path(log_path).unlink()
+                    ui.info(f"Removed log: {log_path}")
+                    removed_any = True
+                except Exception as exc:
+                    ui.warning(f"Could not remove log '{log_path}': {exc}")
+        except Exception as exc:
+            ui.warning(f"Could not enumerate logs: {exc}")
+        # Remove debug log
+        try:
+            if DEBUG_LOG_PATH and DEBUG_LOG_PATH.exists():
+                DEBUG_LOG_PATH.unlink()
+                ui.info(f"Removed log: {DEBUG_LOG_PATH}")
+                removed_any = True
+        except Exception as exc:
+            ui.warning(f"Could not remove debug log '{DEBUG_LOG_PATH}': {exc}")
+        if not removed_any:
+            ui.skip_step("Nothing to remove.")
+        else:
+            ui.complete_step("Cache and logs cleaned.")
 
     # If --update-project-dates is set, run only that and exit
     if args.update_project_dates:
@@ -4468,6 +5146,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"(auto-detected)" if op_version is None else f"(specified)",
             "info"
         )
+    # Baseline counts before import (captured for final verification summary)
+    before_counts = get_openproject_counts(client, ui)
 
     ui.start_step("Fetch users from OpenProject")
     user_records = client.list_users()
@@ -4525,7 +5205,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             missing_users,
             key=lambda user: user.full_name.lower(),
         )
-        for staged_user in sorted_missing:
+        # 1% progress bar for user creation
+        total_to_create_users = len(sorted_missing)
+        if total_to_create_users:
+            ui.progress(0, total_to_create_users, "Creating users")
+        users_progress_interval = max(1, total_to_create_users // 100) if total_to_create_users > 0 else None
+        for idx_u, staged_user in enumerate(sorted_missing, start=1):
+            if users_progress_interval and (idx_u % users_progress_interval == 0 or idx_u == total_to_create_users):
+                ui.progress(idx_u, total_to_create_users, "Creating users")
             login = build_unique_login(staged_user.full_name, existing_logins)
             email = f"{login}@{email_domain}"
             password = secrets.token_urlsafe(12)
@@ -4607,7 +5294,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             ui.skip_step("Project creation cancelled by operator.")
             print("Import aborted.")
             return 0
-        for staged_project in missing_projects:
+        # 1% progress bar for project creation
+        total_to_create_projects = len(missing_projects)
+        if total_to_create_projects:
+            ui.progress(0, total_to_create_projects, "Creating projects")
+        proj_progress_interval = max(1, total_to_create_projects // 100) if total_to_create_projects > 0 else None
+        for idx_p, staged_project in enumerate(missing_projects, start=1):
+            if proj_progress_interval and (idx_p % proj_progress_interval == 0 or idx_p == total_to_create_projects):
+                ui.progress(idx_p, total_to_create_projects, "Creating projects")
             created = client.create_project(staged_project.name)
             project_records[staged_project.name] = created
             staged_project.openproject_id = int(created["id"])
@@ -4754,7 +5448,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         except OpenProjectError as exc:
             if "status 404" in str(exc):
                 activity_source = "database"
-                db_records = fetch_time_entry_activities_from_db()
+                db_records = fetch_time_entry_activities_from_db(base_url=server)
                 for name, activity_id in db_records.items():
                     normalized_name = normalize_activity_name(name)
                     if not normalized_name:
@@ -4788,6 +5482,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 else:
                     continue
                 activity_map[normalized_name] = (name, record_id_int)
+            # v13 may return empty activities via API; fallback to DB if empty
+            if client.version == "v13" and not activity_map:
+                try:
+                    db_records = fetch_time_entry_activities_from_db(base_url=server)
+                    for dname, did in db_records.items():
+                        n = normalize_activity_name(dname)
+                        if n:
+                            activity_map[n] = (dname, did)
+                    activity_source = "database"
+                except Exception:
+                    pass
         missing_activity_names: List[str] = []
         for normalized, original in workbook_activity_lookup.items():
             entry = activity_map.get(normalized)
@@ -4812,7 +5517,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     % exc
                 )
                 return 1
-            db_records = fetch_time_entry_activities_from_db()
+            db_records = fetch_time_entry_activities_from_db(base_url=server)
             for name, activity_id in db_records.items():
                 normalized_name = normalize_activity_name(name)
                 if not normalized_name:
@@ -5019,6 +5724,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 ui.skip_step("Membership updates cancelled by operator.")
                 return 0
             added_count = 0
+            # 1% progress across all membership additions
+            if total_memberships:
+                ui.progress(0, total_memberships, "Assigning memberships")
+            mem_progress_interval = max(1, total_memberships // 100) if total_memberships > 0 else None
             for staged_project, member_ids in project_membership_additions:
                 project_id_membership_update: Optional[int] = (
                     staged_project.openproject_id
@@ -5033,6 +5742,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                             role_id=member_role_id,
                         )
                         added_count += 1
+                        if mem_progress_interval and (added_count % mem_progress_interval == 0 or added_count == total_memberships):
+                            ui.progress(added_count, total_memberships, "Assigning memberships")
                     except OpenProjectError as e:
                         error_msg = str(e)
                         user_name = user_id_to_name.get(user_id, f"User {user_id}")
@@ -5096,6 +5807,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                             role_id=member_role_id,
                         )
                         added_count += 1
+                        if mem_progress_interval and (added_count % mem_progress_interval == 0 or added_count == total_memberships):
+                            ui.progress(added_count, total_memberships, "Assigning memberships")
                         ui.success(f"  ✅ Fixed and assigned user '{user_name}'")
             
             ui.complete_step(
@@ -5511,23 +6224,62 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ui.start_step("Log time entries")
     total_created_entries = 0
     total_missing_entries = 0
-    try:
-        existing_time_entries = client.list_time_entries()
-    except OpenProjectError as exc:
-        ui.info("  [logwork] Failed to retrieve existing time entries: %s" % exc)
-        existing_time_entries = []
-    time_entries_by_wp: Dict[int, List[dict]] = defaultdict(list)
-    for entry in existing_time_entries:
-        wp_href = (
-            entry.get("_links", {}).get("workPackage", {}) or {}
-        ).get("href")
-        if not wp_href:
-            continue
+    # Load time-entry cache (resume support)
+    time_entry_cache_path: Path = args.time_entry_cache or DEFAULT_TIME_ENTRY_CACHE
+    cached_entries_by_wp: Dict[int, List[dict]] = {}
+    if time_entry_cache_path.exists():
         try:
-            wp_id = int(wp_href.split("/")[-1])
-        except (ValueError, AttributeError):
-            continue
-        time_entries_by_wp[wp_id].append(entry)
+            with time_entry_cache_path.open("r", encoding="utf-8") as _h:
+                raw_cache = json.load(_h)
+            # keys are strings in JSON; convert to int
+            for k, v in raw_cache.items():
+                try:
+                    cached_entries_by_wp[int(k)] = list(v) if isinstance(v, list) else []
+                except Exception:
+                    continue
+            if cached_entries_by_wp:
+                ui.info(f"Loaded cached time entries for {len(cached_entries_by_wp)} work package(s) (resume mode).", "info")
+        except Exception as _exc:
+            ui.warning(f"Failed to read time-entry cache '{time_entry_cache_path}': {_exc}")
+    
+    # Determine source for existing time entries
+    source_decision = args.time_entry_source
+    if source_decision == "auto":
+        # Prefer DB on v13 where embedded DB access is available
+        source_decision = "db" if client.version == "v13" else "api"
+    ui.info(f"Using time entry source: {source_decision}", "info")
+    # Unified fetch method banner for Step 17
+    if source_decision == "db":
+        ui.info("Fetching time entries from OpenProject using Database", "info")
+    else:
+        ui.info("Fetching time entries from OpenProject using API", "info")
+
+    # Option A: DB fast-path (per work package)
+    # Option B: API (single bulk list, then group by work package)
+    time_entries_by_wp: Dict[int, List[dict]] = defaultdict(list)
+    total_api_entries_fetched = 0
+    total_db_entries_fetched = 0
+    total_db_wps = 0
+    if source_decision == "api":
+        ui.info("Fetching time entries from OpenProject using API (may take time)...", "info")
+        try:
+            all_entries_api = client.list_time_entries()
+        except OpenProjectError as exc:
+            ui.warning(f"Failed to fetch time entries via API: {exc}")
+            all_entries_api = []
+        # Group by work package id
+        for entry in all_entries_api:
+            wp_href = (entry.get("_links", {}).get("workPackage", {}) or {}).get("href")
+            if not wp_href:
+                continue
+            try:
+                wp_id_val = int(wp_href.split("/")[-1])
+            except (ValueError, AttributeError):
+                continue
+            time_entries_by_wp[wp_id_val].append(entry)
+        total_api_entries_fetched = len(all_entries_api)
+        ui.info(f"[source=API] Loaded {total_api_entries_fetched:,} time entry record(s) from API", "info")
+
     # Process all tasks with work package IDs, regardless of log validity
     loggable_tasks = [
         task
@@ -5537,6 +6289,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     total_log_tasks = len(loggable_tasks)
     if total_log_tasks:
         ui.info(f"Verifying time entries for {total_log_tasks:,} task(s)", "info")
+        # Show initial progress
+        ui.progress(0, total_log_tasks, "Verifying time entries")
     # Calculate interval for 1% progress updates
     progress_interval = (
         max(1, total_log_tasks // 100) if total_log_tasks > 0 else None
@@ -5562,8 +6316,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # (multiple staged_task objects can map to the same work package)
         if wp_id_int in processed_wp_ids:
             continue
+        # Preload from cache first (resume support)
+        if wp_id_int in cached_entries_by_wp and cached_entries_by_wp[wp_id_int]:
+            time_entries_by_wp[wp_id_int].extend(cached_entries_by_wp[wp_id_int])
         
-        existing_entries = time_entries_by_wp.setdefault(wp_id_int, [])
+        # Populate existing time entries for this work package per source selection
+        if source_decision == "db":
+            if wp_id_int not in time_entries_by_wp:
+                try:
+                    # Suppress verbose DB query messages during progress
+                    db_entries = fetch_time_entries_for_work_package_from_db(
+                        wp_id_int,
+                        ui=None,  # Don't show individual DB query messages
+                        base_url=client.base_url if hasattr(client, "base_url") else None,
+                    )
+                    time_entries_by_wp[wp_id_int] = db_entries
+                    total_db_entries_fetched += len(db_entries)
+                    total_db_wps += 1
+                except Exception as exc:
+                    ui.warning(
+                        f"  [logwork] Failed to fetch time entries from DB for WP {wp_id_int}: {exc}"
+                    )
+                    time_entries_by_wp[wp_id_int] = []
+        else:
+            # API path already grouped above; ensure key exists
+            time_entries_by_wp.setdefault(wp_id_int, [])
+
+        # Create missing entries for this work package
+        existing_entries = time_entries_by_wp[wp_id_int]
         created_entries, missing_count = ensure_time_entries_for_task(
             staged_task,
             client=client,
@@ -5593,6 +6373,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             imported_packages_map[wp_id_int] = pkg
         pkg.time_entries.extend(created_entries)
         total_created_entries += len(created_entries)
+
+    # Summarize the source used (post-processing)
+    if source_decision == "db":
+        ui.info(f"[source=DB] Loaded {total_db_entries_fetched:,} time entry record(s) across {total_db_wps:,} work package(s)", "info")
     
     # Calculate existing entries (total - missing - created)
     total_expected_entries = sum(
@@ -5628,6 +6412,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
 
     imported_packages = list(imported_packages_map.values())
+    # Save time-entry cache after logging step (serialize API-like dicts only)
+    try:
+        if time_entries_by_wp:
+            # Convert keys to str for JSON and ensure values are plain dicts/lists
+            serializable_cache = {str(k): v for k, v in time_entries_by_wp.items()}
+            time_entry_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with time_entry_cache_path.open("w", encoding="utf-8") as _h:
+                json.dump(serializable_cache, _h, indent=2)
+            ui.info(f"Saved time-entry cache to '{time_entry_cache_path}'.", "info")
+    except Exception as _exc:
+        ui.warning(f"Failed to write time-entry cache '{time_entry_cache_path}': {_exc}")
 
     # Step 15.5: Update logged_by field for time entries
     ui.start_step("Update time entry logged_by field")
@@ -5640,6 +6435,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             staging=staging,
             ui=ui,
             dry_run=False,
+            source=args.logged_by_source,
         )
         if updated_count == 0:
             ui.skip_step("No time entries need logged_by update.")
@@ -5654,6 +6450,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         staging,
         packages_dict,
         ui,
+        base_url=client.base_url if hasattr(client, "base_url") else None,
     )
     if not history_packages:
         ui.skip_step("No history adjustments required.")
@@ -5675,10 +6472,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     else:
         # Scan all projects and update their creation dates based on earliest
         # work package/time entry dates from the database
+        # Limit scope to projects touched in this import when possible
+        target_project_ids: Set[int] = set()
+        if imported_packages:
+            target_project_ids = {int(pkg.project_id) for pkg in imported_packages if pkg.project_id is not None}
+        elif staging and staging.projects:
+            # fallback to projects referenced in the workbook
+            for sp in staging.projects.values():
+                if sp.openproject_id is not None:
+                    target_project_ids.add(int(sp.openproject_id))
         scan_and_update_all_project_dates(
             client,
             dry_run=False,
             ui=ui,
+            limit_project_ids=target_project_ids if target_project_ids else None,
         )
         ui.complete_step("Updated project creation dates.")
 
@@ -5718,6 +6525,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 created_time_entry_ids=created_time_entry_ids if created_time_entry_ids else None,
             )
         
+        # Merge before/after instance counts into the verification section
+        after_counts = get_openproject_counts(client, ui)
+        ui.section("Instance Totals (Before → After)")
+        ui.table_header("Metric", "Before", "After", "Δ")
+        proj_b = before_counts.get("projects", 0); proj_a = after_counts.get("projects", 0)
+        user_b = before_counts.get("users", 0); user_a = after_counts.get("users", 0)
+        wp_b = before_counts.get("work_packages", 0); wp_a = after_counts.get("work_packages", 0)
+        ui.table_row("Projects", str(proj_b), str(proj_a), str(proj_a - proj_b))
+        ui.table_row("Users", str(user_b), str(user_a), str(user_a - user_b))
+        ui.table_row("Work packages", str(wp_b), str(wp_a), str(wp_a - wp_b))
+        print()
         ui.complete_step("Import verification completed.")
 
     ui.complete_step("Import completed successfully.")

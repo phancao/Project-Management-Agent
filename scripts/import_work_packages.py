@@ -5654,14 +5654,55 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if staged_user.openproject_id is not None
     }
     for staged_task in staging.tasks.values():
-        project_required_type_ids[staged_task.project_name].add(
-            staged_task.resolved_type_id or fallback_type_id
-        )
+        _req_type = staged_task.resolved_type_id
+        if _req_type is None:
+            # fall back to default type id if available
+            _req_type = type_id_map.get(args.default_type)
+        if _req_type is not None:
+            project_required_type_ids[staged_task.project_name].add(int(_req_type))
         assignee_normalized = normalize_person_name(staged_task.assignee_name)
         assignee_id = user_id_map.get(assignee_normalized)
         if assignee_id is not None:
             project_user_ids_required[staged_task.project_name].add(
                 assignee_id)
+
+    # Pre-activate/unlock all required users before attempting membership assignment
+    all_required_user_ids: set[int] = set().union(
+        *([uids for uids in project_user_ids_required.values()] or [set()])
+    )
+    if all_required_user_ids:
+        ui.info("  Pre-activating required users before membership assignment...")
+        for uid in sorted(all_required_user_ids):
+            # Check current user status via API
+            try:
+                resp = client._request("GET", f"/users/{uid}")
+                udata = resp.json()
+                status = udata.get("status", "")
+                locked = bool(udata.get("locked", False))
+            except Exception:
+                status = ""
+                locked = False
+            needs_fix = (status != "active") or locked
+            if needs_fix:
+                uname = user_id_to_name.get(uid, f"User {uid}")
+                ui.info(f"    Ensuring user '{uname}' (ID: {uid}) is active/unlocked...")
+                fixed = _try_fix_user_assignment_via_api(client, uid, 0, ui)
+                if not fixed:
+                    fixed = _try_fix_user_assignment_via_db(
+                        uid, 0, ui, base_url=getattr(client, "base_url", None)
+                    )
+                # Re-check status after attempted fix
+                try:
+                    resp2 = client._request("GET", f"/users/{uid}")
+                    u2 = resp2.json()
+                    s2 = u2.get("status", "")
+                    l2 = bool(u2.get("locked", False))
+                    if s2 == "active" and not l2:
+                        ui.success(f"    ✅ User '{uname}' is active/unlocked.")
+                    else:
+                        ui.warning(f"    ⚠ User '{uname}' may still be non-assignable (status={s2}, locked={l2}).")
+                except Exception:
+                    ui.warning(f"    ⚠ Could not re-check user '{uname}' after fix attempt.")
 
     project_type_updates: List[Tuple[StagedProject, List[int]]] = []
     for project_name, required_ids in project_required_type_ids.items():
@@ -6115,9 +6156,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 )
                 continue
             project_id_int = int(project_id_for_task)
-            required_type_id = int(
-                staged_task.resolved_type_id or fallback_type_id
-            )
+            if staged_task.resolved_type_id is not None:
+                required_type_id = int(staged_task.resolved_type_id)
+            else:
+                _fallback = type_id_map.get(args.default_type)
+                if _fallback is None:
+                    ui.skip_step(
+                        "Unable to determine type id for task subject '%s'."
+                        % staged_task.subject
+                    )
+                    raise OpenProjectError(
+                        "Missing type id for task '%s' and no default type available."
+                        % staged_task.subject
+                    )
+                required_type_id = int(_fallback)
 
             allowed_types = project_type_cache.get(project_id_int)
             if allowed_types is None:

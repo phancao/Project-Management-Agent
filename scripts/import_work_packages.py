@@ -5260,10 +5260,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             base_email_local = login
             email_local = base_email_local
             suffix = 1
-            while f\"{email_local}@{email_domain}\" in existing_emails:
+            while f"{email_local}@{email_domain}" in existing_emails:
                 suffix += 1
-                email_local = f\"{base_email_local}{suffix}\"
-            email = f\"{email_local}@{email_domain}\"
+                email_local = f"{base_email_local}{suffix}"
+            email = f"{email_local}@{email_domain}"
             password = secrets.token_urlsafe(12)
             try:
                 created_user = client.create_user(

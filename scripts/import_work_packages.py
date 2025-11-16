@@ -2597,17 +2597,30 @@ def normalize_activity_name(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip()).lower()
 
 
-def build_unique_login(full_name: str, existing_logins: set[str]) -> str:
-    base_slug = slugify(full_name)
-    if not base_slug:
-        base_slug = "user"
-    login = base_slug
+def build_unique_username(full_name: str, existing_usernames: set[str]) -> str:
+    """
+    Build a unique username in the format 'first.last' (lowercase, ASCII),
+    appending a numeric suffix when needed (e.g., 'first.last2').
+    """
+    cleaned = unicodedata.normalize("NFKD", full_name).encode("ascii", "ignore").decode("ascii")
+    cleaned = re.sub(r"\s+", " ", cleaned.strip())
+    if not cleaned:
+        base = "user"
+    else:
+        parts = cleaned.split(" ")
+        first = parts[0] if parts else "user"
+        last = parts[-1] if len(parts) > 1 else parts[0]
+        # Keep only alphanumerics
+        first = re.sub(r"[^A-Za-z0-9]", "", first)
+        last = re.sub(r"[^A-Za-z0-9]", "", last)
+        base = f"{first}.{last}".lower() if first and last else (first or last or "user")
+    username = base
     counter = 1
-    while login in existing_logins:
+    while username in existing_usernames:
         counter += 1
-        login = f"{base_slug}{counter}"
-    existing_logins.add(login)
-    return login
+        username = f"{base}{counter}"
+    existing_usernames.add(username)
+    return username
 
 
 def clean_work_package_subject(raw: str) -> str:
@@ -4493,7 +4506,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     parser.add_argument(
         "--user-email-domain",
-        default="example.com",
+        default="galaxytechnology.vn",
         help=(
             "Email domain to use when creating placeholder accounts "
             "for missing users."
@@ -5213,7 +5226,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for idx_u, staged_user in enumerate(sorted_missing, start=1):
             if users_progress_interval and (idx_u % users_progress_interval == 0 or idx_u == total_to_create_users):
                 ui.progress(idx_u, total_to_create_users, "Creating users")
-            login = build_unique_login(staged_user.full_name, existing_logins)
+            login = build_unique_username(staged_user.full_name, existing_logins)
             email = f"{login}@{email_domain}"
             password = secrets.token_urlsafe(12)
             try:

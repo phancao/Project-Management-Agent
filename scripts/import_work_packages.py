@@ -1095,13 +1095,16 @@ def _run_sql_statements(
     for i in range(0, total, chunk_size):
         chunk = statements[i:i + chunk_size]
         chunk_num = (i // chunk_size) + 1
-        if ui:
-            ui.info(f"  {description}: {chunk_num}/{chunks} chunk(s) ({len(chunk)} statement(s))")
         sql = "BEGIN;\n" + "\n".join(chunk) + "\nCOMMIT;\n"
         _run_psql(sql, suppress_output=True)
         processed += len(chunk)
         if ui:
-            ui.progress(min(processed, total), total, description)
+            # Single-line progress update including chunk position
+            ui.progress(
+                min(processed, total),
+                total,
+                f"{description} {chunk_num}/{chunks}"
+            )
 
 
 def update_time_entry_logged_by_batch(

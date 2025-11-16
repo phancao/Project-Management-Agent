@@ -6607,13 +6607,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # Merge before/after instance counts into the verification section
         after_counts = get_openproject_counts(client, ui)
         ui.section("Instance Totals (Before → After)")
-        ui.table_header("Metric", "Before", "After", "Δ")
+        # Use fixed-width columns for alignment
+        metric_w = 18
+        num_w = 8
+        delta_w = 6
+        ui.table_header(
+            "Metric".ljust(metric_w),
+            "Before".rjust(num_w),
+            "After".rjust(num_w),
+            "Δ".rjust(delta_w),
+        )
         proj_b = before_counts.get("projects", 0); proj_a = after_counts.get("projects", 0)
         user_b = before_counts.get("users", 0); user_a = after_counts.get("users", 0)
         wp_b = before_counts.get("work_packages", 0); wp_a = after_counts.get("work_packages", 0)
-        ui.table_row("Projects", str(proj_b), str(proj_a), str(proj_a - proj_b))
-        ui.table_row("Users", str(user_b), str(user_a), str(user_a - user_b))
-        ui.table_row("Work packages", str(wp_b), str(wp_a), str(wp_a - wp_b))
+        ui.table_row(
+            "Projects".ljust(metric_w),
+            f"{proj_b:>{num_w}d}",
+            f"{proj_a:>{num_w}d}",
+            f"{(proj_a - proj_b):>{delta_w}d}",
+        )
+        ui.table_row(
+            "Users".ljust(metric_w),
+            f"{user_b:>{num_w}d}",
+            f"{user_a:>{num_w}d}",
+            f"{(user_a - user_b):>{delta_w}d}",
+        )
+        ui.table_row(
+            "Work packages".ljust(metric_w),
+            f"{wp_b:>{num_w}d}",
+            f"{wp_a:>{num_w}d}",
+            f"{(wp_b and wp_a - wp_b or 0):>{delta_w}d}",
+        )
         print()
         ui.complete_step("Import verification completed.")
 

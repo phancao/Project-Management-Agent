@@ -698,6 +698,8 @@ def _try_fix_user_assignment_via_db(
     user_id: int,
     project_id: int,
     ui: ConsoleUI,
+    *,
+    base_url: Optional[str] = None,
 ) -> bool:
     """Try to fix user assignment issues via database.
     
@@ -718,12 +720,26 @@ def _try_fix_user_assignment_via_db(
             WHERE id = {user_id};
         """
         
-        result = subprocess.run(
-            [
+        # Detect correct container (supports v13 embedded and v16 external DB)
+        container_name = _get_openproject_container(base_url)
+        if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+            # Embedded DB inside app container (v13): use su - postgres
+            command = [
                 "docker",
                 "exec",
                 "-i",
-                OPENPROJECT_CONTAINER,
+                container_name,
+                "bash",
+                "-c",
+                f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{check_sql}\nSQL\nEOSQL",
+            ]
+        else:
+            # External DB (v16+): connect via psql using env credentials
+            command = [
+                "docker",
+                "exec",
+                "-i",
+                container_name,
                 "bash",
                 "-lc",
                 (
@@ -731,11 +747,8 @@ def _try_fix_user_assignment_via_db(
                     f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
                     f"-h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \"{check_sql}\""
                 ),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+            ]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=20)
         
         if result.returncode != 0:
             ui.warning(f"  ⚠️  Could not query user: {result.stderr}")
@@ -782,12 +795,24 @@ def _try_fix_user_assignment_via_db(
             WHERE id = {user_id};
         """
         
-        result = subprocess.run(
-            [
+        if "container_name" not in locals():
+            container_name = _get_openproject_container(base_url)
+        if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+            command = [
                 "docker",
                 "exec",
                 "-i",
-                OPENPROJECT_CONTAINER,
+                container_name,
+                "bash",
+                "-c",
+                f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -c \"{update_sql}\"\nEOSQL",
+            ]
+        else:
+            command = [
+                "docker",
+                "exec",
+                "-i",
+                container_name,
                 "bash",
                 "-lc",
                 (
@@ -795,11 +820,8 @@ def _try_fix_user_assignment_via_db(
                     f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
                     f"-h {OPENPROJECT_DB_HOST} -c \"{update_sql}\""
                 ),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+            ]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=20)
         
         if result.returncode != 0:
             ui.warning(f"  ⚠️  Could not update user: {result.stderr}")
@@ -5788,7 +5810,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                             # Try to fix via database
                             ui.info("  Attempting to fix via database...")
                             fixed = _try_fix_user_assignment_via_db(
-                                user_id, project_id_membership_update, ui
+                                user_id, project_id_membership_update, ui, base_url=getattr(client, "base_url", None)
                             )
                         
                         if not fixed:

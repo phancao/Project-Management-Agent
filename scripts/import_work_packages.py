@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import requests
+import time
 
 
 API_PREFIX = "/api/v3"
@@ -640,6 +641,28 @@ class ConsoleUI:
             f"{100.0:>{pct_w}.1f}%"
         )
         print()  # Empty line after table
+
+
+def _format_duration(seconds: float) -> str:
+    """Format duration in seconds as H:MM:SS."""
+    seconds_int = int(round(seconds))
+    hours = seconds_int // 3600
+    minutes = (seconds_int % 3600) // 60
+    secs = seconds_int % 60
+    return f"{hours:d}:{minutes:02d}:{secs:02d}"
+
+
+def _print_total_duration(ui: ConsoleUI, start_ts: float) -> None:
+    """Print the total elapsed time since start_ts."""
+    try:
+        elapsed = max(0.0, time.time() - start_ts)
+        hhmmss = _format_duration(elapsed)
+        minutes = elapsed / 60.0
+        ui.section("⏱ Total Duration")
+        ui.info(f"Elapsed: {hhmmss} ({minutes:.1f} min)")
+    except Exception:
+        # Never fail on reporting duration
+        pass
 
 
 def _try_fix_user_assignment_via_api(
@@ -4663,6 +4686,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     global DEBUG_LOG_PATH
     DEBUG_LOG_PATH = args.debug_log
     ui = ConsoleUI(auto_confirm=args.yes)
+    # Start wall-clock timer for whole process
+    _process_start_ts = time.time()
     # Configure verification source for Step 20
     global VERIFICATION_SOURCE
     VERIFICATION_SOURCE = args.verification_source
@@ -4727,6 +4752,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             ui=ui,
         )
         ui.complete_step("Project date update completed.")
+        _print_total_duration(ui, _process_start_ts)
         return 0
 
     # If --analyze-only is set, run only analysis and exit
@@ -4932,6 +4958,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
 
         ui.complete_step("Analysis completed.")
+        _print_total_duration(ui, _process_start_ts)
         return 0
 
     # If --update-logged-by is set, update logged_by field and exit
@@ -5062,6 +5089,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             ui.complete_step(
                 f"Updated logged_by for {updated_count} time entry(ies)."
             )
+        _print_total_duration(ui, _process_start_ts)
         return 0
 
     if not args.workbook.exists():
@@ -6589,6 +6617,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ui.complete_step("Import verification completed.")
 
     ui.complete_step("Import completed successfully.")
+    _print_total_duration(ui, _process_start_ts)
     return 0
 
 

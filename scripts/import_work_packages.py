@@ -1130,6 +1130,48 @@ def _run_sql_statements(
             )
 
 
+def update_work_package_status_via_db(
+    work_package_id: int,
+    status_id: Optional[int] = None,
+    percentage_done: Optional[int] = None,
+    base_url: Optional[str] = None,
+) -> bool:
+    """
+    Update work package status and/or completion percentage via database.
+    This bypasses workflow permission checks.
+    
+    Args:
+        work_package_id: The work package ID to update
+        status_id: Optional status ID to set
+        percentage_done: Optional completion percentage (0-100)
+        base_url: Optional base URL for container detection
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    statements: List[str] = []
+    
+    if status_id is not None:
+        statements.append(
+            f"UPDATE work_packages SET status_id={status_id} WHERE id={work_package_id};"
+        )
+    
+    if percentage_done is not None:
+        statements.append(
+            f"UPDATE work_packages SET done_ratio={percentage_done / 100.0} WHERE id={work_package_id};"
+        )
+    
+    if not statements:
+        return False
+    
+    try:
+        sql = "BEGIN;\n" + "\n".join(statements) + "\nCOMMIT;\n"
+        _run_psql(sql, suppress_output=True)
+        return True
+    except Exception:
+        return False
+
+
 def update_time_entry_logged_by_batch(
     updates: List[Tuple[int, int]],
     ui: Optional[ConsoleUI] = None,
@@ -6869,6 +6911,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # Update all imported work packages
         total_wps = len(imported_packages_list)
         updated_count = 0
+        updated_via_db_count = 0
         progress_interval = max(1, total_wps // 100) if total_wps > 0 else None
         
         for index, pkg in enumerate(imported_packages_list, start=1):
@@ -6886,6 +6929,35 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 )
                 updated_count += 1
             except Exception as exc:
+                error_msg = str(exc)
+                # Check if it's a workflow permission error
+                is_workflow_error = (
+                    "no valid transition exists" in error_msg.lower() or
+                    "status is invalid" in error_msg.lower()
+                )
+                
+                if is_workflow_error and closed_status_id is not None:
+                    # Try updating via database to bypass workflow checks
+                    try:
+                        if update_work_package_status_via_db(
+                            work_package_id=pkg.work_package_id,
+                            status_id=closed_status_id,
+                            percentage_done=100,
+                            base_url=client.base_url if hasattr(client, "base_url") else None,
+                        ):
+                            updated_via_db_count += 1
+                            updated_count += 1
+                            _write_debug_log(
+                                "debug",
+                                f"[wp_update] Updated WP {pkg.work_package_id} via DB (workflow bypass)",
+                            )
+                            continue
+                    except Exception as db_exc:
+                        _write_debug_log(
+                            "debug",
+                            f"[wp_update] DB update also failed for WP {pkg.work_package_id}: {db_exc}",
+                        )
+                
                 _write_debug_log(
                     "debug",
                     f"[wp_update] Failed to update WP {pkg.work_package_id}: {exc}",
@@ -6893,10 +6965,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 ui.warning(f"  ⚠ Failed to update work package {pkg.work_package_id}: {exc}")
         
         if updated_count > 0:
-            ui.complete_step(
-                f"Updated {updated_count}/{total_wps} work package(s) to 100% complete"
-                + (f" and closed status" if closed_status_id else "")
-            )
+            msg = f"Updated {updated_count}/{total_wps} work package(s) to 100% complete"
+            if closed_status_id:
+                msg += " and closed status"
+            if updated_via_db_count > 0:
+                msg += f" ({updated_via_db_count} via database to bypass workflow restrictions)"
+            ui.complete_step(msg)
         else:
             ui.warning("No work packages were updated.")
     

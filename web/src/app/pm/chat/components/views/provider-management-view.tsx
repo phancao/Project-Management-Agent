@@ -407,7 +407,7 @@ export function ProviderManagementView() {
                             {providerProjects?.projects?.length || 0}):
                           </p>
                           <div className="space-y-1">
-                            {providerProjects?.projects?.map((project) => (
+                            {providerProjects?.projects?.slice(0, 3).map((project) => (
                               <div
                                 key={project.id}
                                 className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded"
@@ -425,6 +425,11 @@ export function ProviderManagementView() {
                                 <ExternalLink className="w-4 h-4 text-gray-400" />
                               </div>
                             ))}
+                            {(providerProjects?.projects?.length || 0) > 3 && (
+                              <p className="text-sm text-gray-500 dark:text-gray-400 italic px-2 py-1">
+                                +{(providerProjects?.projects?.length || 0) - 3} more projects
+                              </p>
+                            )}
                           </div>
                         </div>
                       ) : (

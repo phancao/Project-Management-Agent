@@ -353,12 +353,10 @@ export function ProviderManagementView() {
                       </span>
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">
-                          {provider.base_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                          {provider.provider_type.toUpperCase()}
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {provider.provider_type === "openproject_v13" ? "OpenProject v13" :
-                           provider.provider_type === "openproject" ? "OpenProject v16" :
-                           provider.provider_type.toUpperCase()}
+                          {provider.base_url}
                         </p>
                       </div>
                     </div>
@@ -409,7 +407,7 @@ export function ProviderManagementView() {
                             {providerProjects?.projects?.length || 0}):
                           </p>
                           <div className="space-y-1">
-                            {providerProjects?.projects?.slice(0, 3).map((project) => (
+                            {providerProjects?.projects?.map((project) => (
                               <div
                                 key={project.id}
                                 className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded"
@@ -427,11 +425,6 @@ export function ProviderManagementView() {
                                 <ExternalLink className="w-4 h-4 text-gray-400" />
                               </div>
                             ))}
-                            {(providerProjects?.projects?.length || 0) > 3 && (
-                              <p className="text-sm text-gray-500 dark:text-gray-400 italic px-2 py-1">
-                                +{(providerProjects?.projects?.length || 0) - 3} more projects
-                              </p>
-                            )}
                           </div>
                         </div>
                       ) : (

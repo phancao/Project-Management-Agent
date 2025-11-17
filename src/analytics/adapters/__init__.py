@@ -10,6 +10,21 @@ into formats suitable for analytics calculators.
 
 from .base import BaseAnalyticsAdapter
 from .pm_adapter import PMProviderAnalyticsAdapter
+from .task_status_resolver import (
+    TaskStatusResolver,
+    JIRATaskStatusResolver,
+    OpenProjectTaskStatusResolver,
+    MockTaskStatusResolver,
+    create_task_status_resolver,
+)
 
-__all__ = ["BaseAnalyticsAdapter", "PMProviderAnalyticsAdapter"]
+__all__ = [
+    "BaseAnalyticsAdapter",
+    "PMProviderAnalyticsAdapter",
+    "TaskStatusResolver",
+    "JIRATaskStatusResolver",
+    "OpenProjectTaskStatusResolver",
+    "MockTaskStatusResolver",
+    "create_task_status_resolver",
+]
 

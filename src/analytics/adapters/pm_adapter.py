@@ -6,6 +6,8 @@ PM Provider Analytics Adapter
 
 Fetches real data from PM providers (OpenProject, JIRA) and transforms it
 for analytics calculators.
+
+Uses TaskStatusResolver to handle provider-specific status logic.
 """
 
 import logging
@@ -16,6 +18,7 @@ from collections import defaultdict
 from src.pm_providers.base import BasePMProvider
 from src.pm_providers.models import PMTask, PMSprint, PMProject
 from .base import BaseAnalyticsAdapter
+from .task_status_resolver import TaskStatusResolver, create_task_status_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,8 @@ logger = logging.getLogger(__name__)
 class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
     """
     Analytics adapter that fetches data from PM providers.
+    
+    Uses TaskStatusResolver to handle provider-specific status logic.
     """
     
     def __init__(self, provider: BasePMProvider):
@@ -33,6 +38,16 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             provider: PM provider instance (OpenProject, JIRA, etc.)
         """
         self.provider = provider
+        
+        # Create appropriate task status resolver based on provider type
+        provider_type = getattr(
+            getattr(provider, "config", None),
+            "provider_type",
+            provider.__class__.__name__
+        )
+        self.status_resolver: TaskStatusResolver = create_task_status_resolver(provider_type)
+        
+        logger.info(f"[PMProviderAnalyticsAdapter] Created with resolver for provider: {provider_type}")
     
     def _extract_project_key(self, project_id: str) -> str:
         """
@@ -75,9 +90,12 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                     return None
                 sprint = sprints[0]
                 sprint_id = sprint.id
+                logger.info(f"[PMProviderAnalyticsAdapter] Using active sprint: {sprint.name} (id={sprint_id})")
             else:
                 try:
                     sprint = await self.provider.get_sprint(sprint_id)
+                    if sprint:
+                        logger.info(f"[PMProviderAnalyticsAdapter] Found sprint: {sprint.name} (id={sprint_id})")
                 except NotImplementedError as exc:
                     provider_name = getattr(
                         getattr(self.provider, "config", None), "provider_type", self.provider.__class__.__name__
@@ -99,32 +117,67 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             
             # Get all tasks in the sprint
             all_tasks = await self.provider.list_tasks(project_id=project_key)
-            sprint_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
+            
+            # Debug logging
+            logger.info(f"[PMProviderAnalyticsAdapter] Looking for sprint_id={sprint_id} (type: {type(sprint_id).__name__})")
+            logger.info(f"[PMProviderAnalyticsAdapter] Found {len(all_tasks)} total tasks in project")
+            
+            # Log sprint_ids from tasks for debugging
+            task_sprint_ids = [str(t.sprint_id) if t.sprint_id else "None" for t in all_tasks[:10]]
+            logger.info(f"[PMProviderAnalyticsAdapter] Sample task sprint_ids: {task_sprint_ids}")
+            
+            # Compare sprint_id as strings to handle type mismatches
+            sprint_id_str = str(sprint_id) if sprint_id else None
+            sprint_tasks = [
+                t for t in all_tasks 
+                if (t.sprint_id and str(t.sprint_id) == sprint_id_str) or 
+                   (sprint_id_str and t.sprint_id == sprint_id)
+            ]
             
             logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks in sprint {sprint_id}")
             
-            # Transform tasks for burndown calculator
+            # If no tasks found, log more details
+            if len(sprint_tasks) == 0 and len(all_tasks) > 0:
+                # Log detailed info about first few tasks
+                logger.warning(
+                    f"[PMProviderAnalyticsAdapter] No tasks found for sprint {sprint_id}. "
+                    f"Total tasks: {len(all_tasks)}"
+                )
+                # Log sprint_ids from all tasks
+                all_sprint_ids = [str(t.sprint_id) if t.sprint_id else "None" for t in all_tasks]
+                logger.warning(
+                    f"[PMProviderAnalyticsAdapter] All task sprint_ids: {all_sprint_ids}"
+                )
+                # Log raw data from first task to debug version link
+                if all_tasks[0].raw_data:
+                    task_raw = all_tasks[0].raw_data
+                    version_link = task_raw.get("_links", {}).get("version")
+                    version_embedded = task_raw.get("_embedded", {}).get("version")
+                    logger.warning(
+                        f"[PMProviderAnalyticsAdapter] Sample task raw data - "
+                        f"_links.version: {version_link}, "
+                        f"_embedded.version: {version_embedded is not None if version_embedded else False}"
+                    )
+            
+            # Transform tasks for burndown calculator using status resolver
             tasks_data = []
             for task in sprint_tasks:
-                # Extract story points from raw_data or estimated_hours
-                story_points = 0
-                if task.raw_data and "storyPoints" in task.raw_data:
-                    story_points = task.raw_data["storyPoints"] or 0
-                elif task.estimated_hours:
-                    # Convert hours to story points (rough estimate: 8 hours = 1 point)
-                    story_points = task.estimated_hours / 8
+                # Use resolver to extract story points
+                story_points = self.status_resolver.extract_story_points(task)
                 
-                # Determine if completed
-                status_lower = (task.status or "").lower()
-                is_completed = any(keyword in status_lower for keyword in ["done", "closed", "completed", "resolved"])
+                # Use resolver to determine if burndowned
+                is_burndowned = self.status_resolver.is_burndowned(task)
+                
+                # Get completion date from resolver
+                completion_date = self.status_resolver.get_completion_date(task)
                 
                 tasks_data.append({
                     "id": task.id,
                     "title": task.title,
                     "story_points": story_points,
                     "status": task.status,
-                    "completed": is_completed,
-                    "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+                    "completed": is_burndowned,
+                    "completed_at": completion_date.isoformat() if completion_date else None,
                 })
             
             return {
@@ -187,18 +240,13 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 completed_count = 0
                 
                 for task in sprint_tasks:
-                    # Extract story points
-                    story_points = 0
-                    if task.raw_data and "storyPoints" in task.raw_data:
-                        story_points = task.raw_data["storyPoints"] or 0
-                    elif task.estimated_hours:
-                        story_points = task.estimated_hours / 8
+                    # Use resolver to extract story points
+                    story_points = self.status_resolver.extract_story_points(task)
                     
                     planned_points += story_points
                     
-                    # Check if completed
-                    status_lower = (task.status or "").lower()
-                    is_completed = any(keyword in status_lower for keyword in ["done", "closed", "completed", "resolved"])
+                    # Use resolver to check if completed
+                    is_completed = self.status_resolver.is_completed(task)
                     
                     if is_completed:
                         completed_points += story_points
@@ -259,8 +307,11 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             incomplete_tasks = []
             
             for task in sprint_tasks:
-                status_lower = (task.status or "").lower()
-                is_completed = any(keyword in status_lower for keyword in ["done", "closed", "completed", "resolved"])
+                # Use resolver to check completion
+                is_completed = self.status_resolver.is_completed(task)
+                
+                # Use resolver to get task type
+                task_type = self.status_resolver.get_task_type(task)
                 
                 task_data = {
                     "id": task.id,
@@ -268,7 +319,7 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                     "status": task.status,
                     "assignee_id": task.assignee_id,
                     "priority": task.priority,
-                    "type": task.raw_data.get("type") if task.raw_data else "Task",
+                    "type": task_type,
                 }
                 
                 if is_completed:
@@ -332,39 +383,30 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             
             statuses.sort(key=status_sort_key)
             
-            # Build work items with status history
+            # Build work items with status history using resolver
             work_items = []
             for task in all_tasks:
-                # Since we don't have full history, simulate it
-                # Use created_at as initial status date
-                status_history = []
+                # Use resolver to get status history
+                status_history = self.status_resolver.get_status_history(task)
                 
-                if task.created_at:
-                    # Initial status (assume "To Do")
-                    status_history.append({
-                        "date": task.created_at.isoformat(),
-                        "status": "To Do"
-                    })
-                
-                # Current status
-                if task.status and task.updated_at:
-                    status_history.append({
-                        "date": task.updated_at.isoformat(),
-                        "status": task.status
-                    })
-                elif task.status and task.created_at:
-                    status_history.append({
-                        "date": task.created_at.isoformat(),
-                        "status": task.status
-                    })
+                # If no history, create basic one
+                if not status_history:
+                    if task.created_at:
+                        status_history.append({
+                            "date": task.created_at.isoformat(),
+                            "status": task.status or "To Do"
+                        })
+                    else:
+                        status_history.append({
+                            "date": start_date.isoformat(),
+                            "status": task.status or "To Do"
+                        })
                 
                 work_items.append({
                     "id": task.id,
                     "title": task.title,
                     "created_date": task.created_at.isoformat() if task.created_at else start_date.isoformat(),
-                    "status_history": status_history if status_history else [
-                        {"date": start_date.isoformat(), "status": task.status or "To Do"}
-                    ],
+                    "status_history": status_history,
                 })
             
             return {
@@ -402,39 +444,38 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             cycle_time_data = []
             
             for task in all_tasks:
-                # Only include completed tasks
-                status_lower = (task.status or "").lower()
-                is_completed = any(keyword in status_lower for keyword in ["done", "closed", "completed", "resolved"])
+                # Use resolver to check if completed
+                is_completed = self.status_resolver.is_completed(task)
                 
-                if not is_completed or not task.completed_at:
+                if not is_completed:
+                    continue
+                
+                # Get completion date from resolver
+                completion_date = self.status_resolver.get_completion_date(task)
+                if not completion_date:
                     continue
                 
                 # Check if completed in date range
-                if task.completed_at < start_date or task.completed_at > end_date:
+                if completion_date < start_date or completion_date > end_date:
                     continue
                 
-                # Calculate cycle time
-                start_date_task = task.start_date or task.created_at
+                # Get start date from resolver
+                start_date_task = self.status_resolver.get_start_date(task)
                 if not start_date_task:
                     continue
                 
-                # Convert to datetime if date
-                if isinstance(start_date_task, date) and not isinstance(start_date_task, datetime):
-                    start_date_task = datetime.combine(start_date_task, datetime.min.time())
+                # Calculate cycle time
+                cycle_time_days = (completion_date - start_date_task).days
                 
-                cycle_time_days = (task.completed_at - start_date_task).days
-                
-                # Get task type
-                task_type = "Task"
-                if task.raw_data and "type" in task.raw_data:
-                    task_type = task.raw_data["type"]
+                # Get task type from resolver
+                task_type = self.status_resolver.get_task_type(task)
                 
                 cycle_time_data.append({
                     "id": task.id,
                     "title": task.title,
                     "type": task_type,
                     "start_date": start_date_task.isoformat(),
-                    "completion_date": task.completed_at.isoformat(),
+                    "completion_date": completion_date.isoformat(),
                     "cycle_time_days": max(cycle_time_days, 0),  # Ensure non-negative
                 })
             
@@ -462,21 +503,15 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
             
-            # Transform tasks
+            # Transform tasks using resolver
             work_items = []
             assignee_name_cache: Dict[str, str] = {}
             for task in all_tasks:
-                # Extract story points
-                story_points = 0
-                if task.raw_data and "storyPoints" in task.raw_data:
-                    story_points = task.raw_data["storyPoints"] or 0
-                elif task.estimated_hours:
-                    story_points = task.estimated_hours / 8
+                # Use resolver to extract story points
+                story_points = self.status_resolver.extract_story_points(task)
                 
-                # Get task type
-                task_type = "Task"
-                if task.raw_data and "type" in task.raw_data:
-                    task_type = task.raw_data["type"]
+                # Use resolver to get task type
+                task_type = self.status_resolver.get_task_type(task)
                 
                 # Get assignee name
                 assignee_id = task.assignee_id
@@ -534,20 +569,21 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             end_date = datetime.now()
             start_date = end_date - timedelta(days=days_back)
             
-            # Transform tasks
+            # Transform tasks using resolver
             work_items = []
             for task in all_tasks:
-                # Get task type
-                task_type = "Task"
-                if task.raw_data and "type" in task.raw_data:
-                    task_type = task.raw_data["type"]
+                # Use resolver to get task type
+                task_type = self.status_resolver.get_task_type(task)
+                
+                # Use resolver to get completion date
+                completion_date = self.status_resolver.get_completion_date(task)
                 
                 work_items.append({
                     "id": task.id,
                     "title": task.title,
                     "type": task_type,
                     "created_date": task.created_at.isoformat() if task.created_at else start_date.isoformat(),
-                    "completion_date": task.completed_at.isoformat() if task.completed_at else None,
+                    "completion_date": completion_date.isoformat() if completion_date else None,
                 })
             
             logger.info(f"[PMProviderAnalyticsAdapter] Found {len(work_items)} tasks for issue trend")

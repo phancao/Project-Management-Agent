@@ -3017,6 +3017,7 @@ async def get_burndown_chart(
     scope_type: str = "story_points"
 ):
     """Get burndown chart for a project/sprint"""
+    logger.info(f"[get_burndown_chart] Request: project_id={project_id}, sprint_id={sprint_id}, scope_type={scope_type}")
     try:
         from database.connection import get_db_session
         
@@ -3031,11 +3032,13 @@ async def get_burndown_chart(
                 if ":" in project_id
                 else project_id
             )
+            logger.info(f"[get_burndown_chart] Using actual_project_id={actual_project_id}, sprint_id={sprint_id}")
             chart = await analytics_service.get_burndown_chart(
                 project_id=actual_project_id,
                 sprint_id=sprint_id,
                 scope_type=scope_type  # type: ignore
             )
+            logger.info(f"[get_burndown_chart] Success: returning chart data")
             return chart.model_dump()
         finally:
             try:
@@ -3044,6 +3047,8 @@ async def get_burndown_chart(
                 pass
     except Exception as e:
         logger.error(f"Failed to get burndown chart: {e}", exc_info=True)
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 

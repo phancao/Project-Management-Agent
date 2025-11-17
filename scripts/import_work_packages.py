@@ -40,6 +40,7 @@ from getpass import getpass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+import random
 import requests
 import time as time_module
 
@@ -48,6 +49,30 @@ API_PREFIX = "/api/v3"
 CURRENT_OP_VERSION: Optional[str] = None
 DEFAULT_CREATION_TIME = time(9, 0, tzinfo=timezone.utc)
 DEFAULT_LOG_TIME = time(9, 0, tzinfo=timezone.utc)
+
+
+def random_work_package_creation_time() -> time:
+    """Generate a random time between 8:00 AM and 12:00 PM (noon) in GMT+7 (Bangkok/Hanoi).
+    
+    Returns a UTC time that corresponds to 8:00-12:00 in GMT+7.
+    GMT+7 is 7 hours ahead of UTC, so 8:00-12:00 GMT+7 = 1:00-5:00 UTC.
+    """
+    # Generate time in GMT+7 (8:00 AM to 12:00 PM)
+    # Random hour between 8 and 11 (inclusive), or 12 with minute 0
+    hour_local = random.randint(8, 12)
+    if hour_local == 12:
+        # At 12:00 PM, only minute 0 is valid (12:00:00)
+        minute = 0
+    else:
+        # For hours 8-11, random minute between 0 and 59
+        minute = random.randint(0, 59)
+    
+    # Convert GMT+7 to UTC (subtract 7 hours)
+    hour_utc = hour_local - 7
+    if hour_utc < 0:
+        hour_utc += 24  # Handle day rollover (shouldn't happen for 8-12 range)
+    
+    return time(hour_utc, minute, tzinfo=timezone.utc)
 OPENPROJECT_CONTAINER = os.environ.get(
     "OPENPROJECT_CONTAINER",
     "project-management-agent-openproject-1",
@@ -2010,6 +2035,11 @@ class OpenProjectClient:
                 break
             offset += 1
 
+    def get_current_user(self) -> dict:
+        """Get the current authenticated user (token owner)."""
+        resp = self._request("GET", "/users/me")
+        return resp.json()
+
     def list_users(self) -> Dict[str, dict]:
         """Return a mapping of user display name -> API record."""
         users = {}
@@ -2175,7 +2205,7 @@ class OpenProjectClient:
         project_id: int,
         type_id: int,
         subject: str,
-        assignee_id: int,
+        assignee_id: Optional[int] = None,
         start_date: Optional[str] = None,
         due_date: Optional[str] = None,
         estimated_time: Optional[str] = None,
@@ -2184,8 +2214,10 @@ class OpenProjectClient:
         links = {
             "type": {"href": f"{API_PREFIX}/types/{type_id}"},
             "project": {"href": f"{API_PREFIX}/projects/{project_id}"},
-            "assignee": {"href": f"{API_PREFIX}/users/{assignee_id}"},
         }
+        # Add assignee only if provided
+        if assignee_id is not None:
+            links["assignee"] = {"href": f"{API_PREFIX}/users/{assignee_id}"}
         payload = {
             "subject": subject,
             "_links": links,
@@ -2218,6 +2250,49 @@ class OpenProjectClient:
             raise
         return resp.json()
 
+    def update_work_package(
+        self,
+        work_package_id: int,
+        percentage_done: Optional[int] = None,
+        status_id: Optional[int] = None,
+        lock_version: Optional[int] = None,
+    ) -> dict:
+        """Update a work package's completion percentage and/or status.
+        
+        If lock_version is not provided, fetches the current work package to get it.
+        """
+        payload: Dict[str, Any] = {}
+        links: Dict[str, Dict[str, str]] = {}
+        
+        # Get lock_version if not provided
+        if lock_version is None:
+            wp = self.get_work_package(work_package_id)
+            if wp:
+                lock_version = wp.get("lockVersion")
+            if lock_version is None:
+                raise OpenProjectError(f"Could not get lockVersion for work package {work_package_id}")
+        
+        payload["lockVersion"] = lock_version
+        
+        if percentage_done is not None:
+            payload["percentageDone"] = percentage_done
+        
+        if status_id is not None:
+            links["status"] = {"href": f"{API_PREFIX}/statuses/{status_id}"}
+        
+        if links:
+            payload["_links"] = links
+        
+        if not payload or (percentage_done is None and status_id is None):
+            raise ValueError("At least one of percentage_done or status_id must be provided")
+        
+        resp = self._request(
+            "PATCH",
+            f"/work_packages/{work_package_id}",
+            data=json.dumps(payload),
+        )
+        return resp.json()
+
     def search_work_packages(
         self,
         project_id: int,
@@ -2241,6 +2316,15 @@ class OpenProjectClient:
         )
         payload = resp.json()
         return payload.get("_embedded", {}).get("elements", [])
+
+    def list_statuses(self) -> Dict[str, dict]:
+        """Return a mapping of status name -> API record."""
+        statuses = {}
+        for status in self._get_collection("/statuses"):
+            name = status.get("name", "").lower()
+            if name:
+                statuses[name] = status
+        return statuses
 
     def create_time_entry(
         self,
@@ -3159,15 +3243,372 @@ def update_project_creation_dates(
         )
 
 
+def _cleanup_work_package_journals(
+    imported_packages: List[ImportedWorkPackage],
+    base_url: Optional[str] = None,
+    ui: Optional[ConsoleUI] = None,
+) -> None:
+    """Clean up journal entries for work packages:
+    1. Fix 'Author changed' by updating version 1's author_id to match final author_id
+    2. Update 'Status changed' journal entries:
+       - Set timestamp to last time entry timestamp
+       - Set author (user_id) to assignee_id to represent that the issue was closed by the assignee
+    """
+    if not imported_packages:
+        return
+    
+    # Get work package IDs
+    wp_ids = [str(pkg.work_package_id) for pkg in imported_packages]
+    if not wp_ids:
+        return
+    
+    # Get the last time entry timestamp for each work package
+    wp_id_list = ",".join(wp_ids)
+    
+    # Query to get last time entry timestamp per work package
+    sql_get_last_te = f"""
+        SELECT 
+            te.work_package_id,
+            MAX(te.created_at) as last_te_time
+        FROM time_entries te
+        WHERE te.work_package_id IN ({wp_id_list})
+        GROUP BY te.work_package_id;
+    """
+    
+    # Determine correct container
+    container_name = _get_openproject_container(base_url)
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-c",
+            f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F ',' <<'SQL'\n{sql_get_last_te}\nSQL\nEOSQL",
+        ]
+    else:
+        command = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "bash",
+            "-lc",
+            (
+                f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql_get_last_te}\""
+            ),
+        ]
+    
+    try:
+        result = subprocess.run(
+            command,
+            check=True,
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+        # Parse results: wp_id,last_te_time
+        wp_last_te_map: Dict[int, str] = {}
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            parts = stripped.split(",")
+            if len(parts) >= 2:
+                try:
+                    wp_id = int(parts[0])
+                    last_te_time = parts[1].strip()
+                    if last_te_time:
+                        wp_last_te_map[wp_id] = last_te_time
+                except (ValueError, IndexError):
+                    continue
+    except subprocess.CalledProcessError as exc:
+        if ui:
+            ui.warning(f"  ⚠ Failed to get last time entry timestamps: {exc}")
+        return
+    
+    if not wp_last_te_map:
+        # No time entries found, use work package updated_at as fallback
+        sql_get_wp_updated = f"""
+            SELECT id, updated_at
+            FROM work_packages
+            WHERE id IN ({wp_id_list});
+        """
+        try:
+            if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+                cmd = [
+                    "docker",
+                    "exec",
+                    "-i",
+                    container_name,
+                    "bash",
+                    "-c",
+                    f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F ',' <<'SQL'\n{sql_get_wp_updated}\nSQL\nEOSQL",
+                ]
+            else:
+                cmd = [
+                    "docker",
+                    "exec",
+                    "-i",
+                    container_name,
+                    "bash",
+                    "-lc",
+                    (
+                        f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                        f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                        f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql_get_wp_updated}\""
+                    ),
+                ]
+            result = subprocess.run(
+                cmd,
+                check=True,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+            for line in result.stdout.splitlines():
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                parts = stripped.split(",")
+                if len(parts) >= 2:
+                    try:
+                        wp_id = int(parts[0])
+                        updated_at = parts[1].strip()
+                        if updated_at and wp_id not in wp_last_te_map:
+                            wp_last_te_map[wp_id] = updated_at
+                    except (ValueError, IndexError):
+                        continue
+        except subprocess.CalledProcessError:
+            pass
+    
+    # Build SQL statements to:
+    # 1. Fix author changes by updating version 1's author_id to match the final author_id
+    #    (This eliminates "Author changed" messages in the UI)
+    # 2. Update journal entries with status changes:
+    #    - Set timestamp to last time entry timestamp
+    #    - Set author (user_id) to assignee_id to represent that the issue was closed by the assignee
+    
+    # First, get the final author_id and assignee_id for each work package
+    sql_get_wp_info = f"""
+        SELECT id, author_id, assigned_to_id
+        FROM work_packages
+        WHERE id IN ({wp_id_list});
+    """
+    
+    wp_author_map: Dict[int, int] = {}
+    wp_assignee_map: Dict[int, Optional[int]] = {}
+    try:
+        if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+            cmd = [
+                "docker",
+                "exec",
+                "-i",
+                container_name,
+                "bash",
+                "-c",
+                f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F ',' <<'SQL'\n{sql_get_wp_info}\nSQL\nEOSQL",
+            ]
+        else:
+            cmd = [
+                "docker",
+                "exec",
+                "-i",
+                container_name,
+                "bash",
+                "-lc",
+                (
+                    f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
+                    f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
+                    f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql_get_wp_info}\""
+                ),
+            ]
+        result = subprocess.run(
+            cmd,
+            check=True,
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            parts = stripped.split(",")
+            if len(parts) >= 3:
+                try:
+                    wp_id = int(parts[0])
+                    author_id = int(parts[1]) if parts[1] else None
+                    assignee_id = int(parts[2]) if parts[2] else None
+                    if author_id:
+                        wp_author_map[wp_id] = author_id
+                    wp_assignee_map[wp_id] = assignee_id
+                except (ValueError, IndexError):
+                    continue
+    except subprocess.CalledProcessError:
+        pass
+    
+    fix_author_statements: List[str] = []
+    update_statements: List[str] = []
+    
+    for wp_id, last_te_time in wp_last_te_map.items():
+        final_author_id = wp_author_map.get(wp_id)
+        if final_author_id:
+            # Fix author changes: Update version 1's author_id to match final author_id
+            # This prevents "Author changed" messages in the UI
+            # In v13, work_package_journals.id corresponds to journals.data_id
+            fix_author_statements.append(
+                f"""
+                UPDATE work_package_journals wpj
+                SET author_id = {final_author_id}
+                FROM journals j
+                WHERE j.data_id = wpj.id
+                  AND j.journable_type = 'WorkPackage'
+                  AND j.journable_id = {wp_id}
+                  AND j.version = 1
+                  AND wpj.author_id != {final_author_id};
+                """
+            )
+        
+        # Update journal entries that have status changes:
+        # 1. Set timestamp to last time entry timestamp
+        # 2. Set user_id (author) to assignee_id
+        if last_te_time:
+            assignee_id = wp_assignee_map.get(wp_id)
+            if assignee_id:
+                # In v13, status changes are detected by comparing status_id between versions
+                # We update journals that have a different status_id than version 1
+                # Set both timestamp and user_id (author) to assignee
+                update_statements.append(
+                    f"""
+                    UPDATE journals j
+                    SET created_at = '{last_te_time}'::timestamp with time zone,
+                        updated_at = '{last_te_time}'::timestamp with time zone,
+                        user_id = {assignee_id}
+                    WHERE j.journable_type = 'WorkPackage'
+                      AND j.journable_id = {wp_id}
+                      AND j.version > 1
+                      AND EXISTS (
+                          SELECT 1 
+                          FROM work_package_journals wpj1
+                          JOIN work_package_journals wpj2 ON wpj2.id = (
+                              SELECT j2.data_id FROM journals j2
+                              WHERE j2.journable_type = 'WorkPackage'
+                                AND j2.journable_id = {wp_id}
+                                AND j2.version = 1
+                              LIMIT 1
+                          )
+                          WHERE wpj1.id = j.data_id
+                            AND wpj1.status_id != wpj2.status_id
+                      );
+                    """
+                )
+            else:
+                # No assignee, just update timestamp
+                update_statements.append(
+                    f"""
+                    UPDATE journals j
+                    SET created_at = '{last_te_time}'::timestamp with time zone,
+                        updated_at = '{last_te_time}'::timestamp with time zone
+                    WHERE j.journable_type = 'WorkPackage'
+                      AND j.journable_id = {wp_id}
+                      AND j.version > 1
+                      AND EXISTS (
+                          SELECT 1 
+                          FROM work_package_journals wpj1
+                          JOIN work_package_journals wpj2 ON wpj2.id = (
+                              SELECT j2.data_id FROM journals j2
+                              WHERE j2.journable_type = 'WorkPackage'
+                                AND j2.journable_id = {wp_id}
+                                AND j2.version = 1
+                              LIMIT 1
+                          )
+                          WHERE wpj1.id = j.data_id
+                            AND wpj1.status_id != wpj2.status_id
+                      );
+                    """
+                )
+    
+    # Execute fix author statements one at a time to avoid nested heredoc issues
+    if fix_author_statements:
+        try:
+            fixed_count = 0
+            total_fixes = len(fix_author_statements)
+            progress_interval = max(1, total_fixes // 20) if total_fixes > 0 else None
+            
+            for idx, stmt in enumerate(fix_author_statements, start=1):
+                if progress_interval and (idx % progress_interval == 0 or idx == total_fixes):
+                    if ui:
+                        ui.progress(idx, total_fixes, "Fixing author change journal entries")
+                
+                try:
+                    # Execute each statement individually
+                    sql = "BEGIN;\n" + stmt.strip() + "\nCOMMIT;\n"
+                    _run_psql(sql, suppress_output=True)
+                    fixed_count += 1
+                except Exception as stmt_exc:
+                    # Log but continue - individual statement failures shouldn't stop the process
+                    _write_debug_log("debug", f"[journal_cleanup] Fix author statement {idx} failed: {stmt_exc}")
+                    continue
+            
+            if ui:
+                if fixed_count > 0:
+                    ui.info(f"  ✔ Fixed author change entries for {fixed_count}/{total_fixes} work package(s).")
+                else:
+                    ui.warning(f"  ⚠ No author change entries needed fixing.")
+        except Exception as exc:
+            if ui:
+                ui.warning(f"  ⚠ Failed to fix author change entries: {exc}")
+                _write_debug_log("error", f"[journal_cleanup] Fix author error: {exc}")
+    
+    # Execute update statements one at a time to avoid nested heredoc issues
+    if update_statements:
+        try:
+            updated_count = 0
+            total_updates = len(update_statements)
+            progress_interval = max(1, total_updates // 20) if total_updates > 0 else None
+            
+            for idx, stmt in enumerate(update_statements, start=1):
+                if progress_interval and (idx % progress_interval == 0 or idx == total_updates):
+                    if ui:
+                        ui.progress(idx, total_updates, "Updating status change journal entries")
+                
+                try:
+                    # Execute each statement individually
+                    sql = "BEGIN;\n" + stmt.strip() + "\nCOMMIT;\n"
+                    _run_psql(sql, suppress_output=True)
+                    updated_count += 1
+                except Exception as stmt_exc:
+                    # Log but continue - individual statement failures shouldn't stop the process
+                    _write_debug_log("debug", f"[journal_cleanup] Update statement {idx} failed: {stmt_exc}")
+                    continue
+            
+            if ui:
+                if updated_count > 0:
+                    ui.info(f"  ✔ Updated status change entries (timestamp and author) for {updated_count}/{total_updates} work package(s).")
+                else:
+                    ui.warning(f"  ⚠ No status change entries were updated.")
+        except Exception as exc:
+            if ui:
+                ui.warning(f"  ⚠ Failed to update status change entries: {exc}")
+                _write_debug_log("error", f"[journal_cleanup] Update error: {exc}")
+
+
 def apply_history_adjustments(
     imported_packages: List[ImportedWorkPackage],
     dry_run: bool,
     ui: Optional[ConsoleUI] = None,
+    user_id_map: Optional[Dict[str, Optional[int]]] = None,
+    current_user_id: Optional[int] = None,
 ) -> None:
     if not imported_packages:
         return
 
     creation_statements: List[str] = []
+    author_statements: List[str] = []
     work_package_latest: Dict[int, datetime] = {}
 
     for pkg in imported_packages:
@@ -3193,11 +3634,13 @@ def apply_history_adjustments(
                     creation_date = entry_date
         if creation_date is None:
             continue
-        ts = datetime.combine(creation_date, DEFAULT_CREATION_TIME)
+        # Use random time between 8:00 AM and 12:00 PM for work package creation
+        random_time = random_work_package_creation_time()
+        ts = datetime.combine(creation_date, random_time)
         ts = ts.astimezone(timezone.utc)
         ts_str = ts.isoformat()
         creation_statements.append(
-            "UPDATE work_packages SET created_at='{ts}' WHERE id={wp};".format(
+            "UPDATE work_packages SET created_at='{ts}', updated_at='{ts}' WHERE id={wp};".format(
                 ts=ts_str,
                 wp=pkg.work_package_id,
             )
@@ -3208,10 +3651,36 @@ def apply_history_adjustments(
                 "    updated_at='{ts}', "
                 "    validity_period=tstzrange('{ts}', NULL) "
                 "WHERE journable_type='WorkPackage' "
-                "  AND journable_id={wp} "
-                "  AND version=1;"
+                "  AND journable_id={wp};"
             ).format(ts=ts_str, wp=pkg.work_package_id)
         )
+        
+        # Set author in journals and work_packages: assignee if available, otherwise current_user_id (admin)
+        author_id: Optional[int] = None
+        if user_id_map and pkg.task.assignee_name:
+            assignee_normalized = normalize_person_name(pkg.task.assignee_name)
+            author_id = user_id_map.get(assignee_normalized)
+        
+        if author_id is None:
+            author_id = current_user_id
+        
+        if author_id is not None:
+            # Update work_packages.author_id
+            author_statements.append(
+                (
+                    "UPDATE work_packages SET author_id={author_id} "
+                    "WHERE id={wp};"
+                ).format(author_id=author_id, wp=pkg.work_package_id)
+            )
+            # Update journals.user_id for all journal entries (not just version=1)
+            author_statements.append(
+                (
+                    "UPDATE journals SET user_id={author_id} "
+                    "WHERE journable_type='WorkPackage' "
+                    "  AND journable_id={wp};"
+                ).format(author_id=author_id, wp=pkg.work_package_id)
+            )
+        
         work_package_latest[pkg.work_package_id] = ts
 
     time_entry_statements: List[str] = []
@@ -3260,9 +3729,11 @@ def apply_history_adjustments(
     if dry_run:
         msg = (
             "[DRY-RUN] Would apply {creates} creation updates, "
+            "{authors} author updates, "
             "{logs} logwork updates, {updates} updated_at corrections."
         ).format(
             creates=len(creation_statements),
+            authors=len(author_statements),
             logs=len(time_entry_statements),
             updates=len(updated_at_statements),
         )
@@ -3279,6 +3750,14 @@ def apply_history_adjustments(
             creation_statements,
             ui=ui,
             description="Updating work package creation dates",
+        )
+    if author_statements:
+        if ui:
+            ui.info(f"  Updating work package authors in journals ({len(author_statements)} statement(s))...")
+        _run_sql_statements(
+            author_statements,
+            ui=ui,
+            description="Updating work package authors in journals",
         )
     if time_entry_statements:
         if ui:
@@ -6175,15 +6654,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             
             staged_project = staging.projects[staged_task.project_name]
             project_id_for_task: Optional[int] = staged_project.openproject_id
-            assignee_name_raw = staged_task.assignee_name
-            assignee_normalized = normalize_person_name(assignee_name_raw)
-            assignee_id = user_id_map.get(assignee_normalized)
-            if project_id_for_task is None or assignee_id is None:
+            if project_id_for_task is None:
                 ui.info(
-                    "Skipping task '%s' due to missing project/user mapping."
+                    "Skipping task '%s' due to missing project mapping."
                     % staged_task.subject
                 )
                 continue
+            
+            # Get assignee if available
+            assignee_id: Optional[int] = None
+            assignee_name_raw = staged_task.assignee_name
+            if assignee_name_raw:
+                assignee_normalized = normalize_person_name(assignee_name_raw)
+                assignee_id = user_id_map.get(assignee_normalized)
+            
             project_id_int = int(project_id_for_task)
             if staged_task.resolved_type_id is not None:
                 required_type_id = int(staged_task.resolved_type_id)
@@ -6252,7 +6736,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     project_id=project_id_int,
                     type_id=required_type_id,
                     subject=staged_task.subject,
-                    assignee_id=int(assignee_id),
+                    assignee_id=int(assignee_id) if assignee_id is not None else None,
                     start_date=staged_task.aggregated.start_date,
                     due_date=staged_task.aggregated.due_date,
                     estimated_time=estimated_time,
@@ -6315,7 +6799,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         project_id=project_id_int,
                         type_id=required_type_id,
                         subject=staged_task.subject,
-                        assignee_id=int(assignee_id),
+                        assignee_id=int(assignee_id) if assignee_id is not None else None,
                         start_date=staged_task.aggregated.start_date,
                         due_date=staged_task.aggregated.due_date,
                         estimated_time=estimated_time,
@@ -6350,6 +6834,71 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             entity_name="work packages"
         )
         ui.complete_step(f"Created {created_count} work package(s).")
+    
+    # Step 15.5: Set completion to 100% and status to closed for all imported work packages
+    ui.start_step("Set work packages to 100% complete and closed")
+    if args.dry_run:
+        ui.skip_step("Dry-run: would set completion to 100% and status to closed.")
+    elif not imported_packages_map:
+        ui.skip_step("No work packages to update.")
+    else:
+        # Convert map to list for processing
+        imported_packages_list = list(imported_packages_map.values())
+        
+        # Get closed status ID
+        try:
+            statuses = client.list_statuses()
+            closed_status = statuses.get("closed")
+            if not closed_status:
+                # Try alternative names
+                for name in ["closed", "done", "finished", "completed"]:
+                    closed_status = statuses.get(name)
+                    if closed_status:
+                        break
+            
+            if not closed_status:
+                ui.warning("Could not find 'closed' status. Skipping status update.")
+                closed_status_id = None
+            else:
+                closed_status_id = int(closed_status["id"])
+                ui.info(f"  Found closed status: ID {closed_status_id}")
+        except Exception as exc:
+            ui.warning(f"Failed to fetch statuses: {exc}. Skipping status update.")
+            closed_status_id = None
+        
+        # Update all imported work packages
+        total_wps = len(imported_packages_list)
+        updated_count = 0
+        progress_interval = max(1, total_wps // 100) if total_wps > 0 else None
+        
+        for index, pkg in enumerate(imported_packages_list, start=1):
+            if progress_interval and (
+                index % progress_interval == 0 or index == total_wps
+            ):
+                ui.progress(index, total_wps, "Updating work packages")
+            
+            try:
+                # Update to 100% completion and closed status
+                client.update_work_package(
+                    work_package_id=pkg.work_package_id,
+                    percentage_done=100,
+                    status_id=closed_status_id,
+                )
+                updated_count += 1
+            except Exception as exc:
+                _write_debug_log(
+                    "debug",
+                    f"[wp_update] Failed to update WP {pkg.work_package_id}: {exc}",
+                )
+                ui.warning(f"  ⚠ Failed to update work package {pkg.work_package_id}: {exc}")
+        
+        if updated_count > 0:
+            ui.complete_step(
+                f"Updated {updated_count}/{total_wps} work package(s) to 100% complete"
+                + (f" and closed status" if closed_status_id else "")
+            )
+        else:
+            ui.warning("No work packages were updated.")
     
     # Save staging cache after all work packages are created (both matched and newly created)
     if staging_cache_path is not None:
@@ -6622,7 +7171,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ):
             ui.skip_step("History adjustments skipped by operator.")
         else:
-            apply_history_adjustments(history_packages, dry_run=False, ui=ui)
+            # Get current user (token owner) to use as author when assignee is None
+            current_user_id_for_history: Optional[int] = None
+            try:
+                current_user = client.get_current_user()
+                current_user_id_for_history = int(current_user["id"])
+                _write_debug_log("debug", f"[history] Current user (token owner): ID={current_user_id_for_history}, name={current_user.get('name', 'unknown')}")
+            except Exception as exc:
+                ui.warning(f"Failed to get current user for history adjustments: {exc}. Will use default author.")
+            
+            apply_history_adjustments(
+                history_packages,
+                dry_run=False,
+                ui=ui,
+                user_id_map=user_id_map,
+                current_user_id=current_user_id_for_history,
+            )
+            
+            # Clean up journal entries: remove author changes and fix status change timestamps
+            ui.info("  Cleaning up journal entries...")
+            _cleanup_work_package_journals(
+                history_packages,
+                client.base_url if hasattr(client, "base_url") else None,
+                ui,
+            )
+            
             ui.complete_step(
                 "Updated journals and time entries in the database.")
 

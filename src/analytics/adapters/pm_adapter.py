@@ -118,46 +118,53 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             # Get all tasks in the sprint
             all_tasks = await self.provider.list_tasks(project_id=project_key)
             
-            # Debug logging
-            logger.info(f"[PMProviderAnalyticsAdapter] Looking for sprint_id={sprint_id} (type: {type(sprint_id).__name__})")
+            # Debug logging - ALWAYS log this
+            logger.info(f"[PMProviderAnalyticsAdapter] ===== BURNDOWN DEBUG START =====")
+            logger.info(f"[PMProviderAnalyticsAdapter] Project: {project_key}, Sprint ID: {sprint_id} (type: {type(sprint_id).__name__})")
             logger.info(f"[PMProviderAnalyticsAdapter] Found {len(all_tasks)} total tasks in project")
             
-            # Log sprint_ids from tasks for debugging
-            task_sprint_ids = [str(t.sprint_id) if t.sprint_id else "None" for t in all_tasks[:10]]
-            logger.info(f"[PMProviderAnalyticsAdapter] Sample task sprint_ids: {task_sprint_ids}")
+            # Log sprint_ids from ALL tasks for debugging
+            all_sprint_ids = [str(t.sprint_id) if t.sprint_id else "None" for t in all_tasks]
+            logger.info(f"[PMProviderAnalyticsAdapter] All task sprint_ids: {all_sprint_ids}")
+            
+            # Log first few tasks' details
+            for i, task in enumerate(all_tasks[:5]):
+                logger.info(
+                    f"[PMProviderAnalyticsAdapter] Task {i+1}: id={task.id}, "
+                    f"title={task.title[:50]}, sprint_id={task.sprint_id} (type: {type(task.sprint_id).__name__ if task.sprint_id else 'None'})"
+                )
+                if task.raw_data:
+                    version_link = task.raw_data.get("_links", {}).get("version")
+                    version_embedded = task.raw_data.get("_embedded", {}).get("version")
+                    logger.info(
+                        f"[PMProviderAnalyticsAdapter]   Task {i+1} raw: _links.version={version_link}, "
+                        f"_embedded.version={version_embedded is not None if version_embedded else False}"
+                    )
             
             # Compare sprint_id as strings to handle type mismatches
             sprint_id_str = str(sprint_id) if sprint_id else None
+            logger.info(f"[PMProviderAnalyticsAdapter] Comparing sprint_id_str='{sprint_id_str}' against task sprint_ids")
+            
             sprint_tasks = [
                 t for t in all_tasks 
                 if (t.sprint_id and str(t.sprint_id) == sprint_id_str) or 
                    (sprint_id_str and t.sprint_id == sprint_id)
             ]
             
-            logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks in sprint {sprint_id}")
+            logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks matching sprint {sprint_id}")
+            logger.info(f"[PMProviderAnalyticsAdapter] ===== BURNDOWN DEBUG END =====")
             
             # If no tasks found, log more details
             if len(sprint_tasks) == 0 and len(all_tasks) > 0:
-                # Log detailed info about first few tasks
                 logger.warning(
-                    f"[PMProviderAnalyticsAdapter] No tasks found for sprint {sprint_id}. "
-                    f"Total tasks: {len(all_tasks)}"
+                    f"[PMProviderAnalyticsAdapter] ⚠️ NO TASKS FOUND FOR SPRINT {sprint_id} ⚠️"
                 )
-                # Log sprint_ids from all tasks
-                all_sprint_ids = [str(t.sprint_id) if t.sprint_id else "None" for t in all_tasks]
                 logger.warning(
-                    f"[PMProviderAnalyticsAdapter] All task sprint_ids: {all_sprint_ids}"
+                    f"[PMProviderAnalyticsAdapter] Searched for: '{sprint_id_str}' (from sprint_id={sprint_id})"
                 )
-                # Log raw data from first task to debug version link
-                if all_tasks[0].raw_data:
-                    task_raw = all_tasks[0].raw_data
-                    version_link = task_raw.get("_links", {}).get("version")
-                    version_embedded = task_raw.get("_embedded", {}).get("version")
-                    logger.warning(
-                        f"[PMProviderAnalyticsAdapter] Sample task raw data - "
-                        f"_links.version: {version_link}, "
-                        f"_embedded.version: {version_embedded is not None if version_embedded else False}"
-                    )
+                logger.warning(
+                    f"[PMProviderAnalyticsAdapter] Available sprint_ids in tasks: {set(all_sprint_ids)}"
+                )
             
             # Transform tasks for burndown calculator using status resolver
             tasks_data = []

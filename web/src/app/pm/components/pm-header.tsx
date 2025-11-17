@@ -37,7 +37,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   const pathname = usePathname();
   const { projects, loading: projectsLoading, refresh: refreshProjects } = useProjects();
   const { state: loadingState } = usePMLoading();
-  const [providers, setProviders] = useState<Array<{ id: string; provider_type: string }>>([]);
+  const [providers, setProviders] = useState<Array<{ id: string; provider_type: string; base_url: string }>>([]);
   const [regeneratingMockData, setRegeneratingMockData] = useState(false);
   const [projectComboboxOpen, setProjectComboboxOpen] = useState(false);
   
@@ -48,8 +48,9 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
     if (loadingState.providers.data) {
       const mapped = loadingState.providers.data.map((p: any) => ({
         id: p.id || '',
-        provider_type: p.provider_type || ''
-      })).filter((p: any) => p.id && p.provider_type);
+        provider_type: p.provider_type || '',
+        base_url: p.base_url || ''
+      })).filter((p: any) => p.id && p.provider_type && p.base_url);
       setProviders(mapped);
     }
   }, [loadingState.providers.data]);
@@ -60,6 +61,17 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
     providers.forEach(p => {
       if (p.id && p.provider_type) {
         map.set(p.id, p.provider_type);
+      }
+    });
+    return map;
+  }, [providers]);
+
+  // Create mapping from provider_id to base_url
+  const providerUrlMap = useMemo(() => {
+    const map = new Map<string, string>();
+    providers.forEach(p => {
+      if (p.id && p.base_url) {
+        map.set(p.id, p.base_url);
       }
     });
     return map;
@@ -116,10 +128,45 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
     [projects]
   );
 
-  const realProjects = useMemo(
-    () => projects.filter(project => !project.id?.startsWith("mock:")),
-    [projects]
-  );
+  // Group real projects by provider (using provider_id as key, base_url for display)
+  const projectsByProvider = useMemo(() => {
+    const grouped = new Map<string, { baseUrl: string; projects: typeof projects }>();
+    
+    projects.forEach(project => {
+      if (project.id?.startsWith("mock:")) return; // Skip mock projects
+      
+      // Get provider ID from project ID
+      const parts = project.id?.split(":");
+      if (!parts || parts.length < 2) return;
+      
+      const providerId = parts[0];
+      const baseUrl = providerUrlMap.get(providerId);
+      
+      if (!baseUrl) return;
+      
+      if (!grouped.has(providerId)) {
+        grouped.set(providerId, { baseUrl, projects: [] });
+      }
+      grouped.get(providerId)!.projects.push(project);
+    });
+    
+    return grouped;
+  }, [projects, providerUrlMap]);
+
+  // Helper to extract domain from URL
+  const getDomainFromUrl = (url: string): string => {
+    try {
+      // Remove protocol if present
+      let cleanUrl = url.replace(/^https?:\/\//, '');
+      // Remove trailing slash
+      cleanUrl = cleanUrl.replace(/\/$/, '');
+      // Extract domain (everything before the first /)
+      const domain = cleanUrl.split('/')[0];
+      return domain;
+    } catch {
+      return url;
+    }
+  };
 
   const isOverview = pathname?.includes('/overview') ?? false;
   const isChat = pathname?.includes('/chat') ?? false;
@@ -287,10 +334,10 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                           ))}
                         </CommandGroup>
                       )}
-                      {realProjects.length > 0 && (
-                        <CommandGroup heading={mockProjects.length > 0 ? "Real Projects" : "Projects"}>
-                          {realProjects.map(project => {
-                            const providerType = getProviderType(project.id);
+                      {Array.from(projectsByProvider.entries()).map(([providerId, { baseUrl, projects: providerProjects }]) => (
+                        <CommandGroup key={providerId} heading={getDomainFromUrl(baseUrl)}>
+                          {providerProjects.map(project => {
+                            const projectProviderType = getProviderType(project.id);
                             return (
                               <CommandItem
                                 key={project.id}
@@ -301,7 +348,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                                 }}
                               >
                                 <div className="flex items-center gap-2 flex-1">
-                                  {getProviderBadge(providerType)}
+                                  {getProviderBadge(projectProviderType)}
                                   <span>{project.name}</span>
                                 </div>
                                 <Check
@@ -313,7 +360,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                             );
                           })}
                         </CommandGroup>
-                      )}
+                      ))}
                     </CommandList>
                   </Command>
                 </PopoverContent>

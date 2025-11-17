@@ -6,6 +6,7 @@ import base64
 import json
 import logging
 import os
+import requests
 from typing import Annotated, Any, AsyncIterator, List, Optional
 from uuid import uuid4
 
@@ -1682,8 +1683,33 @@ async def pm_list_users(request: Request, project_id: str):
                     )
                     return []
                 raise HTTPException(status_code=400, detail=error_msg)
+            except requests.exceptions.HTTPError as http_err:
+                # Handle HTTP errors (403, 401, etc.) gracefully
+                error_msg = str(http_err)
+                status_code = getattr(http_err.response, 'status_code', None) if hasattr(http_err, 'response') else None
+                
+                if status_code in (403, 401):
+                    logger.warning(
+                        "[pm_list_users] Provider returned %s Forbidden/Unauthorized for users endpoint, returning empty list. Error: %s",
+                        status_code, error_msg
+                    )
+                    return []
+                logger.error(f"Failed to list users (HTTP {status_code}): {http_err}")
+                import traceback
+                logger.error(traceback.format_exc())
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to fetch users: {error_msg}"
+                )
             except Exception as e:
                 error_msg = str(e)
+                # Check for 403/401 in error message
+                if "403" in error_msg or "Forbidden" in error_msg or "401" in error_msg or "Unauthorized" in error_msg:
+                    logger.warning(
+                        "[pm_list_users] Provider authentication/authorization issue, returning empty list. Error: %s",
+                        error_msg
+                    )
+                    return []
                 if "JIRA requires" in error_msg or "username" in error_msg.lower():
                     logger.warning(
                         "[pm_list_users] Provider configuration issue, returning empty list. Error: %s",
@@ -2999,8 +3025,14 @@ async def get_burndown_chart(
         
         try:
             analytics_service = get_analytics_service(project_id, db)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
             chart = await analytics_service.get_burndown_chart(
-                project_id=project_id,
+                project_id=actual_project_id,
                 sprint_id=sprint_id,
                 scope_type=scope_type  # type: ignore
             )
@@ -3029,8 +3061,14 @@ async def get_velocity_chart(
         
         try:
             analytics_service = get_analytics_service(project_id, db)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
             chart = await analytics_service.get_velocity_chart(
-                project_id=project_id,
+                project_id=actual_project_id,
                 sprint_count=sprint_count
             )
             return chart.model_dump()
@@ -3056,7 +3094,13 @@ async def get_sprint_report(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            report = await analytics_service.get_sprint_report(sprint_id=sprint_id, project_id=project_id)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
+            report = await analytics_service.get_sprint_report(sprint_id=sprint_id, project_id=actual_project_id)
             return report.model_dump()
         finally:
             try:
@@ -3080,7 +3124,13 @@ async def get_project_summary(project_id: str):
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            summary = await analytics_service.get_project_summary(project_id=project_id)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
+            summary = await analytics_service.get_project_summary(project_id=actual_project_id)
             return summary
         finally:
             try:
@@ -3108,7 +3158,13 @@ async def get_cfd_chart(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = await analytics_service.get_cfd_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
+            chart = await analytics_service.get_cfd_chart(project_id=actual_project_id, sprint_id=sprint_id, days_back=days_back)
             return chart.model_dump()
         finally:
             try:
@@ -3120,7 +3176,10 @@ async def get_cfd_chart(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get CFD chart: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        logger.error(traceback.format_exc())
+        error_detail = str(e)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @app.get("/api/analytics/projects/{project_id}/cycle-time")
@@ -3136,7 +3195,13 @@ async def get_cycle_time_chart(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = await analytics_service.get_cycle_time_chart(project_id=project_id, sprint_id=sprint_id, days_back=days_back)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
+            chart = await analytics_service.get_cycle_time_chart(project_id=actual_project_id, sprint_id=sprint_id, days_back=days_back)
             return chart.model_dump()
         finally:
             try:
@@ -3164,7 +3229,13 @@ async def get_work_distribution_chart(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = await analytics_service.get_work_distribution_chart(project_id=project_id, dimension=dimension, sprint_id=sprint_id)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
+            chart = await analytics_service.get_work_distribution_chart(project_id=actual_project_id, dimension=dimension, sprint_id=sprint_id)
             return chart.model_dump()
         finally:
             try:
@@ -3192,7 +3263,13 @@ async def get_issue_trend_chart(
         db = next(db_gen)
         try:
             analytics_service = get_analytics_service(project_id, db)
-            chart = await analytics_service.get_issue_trend_chart(project_id=project_id, days_back=days_back, sprint_id=sprint_id)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
+            chart = await analytics_service.get_issue_trend_chart(project_id=actual_project_id, days_back=days_back, sprint_id=sprint_id)
             return chart.model_dump()
         finally:
             try:

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 
@@ -60,11 +61,28 @@ export function useUsers(projectId?: string) {
       .catch((err) => {
         // Log as warning instead of error - this is often expected (e.g., missing username for JIRA)
         const errorMessage = err instanceof Error ? err.message : String(err);
-        if (errorMessage.includes("JIRA requires email") || errorMessage.includes("username")) {
-          // This is a configuration issue, not a critical error - just log a warning
+        
+        // Check if it's a permission/authentication issue (403, 401, Forbidden, Unauthorized)
+        const isPermissionError = 
+          errorMessage.includes("403") || 
+          errorMessage.includes("Forbidden") ||
+          errorMessage.includes("401") ||
+          errorMessage.includes("Unauthorized") ||
+          errorMessage.includes("JIRA requires email") ||
+          errorMessage.includes("username");
+        
+        if (isPermissionError) {
+          // This is a configuration/permission issue - show a warning toast
           console.warn(`[useUsers] Cannot fetch users for project ${projectId}: ${errorMessage}. Users list will be empty.`);
+          toast.warning("Cannot load users", {
+            description: "Your API key doesn't have permission to access the users endpoint, or the provider requires additional configuration.",
+          });
         } else {
+          // This is an unexpected error - show an error toast
           console.error(`[useUsers] Failed to fetch users for project ${projectId}:`, err);
+          toast.error("Failed to load users", {
+            description: errorMessage,
+          });
         }
         setError(err as Error);
         setUsers([]);

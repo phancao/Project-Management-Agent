@@ -97,7 +97,14 @@ export function useBurndownChart(projectId: string | null, sprintId?: string, sc
       const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch burndown chart: ${response.statusText}`);
+        let errorDetail = response.statusText;
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message || errorDetail;
+        } catch {
+          // If response is not JSON, use status text
+        }
+        throw new Error(`Failed to fetch burndown chart: ${errorDetail}`);
       }
       
       return response.json() as Promise<ChartResponse>;
@@ -120,7 +127,14 @@ export function useVelocityChart(projectId: string | null, sprintCount: number =
       const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch velocity chart: ${response.statusText}`);
+        let errorDetail = response.statusText;
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message || errorDetail;
+        } catch {
+          // If response is not JSON, use status text
+        }
+        throw new Error(`Failed to fetch velocity chart: ${errorDetail}`);
       }
       
       return response.json() as Promise<ChartResponse>;
@@ -193,7 +207,14 @@ export function useCFDChart(projectId: string | null, sprintId?: string, daysBac
       const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch CFD chart: ${response.statusText}`);
+        let errorDetail = response.statusText;
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message || errorDetail;
+        } catch {
+          // If response is not JSON, use status text
+        }
+        throw new Error(`Failed to fetch CFD chart: ${errorDetail}`);
       }
       
       return response.json() as Promise<ChartResponse>;
@@ -220,7 +241,14 @@ export function useCycleTimeChart(projectId: string | null, sprintId?: string, d
       const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch cycle time chart: ${response.statusText}`);
+        let errorDetail = response.statusText;
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message || errorDetail;
+        } catch {
+          // If response is not JSON, use status text
+        }
+        throw new Error(`Failed to fetch cycle time chart: ${errorDetail}`);
       }
       
       return response.json() as Promise<ChartResponse>;
@@ -251,7 +279,14 @@ export function useWorkDistributionChart(
       const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch work distribution chart: ${response.statusText}`);
+        let errorDetail = response.statusText;
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message || errorDetail;
+        } catch {
+          // If response is not JSON, use status text
+        }
+        throw new Error(`Failed to fetch work distribution chart: ${errorDetail}`);
       }
       
       return response.json() as Promise<ChartResponse>;
@@ -278,7 +313,14 @@ export function useIssueTrendChart(projectId: string | null, daysBack: number = 
       const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch issue trend chart: ${response.statusText}`);
+        let errorDetail = response.statusText;
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message || errorDetail;
+        } catch {
+          // If response is not JSON, use status text
+        }
+        throw new Error(`Failed to fetch issue trend chart: ${errorDetail}`);
       }
       
       return response.json() as Promise<ChartResponse>;

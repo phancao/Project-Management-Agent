@@ -40,10 +40,46 @@ export function IssueTrendView() {
     );
   }
 
+  // Issue Trend Description component (reusable)
+  const IssueTrendDescription = () => (
+    <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📈 What is Issue Trend Analysis?</h3>
+      <p className="text-sm text-gray-700 dark:text-gray-300">
+        Issue trend analysis tracks how issues are created and resolved over time. It helps you understand if your backlog 
+        is growing or shrinking. Use this chart to:
+      </p>
+      <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
+        <li><strong>Monitor backlog health:</strong> Is work being resolved faster than it's created?</li>
+        <li><strong>Identify capacity issues:</strong> If created &gt; resolved consistently, you may need more resources</li>
+        <li><strong>Track team productivity:</strong> See resolution rates and trends over time</li>
+        <li><strong>Plan capacity:</strong> Use historical data to forecast future needs</li>
+      </ul>
+    </Card>
+  );
+
   if (error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-red-500">Error loading data: {error.message}</div>
+      <div className="space-y-6">
+        <Card className="p-6 text-center">
+          <div className="mx-auto max-w-md space-y-4">
+            <div className="flex justify-center">
+              <div className="rounded-full bg-red-100 p-3 dark:bg-red-900/30">
+                <span className="text-2xl">📈</span>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Unable to Load Issue Trend Chart
+              </h3>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                  ? "Issue trend chart is not available for this project type."
+                  : "There was an error loading the issue trend chart. Please try again later."}
+              </p>
+            </div>
+          </div>
+        </Card>
+        <IssueTrendDescription />
       </div>
     );
   }
@@ -184,19 +220,7 @@ export function IssueTrendView() {
       )}
 
       {/* Explanation */}
-      <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📈 What is Issue Trend Analysis?</h3>
-        <p className="text-sm text-gray-700 dark:text-gray-300">
-          Issue trend analysis tracks how issues are created and resolved over time. It helps you understand if your backlog 
-          is growing or shrinking. Use this chart to:
-        </p>
-        <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
-          <li><strong>Monitor backlog health:</strong> Is work being resolved faster than it's created?</li>
-          <li><strong>Identify capacity issues:</strong> If created &gt; resolved consistently, you may need more resources</li>
-          <li><strong>Track team productivity:</strong> See resolution rates and trends over time</li>
-          <li><strong>Plan capacity:</strong> Use historical data to forecast future needs</li>
-        </ul>
-      </Card>
+      <IssueTrendDescription />
     </div>
   );
 }

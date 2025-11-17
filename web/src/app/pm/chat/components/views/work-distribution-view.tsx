@@ -45,10 +45,45 @@ export function WorkDistributionView() {
     );
   }
 
+  // Work Distribution Description component (reusable)
+  const WorkDistributionDescription = () => (
+    <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📊 What is Work Distribution?</h3>
+      <p className="text-sm text-gray-700 dark:text-gray-300">
+        Work distribution charts show how work is spread across different dimensions. Use these charts to:
+      </p>
+      <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
+        <li><strong>By Assignee:</strong> Identify workload imbalances and ensure fair distribution</li>
+        <li><strong>By Priority:</strong> Understand priority mix and ensure high-priority work is addressed</li>
+        <li><strong>By Type:</strong> Track the ratio of stories, bugs, tasks, and features</li>
+        <li><strong>By Status:</strong> See how work is distributed across workflow stages</li>
+      </ul>
+    </Card>
+  );
+
   if (error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-red-500">Error loading data: {error.message}</div>
+      <div className="space-y-6">
+        <Card className="p-6 text-center">
+          <div className="mx-auto max-w-md space-y-4">
+            <div className="flex justify-center">
+              <div className="rounded-full bg-red-100 p-3 dark:bg-red-900/30">
+                <span className="text-2xl">📊</span>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Unable to Load Work Distribution Chart
+              </h3>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                  ? "Work distribution chart is not available for this project type."
+                  : "There was an error loading the work distribution chart. Please try again later."}
+              </p>
+            </div>
+          </div>
+        </Card>
+        <WorkDistributionDescription />
       </div>
     );
   }
@@ -200,18 +235,7 @@ export function WorkDistributionView() {
       </Tabs>
 
       {/* Explanation */}
-      <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📊 What is Work Distribution?</h3>
-        <p className="text-sm text-gray-700 dark:text-gray-300">
-          Work distribution charts show how work is spread across different dimensions. Use these charts to:
-        </p>
-        <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
-          <li><strong>By Assignee:</strong> Identify workload imbalances and ensure fair distribution</li>
-          <li><strong>By Priority:</strong> Understand priority mix and ensure high-priority work is addressed</li>
-          <li><strong>By Type:</strong> Track the ratio of stories, bugs, tasks, and features</li>
-          <li><strong>By Status:</strong> See how work is distributed across workflow stages</li>
-        </ul>
-      </Card>
+      <WorkDistributionDescription />
     </div>
   );
 }

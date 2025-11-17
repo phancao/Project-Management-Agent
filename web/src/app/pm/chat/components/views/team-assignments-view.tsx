@@ -448,10 +448,50 @@ export function TeamAssignmentsView() {
     );
   }
 
-  if (tasksError || usersError) {
+  // Check if usersError is a permission error
+  const isPermissionError = usersError && (
+    usersError.message.includes("403") ||
+    usersError.message.includes("Forbidden") ||
+    usersError.message.includes("401") ||
+    usersError.message.includes("Unauthorized")
+  );
+
+  if (tasksError) {
     return (
       <Card className="p-6 text-center text-rose-600 dark:text-rose-300">
-        Failed to load team assignments: {tasksError?.message ?? usersError?.message}
+        Failed to load team assignments: {tasksError.message}
+      </Card>
+    );
+  }
+
+  if (usersError && !isPermissionError) {
+    return (
+      <Card className="p-6 text-center text-rose-600 dark:text-rose-300">
+        Failed to load team assignments: {usersError.message}
+      </Card>
+    );
+  }
+
+  if (isPermissionError) {
+    return (
+      <Card className="p-6 text-center">
+        <div className="mx-auto max-w-md space-y-4">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-amber-100 p-3 dark:bg-amber-900/30">
+              <Users className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Cannot View Team Assignments
+            </h3>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Your API key doesn't have permission to access the users endpoint. 
+              Please contact your administrator to grant the necessary permissions, 
+              or use an API key with user access rights.
+            </p>
+          </div>
+        </div>
       </Card>
     );
   }

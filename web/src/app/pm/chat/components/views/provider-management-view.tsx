@@ -353,10 +353,12 @@ export function ProviderManagementView() {
                       </span>
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">
-                          {provider.provider_type.toUpperCase()}
+                          {provider.base_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {provider.base_url}
+                          {provider.provider_type === "openproject_v13" ? "OpenProject v13" :
+                           provider.provider_type === "openproject" ? "OpenProject v16" :
+                           provider.provider_type.toUpperCase()}
                         </p>
                       </div>
                     </div>

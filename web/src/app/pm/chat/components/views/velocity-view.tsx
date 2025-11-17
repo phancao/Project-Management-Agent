@@ -40,10 +40,46 @@ export function VelocityView() {
     );
   }
 
+  // Velocity Description component (reusable)
+  const VelocityDescription = () => (
+    <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">⚡ What is a Velocity Chart?</h3>
+      <p className="text-sm text-gray-700 dark:text-gray-300">
+        Velocity measures how much work a team completes in each sprint. It compares <strong>committed points</strong> (planned work) 
+        with <strong>completed points</strong> (actual delivery). Use this chart to:
+      </p>
+      <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
+        <li>Understand team capacity and plan future sprints more accurately</li>
+        <li>Track team performance trends over time</li>
+        <li>Identify if the team is over-committing or under-committing</li>
+        <li>Make data-driven decisions about sprint planning</li>
+      </ul>
+    </Card>
+  );
+
   if (error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-red-500">Error loading data: {error.message}</div>
+      <div className="space-y-6">
+        <Card className="p-6 text-center">
+          <div className="mx-auto max-w-md space-y-4">
+            <div className="flex justify-center">
+              <div className="rounded-full bg-red-100 p-3 dark:bg-red-900/30">
+                <span className="text-2xl">⚡</span>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Unable to Load Velocity Chart
+              </h3>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                  ? "Velocity chart is not available for this project type."
+                  : "There was an error loading the velocity chart. Please try again later."}
+              </p>
+            </div>
+          </div>
+        </Card>
+        <VelocityDescription />
       </div>
     );
   }
@@ -169,19 +205,7 @@ export function VelocityView() {
       </Card>
 
       {/* Explanation */}
-      <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">⚡ What is a Velocity Chart?</h3>
-        <p className="text-sm text-gray-700 dark:text-gray-300">
-          Velocity measures how much work a team completes in each sprint. It compares <strong>committed points</strong> (planned work) 
-          with <strong>completed points</strong> (actual delivery). Use this chart to:
-        </p>
-        <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
-          <li>Understand team capacity and plan future sprints more accurately</li>
-          <li>Track team performance trends over time</li>
-          <li>Identify if the team is over-committing or under-committing</li>
-          <li>Make data-driven decisions about sprint planning</li>
-        </ul>
-      </Card>
+      <VelocityDescription />
     </div>
   );
 }

@@ -41,10 +41,46 @@ export function BurndownView() {
     );
   }
 
+  // Burndown Description component (reusable)
+  const BurndownDescription = () => (
+    <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📊 What is a Burndown Chart?</h3>
+      <p className="text-sm text-gray-700 dark:text-gray-300">
+        A burndown chart tracks the amount of work remaining in a sprint over time. The <strong>ideal line</strong> shows the expected 
+        progress if work is completed at a steady pace, while the <strong>actual line</strong> shows real progress. Use this chart to:
+      </p>
+      <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
+        <li>Monitor if the team is on track to complete the sprint goal</li>
+        <li>Identify if the team is ahead or behind schedule</li>
+        <li>Spot scope changes (when the actual line goes up)</li>
+        <li>Forecast sprint completion based on current velocity</li>
+      </ul>
+    </Card>
+  );
+
   if (error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-red-500">Error loading data: {error.message}</div>
+      <div className="space-y-6">
+        <Card className="p-6 text-center">
+          <div className="mx-auto max-w-md space-y-4">
+            <div className="flex justify-center">
+              <div className="rounded-full bg-red-100 p-3 dark:bg-red-900/30">
+                <span className="text-2xl">📊</span>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Unable to Load Burndown Chart
+              </h3>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                  ? "Burndown chart is not available for this project type."
+                  : "There was an error loading the burndown chart. Please try again later."}
+              </p>
+            </div>
+          </div>
+        </Card>
+        <BurndownDescription />
       </div>
     );
   }
@@ -159,19 +195,7 @@ export function BurndownView() {
       )}
 
       {/* Explanation */}
-      <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📊 What is a Burndown Chart?</h3>
-        <p className="text-sm text-gray-700 dark:text-gray-300">
-          A burndown chart tracks the amount of work remaining in a sprint over time. The <strong>ideal line</strong> shows the expected 
-          progress if work is completed at a steady pace, while the <strong>actual line</strong> shows real progress. Use this chart to:
-        </p>
-        <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
-          <li>Monitor if the team is on track to complete the sprint goal</li>
-          <li>Identify if the team is ahead or behind schedule</li>
-          <li>Spot scope changes (when the actual line goes up)</li>
-          <li>Forecast sprint completion based on current velocity</li>
-        </ul>
-      </Card>
+      <BurndownDescription />
     </div>
   );
 }

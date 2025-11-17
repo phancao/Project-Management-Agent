@@ -52,7 +52,8 @@ export function ProviderManagementView() {
   const [providerTypes, setProviderTypes] = useState<
     Array<{ type: string; display_name: string }>
   >([
-    { type: "openproject", display_name: "OpenProject" },
+    { type: "openproject", display_name: "OpenProject v16" },
+    { type: "openproject_v13", display_name: "OpenProject v13" },
     { type: "jira", display_name: "JIRA" },
     { type: "clickup", display_name: "ClickUp" },
   ]);
@@ -186,15 +187,23 @@ export function ProviderManagementView() {
       };
 
       // Add provider-specific fields
-      if (formData.provider_type === "openproject" || formData.provider_type === "clickup") {
+      if (
+        formData.provider_type === "openproject" ||
+        formData.provider_type === "openproject_v13" ||
+        formData.provider_type === "clickup"
+      ) {
         request.api_key = formData.api_key;
       } else if (formData.provider_type === "jira") {
         request.api_token = formData.api_token;
       }
 
       // For JIRA, username should be the email address
-      // OpenProject doesn't require username
-      if (formData.username && formData.provider_type !== "openproject") {
+      // OpenProject (both v13 and v16) doesn't require username
+      if (
+        formData.username &&
+        formData.provider_type !== "openproject" &&
+        formData.provider_type !== "openproject_v13"
+      ) {
         request.username = formData.username;
       }
 
@@ -254,6 +263,7 @@ export function ProviderManagementView() {
   const getProviderIcon = (type: string) => {
     switch (type) {
       case "openproject":
+      case "openproject_v13":
         return "🔧";
       case "jira":
         return "🎯";
@@ -482,6 +492,7 @@ export function ProviderManagementView() {
             </div>
 
                                   {(formData.provider_type === "openproject" ||
+                        formData.provider_type === "openproject_v13" ||
                         formData.provider_type === "clickup") && (
                         <div className="space-y-2">
                           <Label htmlFor="api_key">

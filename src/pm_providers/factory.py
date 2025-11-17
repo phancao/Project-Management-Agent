@@ -10,6 +10,7 @@ from typing import Optional
 from .base import BasePMProvider
 from .models import PMProviderConfig
 from .openproject import OpenProjectProvider
+from .openproject_v13 import OpenProjectV13Provider
 from .jira import JIRAProvider
 from .clickup import ClickUpProvider
 
@@ -55,8 +56,10 @@ def create_pm_provider(
     # Normalize provider type to lowercase for case-insensitive matching
     provider_type_lower = provider_type.lower().strip()
     
-    if provider_type_lower == "openproject":
+    if provider_type_lower == "openproject" or provider_type_lower == "openproject_v16":
         return OpenProjectProvider(config)
+    elif provider_type_lower == "openproject_v13":
+        return OpenProjectV13Provider(config)
     elif provider_type_lower == "jira":
         return JIRAProvider(config)
     elif provider_type_lower == "clickup":
@@ -64,5 +67,5 @@ def create_pm_provider(
     else:
         raise ValueError(
             f"Unsupported provider type: {provider_type} "
-            f"(supported: openproject, jira, clickup)"
+            f"(supported: openproject, openproject_v13, openproject_v16, jira, clickup)"
         )

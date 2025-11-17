@@ -8,6 +8,7 @@ from .base import BasePMProvider
 from .models import PMProviderConfig
 from .internal import InternalPMProvider
 from .openproject import OpenProjectProvider
+from .openproject_v13 import OpenProjectV13Provider
 from .jira import JIRAProvider
 from .clickup import ClickUpProvider
 from sqlalchemy.orm import Session
@@ -37,12 +38,17 @@ def build_pm_provider(db_session: Optional[Session] = None) -> Optional[BasePMPr
         return InternalPMProvider(config, db_session)
     
     elif provider_type == PMProvider.OPENPROJECT.value:
+        # Check if v13 is specified via environment variable or use v16 by default
+        openproject_version = _get_env("OPENPROJECT_VERSION")
         config = PMProviderConfig(
             provider_type="openproject",
             base_url=_get_env("OPENPROJECT_URL"),
             api_key=_get_env("OPENPROJECT_API_KEY")
         )
-        return OpenProjectProvider(config)
+        if openproject_version and openproject_version.lower() == "13":
+            return OpenProjectV13Provider(config)
+        else:
+            return OpenProjectProvider(config)
     
     elif provider_type == PMProvider.JIRA.value:
         config = PMProviderConfig(

@@ -2707,6 +2707,13 @@ async def pm_get_provider_projects(provider_id: str):
                 projects = await provider_instance.list_projects()
             except Exception as api_error:
                 error_msg = str(api_error)
+                import traceback
+                logger.error(
+                    f"Failed to fetch projects from provider {provider_id} "
+                    f"({provider.provider_type}): {error_msg}"
+                )
+                logger.error(traceback.format_exc())
+                
                 # Handle specific HTTP errors
                 if "401" in error_msg or "Unauthorized" in error_msg:
                     raise HTTPException(

@@ -1204,45 +1204,56 @@ def update_time_entry_logged_by_batch(
             "info"
         )
     
-    # Build SQL update statements.
-    # Update whichever column represents the "logged by" user in this OP version.
+    # Build batched SQL update statements for optimal performance
+    # Group updates by user_id to minimize UPDATE statements
     # Strategy:
     # - If time_entries.logged_by_id exists, set it to user_id
     # - If time_entries.created_by_id exists, set it to user_id (author of the time entry)
     # - Always ensure time_entries.user_id is set to user_id (person who logged the time)
     # - Also update journals.user_id for the corresponding TimeEntry journal rows
-    update_statements: List[str] = []
+    
+    # Group by user_id to batch updates
+    user_groups: Dict[int, List[int]] = defaultdict(list)
     for entry_id, user_id in updates:
+        user_groups[user_id].append(entry_id)
+    
+    # Build batched update statements using DO blocks for conditional column updates
+    # This is more efficient than individual DO blocks per entry
+    update_statements: List[str] = []
+    
+    for user_id, entry_ids in user_groups.items():
+        entry_id_list = ",".join(str(eid) for eid in entry_ids)
+        # Use a single DO block per user_id group to check columns once and update all entries
         stmt = f"""
 DO $$
 BEGIN
+  -- Update time_entries columns if they exist
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name='time_entries' AND column_name='logged_by_id'
   ) THEN
-    UPDATE time_entries SET logged_by_id = {user_id} WHERE id = {entry_id};
+    UPDATE time_entries SET logged_by_id = {user_id} WHERE id IN ({entry_id_list});
   END IF;
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name='time_entries' AND column_name='created_by_id'
   ) THEN
-    UPDATE time_entries SET created_by_id = {user_id} WHERE id = {entry_id};
+    UPDATE time_entries SET created_by_id = {user_id} WHERE id IN ({entry_id_list});
   END IF;
-  -- Ensure the time entry is attributed to the correct user
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name='time_entries' AND column_name='user_id'
   ) THEN
-    UPDATE time_entries SET user_id = {user_id} WHERE id = {entry_id};
+    UPDATE time_entries SET user_id = {user_id} WHERE id IN ({entry_id_list});
   END IF;
-  -- Update journal author for this time entry
+  -- Update journal author for time entries
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name='journals' AND column_name='user_id'
   ) THEN
     UPDATE journals
       SET user_id = {user_id}
-      WHERE journable_type='TimeEntry' AND journable_id={entry_id};
+      WHERE journable_type='TimeEntry' AND journable_id IN ({entry_id_list});
   END IF;
 END $$;
 """
@@ -1251,7 +1262,7 @@ END $$;
     if update_statements:
         _run_sql_statements(
             update_statements,
-            chunk_size=50,  # smaller chunks due to DO blocks
+            chunk_size=200,  # Larger chunks now that we're batching
             ui=ui,
             description="Updating logged_by/author/user for time entries",
         )
@@ -1268,6 +1279,7 @@ def update_time_entry_logged_by_from_excel(
     ui: ConsoleUI,
     dry_run: bool = False,
     source: str = "auto",
+    imported_packages: Optional[List[ImportedWorkPackage]] = None,
 ) -> int:
     """
     Update logged_by field for time entries by matching Excel data with OpenProject entries.
@@ -1366,19 +1378,69 @@ def update_time_entry_logged_by_from_excel(
         ui.info("No time entries found in Excel to match.", "info")
         return 0
     
-    # Decide source (db/api/auto) and fetch entries scoped to staging WPs
-    if source == "auto":
-        use_db = (client.version == "v13")
-    else:
-        use_db = (source == "db")
-    target_wp_ids: Set[int] = {
-        int(task.openproject_id)
-        for task in staging.tasks.values()
-        if task.openproject_id is not None
-    }
-    ui.info("  Fetching time entries from OpenProject...")
+    # First, try to use time entries from imported_packages (just created in Step 17)
+    # This is more reliable than querying the database, especially for newly created entries
     all_time_entries: List[dict] = []
-    if use_db:
+    
+    # Initialize variables that may be used later
+    use_db = False
+    target_wp_ids: Set[int] = set()
+    
+    if imported_packages:
+        ui.info("  Using time entries from Step 17 (just created)...")
+        for pkg in imported_packages:
+            for te in pkg.time_entries:
+                # Convert ImportedTimeEntry to API-like dict format for matching
+                # ImportedTimeEntry has: id, spent_on (str), units (float), user_id (optional)
+                # We need to fetch activity_id from the actual time entry in OpenProject
+                # For now, create a dict that can be matched by (wp_id, spent_on, hours)
+                te_dict = {
+                    "id": te.id,
+                    "spentOn": te.spent_on if te.spent_on else "",
+                    "hours": str(te.units) if te.units else "0",  # Match as string for comparison
+                    "_links": {
+                        "workPackage": {"href": f"/api/v3/work_packages/{pkg.work_package_id}"},
+                        "user": {"href": f"/api/v3/users/{te.user_id}"} if te.user_id else {},
+                    }
+                }
+                all_time_entries.append(te_dict)
+        if all_time_entries:
+            ui.info(f"  Found {len(all_time_entries)} time entry(ies) from Step 17")
+    
+    # If no entries from Step 17, fall back to fetching from database/API
+    # Use work package IDs from imported_packages (which have time entries) if available
+    if not all_time_entries:
+        # Decide source (db/api/auto) and fetch entries scoped to work packages that have time entries
+        if source == "auto":
+            use_db = (client.version == "v13")
+        else:
+            use_db = (source == "db")
+        
+        # Prefer work package IDs from imported_packages (which have time entries)
+        # Fall back to staging.tasks if imported_packages not available
+        if imported_packages:
+            target_wp_ids = {
+                pkg.work_package_id
+                for pkg in imported_packages
+                if pkg.time_entries  # Only include WPs that have time entries
+            }
+            if not target_wp_ids:
+                # Fall back to staging if no time entries in imported_packages
+                target_wp_ids = {
+                    int(task.openproject_id)
+                    for task in staging.tasks.values()
+                    if task.openproject_id is not None
+                }
+        else:
+            target_wp_ids = {
+                int(task.openproject_id)
+                for task in staging.tasks.values()
+                if task.openproject_id is not None
+            }
+        ui.info("  Fetching time entries from OpenProject...")
+    
+    # Only fetch from DB/API if we don't have entries from Step 17
+    if not all_time_entries and use_db:
         total_wps = len(target_wp_ids)
         if total_wps:
             ui.progress(0, total_wps, "Fetching time entries (DB)")
@@ -1386,26 +1448,71 @@ def update_time_entry_logged_by_from_excel(
         for idx_wp, wp_id in enumerate(sorted(target_wp_ids), start=1):
             try:
                 entries = fetch_time_entries_for_work_package_from_db(wp_id, ui=None, base_url=client.base_url if hasattr(client, "base_url") else None)
-                for e in entries:
-                    if "_links" not in e:
-                        e["_links"] = {}
-                    e["_links"].setdefault("workPackage", {"href": f"/api/v3/work_packages/{wp_id}"})
-                all_time_entries.extend(entries)
+                if entries:
+                    for e in entries:
+                        if "_links" not in e:
+                            e["_links"] = {}
+                        e["_links"].setdefault("workPackage", {"href": f"/api/v3/work_packages/{wp_id}"})
+                    all_time_entries.extend(entries)
+                else:
+                    _write_debug_log("debug", f"[logged_by] No DB entries found for WP {wp_id} (this is normal if no time entries exist yet)")
             except Exception as exc:
                 _write_debug_log("debug", f"[logged_by] DB fetch failed for WP {wp_id}: {exc}")
+                import traceback
+                _write_debug_log("debug", f"[logged_by] Traceback: {traceback.format_exc()}")
             if interval and (idx_wp % interval == 0 or idx_wp == total_wps):
                 ui.progress(idx_wp, total_wps, "Fetching time entries (DB)")
         if not all_time_entries:
-            ui.info("  [fallback] No DB entries found; falling back to API listing")
+            # Check if any work packages actually have time entries in DB
+            sample_wp_ids = list(target_wp_ids)[:5]  # Check first 5 as sample
+            sample_has_entries = False
+            for wp_id in sample_wp_ids:
+                try:
+                    test_entries = fetch_time_entries_for_work_package_from_db(wp_id, ui=None, base_url=client.base_url if hasattr(client, "base_url") else None)
+                    if test_entries:
+                        sample_has_entries = True
+                        break
+                except Exception:
+                    pass
+            
+            if sample_has_entries:
+                ui.info("  [fallback] No DB entries found for target work packages; falling back to API listing")
+                _write_debug_log("debug", f"[logged_by] Fallback: checked {len(target_wp_ids)} WP(s), found 0 entries (but DB query works - these WPs may not have time entries yet)")
+            else:
+                ui.info("  [fallback] No DB entries found; falling back to API listing")
+                _write_debug_log("debug", f"[logged_by] Fallback: checked {len(target_wp_ids)} WP(s), found 0 entries. Sample WP IDs: {sample_wp_ids}")
             use_db = False
-    if not use_db:
+    
+    # Only fetch from API if we don't have entries from Step 17 and DB fetch failed or wasn't used
+    if not all_time_entries and not use_db:
         page_size = 200
         offset = 1
         seen_count = 0
         total_entries_api: Optional[int] = None
+        
+        # Build filters to only fetch time entries for target work packages
+        # This avoids fetching all 188k+ time entries when we only need a few
+        params = {"offset": offset, "pageSize": page_size}
+        if target_wp_ids:
+            # Use OpenProject API filters to filter by work package ID
+            # Format: filters=[{"workPackage": {"operator": "=", "values": ["wp_id1", "wp_id2", ...]}}]
+            # Note: values must be strings, not integers
+            wp_id_list = [str(wp_id) for wp_id in sorted(target_wp_ids)]
+            filters = json.dumps([
+                {
+                    "workPackage": {
+                        "operator": "=",
+                        "values": wp_id_list
+                    }
+                }
+            ])
+            params["filters"] = filters
+            ui.info(f"  Fetching time entries for {len(target_wp_ids)} work package(s) via API (filtered)...")
+        else:
+            ui.info("  Fetching all time entries via API (no work package filter)...")
+        
         ui.progress(0, 1, "Fetching time entries (API)")
         while True:
-            params = {"offset": offset, "pageSize": page_size}
             resp = client._request("GET", "/time_entries", params=params)
             payload = resp.json()
             if total_entries_api is None:
@@ -1414,19 +1521,8 @@ def update_time_entry_logged_by_from_excel(
                 except Exception:
                     total_entries_api = None
             elements = payload.get("_embedded", {}).get("elements", []) or []
-            if target_wp_ids:
-                for e in elements:
-                    wp_href = (e.get("_links", {}).get("workPackage", {}) or {}).get("href")
-                    if not wp_href:
-                        continue
-                    try:
-                        wp_id = int(wp_href.split("/")[-1])
-                    except Exception:
-                        continue
-                    if wp_id in target_wp_ids:
-                        all_time_entries.append(e)
-            else:
-                all_time_entries.extend(elements)
+            # Since we're filtering by work package ID in the API, all returned entries are relevant
+            all_time_entries.extend(elements)
             seen_count += len(elements)
             if total_entries_api and total_entries_api > 0:
                 ui.progress(min(seen_count, total_entries_api), total_entries_api, "Fetching time entries (API)")
@@ -1436,6 +1532,7 @@ def update_time_entry_logged_by_from_excel(
             if not elements or not next_link:
                 break
             offset += 1
+            params["offset"] = offset
     total_entries = len(all_time_entries)
     ui.info(f"  Found {total_entries:,} time entry(ies) to check")
     
@@ -1670,16 +1767,18 @@ def fetch_time_entries_for_work_package_from_db(
     Returns a list of dicts with the same structure as API responses for matching.
     """
     container_name = _get_openproject_container(base_url)
-    # On v13 embedded DB, time_entries are linked by work_package_id only.
-    # Some versions may have entity_type/entity_id, but v13 lacks te.entity_id.
-    if CURRENT_OP_VERSION == "v13":
-        where_clause = f"te.work_package_id = {int(work_package_id)}"
-    else:
-        # For v16 and newer schemas that may include entity_type/entity_id
-        where_clause = (
-            f"(te.work_package_id = {int(work_package_id)} "
-            f"OR (COALESCE(te.entity_type,'') = 'WorkPackage' AND COALESCE(te.entity_id,0) = {int(work_package_id)}))"
-        )
+    # Detect version from container name or base_url
+    op_version = "v13" if "v13" in container_name else "v16"
+    if base_url and ":8081" in base_url:
+        op_version = "v13"
+    elif base_url and ":8080" in base_url:
+        op_version = "v16"
+    
+    # Time entries are linked via work_package_id
+    # Note: In OpenProject, work packages are stored in the work_packages table
+    # and time_entries.work_package_id references work_packages.id
+    wp_id = int(work_package_id)
+    where_clause = f"te.work_package_id = {wp_id}"
     sql = (
         "SELECT "
         "    te.id, "
@@ -1694,6 +1793,7 @@ def fetch_time_entries_for_work_package_from_db(
     
     # For v13, database is embedded, use su - postgres
     if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        # Use the same pattern as _run_psql but capture output
         command = [
             "docker",
             "exec",
@@ -1701,7 +1801,13 @@ def fetch_time_entries_for_work_package_from_db(
             container_name,
             "bash",
             "-c",
-            f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{sql}\nSQL\nEOSQL",
+            (
+                f"su - postgres <<'EOSQL'\n"
+                f"psql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n"
+                f"{sql}\n"
+                f"SQL\n"
+                f"EOSQL"
+            ),
         ]
     else:
         command = [
@@ -1726,11 +1832,28 @@ def fetch_time_entries_for_work_package_from_db(
             capture_output=True,
             timeout=30,
         )
+        # Check for SQL errors in stderr
+        if result.stderr and ("ERROR" in result.stderr or "error" in result.stderr.lower()):
+            error_msg = result.stderr.strip()
+            if ui:
+                ui.debug(f"    [history] SQL error for WP {work_package_id}: {error_msg}")
+            # Log to debug file
+            import sys
+            if hasattr(sys.modules.get('__main__', None), '_write_debug_log'):
+                sys.modules['__main__']._write_debug_log("debug", f"[fetch_time_entries] SQL error for WP {work_package_id}: {error_msg}")
+            # Don't return empty - let the query continue, might be warnings
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        error_msg = f"{exc}"
+        if hasattr(exc, 'stderr') and exc.stderr:
+            error_msg += f"\nstderr: {exc.stderr}"
+        if hasattr(exc, 'stdout') and exc.stdout:
+            error_msg += f"\nstdout: {exc.stdout}"
         if ui:
-            ui.debug(
-                f"    [history] Failed to query time entries for WP {work_package_id}: {exc}"
-            )
+            ui.debug(f"    [history] Failed to query time entries for WP {work_package_id}: {error_msg}")
+        # Log to debug file
+        import sys
+        if hasattr(sys.modules.get('__main__', None), '_write_debug_log'):
+            sys.modules['__main__']._write_debug_log("debug", f"[fetch_time_entries] Exception for WP {work_package_id}: {error_msg}")
         return []
     
     entries: List[dict] = []
@@ -3231,37 +3354,35 @@ def update_project_creation_dates(
     if not project_earliest_dates:
         return
 
-    update_statements: List[str] = []
+    # Group projects by timestamp to batch updates
+    project_groups: Dict[str, List[int]] = defaultdict(list)
     for project_id, earliest_date in project_earliest_dates.items():
         ts = datetime.combine(earliest_date, DEFAULT_CREATION_TIME)
         ts = ts.astimezone(timezone.utc)
         ts_str = ts.isoformat()
+        project_groups[ts_str].append(project_id)
+    
+    update_statements: List[str] = []
+    for ts_str, project_ids in project_groups.items():
+        project_id_list = ",".join(str(pid) for pid in project_ids)
         
-        # Update project created_at
+        # Batch update projects table
         update_statements.append(
-            f"UPDATE projects SET created_at='{ts_str}' WHERE id={project_id};"
+            f"UPDATE projects SET created_at='{ts_str}'::timestamp with time zone WHERE id IN ({project_id_list});"
         )
         
-        # Update project journal (version 1 is the initial creation)
-        # Handle exclusion constraint by closing old period first, then setting new one
-        # We do this in a single statement using a subquery to avoid conflicts
+        # Batch update project journals (version 1 is the initial creation)
+        # Update all projects with the same timestamp in one statement
         update_statements.append(
-            (
-                "WITH old_period AS ("
-                "  SELECT validity_period FROM journals "
-                "  WHERE journable_type='Project' "
-                "    AND journable_id={proj_id} "
-                "    AND version=1"
-                "  LIMIT 1"
-                ")"
-                "UPDATE journals SET "
-                "    created_at='{ts}', "
-                "    updated_at='{ts}', "
-                "    validity_period=tstzrange('{ts}', NULL) "
-                "WHERE journable_type='Project' "
-                "  AND journable_id={proj_id} "
-                "  AND version=1;"
-            ).format(ts=ts_str, proj_id=project_id)
+            f"""
+            UPDATE journals 
+            SET created_at='{ts_str}'::timestamp with time zone,
+                updated_at='{ts_str}'::timestamp with time zone,
+                validity_period=tstzrange('{ts_str}'::timestamp with time zone, NULL)
+            WHERE journable_type='Project' 
+              AND journable_id IN ({project_id_list})
+              AND version=1;
+            """
         )
 
     if dry_run:
@@ -3285,358 +3406,707 @@ def update_project_creation_dates(
         )
 
 
-def _cleanup_work_package_journals(
-    imported_packages: List[ImportedWorkPackage],
-    base_url: Optional[str] = None,
-    ui: Optional[ConsoleUI] = None,
-) -> None:
-    """Clean up journal entries for work packages:
-    1. Fix 'Author changed' by updating version 1's author_id to match final author_id
-    2. Update 'Status changed' journal entries:
-       - Set timestamp to last time entry timestamp
-       - Set author (user_id) to assignee_id to represent that the issue was closed by the assignee
+def random_time_in_range(start_hour: int, start_minute: int, end_hour: int, end_minute: int) -> time:
+    """Generate random time between start and end times."""
+    start_minutes = start_hour * 60 + start_minute
+    end_minutes = end_hour * 60 + end_minute
+    random_minutes = random.randint(start_minutes, end_minutes)
+    return time(random_minutes // 60, random_minutes % 60)
+
+
+def get_status_ids_for_journal(base_url: Optional[str] = None) -> Dict[str, int]:
+    """Get status IDs for 'New' and 'Closed'."""
+    container_name = _get_openproject_container(base_url)
+    
+    # First, try to find "Closed" by name specifically
+    sql_closed = """
+    SELECT id, name, is_closed 
+    FROM statuses 
+    WHERE LOWER(name) = 'closed' AND is_closed = true
+    LIMIT 1;
     """
+    
+    # Then find "New" status
+    sql_new = """
+    SELECT id, name, is_closed 
+    FROM statuses 
+    WHERE LOWER(name) = 'new' AND is_closed = false
+    LIMIT 1;
+    """
+    
+    status_map = {}
+    
+    # Find Closed status (prioritize exact name match)
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        command = f"docker exec -i {container_name} bash -c \"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{sql_closed}\nSQL\nEOSQL\""
+    else:
+        command = f"docker exec -i {container_name} bash -c \"PGPASSWORD={OPENPROJECT_DB_PASSWORD} psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} -h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \\\"{sql_closed}\\\"\""
+    
+    import subprocess
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                parts = line.split('|')
+                if len(parts) >= 3:
+                    status_id = int(parts[0])
+                    name = parts[1].strip()
+                    is_closed = parts[2].strip() == 't'
+                    if name.lower() == 'closed' and is_closed:
+                        status_map['closed'] = status_id
+                        break
+    
+    # If not found, try to find any closed status (fallback)
+    if 'closed' not in status_map:
+        sql_fallback = """
+        SELECT id, name, is_closed 
+        FROM statuses 
+        WHERE is_closed = true AND (LOWER(name) LIKE '%done%' OR LOWER(name) LIKE '%finish%')
+        ORDER BY CASE WHEN LOWER(name) = 'done' THEN 1 WHEN LOWER(name) = 'finished' THEN 2 ELSE 3 END
+        LIMIT 1;
+        """
+        if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+            command = f"docker exec -i {container_name} bash -c \"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{sql_fallback}\nSQL\nEOSQL\""
+        else:
+            command = f"docker exec -i {container_name} bash -c \"PGPASSWORD={OPENPROJECT_DB_PASSWORD} psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} -h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \\\"{sql_fallback}\\\"\""
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                if line.strip():
+                    parts = line.split('|')
+                    if len(parts) >= 3:
+                        status_id = int(parts[0])
+                        status_map['closed'] = status_id
+                        break
+    
+    # Find New status
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        command = f"docker exec -i {container_name} bash -c \"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{sql_new}\nSQL\nEOSQL\""
+    else:
+        command = f"docker exec -i {container_name} bash -c \"PGPASSWORD={OPENPROJECT_DB_PASSWORD} psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} -h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \\\"{sql_new}\\\"\""
+    
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                parts = line.split('|')
+                if len(parts) >= 3:
+                    status_id = int(parts[0])
+                    name = parts[1].strip()
+                    is_closed = parts[2].strip() == 't'
+                    if name.lower() == 'new' and not is_closed:
+                        status_map['new'] = status_id
+                        break
+    
+    # Fallback to common IDs if not found
+    if 'new' not in status_map:
+        status_map['new'] = 1
+    if 'closed' not in status_map:
+        status_map['closed'] = 13
+    
+    return status_map
+
+
+def get_work_package_time_entry_dates(wp_id: int, base_url: Optional[str] = None) -> Tuple[Optional[dt.date], Optional[dt.date]]:
+    """Get first and last time entry dates for a work package from database."""
+    container_name = _get_openproject_container(base_url)
+    sql = f"""
+    SELECT spent_on 
+    FROM time_entries 
+    WHERE work_package_id = {wp_id} 
+    ORDER BY spent_on;
+    """
+    
+    dates = []
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        command = f"docker exec -i {container_name} bash -c \"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A <<'SQL'\n{sql}\nSQL\nEOSQL\""
+    else:
+        command = f"docker exec -i {container_name} bash -c \"PGPASSWORD={OPENPROJECT_DB_PASSWORD} psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} -h {OPENPROJECT_DB_HOST} -t -A -c \\\"{sql}\\\"\""
+    
+    import subprocess
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                try:
+                    date_obj = datetime.strptime(line.strip(), "%Y-%m-%d").date()
+                    dates.append(date_obj)
+                except ValueError:
+                    continue
+    
+    if not dates:
+        return None, None
+    
+    return min(dates), max(dates)
+
+
+def fetch_existing_journal_v1(wp_id: int, base_url: Optional[str] = None) -> Optional[dict]:
+    """Fetch existing journal version 1 data if it exists."""
+    container_name = _get_openproject_container(base_url)
+    sql = f"""
+    SELECT 
+        j.id as journal_id,
+        j.user_id,
+        j.created_at,
+        j.updated_at,
+        j.validity_period,
+        j.notes,
+        wpj.id as wpj_id,
+        wpj.status_id,
+        wpj.type_id,
+        wpj.project_id,
+        wpj.subject,
+        wpj.description,
+        wpj.due_date,
+        wpj.start_date,
+        wpj.responsible_id,
+        wpj.assigned_to_id,
+        wpj.priority_id,
+        wpj.done_ratio,
+        wpj.estimated_hours,
+        wpj.author_id,
+        wpj.category_id,
+        wpj.version_id,
+        wpj.parent_id,
+        wpj.budget_id,
+        wpj.story_points,
+        wpj.remaining_hours,
+        wpj.derived_estimated_hours,
+        wpj.schedule_manually,
+        wpj.duration,
+        wpj.ignore_non_working_days,
+        wpj.derived_remaining_hours,
+        wpj.derived_done_ratio
+    FROM journals j
+    JOIN work_package_journals wpj ON j.data_id = wpj.id
+    WHERE j.journable_type = 'WorkPackage' 
+      AND j.journable_id = {wp_id}
+      AND j.version = 1
+      AND j.data_type = 'Journal::WorkPackageJournal'
+    LIMIT 1;
+    """
+    
+    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+        command = f"docker exec -i {container_name} bash -c \"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{sql}\nSQL\nEOSQL\""
+    else:
+        command = f"docker exec -i {container_name} bash -c \"PGPASSWORD={OPENPROJECT_DB_PASSWORD} psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} -h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \\\"{sql}\\\"\""
+    
+    import subprocess
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if result.returncode == 0 and result.stdout.strip():
+        parts = result.stdout.strip().split('|')
+        if len(parts) >= 32:
+            def safe_int(val):
+                try:
+                    return int(val) if val and val.strip() else None
+                except (ValueError, AttributeError):
+                    return None
+            
+            def safe_bool(val):
+                return val and val.strip().lower() == 't'
+            
+            return {
+                'journal_id': safe_int(parts[0]),
+                'user_id': safe_int(parts[1]),
+                'created_at': parts[2] if parts[2] and parts[2].strip() else None,
+                'updated_at': parts[3] if parts[3] and parts[3].strip() else None,
+                'validity_period': parts[4] if parts[4] and parts[4].strip() else None,
+                'notes': parts[5] if parts[5] and parts[5].strip() else None,
+                'wpj_id': safe_int(parts[6]),
+                'status_id': safe_int(parts[7]),
+                'type_id': safe_int(parts[8]),
+                'project_id': safe_int(parts[9]),
+                'subject': parts[10] if parts[10] and parts[10].strip() else None,
+                'description': parts[11] if parts[11] and parts[11].strip() else None,
+                'due_date': parts[12] if parts[12] and parts[12].strip() else None,
+                'start_date': parts[13] if parts[13] and parts[13].strip() else None,
+                'responsible_id': safe_int(parts[14]),
+                'assigned_to_id': safe_int(parts[15]),
+                'priority_id': safe_int(parts[16]),
+                'done_ratio': safe_int(parts[17]),
+                'estimated_hours': parts[18] if parts[18] and parts[18].strip() else None,
+                'author_id': safe_int(parts[19]),
+                'category_id': safe_int(parts[20]),
+                'version_id': safe_int(parts[21]),
+                'parent_id': safe_int(parts[22]),
+                'budget_id': safe_int(parts[23]),
+                'story_points': safe_int(parts[24]),
+                'remaining_hours': parts[25] if parts[25] and parts[25].strip() else None,
+                'derived_estimated_hours': parts[26] if parts[26] and parts[26].strip() else None,
+                'schedule_manually': safe_bool(parts[27]),
+                'duration': safe_int(parts[28]),
+                'ignore_non_working_days': safe_bool(parts[29]),
+                'derived_remaining_hours': parts[30] if parts[30] and parts[30].strip() else None,
+                'derived_done_ratio': safe_int(parts[31]),
+            }
+    return None
+
+
+def delete_work_package_journals(wp_id: int, base_url: Optional[str] = None) -> None:
+    """Delete all journal entries for a work package."""
+    sql = f"""
+    BEGIN;
+    -- Delete work_package_journals first (referenced by journals.data_id)
+    DELETE FROM work_package_journals 
+    WHERE id IN (
+        SELECT data_id FROM journals 
+        WHERE journable_type = 'WorkPackage' 
+          AND journable_id = {wp_id}
+          AND data_type = 'Journal::WorkPackageJournal'
+    );
+    -- Delete journals
+    DELETE FROM journals 
+    WHERE journable_type = 'WorkPackage' AND journable_id = {wp_id};
+    COMMIT;
+    """
+    _run_psql(sql, suppress_output=True)
+
+
+def create_work_package_journal_version(
+    wp_id: int,
+    version: int,
+    status_id: int,
+    done_ratio: int,
+    author_id: int,
+    timestamp: datetime,
+    base_url: Optional[str] = None,
+    clone_from: Optional[dict] = None,
+) -> None:
+    """Create a new journal version for a work package, optionally cloning from existing data."""
+    ts_str = timestamp.isoformat()
+    
+    if clone_from:
+        # Clone from existing journal data, only updating specific fields
+        # Escape single quotes in text fields
+        subject_val = "NULL"
+        if clone_from.get('subject'):
+            escaped_subject = clone_from['subject'].replace("'", "''")
+            subject_val = f"'{escaped_subject}'"
+        
+        description_val = "NULL"
+        if clone_from.get('description'):
+            escaped_description = clone_from['description'].replace("'", "''")
+            description_val = f"'{escaped_description}'"
+        
+        notes_val = "NULL"
+        if clone_from.get('notes'):
+            escaped_notes = clone_from['notes'].replace("'", "''")
+            notes_val = f"'{escaped_notes}'"
+        
+        # Build value strings for nullable fields
+        due_date_val = f"'{clone_from['due_date']}'::date" if clone_from.get('due_date') else 'NULL'
+        start_date_val = f"'{clone_from['start_date']}'::date" if clone_from.get('start_date') else 'NULL'
+        responsible_id_val = str(clone_from['responsible_id']) if clone_from.get('responsible_id') else 'NULL'
+        assigned_to_id_val = str(clone_from['assigned_to_id']) if clone_from.get('assigned_to_id') else 'NULL'
+        estimated_hours_val = str(clone_from['estimated_hours']) if clone_from.get('estimated_hours') else 'NULL'
+        category_id_val = str(clone_from['category_id']) if clone_from.get('category_id') else 'NULL'
+        version_id_val = str(clone_from['version_id']) if clone_from.get('version_id') else 'NULL'
+        parent_id_val = str(clone_from['parent_id']) if clone_from.get('parent_id') else 'NULL'
+        budget_id_val = str(clone_from['budget_id']) if clone_from.get('budget_id') else 'NULL'
+        story_points_val = str(clone_from['story_points']) if clone_from.get('story_points') else 'NULL'
+        remaining_hours_val = str(clone_from['remaining_hours']) if clone_from.get('remaining_hours') else 'NULL'
+        derived_estimated_hours_val = str(clone_from['derived_estimated_hours']) if clone_from.get('derived_estimated_hours') else 'NULL'
+        duration_val = str(clone_from['duration']) if clone_from.get('duration') else 'NULL'
+        derived_remaining_hours_val = str(clone_from['derived_remaining_hours']) if clone_from.get('derived_remaining_hours') else 'NULL'
+        derived_done_ratio_val = str(clone_from['derived_done_ratio']) if clone_from.get('derived_done_ratio') else 'NULL'
+        
+        sql = f"""
+        DO $$
+        DECLARE
+            new_wpj_id BIGINT;
+            new_journal_id BIGINT;
+        BEGIN
+            -- Create work_package_journals entry by cloning existing data
+            INSERT INTO work_package_journals (
+                status_id,
+                type_id,
+                project_id,
+                subject,
+                description,
+                due_date,
+                start_date,
+                responsible_id,
+                assigned_to_id,
+                priority_id,
+                done_ratio,
+                estimated_hours,
+                author_id,
+                category_id,
+                version_id,
+                parent_id,
+                budget_id,
+                story_points,
+                remaining_hours,
+                derived_estimated_hours,
+                schedule_manually,
+                duration,
+                ignore_non_working_days,
+                derived_remaining_hours,
+                derived_done_ratio
+            ) VALUES (
+                {status_id},  -- Updated
+                {clone_from['type_id']},
+                {clone_from['project_id']},
+                {subject_val},
+                {description_val},
+                {due_date_val},
+                {start_date_val},
+                {responsible_id_val},
+                {assigned_to_id_val},
+                {clone_from['priority_id']},
+                {done_ratio},  -- Updated
+                {estimated_hours_val},
+                {author_id},  -- Updated
+                {category_id_val},
+                {version_id_val},
+                {parent_id_val},
+                {budget_id_val},
+                {story_points_val},
+                {remaining_hours_val},
+                {derived_estimated_hours_val},
+                {str(clone_from.get('schedule_manually', False)).lower()},
+                {duration_val},
+                {str(clone_from.get('ignore_non_working_days', False)).lower()},
+                {derived_remaining_hours_val},
+                {derived_done_ratio_val}
+            ) RETURNING id INTO new_wpj_id;
+            
+            -- Create journal entry pointing to work_package_journals
+            INSERT INTO journals (
+                journable_type,
+                journable_id,
+                user_id,
+                created_at,
+                updated_at,
+                validity_period,
+                version,
+                data_type,
+                data_id,
+                notes
+            ) VALUES (
+                'WorkPackage',
+                {wp_id},
+                {author_id},  -- Updated
+                '{ts_str}'::timestamp with time zone,  -- Updated
+                '{ts_str}'::timestamp with time zone,  -- Updated
+                tstzrange('{ts_str}'::timestamp with time zone, NULL),  -- Updated
+                {version},
+                'Journal::WorkPackageJournal',
+                new_wpj_id,
+                {notes_val}
+            ) RETURNING id INTO new_journal_id;
+        END $$;
+        """
+    else:
+        # Create new journal entry from work package current values
+        sql = f"""
+        DO $$
+        DECLARE
+            new_wpj_id BIGINT;
+            new_journal_id BIGINT;
+            current_type_id INTEGER;
+            current_project_id INTEGER;
+            current_priority_id INTEGER;
+            current_assigned_to_id INTEGER;
+            current_responsible_id INTEGER;
+            current_start_date DATE;
+            current_due_date DATE;
+            current_estimated_hours NUMERIC;
+            current_subject VARCHAR;
+            current_description TEXT;
+        BEGIN
+            -- Get current work package values
+            SELECT 
+                type_id, project_id, priority_id, assigned_to_id, responsible_id,
+                start_date, due_date, estimated_hours, subject, description
+            INTO 
+                current_type_id, current_project_id, current_priority_id, 
+                current_assigned_to_id, current_responsible_id,
+                current_start_date, current_due_date, current_estimated_hours,
+                current_subject, current_description
+            FROM work_packages
+            WHERE id = {wp_id};
+            
+            -- Create work_package_journals entry first
+            INSERT INTO work_package_journals (
+                status_id,
+                type_id,
+                project_id,
+                subject,
+                description,
+                due_date,
+                start_date,
+                responsible_id,
+                assigned_to_id,
+                priority_id,
+                done_ratio,
+                estimated_hours,
+                author_id,
+                ignore_non_working_days
+            ) VALUES (
+                {status_id},
+                current_type_id,
+                current_project_id,
+                COALESCE(current_subject, ''),
+                COALESCE(current_description, ''),
+                current_due_date,
+                current_start_date,
+                current_responsible_id,
+                current_assigned_to_id,
+                current_priority_id,
+                {done_ratio},
+                current_estimated_hours,
+                {author_id},
+                false
+            ) RETURNING id INTO new_wpj_id;
+            
+            -- Create journal entry pointing to work_package_journals
+            INSERT INTO journals (
+                journable_type,
+                journable_id,
+                user_id,
+                created_at,
+                updated_at,
+                validity_period,
+                version,
+                data_type,
+                data_id
+            ) VALUES (
+                'WorkPackage',
+                {wp_id},
+                {author_id},
+                '{ts_str}'::timestamp with time zone,
+                '{ts_str}'::timestamp with time zone,
+                tstzrange('{ts_str}'::timestamp with time zone, NULL),
+                {version},
+                'Journal::WorkPackageJournal',
+                new_wpj_id
+            ) RETURNING id INTO new_journal_id;
+        END $$;
+        """
+    _run_psql(sql, suppress_output=True)
+
+
+def rebuild_work_package_journals(
+    wp_id: int,
+    assignee_id: Optional[int],
+    author_id: Optional[int],
+    first_date: dt.date,
+    last_date: dt.date,
+    new_status_id: int,
+    closed_status_id: int,
+    base_url: Optional[str] = None,
+) -> None:
+    """Rebuild journal entries for a work package with v1 (New, 0%) and v2 (Closed, 100%).
+    
+    Strategy:
+    - If existing journal v1 exists: Clone it, update only status/done_ratio/author/timestamp for v1,
+      then clone v1 and update only status/done_ratio/author/timestamp for v2
+    - If no existing journal: Delete all and create new ones from work package current values
+    """
+    # Determine author (assignee or current author)
+    final_author_id = assignee_id or author_id
+    if not final_author_id:
+        return  # Skip if no author available
+    
+    # Generate random times in GMT+7
+    GMT7 = timezone(timedelta(hours=7))
+    
+    # v1: 8:00AM-11:00AM GMT+7
+    v1_time = random_time_in_range(8, 0, 11, 0)
+    v1_datetime = datetime.combine(first_date, v1_time)
+    v1_datetime = v1_datetime.replace(tzinfo=GMT7).astimezone(timezone.utc)
+    
+    # v2: 5:00PM-6:00PM GMT+7
+    v2_time = random_time_in_range(17, 0, 18, 0)
+    v2_datetime = datetime.combine(last_date, v2_time)
+    v2_datetime = v2_datetime.replace(tzinfo=GMT7).astimezone(timezone.utc)
+    
+    # Try to fetch existing journal v1
+    existing_v1 = fetch_existing_journal_v1(wp_id, base_url)
+    
+    if existing_v1:
+        # Clone existing v1 and update only the fields we want
+        # Delete all existing journal entries first
+        delete_work_package_journals(wp_id, base_url)
+        
+        # Create v1: Clone existing, update only status/done_ratio/author/timestamp
+        create_work_package_journal_version(
+            wp_id=wp_id,
+            version=1,
+            status_id=new_status_id,
+            done_ratio=0,
+            author_id=final_author_id,
+            timestamp=v1_datetime,
+            base_url=base_url,
+            clone_from=existing_v1,
+        )
+        
+        # Create v2: Clone v1 (which we just created), update only status/done_ratio/author/timestamp
+        # Fetch the v1 we just created to clone it for v2
+        v1_clone = fetch_existing_journal_v1(wp_id, base_url)
+        if v1_clone:
+            create_work_package_journal_version(
+                wp_id=wp_id,
+                version=2,
+                status_id=closed_status_id,
+                done_ratio=100,
+                author_id=final_author_id,
+                timestamp=v2_datetime,
+                base_url=base_url,
+                clone_from=v1_clone,
+            )
+    else:
+        # No existing journal, delete all and create new ones from work package current values
+        delete_work_package_journals(wp_id, base_url)
+        
+        # Create v1: New status, 0% complete
+        create_work_package_journal_version(
+            wp_id=wp_id,
+            version=1,
+            status_id=new_status_id,
+            done_ratio=0,
+            author_id=final_author_id,
+            timestamp=v1_datetime,
+            base_url=base_url,
+        )
+        
+        # Create v2: Closed status, 100% complete
+        create_work_package_journal_version(
+            wp_id=wp_id,
+            version=2,
+            status_id=closed_status_id,
+            done_ratio=100,
+            author_id=final_author_id,
+            timestamp=v2_datetime,
+            base_url=base_url,
+        )
+    
+    # Update work package to match final state (including updated_at to match v2 journal timestamp)
+    sql = f"""
+    UPDATE work_packages 
+    SET status_id = {closed_status_id},
+        done_ratio = 100,
+        author_id = {final_author_id},
+        updated_at = '{v2_datetime.isoformat()}'::timestamp with time zone
+    WHERE id = {wp_id};
+    """
+    _run_psql(sql, suppress_output=True)
+
+
+def rebuild_journals_for_imported_packages(
+    imported_packages: List[ImportedWorkPackage],
+    user_id_map: Dict[str, Optional[int]],
+    current_user_id: Optional[int],
+    ui: Optional[ConsoleUI] = None,
+    base_url: Optional[str] = None,
+) -> None:
+    """Rebuild journal entries for all imported work packages."""
     if not imported_packages:
         return
     
-    # Get work package IDs
-    wp_ids = [str(pkg.work_package_id) for pkg in imported_packages]
-    if not wp_ids:
-        return
+    # Get status IDs once
+    status_ids = get_status_ids_for_journal(base_url)
+    new_status_id = status_ids['new']
+    closed_status_id = status_ids['closed']
     
-    # Get the last time entry timestamp for each work package
-    wp_id_list = ",".join(wp_ids)
+    total = len(imported_packages)
+    if ui:
+        ui.progress(0, total, "Rebuilding journals")
     
-    # Query to get last time entry timestamp per work package
-    sql_get_last_te = f"""
-        SELECT 
-            te.work_package_id,
-            MAX(te.created_at) as last_te_time
-        FROM time_entries te
-        WHERE te.work_package_id IN ({wp_id_list})
-        GROUP BY te.work_package_id;
-    """
+    progress_interval = max(1, total // 100) if total > 0 else None
+    processed = 0
+    skipped = 0
     
-    # Determine correct container
-    container_name = _get_openproject_container(base_url)
-    if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
-        command = [
-            "docker",
-            "exec",
-            "-i",
-            container_name,
-            "bash",
-            "-c",
-            f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F ',' <<'SQL'\n{sql_get_last_te}\nSQL\nEOSQL",
-        ]
-    else:
-        command = [
-            "docker",
-            "exec",
-            "-i",
-            container_name,
-            "bash",
-            "-lc",
-            (
-                f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
-                f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
-                f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql_get_last_te}\""
-            ),
-        ]
-    
-    try:
-        result = subprocess.run(
-            command,
-            check=True,
-            text=True,
-            capture_output=True,
-            timeout=60,
-        )
-        # Parse results: wp_id,last_te_time
-        wp_last_te_map: Dict[int, str] = {}
-        for line in result.stdout.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            parts = stripped.split(",")
-            if len(parts) >= 2:
-                try:
-                    wp_id = int(parts[0])
-                    last_te_time = parts[1].strip()
-                    if last_te_time:
-                        wp_last_te_map[wp_id] = last_te_time
-                except (ValueError, IndexError):
-                    continue
-    except subprocess.CalledProcessError as exc:
-        if ui:
-            ui.warning(f"  ⚠ Failed to get last time entry timestamps: {exc}")
-        return
-    
-    if not wp_last_te_map:
-        # No time entries found, use work package updated_at as fallback
-        sql_get_wp_updated = f"""
-            SELECT id, updated_at
-            FROM work_packages
-            WHERE id IN ({wp_id_list});
-        """
-        try:
-            if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
-                cmd = [
-                    "docker",
-                    "exec",
-                    "-i",
-                    container_name,
-                    "bash",
-                    "-c",
-                    f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F ',' <<'SQL'\n{sql_get_wp_updated}\nSQL\nEOSQL",
-                ]
-            else:
-                cmd = [
-                    "docker",
-                    "exec",
-                    "-i",
-                    container_name,
-                    "bash",
-                    "-lc",
-                    (
-                        f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
-                        f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
-                        f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql_get_wp_updated}\""
-                    ),
-                ]
-            result = subprocess.run(
-                cmd,
-                check=True,
-                text=True,
-                capture_output=True,
-                timeout=60,
-            )
-            for line in result.stdout.splitlines():
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                parts = stripped.split(",")
-                if len(parts) >= 2:
-                    try:
-                        wp_id = int(parts[0])
-                        updated_at = parts[1].strip()
-                        if updated_at and wp_id not in wp_last_te_map:
-                            wp_last_te_map[wp_id] = updated_at
-                    except (ValueError, IndexError):
-                        continue
-        except subprocess.CalledProcessError:
-            pass
-    
-    # Build SQL statements to:
-    # 1. Fix author changes by updating version 1's author_id to match the final author_id
-    #    (This eliminates "Author changed" messages in the UI)
-    # 2. Update journal entries with status changes:
-    #    - Set timestamp to last time entry timestamp
-    #    - Set author (user_id) to assignee_id to represent that the issue was closed by the assignee
-    
-    # First, get the final author_id and assignee_id for each work package
-    sql_get_wp_info = f"""
-        SELECT id, author_id, assigned_to_id
-        FROM work_packages
-        WHERE id IN ({wp_id_list});
-    """
-    
-    wp_author_map: Dict[int, int] = {}
-    wp_assignee_map: Dict[int, Optional[int]] = {}
-    try:
-        if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
-            cmd = [
-                "docker",
-                "exec",
-                "-i",
-                container_name,
-                "bash",
-                "-c",
-                f"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F ',' <<'SQL'\n{sql_get_wp_info}\nSQL\nEOSQL",
-            ]
-        else:
-            cmd = [
-                "docker",
-                "exec",
-                "-i",
-                container_name,
-                "bash",
-                "-lc",
-                (
-                    f"PGPASSWORD={OPENPROJECT_DB_PASSWORD} "
-                    f"psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} "
-                    f"-h {OPENPROJECT_DB_HOST} -t -A -F ',' -c \"{sql_get_wp_info}\""
-                ),
-            ]
-        result = subprocess.run(
-            cmd,
-            check=True,
-            text=True,
-            capture_output=True,
-            timeout=60,
-        )
-        for line in result.stdout.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            parts = stripped.split(",")
-            if len(parts) >= 3:
-                try:
-                    wp_id = int(parts[0])
-                    author_id = int(parts[1]) if parts[1] else None
-                    assignee_id = int(parts[2]) if parts[2] else None
-                    if author_id:
-                        wp_author_map[wp_id] = author_id
-                    wp_assignee_map[wp_id] = assignee_id
-                except (ValueError, IndexError):
-                    continue
-    except subprocess.CalledProcessError:
-        pass
-    
-    fix_author_statements: List[str] = []
-    update_statements: List[str] = []
-    
-    for wp_id, last_te_time in wp_last_te_map.items():
-        final_author_id = wp_author_map.get(wp_id)
-        if final_author_id:
-            # Fix author changes: Update version 1's author_id to match final author_id
-            # This prevents "Author changed" messages in the UI
-            # In v13, work_package_journals.id corresponds to journals.data_id
-            fix_author_statements.append(
-                f"""
-                UPDATE work_package_journals wpj
-                SET author_id = {final_author_id}
-                FROM journals j
-                WHERE j.data_id = wpj.id
-                  AND j.journable_type = 'WorkPackage'
-                  AND j.journable_id = {wp_id}
-                  AND j.version = 1
-                  AND wpj.author_id != {final_author_id};
-                """
-            )
+    for idx, pkg in enumerate(imported_packages, start=1):
+        if progress_interval and (idx % progress_interval == 0 or idx == total):
+            if ui:
+                ui.progress(idx, total, "Rebuilding journals")
         
-        # Update journal entries that have status changes:
-        # 1. Set timestamp to last time entry timestamp
-        # 2. Set user_id (author) to assignee_id
-        if last_te_time:
-            assignee_id = wp_assignee_map.get(wp_id)
-            if assignee_id:
-                # In v13, status changes are detected by comparing status_id between versions
-                # We update journals that have a different status_id than version 1
-                # Set both timestamp and user_id (author) to assignee
-                update_statements.append(
-                    f"""
-                    UPDATE journals j
-                    SET created_at = '{last_te_time}'::timestamp with time zone,
-                        updated_at = '{last_te_time}'::timestamp with time zone,
-                        user_id = {assignee_id}
-                    WHERE j.journable_type = 'WorkPackage'
-                      AND j.journable_id = {wp_id}
-                      AND j.version > 1
-                      AND EXISTS (
-                          SELECT 1 
-                          FROM work_package_journals wpj1
-                          JOIN work_package_journals wpj2 ON wpj2.id = (
-                              SELECT j2.data_id FROM journals j2
-                              WHERE j2.journable_type = 'WorkPackage'
-                                AND j2.journable_id = {wp_id}
-                                AND j2.version = 1
-                              LIMIT 1
-                          )
-                          WHERE wpj1.id = j.data_id
-                            AND wpj1.status_id != wpj2.status_id
-                      );
-                    """
-                )
+        wp_id = pkg.work_package_id
+        
+        # Get assignee ID
+        assignee_id = None
+        if pkg.task.assignee_name:
+            assignee_normalized = normalize_person_name(pkg.task.assignee_name)
+            assignee_id = user_id_map.get(assignee_normalized)
+        
+        # Get author ID (fallback to current_user_id)
+        author_id = assignee_id or current_user_id
+        if not author_id:
+            skipped += 1
+            continue
+        
+        # Get first and last time entry dates
+        first_date, last_date = get_work_package_time_entry_dates(wp_id, base_url)
+        
+        # Fallback to work package start_date or created_at if no time entries
+        if first_date is None or last_date is None:
+            # Try to get from work package
+            container_name = _get_openproject_container(base_url)
+            sql = f"SELECT start_date, created_at FROM work_packages WHERE id = {wp_id};"
+            if "v13" in container_name or OPENPROJECT_DB_HOST == "127.0.0.1":
+                command = f"docker exec -i {container_name} bash -c \"su - postgres <<'EOSQL'\npsql -d {OPENPROJECT_DB_NAME} -t -A -F '|' <<'SQL'\n{sql}\nSQL\nEOSQL\""
             else:
-                # No assignee, just update timestamp
-                update_statements.append(
-                    f"""
-                    UPDATE journals j
-                    SET created_at = '{last_te_time}'::timestamp with time zone,
-                        updated_at = '{last_te_time}'::timestamp with time zone
-                    WHERE j.journable_type = 'WorkPackage'
-                      AND j.journable_id = {wp_id}
-                      AND j.version > 1
-                      AND EXISTS (
-                          SELECT 1 
-                          FROM work_package_journals wpj1
-                          JOIN work_package_journals wpj2 ON wpj2.id = (
-                              SELECT j2.data_id FROM journals j2
-                              WHERE j2.journable_type = 'WorkPackage'
-                                AND j2.journable_id = {wp_id}
-                                AND j2.version = 1
-                              LIMIT 1
-                          )
-                          WHERE wpj1.id = j.data_id
-                            AND wpj1.status_id != wpj2.status_id
-                      );
-                    """
-                )
-    
-    # Execute fix author statements one at a time to avoid nested heredoc issues
-    if fix_author_statements:
+                command = f"docker exec -i {container_name} bash -c \"PGPASSWORD={OPENPROJECT_DB_PASSWORD} psql -U {OPENPROJECT_DB_USER} -d {OPENPROJECT_DB_NAME} -h {OPENPROJECT_DB_HOST} -t -A -F '|' -c \\\"{sql}\\\"\""
+            
+            import subprocess
+            result = subprocess.run(command, shell=True, capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout.strip():
+                parts = result.stdout.strip().split('|')
+                if len(parts) >= 2:
+                    start_date_str = parts[0].strip() if parts[0] else None
+                    created_at_str = parts[1].strip() if parts[1] else None
+                    
+                    if start_date_str:
+                        try:
+                            first_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                            last_date = first_date
+                        except ValueError:
+                            pass
+                    
+                    if (first_date is None or last_date is None) and created_at_str:
+                        try:
+                            if 'T' in created_at_str:
+                                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                            else:
+                                created_at = datetime.strptime(created_at_str, "%Y-%m-%d")
+                            date_obj = created_at.date()
+                            if first_date is None:
+                                first_date = date_obj
+                            if last_date is None:
+                                last_date = date_obj
+                        except (ValueError, TypeError):
+                            pass
+        
+        if first_date is None or last_date is None:
+            skipped += 1
+            continue
+        
+        # Rebuild journals
         try:
-            fixed_count = 0
-            total_fixes = len(fix_author_statements)
-            progress_interval = max(1, total_fixes // 20) if total_fixes > 0 else None
-            
-            for idx, stmt in enumerate(fix_author_statements, start=1):
-                if progress_interval and (idx % progress_interval == 0 or idx == total_fixes):
-                    if ui:
-                        ui.progress(idx, total_fixes, "Fixing author change journal entries")
-                
-                try:
-                    # Execute each statement individually
-                    sql = "BEGIN;\n" + stmt.strip() + "\nCOMMIT;\n"
-                    _run_psql(sql, suppress_output=True)
-                    fixed_count += 1
-                except Exception as stmt_exc:
-                    # Log but continue - individual statement failures shouldn't stop the process
-                    _write_debug_log("debug", f"[journal_cleanup] Fix author statement {idx} failed: {stmt_exc}")
-                    continue
-            
-            if ui:
-                if fixed_count > 0:
-                    ui.info(f"  ✔ Fixed author change entries for {fixed_count}/{total_fixes} work package(s).")
-                else:
-                    ui.warning(f"  ⚠ No author change entries needed fixing.")
+            rebuild_work_package_journals(
+                wp_id=wp_id,
+                assignee_id=assignee_id,
+                author_id=current_user_id,
+                first_date=first_date,
+                last_date=last_date,
+                new_status_id=new_status_id,
+                closed_status_id=closed_status_id,
+                base_url=base_url,
+            )
+            processed += 1
         except Exception as exc:
             if ui:
-                ui.warning(f"  ⚠ Failed to fix author change entries: {exc}")
-                _write_debug_log("error", f"[journal_cleanup] Fix author error: {exc}")
+                ui.warning(f"Failed to rebuild journals for WP {wp_id}: {exc}")
+            skipped += 1
     
-    # Execute update statements one at a time to avoid nested heredoc issues
-    if update_statements:
-        try:
-            updated_count = 0
-            total_updates = len(update_statements)
-            progress_interval = max(1, total_updates // 20) if total_updates > 0 else None
-            
-            for idx, stmt in enumerate(update_statements, start=1):
-                if progress_interval and (idx % progress_interval == 0 or idx == total_updates):
-                    if ui:
-                        ui.progress(idx, total_updates, "Updating status change journal entries")
-                
-                try:
-                    # Execute each statement individually
-                    sql = "BEGIN;\n" + stmt.strip() + "\nCOMMIT;\n"
-                    _run_psql(sql, suppress_output=True)
-                    updated_count += 1
-                except Exception as stmt_exc:
-                    # Log but continue - individual statement failures shouldn't stop the process
-                    _write_debug_log("debug", f"[journal_cleanup] Update statement {idx} failed: {stmt_exc}")
-                    continue
-            
-            if ui:
-                if updated_count > 0:
-                    ui.info(f"  ✔ Updated status change entries (timestamp and author) for {updated_count}/{total_updates} work package(s).")
-                else:
-                    ui.warning(f"  ⚠ No status change entries were updated.")
-        except Exception as exc:
-            if ui:
-                ui.warning(f"  ⚠ Failed to update status change entries: {exc}")
-                _write_debug_log("error", f"[journal_cleanup] Update error: {exc}")
+    if ui:
+        ui.progress(total, total, "Rebuilding journals")
+        if skipped > 0:
+            ui.info(f"Rebuilt journals for {processed} work package(s), skipped {skipped}", "info")
+        else:
+            ui.info(f"Rebuilt journals for {processed} work package(s)", "info")
 
 
 def apply_history_adjustments(
@@ -3646,13 +4116,25 @@ def apply_history_adjustments(
     user_id_map: Optional[Dict[str, Optional[int]]] = None,
     current_user_id: Optional[int] = None,
 ) -> None:
+    """
+    Optimized history adjustments with batched journal updates.
+    
+    Collects all update data first, then executes bulk updates grouped by:
+    1. WorkPackage journals (timestamps + user_id)
+    2. TimeEntry journals (timestamps only - user_id handled separately in Step 18)
+    3. Work packages (created_at, updated_at, author_id)
+    4. Time entries (created_at, updated_at)
+    """
     if not imported_packages:
         return
 
-    creation_statements: List[str] = []
-    author_statements: List[str] = []
-    work_package_latest: Dict[int, datetime] = {}
-
+    # Data structures for batched updates
+    wp_creation_data: Dict[int, str] = {}  # wp_id -> timestamp
+    wp_author_data: Dict[int, int] = {}  # wp_id -> author_id
+    wp_updated_at_data: Dict[int, datetime] = {}  # wp_id -> latest timestamp
+    te_timestamp_data: Dict[int, str] = {}  # time_entry_id -> timestamp
+    
+    # Collect all data first
     for pkg in imported_packages:
         creation_date: Optional[datetime.date] = None
         if pkg.task.start_date:
@@ -3676,28 +4158,17 @@ def apply_history_adjustments(
                     creation_date = entry_date
         if creation_date is None:
             continue
+        
         # Use random time between 8:00 AM and 12:00 PM for work package creation
         random_time = random_work_package_creation_time()
         ts = datetime.combine(creation_date, random_time)
         ts = ts.astimezone(timezone.utc)
         ts_str = ts.isoformat()
-        creation_statements.append(
-            "UPDATE work_packages SET created_at='{ts}', updated_at='{ts}' WHERE id={wp};".format(
-                ts=ts_str,
-                wp=pkg.work_package_id,
-            )
-        )
-        creation_statements.append(
-            (
-                "UPDATE journals SET created_at='{ts}', "
-                "    updated_at='{ts}', "
-                "    validity_period=tstzrange('{ts}', NULL) "
-                "WHERE journable_type='WorkPackage' "
-                "  AND journable_id={wp};"
-            ).format(ts=ts_str, wp=pkg.work_package_id)
-        )
         
-        # Set author in journals and work_packages: assignee if available, otherwise current_user_id (admin)
+        wp_creation_data[pkg.work_package_id] = ts_str
+        wp_updated_at_data[pkg.work_package_id] = ts
+        
+        # Set author: assignee if available, otherwise current_user_id (admin)
         author_id: Optional[int] = None
         if user_id_map and pkg.task.assignee_name:
             assignee_normalized = normalize_person_name(pkg.task.assignee_name)
@@ -3707,25 +4178,9 @@ def apply_history_adjustments(
             author_id = current_user_id
         
         if author_id is not None:
-            # Update work_packages.author_id
-            author_statements.append(
-                (
-                    "UPDATE work_packages SET author_id={author_id} "
-                    "WHERE id={wp};"
-                ).format(author_id=author_id, wp=pkg.work_package_id)
-            )
-            # Update journals.user_id for all journal entries (not just version=1)
-            author_statements.append(
-                (
-                    "UPDATE journals SET user_id={author_id} "
-                    "WHERE journable_type='WorkPackage' "
-                    "  AND journable_id={wp};"
-                ).format(author_id=author_id, wp=pkg.work_package_id)
-            )
-        
-        work_package_latest[pkg.work_package_id] = ts
+            wp_author_data[pkg.work_package_id] = author_id
 
-    time_entry_statements: List[str] = []
+    # Collect time entry timestamps
     for pkg in imported_packages:
         counts: Dict[Tuple[int, dt.date], int] = defaultdict(int)
         for entry in sorted(pkg.time_entries, key=lambda x: x.order_index):
@@ -3744,40 +4199,22 @@ def apply_history_adjustments(
             ) + timedelta(minutes=offset)
             timestamp = timestamp.astimezone(timezone.utc)
             ts_str = timestamp.isoformat()
-            time_entry_statements.append(
-                "UPDATE time_entries "
-                f"SET created_at='{ts_str}', updated_at='{ts_str}' "
-                f"WHERE id={entry.id};"
-            )
-            time_entry_statements.append(
-                "UPDATE journals "
-                f"SET created_at='{ts_str}', "
-                f"    updated_at='{ts_str}', "
-                f"    validity_period=tstzrange('{ts_str}', NULL) "
-                "WHERE journable_type='TimeEntry' "
-                f"  AND journable_id={entry.id};"
-            )
-            current_latest = work_package_latest.get(pkg.work_package_id)
+            te_timestamp_data[entry.id] = ts_str
+            
+            # Track latest timestamp for work package updated_at
+            current_latest = wp_updated_at_data.get(pkg.work_package_id)
             if current_latest is None or timestamp > current_latest:
-                work_package_latest[pkg.work_package_id] = timestamp
-
-    updated_at_statements: List[str] = [
-        (
-            "UPDATE work_packages SET updated_at='{ts}' WHERE id={wp_id};"
-        ).format(ts=ts.isoformat(), wp_id=wp_id)
-        for wp_id, ts in work_package_latest.items()
-    ]
+                wp_updated_at_data[pkg.work_package_id] = timestamp
 
     if dry_run:
+        wp_count = len(wp_creation_data)
+        te_count = len(te_timestamp_data)
         msg = (
-            "[DRY-RUN] Would apply {creates} creation updates, "
-            "{authors} author updates, "
-            "{logs} logwork updates, {updates} updated_at corrections."
-        ).format(
-            creates=len(creation_statements),
-            authors=len(author_statements),
-            logs=len(time_entry_statements),
-            updates=len(updated_at_statements),
+            "[DRY-RUN] Would apply: "
+            f"{wp_count} work package creation updates, "
+            f"{len(wp_author_data)} author updates, "
+            f"{te_count} time entry timestamp updates, "
+            f"{len(wp_updated_at_data)} updated_at corrections."
         )
         if ui:
             ui.info(f"  {msg}")
@@ -3785,38 +4222,184 @@ def apply_history_adjustments(
             print(msg)
         return
 
-    if creation_statements:
-        if ui:
-            ui.info(f"  Updating work package creation dates ({len(creation_statements)} statement(s))...")
+    # Build batched SQL statements for optimal performance
+    
+    # 1. Batch WorkPackage journal updates (timestamps + user_id combined)
+    wp_journal_statements: List[str] = []
+    if wp_creation_data:
+        # Group by (timestamp, author_id) to minimize UPDATE statements
+        wp_groups: Dict[Tuple[str, Optional[int]], List[int]] = defaultdict(list)
+        for wp_id, ts_str in wp_creation_data.items():
+            author_id = wp_author_data.get(wp_id)
+            wp_groups[(ts_str, author_id)].append(wp_id)
+        
+        for (ts_str, author_id), wp_ids in wp_groups.items():
+            wp_id_list = ",".join(str(wp_id) for wp_id in wp_ids)
+            if author_id is not None:
+                # Update both timestamp and user_id in one statement
+                wp_journal_statements.append(
+                    f"""
+                    UPDATE journals 
+                    SET created_at='{ts_str}'::timestamp with time zone,
+                        updated_at='{ts_str}'::timestamp with time zone,
+                        validity_period=tstzrange('{ts_str}'::timestamp with time zone, NULL),
+                        user_id={author_id}
+                    WHERE journable_type='WorkPackage' 
+                      AND journable_id IN ({wp_id_list});
+                    """
+                )
+            else:
+                # Update only timestamp
+                wp_journal_statements.append(
+                    f"""
+                    UPDATE journals 
+                    SET created_at='{ts_str}'::timestamp with time zone,
+                        updated_at='{ts_str}'::timestamp with time zone,
+                        validity_period=tstzrange('{ts_str}'::timestamp with time zone, NULL)
+                    WHERE journable_type='WorkPackage' 
+                      AND journable_id IN ({wp_id_list});
+                    """
+                )
+    
+    # 2. Batch TimeEntry journal updates (timestamps only - user_id handled in Step 18)
+    te_journal_statements: List[str] = []
+    if te_timestamp_data:
+        # Group by timestamp to minimize UPDATE statements
+        te_groups: Dict[str, List[int]] = defaultdict(list)
+        for te_id, ts_str in te_timestamp_data.items():
+            te_groups[ts_str].append(te_id)
+        
+        for ts_str, te_ids in te_groups.items():
+            te_id_list = ",".join(str(te_id) for te_id in te_ids)
+            te_journal_statements.append(
+                f"""
+                UPDATE journals 
+                SET created_at='{ts_str}'::timestamp with time zone,
+                    updated_at='{ts_str}'::timestamp with time zone,
+                    validity_period=tstzrange('{ts_str}'::timestamp with time zone, NULL)
+                WHERE journable_type='TimeEntry' 
+                  AND journable_id IN ({te_id_list});
+                """
+            )
+    
+    # 3. Batch work package table updates
+    wp_table_statements: List[str] = []
+    if wp_creation_data:
+        # Group by (created_at, author_id) to minimize UPDATE statements
+        wp_table_groups: Dict[Tuple[str, Optional[int]], List[int]] = defaultdict(list)
+        for wp_id, ts_str in wp_creation_data.items():
+            author_id = wp_author_data.get(wp_id)
+            wp_table_groups[(ts_str, author_id)].append(wp_id)
+        
+        for (ts_str, author_id), wp_ids in wp_table_groups.items():
+            wp_id_list = ",".join(str(wp_id) for wp_id in wp_ids)
+            if author_id is not None:
+                wp_table_statements.append(
+                    f"""
+                    UPDATE work_packages 
+                    SET created_at='{ts_str}'::timestamp with time zone,
+                        updated_at='{ts_str}'::timestamp with time zone,
+                        author_id={author_id}
+                    WHERE id IN ({wp_id_list});
+                    """
+                )
+            else:
+                wp_table_statements.append(
+                    f"""
+                    UPDATE work_packages 
+                    SET created_at='{ts_str}'::timestamp with time zone,
+                        updated_at='{ts_str}'::timestamp with time zone
+                    WHERE id IN ({wp_id_list});
+                    """
+                )
+    
+    # 4. Batch time entry table updates
+    te_table_statements: List[str] = []
+    if te_timestamp_data:
+        # Group by timestamp to minimize UPDATE statements
+        te_table_groups: Dict[str, List[int]] = defaultdict(list)
+        for te_id, ts_str in te_timestamp_data.items():
+            te_table_groups[ts_str].append(te_id)
+        
+        for ts_str, te_ids in te_table_groups.items():
+            te_id_list = ",".join(str(te_id) for te_id in te_ids)
+            te_table_statements.append(
+                f"""
+                UPDATE time_entries 
+                SET created_at='{ts_str}'::timestamp with time zone,
+                    updated_at='{ts_str}'::timestamp with time zone
+                WHERE id IN ({te_id_list});
+                """
+            )
+    
+    # 5. Batch work package updated_at updates
+    wp_updated_at_statements: List[str] = []
+    if wp_updated_at_data:
+        # Group by timestamp to minimize UPDATE statements
+        wp_updated_groups: Dict[str, List[int]] = defaultdict(list)
+        for wp_id, ts in wp_updated_at_data.items():
+            ts_str = ts.isoformat()
+            wp_updated_groups[ts_str].append(wp_id)
+        
+        for ts_str, wp_ids in wp_updated_groups.items():
+            wp_id_list = ",".join(str(wp_id) for wp_id in wp_ids)
+            wp_updated_at_statements.append(
+                f"""
+                UPDATE work_packages 
+                SET updated_at='{ts_str}'::timestamp with time zone
+                WHERE id IN ({wp_id_list});
+                """
+            )
+
+    # Execute batched updates in optimal order
+    total_statements = (
+        len(wp_journal_statements) +
+        len(te_journal_statements) +
+        len(wp_table_statements) +
+        len(te_table_statements) +
+        len(wp_updated_at_statements)
+    )
+    
+    if total_statements == 0:
+        return
+    
+    if ui:
+        ui.info(f"  Updating journals and tables with {total_statements} batched statement(s)...")
+    
+    # Execute in order: work packages first, then time entries
+    if wp_journal_statements:
         _run_sql_statements(
-            creation_statements,
+            wp_journal_statements,
             ui=ui,
-            description="Updating work package creation dates",
+            description="Updating work package journals",
         )
-    if author_statements:
-        if ui:
-            ui.info(f"  Updating work package authors in journals ({len(author_statements)} statement(s))...")
+    
+    if wp_table_statements:
         _run_sql_statements(
-            author_statements,
+            wp_table_statements,
             ui=ui,
-            description="Updating work package authors in journals",
+            description="Updating work packages",
         )
-    if time_entry_statements:
-        if ui:
-            ui.info(f"  Updating time entry timestamps ({len(time_entry_statements)} statement(s))...")
+    
+    if te_journal_statements:
         _run_sql_statements(
-            time_entry_statements,
-            chunk_size=150,
+            te_journal_statements,
             ui=ui,
-            description="Updating time entry timestamps",
+            description="Updating time entry journals",
         )
-    if updated_at_statements:
-        if ui:
-            ui.info(f"  Updating work package updated_at timestamps ({len(updated_at_statements)} statement(s))...")
+    
+    if te_table_statements:
         _run_sql_statements(
-            updated_at_statements,
+            te_table_statements,
             ui=ui,
-            description="Updating work package updated_at timestamps",
+            description="Updating time entries",
+        )
+    
+    if wp_updated_at_statements:
+        _run_sql_statements(
+            wp_updated_at_statements,
+            ui=ui,
+            description="Updating work package updated_at",
         )
 
 
@@ -4177,28 +4760,30 @@ def calculate_openproject_totals(
         ui.info("Fetching time entries from OpenProject using Database", "info")
     else:
         ui.info("Fetching time entries from OpenProject using API", "info")
+    
+    # Collect relevant work package ids (needed for both DB and API paths)
+    wp_ids: Set[int] = set()
+    for pkg in imported_packages:
+        try:
+            wp_ids.add(int(pkg.work_package_id))
+        except Exception:
+            continue
+    # If no new imports this run, include all staged work packages
+    if not wp_ids:
+        for task in staging.tasks.values():
+            if task.openproject_id is not None:
+                try:
+                    wp_ids.add(int(task.openproject_id))
+                except Exception:
+                    continue
+    
     if use_db:
         # Build project id -> name from staging
         project_id_to_name: Dict[int, str] = {}
         for staged_project in staging.projects.values():
             if staged_project.openproject_id:
                 project_id_to_name[int(staged_project.openproject_id)] = staged_project.name
-        # Collect relevant work package ids
-        wp_ids: Set[int] = set()
-        for pkg in imported_packages:
-            try:
-                wp_ids.add(int(pkg.work_package_id))
-            except Exception:
-                continue
-        # If no new imports this run, include all staged work packages
-        if not wp_ids:
-            for task in staging.tasks.values():
-                if task.openproject_id is not None:
-                    try:
-                        wp_ids.add(int(task.openproject_id))
-                    except Exception:
-                        continue
-        else:
+        if wp_ids:
             ui.info("  Fetching time entries from OpenProject using Database...", "info")
             ids_csv = ",".join(str(i) for i in sorted(wp_ids))
             # Aggregate hours and entries by project for the selected work packages
@@ -4297,14 +4882,32 @@ def calculate_openproject_totals(
     ui.info("  Fetching time entries from OpenProject using API...", "info")
     # Unified progress bar fetch (avoid per-page console spam)
     all_time_entries: List[dict] = []
+    
+    # Build filters to only fetch time entries for relevant work packages
+    # This avoids fetching all 188k+ time entries when we only need a few
+    params = {"offset": 1, "pageSize": 100}
+    if wp_ids:
+        # Use OpenProject API filters to filter by work package ID
+        wp_id_list = [str(wp_id) for wp_id in sorted(wp_ids)]
+        filters = json.dumps([
+            {
+                "workPackage": {
+                    "operator": "=",
+                    "values": wp_id_list
+                }
+            }
+        ])
+        params["filters"] = filters
+        ui.info(f"  Filtering by {len(wp_ids)} work package(s) to avoid fetching all entries...", "info")
+    
     try:
-        page_size = 100
         offset = 1
         seen_count = 0
         total_from_api: Optional[int] = None
         ui.progress(0, 1, "Fetching time entries")  # show bar start
         while True:
-            resp = client._request("GET", "/time_entries", params={"offset": offset, "pageSize": page_size})
+            params["offset"] = offset
+            resp = client._request("GET", "/time_entries", params=params)
             payload = resp.json()
             if total_from_api is None:
                 try:
@@ -4546,8 +5149,38 @@ def analyze_missing_entries(
                 ui.info(f"    Failed DB fetch for WP {wp_id}: {exc}")
                 continue
     else:
+        # Use API with filters to only fetch time entries for relevant work packages
+        # This avoids fetching all 188k+ time entries when we only need a few
         try:
-            all_time_entries = client.list_time_entries()
+            if staged_wp_ids:
+                # Build filters to filter by work package ID
+                wp_id_list = [str(wp_id) for wp_id in sorted(staged_wp_ids)]
+                filters = json.dumps([
+                    {
+                        "workPackage": {
+                            "operator": "=",
+                            "values": wp_id_list
+                        }
+                    }
+                ])
+                ui.info(f"  Fetching time entries for {len(staged_wp_ids)} work package(s) via API (filtered)...")
+                # Use _request directly with filters since _get_collection doesn't support params
+                all_time_entries = []
+                page_size = 100
+                offset = 1
+                while True:
+                    params = {"offset": offset, "pageSize": page_size, "filters": filters}
+                    resp = client._request("GET", "/time_entries", params=params)
+                    payload = resp.json()
+                    elements = payload.get("_embedded", {}).get("elements", []) or []
+                    all_time_entries.extend(elements)
+                    next_link = payload.get("_links", {}).get("nextByOffset")
+                    if not elements or not next_link:
+                        break
+                    offset += 1
+            else:
+                ui.info("  Fetching all time entries via API (no work package filter)...")
+                all_time_entries = client.list_time_entries()
         except OpenProjectError as exc:
             ui.info(f"  Error fetching time entries: {exc}")
             return
@@ -7207,7 +7840,33 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except Exception as _exc:
         ui.warning(f"Failed to write time-entry cache '{time_entry_cache_path}': {_exc}")
 
-    # Step 15.5: Update logged_by field for time entries
+    # Step 17.5: Rebuild journal entries for imported work packages
+    # This must run AFTER time entries are logged (Step 17) so we can find first/last worklog dates
+    ui.start_step("Rebuild work package journals")
+    if args.dry_run:
+        ui.skip_step("Dry-run: would rebuild journal entries for imported work packages.")
+    else:
+        if not imported_packages:
+            ui.skip_step("No imported work packages to rebuild journals for.")
+        else:
+            # Get current user (token owner) to use as author when assignee is None
+            current_user_id_for_journals: Optional[int] = None
+            try:
+                current_user = client.get_current_user()
+                current_user_id_for_journals = int(current_user["id"])
+            except Exception as exc:
+                ui.warning(f"Failed to get current user for journal rebuild: {exc}. Will use assignee only.")
+            
+            rebuild_journals_for_imported_packages(
+                imported_packages=imported_packages,
+                user_id_map=user_id_map,
+                current_user_id=current_user_id_for_journals,
+                ui=ui,
+                base_url=client.base_url if hasattr(client, "base_url") else None,
+            )
+            ui.complete_step("Rebuilt journal entries for imported work packages.")
+
+    # Step 16: Update logged_by field for time entries
     ui.start_step("Update time entry logged_by field")
     if args.dry_run:
         ui.skip_step("Dry-run: would update logged_by field for time entries.")
@@ -7219,6 +7878,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             ui=ui,
             dry_run=False,
             source=args.logged_by_source,
+            imported_packages=imported_packages,  # Pass time entries from Step 17
         )
         if updated_count == 0:
             ui.skip_step("No time entries need logged_by update.")
@@ -7227,51 +7887,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 f"Updated logged_by for {updated_count} time entry(ies)."
             )
 
+    # Step 19: Adjust activity history (SKIPPED - journals are now generated from scratch in Step 17.5)
     ui.start_step("Adjust activity history")
-    packages_dict = {pkg.work_package_id: pkg for pkg in imported_packages}
-    history_packages = _collect_packages_for_history_adjustment(
-        staging,
-        packages_dict,
-        ui,
-        base_url=client.base_url if hasattr(client, "base_url") else None,
-    )
-    if not history_packages:
-        ui.skip_step("No history adjustments required.")
-    elif args.dry_run:
-        ui.skip_step("Dry-run: would adjust journal timestamps for new items.")
-    else:
-        if not ui.ask_confirmation(
-            "Apply history adjustments to align creation and log timestamps?"
-        ):
-            ui.skip_step("History adjustments skipped by operator.")
-        else:
-            # Get current user (token owner) to use as author when assignee is None
-            current_user_id_for_history: Optional[int] = None
-            try:
-                current_user = client.get_current_user()
-                current_user_id_for_history = int(current_user["id"])
-                _write_debug_log("debug", f"[history] Current user (token owner): ID={current_user_id_for_history}, name={current_user.get('name', 'unknown')}")
-            except Exception as exc:
-                ui.warning(f"Failed to get current user for history adjustments: {exc}. Will use default author.")
-            
-            apply_history_adjustments(
-                history_packages,
-                dry_run=False,
-                ui=ui,
-                user_id_map=user_id_map,
-                current_user_id=current_user_id_for_history,
-            )
-            
-            # Clean up journal entries: remove author changes and fix status change timestamps
-            ui.info("  Cleaning up journal entries...")
-            _cleanup_work_package_journals(
-                history_packages,
-                client.base_url if hasattr(client, "base_url") else None,
-                ui,
-            )
-            
-            ui.complete_step(
-                "Updated journals and time entries in the database.")
+    ui.skip_step("Skipped - journal entries are generated from scratch in Step 17.5 (Rebuild work package journals).")
 
     ui.start_step("Update project creation dates")
     if args.dry_run:

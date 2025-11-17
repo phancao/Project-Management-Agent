@@ -3,17 +3,89 @@
 
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Card } from "~/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useBurndownChart } from "~/core/api/hooks/pm/use-analytics";
-import { useProjects } from "~/core/api/hooks/pm/use-projects";
-import { useSearchParams } from "next/navigation";
+import { useSprints } from "~/core/api/hooks/pm/use-sprints";
 
 export function BurndownView() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  
   const projectId = searchParams?.get("project");
-  const { data: chartData, isLoading: loading, error } = useBurndownChart(projectId);
+  const sprintParam = searchParams?.get("sprint");
+
+  const {
+    sprints,
+    loading: sprintsLoading,
+    error: sprintsError,
+  } = useSprints(projectId ?? "");
+
+  const sortedSprints = useMemo(() => {
+    if (!sprints) return [];
+
+    const normalizeStatus = (status?: string) => (status || "").toLowerCase();
+    const statusPriority = (status?: string) => {
+      const value = normalizeStatus(status);
+      if (["active", "in_progress", "ongoing"].includes(value)) return 0;
+      if (["future", "planned", "planning"].includes(value)) return 1;
+      return 2; // completed/closed or unknown
+    };
+
+    const dateValue = (value?: string) => {
+      if (!value) return Number.MIN_SAFE_INTEGER;
+      const time = new Date(value).getTime();
+      return Number.isNaN(time) ? Number.MIN_SAFE_INTEGER : time;
+    };
+
+    return [...sprints].sort((a, b) => {
+      const statusDiff = statusPriority(a.status) - statusPriority(b.status);
+      if (statusDiff !== 0) return statusDiff;
+
+      const aDate = Math.max(dateValue(a.start_date), dateValue(a.end_date));
+      const bDate = Math.max(dateValue(b.start_date), dateValue(b.end_date));
+
+      return bDate - aDate; // Newest first within the same status bucket
+    });
+  }, [sprints]);
+
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sortedSprints.length) {
+      setSelectedSprintId(null);
+      return;
+    }
+
+    setSelectedSprintId((current) => {
+      if (current && sortedSprints.some((s) => s.id === current)) {
+        return current;
+      }
+      if (sprintParam && sortedSprints.some((s) => s.id === sprintParam)) {
+        return sprintParam;
+      }
+      return sortedSprints[0].id;
+    });
+  }, [sortedSprints, sprintParam]);
+
+  const { data: chartData, isLoading: loading, error } = useBurndownChart(projectId, selectedSprintId);
+
+  const handleSprintChange = (value: string) => {
+    setSelectedSprintId(value);
+    if (!searchParams) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("sprint", value);
+    if (projectId) {
+      params.set("project", projectId);
+    }
+    router.replace(`${pathname}?${params.toString()}`);
+  };
 
   // Transform chart data for Recharts
   const burndownData = chartData?.series[0]?.data.map((point, index) => {
@@ -32,6 +104,40 @@ export function BurndownView() {
   const completed = metadata.completed || 0;
   const completionPercentage = metadata.completion_percentage || 0;
   const onTrack = metadata.on_track || false;
+
+  if (sprintsError) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-red-500">Failed to load sprints: {sprintsError.message}</div>
+      </div>
+    );
+  }
+
+  if (!projectId) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-500 dark:text-gray-400">Select a project to view burndown chart.</div>
+      </div>
+    );
+  }
+
+  if (sprintsLoading || (!selectedSprintId && sortedSprints.length > 0)) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-500 dark:text-gray-400">Loading sprints...</div>
+      </div>
+    );
+  }
+
+  if (!sortedSprints.length) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-500 dark:text-gray-400">
+          No sprints found for this project. Create or activate a sprint to view the burndown chart.
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -87,18 +193,55 @@ export function BurndownView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{chartData?.title || "Burndown Chart"}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Sprint Progress
           </p>
         </div>
-        {onTrack !== undefined && (
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${onTrack ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}`}>
-            {onTrack ? '✓ On Track' : '⚠ Behind Schedule'}
-          </div>
-        )}
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <Select value={selectedSprintId ?? undefined} onValueChange={handleSprintChange}>
+            <SelectTrigger className="min-w-[20rem] max-w-full pr-10 text-left">
+              <SelectValue placeholder="Select sprint" className="truncate" />
+            </SelectTrigger>
+            <SelectContent className="min-w-[20rem] max-w-xl">
+              {sortedSprints.map((sprint) => {
+                const normalizedStatus = (sprint.status || "").toLowerCase();
+                const statusLabel =
+                  normalizedStatus === "active"
+                    ? "Active"
+                    : normalizedStatus === "future"
+                    ? "Planned"
+                    : normalizedStatus === "planning"
+                    ? "Planning"
+                    : normalizedStatus === "closed" || normalizedStatus === "completed"
+                    ? "Completed"
+                    : sprint.status || "Unknown";
+
+                return (
+                  <SelectItem key={sprint.id} value={sprint.id}>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium truncate">{sprint.name}</span>
+                      <span className="text-xs text-muted-foreground truncate">
+                        {statusLabel}
+                        {sprint.start_date
+                          ? ` • ${new Date(sprint.start_date).toLocaleDateString()}`
+                          : ""}
+                      </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+
+          {onTrack !== undefined && (
+            <div className={`px-3 py-1 rounded-full text-sm font-medium ${onTrack ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}`}>
+              {onTrack ? '✓ On Track' : '⚠ Behind Schedule'}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Metrics Cards */}

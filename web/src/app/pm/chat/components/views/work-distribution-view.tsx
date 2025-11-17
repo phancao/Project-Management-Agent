@@ -114,15 +114,15 @@ export function WorkDistributionView() {
             {/* By Count */}
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Distribution by Count</h3>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={400}>
                 <PieChart>
                   <Pie
                     data={distributionData}
                     cx="50%"
-                    cy="50%"
+                    cy="45%"
                     labelLine={false}
-                    label={(entry) => `${entry.name}: ${entry.value}`}
-                    outerRadius={100}
+                    label={false}
+                    outerRadius={120}
                     fill="#8884d8"
                     dataKey="value"
                   >
@@ -137,7 +137,13 @@ export function WorkDistributionView() {
                       props.payload.name
                     ]}
                   />
-                  <Legend />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={100}
+                    iconType="circle"
+                    wrapperStyle={{ paddingTop: '30px' }}
+                    formatter={(value, entry: any) => `${value} (${entry.payload.percentage?.toFixed(1) || 0}%)`}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </Card>
@@ -145,15 +151,15 @@ export function WorkDistributionView() {
             {/* By Story Points */}
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Distribution by Story Points</h3>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={400}>
                 <PieChart>
                   <Pie
                     data={distributionData}
                     cx="50%"
-                    cy="50%"
+                    cy="45%"
                     labelLine={false}
-                    label={(entry) => `${entry.name}: ${entry.storyPoints}pts`}
-                    outerRadius={100}
+                    label={false}
+                    outerRadius={120}
                     fill="#8884d8"
                     dataKey="storyPoints"
                   >
@@ -168,7 +174,13 @@ export function WorkDistributionView() {
                       props.payload.name
                     ]}
                   />
-                  <Legend />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={100}
+                    iconType="circle"
+                    wrapperStyle={{ paddingTop: '30px' }}
+                    formatter={(value, entry: any) => `${value} (${entry.payload.pointsPercentage?.toFixed(1) || 0}%)`}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </Card>

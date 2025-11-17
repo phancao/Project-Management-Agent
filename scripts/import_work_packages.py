@@ -5271,6 +5271,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             if isinstance(email, str) and email
         }
+        # Fast lookup for existing records by email/login (lowercased)
+        existing_by_email: Dict[str, dict] = {}
+        existing_by_login: Dict[str, dict] = {}
+        for record in user_records.values():
+            eml = record.get("email")
+            lgn = record.get("login")
+            if isinstance(eml, str) and eml:
+                existing_by_email[eml.strip().lower()] = record
+            if isinstance(lgn, str) and lgn:
+                existing_by_login[lgn.strip().lower()] = record
         created_count = 0
         sorted_missing = sorted(
             missing_users,
@@ -5284,15 +5294,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for idx_u, staged_user in enumerate(sorted_missing, start=1):
             if users_progress_interval and (idx_u % users_progress_interval == 0 or idx_u == total_to_create_users):
                 ui.progress(idx_u, total_to_create_users, "Creating users")
-            login = build_unique_username(staged_user.full_name, existing_logins)
-            # Ensure email uniqueness alongside username
-            base_email_local = login
+            # Build base local part from dotted username (first.last)
+            base_local = build_unique_username(staged_user.full_name, existing_logins)
+            # Ensure email uniqueness (galaxytechnology.vn) using base_local
+            base_email_local = base_local
             email_local = base_email_local
             suffix = 1
             while f"{email_local}@{email_domain}" in existing_emails:
                 suffix += 1
                 email_local = f"{base_email_local}{suffix}"
             email = f"{email_local}@{email_domain}"
+            # Requirement: login must be the email address
+            login = email
+
+            # If a user already exists with this email/login, map instead of creating
+            existing_record = existing_by_email.get(email.lower()) or existing_by_login.get(login.lower())
+            if existing_record:
+                display_name = existing_record.get("name") or staged_user.full_name
+                staged_user.openproject_id = int(existing_record["id"])
+                normalized_display = normalize_person_name(display_name)
+                normalized_user_records[normalized_display] = existing_record
+                normalized_user_records[staged_user.normalized_name] = existing_record
+                user_records[display_name] = existing_record
+                existing_logins.add(existing_record.get("login") or login)
+                existing_emails.add(existing_record.get("email") or email)
+                # Update fast lookups
+                if existing_record.get("email"):
+                    existing_by_email[existing_record["email"].strip().lower()] = existing_record
+                if existing_record.get("login"):
+                    existing_by_login[existing_record["login"].strip().lower()] = existing_record
+                continue
+
             password = secrets.token_urlsafe(12)
             try:
                 created_user = client.create_user(
@@ -5317,6 +5349,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             user_records[display_name] = created_user
             existing_logins.add(login)
             existing_emails.add(email)
+            existing_by_email[email.strip().lower()] = created_user
+            existing_by_login[login.strip().lower()] = created_user
             created_count += 1
             _write_debug_log("info", f"[user-create] name='{display_name}' login='{login}' id={staged_user.openproject_id}")
         ui.progress_summary(

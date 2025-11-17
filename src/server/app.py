@@ -3017,7 +3017,8 @@ async def get_burndown_chart(
     scope_type: str = "story_points"
 ):
     """Get burndown chart for a project/sprint"""
-    logger.info(f"[get_burndown_chart] Request: project_id={project_id}, sprint_id={sprint_id}, scope_type={scope_type}")
+    logger.info(f"[get_burndown_chart] ========== BURNDOWN REQUEST START ==========")
+    logger.info(f"[get_burndown_chart] project_id={project_id}, sprint_id={sprint_id}, scope_type={scope_type}")
     try:
         from database.connection import get_db_session
         

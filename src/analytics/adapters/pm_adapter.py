@@ -70,7 +70,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         scope_type: str = "story_points"
     ) -> Dict[str, Any]:
         """Fetch burndown data from PM provider"""
-        logger.info(f"[PMProviderAnalyticsAdapter] Fetching burndown data: project={project_id}, sprint={sprint_id}")
+        logger.info(f"[PMProviderAnalyticsAdapter] ========== FETCHING BURNDOWN DATA ==========")
+        logger.info(f"[PMProviderAnalyticsAdapter] project={project_id}, sprint={sprint_id}")
         
         project_key = self._extract_project_key(project_id)
 
@@ -127,19 +128,26 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             all_sprint_ids = [str(t.sprint_id) if t.sprint_id else "None" for t in all_tasks]
             logger.info(f"[PMProviderAnalyticsAdapter] All task sprint_ids: {all_sprint_ids}")
             
-            # Log first few tasks' details
-            for i, task in enumerate(all_tasks[:5]):
+            # Log ALL tasks to find the specific ones the user mentioned
+            logger.info(f"[PMProviderAnalyticsAdapter] Logging ALL {len(all_tasks)} tasks:")
+            for i, task in enumerate(all_tasks):
                 logger.info(
-                    f"[PMProviderAnalyticsAdapter] Task {i+1}: id={task.id}, "
-                    f"title={task.title[:50]}, sprint_id={task.sprint_id} (type: {type(task.sprint_id).__name__ if task.sprint_id else 'None'})"
+                    f"[PMProviderAnalyticsAdapter] Task {i+1}/{len(all_tasks)}: id={task.id}, "
+                    f"title={task.title[:80]}, sprint_id={task.sprint_id} (type: {type(task.sprint_id).__name__ if task.sprint_id else 'None'})"
                 )
-                if task.raw_data:
-                    version_link = task.raw_data.get("_links", {}).get("version")
-                    version_embedded = task.raw_data.get("_embedded", {}).get("version")
-                    logger.info(
-                        f"[PMProviderAnalyticsAdapter]   Task {i+1} raw: _links.version={version_link}, "
-                        f"_embedded.version={version_embedded is not None if version_embedded else False}"
+                # Check for the specific tasks the user mentioned
+                if task.id in ["85982", "85989", "85990"]:
+                    logger.warning(
+                        f"[PMProviderAnalyticsAdapter] ⚠️ FOUND USER MENTIONED TASK: id={task.id}, "
+                        f"title={task.title}, sprint_id={task.sprint_id}"
                     )
+                    if task.raw_data:
+                        version_link = task.raw_data.get("_links", {}).get("version")
+                        version_embedded = task.raw_data.get("_embedded", {}).get("version")
+                        logger.warning(
+                            f"[PMProviderAnalyticsAdapter]   Task {task.id} raw: _links.version={version_link}, "
+                            f"_embedded.version={version_embedded}"
+                        )
             
             # Compare sprint_id as strings to handle type mismatches
             sprint_id_str = str(sprint_id) if sprint_id else None

@@ -108,15 +108,31 @@ EOSQL"
 
 echo "7) Wait for API to be ready..."
 READY=0
-# Shorter wait: up to ~30 seconds total
-for i in {1..30}; do
-  if curl -s -f http://localhost:8081/api/v3/status >/dev/null 2>&1; then
-    READY=1; break;
+# Check every 3 seconds, up to 60 attempts (3 minutes total)
+# Use /api/v3/ endpoint - returns 401 (Unauthorized) when API is ready, 404/000 when not ready
+MAX_ATTEMPTS=60
+ATTEMPT=0
+while [ "${ATTEMPT}" -lt "${MAX_ATTEMPTS}" ]; do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/api/v3/ 2>&1 || echo "000")
+  # 401 (Unauthorized) or 200 means API is ready and responding
+  # 404, 000, or connection errors mean API is not ready yet
+  if [ "${HTTP_CODE}" = "401" ] || [ "${HTTP_CODE}" = "200" ]; then
+    READY=1
+    if [ "${ATTEMPT}" -gt 0 ]; then
+      echo "   ✓ API is ready (after ${ATTEMPT} attempt(s), HTTP ${HTTP_CODE})"
+    else
+      echo "   ✓ API is ready (HTTP ${HTTP_CODE})"
+    fi
+    break
   fi
-  sleep 1
+  ATTEMPT=$((ATTEMPT + 1))
+  if [ $((ATTEMPT % 10)) -eq 0 ]; then
+    echo "   ⏳ Still waiting... (attempt ${ATTEMPT}/${MAX_ATTEMPTS}, HTTP ${HTTP_CODE})"
+  fi
+  sleep 3
 done
 if [ "${READY}" != "1" ]; then
-  echo "⚠ API status not ready after short wait; continuing to token generation"
+  echo "⚠ API not ready after ${MAX_ATTEMPTS} attempts (~$((MAX_ATTEMPTS * 3)) seconds); continuing to token generation"
 fi
 
 echo "8) Generate fresh admin API token (v13) and save for importer..."

@@ -1178,25 +1178,6 @@ class OpenProjectV13Provider(BasePMProvider):
         elif links.get("status", {}).get("title"):
             status = links.get("status", {}).get("title")
         
-        # Extract sprint_id from version link (OpenProject uses "version" for sprints)
-        # Check both _links.version and _embedded.version
-        version_href = None
-        if links.get("version", {}).get("href"):
-            version_href = links.get("version", {}).get("href")
-        elif embedded.get("version"):
-            # Version might be in embedded data
-            version_obj = embedded.get("version", {})
-            if isinstance(version_obj, dict):
-                # Check _links.self.href in embedded version
-                version_links = version_obj.get("_links", {})
-                if version_links.get("self", {}).get("href"):
-                    version_href = version_links.get("self", {}).get("href")
-                # Or check id directly
-                elif version_obj.get("id"):
-                    version_href = f"/api/v3/versions/{version_obj.get('id')}"
-        
-        sprint_id = self._extract_id_from_href(version_href) if version_href else None
-        
         return PMTask(
             id=str(data["id"]),
             title=data.get("subject", ""),
@@ -1216,7 +1197,9 @@ class OpenProjectV13Provider(BasePMProvider):
             epic_id=self._extract_id_from_href(
                 links.get("parent", {}).get("href")
             ) if links.get("parent", {}).get("href") else None,
-            sprint_id=sprint_id,
+            sprint_id=self._extract_id_from_href(
+                links.get("version", {}).get("href")
+            ) if links.get("version", {}).get("href") else None,
             estimated_hours=self._parse_duration_to_hours(
                 data.get("estimatedTime")
             ),

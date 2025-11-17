@@ -12,8 +12,9 @@ import { Suspense } from "react";
 import { toast } from "sonner";
 
 import { Button } from "~/components/ui/button";
-import { RefreshCw } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { RefreshCw, ChevronDown, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "~/components/ui/command";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMLoading } from "../context/pm-loading-context";
@@ -38,6 +39,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   const { state: loadingState } = usePMLoading();
   const [providers, setProviders] = useState<Array<{ id: string; provider_type: string }>>([]);
   const [regeneratingMockData, setRegeneratingMockData] = useState(false);
+  const [projectComboboxOpen, setProjectComboboxOpen] = useState(false);
   
   const selectedProjectId = propSelectedProjectId || new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('project');
 
@@ -203,70 +205,119 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
           {/* Project Selector - Only show on Project Management page */}
           {!isOverview && (
             <div className="flex items-center gap-2 min-w-[200px]">
-              <Select value={selectedProject || ""} onValueChange={handleProjectChange} disabled={projectsLoading || projects.length === 0}>
-                <SelectTrigger className="w-full">
-                  {selectedProject ? (
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      {(() => {
-                        const project = projects.find(p => p.id === selectedProject);
-                        const providerType = getProviderType(selectedProject);
-                        const isMockProject = selectedProject.startsWith("mock:");
-                        if (!project) {
-                          return (
-                            <span className="text-gray-500">No project selected</span>
-                          );
-                        }
-                        if (isMockProject) {
+              <Popover open={projectComboboxOpen} onOpenChange={setProjectComboboxOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={projectComboboxOpen}
+                    className="w-full justify-between"
+                    disabled={projectsLoading || projects.length === 0}
+                  >
+                    {selectedProject ? (
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {(() => {
+                          const project = projects.find(p => p.id === selectedProject);
+                          const providerType = getProviderType(selectedProject);
+                          const isMockProject = selectedProject.startsWith("mock:");
+                          if (!project) {
+                            return (
+                              <span className="text-gray-500">No project selected</span>
+                            );
+                          }
+                          if (isMockProject) {
+                            return (
+                              <>
+                                <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                                  DEMO
+                                </span>
+                                <span className="truncate">Mock Project (Demo Data)</span>
+                              </>
+                            );
+                          }
                           return (
                             <>
-                              <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
-                                DEMO
-                              </span>
-                              <span className="truncate">Mock Project (Demo Data)</span>
+                              {getProviderBadge(providerType)}
+                              <span className="truncate">{project.name}</span>
                             </>
                           );
-                        }
-                        return (
-                          <>
-                            {getProviderBadge(providerType)}
-                            <span className="truncate">{project.name}</span>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  ) : (
-                    <SelectValue placeholder="Loading projects..." />
-                  )}
-                </SelectTrigger>
-                <SelectContent>
-                  {mockProjects.map(project => (
-                    <SelectItem key={project.id} value={project.id}>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
-                          DEMO
-                        </span>
-                        <span>Mock Project (Demo Data)</span>
+                        })()}
                       </div>
-                    </SelectItem>
-                  ))}
-
-                  {mockProjects.length > 0 && realProjects.length > 0 && (
-                    <div className="my-1 h-px bg-gray-200 dark:bg-gray-700" />
-                  )}
-
-                  {realProjects.map(project => {
-                    const providerType = getProviderType(project.id);
-                    return (
-                      <SelectItem key={project.id} value={project.id}>
-                        <div className="flex items-center gap-2">
-                          {getProviderBadge(providerType)}
-                          <span>{project.name}</span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                    ) : (
+                      <span className="text-gray-500">Loading projects...</span>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command
+                    filter={(value, search) => {
+                      // Use exact substring matching (case-insensitive)
+                      const searchLower = search.toLowerCase();
+                      const valueLower = value.toLowerCase();
+                      return valueLower.includes(searchLower) ? 1 : 0;
+                    }}
+                  >
+                    <CommandInput placeholder="Search projects..." />
+                    <CommandList>
+                      <CommandEmpty>No projects found.</CommandEmpty>
+                      {mockProjects.length > 0 && (
+                        <CommandGroup heading="Demo Projects">
+                          {mockProjects.map(project => (
+                            <CommandItem
+                              key={project.id}
+                              value="Mock Project Demo Data"
+                              onSelect={() => {
+                                handleProjectChange(project.id);
+                                setProjectComboboxOpen(false);
+                              }}
+                            >
+                              <div className="flex items-center gap-2 flex-1">
+                                <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                                  DEMO
+                                </span>
+                                <span>Mock Project (Demo Data)</span>
+                              </div>
+                              <Check
+                                className={`ml-2 h-4 w-4 ${
+                                  selectedProject === project.id ? "opacity-100" : "opacity-0"
+                                }`}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                      {realProjects.length > 0 && (
+                        <CommandGroup heading={mockProjects.length > 0 ? "Real Projects" : "Projects"}>
+                          {realProjects.map(project => {
+                            const providerType = getProviderType(project.id);
+                            return (
+                              <CommandItem
+                                key={project.id}
+                                value={project.name}
+                                onSelect={() => {
+                                  handleProjectChange(project.id);
+                                  setProjectComboboxOpen(false);
+                                }}
+                              >
+                                <div className="flex items-center gap-2 flex-1">
+                                  {getProviderBadge(providerType)}
+                                  <span>{project.name}</span>
+                                </div>
+                                <Check
+                                  className={`ml-2 h-4 w-4 ${
+                                    selectedProject === project.id ? "opacity-100" : "opacity-0"
+                                  }`}
+                                />
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               {isMockProjectSelected ? (
                 <Button
                   variant="outline"

@@ -3,8 +3,8 @@
 
 "use client";
 
-import { Edit2, Save } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Edit2, Save, ExternalLink } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -15,6 +15,7 @@ import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
 import { useEpics } from "~/core/api/hooks/pm/use-epics";
 import { useUsers } from "~/core/api/hooks/pm/use-users";
+import { listProviders, type ProviderConfig } from "~/core/api/pm/providers";
 
 interface TaskDetailsModalProps {
   task: Task | null;
@@ -30,12 +31,22 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null); // Store the task ID being edited
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [providers, setProviders] = useState<ProviderConfig[]>([]);
   
   // Fetch statuses, priorities, epics, and users for the project (hooks must be called before early return)
   const { statuses } = useStatuses(projectId ?? undefined, "task");
   const { priorities, loading: prioritiesLoading, error: prioritiesError } = usePriorities(projectId ?? undefined);
   const { epics } = useEpics(projectId ?? undefined);
   const { users, loading: usersLoading } = useUsers(projectId ?? undefined);
+
+  // Load providers on mount
+  useEffect(() => {
+    listProviders()
+      .then(setProviders)
+      .catch((err) => {
+        console.error("Failed to load providers:", err);
+      });
+  }, []);
   
   // Log errors only
   useEffect(() => {
@@ -72,6 +83,49 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
       setError(null);
     }
   }, [task, isEditing, open, editingTaskId]);
+
+  // Get external URL for the task (must be before early return to follow Rules of Hooks)
+  const externalUrl = useMemo(() => {
+    if (!task || !projectId) return null;
+    
+    // Skip mock projects
+    if (projectId.startsWith("mock:")) {
+      return null;
+    }
+
+    // Parse project ID to get provider ID
+    const parts = projectId.split(":");
+    if (parts.length < 2) return null;
+    
+    const providerId = parts[0];
+    const provider = providers.find(p => p.id === providerId);
+    
+    if (!provider || !provider.base_url) return null;
+
+    // Extract task ID (might be in format "provider_id:task_id" or just "task_id")
+    let taskId = task.id;
+    if (task.id.includes(":")) {
+      const taskParts = task.id.split(":");
+      taskId = taskParts.length > 1 ? taskParts[1] : taskParts[0];
+    }
+
+    // Construct URL based on provider type
+    const baseUrl = provider.base_url.replace(/\/$/, '');
+    switch (provider.provider_type) {
+      case "jira":
+        // JIRA uses task key format like "PROJ-123"
+        return `${baseUrl}/browse/${taskId}`;
+      case "openproject":
+      case "openproject_v13":
+        // OpenProject uses work package ID
+        return `${baseUrl}/work_packages/${taskId}`;
+      case "clickup":
+        // ClickUp uses task ID in URL
+        return `${baseUrl.replace('/api/v2', '')}/t/${taskId}`;
+      default:
+        return null;
+    }
+  }, [task, projectId, providers]);
 
   // Helper function to find matching status/priority name (case-insensitive)
   // IMPORTANT: Check longer names first to avoid "high" matching "highest"
@@ -494,6 +548,36 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
               </div>
             </div>
           </div>
+
+          {/* External Link */}
+          {externalUrl && (
+            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.open(externalUrl, '_blank', 'noopener,noreferrer');
+                }}
+                className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>View in {(() => {
+                  const parts = projectId?.split(":");
+                  if (parts && parts.length >= 2) {
+                    const providerId = parts[0];
+                    const provider = providers.find(p => p.id === providerId);
+                    if (provider) {
+                      const type = provider.provider_type;
+                      if (type === "openproject_v13") return "OpenProject v13";
+                      if (type === "openproject") return "OpenProject";
+                      return type.toUpperCase();
+                    }
+                  }
+                  return "External Tool";
+                })()}</span>
+              </button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

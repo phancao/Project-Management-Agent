@@ -119,18 +119,34 @@ const fetchTasksFn = async (projectId?: string) => {
   return response.json();
 };
 
+// Cache for tasks by projectId
+const tasksCache = new Map<string, { data: Task[]; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 export function useTasks(projectId?: string) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true); // Start as true to show loading state initially
   const [error, setError] = useState<Error | null>(null);
 
-  const refresh = useCallback((clearTasks: boolean = true) => {
+  const refresh = useCallback((clearTasks: boolean = true, forceRefresh: boolean = false) => {
     // If no project ID, return empty immediately
     if (!projectId) {
       setTasks([]);
       setLoading(false);
       setError(null);
       return;
+    }
+    
+    // Check cache if not forcing refresh
+    if (!forceRefresh) {
+      const cached = tasksCache.get(projectId);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        debug.api('Using cached tasks', { projectId, count: cached.data.length });
+        setTasks(cached.data);
+        setLoading(false);
+        setError(null);
+        return;
+      }
     }
     
     // Optionally clear tasks to avoid showing stale data
@@ -143,6 +159,8 @@ export function useTasks(projectId?: string) {
     
     fetchTasksFn(projectId)
       .then((data) => {
+        // Update cache
+        tasksCache.set(projectId, { data, timestamp: Date.now() });
         setTasks(data);
         setLoading(false);
       })
@@ -155,19 +173,30 @@ export function useTasks(projectId?: string) {
 
   useEffect(() => {
     debug.api('Effect triggered', { projectId });
-    // Clear tasks immediately when projectId changes to avoid showing stale data
-    debug.api('Clearing tasks (projectId changed)');
-    setTasks([]);
-    setError(null);
     
     // If no project ID, set loading to false and return empty
     if (!projectId) {
       debug.api('No projectId, setting loading to false');
+      setTasks([]);
+      setError(null);
       setLoading(false);
       return;
     }
     
-    debug.api('Setting loading to true for projectId', { projectId });
+    // Check cache first
+    const cached = tasksCache.get(projectId);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      debug.api('Using cached tasks on mount', { projectId, count: cached.data.length });
+      setTasks(cached.data);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    
+    // Clear tasks immediately when projectId changes to avoid showing stale data
+    debug.api('Clearing tasks (projectId changed or cache expired)');
+    setTasks([]);
+    setError(null);
     setLoading(true);
     
     // Use a flag to track if this effect is still relevant (projectId hasn't changed)
@@ -186,6 +215,8 @@ export function useTasks(projectId?: string) {
         });
         // Only update state if this effect is still relevant (projectId hasn't changed)
         if (isCurrent) {
+          // Update cache
+          tasksCache.set(projectId, { data, timestamp: Date.now() });
           debug.api('Updating state with tasks', { count: data.length });
           setTasks(data);
           setLoading(false);
@@ -213,7 +244,7 @@ export function useTasks(projectId?: string) {
     };
   }, [projectId]);
 
-  usePMRefresh(refresh);
+  usePMRefresh(() => refresh(true, true)); // Force refresh on PM refresh event
 
   return { tasks, loading, error, refresh };
 }
@@ -311,4 +342,5 @@ export function useAllTasks() {
 
   return { tasks, loading, error, refresh };
 }
+
 

@@ -37,17 +37,38 @@ const fetchSprints = async (projectId: string, state?: string): Promise<Sprint[]
   return response.json();
 };
 
+// Cache for sprints by projectId and state
+const sprintsCache = new Map<string, { data: Sprint[]; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+const getCacheKey = (projectId: string, state?: string) => {
+  return state ? `${projectId}:${state}` : projectId;
+};
+
 export function useSprints(projectId: string, state?: string) {
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback((forceRefresh: boolean = false) => {
     if (!projectId) {
       setSprints([]);
       setLoading(false);
       setError(null);
       return;
+    }
+    
+    const cacheKey = getCacheKey(projectId, state);
+    
+    // Check cache if not forcing refresh
+    if (!forceRefresh) {
+      const cached = sprintsCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        setSprints(cached.data);
+        setLoading(false);
+        setError(null);
+        return;
+      }
     }
     
     setLoading(true);
@@ -58,6 +79,8 @@ export function useSprints(projectId: string, state?: string) {
     
     fetchSprints(projectId, state)
       .then((data) => {
+        // Update cache
+        sprintsCache.set(cacheKey, { data, timestamp: Date.now() });
         setSprints(data);
         setLoading(false);
         setError(null);
@@ -70,10 +93,29 @@ export function useSprints(projectId: string, state?: string) {
   }, [projectId, state]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!projectId) {
+      setSprints([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    
+    const cacheKey = getCacheKey(projectId, state);
+    
+    // Check cache first
+    const cached = sprintsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      setSprints(cached.data);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    
+    // Fetch if not cached
+    refresh(false);
+  }, [projectId, state, refresh]);
 
-  usePMRefresh(refresh);
+  usePMRefresh(() => refresh(true)); // Force refresh on PM refresh event
 
   return { sprints, loading, error, refresh };
 }

@@ -1134,8 +1134,8 @@ class PMHandler:
 
         try:
             statuses = await provider_instance.list_statuses(
-                project_id=actual_project_id,
-                entity_type=entity_type
+                entity_type=entity_type,
+                project_id=actual_project_id
             )
         except NotImplementedError:
             raise ValueError(

@@ -23,6 +23,7 @@ You have access to two types of tools:
    - Database Retrieval tools
    - **Project Management Tools**: When available, you can query project management data (projects, tasks, sprints, epics, users). These tools allow you to:
      - List and get project information
+     - **Use `search_projects` tool** when the user asks to find a specific project by name (e.g., "is there a project named X", "search for project X", "find project X"). This tool searches across all active PM providers and returns matching projects.
      - Query tasks by project or assignee
      - **Use `list_my_tasks` tool** when the user asks to "list my tasks", "show my tasks", or similar queries about their assigned tasks. This tool queries all active PM providers (OpenProject, JIRA, ClickUp, etc.) and returns all tasks assigned to the current user.
      - Access sprint and epic data

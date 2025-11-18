@@ -153,7 +153,7 @@ Before creating a test script, ask:
 ## 📚 Additional Resources
 
 - **Standalone Scripts**: See `scripts/tests/README.md` for detailed guidelines
-- **Official Test Suite**: See `TESTING_GUIDE.md` for testing best practices
+- **Official Test Suite**: See `docs/guides/TESTING_GUIDE.md` for testing best practices
 - **Pytest Documentation**: https://docs.pytest.org/
 
 ## 🚨 Important Notes

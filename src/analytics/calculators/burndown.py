@@ -165,8 +165,16 @@ class BurndownCalculator:
             completed_work = 0
             
             for item in sprint_data.work_items:
-                if item.status == TaskStatus.DONE and item.completed_at:
-                    if item.completed_at.date() <= current_date:
+                if item.status == TaskStatus.DONE:
+                    # If task is DONE, count it toward burndown
+                    # Use completed_at if available, otherwise use sprint end date or current date
+                    completion_date = item.completed_at
+                    if not completion_date:
+                        # If no completion date but task is done, use sprint end date
+                        # This handles cases where tasks are marked done but don't have completion dates
+                        completion_date = datetime.combine(sprint_data.end_date, datetime.min.time())
+                    
+                    if completion_date.date() <= current_date:
                         if scope_type == "story_points":
                             completed_work += item.story_points or 0
                         elif scope_type == "hours":

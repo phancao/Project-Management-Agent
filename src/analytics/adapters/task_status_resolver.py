@@ -385,12 +385,32 @@ class OpenProjectTaskStatusResolver(TaskStatusResolver):
             completion_date_str = (
                 task.raw_data.get("date") or
                 task.raw_data.get("completionDate") or
-                task.raw_data.get("completion_date")
+                task.raw_data.get("completion_date") or
+                task.raw_data.get("updatedAt") or  # Use updatedAt as fallback
+                task.raw_data.get("updated_at")
             )
             if completion_date_str:
                 try:
                     return datetime.fromisoformat(completion_date_str.replace("Z", "+00:00"))
                 except (ValueError, AttributeError):
+                    pass
+            
+            # If task is 100% complete but no completion date, use updatedAt or created_at
+            percentage_complete = task.raw_data.get("percentageComplete") or task.raw_data.get("percentage_complete")
+            if percentage_complete is not None:
+                try:
+                    if float(percentage_complete) >= 100.0:
+                        # Task is 100% complete, use updatedAt or created_at as completion date
+                        updated_at_str = task.raw_data.get("updatedAt") or task.raw_data.get("updated_at")
+                        if updated_at_str:
+                            try:
+                                return datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
+                            except (ValueError, AttributeError):
+                                pass
+                        # Fallback to created_at if available
+                        if task.created_at:
+                            return task.created_at
+                except (ValueError, TypeError):
                     pass
         
         return None

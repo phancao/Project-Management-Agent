@@ -570,11 +570,32 @@ class AnalyticsService:
                 story_points = data.estimated_hours / 8
             created = cls._parse_datetime(data.created_at) or datetime.utcnow()
             completed = cls._parse_datetime(data.completed_at)
+            
+            # Determine status: if task is completed (100% or marked done), use DONE
+            # Otherwise map from status string
+            status = cls._map_status(data.status)
+            # Check if task is actually completed (100% or marked as done)
+            if data.raw_data:
+                # Check percentage complete for OpenProject
+                percentage_complete = raw.get("percentageComplete") or raw.get("percentage_complete")
+                if percentage_complete is not None:
+                    try:
+                        if float(percentage_complete) >= 100.0:
+                            status = TaskStatus.DONE
+                    except (ValueError, TypeError):
+                        pass
+                # Check status.is_closed for OpenProject
+                status_obj = raw.get("_embedded", {}).get("status", {}) or raw.get("status", {})
+                if isinstance(status_obj, dict):
+                    is_closed = status_obj.get("isClosed", False)
+                    if is_closed:
+                        status = TaskStatus.DONE
+            
             return WorkItem(
                 id=str(data.id or "unknown"),
                 title=str(data.title or "Untitled"),
                 type=cls._map_type(raw.get("type")),
-                status=cls._map_status(data.status),
+                status=status,
                 priority=cls._map_priority(data.priority),
                 story_points=story_points,
                 estimated_hours=data.estimated_hours,
@@ -588,11 +609,27 @@ class AnalyticsService:
         if not created:
             created = datetime.utcnow()
         completed = cls._parse_datetime(data.get("completed_at"))
+        
+        # Determine status: if task is marked as completed, use DONE
+        # Otherwise map from status string
+        status = cls._map_status(data.get("status"))
+        # Check if task is marked as completed in the data
+        if data.get("completed") is True:
+            status = TaskStatus.DONE
+        # Also check percentage complete
+        percentage_complete = data.get("percentage_complete") or data.get("percentageComplete")
+        if percentage_complete is not None:
+            try:
+                if float(percentage_complete) >= 100.0:
+                    status = TaskStatus.DONE
+            except (ValueError, TypeError):
+                pass
+        
         return WorkItem(
             id=str(data.get("id") or "unknown"),
             title=str(data.get("title") or "Untitled"),
             type=cls._map_type(data.get("type")),
-            status=cls._map_status(data.get("status")),
+            status=status,
             priority=cls._map_priority(data.get("priority")),
             story_points=data.get("story_points"),
             estimated_hours=data.get("estimated_hours"),

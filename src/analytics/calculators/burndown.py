@@ -165,6 +165,16 @@ class BurndownCalculator:
             completed_work = 0
             
             for item in sprint_data.work_items:
+                # Log each item for debugging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(
+                    f"[BurndownCalculator] Checking item {item.id}: "
+                    f"status={item.status}, "
+                    f"completed_at={item.completed_at}, "
+                    f"story_points={item.story_points}"
+                )
+                
                 if item.status == TaskStatus.DONE:
                     # If task is DONE, count it toward burndown
                     # Use completed_at if available, otherwise use sprint end date or current date
@@ -173,14 +183,25 @@ class BurndownCalculator:
                         # If no completion date but task is done, use sprint end date
                         # This handles cases where tasks are marked done but don't have completion dates
                         completion_date = datetime.combine(sprint_data.end_date, datetime.min.time())
+                        logger.debug(
+                            f"[BurndownCalculator] Item {item.id} is DONE but no completion_date, "
+                            f"using sprint end date: {completion_date.date()}"
+                        )
                     
                     if completion_date.date() <= current_date:
+                        work_value = 0
                         if scope_type == "story_points":
-                            completed_work += item.story_points or 0
+                            work_value = item.story_points or 0
                         elif scope_type == "hours":
-                            completed_work += item.estimated_hours or 0
+                            work_value = item.estimated_hours or 0
                         else:
-                            completed_work += 1
+                            work_value = 1
+                        
+                        completed_work += work_value
+                        logger.debug(
+                            f"[BurndownCalculator] Item {item.id} counted as completed: "
+                            f"{work_value} {scope_type} on {current_date}"
+                        )
             
             # Account for scope changes up to current date
             added_work = 0

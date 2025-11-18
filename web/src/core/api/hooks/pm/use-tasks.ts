@@ -124,9 +124,22 @@ const tasksCache = new Map<string, { data: Task[]; timestamp: number }>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export function useTasks(projectId?: string) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true); // Start as true to show loading state initially
-  const [error, setError] = useState<Error | null>(null);
+  // Initialize from cache if available to avoid loading state
+  const getInitialState = () => {
+    if (!projectId) {
+      return { tasks: [], loading: false, error: null };
+    }
+    const cached = tasksCache.get(projectId);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return { tasks: cached.data, loading: false, error: null };
+    }
+    return { tasks: [], loading: true, error: null };
+  };
+  
+  const initialState = getInitialState();
+  const [tasks, setTasks] = useState<Task[]>(initialState.tasks);
+  const [loading, setLoading] = useState(initialState.loading);
+  const [error, setError] = useState<Error | null>(initialState.error);
 
   const refresh = useCallback((clearTasks: boolean = true, forceRefresh: boolean = false) => {
     // If no project ID, return empty immediately
@@ -183,21 +196,27 @@ export function useTasks(projectId?: string) {
       return;
     }
     
-    // Check cache first
+    // Check cache first - if we already have cached data from initial state, skip
     const cached = tasksCache.get(projectId);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      debug.api('Using cached tasks on mount', { projectId, count: cached.data.length });
-      setTasks(cached.data);
-      setLoading(false);
-      setError(null);
+      // Only update if state doesn't match cache (e.g., projectId changed)
+      if (tasks.length !== cached.data.length || tasks.length === 0) {
+        debug.api('Using cached tasks in effect', { projectId, count: cached.data.length });
+        setTasks(cached.data);
+        setLoading(false);
+        setError(null);
+      }
       return;
     }
     
-    // Clear tasks immediately when projectId changes to avoid showing stale data
-    debug.api('Clearing tasks (projectId changed or cache expired)');
-    setTasks([]);
-    setError(null);
-    setLoading(true);
+    // Only fetch if we don't have cached data
+    // If tasks are already set from initial state, don't clear them
+    if (tasks.length === 0) {
+      debug.api('Clearing tasks (projectId changed or cache expired)');
+      setTasks([]);
+      setError(null);
+      setLoading(true);
+    }
     
     // Use a flag to track if this effect is still relevant (projectId hasn't changed)
     let isCurrent = true;
@@ -242,7 +261,7 @@ export function useTasks(projectId?: string) {
       debug.api('Cleanup: marking effect as stale', { projectId });
       isCurrent = false;
     };
-  }, [projectId]);
+  }, [projectId]); // Removed tasks from deps to avoid infinite loop
 
   usePMRefresh(() => refresh(true, true)); // Force refresh on PM refresh event
 

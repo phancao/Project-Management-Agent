@@ -46,9 +46,23 @@ const getCacheKey = (projectId: string, state?: string) => {
 };
 
 export function useSprints(projectId: string, state?: string) {
-  const [sprints, setSprints] = useState<Sprint[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  // Initialize from cache if available to avoid loading state
+  const getInitialState = () => {
+    if (!projectId) {
+      return { sprints: [], loading: false, error: null };
+    }
+    const cacheKey = getCacheKey(projectId, state);
+    const cached = sprintsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return { sprints: cached.data, loading: false, error: null };
+    }
+    return { sprints: [], loading: true, error: null };
+  };
+  
+  const initialState = getInitialState();
+  const [sprints, setSprints] = useState<Sprint[]>(initialState.sprints);
+  const [loading, setLoading] = useState(initialState.loading);
+  const [error, setError] = useState<Error | null>(initialState.error);
 
   const refresh = useCallback((forceRefresh: boolean = false) => {
     if (!projectId) {
@@ -102,18 +116,27 @@ export function useSprints(projectId: string, state?: string) {
     
     const cacheKey = getCacheKey(projectId, state);
     
-    // Check cache first
+    // Check cache first - if we already have cached data from initial state, skip
     const cached = sprintsCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      setSprints(cached.data);
-      setLoading(false);
-      setError(null);
+      // Only update if state doesn't match cache (e.g., projectId changed)
+      if (sprints.length !== cached.data.length || sprints.length === 0) {
+        setSprints(cached.data);
+        setLoading(false);
+        setError(null);
+      }
       return;
+    }
+    
+    // Only fetch if we don't have cached data
+    // If sprints are already set from initial state, don't clear them
+    if (sprints.length === 0) {
+      setLoading(true);
     }
     
     // Fetch if not cached
     refresh(false);
-  }, [projectId, state, refresh]);
+  }, [projectId, state, refresh]); // Removed sprints from deps to avoid infinite loop
 
   usePMRefresh(() => refresh(true)); // Force refresh on PM refresh event
 

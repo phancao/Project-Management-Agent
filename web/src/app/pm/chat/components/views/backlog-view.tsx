@@ -210,6 +210,34 @@ const logSprintDnd = (...args: unknown[]) => {
  * TASK CARD COMPONENT
  * ========================================================================= */
 
+// Helper function to get status badge color classes
+function getStatusColorClasses(status: string): string {
+  const statusLower = status.toLowerCase().replace(/[\s_-]/g, '_');
+  
+  // Map common status names to color classes
+  if (statusLower.includes('done') || statusLower.includes('completed') || statusLower.includes('closed') || statusLower.includes('resolved')) {
+    return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
+  }
+  if (statusLower.includes('in_progress') || statusLower.includes('inprogress') || statusLower.includes('working') || statusLower.includes('active')) {
+    return 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200';
+  }
+  if (statusLower.includes('todo') || statusLower.includes('to_do') || statusLower.includes('open') || statusLower.includes('new')) {
+    return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
+  }
+  if (statusLower.includes('blocked') || statusLower.includes('waiting')) {
+    return 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200';
+  }
+  if (statusLower.includes('review') || statusLower.includes('testing') || statusLower.includes('qa')) {
+    return 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200';
+  }
+  if (statusLower.includes('backlog')) {
+    return 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200';
+  }
+  
+  // Default color
+  return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
+}
+
 function TaskCard({ 
   task, 
   onClick, 
@@ -252,7 +280,7 @@ function TaskCard({
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {task.status && (
-          <span className="px-2 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+          <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColorClasses(task.status)}`}>
             {task.status}
           </span>
         )}

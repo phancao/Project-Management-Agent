@@ -1059,3 +1059,63 @@ async def coder_node(
         "coder",
         tools,
     )
+
+
+async def pm_agent_node(
+    state: State, config: RunnableConfig
+) -> Command[Literal["research_team"]]:
+    """PM Agent node that handles project management operations."""
+    logger.info("PM Agent node is processing PM operations.")
+    logger.debug(f"[pm_agent_node] Starting PM agent")
+    
+    tools = []
+    
+    # Add PM tools via MCP (preferred) or direct
+    try:
+        from src.tools import get_pm_mcp_tools, is_pm_mcp_configured
+        
+        if is_pm_mcp_configured():
+            try:
+                pm_tools = await get_pm_mcp_tools()
+                tools.extend(pm_tools)
+                logger.info(f"[pm_agent_node] Added {len(pm_tools)} PM tools via MCP")
+                logger.debug(f"[pm_agent_node] PM MCP tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in pm_tools]}")
+            except (ConnectionError, RuntimeError) as e:
+                # MCP server not available, fall back to direct tools
+                logger.warning(f"[pm_agent_node] MCP server not available, falling back to direct PM tools: {e}")
+                from src.tools import get_pm_tools
+                pm_tools = get_pm_tools()
+                if pm_tools:
+                    tools.extend(pm_tools)
+                    logger.info(f"[pm_agent_node] Added {len(pm_tools)} PM tools (direct fallback)")
+                    logger.debug(f"[pm_agent_node] PM tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in pm_tools]}")
+        else:
+            # Fallback to direct PM tools
+            from src.tools import get_pm_tools
+            pm_tools = get_pm_tools()
+            if pm_tools:
+                tools.extend(pm_tools)
+                logger.info(f"[pm_agent_node] Added {len(pm_tools)} PM tools (direct)")
+                logger.debug(f"[pm_agent_node] PM tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in pm_tools]}")
+    except Exception as e:
+        logger.warning(f"[pm_agent_node] Could not add PM tools: {e}")
+    
+    # Add Analytics tools for project insights
+    try:
+        analytics_tools = get_analytics_tools()
+        if analytics_tools:
+            tools.extend(analytics_tools)
+            logger.info(f"[pm_agent_node] Added {len(analytics_tools)} analytics tools to PM agent")
+            logger.debug(f"[pm_agent_node] Analytics tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in analytics_tools]}")
+    except Exception as e:
+        logger.warning(f"[pm_agent_node] Could not add analytics tools: {e}")
+    
+    logger.info(f"[pm_agent_node] PM Agent tools count: {len(tools)}")
+    logger.debug(f"[pm_agent_node] PM Agent tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in tools]}")
+    
+    return await _setup_and_execute_agent_step(
+        state,
+        config,
+        "pm_agent",
+        tools,
+    )

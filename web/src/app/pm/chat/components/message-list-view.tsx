@@ -151,8 +151,20 @@ function MessageListItem({
       message.agent === "coordinator" ||
       message.agent === "planner" ||
       message.agent === "podcast" ||
+      message.agent === "reporter" ||
       startOfResearch
     ) {
+      // Debug logging for reporter messages
+      if (process.env.NODE_ENV === "development" && message.agent === "reporter") {
+        console.log(
+          `[DEBUG] MessageListItem (PM chat) rendering reporter: ` +
+          `id=${messageId}, ` +
+          `content_length=${message.content?.length ?? 0}, ` +
+          `contentChunks_length=${message.contentChunks?.length ?? 0}, ` +
+          `isStreaming=${message.isStreaming}, ` +
+          `hasContent=${!!message.content}`
+        );
+      }
       let content: React.ReactNode;
       if (message.agent === "planner") {
         content = (
@@ -182,7 +194,8 @@ function MessageListItem({
           </div>
         );
       } else {
-        content = message.content ? (
+        // Render if there's content OR if it's streaming (content may be accumulating)
+        content = (message.content || message.isStreaming) ? (
           <div
             className={cn(
               "flex w-full px-4",

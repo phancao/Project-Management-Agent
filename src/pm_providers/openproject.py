@@ -51,13 +51,66 @@ class OpenProjectProvider(BasePMProvider):
     # ==================== Project Operations ====================
     
     async def list_projects(self) -> List[PMProject]:
-        """List all projects from OpenProject"""
-        url = f"{self.base_url}/api/v3/projects"
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
+        """List all projects from OpenProject (handles pagination)"""
+        import logging
+        logger = logging.getLogger(__name__)
         
-        projects_data = response.json()["_embedded"]["elements"]
-        return [self._parse_project(proj) for proj in projects_data]
+        url = f"{self.base_url}/api/v3/projects"
+        all_projects = []
+        page_num = 1
+        
+        # Use maximum page size for efficiency (OpenProject API supports up to 500 per page)
+        params = {"pageSize": 500}
+        request_url = url
+        
+        logger.info(f"OpenProject: Fetching projects from {url} with pageSize=500")
+        
+        while request_url:
+            response = requests.get(request_url, headers=self.headers, params=params, timeout=60)
+            response.raise_for_status()
+            
+            data = response.json()
+            projects_data = data.get("_embedded", {}).get("elements", [])
+            
+            total_count = data.get("count", len(all_projects) + len(projects_data))
+            logger.info(
+                f"OpenProject: Page {page_num} - Found {len(projects_data)} projects "
+                f"(total so far: {len(all_projects) + len(projects_data)}/{total_count})"
+            )
+            
+            all_projects.extend(projects_data)
+            
+            # Check for next page
+            links = data.get("_links", {})
+            next_link = links.get("nextByOffset") or links.get("next")
+            
+            if next_link and isinstance(next_link, dict):
+                next_href = next_link.get("href")
+                if next_href:
+                    if not next_href.startswith("http"):
+                        request_url = f"{self.base_url}{next_href}"
+                    else:
+                        request_url = next_href
+                    params = {}  # Clear params for subsequent requests
+                    page_num += 1
+                else:
+                    request_url = None
+            else:
+                # Verify we got all projects
+                if total_count > len(all_projects):
+                    logger.warning(
+                        f"OpenProject: Response indicates {total_count} total projects, "
+                        f"but only fetched {len(all_projects)}. "
+                        f"This may indicate pagination issues."
+                    )
+                request_url = None
+        
+        logger.info(
+            f"OpenProject: Pagination complete - Total projects fetched: {len(all_projects)} "
+            f"from {page_num} page(s)"
+        )
+        
+        return [self._parse_project(proj) for proj in all_projects]
     
     async def get_project(self, project_id: str) -> Optional[PMProject]:
         """Get a single project by ID"""

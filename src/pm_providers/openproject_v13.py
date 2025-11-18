@@ -80,19 +80,24 @@ class OpenProjectV13Provider(BasePMProvider):
         
         url = f"{self.base_url}/api/v3/projects"
         all_projects = []
+        page_num = 1
         
         try:
-            # Use larger page size and handle pagination
-            params = {"pageSize": 100}
+            # Use maximum page size for efficiency (OpenProject API supports up to 500 per page)
+            # Start with a large page size to minimize API calls
+            params = {"pageSize": 500}
             
-            logger.info(f"OpenProject v13: Fetching projects from {url}")
+            logger.info(f"OpenProject v13: Fetching projects from {url} with pageSize=500")
             
-            while url:
+            request_url = url
+            while request_url:
                 try:
-                    response = requests.get(url, headers=self.headers, params=params, timeout=30)
+                    response = requests.get(request_url, headers=self.headers, params=params, timeout=60)
                     
                     # Log response status for debugging
-                    logger.info(f"OpenProject v13: Response status {response.status_code} for {url}")
+                    logger.info(
+                        f"OpenProject v13: Page {page_num} - Response status {response.status_code} for {request_url}"
+                    )
                     
                     if response.status_code != 200:
                         error_text = response.text[:500] if response.text else "No error message"
@@ -121,10 +126,15 @@ class OpenProjectV13Provider(BasePMProvider):
                     else:
                         projects_data = data.get("_embedded", {}).get("elements", [])
                     
-                    logger.info(f"OpenProject v13: Found {len(projects_data)} projects in this page")
+                    total_count = data.get("count", len(all_projects) + len(projects_data))
+                    logger.info(
+                        f"OpenProject v13: Page {page_num} - Found {len(projects_data)} projects "
+                        f"(total so far: {len(all_projects) + len(projects_data)}/{total_count})"
+                    )
+                    
                     all_projects.extend(projects_data)
                     
-                    # Check for next page
+                    # Check for next page - OpenProject uses nextByOffset or next
                     links = data.get("_links", {})
                     next_link = links.get("nextByOffset") or links.get("next")
                     
@@ -133,15 +143,24 @@ class OpenProjectV13Provider(BasePMProvider):
                         if next_href:
                             # If it's a relative URL, make it absolute
                             if not next_href.startswith("http"):
-                                url = f"{self.base_url}{next_href}"
+                                request_url = f"{self.base_url}{next_href}"
                             else:
-                                url = next_href
+                                request_url = next_href
                             # Clear params for subsequent requests (they're in the URL)
                             params = {}
+                            page_num += 1
                         else:
-                            url = None
+                            request_url = None
                     else:
-                        url = None
+                        # No next link means we've reached the end
+                        # Verify we got all projects by checking count
+                        if total_count > len(all_projects):
+                            logger.warning(
+                                f"OpenProject v13: Response indicates {total_count} total projects, "
+                                f"but only fetched {len(all_projects)}. "
+                                f"This may indicate pagination issues."
+                            )
+                        request_url = None
                         
                 except requests.exceptions.RequestException as e:
                     logger.error(
@@ -161,7 +180,10 @@ class OpenProjectV13Provider(BasePMProvider):
                     )
                     raise
             
-            logger.info(f"OpenProject v13: Total projects found: {len(all_projects)}")
+            logger.info(
+                f"OpenProject v13: Pagination complete - Total projects fetched: {len(all_projects)} "
+                f"from {page_num} page(s)"
+            )
             
             # Parse projects with error handling
             parsed_projects = []
@@ -175,6 +197,11 @@ class OpenProjectV13Provider(BasePMProvider):
                     )
                     # Continue with other projects instead of failing completely
                     continue
+            
+            logger.info(
+                f"OpenProject v13: Successfully parsed {len(parsed_projects)} projects "
+                f"(out of {len(all_projects)} raw projects)"
+            )
             
             return parsed_projects
             

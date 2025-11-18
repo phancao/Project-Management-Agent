@@ -4,6 +4,7 @@ JIRA Provider
 Connects to Atlassian JIRA API to manage projects, issues, and sprints.
 """
 import base64
+import logging
 import requests
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
@@ -13,6 +14,8 @@ from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMLabel,
     PMProviderConfig
 )
+
+logger = logging.getLogger(__name__)
 
 
 class JIRAProvider(BasePMProvider):
@@ -55,52 +58,86 @@ class JIRAProvider(BasePMProvider):
         """
         List all projects from JIRA.
         
-        Uses the 'recent' parameter to get projects accessible to the user.
+        Fetches all accessible projects. Without the 'recent' parameter,
+        JIRA returns all accessible projects (may be paginated internally).
         """
         url = f"{self.base_url}/rest/api/3/project"
+        all_projects = []
+        start_at = 0
+        max_results = 50  # JIRA API default page size
         
-        # JIRA API v3: Use 'recent' parameter to get accessible projects
-        params: Dict[str, str] = {
-            "recent": "50",  # Get up to 50 recent projects
-            # Get more details
-            "expand": "description,lead,url,projectKeys"
-        }
-        
-        response = requests.get(
-            url, headers=self.headers, params=params, timeout=10
-        )
-        
-        # Provide better error messages for common issues
-        if response.status_code == 401:
-            raise ValueError(
-                "JIRA authentication failed. Please verify your email and "
-                "API token are correct. "
-                "For JIRA Cloud, use: email:API_TOKEN for Basic Auth."
+        while True:
+            # JIRA API v3: Remove 'recent' parameter to get ALL projects
+            # Use pagination to fetch all pages
+            params: Dict[str, Any] = {
+                "startAt": start_at,
+                "maxResults": max_results,
+                # Get more details
+                "expand": "description,lead,url,projectKeys"
+            }
+            
+            response = requests.get(
+                url, headers=self.headers, params=params, timeout=30
             )
-        elif response.status_code == 403:
-            raise ValueError(
-                "JIRA access forbidden. The API token may not have "
-                "permission to list projects, or the account doesn't "
-                "have access to any projects."
-            )
-        
-        response.raise_for_status()
-        
-        projects_data = response.json()
-        
-        # Handle empty response
-        if not projects_data:
-            return []
-        
-        # Response is a list of projects
-        if not isinstance(projects_data, list):
-            # Handle unexpected format
-            if isinstance(projects_data, dict) and 'values' in projects_data:
-                projects_data = projects_data['values']
+            
+            # Provide better error messages for common issues
+            if response.status_code == 401:
+                raise ValueError(
+                    "JIRA authentication failed. Please verify your email and "
+                    "API token are correct. "
+                    "For JIRA Cloud, use: email:API_TOKEN for Basic Auth."
+                )
+            elif response.status_code == 403:
+                raise ValueError(
+                    "JIRA access forbidden. The API token may not have "
+                    "permission to list projects, or the account doesn't "
+                    "have access to any projects."
+                )
+            
+            response.raise_for_status()
+            
+            projects_data = response.json()
+            
+            # Handle empty response
+            if not projects_data:
+                break
+            
+            # Response is typically a list of projects
+            if isinstance(projects_data, list):
+                # Direct list response - parse all projects
+                for proj in projects_data:
+                    all_projects.append(self._parse_project(proj))
+                
+                # If we got fewer than max_results, we're done
+                if len(projects_data) < max_results:
+                    break
+                
+                # Continue to next page
+                start_at += len(projects_data)
             else:
-                return []
+                # Unexpected format - try to handle gracefully
+                if isinstance(projects_data, dict):
+                    if "values" in projects_data:
+                        # Paginated response format
+                        projects_list = projects_data["values"]
+                        for proj in projects_list:
+                            all_projects.append(self._parse_project(proj))
+                        
+                        # Check if there are more pages
+                        total = projects_data.get("total", 0)
+                        start_at = projects_data.get("startAt", 0) + len(projects_list)
+                        if start_at >= total or projects_data.get("isLast", True):
+                            break
+                    else:
+                        # Single project object
+                        all_projects.append(self._parse_project(projects_data))
+                        break
+                else:
+                    # Unknown format
+                    logger.warning(f"Unexpected JIRA projects response format: {type(projects_data)}")
+                    break
         
-        return [self._parse_project(proj) for proj in projects_data]
+        return all_projects
     
     def _parse_project(self, proj_data: Dict[str, Any]) -> PMProject:
         """Parse JIRA project data to PMProject"""

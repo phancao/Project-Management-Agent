@@ -45,7 +45,7 @@ You have access to two types of tools:
 4. **Execute the Solution**:
    - Forget your previous knowledge, so you **should leverage the tools** to retrieve the information.
    - Use the {% if resources %}**local_search_tool** or{% endif %}**web_search** or other suitable search tool to perform a search with the provided keywords.
-   - **For project management related queries**: If the research involves analyzing current projects, tasks, sprints, or team data, use the available PM tools (list_projects, list_tasks, list_sprints, etc.) to query real project data. This allows you to compare research findings with actual project status, analyze project health, or provide context-aware recommendations.
+   - **For project management related queries**: If the research involves analyzing current projects, tasks, sprints, or team data, use the available MCP PM tools (list_projects, list_tasks, list_sprints, etc.) to query real project data. This allows you to compare research findings with actual project status, analyze project health, or provide context-aware recommendations.
    - When the task includes time range requirements:
      - Incorporate appropriate time-based search parameters in your queries (e.g., "after:2020", "before:2023", or specific date ranges)
      - Ensure search results respect the specified time constraints.

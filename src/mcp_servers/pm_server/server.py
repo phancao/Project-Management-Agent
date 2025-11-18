@@ -11,7 +11,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from sqlalchemy.orm import Session
 
-from src.database.session import get_db_session
+from database.connection import get_db_session
 from src.server.pm_handler import PMHandler
 from .config import PMServerConfig
 from .tools import (
@@ -73,8 +73,11 @@ class PMMCPServer:
         # Initialize PMHandler in multi-provider mode
         self.pm_handler = PMHandler.from_db_session(self.db_session)
         
+        # Get provider count
+        provider_count = len(self.pm_handler._get_active_providers())
+        
         logger.info(
-            f"PM Handler initialized with {len(self.pm_handler.providers)} providers"
+            f"PM Handler initialized with {provider_count} active providers"
         )
     
     def _register_all_tools(self) -> None:

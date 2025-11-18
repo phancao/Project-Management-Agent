@@ -38,12 +38,49 @@ const fetchStatusesFn = async (projectId?: string, entityType: string = "task") 
   return data.statuses || [];
 };
 
-export function useStatuses(projectId?: string, entityType: string = "task") {
-  const [statuses, setStatuses] = useState<Status[]>([]);
-  const [loading, setLoading] = useState(true); // Start as true to show loading state initially
-  const [error, setError] = useState<Error | null>(null);
+// Cache for statuses by projectId and entityType
+const statusesCache = new Map<string, { data: Status[]; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-  const refresh = useCallback(() => {
+const getCacheKey = (projectId: string, entityType: string) => {
+  return `${projectId}:${entityType}`;
+};
+
+export function useStatuses(projectId?: string, entityType: string = "task") {
+  // Initialize from cache if available to avoid loading state
+  const getInitialState = () => {
+    if (!projectId) {
+      return { statuses: [], loading: false, error: null };
+    }
+    const cacheKey = getCacheKey(projectId, entityType);
+    const cached = statusesCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return { statuses: cached.data, loading: false, error: null };
+    }
+    return { statuses: [], loading: true, error: null };
+  };
+  
+  const initialState = getInitialState();
+  const [statuses, setStatuses] = useState<Status[]>(initialState.statuses);
+  const [loading, setLoading] = useState(initialState.loading);
+  const [error, setError] = useState<Error | null>(initialState.error);
+  
+  // Update state if projectId or entityType changes and we have cached data
+  useEffect(() => {
+    if (projectId) {
+      const cacheKey = getCacheKey(projectId, entityType);
+      const cached = statusesCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        if (statuses.length === 0 || loading) {
+          setStatuses(cached.data);
+          setLoading(false);
+          setError(null);
+        }
+      }
+    }
+  }, [projectId, entityType, statuses.length, loading]);
+
+  const refresh = useCallback((forceRefresh: boolean = false) => {
     if (!projectId) {
       setStatuses([]);
       setLoading(false);
@@ -51,10 +88,25 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
       return;
     }
     
+    const cacheKey = getCacheKey(projectId, entityType);
+    
+    // Check cache if not forcing refresh
+    if (!forceRefresh) {
+      const cached = statusesCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        setStatuses(cached.data);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+    }
+    
     setLoading(true);
     setError(null);
     fetchStatusesFn(projectId, entityType)
       .then((data) => {
+        // Update cache
+        statusesCache.set(cacheKey, { data, timestamp: Date.now() });
         setStatuses(data);
         setLoading(false);
       })
@@ -66,17 +118,37 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
   }, [projectId, entityType]);
 
   useEffect(() => {
-    // Clear statuses immediately when projectId changes to avoid showing stale data
-    setStatuses([]);
-    setError(null);
-    
     // If no project ID, set loading to false and return empty
     if (!projectId) {
+      setStatuses([]);
+      setError(null);
       setLoading(false);
       return;
     }
     
-    setLoading(true);
+    const cacheKey = getCacheKey(projectId, entityType);
+    
+    // Check cache first - if we already have cached data from initial state, skip
+    const cached = statusesCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      // Only update if state doesn't match cache (e.g., projectId changed)
+      if (statuses.length !== cached.data.length || statuses.length === 0) {
+        setStatuses(cached.data);
+        setLoading(false);
+        setError(null);
+      } else if (loading) {
+        // If we have the same statuses but loading is still true, set it to false
+        setLoading(false);
+        setError(null);
+      }
+      return;
+    }
+    
+    // Only fetch if we don't have cached data
+    // If statuses are already set from initial state, don't clear them
+    if (statuses.length === 0) {
+      setLoading(true);
+    }
     
     // Use a flag to track if this effect is still relevant (projectId hasn't changed)
     let isCurrent = true;
@@ -86,6 +158,8 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
       .then((data) => {
         // Only update state if this effect is still relevant (projectId hasn't changed)
         if (isCurrent) {
+          // Update cache
+          statusesCache.set(cacheKey, { data, timestamp: Date.now() });
           setStatuses(data);
           setLoading(false);
         }
@@ -103,7 +177,7 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
     return () => {
       isCurrent = false;
     };
-  }, [projectId, entityType]);
+  }, [projectId, entityType]); // Removed statuses and loading from deps to avoid infinite loop
 
   return { statuses, loading, error, refresh };
 }

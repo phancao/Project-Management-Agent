@@ -1406,7 +1406,17 @@ export function SprintBoardView() {
         onDragEnd={handleDragEnd}
       >
         {orderedColumns.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-gray-400">No statuses configured for this board.</div>
+          <div className="flex-1 flex items-center justify-center text-gray-400">
+            {statusesLoading ? (
+              <div className="text-center">
+                <div className="text-sm">Loading statuses...</div>
+              </div>
+            ) : availableStatuses && availableStatuses.length === 0 ? (
+              <div className="text-sm">No statuses configured for this board.</div>
+            ) : (
+              <div className="text-sm">Loading board...</div>
+            )}
+          </div>
         ) : (
           <SortableContext items={orderedColumns.map((column) => column.orderId)} strategy={horizontalListSortingStrategy}>
             <div className="flex gap-4 overflow-x-auto flex-1 min-h-0 pb-6">

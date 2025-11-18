@@ -128,6 +128,8 @@ export async function sendMessage(
   let messageId: string | undefined;
   const pendingUpdates = new Map<string, Message>();
   let updateTimer: NodeJS.Timeout | undefined;
+  let eventCount = 0;
+  let hasCreatedMessage = false;
 
   const scheduleUpdate = () => {
     if (updateTimer) clearTimeout(updateTimer);
@@ -142,7 +144,13 @@ export async function sendMessage(
 
   try {
     for await (const event of stream) {
+      eventCount++;
       const { type, data } = event;
+      
+      // Debug logging for PM chat
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[DEBUG] Stream event #${eventCount}: type=${type}`, data);
+      }
       
       // Handle PM refresh events to update PM views
       // Type assertion needed because ChatEvent type doesn't include pm_refresh
@@ -174,6 +182,14 @@ export async function sendMessage(
         // For other event types, use data.id
         messageId = data.id;
         
+        if (!messageId) {
+          // Skip events without message ID (like plan_update, step_update, etc.)
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[DEBUG] Skipping event without message ID: type=${type}`, data);
+          }
+          continue;
+        }
+        
         if (!existsMessage(messageId)) {
           message = {
             id: messageId,
@@ -188,6 +204,7 @@ export async function sendMessage(
             interruptFeedback,
           };
           appendMessage(message);
+          hasCreatedMessage = true;
         }
       }
       
@@ -231,7 +248,15 @@ export async function sendMessage(
         }
       }
     }
-  } catch {
+    
+    // Log if no events were received
+    if (eventCount === 0 && process.env.NODE_ENV === "development") {
+      console.warn("[DEBUG] Stream completed without any events");
+    }
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[DEBUG] Stream error:", error);
+    }
     toast("An error occurred while generating the response. Please try again.");
     // Update message status.
     // TODO: const isAborted = (error as Error).name === "AbortError";
@@ -244,13 +269,24 @@ export async function sendMessage(
     }
     useStore.getState().setOngoingResearch(null);
   } finally {
-    setResponding(false);
     // Ensure all pending updates are processed.
     if (updateTimer) clearTimeout(updateTimer);
     if (pendingUpdates.size > 0) {
       useStore.getState().updateMessages(Array.from(pendingUpdates.values()));
     }
-
+    
+    // Debug logging
+    if (process.env.NODE_ENV === "development") {
+      if (eventCount === 0) {
+        console.warn("[DEBUG] Stream completed with no events received");
+      } else if (!hasCreatedMessage) {
+        console.warn(`[DEBUG] Stream completed with ${eventCount} events but no messages were created`);
+      }
+    }
+    
+    // Always set responding to false when stream completes
+    // The loading animation should be controlled by message.isStreaming, not responding
+    setResponding(false);
   }
 }
 

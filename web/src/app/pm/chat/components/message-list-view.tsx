@@ -68,6 +68,10 @@ export function MessageListView({
   const interruptMessage = useLastInterruptMessage();
   const waitingForFeedbackMessageId = useLastFeedbackMessageId();
   const responding = useStore((state) => state.responding);
+  const messages = useStore((state) => state.messages);
+  const hasStreamingMessages = useMemo(() => {
+    return Array.from(messages.values()).some((msg) => msg.isStreaming);
+  }, [messages]);
   const noOngoingResearch = useStore(
     (state) => state.ongoingResearchId === null,
   );
@@ -109,7 +113,7 @@ export function MessageListView({
         ))}
         <div className="flex h-8 w-full shrink-0"></div>
       </ul>
-      {responding && (noOngoingResearch || !ongoingResearchIsOpen) && (
+      {(responding || hasStreamingMessages) && (noOngoingResearch || !ongoingResearchIsOpen) && (
         <LoadingAnimation className="ml-4" />
       )}
     </ScrollContainer>

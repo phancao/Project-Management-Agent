@@ -130,6 +130,10 @@ export async function sendMessage(
   let updateTimer: NodeJS.Timeout | undefined;
   let eventCount = 0;
   let hasCreatedMessage = false;
+  let streamExited = false;
+  const streamStartTime = Date.now();
+  let lastActivityTime = streamStartTime;
+  let receivedFinishReason = false;
 
   const scheduleUpdate = () => {
     if (updateTimer) clearTimeout(updateTimer);
@@ -145,11 +149,38 @@ export async function sendMessage(
   try {
     for await (const event of stream) {
       eventCount++;
+      const now = Date.now();
+      const timeSinceLastActivity = now - lastActivityTime;
+      lastActivityTime = now;
       const { type, data } = event;
       
       // Debug logging for PM chat
       if (process.env.NODE_ENV === "development") {
-        console.log(`[DEBUG] Stream event #${eventCount}: type=${type}`, data);
+        const timeSinceStart = now - streamStartTime;
+        console.log(
+          `[DEBUG] Stream event #${eventCount}: type=${type}, ` +
+          `timeSinceStart=${timeSinceStart}ms, ` +
+          `timeSinceLastActivity=${timeSinceLastActivity}ms`,
+          data
+        );
+      }
+      
+      // Handle error events
+      if (type === "error") {
+        if (process.env.NODE_ENV === "development") {
+          console.error(`[DEBUG] Stream error event:`, data);
+        }
+        toast(`Error: ${data.error || data.message || "An error occurred during streaming"}`);
+        // Continue processing - the stream may still have valid data
+        continue;
+      }
+      
+      // If we receive finish_reason, mark that stream should exit
+      if (data.finish_reason === "stop") {
+        receivedFinishReason = true;
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[DEBUG] Received finish_reason=stop, stream should exit after processing this event`);
+        }
       }
       
       // Handle PM refresh events to update PM views
@@ -218,10 +249,12 @@ export async function sendMessage(
         // Debug logging for reporter messages
         if (message.agent === "reporter") {
           if (event.type === "message_chunk" && event.data.content) {
+            const chunksReceived = message.contentChunks?.length ?? 0;
             console.log(
               `[DEBUG] Reporter message chunk: id=${message.id}, ` +
               `content_length=${newContentLength}, ` +
-              `chunk_length=${event.data.content.length}`
+              `chunk_length=${event.data.content.length}, ` +
+              `chunks_received=${chunksReceived}`
             );
           }
           if (event.data.finish_reason) {
@@ -229,7 +262,8 @@ export async function sendMessage(
               `[DEBUG] Reporter finished: id=${message.id}, ` +
               `content_length=${newContentLength}, ` +
               `isStreaming=${message.isStreaming}, ` +
-              `finish_reason=${event.data.finish_reason}`
+              `finish_reason=${event.data.finish_reason}, ` +
+              `chunks_received=${message.contentChunks?.length ?? 0}`
             );
           }
         }
@@ -249,11 +283,26 @@ export async function sendMessage(
       }
     }
     
+    streamExited = true;
+    
     // Log if no events were received
     if (eventCount === 0 && process.env.NODE_ENV === "development") {
       console.warn("[DEBUG] Stream completed without any events");
     }
+    
+    if (process.env.NODE_ENV === "development") {
+      const totalTime = Date.now() - streamStartTime;
+      const timeSinceLastActivity = Date.now() - lastActivityTime;
+      console.log(
+        `[DEBUG] Stream for-await loop exited: eventCount=${eventCount}, ` +
+        `streamExited=${streamExited}, ` +
+        `receivedFinishReason=${receivedFinishReason}, ` +
+        `totalTime=${totalTime}ms, ` +
+        `timeSinceLastActivity=${timeSinceLastActivity}ms`
+      );
+    }
   } catch (error) {
+    streamExited = true;
     if (process.env.NODE_ENV === "development") {
       console.error("[DEBUG] Stream error:", error);
     }
@@ -277,6 +326,13 @@ export async function sendMessage(
     
     // Debug logging
     if (process.env.NODE_ENV === "development") {
+      console.log(
+        `[DEBUG] Stream finally block: eventCount=${eventCount}, ` +
+        `hasCreatedMessage=${hasCreatedMessage}, ` +
+        `pendingUpdates=${pendingUpdates.size}, ` +
+        `streamExited=${streamExited}, ` +
+        `receivedFinishReason=${receivedFinishReason}`
+      );
       if (eventCount === 0) {
         console.warn("[DEBUG] Stream completed with no events received");
       } else if (!hasCreatedMessage) {
@@ -286,7 +342,45 @@ export async function sendMessage(
     
     // Always set responding to false when stream completes
     // The loading animation should be controlled by message.isStreaming, not responding
+    const previousResponding = useStore.getState().responding;
     setResponding(false);
+    
+    // Ensure ALL streaming messages are marked as not streaming
+    // This is critical to prevent UI from appearing stuck
+    const state = useStore.getState();
+    const streamingMessages = Array.from(state.messages.values()).filter(m => m.isStreaming);
+    if (streamingMessages.length > 0) {
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[DEBUG] Safeguard: Marking ${streamingMessages.length} message(s) as not streaming`);
+      }
+      const updatedMessages = new Map(state.messages);
+      streamingMessages.forEach(msg => {
+        msg.isStreaming = false;
+        updatedMessages.set(msg.id, msg);
+      });
+      useStore.setState({ messages: updatedMessages });
+    }
+    
+    // Also ensure the last message is marked as not streaming
+    if (messageId) {
+      const finalMessage = getMessage(messageId);
+      if (finalMessage?.isStreaming) {
+        finalMessage.isStreaming = false;
+        useStore.getState().updateMessage(finalMessage);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[DEBUG] Safeguard: Set message ${messageId}.isStreaming=false in finally block`);
+        }
+      }
+    }
+    
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `[DEBUG] Stream cleanup: setResponding(false), ` +
+        `previousResponding=${previousResponding}, ` +
+        `currentResponding=${useStore.getState().responding}, ` +
+        `streamExited=${streamExited}`
+      );
+    }
   }
 }
 

@@ -700,12 +700,26 @@ def reporter_node(state: State, config: RunnableConfig):
             )
         )
 
+    # Log observations for debugging (especially for PM data queries)
+    logger.info(f"Reporter: Received {len(observations)} observations")
+    for idx, obs in enumerate(observations):
+        obs_preview = str(obs)[:200] if len(str(obs)) > 200 else str(obs)
+        logger.debug(f"Observation {idx + 1}: {obs_preview}")
+
     # Context compression
     llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP["reporter"])
     compressed_state = ContextManager(llm_token_limit).compress_messages(
         {"messages": observation_messages}
     )
-    invoke_messages += compressed_state.get("messages", [])
+    compressed_messages = compressed_state.get("messages", [])
+    
+    # Log compression results for debugging
+    if len(compressed_messages) != len(observation_messages):
+        logger.warning(
+            f"Reporter: Observations compressed from {len(observation_messages)} to {len(compressed_messages)} messages"
+        )
+    
+    invoke_messages += compressed_messages
 
     logger.debug(f"Current invoke messages: {invoke_messages}")
     response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)

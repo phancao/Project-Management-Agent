@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { debug } from "~/app/pm/utils/debug";
+import { usePMRefresh } from "./use-pm-refresh";
 
 export interface Priority {
   id: string;
@@ -71,6 +72,9 @@ export function usePriorities(projectId?: string) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Listen for PM refresh events
+  usePMRefresh(refresh);
 
   return { priorities, loading, error, refresh };
 }

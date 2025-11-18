@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from "react";
 
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
+import { usePMRefresh } from "./use-pm-refresh";
 
 export interface Status {
   id: string;
@@ -178,6 +179,9 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
       isCurrent = false;
     };
   }, [projectId, entityType]); // Removed statuses and loading from deps to avoid infinite loop
+
+  // Listen for PM refresh events
+  usePMRefresh(() => refresh(true)); // Force refresh on PM refresh event
 
   return { statuses, loading, error, refresh };
 }

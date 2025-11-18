@@ -1,6 +1,7 @@
 // Analytics API hooks for fetching chart data
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
+import { usePMRefresh } from "./use-pm-refresh";
 
 // Types based on backend analytics models
 export interface ChartDataPoint {
@@ -84,7 +85,8 @@ export interface ProjectSummary {
  * Hook to fetch burndown chart data
  */
 export function useBurndownChart(projectId: string | null, sprintId?: string, scopeType: string = "story_points") {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: ["analytics", "burndown", projectId, sprintId, scopeType],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
@@ -113,13 +115,21 @@ export function useBurndownChart(projectId: string | null, sprintId?: string, sc
     staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (formerly cacheTime)
   });
+
+  // Listen for PM refresh events and invalidate query
+  usePMRefresh(() => {
+    queryClient.invalidateQueries({ queryKey: ["analytics", "burndown", projectId, sprintId, scopeType] });
+  });
+
+  return query;
 }
 
 /**
  * Hook to fetch velocity chart data
  */
 export function useVelocityChart(projectId: string | null, sprintCount: number = 6) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: ["analytics", "velocity", projectId, sprintCount],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
@@ -144,13 +154,21 @@ export function useVelocityChart(projectId: string | null, sprintCount: number =
     staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
+
+  // Listen for PM refresh events and invalidate query
+  usePMRefresh(() => {
+    queryClient.invalidateQueries({ queryKey: ["analytics", "velocity", projectId, sprintCount] });
+  });
+
+  return query;
 }
 
 /**
  * Hook to fetch sprint report
  */
 export function useSprintReport(sprintId: string | null, projectId: string | null) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: ["analytics", "sprint-report", sprintId, projectId],
     queryFn: async () => {
       if (!sprintId || !projectId) throw new Error("Sprint ID and Project ID are required");
@@ -168,13 +186,21 @@ export function useSprintReport(sprintId: string | null, projectId: string | nul
     staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
+
+  // Listen for PM refresh events and invalidate query
+  usePMRefresh(() => {
+    queryClient.invalidateQueries({ queryKey: ["analytics", "sprint-report", sprintId, projectId] });
+  });
+
+  return query;
 }
 
 /**
  * Hook to fetch project analytics summary
  */
 export function useProjectSummary(projectId: string | null) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: ["analytics", "summary", projectId],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
@@ -192,13 +218,21 @@ export function useProjectSummary(projectId: string | null) {
     staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
+
+  // Listen for PM refresh events and invalidate query
+  usePMRefresh(() => {
+    queryClient.invalidateQueries({ queryKey: ["analytics", "summary", projectId] });
+  });
+
+  return query;
 }
 
 /**
  * Hook to fetch CFD (Cumulative Flow Diagram) chart data
  */
 export function useCFDChart(projectId: string | null, sprintId?: string, daysBack: number = 30) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: ["analytics", "cfd", projectId, sprintId, daysBack],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
@@ -227,13 +261,21 @@ export function useCFDChart(projectId: string | null, sprintId?: string, daysBac
     staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
+
+  // Listen for PM refresh events and invalidate query
+  usePMRefresh(() => {
+    queryClient.invalidateQueries({ queryKey: ["analytics", "cfd", projectId, sprintId, daysBack] });
+  });
+
+  return query;
 }
 
 /**
  * Hook to fetch Cycle Time / Control Chart data
  */
 export function useCycleTimeChart(projectId: string | null, sprintId?: string, daysBack: number = 60) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: ["analytics", "cycleTime", projectId, sprintId, daysBack],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
@@ -262,6 +304,13 @@ export function useCycleTimeChart(projectId: string | null, sprintId?: string, d
     staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
+
+  // Listen for PM refresh events and invalidate query
+  usePMRefresh(() => {
+    queryClient.invalidateQueries({ queryKey: ["analytics", "cycleTime", projectId, sprintId, daysBack] });
+  });
+
+  return query;
 }
 
 /**
@@ -272,7 +321,8 @@ export function useWorkDistributionChart(
   dimension: "assignee" | "priority" | "type" | "status" = "assignee",
   sprintId?: string
 ) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: ["analytics", "workDistribution", projectId, dimension, sprintId],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
@@ -301,13 +351,21 @@ export function useWorkDistributionChart(
     staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
+
+  // Listen for PM refresh events and invalidate query
+  usePMRefresh(() => {
+    queryClient.invalidateQueries({ queryKey: ["analytics", "workDistribution", projectId, dimension, sprintId] });
+  });
+
+  return query;
 }
 
 /**
  * Hook to fetch Issue Trend Analysis chart data
  */
 export function useIssueTrendChart(projectId: string | null, daysBack: number = 30, sprintId?: string) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: ["analytics", "issueTrend", projectId, daysBack, sprintId],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
@@ -336,5 +394,12 @@ export function useIssueTrendChart(projectId: string | null, daysBack: number = 
     staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
+
+  // Listen for PM refresh events and invalidate query
+  usePMRefresh(() => {
+    queryClient.invalidateQueries({ queryKey: ["analytics", "issueTrend", projectId, daysBack, sprintId] });
+  });
+
+  return query;
 }
 

@@ -50,13 +50,14 @@ docker exec "${APP_CONTAINER}" bash -lc "\
     sleep 1; \
   done"
 
-echo "3) Drop and recreate database..."
+echo "3) Drop and recreate database (deleting ALL current data)..."
+# Completely remove the database to ensure no current data remains
 docker exec "${APP_CONTAINER}" sh -lc "\
   su - postgres -c 'dropdb --if-exists openproject' || true; \
   su - postgres -c 'createdb openproject'; \
   su - postgres -c \"psql -d postgres -c \\\"UPDATE pg_database SET datallowconn = true WHERE datname = 'openproject'\\\"\" >/dev/null"
 
-echo "3b) Reset public schema to avoid duplicate schema warnings..."
+echo "3b) Reset public schema to ensure clean state..."
 docker exec "${APP_CONTAINER}" sh -lc "su - postgres -c \"psql -d openproject -v ON_ERROR_STOP=1 -c 'DROP SCHEMA IF EXISTS public CASCADE;' -c 'CREATE SCHEMA public AUTHORIZATION postgres;' -c 'GRANT ALL ON SCHEMA public TO postgres;' -c 'GRANT ALL ON SCHEMA public TO public;'\""
 
 echo "4) Restore dump into embedded DB (this may take a few minutes)..."
@@ -69,26 +70,48 @@ docker exec "${APP_CONTAINER}" sh -lc "su - postgres -c \"psql -d openproject -t
 echo "✅ Embedded database restore completed."
 
 echo ""
-echo "6) Validate/fix users table for token auth (PK and admin uniqueness)..."
-# Determine admin user's current id (by login), then move any non-User duplicate that shares that id
-ADMIN_ID=$(docker exec "${APP_CONTAINER}" sh -lc "su - postgres -c \"psql -d openproject -t -A -c 'SELECT id FROM users WHERE login='\\''admin'\\'' ORDER BY created_at ASC LIMIT 1;'\"" | tail -n 1)
-if [ -z "${ADMIN_ID}" ]; then
-  echo "⚠ Could not find admin user id by login; skipping duplicate fix"
-else
-  echo "   Admin user id detected: ${ADMIN_ID}"
-  docker exec "${APP_CONTAINER}" sh -lc "su - postgres <<'EOSQL'
-psql -d openproject -v ON_ERROR_STOP=1 <<SQL
-BEGIN;
-WITH mx AS (SELECT COALESCE(MAX(id),0) AS max_id FROM users),
-     dupe AS (
-       SELECT ctid FROM users 
-       WHERE id=${ADMIN_ID} AND (type <> 'User' OR login IS NULL OR login = '')
-       ORDER BY created_at DESC NULLS LAST LIMIT 1
-     )
-UPDATE users SET id = (SELECT max_id+1 FROM mx) WHERE ctid IN (SELECT ctid FROM dupe);
-COMMIT;
+echo "6) Validate/fix users table for token auth (PK and ALL duplicate IDs)..."
+# Fix ALL duplicate user IDs, not just admin
+# Priority: Keep regular Users, move special principals (SystemUser, AnonymousUser) to new IDs
+docker exec "${APP_CONTAINER}" sh -lc "su - postgres <<'EOSQL'
+psql -d openproject -v ON_ERROR_STOP=1 <<'SQL'
+DO \$\$
+DECLARE
+  dup_id INTEGER;
+  max_id INTEGER;
+  dupe_ctid TID;
+  dupe_type TEXT;
+BEGIN
+  -- Get max user ID to assign new IDs above it
+  SELECT COALESCE(MAX(id), 0) INTO max_id FROM users;
+  
+  -- Find and fix all duplicate IDs
+  FOR dup_id IN 
+    SELECT id FROM users GROUP BY id HAVING COUNT(*) > 1
+  LOOP
+    -- Keep one entry (prefer User type, then oldest), move all others
+    -- Process all duplicates except the first one (which we keep)
+    FOR dupe_ctid, dupe_type IN
+      SELECT ctid, type
+      FROM users
+      WHERE id = dup_id
+      ORDER BY 
+        CASE WHEN type = 'User' THEN 1 ELSE 2 END,  -- Prefer to keep Users
+        created_at ASC NULLS FIRST  -- Keep oldest
+      OFFSET 1  -- Skip the first one (keep it)
+    LOOP
+      max_id := max_id + 1;
+      UPDATE users SET id = max_id WHERE ctid = dupe_ctid;
+      RAISE NOTICE 'Moved duplicate user (id=%, type=%) to new id=%', dup_id, dupe_type, max_id;
+    END LOOP;
+  END LOOP;
+END \$\$;
 SQL
 EOSQL"
+# Determine admin user's current id for logging
+ADMIN_ID=$(docker exec "${APP_CONTAINER}" sh -lc "su - postgres -c \"psql -d openproject -t -A -c 'SELECT id FROM users WHERE login='\\''admin'\\'' ORDER BY created_at ASC LIMIT 1;'\"" | tail -n 1)
+if [ -n "${ADMIN_ID}" ]; then
+  echo "   Admin user id detected: ${ADMIN_ID}"
 fi
 # Ensure primary key exists
 docker exec "${APP_CONTAINER}" sh -lc "su - postgres <<'EOSQL'

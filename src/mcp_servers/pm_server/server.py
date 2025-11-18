@@ -21,6 +21,7 @@ from .tools import (
     register_epic_tools,
     register_user_tools,
     register_analytics_tools,
+    register_task_interaction_tools,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ class PMMCPServer:
             ("epics", register_epic_tools),
             ("users", register_user_tools),
             ("analytics", register_analytics_tools),
+            ("task_interactions", register_task_interaction_tools),
         ]
         
         for module_name, register_func in tool_modules:

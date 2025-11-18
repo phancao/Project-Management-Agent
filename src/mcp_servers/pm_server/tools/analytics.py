@@ -390,6 +390,270 @@ def register_analytics_tools(
     
     tool_count += 1
     
+    # Tool 7: gantt_chart
+    @server.call_tool()
+    async def gantt_chart(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Generate Gantt chart data for project timeline.
+        
+        Args:
+            project_id (required): Project ID
+            start_date (optional): Start date filter (YYYY-MM-DD)
+            end_date (optional): End date filter (YYYY-MM-DD)
+        
+        Returns:
+            Gantt chart data with task timelines
+        """
+        try:
+            project_id = arguments.get("project_id")
+            if not project_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: project_id is required"
+                )]
+            
+            start_date = arguments.get("start_date")
+            end_date = arguments.get("end_date")
+            
+            logger.info(
+                f"gantt_chart called: project_id={project_id}, "
+                f"start_date={start_date}, end_date={end_date}"
+            )
+            
+            # Get Gantt chart data
+            data = pm_handler.get_gantt_chart(
+                project_id,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            if not data:
+                return [TextContent(
+                    type="text",
+                    text=f"No Gantt chart data available for project {project_id}."
+                )]
+            
+            # Format output
+            output_lines = [f"# Gantt Chart - {data.get('project_name')}\n\n"]
+            output_lines.append("Task | Start | End | Duration\n")
+            output_lines.append("-----|-------|-----|----------\n")
+            
+            for task in data.get("tasks", []):
+                output_lines.append(
+                    f"{task.get('name')} | "
+                    f"{task.get('start_date', 'N/A')} | "
+                    f"{task.get('end_date', 'N/A')} | "
+                    f"{task.get('duration', 0)} days\n"
+                )
+            
+            return [TextContent(
+                type="text",
+                text="".join(output_lines)
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in gantt_chart: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error generating Gantt chart: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 8: epic_report
+    @server.call_tool()
+    async def epic_report(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Generate comprehensive epic report.
+        
+        Args:
+            epic_id (required): Epic ID
+        
+        Returns:
+            Epic report with progress and metrics
+        """
+        try:
+            epic_id = arguments.get("epic_id")
+            if not epic_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: epic_id is required"
+                )]
+            
+            logger.info(f"epic_report called: epic_id={epic_id}")
+            
+            # Get epic report
+            report = pm_handler.get_epic_report(epic_id)
+            
+            if not report:
+                return [TextContent(
+                    type="text",
+                    text=f"No report data available for epic {epic_id}."
+                )]
+            
+            # Format output
+            output_lines = [
+                f"# Epic Report: {report.get('name')}\n\n",
+                f"**Status:** {report.get('status')}\n",
+                f"**Progress:** {report.get('completion_percentage', 0)}%\n\n",
+                f"## Metrics\n",
+                f"- **Total Tasks:** {report.get('total_tasks', 0)}\n",
+                f"- **Completed:** {report.get('completed_tasks', 0)}\n",
+                f"- **In Progress:** {report.get('in_progress_tasks', 0)}\n",
+                f"- **Pending:** {report.get('pending_tasks', 0)}\n",
+                f"- **Blocked:** {report.get('blocked_tasks', 0)}\n\n",
+                f"## Timeline\n",
+                f"- **Started:** {report.get('start_date', 'N/A')}\n",
+                f"- **Target Completion:** {report.get('target_date', 'N/A')}\n",
+                f"- **Estimated Completion:** {report.get('estimated_completion', 'N/A')}\n",
+            ]
+            
+            return [TextContent(
+                type="text",
+                text="".join(output_lines)
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in epic_report: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error generating epic report: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 9: resource_utilization
+    @server.call_tool()
+    async def resource_utilization(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Analyze resource utilization across team.
+        
+        Args:
+            project_id (optional): Filter by project
+            provider_id (optional): Filter by provider
+        
+        Returns:
+            Resource utilization metrics
+        """
+        try:
+            project_id = arguments.get("project_id")
+            provider_id = arguments.get("provider_id")
+            
+            logger.info(
+                f"resource_utilization called: project_id={project_id}, "
+                f"provider_id={provider_id}"
+            )
+            
+            # Get resource utilization
+            utilization = pm_handler.get_resource_utilization(
+                project_id=project_id,
+                provider_id=provider_id
+            )
+            
+            if not utilization:
+                return [TextContent(
+                    type="text",
+                    text="No resource utilization data available."
+                )]
+            
+            # Format output
+            output_lines = [
+                f"# Resource Utilization\n\n",
+                f"**Overall Utilization:** {utilization.get('overall_percentage', 0)}%\n\n",
+                f"## Team Members\n"
+            ]
+            
+            for member in utilization.get("members", []):
+                output_lines.append(
+                    f"**{member.get('name')}**\n"
+                    f"- Utilization: {member.get('utilization_percentage', 0)}%\n"
+                    f"- Active Tasks: {member.get('active_tasks', 0)}\n"
+                    f"- Capacity: {member.get('capacity_status', 'Normal')}\n\n"
+                )
+            
+            return [TextContent(
+                type="text",
+                text="".join(output_lines)
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in resource_utilization: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error analyzing resource utilization: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 10: time_tracking_report
+    @server.call_tool()
+    async def time_tracking_report(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Generate time tracking report.
+        
+        Args:
+            project_id (optional): Filter by project
+            user_id (optional): Filter by user
+            start_date (optional): Start date (YYYY-MM-DD)
+            end_date (optional): End date (YYYY-MM-DD)
+        
+        Returns:
+            Time tracking report with hours logged
+        """
+        try:
+            project_id = arguments.get("project_id")
+            user_id = arguments.get("user_id")
+            start_date = arguments.get("start_date")
+            end_date = arguments.get("end_date")
+            
+            logger.info(
+                f"time_tracking_report called: project_id={project_id}, "
+                f"user_id={user_id}, start_date={start_date}, end_date={end_date}"
+            )
+            
+            # Get time tracking report
+            report = pm_handler.get_time_tracking_report(
+                project_id=project_id,
+                user_id=user_id,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            if not report:
+                return [TextContent(
+                    type="text",
+                    text="No time tracking data available."
+                )]
+            
+            # Format output
+            output_lines = [
+                f"# Time Tracking Report\n\n",
+                f"**Period:** {report.get('start_date', 'N/A')} - {report.get('end_date', 'N/A')}\n",
+                f"**Total Hours:** {report.get('total_hours', 0)}\n",
+                f"**Billable Hours:** {report.get('billable_hours', 0)}\n\n",
+                f"## Breakdown\n"
+            ]
+            
+            for entry in report.get("entries", []):
+                output_lines.append(
+                    f"- **{entry.get('task_name')}**: {entry.get('hours', 0)} hours\n"
+                    f"  User: {entry.get('user_name')}\n"
+                )
+            
+            return [TextContent(
+                type="text",
+                text="".join(output_lines)
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in time_tracking_report: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error generating time tracking report: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
     logger.info(f"Registered {tool_count} analytics tools")
     return tool_count
 

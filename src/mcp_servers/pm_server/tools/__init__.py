@@ -11,6 +11,7 @@ Tool Categories:
 - epics: Epic management and progress tracking
 - users: User management and workload analysis
 - analytics: Charts, reports, and metrics
+- task_interactions: Comments, watchers, and collaboration
 """
 
 from .projects import register_project_tools
@@ -19,6 +20,7 @@ from .sprints import register_sprint_tools
 from .epics import register_epic_tools
 from .users import register_user_tools
 from .analytics import register_analytics_tools
+from .task_interactions import register_task_interaction_tools
 
 __all__ = [
     "register_project_tools",
@@ -27,5 +29,6 @@ __all__ = [
     "register_epic_tools",
     "register_user_tools",
     "register_analytics_tools",
+    "register_task_interaction_tools",
 ]
 

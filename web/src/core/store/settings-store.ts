@@ -116,12 +116,17 @@ export const getChatStreamSettings = () => {
             url: cur.url,
           };
         }
+        // PM MCP server should be added to both researcher and coder
+        const addToAgents = cur.name === "pm-server" || cur.name.includes("pm")
+          ? ["researcher", "coder"]
+          : ["researcher"];
+
         return {
           ...acc,
           [cur.name]: {
             ...server,
             enabled_tools: cur.tools.map((tool) => tool.name),
-            add_to_agents: ["researcher"],
+            add_to_agents: addToAgents,
           },
         };
       }, {}),

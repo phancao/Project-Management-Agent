@@ -199,10 +199,16 @@ export function useTasks(projectId?: string) {
     // Check cache first - if we already have cached data from initial state, skip
     const cached = tasksCache.get(projectId);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      // Only update if state doesn't match cache (e.g., projectId changed)
-      if (tasks.length !== cached.data.length || tasks.length === 0) {
-        debug.api('Using cached tasks in effect', { projectId, count: cached.data.length });
+      // Always update from cache if it exists and is valid, even if tasks are already set
+      // This ensures we use the latest cached data when switching views
+      if (tasks.length !== cached.data.length || JSON.stringify(tasks.map(t => t.id).sort()) !== JSON.stringify(cached.data.map(t => t.id).sort())) {
+        debug.api('Using cached tasks in effect', { projectId, count: cached.data.length, currentTasksCount: tasks.length });
         setTasks(cached.data);
+        setLoading(false);
+        setError(null);
+      } else if (loading) {
+        // If we have the same tasks but loading is still true, set it to false
+        debug.api('Cache matches, setting loading to false', { projectId, count: cached.data.length });
         setLoading(false);
         setError(null);
       }

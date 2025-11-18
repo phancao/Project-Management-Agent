@@ -32,6 +32,7 @@ export function InputBox({
   onSend,
   onCancel,
   onRemoveFeedback,
+  onInputChange,
 }: {
   className?: string;
   size?: "large" | "normal";
@@ -46,6 +47,7 @@ export function InputBox({
   ) => void;
   onCancel?: () => void;
   onRemoveFeedback?: () => void;
+  onInputChange?: (hasContent: boolean) => void;
 }) {
   const t = useTranslations("chat.inputBox");
   const tCommon = useTranslations("common");
@@ -65,6 +67,8 @@ export function InputBox({
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [isEnhanceAnimating, setIsEnhanceAnimating] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState("");
+  const [hasContent, setHasContent] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   const handleSendMessage = useCallback(
     (message: string, resources: Array<Resource>) => {
@@ -209,7 +213,12 @@ export function InputBox({
           loading={loading}
           config={config}
           onEnter={handleSendMessage}
-          onChange={setCurrentPrompt}
+          onChange={(text) => {
+            setCurrentPrompt(text);
+            const hasText = text.trim().length > 0;
+            setHasContent(hasText);
+            onInputChange?.(hasText);
+          }}
         />
       </div>
       <div className="flex items-center px-4 py-2">

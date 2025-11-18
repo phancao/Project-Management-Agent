@@ -37,6 +37,7 @@ export function MessagesBlock({ className }: { className?: string }) {
   const [replayStarted, setReplayStarted] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [feedback, setFeedback] = useState<{ option: Option } | null>(null);
+  const [inputHasContent, setInputHasContent] = useState(false);
   const handleSend = useCallback(
     async (
       message: string,
@@ -94,19 +95,31 @@ export function MessagesBlock({ className }: { className?: string }) {
       />
       {!isReplay ? (
         <div className="relative flex h-42 shrink-0 pb-4">
-          {!responding && messageCount === 0 && (
+          {!responding && messageCount === 0 && !inputHasContent && (
             <ConversationStarter
               className="absolute top-[-218px] left-0"
-              onSend={handleSend}
+              onSend={(message) => {
+                // Only send if not responding and no input content
+                if (!responding && !inputHasContent) {
+                  handleSend(message);
+                }
+              }}
             />
           )}
           <InputBox
-            className="h-full w-full"
+            className="h-full w-full relative z-10"
             responding={responding}
             feedback={feedback}
-            onSend={handleSend}
+            onSend={(message, options) => {
+              // Clear input content state when sending
+              setInputHasContent(false);
+              handleSend(message, options);
+            }}
             onCancel={handleCancel}
             onRemoveFeedback={handleRemoveFeedback}
+            onInputChange={(hasContent) => {
+              setInputHasContent(hasContent);
+            }}
           />
         </div>
       ) : (

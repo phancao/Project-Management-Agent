@@ -148,15 +148,386 @@ def register_sprint_tools(
     
     tool_count += 1
     
-    # TODO: Add more sprint tools:
-    # - create_sprint
-    # - update_sprint
-    # - delete_sprint
-    # - start_sprint
-    # - complete_sprint
-    # - add_task_to_sprint
-    # - remove_task_from_sprint
-    # - sprint_planning
+    # Tool 3: create_sprint
+    @server.call_tool()
+    async def create_sprint(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Create a new sprint.
+        
+        Args:
+            project_id (required): Project ID
+            name (required): Sprint name
+            start_date (required): Start date (YYYY-MM-DD)
+            end_date (required): End date (YYYY-MM-DD)
+            goal (optional): Sprint goal
+        
+        Returns:
+            Created sprint information
+        """
+        try:
+            project_id = arguments.get("project_id")
+            name = arguments.get("name")
+            start_date = arguments.get("start_date")
+            end_date = arguments.get("end_date")
+            
+            if not all([project_id, name, start_date, end_date]):
+                return [TextContent(
+                    type="text",
+                    text="Error: project_id, name, start_date, and end_date are required"
+                )]
+            
+            goal = arguments.get("goal")
+            
+            logger.info(
+                f"create_sprint called: project_id={project_id}, name={name}"
+            )
+            
+            # Create sprint via PM handler
+            sprint = pm_handler.create_sprint(
+                project_id=project_id,
+                name=name,
+                start_date=start_date,
+                end_date=end_date,
+                goal=goal
+            )
+            
+            return [TextContent(
+                type="text",
+                text=f"✅ Sprint created successfully!\n\n"
+                     f"**Name:** {sprint.get('name')}\n"
+                     f"**ID:** {sprint.get('id')}\n"
+                     f"**Duration:** {sprint.get('start_date')} - {sprint.get('end_date')}\n"
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in create_sprint: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error creating sprint: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 4: update_sprint
+    @server.call_tool()
+    async def update_sprint(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Update an existing sprint.
+        
+        Args:
+            sprint_id (required): Sprint ID
+            name (optional): New sprint name
+            start_date (optional): New start date
+            end_date (optional): New end date
+            goal (optional): New sprint goal
+            status (optional): New status
+        
+        Returns:
+            Updated sprint information
+        """
+        try:
+            sprint_id = arguments.get("sprint_id")
+            if not sprint_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: sprint_id is required"
+                )]
+            
+            updates = {
+                k: v for k, v in arguments.items()
+                if k != "sprint_id" and v is not None
+            }
+            
+            if not updates:
+                return [TextContent(
+                    type="text",
+                    text="Error: At least one field to update is required"
+                )]
+            
+            logger.info(
+                f"update_sprint called: sprint_id={sprint_id}, updates={updates}"
+            )
+            
+            # Update sprint via PM handler
+            sprint = pm_handler.update_sprint(sprint_id, **updates)
+            
+            return [TextContent(
+                type="text",
+                text=f"✅ Sprint updated successfully!\n\n"
+                     f"**Name:** {sprint.get('name')}\n"
+                     f"**ID:** {sprint.get('id')}\n"
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in update_sprint: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error updating sprint: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 5: delete_sprint
+    @server.call_tool()
+    async def delete_sprint(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Delete a sprint.
+        
+        Args:
+            sprint_id (required): Sprint ID
+        
+        Returns:
+            Confirmation message
+        """
+        try:
+            sprint_id = arguments.get("sprint_id")
+            if not sprint_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: sprint_id is required"
+                )]
+            
+            logger.info(f"delete_sprint called: sprint_id={sprint_id}")
+            
+            # Delete sprint via PM handler
+            pm_handler.delete_sprint(sprint_id)
+            
+            return [TextContent(
+                type="text",
+                text=f"✅ Sprint {sprint_id} deleted successfully!"
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in delete_sprint: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error deleting sprint: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 6: start_sprint
+    @server.call_tool()
+    async def start_sprint(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Start a sprint (change status to active).
+        
+        Args:
+            sprint_id (required): Sprint ID
+        
+        Returns:
+            Confirmation message
+        """
+        try:
+            sprint_id = arguments.get("sprint_id")
+            if not sprint_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: sprint_id is required"
+                )]
+            
+            logger.info(f"start_sprint called: sprint_id={sprint_id}")
+            
+            # Start sprint by updating status
+            sprint = pm_handler.update_sprint(sprint_id, status="active")
+            
+            return [TextContent(
+                type="text",
+                text=f"✅ Sprint started!\n\n"
+                     f"**Name:** {sprint.get('name')}\n"
+                     f"**Status:** {sprint.get('status')}\n"
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in start_sprint: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error starting sprint: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 7: complete_sprint
+    @server.call_tool()
+    async def complete_sprint(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Complete a sprint (change status to closed).
+        
+        Args:
+            sprint_id (required): Sprint ID
+        
+        Returns:
+            Confirmation message with sprint summary
+        """
+        try:
+            sprint_id = arguments.get("sprint_id")
+            if not sprint_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: sprint_id is required"
+                )]
+            
+            logger.info(f"complete_sprint called: sprint_id={sprint_id}")
+            
+            # Complete sprint by updating status
+            sprint = pm_handler.update_sprint(sprint_id, status="closed")
+            
+            return [TextContent(
+                type="text",
+                text=f"✅ Sprint completed!\n\n"
+                     f"**Name:** {sprint.get('name')}\n"
+                     f"**Status:** {sprint.get('status')}\n"
+                     f"**Duration:** {sprint.get('start_date')} - {sprint.get('end_date')}\n"
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in complete_sprint: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error completing sprint: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 8: add_task_to_sprint
+    @server.call_tool()
+    async def add_task_to_sprint(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Add a task to a sprint.
+        
+        Args:
+            task_id (required): Task ID
+            sprint_id (required): Sprint ID
+        
+        Returns:
+            Confirmation message
+        """
+        try:
+            task_id = arguments.get("task_id")
+            sprint_id = arguments.get("sprint_id")
+            
+            if not task_id or not sprint_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: task_id and sprint_id are required"
+                )]
+            
+            logger.info(
+                f"add_task_to_sprint called: task_id={task_id}, sprint_id={sprint_id}"
+            )
+            
+            # Add task to sprint by updating task
+            task = pm_handler.update_task(task_id, sprint_id=sprint_id)
+            
+            return [TextContent(
+                type="text",
+                text=f"✅ Task added to sprint!\n\n"
+                     f"**Task:** {task.get('subject')}\n"
+                     f"**Sprint ID:** {sprint_id}\n"
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in add_task_to_sprint: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error adding task to sprint: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 9: remove_task_from_sprint
+    @server.call_tool()
+    async def remove_task_from_sprint(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Remove a task from a sprint.
+        
+        Args:
+            task_id (required): Task ID
+        
+        Returns:
+            Confirmation message
+        """
+        try:
+            task_id = arguments.get("task_id")
+            if not task_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: task_id is required"
+                )]
+            
+            logger.info(f"remove_task_from_sprint called: task_id={task_id}")
+            
+            # Remove task from sprint by setting sprint_id to None
+            task = pm_handler.update_task(task_id, sprint_id=None)
+            
+            return [TextContent(
+                type="text",
+                text=f"✅ Task removed from sprint!\n\n"
+                     f"**Task:** {task.get('subject')}\n"
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in remove_task_from_sprint: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error removing task from sprint: {str(e)}"
+            )]
+    
+    tool_count += 1
+    
+    # Tool 10: get_sprint_tasks
+    @server.call_tool()
+    async def get_sprint_tasks(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Get all tasks in a sprint.
+        
+        Args:
+            sprint_id (required): Sprint ID
+        
+        Returns:
+            List of tasks in the sprint
+        """
+        try:
+            sprint_id = arguments.get("sprint_id")
+            if not sprint_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: sprint_id is required"
+                )]
+            
+            logger.info(f"get_sprint_tasks called: sprint_id={sprint_id}")
+            
+            # Get tasks in sprint
+            tasks = pm_handler.list_tasks(sprint_id=sprint_id)
+            
+            if not tasks:
+                return [TextContent(
+                    type="text",
+                    text=f"No tasks found in sprint {sprint_id}."
+                )]
+            
+            # Format output
+            output_lines = [f"Found {len(tasks)} tasks in sprint:\n\n"]
+            for i, task in enumerate(tasks, 1):
+                output_lines.append(
+                    f"{i}. **{task.get('subject')}** (ID: {task.get('id')})\n"
+                    f"   Status: {task.get('status', 'N/A')} | "
+                    f"Assignee: {task.get('assignee_name', 'Unassigned')}\n"
+                )
+            
+            return [TextContent(
+                type="text",
+                text="".join(output_lines)
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in get_sprint_tasks: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error getting sprint tasks: {str(e)}"
+            )]
+    
+    tool_count += 1
     
     logger.info(f"Registered {tool_count} sprint tools")
     return tool_count

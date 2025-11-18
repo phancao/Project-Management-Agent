@@ -457,16 +457,17 @@ function SprintSection({
   isSorting,
   onAddTask
 }: SprintSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const isActive = sprint.status === "active";
+  const isClosed = sprint.status === "closed";
+  const isFuture = sprint.status === "future";
+  
+  // Closed sprints should be collapsed by default
+  const [isExpanded, setIsExpanded] = useState(!isClosed);
   
   const { setNodeRef } = useDroppable({ 
     id: `sprint-${sprint.id}`,
     data: { type: 'sprint', sprintId: sprint.id }
   });
-
-  const isActive = sprint.status === "active";
-  const isClosed = sprint.status === "closed";
-  const isFuture = sprint.status === "future";
 
   const taskIds = useMemo(() => tasks.map(t => `task-${t.id}`), [tasks]);
   

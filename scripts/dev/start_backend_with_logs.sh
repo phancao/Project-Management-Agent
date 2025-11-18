@@ -1,7 +1,9 @@
 #!/bin/bash
 # Script to start the backend server with logs visible
 
-cd "$(dirname "$0")"
+# Get project root directory (parent of scripts/)
+PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # Create logs directory if it doesn't exist
 mkdir -p logs

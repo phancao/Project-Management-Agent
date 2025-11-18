@@ -1,7 +1,9 @@
 #!/bin/bash
 # Script to tail the backend logs
 
-cd "$(dirname "$0")"
+# Get project root directory (parent of scripts/)
+PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$PROJECT_ROOT"
 
 if [ ! -f "logs/backend.log" ]; then
     echo "No log file found. Start the server first with: bash scripts/dev/start_backend_with_logs.sh"

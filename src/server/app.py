@@ -2293,23 +2293,64 @@ async def pm_chat_stream(request: Request):
         import uuid
         import time
             
-        body = await request.json()
-        user_message = body.get("messages", [{}])[0].get("content", "")
+        try:
+            body = await request.json()
+        except Exception as e:
+            logger.error(f"Failed to parse request body: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+        
+        # Validate required fields
+        messages = body.get("messages", [])
+        if not messages or not isinstance(messages, list) or len(messages) == 0:
+            raise HTTPException(status_code=400, detail="messages array is required and cannot be empty")
+        
+        user_message = messages[0].get("content", "")
+        if not user_message or not isinstance(user_message, str):
+            raise HTTPException(status_code=400, detail="Message content is required and must be a string")
+        
         thread_id = body.get("thread_id", str(uuid.uuid4()))
+        mcp_settings = body.get("mcp_settings", {})
+        locale = body.get("locale", "en-US")
+        max_search_results = body.get("max_search_results", 3)
+        max_step_num = body.get("max_step_num", 3)
+        max_plan_iterations = body.get("max_plan_iterations", 1)
+        enable_background_investigation = body.get("enable_background_investigation", True)
+        enable_deep_thinking = body.get("enable_deep_thinking", False)
+        enable_clarification = body.get("enable_clarification", False)
+        max_clarification_rounds = body.get("max_clarification_rounds", 3)
+        report_style_str = body.get("report_style", "academic")
             
         # Get database session
-        db_gen = get_db_session()
-        db = next(db_gen)
+        try:
+            db_gen = get_db_session()
+            db = next(db_gen)
+        except Exception as e:
+            logger.error(f"Failed to get database session: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise HTTPException(
+                status_code=503,
+                detail=f"Database connection failed: {str(e)}"
+            )
             
         try:
             # Use global flow manager singleton to maintain session contexts
             global flow_manager
-            if flow_manager is None:
-                flow_manager = ConversationFlowManager(db_session=db)
-                logger.info(
-                    "Created global ConversationFlowManager singleton"
+            try:
+                if flow_manager is None:
+                    flow_manager = ConversationFlowManager(db_session=db)
+                    logger.info(
+                        "Created global ConversationFlowManager singleton"
+                    )
+                fm = flow_manager
+            except Exception as e:
+                logger.error(f"Failed to initialize ConversationFlowManager: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to initialize conversation manager: {str(e)}"
                 )
-            fm = flow_manager
                 
             async def generate_stream() -> AsyncIterator[str]:
                 """Generate SSE stream of chat responses with progress."""
@@ -2365,6 +2406,21 @@ async def pm_chat_stream(request: Request):
                             # Use _astream_workflow_generator to get properly
                             # formatted research events
                             from src.config.report_style import ReportStyle
+                            
+                            # Convert report_style string to enum
+                            report_style_map = {
+                                "academic": ReportStyle.ACADEMIC,
+                                "popular_science": ReportStyle.POPULAR_SCIENCE,
+                                "news": ReportStyle.NEWS,
+                                "social_media": ReportStyle.SOCIAL_MEDIA,
+                                "strategic_investment": ReportStyle.STRATEGIC_INVESTMENT,
+                            }
+                            report_style = report_style_map.get(report_style_str, ReportStyle.ACADEMIC)
+                            
+                            logger.info(
+                                f"[PM-CHAT] Using mcp_settings: {bool(mcp_settings)}, "
+                                f"locale: {locale}, report_style: {report_style_str}"
+                            )
                                 
                             async for event in _astream_workflow_generator(
                                 messages=[
@@ -2372,18 +2428,18 @@ async def pm_chat_stream(request: Request):
                                 ],
                                 thread_id=thread_id,
                                 resources=[],
-                                max_plan_iterations=1,
-                                max_step_num=3,
-                                max_search_results=3,
+                                max_plan_iterations=max_plan_iterations,
+                                max_step_num=max_step_num,
+                                max_search_results=max_search_results,
                                 auto_accepted_plan=True,
                                 interrupt_feedback="",
-                                mcp_settings={},
-                                enable_background_investigation=True,
-                                report_style=ReportStyle.ACADEMIC,
-                                enable_deep_thinking=False,
-                                enable_clarification=False,
-                                max_clarification_rounds=3,
-                                locale="en-US",
+                                mcp_settings=mcp_settings,
+                                enable_background_investigation=enable_background_investigation,
+                                report_style=report_style,
+                                enable_deep_thinking=enable_deep_thinking,
+                                enable_clarification=enable_clarification,
+                                max_clarification_rounds=max_clarification_rounds,
+                                locale=locale,
                                 interrupt_before_tools=None
                             ):
                                 # Yield formatted DeerFlow events directly
@@ -2443,6 +2499,21 @@ async def pm_chat_stream(request: Request):
                             )
                             import traceback
                             logger.error(traceback.format_exc())
+                            
+                            # Yield error message to client
+                            error_chunk = {
+                                "id": str(uuid.uuid4()),
+                                "thread_id": thread_id,
+                                "agent": "coordinator",
+                                "role": "assistant",
+                                "content": (
+                                    f"❌ **Error during research:** {str(research_error)}\n\n"
+                                    "Please try again or contact support if the issue persists."
+                                ),
+                                "finish_reason": "stop"
+                            }
+                            yield "event: message_chunk\n"
+                            yield f"data: {json.dumps(error_chunk)}\n\n"
                         
                         # Option 2: All queries handled by DeerFlow, skip process_message
                         # This avoids project ID errors for research queries
@@ -2483,6 +2554,8 @@ async def pm_chat_stream(request: Request):
         
     except Exception as e:
         logger.error(f"PM chat error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 

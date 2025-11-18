@@ -129,7 +129,7 @@ python test_openproject_v13_provider.py http://localhost:8081 your_api_key [proj
 ### Created
 - `src/pm_providers/openproject_v13.py` - v13 provider implementation
 - `test_openproject_v13_provider.py` - Comprehensive test script
-- `OPENPROJECT_V13_PROVIDER_REPORT.md` - This report
+- `docs/reports/OPENPROJECT_V13_PROVIDER_REPORT.md` - This report
 
 ### Modified
 - `src/pm_providers/factory.py` - Added v13 provider support

@@ -38,6 +38,7 @@ export function MessagesBlock({ className }: { className?: string }) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [feedback, setFeedback] = useState<{ option: Option } | null>(null);
   const [inputHasContent, setInputHasContent] = useState(false);
+  const sendingRef = useRef(false);
   const handleSend = useCallback(
     async (
       message: string,
@@ -46,6 +47,11 @@ export function MessagesBlock({ className }: { className?: string }) {
         resources?: Array<Resource>;
       },
     ) => {
+      // Prevent multiple simultaneous sends
+      if (sendingRef.current || responding) {
+        return;
+      }
+      sendingRef.current = true;
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
       try {
@@ -61,8 +67,11 @@ export function MessagesBlock({ className }: { className?: string }) {
           },
         );
       } catch {}
+      finally {
+        sendingRef.current = false;
+      }
     },
-    [feedback],
+    [feedback, responding],
   );
   const handleCancel = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -104,9 +113,15 @@ export function MessagesBlock({ className }: { className?: string }) {
             )}
             onSend={(message) => {
               // Only send if not responding and no input content
-              if (!responding && !inputHasContent && messageCount === 0) {
-                handleSend(message);
+              // Add extra guard: if already responding, don't send
+              if (responding || inputHasContent || messageCount > 0 || sendingRef.current) {
+                return;
               }
+              // Immediately mark as sending to prevent duplicate sends
+              sendingRef.current = true;
+              // Immediately hide conversation starter by setting inputHasContent
+              setInputHasContent(true);
+              handleSend(message);
             }}
           />
           <InputBox

@@ -4,6 +4,10 @@
 
 set -e
 
+# Get project root directory (parent of scripts/)
+PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$PROJECT_ROOT"
+
 # Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'

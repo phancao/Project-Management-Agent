@@ -14,6 +14,9 @@ from pydantic import BaseModel, Field
 
 from src.server.pm_handler import PMHandler
 from ..config import PMServerConfig
+from ..auth import AuthManager, AuthMiddleware, create_auth_router
+from ..auth.middleware import get_current_user, get_optional_user
+from ..auth.models import User, Permission
 
 logger = logging.getLogger(__name__)
 
@@ -51,20 +54,25 @@ class ServerInfo(BaseModel):
     providers_count: int
 
 
-def create_http_app(pm_handler: PMHandler, config: PMServerConfig) -> FastAPI:
+def create_http_app(
+    pm_handler: PMHandler,
+    config: PMServerConfig,
+    enable_auth: bool = True
+) -> FastAPI:
     """
     Create FastAPI application with HTTP REST API endpoints.
     
     Args:
         pm_handler: PM handler instance
         config: Server configuration
+        enable_auth: Enable authentication (default: True)
     
     Returns:
         Configured FastAPI application
     """
     app = FastAPI(
         title="PM MCP Server API",
-        description="Project Management MCP Server REST API",
+        description="Project Management MCP Server REST API with Authentication",
         version=config.server_version,
         docs_url="/docs",
         redoc_url="/redoc",
@@ -76,12 +84,24 @@ def create_http_app(pm_handler: PMHandler, config: PMServerConfig) -> FastAPI:
         allow_origins=["*"],  # Configure based on config in production
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["*"],
+        allow_headers=["*", "Authorization"],
     )
     
-    # Store PM handler in app state
+    # Initialize authentication
+    auth_manager = AuthManager()
+    
+    # Add authentication middleware if enabled
+    if enable_auth:
+        app.add_middleware(AuthMiddleware, auth_manager=auth_manager)
+        logger.info("Authentication enabled")
+    else:
+        logger.warning("Authentication disabled - server is open to all!")
+    
+    # Store instances in app state
     app.state.pm_handler = pm_handler
     app.state.config = config
+    app.state.auth_manager = auth_manager
+    app.state.auth_enabled = enable_auth
     
     # Tool registry organized by category
     app.state.tools_by_category = {
@@ -93,6 +113,13 @@ def create_http_app(pm_handler: PMHandler, config: PMServerConfig) -> FastAPI:
         "analytics": {},
         "task_interactions": {},
     }
+    
+    # Include authentication router
+    if enable_auth:
+        from ..auth.routes import create_auth_router
+        auth_router = create_auth_router(auth_manager)
+        app.include_router(auth_router)
+        logger.info("Authentication routes registered")
     
     @app.get("/", response_model=ServerInfo)
     async def root():

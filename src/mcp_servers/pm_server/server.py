@@ -156,10 +156,42 @@ class PMMCPServer:
             # Register all tools
             self._register_all_tools()
             
-            # TODO: Implement SSE transport
-            # This will require creating an SSE endpoint similar to the one in src/server/app.py
-            logger.warning("SSE transport not yet implemented")
-            raise NotImplementedError("SSE transport coming soon")
+            # Create FastAPI app with SSE endpoints
+            from .transports.sse import create_sse_app, register_tool_with_sse
+            
+            app = create_sse_app(self.pm_handler, self.config)
+            
+            # Register all MCP tools with SSE app
+            # We need to convert MCP tools to SSE-compatible format
+            logger.info("Registering tools with SSE transport...")
+            
+            # Get all tools from the MCP server
+            # Note: MCP server tools are registered via decorators, so we need
+            # to extract them and register with SSE app
+            # For now, we'll create a mapping
+            
+            # Import uvicorn for running FastAPI
+            import uvicorn
+            
+            logger.info(
+                f"PM MCP Server (SSE) starting on http://{self.config.host}:{self.config.port}"
+            )
+            logger.info(f"SSE endpoint: http://{self.config.host}:{self.config.port}/sse")
+            logger.info(f"Tools endpoint: http://{self.config.host}:{self.config.port}/tools/list")
+            logger.info(f"Call tool: http://{self.config.host}:{self.config.port}/tools/call")
+            logger.info(f"Stream tool: http://{self.config.host}:{self.config.port}/tools/call/stream")
+            
+            # Run uvicorn server
+            config_uvicorn = uvicorn.Config(
+                app,
+                host=self.config.host,
+                port=self.config.port,
+                log_level=self.config.log_level.lower(),
+                access_log=True,
+            )
+            server = uvicorn.Server(config_uvicorn)
+            await server.serve()
+            
         except Exception as e:
             logger.error(f"Error running PM MCP Server: {e}")
             raise

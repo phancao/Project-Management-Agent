@@ -363,7 +363,10 @@ export function SprintBoardView() {
     };
   }, [activeProjectId, columnOrderIds, columnOrder, orderIdToStatusIdMap, availableStatuses, visibleColumns]);
 
+  // Only require canLoadTasks if we don't have cached tasks
+  // This allows cached data to display immediately even if canLoadTasks is false
   const shouldLoadTasks = loadingState.canLoadTasks && activeProjectId;
+  const hasCachedTasks = tasks.length > 0 && !loading;
 
   const availablePriorities = useMemo(() => {
     if (backendPriorities && backendPriorities.length > 0) {
@@ -1239,7 +1242,12 @@ export function SprintBoardView() {
   const sensorsContext = useMemo(() => sensors, [sensors]);
 
   const hasTasks = tasks.length > 0;
-  const isLoadingBoard = loadingState.filterData.loading || (shouldLoadTasks && loading && !hasTasks);
+  // Only show loading if:
+  // 1. Filter data is loading, OR
+  // 2. We should load tasks AND we're actually loading AND we don't have tasks yet
+  // This ensures cached data (hasTasks=true, loading=false) doesn't show loading state
+  // If we have cached tasks, don't show loading even if shouldLoadTasks is true
+  const isLoadingBoard = loadingState.filterData.loading || (shouldLoadTasks && loading && !hasTasks && !hasCachedTasks);
 
   if (isLoadingBoard) {
     return (

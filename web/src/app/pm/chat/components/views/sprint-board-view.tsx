@@ -1246,8 +1246,8 @@ export function SprintBoardView() {
   // 1. Filter data is loading, OR
   // 2. We should load tasks AND we're actually loading AND we don't have tasks yet
   // This ensures cached data (hasTasks=true, loading=false) doesn't show loading state
-  // If we have cached tasks, don't show loading even if shouldLoadTasks is true
-  const isLoadingBoard = loadingState.filterData.loading || (shouldLoadTasks && loading && !hasTasks && !hasCachedTasks);
+  // If we have cached tasks (hasTasks && !loading), always show them, don't wait for canLoadTasks
+  const isLoadingBoard = loadingState.filterData.loading || (shouldLoadTasks && loading && !hasTasks);
 
   if (isLoadingBoard) {
     return (

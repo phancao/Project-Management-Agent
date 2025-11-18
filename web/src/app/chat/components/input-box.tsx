@@ -32,7 +32,6 @@ export function InputBox({
   onSend,
   onCancel,
   onRemoveFeedback,
-  onInputChange,
 }: {
   className?: string;
   size?: "large" | "normal";
@@ -47,7 +46,6 @@ export function InputBox({
   ) => void;
   onCancel?: () => void;
   onRemoveFeedback?: () => void;
-  onInputChange?: (hasContent: boolean) => void;
 }) {
   const t = useTranslations("chat.inputBox");
   const tCommon = useTranslations("common");
@@ -133,12 +131,6 @@ export function InputBox({
         className,
       )}
       ref={containerRef}
-      onClick={(e) => {
-        e.stopPropagation();
-      }}
-      onMouseDown={(e) => {
-        e.stopPropagation();
-      }}
     >
       <div className="w-full">
         <AnimatePresence>
@@ -217,11 +209,7 @@ export function InputBox({
           loading={loading}
           config={config}
           onEnter={handleSendMessage}
-          onChange={(text) => {
-            setCurrentPrompt(text);
-            const hasText = text.trim().length > 0;
-            onInputChange?.(hasText);
-          }}
+          onChange={setCurrentPrompt}
         />
       </div>
       <div className="flex items-center px-4 py-2">

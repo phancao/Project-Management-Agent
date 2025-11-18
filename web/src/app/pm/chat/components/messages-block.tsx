@@ -37,8 +37,6 @@ export function MessagesBlock({ className }: { className?: string }) {
   const [replayStarted, setReplayStarted] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [feedback, setFeedback] = useState<{ option: Option } | null>(null);
-  const [inputHasContent, setInputHasContent] = useState(false);
-  const sendingRef = useRef(false);
   const handleSend = useCallback(
     async (
       message: string,
@@ -47,11 +45,6 @@ export function MessagesBlock({ className }: { className?: string }) {
         resources?: Array<Resource>;
       },
     ) => {
-      // Prevent multiple simultaneous sends
-      if (sendingRef.current || responding) {
-        return;
-      }
-      sendingRef.current = true;
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
       try {
@@ -67,11 +60,8 @@ export function MessagesBlock({ className }: { className?: string }) {
           },
         );
       } catch {}
-      finally {
-        sendingRef.current = false;
-      }
     },
-    [feedback, responding],
+    [feedback],
   );
   const handleCancel = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -104,40 +94,19 @@ export function MessagesBlock({ className }: { className?: string }) {
       />
       {!isReplay ? (
         <div className="relative flex h-42 shrink-0 pb-4">
-          <ConversationStarter
-            className={cn(
-              "absolute top-[-218px] left-0 transition-opacity duration-200",
-              !responding && messageCount === 0 && !inputHasContent
-                ? "opacity-100 pointer-events-auto"
-                : "opacity-0 pointer-events-none"
-            )}
-            onSend={(message) => {
-              // Only send if not responding and no input content
-              // Add extra guard: if already responding, don't send
-              if (responding || inputHasContent || messageCount > 0 || sendingRef.current) {
-                return;
-              }
-              // Immediately mark as sending to prevent duplicate sends
-              sendingRef.current = true;
-              // Immediately hide conversation starter by setting inputHasContent
-              setInputHasContent(true);
-              handleSend(message);
-            }}
-          />
+          {!responding && messageCount === 0 && (
+            <ConversationStarter
+              className="absolute top-[-218px] left-0"
+              onSend={handleSend}
+            />
+          )}
           <InputBox
-            className="h-full w-full relative z-10"
+            className="h-full w-full"
             responding={responding}
             feedback={feedback}
-            onSend={(message, options) => {
-              // Clear input content state when sending
-              setInputHasContent(false);
-              handleSend(message, options);
-            }}
+            onSend={handleSend}
             onCancel={handleCancel}
             onRemoveFeedback={handleRemoveFeedback}
-            onInputChange={(hasContent) => {
-              setInputHasContent(hasContent);
-            }}
           />
         </div>
       ) : (

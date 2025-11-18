@@ -3,7 +3,6 @@
 
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { useRef } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -18,27 +17,6 @@ export function ConversationStarter({
 }) {
   const t = useTranslations("chat");
   const questions = t.raw("conversationStarters") as string[];
-  const clickedRef = useRef(false);
-
-  const handleClick = (e: React.MouseEvent, question: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    // Prevent multiple clicks
-    if (clickedRef.current) {
-      return;
-    }
-    
-    clickedRef.current = true;
-    
-    // Call onSend only once
-    onSend?.(question);
-    
-    // Reset after a delay to allow new clicks
-    setTimeout(() => {
-      clickedRef.current = false;
-    }, 1000);
-  };
 
   return (
     <div className={cn("flex flex-col items-center", className)}>
@@ -62,9 +40,8 @@ export function ConversationStarter({
           >
             <div
               className="bg-card text-muted-foreground h-full w-full cursor-pointer rounded-2xl border px-4 py-4 opacity-75 transition-all duration-300 hover:opacity-100 hover:shadow-md"
-              onClick={(e) => handleClick(e, question)}
-              onMouseDown={(e) => {
-                e.stopPropagation();
+              onClick={() => {
+                onSend?.(question);
               }}
             >
               {question}

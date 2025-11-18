@@ -215,9 +215,35 @@ class PMMCPServer:
             # Register all tools
             self._register_all_tools()
             
-            # TODO: Implement HTTP transport
-            logger.warning("HTTP transport not yet implemented")
-            raise NotImplementedError("HTTP transport coming soon")
+            # Create FastAPI app with HTTP REST API
+            from .transports.http import create_http_app
+            
+            app = create_http_app(self.pm_handler, self.config)
+            
+            # Import uvicorn for running FastAPI
+            import uvicorn
+            
+            logger.info(
+                f"PM MCP Server (HTTP) starting on http://{self.config.host}:{self.config.port}"
+            )
+            logger.info(f"API Documentation: http://{self.config.host}:{self.config.port}/docs")
+            logger.info(f"ReDoc: http://{self.config.host}:{self.config.port}/redoc")
+            logger.info(f"Health: http://{self.config.host}:{self.config.port}/health")
+            logger.info(f"Tools: http://{self.config.host}:{self.config.port}/tools")
+            logger.info(f"Projects: http://{self.config.host}:{self.config.port}/projects")
+            logger.info(f"Tasks: http://{self.config.host}:{self.config.port}/tasks/my")
+            
+            # Run uvicorn server
+            config_uvicorn = uvicorn.Config(
+                app,
+                host=self.config.host,
+                port=self.config.port,
+                log_level=self.config.log_level.lower(),
+                access_log=True,
+            )
+            server = uvicorn.Server(config_uvicorn)
+            await server.serve()
+            
         except Exception as e:
             logger.error(f"Error running PM MCP Server: {e}")
             raise

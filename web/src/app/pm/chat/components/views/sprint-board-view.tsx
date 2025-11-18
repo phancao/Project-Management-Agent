@@ -333,7 +333,8 @@ export function SprintBoardView() {
   const { tasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForTasks ?? undefined);
   const { priorities: backendPriorities } = usePriorities(activeProjectId ?? undefined);
   const { epics } = useEpics(activeProjectId ?? undefined);
-  const { sprints } = useSprints(activeProjectId || "");
+  // Use projectIdForTasks for sprints to match tasks (ensures same cache key)
+  const { sprints } = useSprints(projectIdForTasks || "");
   const {
     statuses: availableStatuses,
     loading: statusesLoading,

@@ -289,7 +289,24 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             all_tasks = await self.provider.list_tasks(project_id=project_key)
             
             for sprint in sorted_sprints:
-                sprint_tasks = [t for t in all_tasks if t.sprint_id == sprint.id]
+                # Use flexible sprint_id matching (same as burndown)
+                sprint_id_str = str(sprint.id) if sprint.id else None
+                sprint_tasks = []
+                
+                for t in all_tasks:
+                    task_sprint_id_str = str(t.sprint_id) if t.sprint_id else None
+                    task_sprint_id_int = int(t.sprint_id) if t.sprint_id and str(t.sprint_id).isdigit() else None
+                    sprint_id_int = int(sprint.id) if sprint.id and str(sprint.id).isdigit() else None
+                    
+                    matches = (
+                        (task_sprint_id_str and task_sprint_id_str == sprint_id_str) or
+                        (task_sprint_id_int and sprint_id_int and task_sprint_id_int == sprint_id_int) or
+                        (t.sprint_id == sprint.id) or
+                        (t.sprint_id and str(t.sprint_id) == str(sprint.id))
+                    )
+                    
+                    if matches:
+                        sprint_tasks.append(t)
                 
                 # Calculate planned and completed
                 planned_points = 0

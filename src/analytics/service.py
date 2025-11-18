@@ -694,11 +694,16 @@ class AnalyticsService:
 
         completed = payload.get("completed_points")
         if completed is None:
-            completed = sum(
-                item.story_points or 0
-                for item in work_items
-                if item.status == TaskStatus.DONE and item.completed_at
-            )
+            # Try to calculate from work_items if available
+            if work_items:
+                completed = sum(
+                    item.story_points or 0
+                    for item in work_items
+                    if item.status == TaskStatus.DONE
+                )
+            else:
+                # If no work_items, default to 0 (velocity data might not include tasks)
+                completed = 0
 
         return SprintData(
             id=str(sprint_info.get("id") or "unknown"),

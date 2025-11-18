@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar, Loader2, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar, Loader2 } from "lucide-react";
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
@@ -2110,22 +2110,9 @@ export function BacklogView() {
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
           {/* Top Header with Filters */}
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Backlog</h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  refreshTasks(true, true); // Force refresh tasks
-                  refreshSprints(true); // Force refresh sprints
-                }}
-                disabled={loading || sprintsLoading}
-                className="gap-2"
-              >
-                <RefreshCw className={`w-4 h-4 ${(loading || sprintsLoading) ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-            </div>
+    <div className="mb-4">
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Backlog</h2>
+    </div>
 
             {/* Filters */}
             <div className="flex flex-col md:flex-row gap-3">

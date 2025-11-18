@@ -142,37 +142,6 @@ export function useVelocityChart(projectId: string | null, sprintCount: number =
     },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (formerly cacheTime)
-  });
-}
-
-/**
- * Hook to fetch velocity chart data
- */
-export function useVelocityChart(projectId: string | null, sprintCount: number = 6) {
-  return useQuery({
-    queryKey: ["analytics", "velocity", projectId, sprintCount],
-    queryFn: async () => {
-      if (!projectId) throw new Error("Project ID is required");
-      
-      const url = resolveServiceURL(`analytics/projects/${projectId}/velocity?sprint_count=${sprintCount}`);
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        let errorDetail = response.statusText;
-        try {
-          const errorData = await response.json();
-          errorDetail = errorData.detail || errorData.message || errorDetail;
-        } catch {
-          // If response is not JSON, use status text
-        }
-        throw new Error(`Failed to fetch velocity chart: ${errorDetail}`);
-      }
-      
-      return response.json() as Promise<ChartResponse>;
-    },
-    enabled: !!projectId,
-    staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
 }

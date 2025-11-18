@@ -125,21 +125,38 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export function useTasks(projectId?: string) {
   // Initialize from cache if available to avoid loading state
-  const getInitialState = () => {
+  // Use a function to compute initial state so it's recalculated if projectId changes
+  const getInitialState = useCallback(() => {
     if (!projectId) {
       return { tasks: [], loading: false, error: null };
     }
     const cached = tasksCache.get(projectId);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      debug.api('Initializing from cache', { projectId, count: cached.data.length });
       return { tasks: cached.data, loading: false, error: null };
     }
     return { tasks: [], loading: true, error: null };
-  };
+  }, [projectId]);
   
   const initialState = getInitialState();
   const [tasks, setTasks] = useState<Task[]>(initialState.tasks);
   const [loading, setLoading] = useState(initialState.loading);
   const [error, setError] = useState<Error | null>(initialState.error);
+  
+  // Update state if projectId changes and we have cached data
+  useEffect(() => {
+    if (projectId) {
+      const cached = tasksCache.get(projectId);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        if (tasks.length === 0 || loading) {
+          debug.api('Updating from cache on projectId change', { projectId, count: cached.data.length });
+          setTasks(cached.data);
+          setLoading(false);
+          setError(null);
+        }
+      }
+    }
+  }, [projectId, tasks.length, loading]);
 
   const refresh = useCallback((clearTasks: boolean = true, forceRefresh: boolean = false) => {
     // If no project ID, return empty immediately

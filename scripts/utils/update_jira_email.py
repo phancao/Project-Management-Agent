@@ -48,7 +48,7 @@ def update_jira_email():
         
         if not jira_provider:
             print("❌ JIRA provider not found in database.")
-            print("Please run add_providers_from_env.py first.")
+            print("Please run scripts/utils/add_providers_from_env.py first.")
             sys.exit(1)
         
         # Update username/email

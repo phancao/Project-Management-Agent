@@ -4,7 +4,7 @@
 cd "$(dirname "$0")"
 
 if [ ! -f "logs/backend.log" ]; then
-    echo "No log file found. Start the server first with: ./start_backend_with_logs.sh"
+    echo "No log file found. Start the server first with: bash scripts/dev/start_backend_with_logs.sh"
     exit 1
 fi
 

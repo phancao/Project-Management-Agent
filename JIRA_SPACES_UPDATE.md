@@ -53,7 +53,7 @@ curl http://localhost:8000/api/pm/providers
 curl http://localhost:8000/api/pm/providers/{provider_id}/projects
 
 # Update provider with correct email
-python3 update_jira_provider.py your-email@example.com
+python3 scripts/utils/update_jira_provider.py your-email@example.com
 ```
 
 ## 📝 Notes

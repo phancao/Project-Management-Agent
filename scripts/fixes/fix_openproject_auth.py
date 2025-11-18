@@ -56,7 +56,7 @@ def diagnose_and_fix():
         
         if not provider:
             print("❌ No OpenProject provider found in database")
-            print("\n💡 Solution: Run add_providers_from_env.py to add OpenProject provider")
+            print("\n💡 Solution: Run scripts/utils/add_providers_from_env.py to add OpenProject provider")
             return
         
         print(f"\n📋 Current Configuration:")
@@ -93,7 +93,7 @@ def diagnose_and_fix():
             if test_openproject_auth(openproject_url or provider.base_url, openproject_key):
                 print("   ✅ Environment API key is valid!")
                 print(f"\n💡 Solution: Update database with environment API key")
-                print(f"   Run: python update_openproject_api_key.py")
+                print(f"   Run: python scripts/utils/update_openproject_api_key.py")
                 
                 # Offer to update
                 response = input("\n   Would you like to update the database now? (y/n): ")
@@ -132,7 +132,7 @@ def diagnose_and_fix():
         print("\n   ⚠️  Note: Use the RAW token, NOT base64 encoded")
         print("   The code will handle base64 encoding automatically")
         print("\n5. Update Database:")
-        print("   → Run: python update_openproject_api_key.py")
+        print("   → Run: python scripts/utils/update_openproject_api_key.py")
         print("\n6. Restart Backend Server:")
         print("   → The changes will take effect after restart")
         print("=" * 60)

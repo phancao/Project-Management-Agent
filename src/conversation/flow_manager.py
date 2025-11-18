@@ -105,14 +105,14 @@ class ConversationFlowManager:
             else:
                 # Fallback to single provider if no DB session
                 from src.pm_providers import build_pm_provider
-                pm_provider = build_pm_provider(db_session=db_session)
-                if pm_provider:
-                    self.pm_handler = PMHandler.from_single_provider(pm_provider)
+            pm_provider = build_pm_provider(db_session=db_session)
+            if pm_provider:
+                self.pm_handler = PMHandler.from_single_provider(pm_provider)
                     set_pm_handler(self.pm_handler)
-                    logger.info(
+                logger.info(
                         f"PM Handler initialized with single provider: "
-                        f"{pm_provider.__class__.__name__}"
-                    )
+                    f"{pm_provider.__class__.__name__}"
+                )
         except Exception as e:
             logger.warning(f"Could not initialize PM handler: {e}")
         
@@ -456,16 +456,16 @@ class ConversationFlowManager:
                     summary_msg = f"Query has been processed by DeerFlow agents."
                 
                 # All queries complete here - agents handled everything
-                context.current_state = FlowState.COMPLETED
-                return {
+                    context.current_state = FlowState.COMPLETED
+                    return {
                     "type": "agent_completed",
-                    "message": summary_msg,
-                    "state": context.current_state.value,
-                    "data": {
+                        "message": summary_msg,
+                        "state": context.current_state.value,
+                        "data": {
                         "intent": context.intent.value,
-                        "full_results": research_result if research_result else None
+                            "full_results": research_result if research_result else None
+                        }
                     }
-                }
             except Exception as e:
                 logger.error(f"DeerFlow research failed: {e}")
                 return {

@@ -407,24 +407,63 @@ export function ProviderManagementView() {
                             {providerProjects?.projects?.length || 0}):
                           </p>
                           <div className="space-y-1">
-                            {providerProjects?.projects?.map((project) => (
-                              <div
-                                key={project.id}
-                                className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded"
-                              >
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {project.name}
-                                  </p>
-                                  {project.description && (
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                      {project.description}
+                            {providerProjects?.projects?.slice(0, 3).map((project) => {
+                              // Construct external URL based on provider type
+                              const getProjectUrl = (providerType: string, baseUrl: string, projectId: string): string | null => {
+                                const base = baseUrl.replace(/\/$/, ""); // Remove trailing slash
+                                
+                                if (providerType === "openproject" || providerType === "openproject_v13") {
+                                  return `${base}/projects/${projectId}`;
+                                } else if (providerType === "jira") {
+                                  return `${base}/browse/${projectId}`;
+                                } else if (providerType === "clickup") {
+                                  // ClickUp uses workspace_id and project_id
+                                  if (provider.workspace_id) {
+                                    return `${base}/space/${provider.workspace_id}/project/${projectId}`;
+                                  }
+                                  return null;
+                                }
+                                return null;
+                              };
+
+                              const projectUrl = getProjectUrl(provider.provider_type, provider.base_url, project.id);
+
+                              return (
+                                <div
+                                  key={project.id}
+                                  className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                      {project.name}
                                     </p>
+                                    {project.description && (
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={project.description}>
+                                        {project.description.length > 50 
+                                          ? `${project.description.substring(0, 50)}...` 
+                                          : project.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {projectUrl ? (
+                                    <button
+                                      onClick={() => window.open(projectUrl, "_blank", "noopener,noreferrer")}
+                                      className="shrink-0 ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                                      title={`Open ${project.name} in ${provider.provider_type}`}
+                                    >
+                                      <ExternalLink className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
+                                    </button>
+                                  ) : (
+                                    <ExternalLink className="w-4 h-4 text-gray-400 shrink-0 ml-2 opacity-50" />
                                   )}
                                 </div>
-                                <ExternalLink className="w-4 h-4 text-gray-400" />
-                              </div>
-                            ))}
+                              );
+                            })}
+                            {(providerProjects?.projects?.length || 0) > 3 && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 pt-1">
+                                +{(providerProjects?.projects?.length || 0) - 3} more projects
+                              </p>
+                            )}
                           </div>
                         </div>
                       ) : (
@@ -443,7 +482,7 @@ export function ProviderManagementView() {
 
       {/* Add/Edit Provider Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingProvider ? "Edit Provider" : "Add Provider"}

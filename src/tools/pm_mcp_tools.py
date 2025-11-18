@@ -53,12 +53,13 @@ def configure_pm_mcp_client(
     """
     global _pm_mcp_config
     
+    # Store enabled_tools separately (not in MCP client config)
     _pm_mcp_config = {
         "pm-server": {
             "transport": transport,
             "url": url if transport == "sse" else None,
-            "enabled_tools": enabled_tools,
-        }
+        },
+        "enabled_tools": enabled_tools,  # Store separately for filtering
     }
     
     logger.info(
@@ -100,7 +101,9 @@ async def get_pm_mcp_tools() -> list:
         # Create MCP client if not already created
         if _mcp_client is None:
             logger.info("Creating PM MCP client...")
-            _mcp_client = MultiServerMCPClient(_pm_mcp_config)
+            # Only pass MCP server config (without enabled_tools)
+            mcp_server_config = {"pm-server": _pm_mcp_config["pm-server"]}
+            _mcp_client = MultiServerMCPClient(mcp_server_config)
             logger.info("PM MCP client created successfully")
         
         # Get all tools from MCP server
@@ -108,7 +111,7 @@ async def get_pm_mcp_tools() -> list:
         all_tools = await _mcp_client.get_tools()
         
         # Filter tools if enabled_tools is specified
-        enabled_tools = _pm_mcp_config["pm-server"].get("enabled_tools")
+        enabled_tools = _pm_mcp_config.get("enabled_tools")
         if enabled_tools:
             filtered_tools = [
                 tool for tool in all_tools
@@ -124,8 +127,26 @@ async def get_pm_mcp_tools() -> list:
             return all_tools
             
     except Exception as e:
-        logger.error(f"Error loading PM tools from MCP server: {e}", exc_info=True)
-        raise RuntimeError(f"Failed to load PM tools from MCP server: {e}")
+        error_msg = str(e).lower()
+        # Check if it's a connection error (server not running)
+        # ExceptionGroup may wrap connection errors
+        is_connection_error = (
+            "connection" in error_msg or 
+            "connect" in error_msg or
+            isinstance(e, BaseExceptionGroup) and 
+            any("connection" in str(exc).lower() or "connect" in str(exc).lower() 
+                for exc in (e.exceptions if hasattr(e, 'exceptions') else []))
+        )
+        
+        if is_connection_error:
+            logger.warning(
+                f"PM MCP server not available at {_pm_mcp_config['pm-server'].get('url', 'configured URL')}. "
+                f"Falling back to direct PM tools. Error: {e}"
+            )
+            raise ConnectionError(f"PM MCP server not available: {e}") from e
+        else:
+            logger.error(f"Error loading PM tools from MCP server: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to load PM tools from MCP server: {e}") from e
 
 
 def is_pm_mcp_configured() -> bool:

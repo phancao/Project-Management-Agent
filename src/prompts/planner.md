@@ -18,6 +18,7 @@ As a Deep Researcher, you can breakdown the major subject into sub-topics and ex
 
 These are simple data queries that require MCP PM tools (NOT web search or research):
 - "show me my projects" / "list projects" / "list all projects"
+- "is there a project named [X]" / "search for project [X]" / "find project [X]"
 - "show me my tasks" / "list my tasks" / "what are my tasks"
 - "show sprints" / "list sprints" / "what sprints are there"
 - "show epics" / "list epics"
@@ -25,6 +26,7 @@ These are simple data queries that require MCP PM tools (NOT web search or resea
 - "get project [ID]" / "show project [ID]"
 - "get task [ID]" / "show task [ID]"
 - Any query asking to display/list/view project management data
+- Any query asking to check if a specific project exists or to search for a project by name
 
 ### Research Queries vs. Simple PM Queries
 
@@ -38,13 +40,16 @@ These are simple data queries that require MCP PM tools (NOT web search or resea
 For simple PM queries:
 1. **Set `has_enough_context: true`** - These queries don't need external research, just data retrieval from MCP PM tools
 2. **Create a simple plan** with 1-2 steps that use MCP PM tools:
-   - Step 1: Use the appropriate MCP PM tool (e.g., `list_projects`, `list_my_tasks`) to retrieve the data
+   - Step 1: Use the appropriate MCP PM tool (e.g., `list_projects`, `search_projects`, `list_my_tasks`) to retrieve the data
      - **CRITICAL**: Be explicit about which PM tool to use:
        - For "list my projects" / "show my projects" / "list projects" → Use `list_projects` tool
+       - For "is there a project named [X]" / "search for project [X]" / "find project [X]" → Use `search_projects` tool with the project name as the query parameter
        - For "list my tasks" / "show my tasks" → Use `list_my_tasks` tool
        - For "show sprints" → Use `list_sprints` tool
        - For "show epics" → Use `list_epics` tool
-     - **Step description should be explicit**: "Use the `list_projects` MCP PM tool to retrieve all available projects from all active PM providers (OpenProject, JIRA, ClickUp, etc.)"
+     - **Step description should be explicit**: 
+       - For listing: "Use the `list_projects` MCP PM tool to retrieve all available projects from all active PM providers (OpenProject, JIRA, ClickUp, etc.)"
+       - For searching: "Use the `search_projects` MCP PM tool with query '[project name]' to search for projects matching the name across all active PM providers"
    - Step 2 (optional): Format or present the retrieved data
 3. **Set `need_search: false`** for all steps - No web search needed
 4. **Set `step_type: "processing"`** - These are data retrieval/processing steps, not research

@@ -151,13 +151,25 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             
             # Compare sprint_id as strings to handle type mismatches
             sprint_id_str = str(sprint_id) if sprint_id else None
-            logger.info(f"[PMProviderAnalyticsAdapter] Comparing sprint_id_str='{sprint_id_str}' against task sprint_ids")
+            logger.info(f"[PMProviderAnalyticsAdapter] Comparing sprint_id_str='{sprint_id_str}' (type: {type(sprint_id).__name__}) against task sprint_ids")
             
-            sprint_tasks = [
-                t for t in all_tasks 
-                if (t.sprint_id and str(t.sprint_id) == sprint_id_str) or 
-                   (sprint_id_str and t.sprint_id == sprint_id)
-            ]
+            # More flexible matching: try both string and int comparisons
+            sprint_tasks = []
+            for t in all_tasks:
+                task_sprint_id_str = str(t.sprint_id) if t.sprint_id else None
+                task_sprint_id_int = int(t.sprint_id) if t.sprint_id and str(t.sprint_id).isdigit() else None
+                sprint_id_int = int(sprint_id) if sprint_id and str(sprint_id).isdigit() else None
+                
+                matches = (
+                    (task_sprint_id_str and task_sprint_id_str == sprint_id_str) or
+                    (task_sprint_id_int and sprint_id_int and task_sprint_id_int == sprint_id_int) or
+                    (t.sprint_id == sprint_id) or
+                    (t.sprint_id and str(t.sprint_id) == str(sprint_id))
+                )
+                
+                if matches:
+                    sprint_tasks.append(t)
+                    logger.debug(f"[PMProviderAnalyticsAdapter] Task {t.id} matched: task.sprint_id={t.sprint_id} (type: {type(t.sprint_id).__name__}) == sprint_id={sprint_id} (type: {type(sprint_id).__name__})")
             
             logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks matching sprint {sprint_id}")
             logger.info(f"[PMProviderAnalyticsAdapter] ===== BURNDOWN DEBUG END =====")

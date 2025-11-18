@@ -247,14 +247,12 @@ class OpenProjectV13Provider(BasePMProvider):
         project_id: Optional[str] = None,
         assignee_id: Optional[str] = None
     ) -> List[PMTask]:
-        """List all work packages (tasks)"""
-        url = f"{self.base_url}/api/v3/work_packages"
-        
-        # Build filters for project and/or assignee
+        """List all work packages (tasks) with pagination support"""
         import json as json_lib
         import logging
         logger = logging.getLogger(__name__)
         
+        # Build filters for project and/or assignee
         filters = []
         if project_id:
             filters.append({
@@ -265,37 +263,67 @@ class OpenProjectV13Provider(BasePMProvider):
                 "assignee": {"operator": "=", "values": [assignee_id]}
             })
         
+        # Build initial request parameters (matching test script pattern)
         if filters:
-            params = {"filters": json_lib.dumps(filters)}
+            params = {
+                "filters": json_lib.dumps(filters),
+                "pageSize": 100,
+                "include": "priority,status,assignee,project,version,parent"
+            }
             logger.info(f"OpenProject list_tasks with filters: {params}")
         else:
-            params = {}
+            params = {
+                "pageSize": 100,
+                "include": "priority,status,assignee,project,version,parent"
+            }
         
-        # Include priority in embedded data for better parsing
-        params["include"] = "priority,status,assignee,project,version,parent"
+        # Fetch all pages using pagination (exact pattern from test script)
+        all_tasks_data = []
+        request_url = f"{self.base_url}/api/v3/work_packages"
+        page_num = 1
         
-        response = requests.get(url, headers=self.headers, params=params)
+        while request_url:
+            logger.debug(f"Fetching page {page_num} from {request_url}")
+            response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            tasks_data = data.get("_embedded", {}).get("elements", [])
+            all_tasks_data.extend(tasks_data)
+            
+            total_count = data.get("count", len(all_tasks_data))
+            logger.debug(f"Page {page_num}: {len(tasks_data)} tasks (total so far: {len(all_tasks_data)}/{total_count})")
+            
+            # Check for next page (exact pattern from test script)
+            links = data.get("_links", {})
+            next_link = links.get("nextByOffset") or links.get("next")
+            
+            if next_link and isinstance(next_link, dict):
+                next_href = next_link.get("href")
+                if next_href:
+                    if not next_href.startswith("http"):
+                        request_url = f"{self.base_url}{next_href}"
+                    else:
+                        request_url = next_href
+                    params = {}  # Clear params for subsequent requests
+                    page_num += 1
+                else:
+                    request_url = None
+            else:
+                request_url = None
+        
+        logger.info(
+            f"OpenProject list_tasks: Fetched {len(all_tasks_data)} tasks "
+            f"from {page_num} page(s) (total reported: {total_count})"
+        )
         
         # Log if filter returns no results
-        if assignee_id:
-            try:
-                result = response.json()
-                task_count = len(
-                    result.get("_embedded", {}).get("elements", [])
-                )
-                if task_count == 0:
-                    logger.warning(
-                        f"Assignee filter returned 0 tasks for "
-                        f"user_id={assignee_id}. Response: "
-                        f"{result.get('count', 'N/A')} total"
-                    )
-            except Exception:
-                pass
+        if assignee_id and len(all_tasks_data) == 0:
+            logger.warning(
+                f"Assignee filter returned 0 tasks for user_id={assignee_id}"
+            )
         
-        response.raise_for_status()
-        
-        tasks_data = response.json()["_embedded"]["elements"]
-        return [self._parse_task(task) for task in tasks_data]
+        return [self._parse_task(task) for task in all_tasks_data]
     
     async def get_task(self, task_id: str) -> Optional[PMTask]:
         """Get a single work package by ID"""
@@ -918,11 +946,37 @@ class OpenProjectV13Provider(BasePMProvider):
         logger = logging.getLogger(__name__)
         
         url = f"{self.base_url}/api/v3/versions"
+        all_sprints_data = []
+        params = {"pageSize": 100}
+        request_url = url
         
-        response = requests.get(url, headers=self.headers, timeout=10)
-        response.raise_for_status()
+        # Fetch all pages using pagination (exact pattern from test script)
+        while request_url:
+            response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            sprints_data = data.get("_embedded", {}).get("elements", [])
+            all_sprints_data.extend(sprints_data)
+            
+            # Check for next page
+            links = data.get("_links", {})
+            next_link = links.get("nextByOffset") or links.get("next")
+            
+            if next_link and isinstance(next_link, dict):
+                next_href = next_link.get("href")
+                if next_href:
+                    if not next_href.startswith("http"):
+                        request_url = f"{self.base_url}{next_href}"
+                    else:
+                        request_url = next_href
+                    params = {}  # Clear params for subsequent requests
+                else:
+                    request_url = None
+            else:
+                request_url = None
         
-        sprints_data = response.json()["_embedded"]["elements"]
+        sprints_data = all_sprints_data
         
         # Filter by project_id if provided
         # (versions don't have project filter in API)
@@ -1404,17 +1458,56 @@ class OpenProjectV13Provider(BasePMProvider):
                 "project": {"operator": "=", "values": [project_id]}
             })
         
+        # Build initial request parameters
         if filters:
             import json as json_lib
-            params = {"filters": json_lib.dumps(filters)}
+            params = {
+                "filters": json_lib.dumps(filters),
+                "pageSize": 100
+            }
         else:
-            params = {}
+            params = {"pageSize": 100}
         
-        response = requests.get(url, headers=self.headers, params=params)
-        response.raise_for_status()
+        # Fetch all pages using pagination (exact pattern from test script)
+        import logging
+        logger = logging.getLogger(__name__)
+        all_time_entries = []
+        request_url = url
+        page_num = 1
         
-        data = response.json()
-        return data.get("_embedded", {}).get("elements", [])
+        while request_url:
+            logger.debug(f"Fetching time entries page {page_num} from {request_url}")
+            response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            time_entries = data.get("_embedded", {}).get("elements", [])
+            all_time_entries.extend(time_entries)
+            
+            # Check for next page
+            links = data.get("_links", {})
+            next_link = links.get("nextByOffset") or links.get("next")
+            
+            if next_link and isinstance(next_link, dict):
+                next_href = next_link.get("href")
+                if next_href:
+                    if not next_href.startswith("http"):
+                        request_url = f"{self.base_url}{next_href}"
+                    else:
+                        request_url = next_href
+                    params = {}  # Clear params for subsequent requests
+                    page_num += 1
+                else:
+                    request_url = None
+            else:
+                request_url = None
+        
+        logger.info(
+            f"OpenProject get_time_entries: Fetched {len(all_time_entries)} entries "
+            f"from {page_num} page(s)"
+        )
+        
+        return all_time_entries
     
     async def get_total_hours_for_task(self, task_id: str) -> float:
         """
@@ -1515,15 +1608,44 @@ class OpenProjectV13Provider(BasePMProvider):
         
         params = {
             "filters": json_lib.dumps(filters),
-            "pageSize": 100
+            "pageSize": 100,
+            "include": "priority,status,assignee,project,version,parent"
         }
         
         try:
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            # Fetch all pages using pagination (exact pattern from test script)
+            all_work_packages = []
+            request_url = url
+            
+            while request_url:
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    work_packages = data.get('_embedded', {}).get('elements', [])
+                    all_work_packages.extend(work_packages)
+                    
+                    # Check for next page
+                    links = data.get("_links", {})
+                    next_link = links.get("nextByOffset") or links.get("next")
+                    
+                    if next_link and isinstance(next_link, dict):
+                        next_href = next_link.get("href")
+                        if next_href:
+                            if not next_href.startswith("http"):
+                                request_url = f"{self.base_url}{next_href}"
+                            else:
+                                request_url = next_href
+                            params = {}  # Clear params for subsequent requests
+                        else:
+                            request_url = None
+                    else:
+                        request_url = None
+                else:
+                    break
             
             if response.status_code == 200:
-                data = response.json()
-                work_packages = data.get('_embedded', {}).get('elements', [])
+                work_packages = all_work_packages
                 
                 epics = []
                 for wp in work_packages:
@@ -1862,11 +1984,39 @@ class OpenProjectV13Provider(BasePMProvider):
             }])
         
         try:
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            # Fetch all pages using pagination (exact pattern from test script)
+            all_work_packages = []
+            request_url = url
+            
+            while request_url:
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    work_packages = data.get('_embedded', {}).get('elements', [])
+                    all_work_packages.extend(work_packages)
+                    
+                    # Check for next page
+                    links = data.get("_links", {})
+                    next_link = links.get("nextByOffset") or links.get("next")
+                    
+                    if next_link and isinstance(next_link, dict):
+                        next_href = next_link.get("href")
+                        if next_href:
+                            if not next_href.startswith("http"):
+                                request_url = f"{self.base_url}{next_href}"
+                            else:
+                                request_url = next_href
+                            params = {}  # Clear params for subsequent requests
+                        else:
+                            request_url = None
+                    else:
+                        request_url = None
+                else:
+                    break
             
             if response.status_code == 200:
-                data = response.json()
-                work_packages = data.get('_embedded', {}).get('elements', [])
+                work_packages = all_work_packages
                 
                 # Extract unique categories
                 categories_map = {}
@@ -1940,13 +2090,41 @@ class OpenProjectV13Provider(BasePMProvider):
         logger = logging.getLogger(__name__)
         
         url = f"{self.base_url}/api/v3/statuses"
+        all_elements = []
+        params = {"pageSize": 100}
         
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
+            # Fetch all pages using pagination (exact pattern from test script)
+            request_url = url
+            while request_url:
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    elements = data.get('_embedded', {}).get('elements', [])
+                    all_elements.extend(elements)
+                    
+                    # Check for next page
+                    links = data.get("_links", {})
+                    next_link = links.get("nextByOffset") or links.get("next")
+                    
+                    if next_link and isinstance(next_link, dict):
+                        next_href = next_link.get("href")
+                        if next_href:
+                            if not next_href.startswith("http"):
+                                request_url = f"{self.base_url}{next_href}"
+                            else:
+                                request_url = next_href
+                            params = {}  # Clear params for subsequent requests
+                        else:
+                            request_url = None
+                    else:
+                        request_url = None
+                else:
+                    break
             
             if response.status_code == 200:
-                data = response.json()
-                elements = data.get('_embedded', {}).get('elements', [])
+                elements = all_elements
                 
                 statuses = []
                 for status in elements:
@@ -1989,13 +2167,41 @@ class OpenProjectV13Provider(BasePMProvider):
         logger = logging.getLogger(__name__)
         
         url = f"{self.base_url}/api/v3/priorities"
+        all_elements = []
+        params = {"pageSize": 100}
         
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
+            # Fetch all pages using pagination (exact pattern from test script)
+            request_url = url
+            while request_url:
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    elements = data.get('_embedded', {}).get('elements', [])
+                    all_elements.extend(elements)
+                    
+                    # Check for next page
+                    links = data.get("_links", {})
+                    next_link = links.get("nextByOffset") or links.get("next")
+                    
+                    if next_link and isinstance(next_link, dict):
+                        next_href = next_link.get("href")
+                        if next_href:
+                            if not next_href.startswith("http"):
+                                request_url = f"{self.base_url}{next_href}"
+                            else:
+                                request_url = next_href
+                            params = {}  # Clear params for subsequent requests
+                        else:
+                            request_url = None
+                    else:
+                        request_url = None
+                else:
+                    break
             
             if response.status_code == 200:
-                data = response.json()
-                elements = data.get('_embedded', {}).get('elements', [])
+                elements = all_elements
                 
                 priorities = []
                 for priority in elements:

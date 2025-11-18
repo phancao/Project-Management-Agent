@@ -264,13 +264,28 @@ SEARCH_ENGINE:
 
 ## 🧪 Testing
 
+### Test Organization
+
+The project has two types of test files:
+
+1. **Official Test Suite** (`tests/` directory): Automated unit and integration tests run via pytest
+2. **Standalone Test Scripts** (`scripts/tests/` directory): Manual testing, debugging, and validation scripts
+
+**For AI Assistants**: When creating new test scripts:
+- **Standalone/debugging scripts**: Create in `scripts/tests/` directory
+- **Unit/integration tests**: Create in `tests/` directory (follow pytest conventions)
+- See `scripts/tests/README.md` for detailed guidelines
+
 ### Run Tests
 ```bash
-# Backend tests
+# Backend tests (official test suite)
 uv run pytest
 
 # PM feature tests
 python tests/test_pm_features.py
+
+# Standalone test scripts (manual testing/debugging)
+python scripts/tests/test_openproject_all_pagination.py
 
 # Frontend tests
 cd frontend && npm test

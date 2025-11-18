@@ -2,6 +2,20 @@
 
 Hướng dẫn chi tiết về cách test từng phần của hệ thống Project Management Agent.
 
+## 📁 Test Organization
+
+The project has two types of test files:
+
+1. **Official Test Suite** (`tests/` directory): Automated unit and integration tests run via pytest
+2. **Standalone Test Scripts** (`scripts/tests/` directory): Manual testing, debugging, and validation scripts
+
+### Creating New Test Scripts
+
+**For AI Assistants**: When creating new test scripts:
+- **Standalone/debugging scripts**: Create in `scripts/tests/` directory
+- **Unit/integration tests**: Create in `tests/` directory (follow pytest conventions)
+- See `scripts/tests/README.md` for detailed guidelines
+
 ## 🚀 Quick Start
 
 ### Chạy test nhanh
@@ -23,6 +37,12 @@ python run_tests.py deerflow
 python run_tests.py conversation
 python run_tests.py database
 python run_tests.py api
+```
+
+### Chạy standalone test scripts
+```bash
+# Run standalone test scripts (manual testing/debugging)
+python scripts/tests/test_openproject_all_pagination.py
 ```
 
 ## 📋 Test Suites

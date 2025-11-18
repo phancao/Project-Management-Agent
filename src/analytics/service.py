@@ -613,15 +613,28 @@ class AnalyticsService:
         # Determine status: if task is marked as completed, use DONE
         # Otherwise map from status string
         status = cls._map_status(data.get("status"))
-        # Check if task is marked as completed in the data
+        # Check if task is marked as completed in the data (this is the key check!)
         if data.get("completed") is True:
             status = TaskStatus.DONE
+            # Log this important status change
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(
+                f"[AnalyticsService] Task {data.get('id')} marked as completed=True, "
+                f"setting status to DONE (was: {status})"
+            )
         # Also check percentage complete
         percentage_complete = data.get("percentage_complete") or data.get("percentageComplete")
         if percentage_complete is not None:
             try:
                 if float(percentage_complete) >= 100.0:
                     status = TaskStatus.DONE
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(
+                        f"[AnalyticsService] Task {data.get('id')} has 100% completion, "
+                        f"setting status to DONE"
+                    )
             except (ValueError, TypeError):
                 pass
         

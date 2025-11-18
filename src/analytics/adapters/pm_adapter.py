@@ -198,6 +198,28 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 # Get completion date from resolver
                 completion_date = self.status_resolver.get_completion_date(task)
                 
+                # Detailed logging for each task
+                logger.info(
+                    f"[PMProviderAnalyticsAdapter] Task {task.id}: "
+                    f"title={task.title[:50]}, "
+                    f"status={task.status}, "
+                    f"is_burndowned={is_burndowned}, "
+                    f"story_points={story_points}, "
+                    f"completed_at={completion_date.isoformat() if completion_date else 'None'}"
+                )
+                
+                # Log raw data for debugging completion status
+                if task.raw_data:
+                    percentage_complete = task.raw_data.get("percentageComplete") or task.raw_data.get("percentage_complete")
+                    status_obj = task.raw_data.get("_embedded", {}).get("status", {}) or task.raw_data.get("status", {})
+                    is_closed = status_obj.get("isClosed", False) if isinstance(status_obj, dict) else False
+                    logger.info(
+                        f"[PMProviderAnalyticsAdapter]   Task {task.id} raw: "
+                        f"percentageComplete={percentage_complete}, "
+                        f"status.isClosed={is_closed}, "
+                        f"status.name={status_obj.get('name') if isinstance(status_obj, dict) else 'N/A'}"
+                    )
+                
                 tasks_data.append({
                     "id": task.id,
                     "title": task.title,
@@ -206,6 +228,15 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                     "completed": is_burndowned,
                     "completed_at": completion_date.isoformat() if completion_date else None,
                 })
+            
+            # Log summary
+            completed_count = sum(1 for t in tasks_data if t["completed"])
+            logger.info(
+                f"[PMProviderAnalyticsAdapter] Burndown summary: "
+                f"{len(tasks_data)} total tasks, "
+                f"{completed_count} completed, "
+                f"{len(tasks_data) - completed_count} incomplete"
+            )
             
             return {
                 "sprint": {

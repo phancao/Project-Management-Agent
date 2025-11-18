@@ -407,24 +407,31 @@ export function ProviderManagementView() {
                             {providerProjects?.projects?.length || 0}):
                           </p>
                           <div className="space-y-1">
-                            {providerProjects?.projects?.map((project) => (
+                            {providerProjects?.projects?.slice(0, 3).map((project) => (
                               <div
                                 key={project.id}
                                 className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded"
                               >
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                                     {project.name}
                                   </p>
                                   {project.description && (
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                      {project.description}
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                                      {project.description.length > 100 
+                                        ? `${project.description.substring(0, 100)}...`
+                                        : project.description}
                                     </p>
                                   )}
                                 </div>
-                                <ExternalLink className="w-4 h-4 text-gray-400" />
+                                <ExternalLink className="w-4 h-4 text-gray-400 shrink-0 ml-2" />
                               </div>
                             ))}
+                            {providerProjects?.projects?.length > 3 && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 pt-1">
+                                +{providerProjects.projects.length - 3} more project{providerProjects.projects.length - 3 !== 1 ? 's' : ''}
+                              </p>
+                            )}
                           </div>
                         </div>
                       ) : (

@@ -133,6 +133,12 @@ export function InputBox({
         className,
       )}
       ref={containerRef}
+      onClick={(e) => {
+        e.stopPropagation();
+      }}
+      onMouseDown={(e) => {
+        e.stopPropagation();
+      }}
     >
       <div className="w-full">
         <AnimatePresence>

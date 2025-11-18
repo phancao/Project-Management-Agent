@@ -40,8 +40,13 @@ export function ConversationStarter({
           >
             <div
               className="bg-card text-muted-foreground h-full w-full cursor-pointer rounded-2xl border px-4 py-4 opacity-75 transition-all duration-300 hover:opacity-100 hover:shadow-md"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
                 onSend?.(question);
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
               }}
             >
               {question}

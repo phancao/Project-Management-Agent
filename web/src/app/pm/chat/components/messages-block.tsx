@@ -95,17 +95,20 @@ export function MessagesBlock({ className }: { className?: string }) {
       />
       {!isReplay ? (
         <div className="relative flex h-42 shrink-0 pb-4">
-          {!responding && messageCount === 0 && !inputHasContent && (
-            <ConversationStarter
-              className="absolute top-[-218px] left-0"
-              onSend={(message) => {
-                // Only send if not responding and no input content
-                if (!responding && !inputHasContent) {
-                  handleSend(message);
-                }
-              }}
-            />
-          )}
+          <ConversationStarter
+            className={cn(
+              "absolute top-[-218px] left-0 transition-opacity duration-200",
+              !responding && messageCount === 0 && !inputHasContent
+                ? "opacity-100 pointer-events-auto"
+                : "opacity-0 pointer-events-none"
+            )}
+            onSend={(message) => {
+              // Only send if not responding and no input content
+              if (!responding && !inputHasContent && messageCount === 0) {
+                handleSend(message);
+              }
+            }}
+          />
           <InputBox
             className="h-full w-full relative z-10"
             responding={responding}

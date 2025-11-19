@@ -59,7 +59,11 @@ def register_project_tools(
             )
             
             # Get projects from PM handler
-            projects = pm_handler.list_all_projects(provider_id=provider_id)
+            projects = await pm_handler.list_all_projects()
+            
+            # Apply provider_id filter if specified
+            if provider_id:
+                projects = [p for p in projects if p.get("provider_id") == provider_id]
             
             # Apply search filter
             if search:
@@ -351,7 +355,11 @@ def register_project_tools(
             )
             
             # Search via list_projects with filter
-            projects = pm_handler.list_all_projects(provider_id=provider_id)
+            projects = await pm_handler.list_all_projects()
+            
+            # Apply provider_id filter if specified
+            if provider_id:
+                projects = [p for p in projects if p.get("provider_id") == provider_id]
             
             # Filter by query
             query_lower = query.lower()

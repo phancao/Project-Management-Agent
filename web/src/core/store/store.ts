@@ -158,7 +158,7 @@ export async function sendMessage(
       // Handle error events
       if (type === "error") {
         const hasErrorData = data && (typeof data === "object") && Object.keys(data).length > 0;
-        const errorMessage = data?.error || data?.message || "An error occurred during streaming";
+        const errorMessage = data?.error ?? data?.message ?? "An error occurred during streaming";
         
         if (process.env.NODE_ENV === "development" && hasErrorData) {
           console.error(`[DEBUG] Stream error event:`, data);

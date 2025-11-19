@@ -4,8 +4,8 @@
  * Automatically detects and configures PM MCP Server if available.
  */
 
-import type { MCPServerMetadata, SimpleStdioMCPServerMetadata, SimpleSSEMCPServerMetadata } from "../mcp";
 import { queryMCPServerMetadata } from "../api/mcp";
+import type { MCPServerMetadata, SimpleStdioMCPServerMetadata, SimpleSSEMCPServerMetadata } from "../mcp";
 import { useSettingsStore, saveSettings } from "../store/settings-store";
 
 const PM_MCP_SERVER_URL = "http://localhost:8080";

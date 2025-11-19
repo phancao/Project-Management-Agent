@@ -4,13 +4,14 @@
 "use client";
 
 import { useState } from "react";
+
 import { Plus } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Textarea } from "~/components/ui/textarea";
 import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 
 interface CreateEpicDialogProps {
@@ -51,14 +52,14 @@ export function CreateEpicDialog({ projectId, onEpicCreated }: CreateEpicDialogP
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: formData.name.trim(),
-            description: formData.description.trim() || undefined,
+            description: formData.description.trim() ?? undefined,
           }),
         }
       );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to create epic: ${response.statusText}`);
+        throw new Error(errorData.detail ?? `Failed to create epic: ${response.statusText}`);
       }
 
       // Reset form and close dialog

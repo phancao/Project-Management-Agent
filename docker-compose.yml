@@ -38,12 +38,17 @@ services:
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ENVIRONMENT=production
+      # PM MCP Server connection (use Docker service name for internal communication)
+      - PM_MCP_SERVER_URL=http://pm_mcp_server:8080/sse
+      - PM_MCP_TRANSPORT=sse
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      pm_mcp_server:
         condition: service_healthy
     volumes:
       - ./api:/app/api
@@ -165,6 +170,47 @@ services:
       timeout: 10s
       retries: 10
       start_period: 180s  # OpenProject takes time to start
+
+  # PM MCP Server - Dedicated service for MCP protocol
+  pm_mcp_server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp-server
+    environment:
+      - DATABASE_URL=postgresql://pm_user:pm_password@postgres:5432/project_management
+      - LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
+      - ENABLE_AUTH=${MCP_ENABLE_AUTH:-false}
+      - ENABLE_RBAC=${MCP_ENABLE_RBAC:-false}
+      # Transport can be: sse, http, or stdio
+      - MCP_TRANSPORT=${MCP_TRANSPORT:-sse}
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8080
+    ports:
+      - "8080:8080"  # SSE/HTTP transport
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./database:/app/database
+      - ./scripts:/app/scripts
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
 volumes:
   postgres_data:

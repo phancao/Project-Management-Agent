@@ -2360,35 +2360,48 @@ async def pm_chat_stream(request: Request):
                     "bulk_update_tasks", "link_related_tasks",
                 ]
                 
-                # Use the script path for running PM MCP server
-                import os
-                project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-                script_path = os.path.join(project_root, "scripts", "run_pm_mcp_server.py")
+                # Determine transport and connection method
+                # Priority: 1) Environment variable (Docker/remote), 2) Local stdio (development)
+                pm_mcp_url = get_str_env("PM_MCP_SERVER_URL", None)
+                pm_mcp_transport = get_str_env("PM_MCP_TRANSPORT", "stdio")
                 
-                # Use uv run python3 to ensure correct Python environment
-                import sys
-                python_cmd = sys.executable  # Use the same Python that's running the server
-                
-                mcp_settings["servers"]["pm-server"] = {
-                    "transport": "stdio",
-                    "command": python_cmd,
-                    "args": [script_path, "--transport", "stdio"],
-                    "enabled_tools": all_tool_names,
-                    "add_to_agents": ["researcher", "coder"],
-                }
-                logger.info(
-                    f"[PM-CHAT] Auto-injected PM MCP server with {len(all_tool_names)} tools"
-                )
-                logger.info(
-                    f"[PM-CHAT] PM MCP server config: "
-                    f"command={mcp_settings['servers']['pm-server']['command']}, "
-                    f"args={mcp_settings['servers']['pm-server']['args']}, "
-                    f"script_path={script_path}, "
-                    f"script_exists={os.path.exists(script_path)}"
-                )
-                logger.info(
-                    f"[PM-CHAT] list_my_tasks in enabled_tools: {'list_my_tasks' in all_tool_names}"
-                )
+                if pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
+                    # Use HTTP/SSE transport (Docker or remote service)
+                    mcp_settings["servers"]["pm-server"] = {
+                        "transport": pm_mcp_transport,
+                        "url": pm_mcp_url,
+                        "enabled_tools": all_tool_names,
+                        "add_to_agents": ["researcher", "coder"],
+                    }
+                    logger.info(
+                        f"[PM-CHAT] Auto-injected PM MCP server via {pm_mcp_transport} at {pm_mcp_url} "
+                        f"with {len(all_tool_names)} tools (Docker/remote mode)"
+                    )
+                else:
+                    # Fallback to stdio transport (local development)
+                    import os
+                    import sys
+                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    script_path = os.path.join(project_root, "scripts", "run_pm_mcp_server.py")
+                    python_cmd = sys.executable
+                    
+                    mcp_settings["servers"]["pm-server"] = {
+                        "transport": "stdio",
+                        "command": python_cmd,
+                        "args": [script_path, "--transport", "stdio"],
+                        "enabled_tools": all_tool_names,
+                        "add_to_agents": ["researcher", "coder"],
+                    }
+                    logger.info(
+                        f"[PM-CHAT] Auto-injected PM MCP server via stdio (local development) "
+                        f"with {len(all_tool_names)} tools"
+                    )
+                    logger.debug(
+                        f"[PM-CHAT] PM MCP server config: "
+                        f"command={python_cmd}, "
+                        f"args={[script_path, '--transport', 'stdio']}, "
+                        f"script_exists={os.path.exists(script_path)}"
+                    )
             except Exception as e:
                 logger.warning(
                     f"[PM-CHAT] Failed to auto-inject PM MCP server: {e}. "

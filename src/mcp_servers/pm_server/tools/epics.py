@@ -56,8 +56,8 @@ def register_epic_tools(
             
             logger.info(f"list_epics called: project_id={project_id}")
             
-            # Get epics from PM handler
-            epics = pm_handler.list_epics(project_id=project_id)
+            # Get epics from PM handler using list_project_epics
+            epics = await pm_handler.list_project_epics(project_id)
             
             if not epics:
                 return [TextContent(
@@ -109,8 +109,17 @@ def register_epic_tools(
             
             logger.info(f"get_epic called: epic_id={epic_id}")
             
-            # Get epic from PM handler
-            epic = pm_handler.get_epic(epic_id)
+            # Get epic by searching project epics
+            # Extract project_id from epic_id if in format "project_id:epic_id"
+            if ":" in epic_id:
+                project_id_part, epic_id_part = epic_id.split(":", 1)
+                epics = await pm_handler.list_project_epics(project_id_part)
+                epic = next((e for e in epics if str(e.get("id")) == epic_id_part), None)
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Epic ID format should be 'project_id:epic_id'. Please provide project_id to search for epic {epic_id}."
+                )]
             
             if not epic:
                 return [TextContent(
@@ -170,12 +179,9 @@ def register_epic_tools(
                 f"create_epic called: project_id={project_id}, name={name}"
             )
             
-            # Create epic via PM handler
-            epic = pm_handler.create_epic(
-                project_id=project_id,
-                name=name,
-                description=description
-            )
+            # Create epic via PM handler using create_project_epic
+            epic_data = {"name": name, "description": description}
+            epic = await pm_handler.create_project_epic(project_id, epic_data)
             
             return [TextContent(
                 type="text",
@@ -231,8 +237,16 @@ def register_epic_tools(
                 f"update_epic called: epic_id={epic_id}, updates={updates}"
             )
             
-            # Update epic via PM handler
-            epic = pm_handler.update_epic(epic_id, **updates)
+            # Update epic via PM handler using update_project_epic
+            # Extract project_id from epic_id if in format "project_id:epic_id"
+            if ":" in epic_id:
+                project_id_part, epic_id_part = epic_id.split(":", 1)
+                epic = await pm_handler.update_project_epic(project_id_part, epic_id_part, updates)
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Epic ID format should be 'project_id:epic_id'. Cannot update epic {epic_id}."
+                )]
             
             return [TextContent(
                 type="text",
@@ -272,8 +286,16 @@ def register_epic_tools(
             
             logger.info(f"delete_epic called: epic_id={epic_id}")
             
-            # Delete epic via PM handler
-            pm_handler.delete_epic(epic_id)
+            # Delete epic via PM handler using delete_project_epic
+            # Extract project_id from epic_id if in format "project_id:epic_id"
+            if ":" in epic_id:
+                project_id_part, epic_id_part = epic_id.split(":", 1)
+                await pm_handler.delete_project_epic(project_id_part, epic_id_part)
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Epic ID format should be 'project_id:epic_id'. Cannot delete epic {epic_id}."
+                )]
             
             return [TextContent(
                 type="text",
@@ -316,15 +338,22 @@ def register_epic_tools(
                 f"link_task_to_epic called: task_id={task_id}, epic_id={epic_id}"
             )
             
-            # Link task to epic by updating task
-            task = pm_handler.update_task(task_id, epic_id=epic_id)
-            
-            return [TextContent(
-                type="text",
-                text=f"✅ Task linked to epic!\n\n"
-                     f"**Task:** {task.get('subject')}\n"
-                     f"**Epic ID:** {epic_id}\n"
-            )]
+            # Link task to epic using assign_task_to_epic
+            # Extract project_id from task_id if in format "project_id:task_id"
+            if ":" in task_id:
+                project_id_part, task_id_part = task_id.split(":", 1)
+                result = await pm_handler.assign_task_to_epic(project_id_part, task_id_part, epic_id)
+                return [TextContent(
+                    type="text",
+                    text=f"✅ Task linked to epic!\n\n"
+                         f"**Task:** {result.get('subject', task_id)}\n"
+                         f"**Epic ID:** {epic_id}\n"
+                )]
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Task ID format should be 'project_id:task_id'. Cannot link task {task_id} to epic."
+                )]
             
         except Exception as e:
             logger.error(f"Error in link_task_to_epic: {e}", exc_info=True)
@@ -357,14 +386,21 @@ def register_epic_tools(
             
             logger.info(f"unlink_task_from_epic called: task_id={task_id}")
             
-            # Unlink task from epic by setting epic_id to None
-            task = pm_handler.update_task(task_id, epic_id=None)
-            
-            return [TextContent(
-                type="text",
-                text=f"✅ Task unlinked from epic!\n\n"
-                     f"**Task:** {task.get('subject')}\n"
-            )]
+            # Unlink task from epic using remove_task_from_epic
+            # Extract project_id from task_id if in format "project_id:task_id"
+            if ":" in task_id:
+                project_id_part, task_id_part = task_id.split(":", 1)
+                result = await pm_handler.remove_task_from_epic(project_id_part, task_id_part)
+                return [TextContent(
+                    type="text",
+                    text=f"✅ Task unlinked from epic!\n\n"
+                         f"**Task:** {result.get('subject', task_id)}\n"
+                )]
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Task ID format should be 'project_id:task_id'. Cannot unlink task {task_id} from epic."
+                )]
             
         except Exception as e:
             logger.error(f"Error in unlink_task_from_epic: {e}", exc_info=True)
@@ -397,21 +433,12 @@ def register_epic_tools(
             
             logger.info(f"get_epic_progress called: epic_id={epic_id}")
             
-            # Get epic progress
-            progress = pm_handler.get_epic_progress(epic_id)
-            
-            if not progress:
-                return [TextContent(
-                    type="text",
-                    text=f"Could not retrieve progress for epic {epic_id}."
-                )]
-            
-            # Format output
-            output_lines = [
-                f"# Epic Progress: {progress.get('name')}\n\n",
-                f"**Total Tasks:** {progress.get('total_tasks', 0)}\n",
-                f"**Completed Tasks:** {progress.get('completed_tasks', 0)}\n",
-                f"**In Progress:** {progress.get('in_progress_tasks', 0)}\n",
+            # Epic progress is not yet implemented in PMHandler
+            return [TextContent(
+                type="text",
+                text=f"Epic progress is not yet implemented. "
+                     f"Please check epic progress directly in your PM provider (JIRA, OpenProject, etc.)."
+            )]
                 f"**Pending:** {progress.get('pending_tasks', 0)}\n",
                 f"**Completion:** {progress.get('completion_percentage', 0)}%\n",
             ]

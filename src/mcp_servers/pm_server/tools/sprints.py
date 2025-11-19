@@ -61,8 +61,8 @@ def register_sprint_tools(
                 f"list_sprints called: project_id={project_id}, status={status}"
             )
             
-            # Get sprints from PM handler
-            sprints = pm_handler.list_sprints(project_id=project_id, status=status)
+            # Get sprints from PM handler using list_project_sprints
+            sprints = await pm_handler.list_project_sprints(project_id, state=status)
             
             if not sprints:
                 return [TextContent(
@@ -115,8 +115,19 @@ def register_sprint_tools(
             
             logger.info(f"get_sprint called: sprint_id={sprint_id}")
             
-            # Get sprint from PM handler
-            sprint = pm_handler.get_sprint(sprint_id)
+            # Get sprint by searching all projects
+            # Extract project_id from sprint_id if in format "project_id:sprint_id"
+            if ":" in sprint_id:
+                project_id_part, sprint_id_part = sprint_id.split(":", 1)
+                sprints = await pm_handler.list_project_sprints(project_id_part)
+                sprint = next((s for s in sprints if str(s.get("id")) == sprint_id_part), None)
+            else:
+                # Search all projects - need project_id to search
+                return [TextContent(
+                    type="text",
+                    text=f"Sprint ID format should be 'project_id:sprint_id'. "
+                         f"Please provide project_id to search for sprint {sprint_id}."
+                )]
             
             if not sprint:
                 return [TextContent(
@@ -131,7 +142,6 @@ def register_sprint_tools(
                 f"**Status:** {sprint.get('status', 'N/A')}\n",
                 f"**Start Date:** {sprint.get('start_date', 'N/A')}\n",
                 f"**End Date:** {sprint.get('end_date', 'N/A')}\n",
-                f"**Goal:** {sprint.get('goal', 'N/A')}\n",
             ]
             
             return [TextContent(
@@ -182,21 +192,11 @@ def register_sprint_tools(
                 f"create_sprint called: project_id={project_id}, name={name}"
             )
             
-            # Create sprint via PM handler
-            sprint = pm_handler.create_sprint(
-                project_id=project_id,
-                name=name,
-                start_date=start_date,
-                end_date=end_date,
-                goal=goal
-            )
-            
+            # Sprint creation is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Sprint created successfully!\n\n"
-                     f"**Name:** {sprint.get('name')}\n"
-                     f"**ID:** {sprint.get('id')}\n"
-                     f"**Duration:** {sprint.get('start_date')} - {sprint.get('end_date')}\n"
+                text=f"Sprint creation is not yet implemented. "
+                     f"Please create sprints directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -248,14 +248,11 @@ def register_sprint_tools(
                 f"update_sprint called: sprint_id={sprint_id}, updates={updates}"
             )
             
-            # Update sprint via PM handler
-            sprint = pm_handler.update_sprint(sprint_id, **updates)
-            
+            # Sprint update is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Sprint updated successfully!\n\n"
-                     f"**Name:** {sprint.get('name')}\n"
-                     f"**ID:** {sprint.get('id')}\n"
+                text=f"Sprint update is not yet implemented. "
+                     f"Please update sprints directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -289,12 +286,11 @@ def register_sprint_tools(
             
             logger.info(f"delete_sprint called: sprint_id={sprint_id}")
             
-            # Delete sprint via PM handler
-            pm_handler.delete_sprint(sprint_id)
-            
+            # Sprint deletion is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Sprint {sprint_id} deleted successfully!"
+                text=f"Sprint deletion is not yet implemented. "
+                     f"Please delete sprints directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -328,14 +324,11 @@ def register_sprint_tools(
             
             logger.info(f"start_sprint called: sprint_id={sprint_id}")
             
-            # Start sprint by updating status
-            sprint = pm_handler.update_sprint(sprint_id, status="active")
-            
+            # Sprint start is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Sprint started!\n\n"
-                     f"**Name:** {sprint.get('name')}\n"
-                     f"**Status:** {sprint.get('status')}\n"
+                text=f"Sprint start is not yet implemented. "
+                     f"Please start sprints directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -369,15 +362,11 @@ def register_sprint_tools(
             
             logger.info(f"complete_sprint called: sprint_id={sprint_id}")
             
-            # Complete sprint by updating status
-            sprint = pm_handler.update_sprint(sprint_id, status="closed")
-            
+            # Sprint completion is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Sprint completed!\n\n"
-                     f"**Name:** {sprint.get('name')}\n"
-                     f"**Status:** {sprint.get('status')}\n"
-                     f"**Duration:** {sprint.get('start_date')} - {sprint.get('end_date')}\n"
+                text=f"Sprint completion is not yet implemented. "
+                     f"Please complete sprints directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -416,15 +405,21 @@ def register_sprint_tools(
                 f"add_task_to_sprint called: task_id={task_id}, sprint_id={sprint_id}"
             )
             
-            # Add task to sprint by updating task
-            task = pm_handler.update_task(task_id, sprint_id=sprint_id)
-            
-            return [TextContent(
-                type="text",
-                text=f"✅ Task added to sprint!\n\n"
-                     f"**Task:** {task.get('subject')}\n"
-                     f"**Sprint ID:** {sprint_id}\n"
-            )]
+            # Extract project_id from task_id if in format "project_id:task_id"
+            if ":" in task_id:
+                project_id_part, task_id_part = task_id.split(":", 1)
+                result = await pm_handler.assign_task_to_sprint(project_id_part, task_id_part, sprint_id)
+                return [TextContent(
+                    type="text",
+                    text=f"✅ Task added to sprint!\n\n"
+                         f"**Task:** {result.get('subject', task_id)}\n"
+                         f"**Sprint ID:** {sprint_id}\n"
+                )]
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Task ID format should be 'project_id:task_id'. Cannot add task {task_id} to sprint."
+                )]
             
         except Exception as e:
             logger.error(f"Error in add_task_to_sprint: {e}", exc_info=True)
@@ -457,14 +452,20 @@ def register_sprint_tools(
             
             logger.info(f"remove_task_from_sprint called: task_id={task_id}")
             
-            # Remove task from sprint by setting sprint_id to None
-            task = pm_handler.update_task(task_id, sprint_id=None)
-            
-            return [TextContent(
-                type="text",
-                text=f"✅ Task removed from sprint!\n\n"
-                     f"**Task:** {task.get('subject')}\n"
-            )]
+            # Extract project_id from task_id if in format "project_id:task_id"
+            if ":" in task_id:
+                project_id_part, task_id_part = task_id.split(":", 1)
+                result = await pm_handler.move_task_to_backlog(project_id_part, task_id_part)
+                return [TextContent(
+                    type="text",
+                    text=f"✅ Task removed from sprint!\n\n"
+                         f"**Task:** {result.get('subject', task_id)}\n"
+                )]
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Task ID format should be 'project_id:task_id'. Cannot remove task {task_id} from sprint."
+                )]
             
         except Exception as e:
             logger.error(f"Error in remove_task_from_sprint: {e}", exc_info=True)
@@ -497,8 +498,18 @@ def register_sprint_tools(
             
             logger.info(f"get_sprint_tasks called: sprint_id={sprint_id}")
             
-            # Get tasks in sprint
-            tasks = pm_handler.list_tasks(sprint_id=sprint_id)
+            # Get tasks in sprint by listing project tasks and filtering
+            # Extract project_id from sprint_id if in format "project_id:sprint_id"
+            if ":" in sprint_id:
+                project_id_part, sprint_id_part = sprint_id.split(":", 1)
+                tasks = await pm_handler.list_project_tasks(project_id_part)
+                # Filter by sprint_id
+                tasks = [t for t in tasks if str(t.get("sprint_id")) == sprint_id_part]
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Sprint ID format should be 'project_id:sprint_id'. Cannot get tasks for sprint {sprint_id}."
+                )]
             
             if not tasks:
                 return [TextContent(
@@ -510,9 +521,9 @@ def register_sprint_tools(
             output_lines = [f"Found {len(tasks)} tasks in sprint:\n\n"]
             for i, task in enumerate(tasks, 1):
                 output_lines.append(
-                    f"{i}. **{task.get('subject')}** (ID: {task.get('id')})\n"
+                    f"{i}. **{task.get('subject') or task.get('title', 'N/A')}** (ID: {task.get('id')})\n"
                     f"   Status: {task.get('status', 'N/A')} | "
-                    f"Assignee: {task.get('assignee_name', 'Unassigned')}\n"
+                    f"Assignee: {task.get('assignee_name', task.get('assigned_to', 'Unassigned'))}\n"
                 )
             
             return [TextContent(

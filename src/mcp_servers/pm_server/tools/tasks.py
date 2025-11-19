@@ -187,12 +187,14 @@ def register_task_tools(
                 f"list_tasks called: project_id={project_id}, status={status}"
             )
             
-            # Get tasks from PM handler
-            tasks = pm_handler.list_tasks(
-                project_id=project_id,
-                status=status,
-                assignee=assignee
-            )
+            # Get tasks from PM handler using list_project_tasks
+            tasks = await pm_handler.list_project_tasks(project_id)
+            
+            # Apply filters
+            if status:
+                tasks = [t for t in tasks if t.get("status") == status]
+            if assignee:
+                tasks = [t for t in tasks if t.get("assignee_id") == assignee or t.get("assignee_name") == assignee]
             
             # Apply limit
             if limit:
@@ -249,8 +251,16 @@ def register_task_tools(
             
             logger.info(f"get_task called: task_id={task_id}")
             
-            # Get task from PM handler
-            task = pm_handler.get_task(task_id)
+            # Get task by searching all projects
+            # Extract project_id from task_id if in format "project_id:task_id"
+            if ":" in task_id:
+                project_id_part, task_id_part = task_id.split(":", 1)
+                tasks = await pm_handler.list_project_tasks(project_id_part)
+                task = next((t for t in tasks if str(t.get("id")) == task_id_part), None)
+            else:
+                # Search all projects
+                all_tasks = await pm_handler.list_all_tasks()
+                task = next((t for t in all_tasks if str(t.get("id")) == task_id), None)
             
             if not task:
                 return [TextContent(
@@ -260,15 +270,12 @@ def register_task_tools(
             
             # Format detailed output
             output_lines = [
-                f"# Task: {task.get('subject')}\n\n",
+                f"# Task: {task.get('subject') or task.get('title', 'N/A')}\n\n",
                 f"**ID:** {task.get('id')}\n",
                 f"**Project:** {task.get('project_name', 'N/A')}\n",
                 f"**Status:** {task.get('status', 'N/A')}\n",
-                f"**Assignee:** {task.get('assignee_name', 'Unassigned')}\n",
+                f"**Assignee:** {task.get('assignee_name', task.get('assigned_to', 'Unassigned'))}\n",
                 f"**Priority:** {task.get('priority', 'N/A')}\n",
-                f"**Due Date:** {task.get('due_date', 'N/A')}\n",
-                f"**Created:** {task.get('created_at', 'N/A')}\n",
-                f"**Updated:** {task.get('updated_at', 'N/A')}\n",
             ]
             
             if "description" in task and task["description"]:
@@ -320,23 +327,23 @@ def register_task_tools(
                 f"create_task called: project_id={project_id}, subject={subject}"
             )
             
-            # Create task via PM handler
-            task = pm_handler.create_task(
-                project_id=project_id,
-                subject=subject,
-                description=arguments.get("description"),
-                assignee_id=arguments.get("assignee_id"),
-                status=arguments.get("status"),
-                priority=arguments.get("priority"),
-                due_date=arguments.get("due_date")
-            )
+            # Create task via PM handler using create_project_task
+            task_data = {
+                "subject": subject,
+                "description": arguments.get("description"),
+                "assignee_id": arguments.get("assignee_id"),
+                "status": arguments.get("status"),
+                "priority": arguments.get("priority"),
+                "due_date": arguments.get("due_date")
+            }
+            task = await pm_handler.create_project_task(project_id, task_data)
             
             return [TextContent(
                 type="text",
                 text=f"✅ Task created successfully!\n\n"
-                     f"**Subject:** {task.get('subject')}\n"
+                     f"**Subject:** {task.get('subject') or task.get('title', 'N/A')}\n"
                      f"**ID:** {task.get('id')}\n"
-                     f"**Project:** {task.get('project_name')}\n"
+                     f"**Project:** {task.get('project_name', project_id)}\n"
             )]
             
         except Exception as e:
@@ -389,14 +396,13 @@ def register_task_tools(
                 f"update_task called: task_id={task_id}, updates={updates}"
             )
             
-            # Update task via PM handler
-            task = pm_handler.update_task(task_id, **updates)
-            
+            # Task update is not yet fully implemented in PMHandler
+            # For now, return a helpful message
             return [TextContent(
                 type="text",
-                text=f"✅ Task updated successfully!\n\n"
-                     f"**Subject:** {task.get('subject')}\n"
-                     f"**ID:** {task.get('id')}\n"
+                text=f"Task update is not yet fully implemented. "
+                     f"Please update tasks directly in your PM provider (JIRA, OpenProject, etc.). "
+                     f"For assigning tasks, use assign_task_to_user API endpoint."
             )]
             
         except Exception as e:
@@ -430,12 +436,11 @@ def register_task_tools(
             
             logger.info(f"delete_task called: task_id={task_id}")
             
-            # Delete task via PM handler
-            pm_handler.delete_task(task_id)
-            
+            # Task deletion is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Task {task_id} deleted successfully!"
+                text=f"Task deletion is not yet implemented. "
+                     f"Please delete tasks directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -474,14 +479,30 @@ def register_task_tools(
                 f"assign_task called: task_id={task_id}, assignee_id={assignee_id}"
             )
             
-            # Assign task via update
-            task = pm_handler.update_task(task_id, assignee_id=assignee_id)
+            # Extract project_id from task_id if in format "project_id:task_id"
+            if ":" in task_id:
+                project_id_part, task_id_part = task_id.split(":", 1)
+            else:
+                # Try to find project_id by searching all tasks
+                all_tasks = await pm_handler.list_all_tasks()
+                task = next((t for t in all_tasks if str(t.get("id")) == task_id), None)
+                if task:
+                    project_id_part = task.get("project_id", "").split(":")[0] if ":" in str(task.get("project_id", "")) else ""
+                    task_id_part = task_id
+                else:
+                    return [TextContent(
+                        type="text",
+                        text=f"Task {task_id} not found. Cannot assign."
+                    )]
+            
+            # Use assign_task_to_user method
+            result = await pm_handler.assign_task_to_user(project_id_part, task_id_part, assignee_id)
             
             return [TextContent(
                 type="text",
                 text=f"✅ Task assigned successfully!\n\n"
-                     f"**Task:** {task.get('subject')}\n"
-                     f"**Assignee:** {task.get('assignee_name')}\n"
+                     f"**Task:** {result.get('subject', task_id)}\n"
+                     f"**Assignee:** {result.get('assignee_name', assignee_id)}\n"
             )]
             
         except Exception as e:
@@ -520,14 +541,11 @@ def register_task_tools(
                 f"update_task_status called: task_id={task_id}, status={status}"
             )
             
-            # Update task status
-            task = pm_handler.update_task(task_id, status=status)
-            
+            # Task status update is not yet fully implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Task status updated!\n\n"
-                     f"**Task:** {task.get('subject')}\n"
-                     f"**New Status:** {task.get('status')}\n"
+                text=f"Task status update is not yet fully implemented. "
+                     f"Please update task status directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -570,12 +588,23 @@ def register_task_tools(
                 f"search_tasks called: query={query}, project_id={project_id}"
             )
             
-            # Search tasks
-            tasks = pm_handler.search_tasks(
-                query=query,
-                project_id=project_id,
-                status=status
-            )
+            # Search tasks by listing all tasks and filtering
+            if project_id:
+                tasks = await pm_handler.list_project_tasks(project_id)
+            else:
+                tasks = await pm_handler.list_all_tasks()
+            
+            # Apply search filter
+            query_lower = query.lower()
+            tasks = [
+                t for t in tasks
+                if query_lower in (t.get("subject") or t.get("title", "")).lower()
+                or query_lower in (t.get("description") or "").lower()
+            ]
+            
+            # Apply status filter
+            if status:
+                tasks = [t for t in tasks if t.get("status") == status]
             
             # Apply limit
             tasks = tasks[:int(limit)]

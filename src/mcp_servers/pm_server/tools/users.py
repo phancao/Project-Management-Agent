@@ -55,11 +55,13 @@ def register_user_tools(
                 f"list_users called: project_id={project_id}, provider_id={provider_id}"
             )
             
-            # Get users from PM handler
-            users = pm_handler.list_users(
-                project_id=project_id,
-                provider_id=provider_id
-            )
+            # User listing is not yet implemented in PMHandler
+            # Return helpful message
+            return [TextContent(
+                type="text",
+                text=f"User listing is not yet implemented in PMHandler. "
+                     f"Please use the PM provider API endpoints directly to list users."
+            )]
             
             if not users:
                 return [TextContent(
@@ -106,27 +108,11 @@ def register_user_tools(
             
             logger.info(f"get_current_user called: provider_id={provider_id}")
             
-            # Get current user from PM handler
-            user = pm_handler.get_current_user(provider_id=provider_id)
-            
-            if not user:
-                return [TextContent(
-                    type="text",
-                    text="Could not retrieve current user information."
-                )]
-            
-            # Format output
-            output_lines = [
-                f"# Current User\n\n",
-                f"**Name:** {user.get('name')}\n",
-                f"**ID:** {user.get('id')}\n",
-                f"**Email:** {user.get('email', 'N/A')}\n",
-                f"**Provider:** {user.get('provider_type', 'N/A')}\n",
-            ]
-            
+            # Current user retrieval is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Current user retrieval is not yet implemented. "
+                     f"Please use the PM provider API endpoints directly."
             )]
             
         except Exception as e:
@@ -165,32 +151,11 @@ def register_user_tools(
                 f"get_user called: user_id={user_id}, provider_id={provider_id}"
             )
             
-            # Get user from PM handler
-            user = pm_handler.get_user(user_id, provider_id=provider_id)
-            
-            if not user:
-                return [TextContent(
-                    type="text",
-                    text=f"User with ID {user_id} not found."
-                )]
-            
-            # Format output
-            output_lines = [
-                f"# User: {user.get('name')}\n\n",
-                f"**ID:** {user.get('id')}\n",
-                f"**Email:** {user.get('email', 'N/A')}\n",
-                f"**Provider:** {user.get('provider_type', 'N/A')}\n",
-            ]
-            
-            if "role" in user:
-                output_lines.append(f"**Role:** {user['role']}\n")
-            
-            if "status" in user:
-                output_lines.append(f"**Status:** {user['status']}\n")
-            
+            # User retrieval is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"User retrieval is not yet implemented. "
+                     f"Please use the PM provider API endpoints directly to get user information."
             )]
             
         except Exception as e:
@@ -233,11 +198,12 @@ def register_user_tools(
                 f"search_users called: query={query}, project_id={project_id}"
             )
             
-            # Get users and filter
-            users = pm_handler.list_users(
-                project_id=project_id,
-                provider_id=provider_id
-            )
+            # User listing is not yet implemented in PMHandler
+            return [TextContent(
+                type="text",
+                text=f"User search is not yet implemented. "
+                     f"Please use the PM provider API endpoints directly to search users."
+            )]
             
             # Filter by query
             query_lower = query.lower()
@@ -301,16 +267,14 @@ def register_user_tools(
                 f"get_user_workload called: user_id={user_id}, provider_id={provider_id}"
             )
             
-            # Get user workload
-            workload = pm_handler.get_user_workload(user_id, provider_id=provider_id)
+            # User workload is not yet implemented in PMHandler
+            return [TextContent(
+                type="text",
+                text=f"User workload is not yet implemented. "
+                     f"Please use the PM provider API endpoints directly to get user workload."
+            )]
             
-            if not workload:
-                return [TextContent(
-                    type="text",
-                    text=f"Could not retrieve workload for user {user_id}."
-                )]
-            
-            # Format output
+            # Format output (unreachable, but kept for reference)
             output_lines = [
                 f"# Workload: {workload.get('user_name')}\n\n",
                 f"**Total Tasks:** {workload.get('total_tasks', 0)}\n",

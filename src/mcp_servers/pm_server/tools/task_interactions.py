@@ -59,12 +59,11 @@ def register_task_interaction_tools(
             
             logger.info(f"add_task_comment called: task_id={task_id}")
             
-            # Add comment via PM handler
-            result = pm_handler.add_task_comment(task_id, comment)
-            
+            # Task comments are not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Comment added to task {task_id}!"
+                text=f"Task comments are not yet implemented. "
+                     f"Please add comments directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -101,31 +100,11 @@ def register_task_interaction_tools(
             
             logger.info(f"get_task_comments called: task_id={task_id}")
             
-            # Get comments from PM handler
-            comments = pm_handler.get_task_comments(task_id)
-            
-            # Apply limit
-            if limit:
-                comments = comments[:int(limit)]
-            
-            if not comments:
-                return [TextContent(
-                    type="text",
-                    text=f"No comments found for task {task_id}."
-                )]
-            
-            # Format output
-            output_lines = [f"Found {len(comments)} comments:\n\n"]
-            for i, comment in enumerate(comments, 1):
-                output_lines.append(
-                    f"{i}. **{comment.get('author_name', 'Unknown')}** "
-                    f"({comment.get('created_at', 'N/A')})\n"
-                    f"   {comment.get('text', '')}\n\n"
-                )
-            
+            # Task comments are not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Task comments are not yet implemented. "
+                     f"Please view comments directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -164,12 +143,11 @@ def register_task_interaction_tools(
                 f"add_task_watcher called: task_id={task_id}, user_id={user_id}"
             )
             
-            # Add watcher via PM handler
-            pm_handler.add_task_watcher(task_id, user_id)
-            
+            # Task watchers are not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ User {user_id} added as watcher to task {task_id}!"
+                text=f"Task watchers are not yet implemented. "
+                     f"Please add watchers directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -214,16 +192,11 @@ def register_task_interaction_tools(
                 f"bulk_update_tasks called: {len(task_ids)} tasks, updates={updates}"
             )
             
-            # Bulk update via PM handler
-            results = pm_handler.bulk_update_tasks(task_ids, updates)
-            
-            success_count = len([r for r in results if r.get("success")])
-            
+            # Bulk task updates are not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Bulk update complete!\n\n"
-                     f"**Updated:** {success_count}/{len(task_ids)} tasks\n"
-                     f"**Fields:** {', '.join(updates.keys())}\n"
+                text=f"Bulk task updates are not yet implemented. "
+                     f"Please update tasks individually or use your PM provider's bulk update feature."
             )]
             
         except Exception as e:
@@ -266,13 +239,11 @@ def register_task_interaction_tools(
                 f"related_task_id={related_task_id}, type={relationship_type}"
             )
             
-            # Link tasks via PM handler
-            pm_handler.link_related_tasks(task_id, related_task_id, relationship_type)
-            
+            # Task linking is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Tasks linked successfully!\n\n"
-                     f"**Relationship:** Task {task_id} {relationship_type} Task {related_task_id}\n"
+                text=f"Task linking is not yet implemented. "
+                     f"Please link tasks directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:

@@ -438,10 +438,11 @@ def create_http_app(
     async def get_burndown_chart(sprint_id: str):
         """Get burndown chart data for a sprint."""
         try:
-            data = pm_handler.get_burndown_chart(sprint_id)
-            if not data:
-                raise HTTPException(status_code=404, detail="No data available")
-            return data
+            raise HTTPException(
+                status_code=501, 
+                detail="Burndown chart is available via /api/analytics/projects/{project_id}/burndown endpoint. "
+                       "Please use the analytics API endpoint instead."
+            )
         except HTTPException:
             raise
         except Exception as e:
@@ -455,10 +456,11 @@ def create_http_app(
     ):
         """Get velocity chart data for a project."""
         try:
-            data = pm_handler.get_velocity_chart(project_id, sprint_count)
-            if not data:
-                raise HTTPException(status_code=404, detail="No data available")
-            return data
+            raise HTTPException(
+                status_code=501,
+                detail="Velocity chart is available via /api/analytics/projects/{project_id}/velocity endpoint. "
+                       "Please use the analytics API endpoint instead."
+            )
         except HTTPException:
             raise
         except Exception as e:

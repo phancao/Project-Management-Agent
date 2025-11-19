@@ -102,10 +102,18 @@ def register_project_tools(
             )]
             
         except Exception as e:
-            logger.error(f"Error in list_projects: {e}", exc_info=True)
+            error_msg = str(e)
+            logger.error(f"Error in list_projects: {error_msg}", exc_info=True)
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return [TextContent(
                 type="text",
-                text=f"Error listing projects: {str(e)}"
+                text=f"Error listing projects: {error_msg}\n\n"
+                     "This might be due to:\n"
+                     "- Provider connection issues\n"
+                     "- Missing permissions\n"
+                     "- Database connection problems\n\n"
+                     "Please check the backend logs for more details."
             )]
     
     tool_count += 1

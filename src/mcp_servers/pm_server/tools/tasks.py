@@ -15,6 +15,9 @@ from ..config import PMServerConfig
 
 logger = logging.getLogger(__name__)
 
+# Enable debug logging for this module
+_debug_logger = logging.getLogger("src.mcp_servers.pm_server.tools.tasks")
+
 
 def register_task_tools(
     server: Server,
@@ -38,32 +41,124 @@ def register_task_tools(
     @server.call_tool()
     async def list_my_tasks(arguments: dict[str, Any]) -> list[TextContent]:
         """
-        List tasks assigned to the current user across all providers.
+        List tasks assigned to the current user.
+        
+        This tool automatically:
+        1. Lists all active PM providers
+        2. Gets the current user for each provider (via get_current_user())
+        3. Fetches all tasks assigned to that user (via list_tasks(assignee_id=current_user.id))
+        4. Optionally filters by project if project_id is provided
+        
+        CONTEXT-AWARE BEHAVIOR:
+        - If project_id is provided (from UI context or user request):
+          → List tasks assigned to current user IN THAT SPECIFIC PROJECT
+          → This is the expected behavior when user is working in a project context
+          → Example: User selected "Project X" in UI, asks "list my tasks" → should show tasks in Project X
+        
+        - If project_id is NOT provided:
+          → List ALL tasks assigned to current user across ALL projects and ALL providers
+          → This is for when user wants to see everything, not filtered by project
+        
+        EXTRACTING PROJECT_ID FROM MESSAGE:
+        If the user message contains "project_id: xxx" (injected by frontend), extract it and use it.
+        The project_id can be in format "provider_id:project_id" or just "project_id".
         
         Args:
-            project_id (optional): Filter by project ID (format: "provider_id:project_id" or just "project_id")
+            project_id (optional): Filter by project ID. 
+                                  - If provided: Returns tasks assigned to current user in that project only
+                                  - If not provided: Returns all tasks assigned to current user across all projects
+                                  Format: "provider_id:project_id" or just "project_id"
+                                  Can also be extracted from message context if message contains "project_id: xxx"
             status (optional): Filter by status (e.g., "open", "in_progress", "done")
             provider_id (optional): Filter by provider
             limit (optional): Maximum number of tasks
         
         Returns:
-            List of user's tasks
+            List of user's tasks (filtered by project if project_id provided, otherwise all tasks)
         """
         try:
+            logger.info("=" * 80)
+            logger.info("[MCP-TOOL] list_my_tasks called")
+            logger.info(f"[MCP-TOOL] Raw arguments: {arguments}")
+            logger.info(f"[MCP-TOOL] Arguments type: {type(arguments)}")
+            logger.info("=" * 80)
+            
+            # Validate arguments is a dict
+            if not isinstance(arguments, dict):
+                logger.error(f"[list_my_tasks] Invalid arguments type: {type(arguments)}, expected dict")
+                return [TextContent(
+                    type="text",
+                    text=f"Error: Invalid arguments format. Expected dictionary, got {type(arguments).__name__}."
+                )]
+            
+            # Extract and validate parameters
             project_id = arguments.get("project_id")
             status = arguments.get("status")
             provider_id = arguments.get("provider_id")
             limit = arguments.get("limit")
+            
+            logger.info(f"[MCP-TOOL] Extracted parameters:")
+            logger.info(f"  - project_id: {project_id} (type: {type(project_id)})")
+            logger.info(f"  - status: {status}")
+            logger.info(f"  - provider_id: {provider_id}")
+            logger.info(f"  - limit: {limit}")
+            
+            # Normalize project_id if provided
+            if project_id is not None:
+                if not isinstance(project_id, str):
+                    project_id = str(project_id)
+                project_id = project_id.strip()
+                if not project_id:
+                    project_id = None
+            
+            # Normalize other parameters
+            if status is not None and not isinstance(status, str):
+                status = str(status).strip() if status else None
+            if provider_id is not None and not isinstance(provider_id, str):
+                provider_id = str(provider_id).strip() if provider_id else None
+            if limit is not None:
+                try:
+                    limit = int(limit)
+                except (ValueError, TypeError):
+                    logger.warning(f"[list_my_tasks] Invalid limit value: {limit}, ignoring")
+                    limit = None
             
             logger.info(
                 f"list_my_tasks called: project_id={project_id}, status={status}, "
                 f"provider_id={provider_id}, limit={limit}"
             )
             
+            # Log when project_id is provided - this is expected when user is in project context
+            if project_id:
+                logger.info(
+                    f"[list_my_tasks] project_id={project_id} provided. "
+                    f"Filtering tasks to current user's tasks in this project."
+                )
+            
+            logger.debug(
+                f"[list_my_tasks] Starting task retrieval. "
+                f"PMHandler mode: {pm_handler._mode}, "
+                f"Will filter by project_id: {bool(project_id)}, "
+                f"Will filter by provider_id: {bool(provider_id)}"
+            )
+            
             # Get tasks from PM handler (gets all tasks assigned to current user)
             # Note: PMHandler.list_my_tasks() doesn't accept parameters - it gets tasks from all providers
+            # It works by:
+            # 1. Listing all active PM providers
+            # 2. For each provider, calling get_current_user() to get the current user
+            # 3. Then calling list_tasks(assignee_id=current_user.id) to get tasks assigned to that user
             try:
+                logger.info("=" * 80)
+                logger.info("[MCP-TOOL] Calling pm_handler.list_my_tasks()...")
+                logger.info(f"[MCP-TOOL] PMHandler mode: {pm_handler._mode}")
+                logger.info("=" * 80)
                 tasks = await pm_handler.list_my_tasks()
+                logger.info("=" * 80)
+                logger.info(f"[MCP-TOOL] Retrieved {len(tasks)} tasks from PMHandler")
+                if tasks:
+                    logger.info(f"[MCP-TOOL] Sample task project_ids: {[t.get('project_id') for t in tasks[:3]]}")
+                logger.info("=" * 80)
             except Exception as e:
                 logger.error(f"Error calling pm_handler.list_my_tasks(): {e}", exc_info=True)
                 # Return error message but don't fail completely
@@ -79,26 +174,51 @@ def register_task_tools(
             
             # Apply project_id filter if specified
             if project_id:
+                logger.info("=" * 80)
+                logger.info(f"[MCP-TOOL] Filtering {len(tasks)} tasks by project_id: {project_id}")
+                logger.info(f"[MCP-TOOL] Project_id format check: contains ':' = {':' in project_id}")
+                
+                # Log sample task project_ids before filtering
+                if tasks:
+                    sample_project_ids = [t.get("project_id") for t in tasks[:5]]
+                    logger.info(f"[MCP-TOOL] Sample task project_ids before filter: {sample_project_ids}")
+                
                 # Handle both formats: "provider_id:project_id" and just "project_id"
                 if ":" in project_id:
                     # Format: "provider_id:project_id" - match exact project_id field
+                    logger.info(f"[MCP-TOOL] Using exact match for project_id (contains ':')")
                     tasks = [t for t in tasks if t.get("project_id") == project_id]
                 else:
                     # Format: just "project_id" - match if project_id ends with this or matches
-                    # Also check project_name for partial matches
+                    logger.info(f"[MCP-TOOL] Using partial match for project_id (no ':')")
+                    logger.info(f"[MCP-TOOL] Will match if task.project_id ends with ':{project_id}' or equals '{project_id}'")
+                    original_count = len(tasks)
                     tasks = [
                         t for t in tasks
                         if str(t.get("project_id", "")).endswith(f":{project_id}")
                         or str(t.get("project_id", "")) == project_id
                         or str(t.get("project_id", "")).split(":")[-1] == project_id
                     ]
+                    logger.info(f"[MCP-TOOL] Filtered from {original_count} to {len(tasks)} tasks")
+                
+                # Log sample task project_ids after filtering
+                if tasks:
+                    sample_project_ids = [t.get("project_id") for t in tasks[:5]]
+                    logger.info(f"[MCP-TOOL] Sample task project_ids after filter: {sample_project_ids}")
+                else:
+                    logger.warning(f"[MCP-TOOL] No tasks matched project_id filter: {project_id}")
+                    logger.warning(f"[MCP-TOOL] All task project_ids: {[t.get('project_id') for t in tasks[:10]]}")
+                logger.info("=" * 80)
             
             # Apply provider_id filter if specified
             if provider_id:
+                logger.debug(f"[list_my_tasks] Filtering {len(tasks)} tasks by provider_id: {provider_id}")
                 tasks = [t for t in tasks if t.get("provider_id") == provider_id]
+                logger.debug(f"[list_my_tasks] After provider_id filter: {len(tasks)} tasks remaining")
             
             # Apply status filter if specified
             if status:
+                logger.debug(f"[list_my_tasks] Filtering {len(tasks)} tasks by status: {status}")
                 status_lower = status.lower()
                 tasks = [
                     t for t in tasks
@@ -109,7 +229,10 @@ def register_task_tools(
             
             # Apply limit
             if limit:
+                logger.debug(f"[list_my_tasks] Limiting to {limit} tasks")
                 tasks = tasks[:int(limit)]
+            
+            logger.debug(f"[list_my_tasks] Final result: {len(tasks)} tasks to return")
             
             if not tasks:
                 return [TextContent(

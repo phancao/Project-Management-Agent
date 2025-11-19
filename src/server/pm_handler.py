@@ -401,16 +401,26 @@ class PMHandler:
                 for task in tasks:
                     task_project_id = task.project_id
                     project_name = "Unknown"
+                    prefixed_project_id = None
                     
                     if task_project_id:
                         # Try with provider prefix first
                         prefixed_id = f"{provider.id}:{task_project_id}"
                         if prefixed_id in all_projects_map:
                             project_name = all_projects_map[prefixed_id]
+                            prefixed_project_id = prefixed_id
                         elif task_project_id in all_projects_map:
                             project_name = all_projects_map[task_project_id]
+                            prefixed_project_id = prefixed_id  # Use prefixed format for consistency
+                        else:
+                            # Use prefixed format even if not in map
+                            prefixed_project_id = prefixed_id
                     
-                    task_dict = self._task_to_dict(task, project_name)
+                    task_dict = self._task_to_dict(
+                        task, 
+                        project_name,
+                        project_id=prefixed_project_id or (str(task_project_id) if task_project_id else None)
+                    )
                     # Extract assignee name from raw_data if available
                     if task.assignee_id:
                         assignee_name = self._extract_assignee_name_from_raw_data(task)
@@ -429,14 +439,22 @@ class PMHandler:
     
     async def list_my_tasks(self) -> List[Dict[str, Any]]:
         """
-        List tasks assigned to current user.
+        List all tasks assigned to the current user across all active providers.
         
-        In single-provider mode: Returns tasks from the single provider.
-        In multi-provider mode: Returns tasks from all active providers.
+        This method:
+        1. Lists all active PM providers
+        2. For each provider, gets the current user (via get_current_user())
+        3. Fetches all tasks assigned to that user (via list_tasks(assignee_id=current_user.id))
+        4. Converts tasks to dictionaries with project_id included
+        5. Returns aggregated list of all tasks
         
         Returns:
-            List of tasks assigned to the current user with project_name mapped
+            List of task dictionaries, each with project_id field included
         """
+        logger.info("=" * 80)
+        logger.info("[PMHandler] list_my_tasks() called")
+        logger.info(f"[PMHandler] Mode: {self._mode}")
+        logger.info("=" * 80)
         if self._mode == "single":
             # Single provider mode
             if not self.single_provider:
@@ -451,16 +469,30 @@ class PMHandler:
                 f"Getting tasks for current user: ID={current_user.id}, Name={current_user.name}, "
                 f"Provider={self.single_provider.__class__.__name__}"
             )
+            logger.debug(
+                f"[list_my_tasks] Single provider mode: "
+                f"Provider class: {self.single_provider.__class__.__name__}, "
+                f"User ID: {current_user.id}, User Name: {current_user.name}"
+            )
             
             projects = await self.single_provider.list_projects()
             project_map = {p.id: p.name for p in projects}
+            logger.debug(f"[list_my_tasks] Listed {len(projects)} projects for name mapping")
             
             try:
+                logger.debug(
+                    f"[list_my_tasks] Calling provider.list_tasks(assignee_id={current_user.id}) "
+                    f"to get tasks assigned to current user"
+                )
                 tasks = await self.single_provider.list_tasks(
                     assignee_id=current_user.id
                 )
                 logger.info(
                     f"Retrieved {len(tasks)} tasks from API with assignee filter (user_id={current_user.id})"
+                )
+                logger.debug(
+                    f"[list_my_tasks] Provider returned {len(tasks)} tasks. "
+                    f"Sample task IDs: {[str(t.id) for t in tasks[:3]]}"
                 )
             except Exception as e:
                 error_msg = str(e).lower()
@@ -547,23 +579,55 @@ class PMHandler:
                         if assignee_name:
                             assignee_map[task.assignee_id] = assignee_name
             
-            return [
-                (lambda t: {**self._task_to_dict(t, project_map.get(t.project_id, "Unknown")), 
-                           "assigned_to": assignee_map.get(t.assignee_id) if t.assignee_id else None})(task)
+            # Get provider ID for composite project_id format
+            provider_id = None
+            if hasattr(self.single_provider, 'config') and hasattr(self.single_provider.config, 'provider_id'):
+                provider_id = str(self.single_provider.config.provider_id)
+            
+            result = [
+                {**self._task_to_dict(
+                    task, 
+                    project_map.get(task.project_id, "Unknown"),
+                    project_id=f"{provider_id}:{task.project_id}" if (provider_id and task.project_id) else (str(task.project_id) if task.project_id else None)
+                ), 
+                "assigned_to": assignee_map.get(task.assignee_id) if task.assignee_id else None}
                 for task in filtered_tasks
             ]
+            
+            logger.info("=" * 80)
+            logger.info(f"[PMHandler] Single-provider mode: Returning {len(result)} tasks")
+            if result:
+                logger.info(f"[PMHandler] Sample task project_ids: {[t.get('project_id') for t in result[:3]]}")
+            logger.info("=" * 80)
+            
+            return result
         
         # Multi-provider mode
         providers = self._get_active_providers()
+        logger.info("=" * 80)
+        logger.info(f"[PMHandler] Multi-provider mode: Found {len(providers)} active providers")
+        logger.info("=" * 80)
+        logger.debug(f"[list_my_tasks] Multi-provider mode: Found {len(providers)} active providers")
         
         if not providers:
+            logger.warning("[list_my_tasks] No active providers found in multi-provider mode")
             return []
         
         all_tasks = []
         all_projects_map = {}  # Map project_id to project_name across all providers
         
+        logger.debug(
+            f"[list_my_tasks] Starting multi-provider task retrieval. "
+            f"Will process {len(providers)} providers: "
+            f"{[(p.id, p.provider_type) for p in providers]}"
+        )
+        
         for provider in providers:
+            logger.debug(
+                f"[list_my_tasks] Processing provider: {provider.id} ({provider.provider_type})"
+            )
             try:
+                logger.debug(f"[list_my_tasks] Creating provider instance for {provider.id}")
                 provider_instance = self._create_provider_instance(provider)
                 
                 # Get current user for this provider
@@ -571,6 +635,10 @@ class PMHandler:
                     logger.info(
                         f"Attempting to get current user for provider "
                         f"{provider.id} ({provider.provider_type})..."
+                    )
+                    logger.debug(
+                        f"[list_my_tasks] Calling provider.get_current_user() for "
+                        f"provider {provider.id} ({provider.provider_type})"
                     )
                     current_user = await provider_instance.get_current_user()
                     if not current_user:
@@ -580,12 +648,20 @@ class PMHandler:
                             f"get_current_user() returned None. "
                             f"Skipping my tasks for this provider."
                         )
+                        logger.debug(
+                            f"[list_my_tasks] Provider {provider.id} returned None for get_current_user(). "
+                            f"Skipping this provider."
+                        )
                         continue
                     else:
                         logger.info(
                             f"Successfully retrieved current user for provider "
                             f"{provider.id} ({provider.provider_type}): "
                             f"id={current_user.id}, name={current_user.name}"
+                        )
+                        logger.debug(
+                            f"[list_my_tasks] Current user for provider {provider.id}: "
+                            f"ID={current_user.id}, Name={current_user.name}"
                         )
                 except Exception as user_error:
                     logger.warning(
@@ -596,37 +672,70 @@ class PMHandler:
                     continue
                 
                 # Fetch projects for this provider to build name mapping
+                logger.debug(
+                    f"[list_my_tasks] Fetching projects for provider {provider.id} to build name mapping"
+                )
                 projects = await provider_instance.list_projects()
+                logger.debug(
+                    f"[list_my_tasks] Provider {provider.id} has {len(projects)} projects"
+                )
                 for p in projects:
                     # Store with provider_id prefix to ensure uniqueness
                     prefixed_id = f"{provider.id}:{p.id}"
                     all_projects_map[prefixed_id] = p.name
                     # Also store without prefix for backward compatibility
                     all_projects_map[p.id] = p.name
+                logger.debug(
+                    f"[list_my_tasks] Built project map with {len(all_projects_map)} entries "
+                    f"for provider {provider.id}"
+                )
                 
                 # Fetch tasks assigned to current user
                 all_provider_tasks = []
                 try:
+                    logger.debug(
+                        f"[list_my_tasks] Calling provider.list_tasks(assignee_id={current_user.id}) "
+                        f"for provider {provider.id} to get tasks assigned to current user"
+                    )
                     tasks = await provider_instance.list_tasks(
                         assignee_id=current_user.id
                     )
                     all_provider_tasks = tasks
+                    logger.debug(
+                        f"[list_my_tasks] Provider {provider.id} returned {len(tasks)} tasks "
+                        f"with assignee_id={current_user.id}"
+                    )
                 except Exception as e:
                     error_msg = str(e).lower()
+                    logger.debug(
+                        f"[list_my_tasks] Provider {provider.id} list_tasks(assignee_id) failed: {error_msg}. "
+                        f"Will try per-project approach if needed."
+                    )
                     # If JIRA requires project-specific queries, fetch per project
                     if "unbounded" in error_msg or "search restriction" in error_msg:
                         logger.info(
                             f"Provider {provider.provider_type} requires project-specific queries. "
                             f"Fetching my tasks per project..."
                         )
+                        logger.debug(
+                            f"[list_my_tasks] Fetching tasks per project for provider {provider.id}. "
+                            f"Total projects: {len(projects)}"
+                        )
                         # Fetch tasks for each project with assignee filter
                         for project in projects:
                             try:
+                                logger.debug(
+                                    f"[list_my_tasks] Fetching tasks for project {project.id} "
+                                    f"with assignee_id={current_user.id}"
+                                )
                                 project_tasks = await provider_instance.list_tasks(
                                     project_id=project.id,
                                     assignee_id=current_user.id
                                 )
                                 all_provider_tasks.extend(project_tasks)
+                                logger.debug(
+                                    f"[list_my_tasks] Project {project.id} returned {len(project_tasks)} tasks"
+                                )
                             except Exception as project_error:
                                 logger.warning(
                                     f"Failed to fetch my tasks for project {project.id} "
@@ -691,34 +800,67 @@ class PMHandler:
                             f"{' or ' + str(current_user_account_id) if current_user_account_id else ''})"
                         )
                 
+                logger.debug(
+                    f"[list_my_tasks] Provider {provider.id}: "
+                    f"Retrieved {len(tasks)} tasks, filtered to {len(filtered_tasks)} tasks assigned to user"
+                )
+                
                 # Add tasks with project_name mapping
                 for task in filtered_tasks:
                     task_project_id = task.project_id
                     project_name = "Unknown"
+                    prefixed_project_id = None
                     
                     if task_project_id:
                         # Try with provider prefix first
                         prefixed_id = f"{provider.id}:{task_project_id}"
                         if prefixed_id in all_projects_map:
                             project_name = all_projects_map[prefixed_id]
+                            prefixed_project_id = prefixed_id
                         elif task_project_id in all_projects_map:
                             project_name = all_projects_map[task_project_id]
+                            prefixed_project_id = prefixed_id  # Use prefixed format for consistency
+                        else:
+                            # Use prefixed format even if not in map
+                            prefixed_project_id = prefixed_id
                     
-                    task_dict = self._task_to_dict(task, project_name)
+                    task_dict = self._task_to_dict(
+                        task, 
+                        project_name,
+                        project_id=prefixed_project_id or (str(task_project_id) if task_project_id else None)
+                    )
                     # Extract assignee name from raw_data if available
                     if task.assignee_id:
                         assignee_name = self._extract_assignee_name_from_raw_data(task)
                         if assignee_name:
                             task_dict["assigned_to"] = assignee_name
                     all_tasks.append(task_dict)
+                
+                logger.debug(
+                    f"[list_my_tasks] Added {len(filtered_tasks)} tasks from provider {provider.id}. "
+                    f"Total tasks so far: {len(all_tasks)}"
+                )
                         
             except Exception as provider_error:
                 logger.warning(
                     f"Failed to fetch my tasks from provider "
                     f"{provider.id} ({provider.provider_type}): {provider_error}"
                 )
+                logger.debug(
+                    f"[list_my_tasks] Error details for provider {provider.id}: {provider_error}",
+                    exc_info=True
+                )
                 continue
         
+        logger.info("=" * 80)
+        logger.info(f"[PMHandler] Multi-provider mode: Returning {len(all_tasks)} total tasks from {len(providers)} providers")
+        if all_tasks:
+            logger.info(f"[PMHandler] Sample task project_ids: {[t.get('project_id') for t in all_tasks[:5]]}")
+        logger.info("=" * 80)
+        logger.debug(
+            f"[list_my_tasks] Final result: {len(all_tasks)} tasks from {len(providers)} providers. "
+            f"Task project_ids: {[t.get('project_id') for t in all_tasks[:5]]}"
+        )
         return all_tasks
     
     async def list_project_tasks(
@@ -843,7 +985,8 @@ class PMHandler:
         # Convert tasks to dict with assignee names
         result = []
         for task in tasks:
-            task_dict = self._task_to_dict(task, project_name)
+            # Use the full project_id (with provider prefix) for consistency
+            task_dict = self._task_to_dict(task, project_name, project_id=project_id)
             # Try assignee_map first, then fallback to raw_data extraction
             assigned_to = None
             if task.assignee_id:
@@ -1661,9 +1804,9 @@ class PMHandler:
         
         return None
 
-    def _task_to_dict(self, task: PMTask, project_name: str) -> Dict[str, Any]:
-        """Convert PMTask to dictionary with project_name"""
-        return {
+    def _task_to_dict(self, task: PMTask, project_name: str, project_id: Optional[str] = None) -> Dict[str, Any]:
+        """Convert PMTask to dictionary with project_name and project_id"""
+        result = {
             "id": str(task.id),
             "title": task.title,
             "description": task.description,
@@ -1690,4 +1833,12 @@ class PMHandler:
             "sprint_id": str(task.sprint_id) if task.sprint_id else None,
             "assignee_id": str(task.assignee_id) if task.assignee_id else None,
         }
+        
+        # Add project_id if provided, otherwise use task.project_id
+        if project_id:
+            result["project_id"] = project_id
+        elif task.project_id:
+            result["project_id"] = str(task.project_id)
+        
+        return result
 

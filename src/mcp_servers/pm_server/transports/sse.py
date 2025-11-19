@@ -31,13 +31,14 @@ class MCPListToolsRequest(BaseModel):
     pass
 
 
-def create_sse_app(pm_handler: PMHandler, config: PMServerConfig) -> FastAPI:
+def create_sse_app(pm_handler: PMHandler, config: PMServerConfig, mcp_server_instance=None) -> FastAPI:
     """
     Create FastAPI application with SSE endpoint for PM MCP Server.
     
     Args:
         pm_handler: PM handler instance
         config: Server configuration
+        mcp_server_instance: Optional PMMCPServer instance to access MCP tools
     
     Returns:
         Configured FastAPI application
@@ -47,6 +48,9 @@ def create_sse_app(pm_handler: PMHandler, config: PMServerConfig) -> FastAPI:
         description="Project Management MCP Server with SSE transport",
         version=config.server_version
     )
+    
+    # Store MCP server instance for accessing tools
+    app.state.mcp_server = mcp_server_instance
     
     # Add CORS middleware
     app.add_middleware(
@@ -103,13 +107,48 @@ def create_sse_app(pm_handler: PMHandler, config: PMServerConfig) -> FastAPI:
     async def list_tools(request: MCPListToolsRequest | None = None):
         """List all available MCP tools."""
         try:
+            # Try to get tools from MCP server instance if available
+            if hasattr(app.state, 'mcp_server') and app.state.mcp_server:
+                from mcp.types import ListToolsRequest
+                # Call the MCP server's list_tools handler
+                handler = app.state.mcp_server.server.request_handlers.get(ListToolsRequest)
+                if handler:
+                    result = await handler(ListToolsRequest(params=None))
+                    # Extract tools from ListToolsResult
+                    if hasattr(result, 'tools'):
+                        tools = result.tools
+                    elif hasattr(result, 'model_dump'):
+                        dump = result.model_dump()
+                        tools = dump.get('tools', [])
+                    else:
+                        tools = []
+                    
+                    # Convert to dict format for SSE endpoint
+                    tools_list = []
+                    for tool in tools:
+                        tool_dict = {
+                            "name": tool.name if hasattr(tool, 'name') else tool.get('name', ''),
+                            "description": tool.description if hasattr(tool, 'description') else tool.get('description', ''),
+                        }
+                        if hasattr(tool, 'inputSchema'):
+                            tool_dict["inputSchema"] = tool.inputSchema
+                        elif isinstance(tool, dict) and 'inputSchema' in tool:
+                            tool_dict["inputSchema"] = tool['inputSchema']
+                        tools_list.append(tool_dict)
+                    
+                    return {
+                        "tools": tools_list,
+                        "count": len(tools_list),
+                    }
+            
+            # Fallback to app.state.tools if MCP server not available
             tools_list = [
                 {
                     "name": name,
                     "description": tool_info.get("description", ""),
                     "parameters": tool_info.get("parameters", {}),
                 }
-                for name, tool_info in app.state.tools.items()
+                for name, tool_info in getattr(app.state, 'tools', {}).items()
             ]
             
             return {
@@ -117,7 +156,7 @@ def create_sse_app(pm_handler: PMHandler, config: PMServerConfig) -> FastAPI:
                 "count": len(tools_list),
             }
         except Exception as e:
-            logger.error(f"Error listing tools: {e}")
+            logger.error(f"Error listing tools: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
     
     @app.post("/tools/call")

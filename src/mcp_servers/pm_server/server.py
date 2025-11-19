@@ -458,7 +458,7 @@ class PMMCPServer:
             # Create FastAPI app with SSE endpoints
             from .transports.sse import create_sse_app, register_tool_with_sse
             
-            app = create_sse_app(self.pm_handler, self.config)
+            app = create_sse_app(self.pm_handler, self.config, mcp_server_instance=self)
             
             # Register all MCP tools with SSE app
             # We need to convert MCP tools to SSE-compatible format

@@ -26,6 +26,7 @@ from src.tools import (
     python_repl_tool,
 )
 from src.tools.analytics_tools import get_analytics_tools
+from src.tools.pm_tools import get_pm_tools
 from src.tools.search import LoggedTavilySearch
 from src.utils.context_manager import ContextManager, validate_message_content
 from src.utils.json_utils import repair_json_output, sanitize_tool_response

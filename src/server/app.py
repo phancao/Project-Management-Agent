@@ -2310,6 +2310,75 @@ async def pm_chat_stream(request: Request):
         
         thread_id = body.get("thread_id", str(uuid.uuid4()))
         mcp_settings = body.get("mcp_settings", {})
+        
+        # Auto-inject PM MCP server if not already configured
+        # This ensures PM tools are always available for PM chat
+        if not mcp_settings.get("servers") or "pm-server" not in mcp_settings.get("servers", {}):
+            try:
+                from src.mcp_servers.pm_server.config import PMServerConfig
+                pm_config = PMServerConfig.from_env()
+                
+                # Use stdio transport for PM MCP server
+                if "servers" not in mcp_settings:
+                    mcp_settings["servers"] = {}
+                
+                # Get all available PM tools
+                # Get PM handler (already have db session)
+                # Note: We don't need to create a temp handler, just use the config
+                
+                # Define all PM tool names (hardcoded for reliability)
+                # These match the tools registered in the PM MCP server
+                all_tool_names = [
+                    # Project tools
+                    "list_projects", "get_project", "create_project", 
+                    "update_project", "delete_project", "search_projects",
+                    # Task tools
+                    "list_my_tasks", "list_tasks", "get_task", "create_task",
+                    "update_task", "delete_task", "assign_task", 
+                    "update_task_status", "search_tasks",
+                    # Sprint tools
+                    "list_sprints", "get_sprint", "create_sprint",
+                    "update_sprint", "delete_sprint", "start_sprint",
+                    "complete_sprint", "add_task_to_sprint", 
+                    "remove_task_from_sprint", "get_sprint_tasks",
+                    # Epic tools
+                    "list_epics", "get_epic", "create_epic",
+                    "update_epic", "delete_epic", "link_task_to_epic",
+                    "unlink_task_from_epic", "get_epic_progress",
+                    # User tools
+                    "list_users", "get_current_user", "get_user",
+                    "search_users", "get_user_workload",
+                    # Analytics tools
+                    "burndown_chart", "velocity_chart", "sprint_report",
+                    "project_health", "task_distribution", "team_performance",
+                    "gantt_chart", "epic_report", "resource_utilization",
+                    "time_tracking_report",
+                    # Task interaction tools
+                    "add_task_comment", "get_task_comments", "add_task_watcher",
+                    "bulk_update_tasks", "link_related_tasks",
+                ]
+                
+                # Use the script path for running PM MCP server
+                import os
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                script_path = os.path.join(project_root, "scripts", "run_pm_mcp_server.py")
+                
+                mcp_settings["servers"]["pm-server"] = {
+                    "transport": "stdio",
+                    "command": "python",
+                    "args": [script_path, "--transport", "stdio"],
+                    "enabled_tools": all_tool_names,
+                    "add_to_agents": ["researcher", "coder"],
+                }
+                logger.info(
+                    f"[PM-CHAT] Auto-injected PM MCP server with {len(all_tool_names)} tools"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[PM-CHAT] Failed to auto-inject PM MCP server: {e}. "
+                    "PM MCP tools may not be available."
+                )
+        
         locale = body.get("locale", "en-US")
         max_search_results = body.get("max_search_results", 3)
         max_step_num = body.get("max_step_num", 3)

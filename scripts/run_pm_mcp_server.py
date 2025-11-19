@@ -45,6 +45,8 @@ def setup_logging(log_level: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
+    import os
+    
     parser = argparse.ArgumentParser(
         description="PM MCP Server - Expose PM operations as MCP tools"
     )
@@ -52,40 +54,42 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--transport",
         choices=["stdio", "sse", "http"],
-        default="stdio",
-        help="Transport protocol to use (default: stdio)"
+        default=os.getenv("MCP_TRANSPORT", "stdio"),
+        help="Transport protocol to use (default: stdio or MCP_TRANSPORT env var)"
     )
     
     parser.add_argument(
         "--host",
-        default="localhost",
-        help="Host to bind to (for sse/http transports, default: localhost)"
+        default=os.getenv("MCP_HOST", "localhost"),
+        help="Host to bind to (for sse/http transports, default: localhost or MCP_HOST env var)"
     )
     
     parser.add_argument(
         "--port",
         type=int,
-        default=8080,
-        help="Port to bind to (for sse/http transports, default: 8080)"
+        default=int(os.getenv("MCP_PORT", "8080")),
+        help="Port to bind to (for sse/http transports, default: 8080 or MCP_PORT env var)"
     )
     
     parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)"
+        default=os.getenv("LOG_LEVEL", "INFO"),
+        help="Logging level (default: INFO or LOG_LEVEL env var)"
     )
     
     parser.add_argument(
         "--enable-auth",
         action="store_true",
-        help="Enable authentication"
+        default=os.getenv("ENABLE_AUTH", "false").lower() == "true",
+        help="Enable authentication (or set ENABLE_AUTH env var)"
     )
     
     parser.add_argument(
         "--enable-rbac",
         action="store_true",
-        help="Enable role-based access control"
+        default=os.getenv("ENABLE_RBAC", "false").lower() == "true",
+        help="Enable role-based access control (or set ENABLE_RBAC env var)"
     )
     
     return parser.parse_args()

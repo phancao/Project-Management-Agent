@@ -4,7 +4,7 @@
  * Automatically detects and configures PM MCP Server if available.
  */
 
-import type { MCPServerMetadata, SimpleSSEMCPServerMetadata } from "../mcp";
+import type { MCPServerMetadata, SimpleStdioMCPServerMetadata } from "../mcp";
 import { queryMCPServerMetadata } from "../api/mcp";
 import { useSettingsStore, saveSettings } from "../store/settings-store";
 
@@ -28,6 +28,10 @@ export async function checkPMMCPServerAvailable(): Promise<boolean> {
 
 /**
  * Auto-configure PM MCP server if available and not already configured
+ * 
+ * Note: PM MCP server is auto-injected by the backend for PM chat endpoints.
+ * This frontend auto-config is mainly for UI display purposes.
+ * If the server is already configured or auto-injection fails, we skip configuration.
  */
 export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | null> {
   // Check if already configured
@@ -41,19 +45,27 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
     return existingPMServer;
   }
 
-  // Check if server is available
-  const isAvailable = await checkPMMCPServerAvailable();
-  if (!isAvailable) {
-    console.log("[PM MCP] Server not available at", PM_MCP_SERVER_URL);
-    return null;
-  }
+  // PM MCP server is auto-injected by the backend for PM chat
+  // Frontend doesn't need to configure it separately
+  // Skip auto-configuration to avoid errors
+  console.log("[PM MCP] Skipping auto-configuration - server is auto-injected by backend");
+  return null;
 
+  // NOTE: The code below is kept for reference but disabled
+  // If you want to enable frontend auto-config, uncomment and ensure the server is running
+  /*
   try {
-    // Query server metadata
-    const serverConfig: SimpleSSEMCPServerMetadata = {
-      transport: "sse",
+    // Query server metadata using stdio transport
+    // PM MCP server runs via stdio, not SSE
+    const serverConfig: SimpleStdioMCPServerMetadata = {
+      transport: "stdio",
       name: PM_MCP_SERVER_NAME,
-      url: PM_MCP_SERVER_URL,
+      command: "python3",
+      args: [
+        "scripts/run_pm_mcp_server.py",
+        "--transport",
+        "stdio",
+      ],
     };
     
     const metadata = await queryMCPServerMetadata(
@@ -89,6 +101,7 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
     console.error("[PM MCP] Failed to auto-configure:", error);
     return null;
   }
+  */
 }
 
 /**

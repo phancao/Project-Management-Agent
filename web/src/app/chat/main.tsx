@@ -18,14 +18,7 @@ export default function Main() {
     [openResearchId],
   );
   
-  // Debug logging
-  if (process.env.NODE_ENV === "development") {
-    console.log(
-      `[DEBUG] Main: ` +
-      `openResearchId=${openResearchId}, ` +
-      `doubleColumnMode=${doubleColumnMode}`
-    );
-  }
+  // Removed debug logging
   return (
     <div
       className={cn(

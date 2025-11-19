@@ -154,10 +154,9 @@ function MessageListItem({
       message.agent === "reporter" ||
       startOfResearch
     ) {
-      // Debug logging for reporter messages
-      if (process.env.NODE_ENV === "development" && message.agent === "reporter") {
-        console.log(
-          `[DEBUG] MessageListItem (PM chat) rendering reporter: ` +
+      // Removed debug logging
+      if (false && process.env.NODE_ENV === "development" && message.agent === "reporter") {
+        // Removed debug log
           `id=${messageId}, ` +
           `content_length=${message.content?.length ?? 0}, ` +
           `contentChunks_length=${message.contentChunks?.length ?? 0}, ` +

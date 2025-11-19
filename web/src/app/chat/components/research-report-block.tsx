@@ -25,16 +25,6 @@ export function ResearchReportBlock({
   
   // Debug logging - use useEffect to ensure it runs on every render
   useEffect(() => {
-    if (messageId && process.env.NODE_ENV === "development") {
-      console.log(
-        `[DEBUG] ResearchReportBlock render: ` +
-        `messageId=${messageId}, ` +
-        `message exists=${!!message}, ` +
-        `content_length=${message?.content?.length ?? 0}, ` +
-        `contentChunks_length=${message?.contentChunks?.length ?? 0}, ` +
-        `isStreaming=${message?.isStreaming}`
-      );
-    }
   });
   const handleMarkdownChange = useCallback(
     (markdown: string) => {
@@ -55,21 +45,12 @@ export function ResearchReportBlock({
   // Reconstruct content from chunks if main content is empty but chunks exist
   const displayContent = useMemo(() => {
     if (message?.content) {
-      if (process.env.NODE_ENV === "development" && message.content.length > 0) {
-        console.log(`[DEBUG] ResearchReportBlock: Using message.content, length=${message.content.length}`);
-      }
       return message.content;
     }
     // Fallback: reconstruct from contentChunks if content is empty
     if (message?.contentChunks && message.contentChunks.length > 0) {
       const reconstructed = message.contentChunks.join("");
-      if (process.env.NODE_ENV === "development") {
-        console.log(`[DEBUG] ResearchReportBlock: Reconstructing from chunks, length=${reconstructed.length}, chunks=${message.contentChunks.length}`);
-      }
       return reconstructed;
-    }
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[DEBUG] ResearchReportBlock: No content available, content exists=${!!message?.content}, chunks=${message?.contentChunks?.length ?? 0}`);
     }
     return "";
   }, [message?.content, message?.contentChunks]);
@@ -88,11 +69,10 @@ export function ResearchReportBlock({
   //   }
   // }, [isCompleted]);
 
-  // Debug: Log what we're about to render
+  // Removed debug logging
   useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        `[DEBUG] ResearchReportBlock render output: ` +
+    if (false && process.env.NODE_ENV === "development") {
+      // Removed debug log
         `displayContent length=${displayContent.length}, ` +
         `isCompleted=${isCompleted}, ` +
         `isStreaming=${message?.isStreaming}, ` +

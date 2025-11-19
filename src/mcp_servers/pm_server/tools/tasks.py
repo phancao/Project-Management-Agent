@@ -59,7 +59,20 @@ def register_task_tools(
             
             # Get tasks from PM handler (gets all tasks assigned to current user)
             # Note: PMHandler.list_my_tasks() doesn't accept parameters - it gets tasks from all providers
-            tasks = await pm_handler.list_my_tasks()
+            try:
+                tasks = await pm_handler.list_my_tasks()
+            except Exception as e:
+                logger.error(f"Error calling pm_handler.list_my_tasks(): {e}", exc_info=True)
+                # Return error message but don't fail completely
+                return [TextContent(
+                    type="text",
+                    text=f"Error retrieving tasks: {str(e)}\n\n"
+                         "This might be due to:\n"
+                         "- Sprint information that no longer exists\n"
+                         "- Provider connection issues\n"
+                         "- Missing permissions\n\n"
+                         "Please try again or contact support if the issue persists."
+                )]
             
             # Apply provider_id filter if specified
             if provider_id:
@@ -88,12 +101,23 @@ def register_task_tools(
             # Format output
             output_lines = [f"Found {len(tasks)} tasks:\n\n"]
             for i, task in enumerate(tasks, 1):
+                # Use 'title' instead of 'subject' (PMHandler returns 'title')
+                task_title = task.get('title') or task.get('subject', 'Untitled')
+                task_id = task.get('id', 'N/A')
+                task_status = task.get('status', 'N/A')
+                project_name = task.get('project_name', 'N/A')
+                assigned_to = task.get('assigned_to')
+                sprint_id = task.get('sprint_id')
+                
                 output_lines.append(
-                    f"{i}. **{task.get('subject')}** (ID: {task.get('id')})\n"
-                    f"   Status: {task.get('status', 'N/A')} | "
-                    f"Project: {task.get('project_name', 'N/A')}\n"
-                    f"   Provider: {task.get('provider_type')}\n"
+                    f"{i}. **{task_title}** (ID: {task_id})\n"
+                    f"   Status: {task_status} | "
+                    f"Project: {project_name}\n"
                 )
+                if assigned_to:
+                    output_lines.append(f"   Assigned to: {assigned_to}\n")
+                if sprint_id:
+                    output_lines.append(f"   Sprint ID: {sprint_id}\n")
             
             return [TextContent(
                 type="text",

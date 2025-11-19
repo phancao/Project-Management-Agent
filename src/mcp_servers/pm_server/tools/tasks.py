@@ -41,6 +41,7 @@ def register_task_tools(
         List tasks assigned to the current user across all providers.
         
         Args:
+            project_id (optional): Filter by project ID (format: "provider_id:project_id" or just "project_id")
             status (optional): Filter by status (e.g., "open", "in_progress", "done")
             provider_id (optional): Filter by provider
             limit (optional): Maximum number of tasks
@@ -49,12 +50,14 @@ def register_task_tools(
             List of user's tasks
         """
         try:
+            project_id = arguments.get("project_id")
             status = arguments.get("status")
             provider_id = arguments.get("provider_id")
             limit = arguments.get("limit")
             
             logger.info(
-                f"list_my_tasks called: status={status}, provider_id={provider_id}, limit={limit}"
+                f"list_my_tasks called: project_id={project_id}, status={status}, "
+                f"provider_id={provider_id}, limit={limit}"
             )
             
             # Get tasks from PM handler (gets all tasks assigned to current user)
@@ -73,6 +76,22 @@ def register_task_tools(
                          "- Missing permissions\n\n"
                          "Please try again or contact support if the issue persists."
                 )]
+            
+            # Apply project_id filter if specified
+            if project_id:
+                # Handle both formats: "provider_id:project_id" and just "project_id"
+                if ":" in project_id:
+                    # Format: "provider_id:project_id" - match exact project_id field
+                    tasks = [t for t in tasks if t.get("project_id") == project_id]
+                else:
+                    # Format: just "project_id" - match if project_id ends with this or matches
+                    # Also check project_name for partial matches
+                    tasks = [
+                        t for t in tasks
+                        if str(t.get("project_id", "")).endswith(f":{project_id}")
+                        or str(t.get("project_id", "")) == project_id
+                        or str(t.get("project_id", "")).split(":")[-1] == project_id
+                    ]
             
             # Apply provider_id filter if specified
             if provider_id:

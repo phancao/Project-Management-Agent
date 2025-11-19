@@ -205,9 +205,9 @@ class PMMCPServer:
                     
                     logger.info("=" * 80)
                     
-                    # Return list[Tool] - the SDK will wrap it in ListToolsResult automatically
-                    # (The SDK supports both list[Tool] and ListToolsResult, but list[Tool] is simpler)
-                    return tools
+                    # Return ListToolsResult explicitly (SDK v1.21.2 expects this)
+                    from mcp.types import ListToolsResult
+                    return ListToolsResult(tools=tools)
                 except Exception as e:
                     logger.error(f"[list_all_tools] ERROR: {e}", exc_info=True)
                     logger.error("=" * 80)

@@ -155,15 +155,6 @@ function MessageListItem({
       startOfResearch
     ) {
       // Removed debug logging
-      if (false && process.env.NODE_ENV === "development" && message.agent === "reporter") {
-        // Removed debug log
-          `id=${messageId}, ` +
-          `content_length=${message.content?.length ?? 0}, ` +
-          `contentChunks_length=${message.contentChunks?.length ?? 0}, ` +
-          `isStreaming=${message.isStreaming}, ` +
-          `hasContent=${!!message.content}`
-        );
-      }
       let content: React.ReactNode;
       if (message.agent === "planner") {
         content = (

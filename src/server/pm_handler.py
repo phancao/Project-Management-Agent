@@ -395,7 +395,13 @@ class PMHandler:
                         elif task_project_id in all_projects_map:
                             project_name = all_projects_map[task_project_id]
                     
-                    all_tasks.append(self._task_to_dict(task, project_name))
+                    task_dict = self._task_to_dict(task, project_name)
+                    # Extract assignee name from raw_data if available
+                    if task.assignee_id:
+                        assignee_name = self._extract_assignee_name_from_raw_data(task)
+                        if assignee_name:
+                            task_dict["assigned_to"] = assignee_name
+                    all_tasks.append(task_dict)
                         
             except Exception as provider_error:
                 logger.warning(
@@ -671,7 +677,13 @@ class PMHandler:
                         elif task_project_id in all_projects_map:
                             project_name = all_projects_map[task_project_id]
                     
-                    all_tasks.append(self._task_to_dict(task, project_name))
+                    task_dict = self._task_to_dict(task, project_name)
+                    # Extract assignee name from raw_data if available
+                    if task.assignee_id:
+                        assignee_name = self._extract_assignee_name_from_raw_data(task)
+                        if assignee_name:
+                            task_dict["assigned_to"] = assignee_name
+                    all_tasks.append(task_dict)
                         
             except Exception as provider_error:
                 logger.warning(
@@ -787,8 +799,16 @@ class PMHandler:
                     user = await provider_instance.get_user(task.assignee_id)
                     if user:
                         assignee_map[task.assignee_id] = user.name
-                except Exception:
-                    pass
+                except (NotImplementedError, Exception):
+                    # Fallback: Try to extract assignee name from task raw_data
+                    # This is useful for providers like JIRA where get_user might not be implemented
+                    assignee_name = self._extract_assignee_name_from_raw_data(task)
+                    if assignee_name:
+                        assignee_map[task.assignee_id] = assignee_name
+                        logger.debug(
+                            f"Extracted assignee name from raw_data: {assignee_name} "
+                            f"for assignee_id {task.assignee_id}"
+                        )
         
         # Map project names
         project_name = project_map.get(actual_project_id, "Unknown")
@@ -797,11 +817,18 @@ class PMHandler:
         result = []
         for task in tasks:
             task_dict = self._task_to_dict(task, project_name)
-            task_dict["assigned_to"] = (
-                assignee_map.get(task.assignee_id)
-                if task.assignee_id
-                else None
-            )
+            # Try assignee_map first, then fallback to raw_data extraction
+            assigned_to = None
+            if task.assignee_id:
+                assigned_to = assignee_map.get(task.assignee_id)
+                # If still not found, try extracting from this task's raw_data directly
+                if not assigned_to:
+                    assigned_to = self._extract_assignee_name_from_raw_data(task)
+                    if assigned_to:
+                        # Cache it for future use
+                        assignee_map[task.assignee_id] = assigned_to
+            
+            task_dict["assigned_to"] = assigned_to
             result.append(task_dict)
         
         return result
@@ -1533,7 +1560,13 @@ class PMHandler:
                 task_dict["sprint_end_date"] = None
 
             assignee_id = task_dict.get("assignee_id")
-            task_dict["assigned_to"] = assignee_map.get(str(assignee_id)) if assignee_id else None
+            assigned_to = assignee_map.get(str(assignee_id)) if assignee_id else None
+            # Fallback to raw_data extraction if not in map
+            if not assigned_to and task.assignee_id:
+                assigned_to = self._extract_assignee_name_from_raw_data(task)
+                if assigned_to:
+                    assignee_map[str(task.assignee_id)] = assigned_to
+            task_dict["assigned_to"] = assigned_to
 
             has_start = bool(task.start_date)
             has_end = bool(task.due_date)
@@ -1572,6 +1605,35 @@ class PMHandler:
             },
         }
     
+    def _extract_assignee_name_from_raw_data(self, task: PMTask) -> Optional[str]:
+        """
+        Extract assignee display name from task raw_data as a fallback.
+        
+        This is useful when get_user() is not implemented or fails.
+        Supports JIRA format (fields.assignee.displayName) and other formats.
+        """
+        if not task.raw_data or not isinstance(task.raw_data, dict):
+            return None
+        
+        assignee_obj = None
+        # Check different possible locations for assignee data
+        if "fields" in task.raw_data and isinstance(task.raw_data["fields"], dict):
+            assignee_obj = task.raw_data["fields"].get("assignee")
+        elif "assignee" in task.raw_data:
+            assignee_obj = task.raw_data["assignee"]
+        
+        if assignee_obj and isinstance(assignee_obj, dict):
+            # Try different field names for assignee display name
+            return (
+                assignee_obj.get("displayName") or
+                assignee_obj.get("name") or
+                assignee_obj.get("emailAddress") or
+                assignee_obj.get("email") or
+                None
+            )
+        
+        return None
+
     def _task_to_dict(self, task: PMTask, project_name: str) -> Dict[str, Any]:
         """Convert PMTask to dictionary with project_name"""
         return {

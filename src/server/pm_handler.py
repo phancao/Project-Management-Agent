@@ -423,7 +423,13 @@ class PMHandler:
             
             current_user = await self.single_provider.get_current_user()
             if not current_user:
+                logger.warning("Cannot determine current user - get_current_user() returned None")
                 return []
+            
+            logger.info(
+                f"Getting tasks for current user: ID={current_user.id}, Name={current_user.name}, "
+                f"Provider={self.single_provider.__class__.__name__}"
+            )
             
             projects = await self.single_provider.list_projects()
             project_map = {p.id: p.name for p in projects}
@@ -431,6 +437,9 @@ class PMHandler:
             try:
                 tasks = await self.single_provider.list_tasks(
                     assignee_id=current_user.id
+                )
+                logger.info(
+                    f"Retrieved {len(tasks)} tasks from API with assignee filter (user_id={current_user.id})"
                 )
             except Exception as e:
                 error_msg = str(e).lower()
@@ -449,12 +458,35 @@ class PMHandler:
                 else:
                     raise
             
+            # CRITICAL: Post-filter to ensure only tasks actually assigned to current user are returned
+            # This is a safeguard in case the API filter doesn't work correctly or returns tasks with null assignees
+            current_user_id_str = str(current_user.id)
+            filtered_tasks = [
+                task for task in tasks
+                if task.assignee_id and str(task.assignee_id) == current_user_id_str
+            ]
+            
+            if len(filtered_tasks) != len(tasks):
+                # Log detailed information about filtered tasks for debugging
+                logger.warning(
+                    f"Filtered out {len(tasks) - len(filtered_tasks)} tasks that were not "
+                    f"assigned to current user (ID: {current_user_id_str}, Name: {current_user.name}). "
+                    f"Original count: {len(tasks)}, Filtered count: {len(filtered_tasks)}"
+                )
+                # Log sample of tasks that were filtered out
+                filtered_out = [t for t in tasks if not (t.assignee_id and str(t.assignee_id) == current_user_id_str)]
+                for task in filtered_out[:5]:  # Log first 5 for debugging
+                    logger.debug(
+                        f"  Filtered out task: ID={task.id}, Title={task.title}, "
+                        f"AssigneeID={task.assignee_id} (expected: {current_user_id_str})"
+                    )
+            
             return [
                 self._task_to_dict(
                     task,
                     project_map.get(task.project_id, "Unknown")
                 )
-                for task in tasks
+                for task in filtered_tasks
             ]
         
         # Multi-provider mode
@@ -543,8 +575,31 @@ class PMHandler:
                 
                 tasks = all_provider_tasks
                 
+                # CRITICAL: Post-filter to ensure only tasks actually assigned to current user are returned
+                # This is a safeguard in case the API filter doesn't work correctly or returns tasks with null assignees
+                current_user_id_str = str(current_user.id)
+                filtered_tasks = [
+                    task for task in tasks
+                    if task.assignee_id and str(task.assignee_id) == current_user_id_str
+                ]
+                
+                if len(filtered_tasks) != len(tasks):
+                    # Log detailed information about filtered tasks for debugging
+                    logger.warning(
+                        f"Provider {provider.provider_type}: Filtered out {len(tasks) - len(filtered_tasks)} tasks "
+                        f"that were not assigned to current user (ID: {current_user_id_str}, Name: {current_user.name}). "
+                        f"Original count: {len(tasks)}, Filtered count: {len(filtered_tasks)}"
+                    )
+                    # Log sample of tasks that were filtered out
+                    filtered_out = [t for t in tasks if not (t.assignee_id and str(t.assignee_id) == current_user_id_str)]
+                    for task in filtered_out[:5]:  # Log first 5 for debugging
+                        logger.debug(
+                            f"  Filtered out task: ID={task.id}, Title={task.title}, "
+                            f"AssigneeID={task.assignee_id} (expected: {current_user_id_str})"
+                        )
+                
                 # Add tasks with project_name mapping
-                for task in tasks:
+                for task in filtered_tasks:
                     task_project_id = task.project_id
                     project_name = "Unknown"
                     

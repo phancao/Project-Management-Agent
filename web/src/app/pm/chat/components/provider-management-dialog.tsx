@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
@@ -33,6 +34,9 @@ export function ProviderManagementDialog() {
       <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Provider Management</DialogTitle>
+          <DialogDescription>
+            Manage your project management provider connections and view available projects.
+          </DialogDescription>
         </DialogHeader>
         <ProviderManagementView />
       </DialogContent>

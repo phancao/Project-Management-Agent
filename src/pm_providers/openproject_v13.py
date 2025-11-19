@@ -99,7 +99,36 @@ class OpenProjectV13Provider(BasePMProvider):
                         f"OpenProject v13: Page {page_num} - Response status {response.status_code} for {request_url}"
                     )
                     
-                    if response.status_code != 200:
+                    # Check status code BEFORE calling raise_for_status()
+                    # This allows us to provide user-friendly error messages
+                    if response.status_code == 401:
+                        error_text = response.text[:500] if response.text else "No error message"
+                        logger.error(
+                            f"OpenProject v13: Authentication failed. Response: {error_text}"
+                        )
+                        raise ValueError(
+                            "OpenProject authentication failed. Please verify your API token is correct. "
+                            "For OpenProject v13, use Basic Auth with format: apikey:TOKEN"
+                        )
+                    elif response.status_code == 403:
+                        error_text = response.text[:500] if response.text else "No error message"
+                        logger.error(
+                            f"OpenProject v13: Access forbidden. Response: {error_text}"
+                        )
+                        raise ValueError(
+                            "OpenProject access forbidden. The API token may not have permission to list projects, "
+                            "or the account doesn't have access to any projects. Please check your OpenProject permissions."
+                        )
+                    elif response.status_code == 404:
+                        error_text = response.text[:500] if response.text else "No error message"
+                        logger.error(
+                            f"OpenProject v13: Endpoint not found. Response: {error_text}"
+                        )
+                        raise ValueError(
+                            "OpenProject endpoint not found. Please verify the base URL is correct."
+                        )
+                    elif response.status_code != 200:
+                        # For other non-200 status codes, log and raise
                         error_text = response.text[:500] if response.text else "No error message"
                         logger.error(
                             f"OpenProject v13: Failed to fetch projects. "
@@ -107,6 +136,7 @@ class OpenProjectV13Provider(BasePMProvider):
                         )
                         response.raise_for_status()
                     
+                    # Process successful response
                     data = response.json()
                     
                     # Check if response has expected structure
@@ -346,9 +376,9 @@ class OpenProjectV13Provider(BasePMProvider):
         
         # Log if filter returns no results
         if assignee_id and len(all_tasks_data) == 0:
-            logger.warning(
+                    logger.warning(
                 f"Assignee filter returned 0 tasks for user_id={assignee_id}"
-            )
+                    )
         
         return [self._parse_task(task) for task in all_tasks_data]
     

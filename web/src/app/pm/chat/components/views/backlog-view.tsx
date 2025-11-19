@@ -1074,9 +1074,7 @@ export function BacklogView() {
     }
 
     setSprintOrder((previous) => {
-      // Removed debug logging: logSprintDnd("Recalculating sprint order from provider data", {
-        total: sprints.length,
-      });
+      // Removed debug logging
 
       const grouped: Record<SprintStatusCategory, SprintSummary[]> = {
         active: [],
@@ -1427,10 +1425,7 @@ export function BacklogView() {
       if (overId.startsWith("sprint-")) {
         const targetSprintId = overId.replace("sprint-", "");
         setHoverSprint(targetSprintId, over.rect as ClientRect | null);
-        // Removed debug logging: logSprintDnd("Drag over sprint (reorder)", {
-          sprintId: dragState.id,
-          targetSprintId,
-        });
+        // Removed debug logging
         const targetSprint = reference.find((item) => String(item.id) === targetSprintId);
         const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
 
@@ -1457,11 +1452,7 @@ export function BacklogView() {
           ? String(task.sprint_id)
           : resolveContainerSprintId();
         setHoverSprint(containerSprintId, over.rect as ClientRect | null);
-        // Removed debug logging: logSprintDnd("Drag over task while dragging sprint", {
-          sprintId: dragState.id,
-          taskId,
-          containerSprintId,
-        });
+        // Removed debug logging
         if (containerSprintId) {
           const targetSprint = reference.find((item) => String(item.id) === containerSprintId);
           const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
@@ -1474,29 +1465,20 @@ export function BacklogView() {
         }
       } else if (overId === "backlog") {
         setHoverSprint(null);
-        // Removed debug logging: logSprintDnd("Drag over backlog while dragging sprint", {
-          sprintId: dragState.id,
-        });
+        // Removed debug logging
         applyPlaceholder(null, null, false);
       } else if (overId.startsWith("sprint-category-")) {
         const category = overId.replace("sprint-category-", "") as SprintStatusCategory;
         setHoverSprint(null);
         lastSprintCategoryRef.current = category;
-        // Removed debug logging: logSprintDnd("Drag over sprint category drop zone", {
-          sprintId: dragState.id,
-          category,
-        });
+        // Removed debug logging
         setOverSprintCategory(category);
         applyPlaceholder(category, null, true);
       } else {
         const containerSprintId = resolveContainerSprintId();
         if (containerSprintId) {
           setHoverSprint(containerSprintId, over.rect as ClientRect | null);
-          // Removed debug logging: logSprintDnd("Drag over nested sprint container", {
-            sprintId: dragState.id,
-            containerSprintId,
-            overId,
-          });
+          // Removed debug logging
           const targetSprint = reference.find((item) => String(item.id) === containerSprintId);
           const category = targetSprint ? resolveSprintCategory(targetSprint) : null;
           applyPlaceholder(
@@ -1507,10 +1489,7 @@ export function BacklogView() {
           );
         } else {
           setHoverSprint(null);
-          // Removed debug logging: logSprintDnd("Drag over non-sprint while dragging sprint", {
-            sprintId: dragState.id,
-            overId,
-          });
+          // Removed debug logging
           applyPlaceholder(null, null, false);
         }
       }
@@ -1566,13 +1545,10 @@ export function BacklogView() {
         setOverEpicId(null);
         if (task.sprint_id) {
           setOverSprintId(String(task.sprint_id));
-          // Removed debug logging: logSprintDnd("Drag over task in sprint", {
-            taskId,
-            sprintId: String(task.sprint_id),
-          });
+          // Removed debug logging
       } else {
           setOverSprintId('backlog');
-          // Removed debug logging: logSprintDnd("Drag over task in backlog", { taskId });
+          // Removed debug logging
         }
         return;
       }
@@ -1631,45 +1607,25 @@ export function BacklogView() {
           }
         }
         if (targetSprintId) {
-          // Removed debug logging: logSprintDnd("Sprint drag ended over task container", {
-            sprintId: currentDragState.id,
-            taskId,
-            targetSprintId,
-          });
+          // Removed debug logging
         }
       } else if (overId.startsWith("sprint-category-")) {
         targetCategory = overId.replace("sprint-category-", "") as SprintStatusCategory;
         lastSprintHoverIdRef.current = null;
-        // Removed debug logging: logSprintDnd("Sprint drag ended on category drop zone", {
-          sprintId: currentDragState.id,
-          category: targetCategory,
-        });
+        // Removed debug logging
       } else if (overId === "backlog") {
         targetSprintId = null;
         lastSprintHoverIdRef.current = null;
         lastSprintCategoryRef.current = null;
-        // Removed debug logging: logSprintDnd("Sprint drag ended over backlog area", {
-          sprintId: currentDragState.id,
-        });
+        // Removed debug logging
       } else if (previousOverSprintId) {
         targetSprintId = previousOverSprintId;
-        // Removed debug logging: logSprintDnd("Sprint drag using last hovered target", {
-          sprintId: currentDragState.id,
-          targetSprintId,
-          overId,
-        });
+        // Removed debug logging
       } else if (lastSprintCategoryRef.current) {
         targetCategory = lastSprintCategoryRef.current;
-        // Removed debug logging: logSprintDnd("Sprint drag using last hovered category", {
-          sprintId: currentDragState.id,
-          category: targetCategory,
-          overId,
-        });
+        // Removed debug logging
       } else {
-        // Removed debug logging: logSprintDnd("Sprint drag ended without identifiable target", {
-          sprintId: currentDragState.id,
-          overId,
-        });
+        // Removed debug logging
         return;
       }
 
@@ -1680,11 +1636,7 @@ export function BacklogView() {
         const containerId = overData?.sortable?.containerId;
         if (containerId && containerId.startsWith("sprint-")) {
           targetSprintId = containerId.replace("sprint-", "");
-          // Removed debug logging: logSprintDnd("Sprint drag resolved target from containerId", {
-            sprintId: currentDragState.id,
-            targetSprintId,
-            overId,
-          });
+          // Removed debug logging
         }
       }
 
@@ -1695,10 +1647,7 @@ export function BacklogView() {
         : null;
 
       if (!sourceSprint) {
-        // Removed debug logging: logSprintDnd("Sprint drag end missing source sprint", {
-          sourceSprintId: currentDragState.id,
-          targetSprintId,
-        });
+        // Removed debug logging
         return;
       }
 
@@ -1708,10 +1657,7 @@ export function BacklogView() {
       }
 
       if (!targetSprint && !targetCategory) {
-        // Removed debug logging: logSprintDnd("Sprint drag missing target resolution", {
-          sourceSprintId: sourceSprint.id,
-          targetSprintId,
-        });
+        // Removed debug logging
         return;
       }
 
@@ -1879,19 +1825,11 @@ export function BacklogView() {
         });
 
         if (stateUnchanged) {
-          // Removed debug logging: logSprintDnd("Sprint drag resulted in no ordering change (state unchanged)", {
-            sourceSprintId: sourceSprint.id,
-            desiredCategory,
-          });
+          // Removed debug logging
           return previous;
         }
 
-        // Removed debug logging: logSprintDnd("Sprint drag applied ordering change", {
-          sourceSprintId: sourceSprint.id,
-          targetSprintId,
-          sourceCategory: resolvedSourceCategory,
-          targetCategory: desiredCategory,
-          lists: next,
+        // Removed debug logging
         });
 
         return next;

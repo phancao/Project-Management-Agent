@@ -140,8 +140,9 @@ def register_project_tools(
             
             logger.info(f"get_project called: project_id={project_id}")
             
-            # Get project from PM handler
-            project = pm_handler.get_project(project_id)
+            # Get project from list_all_projects
+            projects = await pm_handler.list_all_projects()
+            project = next((p for p in projects if p.get("id") == project_id), None)
             
             if not project:
                 return [TextContent(
@@ -156,19 +157,7 @@ def register_project_tools(
                 f"**Provider:** {project.get('provider_type')} ({project.get('provider_id')})\n",
                 f"**Description:** {project.get('description', 'N/A')}\n",
                 f"**Status:** {project.get('status', 'N/A')}\n",
-                f"**Created:** {project.get('created_at', 'N/A')}\n",
-                f"**Updated:** {project.get('updated_at', 'N/A')}\n",
             ]
-            
-            # Add additional fields if available
-            if "url" in project:
-                output_lines.append(f"**URL:** {project['url']}\n")
-            
-            if "members_count" in project:
-                output_lines.append(f"**Members:** {project['members_count']}\n")
-            
-            if "tasks_count" in project:
-                output_lines.append(f"**Tasks:** {project['tasks_count']}\n")
             
             return [TextContent(
                 type="text",
@@ -213,19 +202,12 @@ def register_project_tools(
                 f"create_project called: name={name}, provider_id={provider_id}"
             )
             
-            # Create project via PM handler
-            project = pm_handler.create_project(
-                name=name,
-                description=description,
-                provider_id=provider_id
-            )
-            
+            # Project creation is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Project created successfully!\n\n"
-                     f"**Name:** {project.get('name')}\n"
-                     f"**ID:** {project.get('id')}\n"
-                     f"**Provider:** {project.get('provider_type')}\n"
+                text=f"Project creation is not yet implemented. "
+                     f"Please create projects directly in your PM provider (JIRA, OpenProject, etc.) "
+                     f"and they will be available via list_projects."
             )]
             
         except Exception as e:
@@ -275,14 +257,11 @@ def register_project_tools(
                 f"update_project called: project_id={project_id}, updates={updates}"
             )
             
-            # Update project via PM handler
-            project = pm_handler.update_project(project_id, **updates)
-            
+            # Project update is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Project updated successfully!\n\n"
-                     f"**Name:** {project.get('name')}\n"
-                     f"**ID:** {project.get('id')}\n"
+                text=f"Project update is not yet implemented. "
+                     f"Please update projects directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:
@@ -316,12 +295,11 @@ def register_project_tools(
             
             logger.info(f"delete_project called: project_id={project_id}")
             
-            # Delete project via PM handler
-            pm_handler.delete_project(project_id)
-            
+            # Project deletion is not yet implemented in PMHandler
             return [TextContent(
                 type="text",
-                text=f"✅ Project {project_id} deleted successfully!"
+                text=f"Project deletion is not yet implemented. "
+                     f"Please delete projects directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
             
         except Exception as e:

@@ -38,6 +38,8 @@ TEAM_MEMBER_CONFIGURATIONS = {
 
 TEAM_MEMBERS = list(TEAM_MEMBER_CONFIGURATIONS.keys())
 
+from .debug_config import DebugConfig, get_debug_config, set_debug_config, reset_debug_config
+
 __all__ = [
     # Other configurations
     "TEAM_MEMBERS",
@@ -47,4 +49,9 @@ __all__ = [
     "BUILT_IN_QUESTIONS",
     "BUILT_IN_QUESTIONS_ZH_CN",
     load_yaml_config,
+    # Debug configuration
+    "DebugConfig",
+    "get_debug_config",
+    "set_debug_config",
+    "reset_debug_config",
 ]

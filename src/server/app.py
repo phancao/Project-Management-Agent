@@ -2933,12 +2933,37 @@ async def pm_get_provider_projects(provider_id: str):
                 logger.error(traceback.format_exc())
                 
                 # Handle specific HTTP errors
-                if "401" in error_msg or "Unauthorized" in error_msg:
+                # Check for 403 Forbidden errors (from requests library or custom messages)
+                # First check if the exception has a response attribute (requests.HTTPError)
+                status_code = None
+                if hasattr(api_error, 'response') and hasattr(api_error.response, 'status_code'):
+                    status_code = api_error.response.status_code
+                
+                # Check for 403 errors
+                if (
+                    status_code == 403
+                    or "403" in error_msg 
+                    or "Forbidden" in error_msg 
+                    or "forbidden" in error_msg.lower()
+                ):
+                    # Use custom message if it contains "forbidden" or "permission"
+                    if "forbidden" in error_msg.lower() or "permission" in error_msg.lower():
+                        detail_msg = error_msg
+                    else:
+                        detail_msg = (
+                            "Access forbidden. The API token may not have permission to list projects, "
+                            "or the account doesn't have access to any projects. Please check your provider permissions."
+                        )
+                    raise HTTPException(
+                        status_code=403,
+                        detail=detail_msg
+                    )
+                elif "401" in error_msg or "Unauthorized" in error_msg or "authentication failed" in error_msg.lower():
                     raise HTTPException(
                         status_code=401,
                         detail=(
-                            "Authentication failed. "
-                            "Please check your API key/token."
+                            error_msg if "authentication" in error_msg.lower()
+                            else "Authentication failed. Please check your API key/token."
                         )
                     )
                 elif "404" in error_msg or "Not Found" in error_msg:

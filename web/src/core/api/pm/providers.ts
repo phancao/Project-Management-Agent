@@ -5,7 +5,7 @@ import { resolveServiceURL } from "../resolve-service-url";
 
 export interface ProviderConfig {
   id?: string;
-  provider_type: "openproject" | "jira" | "clickup";
+  provider_type: "openproject" | "openproject_v13" | "jira" | "clickup";
   base_url: string;
   api_key?: string;
   api_token?: string;
@@ -140,9 +140,26 @@ export async function getProviderProjects(
     let errorMessage = "Failed to fetch projects";
     try {
       const error = await response.json();
-      errorMessage = error.detail || error.message || errorMessage;
+      // Extract error message from various possible formats
+      errorMessage = error.detail || error.message || error.error || errorMessage;
+      
+      // For 403 errors, provide more context
+      if (response.status === 403) {
+        if (errorMessage.includes("forbidden") || errorMessage.includes("permission")) {
+          // Use the detailed message from backend
+        } else {
+          errorMessage = "Access forbidden. The API token may not have permission to list projects, or the account doesn't have access to any projects. Please check your provider permissions.";
+        }
+      }
     } catch {
-      errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      // If response is not JSON, use status code
+      if (response.status === 403) {
+        errorMessage = "Access forbidden. The API token may not have permission to list projects, or the account doesn't have access to any projects. Please check your provider permissions.";
+      } else if (response.status === 401) {
+        errorMessage = "Authentication failed. Please check your API key/token.";
+      } else {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
     }
     throw new Error(errorMessage);
   }

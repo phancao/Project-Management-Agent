@@ -92,7 +92,7 @@ export function ProviderManagementView() {
         await loadProjectsForProvider(provider);
       }
     } catch (err) {
-      console.error("Failed to load providers:", err);
+      // Error is displayed in UI via setError, no need to log to console
       setError(err instanceof Error ? err.message : "Failed to load providers");
     } finally {
       setIsLoadingProviders(false);
@@ -101,7 +101,7 @@ export function ProviderManagementView() {
 
   const loadProjectsForProvider = async (provider: ProviderConfig) => {
     if (!provider.id) {
-      console.error("Provider ID is required to load projects");
+      // Silently skip if provider ID is missing
       return;
     }
     
@@ -130,7 +130,7 @@ export function ProviderManagementView() {
       }));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to load projects";
-      console.error(`Failed to load projects for provider ${providerKey}:`, err);
+      // Error is displayed in UI via setProjects with error state, no need to log to console
       setProjects((prev) => ({
         ...prev,
         [providerKey]: { 
@@ -413,7 +413,8 @@ export function ProviderManagementView() {
                                 if (!provider.base_url) return null;
                                 
                                 const baseUrl = provider.base_url.replace(/\/$/, '');
-                                switch (provider.provider_type) {
+                                const providerType = provider.provider_type;
+                                switch (providerType) {
                                   case "jira":
                                     // JIRA: try /browse/{projectKey} first, fallback to /projects/{projectKey}
                                     return `${baseUrl}/browse/${projectId}`;

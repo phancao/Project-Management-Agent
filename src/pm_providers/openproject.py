@@ -67,6 +67,23 @@ class OpenProjectProvider(BasePMProvider):
         
         while request_url:
             response = requests.get(request_url, headers=self.headers, params=params, timeout=60)
+            
+            # Provide user-friendly error messages for common HTTP errors
+            if response.status_code == 401:
+                raise ValueError(
+                    "OpenProject authentication failed. Please verify your API token is correct. "
+                    "For OpenProject, use Basic Auth with format: apikey:TOKEN"
+                )
+            elif response.status_code == 403:
+                raise ValueError(
+                    "OpenProject access forbidden. The API token may not have permission to list projects, "
+                    "or the account doesn't have access to any projects. Please check your OpenProject permissions."
+                )
+            elif response.status_code == 404:
+                raise ValueError(
+                    "OpenProject endpoint not found. Please verify the base URL is correct."
+                )
+            
             response.raise_for_status()
             
             data = response.json()

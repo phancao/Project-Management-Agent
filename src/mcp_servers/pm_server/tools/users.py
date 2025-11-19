@@ -228,18 +228,6 @@ def register_user_tools(
                 text=f"User workload is not yet implemented. "
                      f"Please use the PM provider API endpoints directly to get user workload."
             )]
-                f"**Overdue:** {workload.get('overdue_tasks', 0)}\n",
-            ]
-            
-            if "capacity_percentage" in workload:
-                output_lines.append(
-                    f"**Capacity:** {workload['capacity_percentage']}%\n"
-                )
-            
-            return [TextContent(
-                type="text",
-                text="".join(output_lines)
-            )]
             
         except Exception as e:
             logger.error(f"Error in get_user_workload: {e}", exc_info=True)

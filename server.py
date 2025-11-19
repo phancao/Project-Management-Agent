@@ -90,6 +90,16 @@ if __name__ == "__main__":
             logging.getLogger("langgraph").setLevel(logging.DEBUG)
             logger.info("DEBUG logging enabled for src, langchain, and langgraph packages - detailed diagnostic information will be logged")
         
+        # Apply smart debug configuration from environment variables
+        try:
+            from src.config.debug_config import DebugConfig, set_debug_config
+            debug_config = DebugConfig.from_env()
+            if any(debug_config.to_dict().values()):
+                set_debug_config(debug_config)
+                logger.info(f"Smart debug configuration applied: {debug_config}")
+        except Exception as e:
+            logger.warning(f"Failed to apply smart debug configuration: {e}")
+        
         uvicorn.run(
             "src.server:app",
             host=args.host,

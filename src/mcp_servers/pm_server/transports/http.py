@@ -314,10 +314,23 @@ def create_http_app(
     ):
         """List current user's tasks."""
         try:
-            tasks = pm_handler.list_my_tasks(
-                provider_id=provider_id,
-                status=status
-            )
+            # Get all tasks assigned to current user (from all providers)
+            tasks = await pm_handler.list_my_tasks()
+            
+            # Apply provider_id filter if specified
+            if provider_id:
+                tasks = [t for t in tasks if t.get("provider_id") == provider_id]
+            
+            # Apply status filter if specified
+            if status:
+                status_lower = status.lower()
+                tasks = [
+                    t for t in tasks
+                    if t.get("status", "").lower() == status_lower
+                    or (status_lower == "open" and t.get("status", "").lower() not in ["done", "closed", "completed"])
+                    or (status_lower == "done" and t.get("status", "").lower() in ["done", "closed", "completed"])
+                ]
+            
             return {"tasks": tasks, "count": len(tasks)}
         except Exception as e:
             logger.error(f"Error listing my tasks: {e}")

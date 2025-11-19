@@ -245,6 +245,15 @@ class PMHandler:
                 return []
             
             projects = await self.single_provider.list_projects()
+            # Get provider type from config if available
+            provider_type = "unknown"
+            if hasattr(self.single_provider, 'config') and self.single_provider.config:
+                provider_type = getattr(self.single_provider.config, 'provider_type', 'unknown')
+            elif hasattr(self.single_provider, '__class__'):
+                # Fallback: use class name
+                class_name = self.single_provider.__class__.__name__
+                provider_type = class_name.replace('Provider', '').lower() if 'Provider' in class_name else class_name.lower()
+            
             return [
                 {
                     "id": str(p.id),
@@ -255,6 +264,8 @@ class PMHandler:
                         if p.status and hasattr(p.status, 'value')
                         else str(p.status) if p.status else "None"
                     ),
+                    "provider_id": "single",
+                    "provider_type": provider_type,
                 }
                 for p in projects
             ]
@@ -290,6 +301,8 @@ class PMHandler:
                         if project.status and hasattr(project.status, "value")
                         else str(project.status) if project.status else "None"
                     ),
+                    "provider_id": "mock",
+                    "provider_type": "mock",
                 })
         except Exception as mock_error:
             logger.warning("Failed to load mock projects: %s", mock_error)
@@ -310,6 +323,8 @@ class PMHandler:
                             if p.status and hasattr(p.status, 'value')
                             else str(p.status) if p.status else "None"
                         ),
+                        "provider_id": str(provider.id),
+                        "provider_type": provider.provider_type,
                     })
             except Exception as provider_error:
                 logger.warning(

@@ -44,12 +44,13 @@ For simple PM queries:
      - **CRITICAL**: Be explicit about which PM tool to use:
        - For "list my projects" / "show my projects" / "list projects" → Use `list_projects` tool
        - For "is there a project named [X]" / "search for project [X]" / "find project [X]" → Use `search_projects` tool with the project name as the query parameter
-       - For "list my tasks" / "show my tasks" → Use `list_my_tasks` tool
+       - For "list my tasks" / "show my tasks" / "what tasks do I have" / "do I have any tasks" → Use `list_my_tasks` tool (NO project_id parameter - this tool gets ALL tasks assigned to the current user across ALL projects)
        - For "show sprints" → Use `list_sprints` tool
        - For "show epics" → Use `list_epics` tool
      - **Step description should be explicit**: 
-       - For listing: "Use the `list_projects` MCP PM tool to retrieve all available projects from all active PM providers (OpenProject, JIRA, ClickUp, etc.)"
-       - For searching: "Use the `search_projects` MCP PM tool with query '[project name]' to search for projects matching the name across all active PM providers"
+       - For listing projects: "Use the `list_projects` MCP PM tool to retrieve all available projects from all active PM providers (OpenProject, JIRA, ClickUp, etc.)"
+       - For searching projects: "Use the `search_projects` MCP PM tool with query '[project name]' to search for projects matching the name across all active PM providers"
+       - For listing my tasks: "Use the `list_my_tasks` MCP PM tool to retrieve all tasks assigned to the current user across all active PM providers and all projects. DO NOT filter by project_id - this tool automatically gets tasks assigned to the current user."
    - Step 2 (optional): Format or present the retrieved data
 3. **Set `need_search: false`** for all steps - No web search needed
 4. **Set `step_type: "processing"`** - These are data retrieval/processing steps, not research

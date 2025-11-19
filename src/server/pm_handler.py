@@ -518,11 +518,23 @@ class PMHandler:
                         f"{' or ' + str(current_user_account_id) if current_user_account_id else ''})"
                     )
             
+            # Build assignee map with fallback to raw_data
+            assignee_map = {}
+            for task in filtered_tasks:
+                if task.assignee_id and task.assignee_id not in assignee_map:
+                    try:
+                        user = await self.single_provider.get_user(task.assignee_id)
+                        if user:
+                            assignee_map[task.assignee_id] = user.name
+                    except (NotImplementedError, Exception):
+                        # Fallback: extract from raw_data
+                        assignee_name = self._extract_assignee_name_from_raw_data(task)
+                        if assignee_name:
+                            assignee_map[task.assignee_id] = assignee_name
+            
             return [
-                self._task_to_dict(
-                    task,
-                    project_map.get(task.project_id, "Unknown")
-                )
+                (lambda t: {**self._task_to_dict(t, project_map.get(t.project_id, "Unknown")), 
+                           "assigned_to": assignee_map.get(t.assignee_id) if t.assignee_id else None})(task)
                 for task in filtered_tasks
             ]
         

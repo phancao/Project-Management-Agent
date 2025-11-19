@@ -23,9 +23,7 @@ export function ResearchReportBlock({
   const message = useMessage(messageId);
   const { isReplay } = useReplay();
   
-  // Debug logging - use useEffect to ensure it runs on every render
-  useEffect(() => {
-  });
+  // Removed debug logging
   const handleMarkdownChange = useCallback(
     (markdown: string) => {
       if (message) {
@@ -70,17 +68,6 @@ export function ResearchReportBlock({
   // }, [isCompleted]);
 
   // Removed debug logging
-  useEffect(() => {
-    if (false && process.env.NODE_ENV === "development") {
-      // Removed debug log
-        `displayContent length=${displayContent.length}, ` +
-        `isCompleted=${isCompleted}, ` +
-        `isStreaming=${message?.isStreaming}, ` +
-        `editing=${editing}, ` +
-        `isReplay=${isReplay}`
-      );
-    }
-  });
 
   return (
     <div ref={contentRef} className={cn("w-full pt-4 pb-8", className)}>

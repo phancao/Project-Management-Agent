@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 def register_user_tools(
     server: Server,
     pm_handler: PMHandler,
-    config: PMServerConfig
+    config: PMServerConfig,
+    tool_names: list[str] | None = None
 ) -> int:
     """
     Register user-related MCP tools.
@@ -71,6 +72,8 @@ def register_user_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("list_users")
     
     # Tool 2: get_current_user
     @server.call_tool()
@@ -104,6 +107,8 @@ def register_user_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("get_current_user")
     
     # Tool 3: get_user
     @server.call_tool()
@@ -147,6 +152,8 @@ def register_user_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("get_user")
     
     # Tool 4: search_users
     @server.call_tool()
@@ -194,6 +201,8 @@ def register_user_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("search_users")
     
     # Tool 5: get_user_workload
     @server.call_tool()
@@ -237,6 +246,8 @@ def register_user_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("get_user_workload")
     
     logger.info(f"Registered {tool_count} user tools")
     return tool_count

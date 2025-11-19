@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 def register_project_tools(
     server: Server,
     pm_handler: PMHandler,
-    config: PMServerConfig
+    config: PMServerConfig,
+    tool_names: list[str] | None = None
 ) -> int:
     """
     Register project-related MCP tools.
@@ -28,6 +29,7 @@ def register_project_tools(
         server: MCP server instance
         pm_handler: PM handler for multi-provider operations
         config: Server configuration
+        tool_names: Optional list to track tool names for list_tools
     
     Returns:
         Number of tools registered
@@ -49,17 +51,33 @@ def register_project_tools(
             List of projects with id, name, description, provider info, etc.
         """
         try:
+            logger.info("=" * 80)
+            logger.info("[MCP-TOOL] list_projects called")
+            logger.info(f"[MCP-TOOL] Raw arguments: {arguments}")
+            logger.info(f"[MCP-TOOL] Arguments type: {type(arguments)}")
+            logger.info("=" * 80)
+            
+            # Validate arguments is a dict
+            if not isinstance(arguments, dict):
+                logger.error(f"[list_projects] Invalid arguments type: {type(arguments)}, expected dict")
+                return [TextContent(
+                    type="text",
+                    text=f"Error: Invalid arguments format. Expected dictionary, got {type(arguments).__name__}."
+                )]
+            
             provider_id = arguments.get("provider_id")
             search = arguments.get("search")
             limit = arguments.get("limit")
             
             logger.info(
-                f"list_projects called: provider_id={provider_id}, "
+                f"[MCP-TOOL] Extracted parameters: provider_id={provider_id}, "
                 f"search={search}, limit={limit}"
             )
             
             # Get projects from PM handler
+            logger.info("[MCP-TOOL] Calling pm_handler.list_all_projects()...")
             projects = await pm_handler.list_all_projects()
+            logger.info(f"[MCP-TOOL] Retrieved {len(projects)} projects from PMHandler")
             
             # Apply provider_id filter if specified
             if provider_id:
@@ -103,19 +121,26 @@ def register_project_tools(
             
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error in list_projects: {error_msg}", exc_info=True)
+            logger.error("=" * 80)
+            logger.error(f"[MCP-TOOL] Error in list_projects: {error_msg}")
+            logger.error(f"[MCP-TOOL] Error type: {type(e).__name__}")
             import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"[MCP-TOOL] Full traceback:\n{traceback.format_exc()}")
+            logger.error("=" * 80)
             return [TextContent(
                 type="text",
                 text=f"Error listing projects: {error_msg}\n\n"
                      "This might be due to:\n"
                      "- Provider connection issues\n"
                      "- Missing permissions\n"
-                     "- Database connection problems\n\n"
+                     "- Database connection problems\n"
+                     "- Invalid arguments passed to the tool\n\n"
                      "Please check the backend logs for more details."
             )]
     
+    # Track tool name after function is defined
+    if tool_names is not None:
+        tool_names.append("list_projects")
     tool_count += 1
     
     # Tool 2: get_project
@@ -171,6 +196,8 @@ def register_project_tools(
                 text=f"Error getting project: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("get_project")
     tool_count += 1
     
     # Tool 3: create_project
@@ -217,6 +244,8 @@ def register_project_tools(
                 text=f"Error creating project: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("create_project")
     tool_count += 1
     
     # Tool 4: update_project
@@ -271,6 +300,8 @@ def register_project_tools(
                 text=f"Error updating project: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("update_project")
     tool_count += 1
     
     # Tool 5: delete_project
@@ -309,6 +340,8 @@ def register_project_tools(
                 text=f"Error deleting project: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("delete_project")
     tool_count += 1
     
     # Tool 6: search_projects
@@ -380,6 +413,8 @@ def register_project_tools(
                 text=f"Error searching projects: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("search_projects")
     tool_count += 1
     
     logger.info(f"Registered {tool_count} project tools")

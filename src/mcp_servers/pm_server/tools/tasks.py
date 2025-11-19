@@ -22,7 +22,8 @@ _debug_logger = logging.getLogger("src.mcp_servers.pm_server.tools.tasks")
 def register_task_tools(
     server: Server,
     pm_handler: PMHandler,
-    config: PMServerConfig
+    config: PMServerConfig,
+    tool_names: list[str] | None = None
 ) -> int:
     """
     Register task-related MCP tools.
@@ -296,6 +297,8 @@ def register_task_tools(
                      "Please try again or contact support if the issue persists."
             )]
     
+    if tool_names is not None:
+        tool_names.append("list_my_tasks")
     tool_count += 1
     
     # Tool 2: list_tasks
@@ -369,6 +372,8 @@ def register_task_tools(
                 text=f"Error listing tasks: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("list_tasks")
     tool_count += 1
     
     # Tool 3: get_task
@@ -435,6 +440,8 @@ def register_task_tools(
                 text=f"Error getting task: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("get_task")
     tool_count += 1
     
     # Tool 4: create_task
@@ -495,6 +502,8 @@ def register_task_tools(
                 text=f"Error creating task: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("create_task")
     tool_count += 1
     
     # Tool 5: update_task
@@ -554,6 +563,8 @@ def register_task_tools(
                 text=f"Error updating task: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("update_task")
     tool_count += 1
     
     # Tool 6: delete_task
@@ -592,6 +603,8 @@ def register_task_tools(
                 text=f"Error deleting task: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("delete_task")
     tool_count += 1
     
     # Tool 7: assign_task
@@ -654,6 +667,8 @@ def register_task_tools(
                 text=f"Error assigning task: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("assign_task")
     tool_count += 1
     
     # Tool 8: update_task_status
@@ -697,6 +712,8 @@ def register_task_tools(
                 text=f"Error updating task status: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("update_task_status")
     tool_count += 1
     
     # Tool 9: search_tasks
@@ -777,6 +794,8 @@ def register_task_tools(
                 text=f"Error searching tasks: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("search_tasks")
     tool_count += 1
     
     logger.info(f"Registered {tool_count} task tools")

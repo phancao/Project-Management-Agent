@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 def register_task_interaction_tools(
     server: Server,
     pm_handler: PMHandler,
-    config: PMServerConfig
+    config: PMServerConfig,
+    tool_names: list[str] | None = None
 ) -> int:
     """
     Register task interaction tools (comments, watchers, etc.).
@@ -74,6 +75,8 @@ def register_task_interaction_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("add_task_comment")
     
     # Tool 2: get_task_comments
     @server.call_tool()
@@ -115,6 +118,8 @@ def register_task_interaction_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("get_task_comments")
     
     # Tool 3: add_task_watcher
     @server.call_tool()
@@ -158,6 +163,8 @@ def register_task_interaction_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("add_task_watcher")
     
     # Tool 4: bulk_update_tasks
     @server.call_tool()
@@ -207,6 +214,8 @@ def register_task_interaction_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("bulk_update_tasks")
     
     # Tool 5: link_related_tasks
     @server.call_tool()
@@ -254,6 +263,8 @@ def register_task_interaction_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("link_related_tasks")
     
     logger.info(f"Registered {tool_count} task interaction tools")
     return tool_count

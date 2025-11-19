@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 def register_analytics_tools(
     server: Server,
     pm_handler: PMHandler,
-    config: PMServerConfig
+    config: PMServerConfig,
+    tool_names: list[str] | None = None
 ) -> int:
     """
     Register analytics-related MCP tools.
@@ -74,6 +75,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("burndown_chart")
     
     # Tool 2: velocity_chart
     @server.call_tool()
@@ -120,6 +123,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("velocity_chart")
     
     # Tool 3: sprint_report
     @server.call_tool()
@@ -170,6 +175,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("sprint_report")
     
     # Tool 4: project_health
     @server.call_tool()
@@ -211,6 +218,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("project_health")
     
     # Tool 5: task_distribution
     @server.call_tool()
@@ -251,6 +260,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("task_distribution")
     
     # Tool 6: team_performance
     @server.call_tool()
@@ -295,6 +306,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("team_performance")
     
     # Tool 7: gantt_chart
     @server.call_tool()
@@ -341,6 +354,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("gantt_chart")
     
     # Tool 8: epic_report
     @server.call_tool()
@@ -379,6 +394,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("epic_report")
     
     # Tool 9: resource_utilization
     @server.call_tool()
@@ -418,6 +435,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("resource_utilization")
     
     # Tool 10: time_tracking_report
     @server.call_tool()
@@ -461,6 +480,8 @@ def register_analytics_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("time_tracking_report")
     
     logger.info(f"Registered {tool_count} analytics tools")
     return tool_count

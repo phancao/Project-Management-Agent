@@ -69,10 +69,7 @@ function SortableSprintSection(props: SortableSprintSectionProps) {
   });
 
   useEffect(() => {
-    logSprintDnd("Sortable sprint mounted", {
-      sprintId: sprint.id,
-      status: sprint.status,
-    });
+    // Removed debug logging
     return () => {
       // Removed debug logging
     };
@@ -1558,7 +1555,7 @@ export function BacklogView() {
     setOverTaskId(null);
     setOverEpicId(null);
     setOverSprintCategory(null);
-    logSprintDnd("Drag over: no matching target", { overId });
+    // Removed debug logging
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -1967,11 +1964,7 @@ export function BacklogView() {
       toast.success("Task assigned to sprint", {
         description: `${draggedTask.title} has been assigned to ${targetSprint?.name || 'sprint'}.`
       });
-      // Removed debug logging: logSprintDnd("Task assigned to sprint via drag", {
-        taskId,
-        targetSprintId,
-        sourceSprintId: currentDragState.sourceSprintId ?? null,
-      });
+      // Removed debug logging
       } catch (error) {
         console.error("Failed to assign task to sprint:", error);
       toast.error("Failed to assign task to sprint", {

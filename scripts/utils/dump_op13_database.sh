@@ -36,14 +36,13 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${APP_CONTAINER}$"; then
 fi
 
 echo "1) Dumping database from embedded PostgreSQL..."
-# Use pg_dump to create a SQL dump
-# - Format: plain SQL (--format=plain)
-# - No owner (--no-owner) to avoid permission issues on restore
-# - No privileges (--no-privileges) to avoid permission issues
-# - Clean (--clean) to include DROP statements
-# - IfExists (--if-exists) to use IF EXISTS in DROP statements
+# Use pg_dump with the format: PGPASSWORD=password pg_dump -h host -p port -U user -d database -n schema -f file
+# Adapted for embedded database inside container (uses postgres user via su, localhost, default port)
 docker exec "${APP_CONTAINER}" bash -lc "\
-  su - postgres -c \"pg_dump -d openproject --format=plain --no-owner --no-privileges --clean --if-exists\" \
+  su - postgres -c 'PGPASSWORD=postgres pg_dump -h localhost -p 5432 -U postgres -d openproject -n public -f /tmp/openproject_dump.sql' 2>/dev/null || \
+  su - postgres -c 'pg_dump -h localhost -p 5432 -U postgres -d openproject -n public -f /tmp/openproject_dump.sql' && \
+  cat /tmp/openproject_dump.sql && \
+  rm -f /tmp/openproject_dump.sql \
 " > "${OUTPUT_FILE}"
 
 # Check if dump was successful

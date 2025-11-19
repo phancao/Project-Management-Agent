@@ -234,32 +234,15 @@ def register_analytics_tools(
             
             logger.info(f"project_health called: project_id={project_id}")
             
-            # Get project health
-            health = pm_handler.get_project_health(project_id)
-            
-            if not health:
-                return [TextContent(
-                    type="text",
-                    text=f"No health data available for project {project_id}."
-                )]
-            
-            # Format output
-            output_lines = [
-                f"# Project Health: {health.get('project_name')}\n\n",
-                f"**Overall Health:** {health.get('health_status', 'Unknown')}\n",
-                f"**Health Score:** {health.get('health_score', 0)}/100\n\n",
-                f"## Indicators\n",
-                f"- **On-Time Delivery:** {health.get('on_time_percentage', 0)}%\n",
-                f"- **Overdue Tasks:** {health.get('overdue_tasks', 0)}\n",
-                f"- **Blocked Tasks:** {health.get('blocked_tasks', 0)}\n",
-                f"- **Team Velocity:** {health.get('velocity_trend', 'Stable')}\n",
-                f"- **Resource Utilization:** {health.get('resource_utilization', 0)}%\n",
-            ]
-            
+            # Get project health via analytics service
+            # Note: project_health is not yet implemented in AnalyticsService
+            # Return a message indicating this feature is not available
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Project health analysis is not yet implemented. "
+                     f"Please use other analytics tools like velocity_chart or sprint_report for project {project_id}."
             )]
+            
             
         except Exception as e:
             logger.error(f"Error in project_health: {e}", exc_info=True)

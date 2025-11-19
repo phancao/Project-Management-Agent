@@ -1652,7 +1652,7 @@ export function BacklogView() {
       }
 
       if (targetSprintId === currentDragState.id && (!targetCategory || targetCategory === resolveSprintCategory(sourceSprint))) {
-        // Removed debug logging: logSprintDnd("Sprint drag ended on same sprint", { sprintId: currentDragState.id });
+        // Removed debug logging
         return;
       }
 
@@ -1830,7 +1830,6 @@ export function BacklogView() {
         }
 
         // Removed debug logging
-        });
 
         return next;
       });

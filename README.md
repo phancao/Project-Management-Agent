@@ -79,6 +79,65 @@ A sophisticated AI-powered project management system that combines deep research
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Data Fetching Architecture
+
+The system uses a **hybrid approach** for fetching data from PM providers (OpenProject, JIRA, ClickUp):
+
+#### **Path 1: Direct REST API (UI Data Fetching)**
+```
+Frontend → Backend REST API → PMHandler → PM Providers → External APIs
+```
+
+**Used for:**
+- Page loads (projects, tasks, sprints, epics)
+- CRUD operations (create/update tasks, assign users)
+- Real-time UI updates (drag-and-drop, status changes)
+- Chart data (analytics endpoints)
+
+**Characteristics:**
+- ⚡ **Fast**: ~10-50ms latency (direct function calls)
+- ✅ **Cached**: React Query caching for performance
+- ✅ **Type-safe**: TypeScript ↔ FastAPI with Pydantic
+- ✅ **Simple**: Direct function calls, easy to debug
+- ✅ **Predictable**: Deterministic responses
+
+**Example endpoints:**
+- `GET /api/pm/projects` - List all projects
+- `GET /api/pm/projects/{project_id}/tasks` - Get tasks
+- `POST /api/pm/projects/{project_id}/tasks` - Create task
+
+#### **Path 2: MCP Server (Conversational Queries)**
+```
+Frontend → Backend Chat Endpoint → DeerFlow Agent → MCP Server → PMHandler → PM Providers
+```
+
+**Used for:**
+- Natural language queries ("list my tasks", "show sprint 4 progress")
+- Complex operations requiring agent reasoning
+- Multi-step operations (agent composes multiple tool calls)
+- Research/analysis scenarios (agent needs PM context)
+
+**Characteristics:**
+- 🧠 **Intelligent**: Agent decides which tools to use
+- 🔄 **Flexible**: Dynamic tool selection based on query
+- 🎯 **Composable**: Agents can combine multiple PM queries
+- ⚠️ **Slower**: ~100-500ms latency (subprocess/network overhead)
+- ⚠️ **Complex**: Requires agent orchestration
+
+**Why not use MCP for UI data fetching?**
+- **Performance**: MCP adds 100-500ms overhead per call (subprocess spawn, IPC, serialization)
+- **Caching**: Harder to cache MCP tool results (agent context, dynamic)
+- **Type Safety**: REST APIs provide better type contracts
+- **Simplicity**: Direct REST calls are easier to debug and maintain
+- **Resource Usage**: MCP requires subprocess or HTTP server (extra overhead)
+
+**Architectural Decision:**
+- ✅ **Keep REST APIs for UI** (performance, caching, type safety)
+- ✅ **Keep MCP for chat** (agent reasoning, flexibility)
+- ✅ **Share PMHandler** (code reuse, single source of truth)
+
+Both paths use the same `PMHandler` abstraction layer, ensuring consistency while optimizing for their respective use cases.
+
 ## 🛠️ Technology Stack
 
 ### Backend

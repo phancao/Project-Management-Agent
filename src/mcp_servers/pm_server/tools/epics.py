@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 def register_epic_tools(
     server: Server,
     pm_handler: PMHandler,
-    config: PMServerConfig
+    config: PMServerConfig,
+    tool_names: list[str] | None = None
 ) -> int:
     """
     Register epic-related MCP tools.
@@ -85,6 +86,8 @@ def register_epic_tools(
                 text=f"Error listing epics: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("list_epics")
     tool_count += 1
     
     # Tool 2: get_epic
@@ -147,6 +150,8 @@ def register_epic_tools(
                 text=f"Error getting epic: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("get_epic")
     tool_count += 1
     
     # Tool 3: create_epic
@@ -197,6 +202,8 @@ def register_epic_tools(
                 text=f"Error creating epic: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("create_epic")
     tool_count += 1
     
     # Tool 4: update_epic
@@ -262,6 +269,8 @@ def register_epic_tools(
                 text=f"Error updating epic: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("update_epic")
     tool_count += 1
     
     # Tool 5: delete_epic
@@ -310,6 +319,8 @@ def register_epic_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("delete_epic")
     
     # Tool 6: link_task_to_epic
     @server.call_tool()
@@ -363,6 +374,8 @@ def register_epic_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("link_task_to_epic")
     
     # Tool 7: unlink_task_from_epic
     @server.call_tool()
@@ -410,6 +423,8 @@ def register_epic_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("unlink_task_from_epic")
     
     # Tool 8: get_epic_progress
     @server.call_tool()
@@ -448,6 +463,8 @@ def register_epic_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("get_epic_progress")
     
     logger.info(f"Registered {tool_count} epic tools")
     return tool_count

@@ -9,6 +9,7 @@ from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
+from mcp.types import ToolsCapability
 from sqlalchemy.orm import Session
 
 from database.connection import get_db_session
@@ -57,6 +58,10 @@ class PMMCPServer:
         # Tool registry
         self.registered_tools: list[str] = []
         
+        # Track registered tool names for list_tools
+        # This list will be populated as tools are registered
+        self._tool_names: list[str] = []
+        
         logger.info(
             f"PM MCP Server initialized: {self.config.server_name} v{self.config.server_version}"
         )
@@ -101,7 +106,14 @@ class PMMCPServer:
         
         for module_name, register_func in tool_modules:
             try:
-                count = register_func(self.server, self.pm_handler, self.config)
+                # Pass tool_names list to registration functions so they can track tool names
+                # Use try/except to handle functions that don't accept tool_names parameter yet
+                import inspect
+                sig = inspect.signature(register_func)
+                if len(sig.parameters) >= 4:
+                    count = register_func(self.server, self.pm_handler, self.config, self._tool_names)
+                else:
+                    count = register_func(self.server, self.pm_handler, self.config)
                 self.registered_tools.extend([f"{module_name}.*"])
                 logger.info(f"Registered {count} {module_name} tools")
             except Exception as e:
@@ -109,6 +121,72 @@ class PMMCPServer:
                 raise
         
         logger.info(f"Total tools registered: {len(self.registered_tools)}")
+        
+        # CRITICAL: Register list_tools handler so the SDK automatically enables tools capability
+        # The MCP SDK only enables tools capability if ListToolsRequest handler exists
+        from mcp.types import Tool
+        
+        @self.server.list_tools()
+        async def list_all_tools() -> list[Tool]:
+            """
+            List all registered PM tools.
+            
+            This handler is required for the MCP SDK to automatically enable
+            the tools capability in initialization options.
+            """
+            # First try to get tools from cache (if SDK populated it)
+            tools = list(self.server._tool_cache.values())
+            
+            # If cache is empty, manually build Tool objects from tracked tool names
+            # The SDK's _get_cached_tool_definition doesn't work because tools aren't in cache
+            # So we'll build basic Tool objects that allow the tools to be called
+            if not tools and self._tool_names:
+                logger.info(f"Cache empty, manually building {len(self._tool_names)} Tool objects...")
+                built_tools = []
+                
+                # Try _get_cached_tool_definition first (in case SDK can build them)
+                for tool_name in self._tool_names:
+                    try:
+                        tool_def = await self.server._get_cached_tool_definition(tool_name)
+                        if tool_def:
+                            built_tools.append(tool_def)
+                            logger.debug(f"Got tool definition from SDK: {tool_name}")
+                            continue
+                    except Exception as e:
+                        logger.debug(f"SDK couldn't build {tool_name}: {e}")
+                
+                # For tools that SDK couldn't build, create basic Tool objects
+                # These will allow tools to be called even without full schema
+                remaining_names = [name for name in self._tool_names if name not in [t.name for t in built_tools]]
+                if remaining_names:
+                    logger.info(f"Manually creating {len(remaining_names)} Tool objects...")
+                    for tool_name in remaining_names:
+                        # Create a basic Tool object with generic schema
+                        # The actual tool function will handle validation
+                        tool = Tool(
+                            name=tool_name,
+                            description=f"Tool: {tool_name}",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": True
+                            }
+                        )
+                        built_tools.append(tool)
+                        logger.debug(f"Created basic Tool object: {tool_name}")
+                
+                tools = built_tools
+                logger.info(f"Built {len(tools)} tools total ({len(built_tools) - len(remaining_names)} from SDK, {len(remaining_names)} manual)")
+            
+            # If still no tools, return empty list (but log warning)
+            if not tools:
+                logger.warning(f"list_tools() returning 0 tools (cache empty, {len(self._tool_names)} tool names tracked)")
+            
+            logger.debug(f"list_tools() returning {len(tools)} tools")
+            
+            # Return ListToolsResult (SDK will wrap it if needed)
+            from mcp.types import ListToolsResult
+            return ListToolsResult(tools=tools)
     
     async def run_stdio(self) -> None:
         """
@@ -128,13 +206,188 @@ class PMMCPServer:
             # Run server with stdio
             async with stdio_server() as (read_stream, write_stream):
                 logger.info("PM MCP Server running on stdio")
-                await self.server.run(
-                    read_stream,
-                    write_stream,
-                    self.server.create_initialization_options()
-                )
+                
+                # Enable debug logging for MCP server
+                mcp_logger = logging.getLogger("mcp")
+                mcp_logger.setLevel(logging.DEBUG)
+                mcp_server_logger = logging.getLogger("mcp.server")
+                mcp_server_logger.setLevel(logging.DEBUG)
+                
+                # Log registered tools count if available
+                tools_count = 0
+                try:
+                    # Check multiple possible attributes where tools might be stored
+                    tools_dict = None
+                    
+                    # Try _tools first (older MCP SDK versions)
+                    if hasattr(self.server, '_tools'):
+                        tools_dict = getattr(self.server, '_tools', {})
+                        logger.info("Found tools in _tools attribute")
+                    
+                    # Try _tool_cache (newer MCP SDK versions)
+                    if hasattr(self.server, '_tool_cache'):
+                        tool_cache = getattr(self.server, '_tool_cache', {})
+                        logger.info(f"Found _tool_cache attribute: type={type(tool_cache)}")
+                        
+                        # _tool_cache might be a dict or a cache object
+                        if isinstance(tool_cache, dict):
+                            tools_dict = tool_cache
+                            logger.info(f"_tool_cache is a dict with {len(tool_cache)} items")
+                            if tool_cache:
+                                logger.info(f"Sample keys: {list(tool_cache.keys())[:5]}")
+                        else:
+                            # It might be a cache object with a different structure
+                            logger.info(f"_tool_cache is {type(tool_cache).__name__}, checking for tools inside...")
+                            # Try to get tools from cache object
+                            if hasattr(tool_cache, 'get'):
+                                try:
+                                    # Try to get all items
+                                    all_items = tool_cache.get('*', {}) if callable(getattr(tool_cache, 'get', None)) else {}
+                                    if all_items:
+                                        tools_dict = all_items
+                                        logger.info(f"Found tools in cache.get('*'): {len(all_items)} items")
+                                except:
+                                    pass
+                            
+                            # Check if it has a dict-like interface
+                            if not tools_dict and hasattr(tool_cache, '__dict__'):
+                                cache_dict = tool_cache.__dict__
+                                logger.info(f"Cache __dict__ keys: {list(cache_dict.keys())[:5]}")
+                                # Look for any dict-like structure
+                                for key, value in cache_dict.items():
+                                    if isinstance(value, dict) and len(value) > 0:
+                                        tools_dict = value
+                                        logger.info(f"Found tools dict in cache.{key}: {len(value)} items")
+                                        break
+                    
+                    # Try _call_tool_handlers (alternative storage)
+                    elif hasattr(self.server, '_call_tool_handlers'):
+                        handlers = getattr(self.server, '_call_tool_handlers', {})
+                        if isinstance(handlers, dict):
+                            tools_dict = handlers
+                            logger.info("Found tools in _call_tool_handlers attribute")
+                    
+                    # If we found tools, count them
+                    if tools_dict:
+                        tools_count = len(tools_dict) if isinstance(tools_dict, dict) else 0
+                        logger.info(f"Server has {tools_count} tools registered")
+                        if tools_count > 0:
+                            # Log first few tool names for verification
+                            tool_names = list(tools_dict.keys())[:5]
+                            logger.info(f"Sample tool names: {tool_names}")
+                    else:
+                        logger.warning("Could not find tools in any known attribute")
+                        # Log all attributes containing 'tool' for debugging
+                        if hasattr(self.server, '__dict__'):
+                            tool_attrs = [k for k in self.server.__dict__.keys() if 'tool' in k.lower()]
+                            logger.info(f"Server attributes with 'tool': {tool_attrs}")
+                        
+                        # Try to call list_tools to see if it works
+                        if hasattr(self.server, 'list_tools'):
+                            try:
+                                # Note: This might not work in this context, but worth trying
+                                logger.info("Attempting to verify tools via list_tools method...")
+                            except Exception as e:
+                                logger.debug(f"Could not call list_tools here: {e}")
+                except Exception as e:
+                    logger.warning(f"Could not check tools count: {e}", exc_info=True)
+                
+                # Get initialization options and ensure tools capability is enabled
+                init_options = self.server.create_initialization_options()
+                logger.info(f"Initial initialization options: {init_options}")
+                
+                # CRITICAL: Enable tools capability so the server can respond to list_tools requests
+                # The MCP server must advertise tools capability or clients will get "Method not found"
+                # Always enable tools capability if we registered tools (even if we can't verify count)
+                # The MCP SDK should handle tool enumeration automatically via @server.call_tool()
+                if init_options.capabilities is None or init_options.capabilities.tools is None:
+                    logger.warning("Tools capability is None! Enabling it manually...")
+                    from mcp.types import ServerCapabilities
+                    
+                    # Create new capabilities with tools enabled, preserving other capabilities
+                    existing_caps = init_options.capabilities.__dict__ if init_options.capabilities else {}
+                    new_capabilities = ServerCapabilities(
+                        tools=ToolsCapability(list_changed=False),
+                        experimental=existing_caps.get('experimental', {}),
+                        logging=existing_caps.get('logging'),
+                        prompts=existing_caps.get('prompts'),
+                        resources=existing_caps.get('resources'),
+                        completions=existing_caps.get('completions'),
+                    )
+                    init_options.capabilities = new_capabilities
+                    logger.info("Manually enabled tools capability")
+                    
+                    if tools_count == 0:
+                        logger.warning("⚠️  Tools capability enabled but tool count is 0 - tools may be stored differently")
+                        logger.warning("⚠️  The MCP SDK should still handle list_tools automatically via @server.call_tool()")
+                else:
+                    logger.info("Tools capability already enabled in initialization options")
+                
+                logger.info(f"Final initialization options: {init_options}")
+                if init_options.capabilities and init_options.capabilities.tools:
+                    logger.info(f"✅ Tools capability is ENABLED (with {tools_count} tools)")
+                else:
+                    logger.error("❌ Tools capability is NOT enabled - this will cause 'Method not found' errors!")
+                
+                try:
+                    logger.info("Starting server.run() - this should run indefinitely...")
+                    
+                    # Verify tools are actually registered by trying to list them
+                    # This helps debug if tools are properly registered
+                    try:
+                        # Check if server has a method to list tools internally
+                        if hasattr(self.server, '_list_tools_handler'):
+                            logger.info("Server has _list_tools_handler")
+                        if hasattr(self.server, 'list_tools'):
+                            logger.info("Server has list_tools method")
+                        
+                        # Try to inspect registered call_tool handlers
+                        if hasattr(self.server, '__dict__'):
+                            all_attrs = [k for k in self.server.__dict__.keys()]
+                            tool_related = [k for k in all_attrs if 'tool' in k.lower() or 'call' in k.lower()]
+                            logger.info(f"Server attributes related to tools/calls: {tool_related}")
+                            
+                            # Try to find where call_tool decorator stores handlers
+                            for attr in tool_related:
+                                try:
+                                    value = getattr(self.server, attr)
+                                    if hasattr(value, '__len__'):
+                                        length = len(value)
+                                        logger.info(f"  {attr}: {type(value).__name__} with length {length}")
+                                        if length > 0 and hasattr(value, 'keys'):
+                                            logger.info(f"    Keys: {list(value.keys())[:5]}")
+                                except:
+                                    pass
+                    except Exception as e:
+                        logger.debug(f"Could not inspect server internals: {e}")
+                    
+                    # Add handler to catch and log any errors during request processing
+                    import asyncio
+                    async def run_with_error_handling():
+                        try:
+                            await self.server.run(
+                                read_stream,
+                                write_stream,
+                                init_options
+                            )
+                        except asyncio.CancelledError:
+                            logger.info("Server run cancelled (connection closed by client)")
+                            raise
+                        except Exception as e:
+                            logger.error(f"Error during server.run(): {e}", exc_info=True)
+                            raise
+                    
+                    await run_with_error_handling()
+                    logger.warning("server.run() completed - this shouldn't happen unless connection closed")
+                except KeyboardInterrupt:
+                    logger.info("Server interrupted by user")
+                    raise
+                except Exception as run_error:
+                    logger.error(f"Error in server.run(): {run_error}", exc_info=True)
+                    # Don't re-raise - let cleanup happen
+                    raise
         except Exception as e:
-            logger.error(f"Error running PM MCP Server: {e}")
+            logger.error(f"Error running PM MCP Server: {e}", exc_info=True)
             raise
         finally:
             self._cleanup()

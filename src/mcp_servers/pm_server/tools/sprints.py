@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 def register_sprint_tools(
     server: Server,
     pm_handler: PMHandler,
-    config: PMServerConfig
+    config: PMServerConfig,
+    tool_names: list[str] | None = None
 ) -> int:
     """
     Register sprint-related MCP tools.
@@ -91,6 +92,8 @@ def register_sprint_tools(
                 text=f"Error listing sprints: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("list_sprints")
     tool_count += 1
     
     # Tool 2: get_sprint
@@ -156,6 +159,8 @@ def register_sprint_tools(
                 text=f"Error getting sprint: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("get_sprint")
     tool_count += 1
     
     # Tool 3: create_sprint
@@ -206,6 +211,8 @@ def register_sprint_tools(
                 text=f"Error creating sprint: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("create_sprint")
     tool_count += 1
     
     # Tool 4: update_sprint
@@ -262,6 +269,8 @@ def register_sprint_tools(
                 text=f"Error updating sprint: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("update_sprint")
     tool_count += 1
     
     # Tool 5: delete_sprint
@@ -301,6 +310,8 @@ def register_sprint_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("delete_sprint")
     
     # Tool 6: start_sprint
     @server.call_tool()
@@ -339,6 +350,8 @@ def register_sprint_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("start_sprint")
     
     # Tool 7: complete_sprint
     @server.call_tool()
@@ -377,6 +390,8 @@ def register_sprint_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("complete_sprint")
     
     # Tool 8: add_task_to_sprint
     @server.call_tool()
@@ -429,6 +444,8 @@ def register_sprint_tools(
             )]
     
     tool_count += 1
+    if tool_names is not None:
+        tool_names.append("add_task_to_sprint")
     
     # Tool 9: remove_task_from_sprint
     @server.call_tool()
@@ -474,6 +491,8 @@ def register_sprint_tools(
                 text=f"Error removing task from sprint: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("remove_task_from_sprint")
     tool_count += 1
     
     # Tool 10: get_sprint_tasks
@@ -538,6 +557,8 @@ def register_sprint_tools(
                 text=f"Error getting sprint tasks: {str(e)}"
             )]
     
+    if tool_names is not None:
+        tool_names.append("get_sprint_tasks")
     tool_count += 1
     
     logger.info(f"Registered {tool_count} sprint tools")

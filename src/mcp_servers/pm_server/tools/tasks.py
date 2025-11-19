@@ -54,14 +54,26 @@ def register_task_tools(
             limit = arguments.get("limit")
             
             logger.info(
-                f"list_my_tasks called: status={status}, provider_id={provider_id}"
+                f"list_my_tasks called: status={status}, provider_id={provider_id}, limit={limit}"
             )
             
-            # Get tasks from PM handler
-            tasks = pm_handler.list_my_tasks(
-                provider_id=provider_id,
-                status=status
-            )
+            # Get tasks from PM handler (gets all tasks assigned to current user)
+            # Note: PMHandler.list_my_tasks() doesn't accept parameters - it gets tasks from all providers
+            tasks = await pm_handler.list_my_tasks()
+            
+            # Apply provider_id filter if specified
+            if provider_id:
+                tasks = [t for t in tasks if t.get("provider_id") == provider_id]
+            
+            # Apply status filter if specified
+            if status:
+                status_lower = status.lower()
+                tasks = [
+                    t for t in tasks
+                    if t.get("status", "").lower() == status_lower
+                    or (status_lower == "open" and t.get("status", "").lower() not in ["done", "closed", "completed"])
+                    or (status_lower == "done" and t.get("status", "").lower() in ["done", "closed", "completed"])
+                ]
             
             # Apply limit
             if limit:

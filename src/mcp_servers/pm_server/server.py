@@ -123,7 +123,8 @@ class PMMCPServer:
         logger.info(f"Total tools registered: {len(self.registered_tools)}")
         
         # CRITICAL: Register list_tools handler so the SDK automatically enables tools capability
-        # The MCP SDK only enables tools capability if ListToolsRequest handler exists
+        # The MCP SDK (v1.21.2) automatically enables tools capability when @server.list_tools() is registered
+        # The handler below will be detected by the SDK and tools capability will be enabled automatically
         from mcp.types import Tool
         
         @self.server.list_tools()
@@ -133,6 +134,10 @@ class PMMCPServer:
             
             This handler is required for the MCP SDK to automatically enable
             the tools capability in initialization options.
+            
+            The SDK supports both return types:
+            - list[Tool] (old style) - SDK wraps it in ListToolsResult
+            - ListToolsResult (new style) - SDK uses it directly
             """
             # First try to get tools from cache (if SDK populated it)
             tools = list(self.server._tool_cache.values())
@@ -184,9 +189,9 @@ class PMMCPServer:
             
             logger.debug(f"list_tools() returning {len(tools)} tools")
             
-            # Return ListToolsResult (SDK will wrap it if needed)
-            from mcp.types import ListToolsResult
-            return ListToolsResult(tools=tools)
+            # Return list[Tool] - the SDK will wrap it in ListToolsResult automatically
+            # (The SDK supports both list[Tool] and ListToolsResult, but list[Tool] is simpler)
+            return tools
     
     async def run_stdio(self) -> None:
         """
@@ -292,16 +297,19 @@ class PMMCPServer:
                 except Exception as e:
                     logger.warning(f"Could not check tools count: {e}", exc_info=True)
                 
-                # Get initialization options and ensure tools capability is enabled
+                # Verify tools capability is enabled (SDK v1.21.2 should do this automatically when @server.list_tools() is registered)
+                # This is just a verification/fallback - the SDK handles capability enabling automatically
                 init_options = self.server.create_initialization_options()
-                logger.info(f"Initial initialization options: {init_options}")
+                logger.debug(f"Initial initialization options: {init_options}")
                 
-                # CRITICAL: Enable tools capability so the server can respond to list_tools requests
-                # The MCP server must advertise tools capability or clients will get "Method not found"
-                # Always enable tools capability if we registered tools (even if we can't verify count)
-                # The MCP SDK should handle tool enumeration automatically via @server.call_tool()
-                if init_options.capabilities is None or init_options.capabilities.tools is None:
-                    logger.warning("Tools capability is None! Enabling it manually...")
+                if init_options.capabilities and init_options.capabilities.tools:
+                    if tools_count > 0:
+                        logger.info(f"✅ Tools capability auto-enabled by SDK (with {tools_count} tools in cache)")
+                    else:
+                        logger.info("✅ Tools capability auto-enabled by SDK (tools will be built on-demand via list_tools handler)")
+                else:
+                    # Fallback: Manually enable if SDK didn't (shouldn't happen with @server.list_tools() registered in SDK v1.21.2)
+                    logger.warning("⚠️  Tools capability not auto-enabled by SDK, enabling manually as fallback...")
                     from mcp.types import ServerCapabilities
                     
                     # Create new capabilities with tools enabled, preserving other capabilities
@@ -315,19 +323,9 @@ class PMMCPServer:
                         completions=existing_caps.get('completions'),
                     )
                     init_options.capabilities = new_capabilities
-                    logger.info("Manually enabled tools capability")
-                    
-                    if tools_count == 0:
-                        logger.warning("⚠️  Tools capability enabled but tool count is 0 - tools may be stored differently")
-                        logger.warning("⚠️  The MCP SDK should still handle list_tools automatically via @server.call_tool()")
-                else:
-                    logger.info("Tools capability already enabled in initialization options")
+                    logger.info("✅ Tools capability manually enabled (fallback)")
                 
-                logger.info(f"Final initialization options: {init_options}")
-                if init_options.capabilities and init_options.capabilities.tools:
-                    logger.info(f"✅ Tools capability is ENABLED (with {tools_count} tools)")
-                else:
-                    logger.error("❌ Tools capability is NOT enabled - this will cause 'Method not found' errors!")
+                logger.debug(f"Final initialization options: {init_options}")
                 
                 try:
                     logger.info("Starting server.run() - this should run indefinitely...")

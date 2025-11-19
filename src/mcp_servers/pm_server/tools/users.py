@@ -63,25 +63,6 @@ def register_user_tools(
                      f"Please use the PM provider API endpoints directly to list users."
             )]
             
-            if not users:
-                return [TextContent(
-                    type="text",
-                    text="No users found."
-                )]
-            
-            # Format output
-            output_lines = [f"Found {len(users)} users:\n\n"]
-            for i, user in enumerate(users, 1):
-                output_lines.append(
-                    f"{i}. **{user.get('name')}** (ID: {user.get('id')})\n"
-                    f"   Email: {user.get('email', 'N/A')}\n"
-                )
-            
-            return [TextContent(
-                type="text",
-                text="".join(output_lines)
-            )]
-            
         except Exception as e:
             logger.error(f"Error in list_users: {e}", exc_info=True)
             return [TextContent(
@@ -205,32 +186,6 @@ def register_user_tools(
                      f"Please use the PM provider API endpoints directly to search users."
             )]
             
-            # Filter by query
-            query_lower = query.lower()
-            matching = [
-                u for u in users
-                if query_lower in u.get("name", "").lower()
-                or query_lower in u.get("email", "").lower()
-            ][:int(limit)]
-            
-            if not matching:
-                return [TextContent(
-                    type="text",
-                    text=f"No users found matching '{query}'"
-                )]
-            
-            output_lines = [f"Found {len(matching)} users matching '{query}':\n\n"]
-            for i, user in enumerate(matching, 1):
-                output_lines.append(
-                    f"{i}. **{user.get('name')}** (ID: {user.get('id')})\n"
-                    f"   Email: {user.get('email', 'N/A')}\n"
-                )
-            
-            return [TextContent(
-                type="text",
-                text="".join(output_lines)
-            )]
-            
         except Exception as e:
             logger.error(f"Error in search_users: {e}", exc_info=True)
             return [TextContent(
@@ -273,14 +228,6 @@ def register_user_tools(
                 text=f"User workload is not yet implemented. "
                      f"Please use the PM provider API endpoints directly to get user workload."
             )]
-            
-            # Format output (unreachable, but kept for reference)
-            output_lines = [
-                f"# Workload: {workload.get('user_name')}\n\n",
-                f"**Total Tasks:** {workload.get('total_tasks', 0)}\n",
-                f"**Open Tasks:** {workload.get('open_tasks', 0)}\n",
-                f"**In Progress:** {workload.get('in_progress_tasks', 0)}\n",
-                f"**Completed:** {workload.get('completed_tasks', 0)}\n",
                 f"**Overdue:** {workload.get('overdue_tasks', 0)}\n",
             ]
             

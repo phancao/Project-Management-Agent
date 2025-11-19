@@ -439,14 +439,6 @@ def register_epic_tools(
                 text=f"Epic progress is not yet implemented. "
                      f"Please check epic progress directly in your PM provider (JIRA, OpenProject, etc.)."
             )]
-                f"**Pending:** {progress.get('pending_tasks', 0)}\n",
-                f"**Completion:** {progress.get('completion_percentage', 0)}%\n",
-            ]
-            
-            return [TextContent(
-                type="text",
-                text="".join(output_lines)
-            )]
             
         except Exception as e:
             logger.error(f"Error in get_epic_progress: {e}", exc_info=True)

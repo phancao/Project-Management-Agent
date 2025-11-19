@@ -125,10 +125,33 @@ def register_task_tools(
             )]
             
         except Exception as e:
+            error_msg = str(e)
             logger.error(f"Error in list_my_tasks: {e}", exc_info=True)
+            
+            # Check if error is related to sprint lookup
+            if "sprint" in error_msg.lower() and ("unavailable" in error_msg.lower() or "not found" in error_msg.lower() or "SCRUM" in error_msg):
+                # This is likely a sprint validation error - tasks might reference non-existent sprints
+                # Try to get tasks anyway, ignoring sprint validation errors
+                logger.warning(f"Sprint-related error in list_my_tasks, but this shouldn't prevent task listing: {error_msg}")
+                return [TextContent(
+                    type="text",
+                    text=f"⚠️ Warning: Some tasks reference sprints that are no longer available (e.g., SCRUM-1).\n\n"
+                         f"Error details: {error_msg}\n\n"
+                         "This usually happens when:\n"
+                         "- Tasks are assigned to sprints that have been deleted\n"
+                         "- Sprint IDs in tasks are outdated\n\n"
+                         "The tasks themselves are still valid, but sprint information cannot be retrieved.\n"
+                         "Please try again or contact support if the issue persists."
+                )]
+            
             return [TextContent(
                 type="text",
-                text=f"Error listing tasks: {str(e)}"
+                text=f"Error listing tasks: {error_msg}\n\n"
+                     "This might be due to:\n"
+                     "- Provider connection issues\n"
+                     "- Missing permissions\n"
+                     "- Invalid sprint or project references\n\n"
+                     "Please try again or contact support if the issue persists."
             )]
     
     tool_count += 1

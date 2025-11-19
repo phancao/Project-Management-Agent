@@ -3,21 +3,23 @@
 
 "use client";
 
-import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
+import { useState } from "react";
+
 import { Card } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { BurndownView } from "../chat/components/views/burndown-view";
-import { VelocityView } from "../chat/components/views/velocity-view";
+import { useProjectSummary } from "~/core/api/hooks/pm/use-analytics";
+import { useProjects } from "~/core/api/hooks/pm/use-projects";
+
 import { SprintReportView } from "../chat/components/views/sprint-report-view";
 import { CFDView } from "../chat/components/views/cfd-view";
 import { CycleTimeView } from "../chat/components/views/cycle-time-view";
+import { BurndownView } from "../chat/components/views/burndown-view";
+import { VelocityView } from "../chat/components/views/velocity-view";
 import { PMHeader } from "../components/pm-header";
-import { PMLoadingProvider } from "../context/pm-loading-context";
 import { PMLoadingManager } from "../components/pm-loading-manager";
-import { useProjects } from "~/core/api/hooks/pm/use-projects";
-import { useProjectSummary } from "~/core/api/hooks/pm/use-analytics";
-import { useSearchParams } from "next/navigation";
+import { PMLoadingProvider } from "../context/pm-loading-context";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -51,7 +53,7 @@ function ChartsPageContent() {
                 Analytics & Charts
               </h1>
               <p className="mt-2 text-gray-600 dark:text-gray-400">
-                {activeProject?.name || "Select a project"} - Comprehensive project insights and metrics
+                {activeProject?.name ?? "Select a project"} - Comprehensive project insights and metrics
               </p>
             </div>
 
@@ -61,7 +63,7 @@ function ChartsPageContent() {
                 <Card className="p-4">
                   <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Current Sprint</div>
                   <div className="text-xl font-bold text-gray-900 dark:text-white">
-                    {summary.current_sprint?.name || "No active sprint"}
+                    {summary.current_sprint?.name ?? "No active sprint"}
                   </div>
                   {summary.current_sprint && (
                     <div className="mt-2">

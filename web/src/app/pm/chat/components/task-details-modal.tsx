@@ -10,10 +10,10 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
-import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
 import { useEpics } from "~/core/api/hooks/pm/use-epics";
+import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useUsers } from "~/core/api/hooks/pm/use-users";
 import { listProviders, type ProviderConfig } from "~/core/api/pm/providers";
 

@@ -1,0 +1,64 @@
+2025-11-19 14:39:53,480 - __main__ - INFO - ============================================================
+2025-11-19 14:39:53,480 - __main__ - INFO - PM MCP Server Starting
+2025-11-19 14:39:53,480 - __main__ - INFO - ============================================================
+2025-11-19 14:39:53,480 - __main__ - INFO - Transport: stdio
+2025-11-19 14:39:53,480 - __main__ - INFO - Log Level: INFO
+2025-11-19 14:39:53,480 - __main__ - INFO - Authentication: Disabled
+2025-11-19 14:39:53,480 - __main__ - INFO - RBAC: Disabled
+2025-11-19 14:39:53,480 - __main__ - INFO - ============================================================
+2025-11-19 14:39:53,480 - src.mcp_servers.pm_server.server - INFO - PM MCP Server initialized: pm-server v0.1.0
+2025-11-19 14:39:53,480 - src.mcp_servers.pm_server.server - INFO - Starting PM MCP Server with stdio transport...
+2025-11-19 14:39:53,480 - src.mcp_servers.pm_server.server - INFO - Initializing PM Handler...
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - PM Handler initialized with 3 active providers
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - Registering PM tools...
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.tools.projects - INFO - Registered 6 project tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - Registered 6 projects tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.tools.tasks - INFO - Registered 9 task tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - Registered 9 tasks tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.tools.sprints - INFO - Registered 10 sprint tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - Registered 10 sprints tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.tools.epics - INFO - Registered 8 epic tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - Registered 8 epics tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.tools.users - INFO - Registered 5 user tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - Registered 5 users tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.tools.analytics - INFO - Registered 10 analytics tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - Registered 10 analytics tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.tools.task_interactions - INFO - Registered 5 task interaction tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - Registered 5 task_interactions tools
+2025-11-19 14:39:53,486 - src.mcp_servers.pm_server.server - INFO - Total tools registered: 7
+2025-11-19 14:39:53,488 - src.mcp_servers.pm_server.server - INFO - PM MCP Server running on stdio
+2025-11-19 14:39:53,494 - mcp.server.lowlevel.server - INFO - Processing request of type ListToolsRequest
+2025-11-19 14:39:53,495 - src.mcp_servers.pm_server.server - INFO - Cleaning up PM MCP Server...
+2025-11-19 14:39:53,497 - src.mcp_servers.pm_server.server - INFO - PM MCP Server stopped
+2025-11-19 14:41:52,050 - __main__ - INFO - ============================================================
+2025-11-19 14:41:52,050 - __main__ - INFO - PM MCP Server Starting
+2025-11-19 14:41:52,050 - __main__ - INFO - ============================================================
+2025-11-19 14:41:52,050 - __main__ - INFO - Transport: stdio
+2025-11-19 14:41:52,050 - __main__ - INFO - Log Level: INFO
+2025-11-19 14:41:52,050 - __main__ - INFO - Authentication: Disabled
+2025-11-19 14:41:52,050 - __main__ - INFO - RBAC: Disabled
+2025-11-19 14:41:52,050 - __main__ - INFO - ============================================================
+2025-11-19 14:41:52,050 - src.mcp_servers.pm_server.server - INFO - PM MCP Server initialized: pm-server v0.1.0
+2025-11-19 14:41:52,051 - src.mcp_servers.pm_server.server - INFO - Starting PM MCP Server with stdio transport...
+2025-11-19 14:41:52,051 - src.mcp_servers.pm_server.server - INFO - Initializing PM Handler...
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - PM Handler initialized with 3 active providers
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - Registering PM tools...
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.tools.projects - INFO - Registered 6 project tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - Registered 6 projects tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.tools.tasks - INFO - Registered 9 task tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - Registered 9 tasks tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.tools.sprints - INFO - Registered 10 sprint tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - Registered 10 sprints tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.tools.epics - INFO - Registered 8 epic tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - Registered 8 epics tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.tools.users - INFO - Registered 5 user tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - Registered 5 users tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.tools.analytics - INFO - Registered 10 analytics tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - Registered 10 analytics tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.tools.task_interactions - INFO - Registered 5 task interaction tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - Registered 5 task_interactions tools
+2025-11-19 14:41:52,054 - src.mcp_servers.pm_server.server - INFO - Total tools registered: 7
+2025-11-19 14:41:52,056 - src.mcp_servers.pm_server.server - INFO - PM MCP Server running on stdio
+2025-11-19 14:41:52,060 - mcp.server.lowlevel.server - INFO - Processing request of type ListToolsRequest
+2025-11-19 14:41:52,061 - src.mcp_servers.pm_server.server - INFO - Cleaning up PM MCP Server...
+2025-11-19 14:41:52,062 - src.mcp_servers.pm_server.server - INFO - PM MCP Server stopped

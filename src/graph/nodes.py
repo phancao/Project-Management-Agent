@@ -841,6 +841,11 @@ async def _execute_agent_step(
         recursion_limit = default_recursion_limit
 
     logger.info(f"Agent input: {agent_input}")
+    logger.debug(
+        f"[{agent_name}] Agent input details: "
+        f"messages_count={len(agent_input.get('messages', []))}, "
+        f"available_tools={[t.name if hasattr(t, 'name') else str(t) for t in agent_input.get('tools', [])]}"
+    )
     
     # Validate message content before invoking agent
     try:
@@ -966,14 +971,25 @@ async def _setup_and_execute_agent_step(
             logger.info(
                 f"[{agent_type}] Retrieved {len(all_tools)} tools from MCP servers"
             )
-            logger.debug(
+            logger.info(
                 f"[{agent_type}] MCP tool names: {[tool.name for tool in all_tools]}"
             )
-            logger.debug(
+            logger.info(
                 f"[{agent_type}] Enabled tools filter: {list(enabled_tools.keys())}"
             )
+            # Check if list_my_tasks is in the discovered tools
+            list_my_tasks_found = any(tool.name == "list_my_tasks" for tool in all_tools)
+            logger.info(
+                f"[{agent_type}] list_my_tasks tool found: {list_my_tasks_found}"
+            )
+            if not list_my_tasks_found:
+                logger.warning(
+                    f"[{agent_type}] WARNING: list_my_tasks tool NOT found in discovered tools! "
+                    f"Available tools: {[tool.name for tool in all_tools]}"
+                )
             
             added_count = 0
+            list_my_tasks_added = False
             for tool in all_tools:
                 if tool.name in enabled_tools:
                     tool.description = (
@@ -981,11 +997,25 @@ async def _setup_and_execute_agent_step(
                     )
                     loaded_tools.append(tool)
                     added_count += 1
+                    if tool.name == "list_my_tasks":
+                        list_my_tasks_added = True
+                    logger.info(
+                        f"[{agent_type}] Added MCP tool: {tool.name} "
+                        f"(from {enabled_tools[tool.name]})"
+                    )
             
             logger.info(
                 f"[{agent_type}] Added {added_count} MCP tools to agent "
                 f"(total tools: {len(loaded_tools)})"
             )
+            logger.info(
+                f"[{agent_type}] list_my_tasks tool added to agent: {list_my_tasks_added}"
+            )
+            if not list_my_tasks_added:
+                logger.error(
+                    f"[{agent_type}] ERROR: list_my_tasks tool was NOT added to agent! "
+                    f"This means the tool was either not discovered or not in enabled_tools filter."
+                )
         except Exception as e:
             logger.error(
                 f"[{agent_type}] Failed to load MCP tools: {e}",

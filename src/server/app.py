@@ -2308,6 +2308,10 @@ async def pm_chat_stream(request: Request):
         if not user_message or not isinstance(user_message, str):
             raise HTTPException(status_code=400, detail="Message content is required and must be a string")
         
+        # Note: We don't strip project_id here - let the agent decide based on tool descriptions
+        # The tool description and prompts should guide the agent to ignore project_id 
+        # when the user asks for "all my tasks" vs "my tasks in project X"
+        
         thread_id = body.get("thread_id", str(uuid.uuid4()))
         mcp_settings = body.get("mcp_settings", {})
         
@@ -2319,19 +2323,13 @@ async def pm_chat_stream(request: Request):
         # This ensures PM tools are always available for PM chat
         if not mcp_settings.get("servers") or "pm-server" not in mcp_settings.get("servers", {}):
             try:
-                from src.mcp_servers.pm_server.config import PMServerConfig
-                pm_config = PMServerConfig.from_env()
-                
                 # Use stdio transport for PM MCP server
                 if "servers" not in mcp_settings:
                     mcp_settings["servers"] = {}
                 
-                # Get all available PM tools
-                # Get PM handler (already have db session)
-                # Note: We don't need to create a temp handler, just use the config
-                
                 # Define all PM tool names (hardcoded for reliability)
                 # These match the tools registered in the PM MCP server
+                # We don't need PMServerConfig - just need the script path and tool names
                 all_tool_names = [
                     # Project tools
                     "list_projects", "get_project", "create_project", 
@@ -2367,15 +2365,29 @@ async def pm_chat_stream(request: Request):
                 project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
                 script_path = os.path.join(project_root, "scripts", "run_pm_mcp_server.py")
                 
+                # Use uv run python3 to ensure correct Python environment
+                import sys
+                python_cmd = sys.executable  # Use the same Python that's running the server
+                
                 mcp_settings["servers"]["pm-server"] = {
                     "transport": "stdio",
-                    "command": "python",
+                    "command": python_cmd,
                     "args": [script_path, "--transport", "stdio"],
                     "enabled_tools": all_tool_names,
                     "add_to_agents": ["researcher", "coder"],
                 }
                 logger.info(
                     f"[PM-CHAT] Auto-injected PM MCP server with {len(all_tool_names)} tools"
+                )
+                logger.info(
+                    f"[PM-CHAT] PM MCP server config: "
+                    f"command={mcp_settings['servers']['pm-server']['command']}, "
+                    f"args={mcp_settings['servers']['pm-server']['args']}, "
+                    f"script_path={script_path}, "
+                    f"script_exists={os.path.exists(script_path)}"
+                )
+                logger.info(
+                    f"[PM-CHAT] list_my_tasks in enabled_tools: {'list_my_tasks' in all_tool_names}"
                 )
             except Exception as e:
                 logger.warning(

@@ -955,15 +955,47 @@ async def _setup_and_execute_agent_step(
 
     # Create and execute agent with MCP tools if available
     if mcp_servers:
-        client = MultiServerMCPClient(mcp_servers)
-        loaded_tools = default_tools[:]
-        all_tools = await client.get_tools()
-        for tool in all_tools:
-            if tool.name in enabled_tools:
-                tool.description = (
-                    f"Powered by '{enabled_tools[tool.name]}'.\n{tool.description}"
-                )
-                loaded_tools.append(tool)
+        try:
+            logger.info(
+                f"[{agent_type}] Connecting to {len(mcp_servers)} MCP server(s): "
+                f"{', '.join(mcp_servers.keys())}"
+            )
+            client = MultiServerMCPClient(mcp_servers)
+            loaded_tools = default_tools[:]
+            all_tools = await client.get_tools()
+            logger.info(
+                f"[{agent_type}] Retrieved {len(all_tools)} tools from MCP servers"
+            )
+            logger.debug(
+                f"[{agent_type}] MCP tool names: {[tool.name for tool in all_tools]}"
+            )
+            logger.debug(
+                f"[{agent_type}] Enabled tools filter: {list(enabled_tools.keys())}"
+            )
+            
+            added_count = 0
+            for tool in all_tools:
+                if tool.name in enabled_tools:
+                    tool.description = (
+                        f"Powered by '{enabled_tools[tool.name]}'.\n{tool.description}"
+                    )
+                    loaded_tools.append(tool)
+                    added_count += 1
+            
+            logger.info(
+                f"[{agent_type}] Added {added_count} MCP tools to agent "
+                f"(total tools: {len(loaded_tools)})"
+            )
+        except Exception as e:
+            logger.error(
+                f"[{agent_type}] Failed to load MCP tools: {e}",
+                exc_info=True
+            )
+            # Fall back to default tools if MCP fails
+            loaded_tools = default_tools[:]
+            logger.warning(
+                f"[{agent_type}] Using default tools only due to MCP error"
+            )
 
         llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP[agent_type])
         pre_model_hook = partial(ContextManager(llm_token_limit, 3).compress_messages)

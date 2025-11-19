@@ -57,12 +57,6 @@ export function ResearchBlock({
     // Also switch if we have a reportId even if hasReport check fails (defensive)
     if ((hasReport || reportId) && !reportStreaming && reportId) {
       setActiveTab("report");
-      if (process.env.NODE_ENV === "development") {
-        console.log(
-          `[DEBUG] ResearchBlock: Auto-switching to report tab, ` +
-          `hasReport=${hasReport}, reportId=${reportId}, reportStreaming=${reportStreaming}`
-        );
-      }
     }
   }, [hasReport, reportId, reportStreaming]);
 

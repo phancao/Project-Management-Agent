@@ -73,15 +73,7 @@ export function MessageListView({
       const reporterMessages = Array.from(store.messages.values()).filter(
         (m) => m.agent === "reporter"
       );
-      console.log(
-        `[DEBUG] MessageListView render: ` +
-        `renderableMessageIds=${messageIds.length}, ` +
-        `allMessageIds=${store.messageIds.length}, ` +
-        `reporterMessages=${reporterMessages.length}, ` +
-        `reporterIds=${reporterMessages.map((m) => m.id).join(",")}, ` +
-        `reporterInRenderable=${reporterMessages.some((m) => messageIds.includes(m.id))}, ` +
-        `renderableIds=${messageIds.slice(-5).join(",")}`
-      );
+      // Removed debug logging
     }
   }, [messageIds]);
   const interruptMessage = useLastInterruptMessage();
@@ -169,10 +161,9 @@ function MessageListItem({
       message.agent === "reporter" ||
       startOfResearch
     ) {
-      // Debug logging for reporter messages
-      if (process.env.NODE_ENV === "development" && message.agent === "reporter") {
-        console.log(
-          `[DEBUG] MessageListItem rendering reporter: ` +
+      // Removed debug logging
+      if (false && process.env.NODE_ENV === "development" && message.agent === "reporter") {
+        // Removed debug log
           `id=${messageId}, ` +
           `content_length=${message.content?.length ?? 0}, ` +
           `contentChunks_length=${message.contentChunks?.length ?? 0}, ` +

@@ -154,29 +154,14 @@ export async function sendMessage(
       lastActivityTime = now;
       const { type, data } = event;
       
-      // Debug logging for PM chat
-      if (process.env.NODE_ENV === "development") {
-        const timeSinceStart = now - streamStartTime;
-        console.log(
-          `[DEBUG] Stream event #${eventCount}: type=${type}, ` +
-          `timeSinceStart=${timeSinceStart}ms, ` +
-          `timeSinceLastActivity=${timeSinceLastActivity}ms`,
-          data
-        );
-      }
       
       // Handle error events
       if (type === "error") {
         const hasErrorData = data && (typeof data === "object") && Object.keys(data).length > 0;
         const errorMessage = data?.error || data?.message || "An error occurred during streaming";
         
-        if (process.env.NODE_ENV === "development") {
-          if (hasErrorData) {
-            console.error(`[DEBUG] Stream error event:`, data);
-          } else {
-            // Empty error object - likely a benign error, log as warning
-            console.warn(`[DEBUG] Stream error event (empty):`, data);
-          }
+        if (process.env.NODE_ENV === "development" && hasErrorData) {
+          console.error(`[DEBUG] Stream error event:`, data);
         }
         
         // Only show toast if there's actual error data or a meaningful error message
@@ -190,9 +175,6 @@ export async function sendMessage(
       // If we receive finish_reason, mark that stream should exit
       if (data.finish_reason === "stop") {
         receivedFinishReason = true;
-        if (process.env.NODE_ENV === "development") {
-          console.log(`[DEBUG] Received finish_reason=stop, stream should exit after processing this event`);
-        }
       }
       
       // Handle PM refresh events to update PM views
@@ -227,9 +209,6 @@ export async function sendMessage(
         
         if (!messageId) {
           // Skip events without message ID (like plan_update, step_update, etc.)
-          if (process.env.NODE_ENV === "development") {
-            console.log(`[DEBUG] Skipping event without message ID: type=${type}`, data);
-          }
           continue;
         }
         
@@ -258,27 +237,6 @@ export async function sendMessage(
         message = mergeMessage(message, event);
         const newContentLength = message.content?.length ?? 0;
         
-        // Debug logging for reporter messages
-        if (message.agent === "reporter") {
-          if (event.type === "message_chunk" && event.data.content) {
-            const chunksReceived = message.contentChunks?.length ?? 0;
-            console.log(
-              `[DEBUG] Reporter message chunk: id=${message.id}, ` +
-              `content_length=${newContentLength}, ` +
-              `chunk_length=${event.data.content.length}, ` +
-              `chunks_received=${chunksReceived}`
-            );
-          }
-          if (event.data.finish_reason) {
-            console.log(
-              `[DEBUG] Reporter finished: id=${message.id}, ` +
-              `content_length=${newContentLength}, ` +
-              `isStreaming=${message.isStreaming}, ` +
-              `finish_reason=${event.data.finish_reason}, ` +
-              `chunks_received=${message.contentChunks?.length ?? 0}`
-            );
-          }
-        }
         
         // If finish_reason is present, apply update immediately to ensure UI updates quickly
         // This is especially important for reporter messages to show the final report
@@ -297,22 +255,6 @@ export async function sendMessage(
     
     streamExited = true;
     
-    // Log if no events were received
-    if (eventCount === 0 && process.env.NODE_ENV === "development") {
-      console.warn("[DEBUG] Stream completed without any events");
-    }
-    
-    if (process.env.NODE_ENV === "development") {
-      const totalTime = Date.now() - streamStartTime;
-      const timeSinceLastActivity = Date.now() - lastActivityTime;
-      console.log(
-        `[DEBUG] Stream for-await loop exited: eventCount=${eventCount}, ` +
-        `streamExited=${streamExited}, ` +
-        `receivedFinishReason=${receivedFinishReason}, ` +
-        `totalTime=${totalTime}ms, ` +
-        `timeSinceLastActivity=${timeSinceLastActivity}ms`
-      );
-    }
   } catch (error) {
     streamExited = true;
     if (process.env.NODE_ENV === "development") {
@@ -336,21 +278,6 @@ export async function sendMessage(
       useStore.getState().updateMessages(Array.from(pendingUpdates.values()));
     }
     
-    // Debug logging
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        `[DEBUG] Stream finally block: eventCount=${eventCount}, ` +
-        `hasCreatedMessage=${hasCreatedMessage}, ` +
-        `pendingUpdates=${pendingUpdates.size}, ` +
-        `streamExited=${streamExited}, ` +
-        `receivedFinishReason=${receivedFinishReason}`
-      );
-      if (eventCount === 0) {
-        console.warn("[DEBUG] Stream completed with no events received");
-      } else if (!hasCreatedMessage) {
-        console.warn(`[DEBUG] Stream completed with ${eventCount} events but no messages were created`);
-      }
-    }
     
     // Always set responding to false when stream completes
     // The loading animation should be controlled by message.isStreaming, not responding
@@ -362,9 +289,6 @@ export async function sendMessage(
     const state = useStore.getState();
     const streamingMessages = Array.from(state.messages.values()).filter(m => m.isStreaming);
     if (streamingMessages.length > 0) {
-      if (process.env.NODE_ENV === "development") {
-        console.log(`[DEBUG] Safeguard: Marking ${streamingMessages.length} message(s) as not streaming`);
-      }
       const updatedMessages = new Map(state.messages);
       streamingMessages.forEach(msg => {
         msg.isStreaming = false;
@@ -379,19 +303,7 @@ export async function sendMessage(
       if (finalMessage?.isStreaming) {
         finalMessage.isStreaming = false;
         useStore.getState().updateMessage(finalMessage);
-        if (process.env.NODE_ENV === "development") {
-          console.log(`[DEBUG] Safeguard: Set message ${messageId}.isStreaming=false in finally block`);
-        }
       }
-    }
-    
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        `[DEBUG] Stream cleanup: setResponding(false), ` +
-        `previousResponding=${previousResponding}, ` +
-        `currentResponding=${useStore.getState().responding}, ` +
-        `streamExited=${streamExited}`
-      );
     }
   }
 }
@@ -462,17 +374,6 @@ function updateMessage(message: Message) {
     
     if (researchId) {
       const currentReportId = useStore.getState().researchReportIds.get(researchId);
-      const contentLength = message.content?.length ?? 0;
-      const contentChunksLength = message.contentChunks?.length ?? 0;
-      
-      console.log(
-        `[DEBUG] Reporter message update: ` +
-        `researchId=${researchId}, ` +
-        `messageId=${message.id}, ` +
-        `content_length=${contentLength}, ` +
-        `contentChunks_length=${contentChunksLength}, ` +
-        `currentReportId=${currentReportId}`
-      );
       
       if (!currentReportId || currentReportId !== message.id) {
         useStore.setState({
@@ -481,24 +382,13 @@ function updateMessage(message: Message) {
             message.id,
           ),
         });
-        console.log(`[DEBUG] Set researchReportIds[${researchId}] = ${message.id}`);
       }
       // Always auto-open the research when report finishes so user can see the results immediately
       // This ensures the report content is visible without requiring user to click "Open"
       const currentOpenResearchId = useStore.getState().openResearchId;
       useStore.getState().openResearch(researchId);
-      console.log(
-        `[DEBUG] Auto-opened research: ` +
-        `previousOpenResearchId=${currentOpenResearchId}, ` +
-        `newOpenResearchId=${researchId}`
-      );
       // Clear ongoingResearchId to stop the loading indicator
       useStore.getState().setOngoingResearch(null);
-      console.log(`[DEBUG] Cleared ongoingResearchId`);
-    } else {
-      console.warn(
-        `[DEBUG] Reporter message update: Could not find researchId for reporter message ${message.id}`
-      );
     }
   }
   useStore.getState().updateMessage(message);

@@ -4745,23 +4745,8 @@ def calculate_openproject_totals(
         container_name = _get_openproject_container(client.base_url if hasattr(client, "base_url") else None)
     except Exception:
         container_name = _get_openproject_container()
-    # Decide based on flag
-    source_decision = VERIFICATION_SOURCE or "auto"
-    if source_decision == "auto":
-        use_db = ("v13" in container_name) and (created_time_entry_ids is None or len(created_time_entry_ids) == 0)
-    elif source_decision == "db":
-        # Force DB aggregation regardless of created_time_entry_ids presence
-        use_db = True
-    else:
-        use_db = False
-    ui.info(f"Using verification source: {'db' if use_db else 'api'}", "info")
-    # Unified fetch method banner for Step 20
-    if use_db:
-        ui.info("Fetching time entries from OpenProject using Database", "info")
-    else:
-        ui.info("Fetching time entries from OpenProject using API", "info")
     
-    # Collect relevant work package ids (needed for both DB and API paths)
+    # Collect relevant work package ids (needed for both DB and API paths, and for decision-making)
     wp_ids: Set[int] = set()
     for pkg in imported_packages:
         try:
@@ -4776,6 +4761,29 @@ def calculate_openproject_totals(
                     wp_ids.add(int(task.openproject_id))
                 except Exception:
                     continue
+    
+    # Decide based on flag and work package count
+    # If there are many work packages (>100), use DB to avoid URL length issues (414 errors)
+    source_decision = VERIFICATION_SOURCE or "auto"
+    if source_decision == "auto":
+        # Use DB if: (1) v13 container, OR (2) too many work packages (URL length limit)
+        use_db = ("v13" in container_name) or (len(wp_ids) > 100)
+    elif source_decision == "db":
+        # Force DB aggregation regardless of created_time_entry_ids presence
+        use_db = True
+    else:
+        # API mode, but check if we have too many IDs (will cause 414 error)
+        if len(wp_ids) > 100:
+            ui.warning(f"  ⚠ Too many work packages ({len(wp_ids)}) for API filtering. Switching to DB to avoid URL length errors.")
+            use_db = True
+        else:
+            use_db = False
+    ui.info(f"Using verification source: {'db' if use_db else 'api'}", "info")
+    # Unified fetch method banner for Step 20
+    if use_db:
+        ui.info("Fetching time entries from OpenProject using Database", "info")
+    else:
+        ui.info("Fetching time entries from OpenProject using API", "info")
     
     if use_db:
         # Build project id -> name from staging

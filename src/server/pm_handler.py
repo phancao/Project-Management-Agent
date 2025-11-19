@@ -460,25 +460,56 @@ class PMHandler:
             
             # CRITICAL: Post-filter to ensure only tasks actually assigned to current user are returned
             # This is a safeguard in case the API filter doesn't work correctly or returns tasks with null assignees
+            # For JIRA: handle multiple ID formats (accountId, key, id) - check all possible formats
             current_user_id_str = str(current_user.id)
+            
+            # For JIRA, get current user accountId from raw_data if available (for better matching)
+            provider_type = getattr(self.single_provider, 'config', None)
+            provider_type = getattr(provider_type, 'provider_type', None) if provider_type else None
+            current_user_account_id = None
+            if provider_type == "jira" and hasattr(current_user, 'raw_data'):
+                raw_data = getattr(current_user, 'raw_data', {})
+                if isinstance(raw_data, dict):
+                    current_user_account_id = raw_data.get("accountId")
+            
+            def is_task_assigned_to_user(task_assignee_id: Optional[str]) -> bool:
+                """Check if task assignee ID matches current user (handles multiple ID formats)"""
+                if not task_assignee_id:
+                    return False
+                
+                task_assignee_str = str(task_assignee_id)
+                
+                # Exact match
+                if task_assignee_str == current_user_id_str:
+                    return True
+                
+                # For JIRA: also check accountId format
+                if provider_type == "jira" and current_user_account_id:
+                    if task_assignee_str == str(current_user_account_id):
+                        return True
+                
+                return False
+            
             filtered_tasks = [
                 task for task in tasks
-                if task.assignee_id and str(task.assignee_id) == current_user_id_str
+                if is_task_assigned_to_user(task.assignee_id)
             ]
             
             if len(filtered_tasks) != len(tasks):
                 # Log detailed information about filtered tasks for debugging
                 logger.warning(
                     f"Filtered out {len(tasks) - len(filtered_tasks)} tasks that were not "
-                    f"assigned to current user (ID: {current_user_id_str}, Name: {current_user.name}). "
+                    f"assigned to current user (ID: {current_user_id_str}, Name: {current_user.name}"
+                    f"{', accountId: ' + str(current_user_account_id) if current_user_account_id else ''}). "
                     f"Original count: {len(tasks)}, Filtered count: {len(filtered_tasks)}"
                 )
                 # Log sample of tasks that were filtered out
-                filtered_out = [t for t in tasks if not (t.assignee_id and str(t.assignee_id) == current_user_id_str)]
+                filtered_out = [t for t in tasks if not is_task_assigned_to_user(t.assignee_id)]
                 for task in filtered_out[:5]:  # Log first 5 for debugging
                     logger.debug(
                         f"  Filtered out task: ID={task.id}, Title={task.title}, "
-                        f"AssigneeID={task.assignee_id} (expected: {current_user_id_str})"
+                        f"AssigneeID={task.assignee_id} (expected: {current_user_id_str}"
+                        f"{' or ' + str(current_user_account_id) if current_user_account_id else ''})"
                     )
             
             return [
@@ -577,25 +608,54 @@ class PMHandler:
                 
                 # CRITICAL: Post-filter to ensure only tasks actually assigned to current user are returned
                 # This is a safeguard in case the API filter doesn't work correctly or returns tasks with null assignees
+                # For JIRA: handle multiple ID formats (accountId, key, id) - check all possible formats
                 current_user_id_str = str(current_user.id)
+                
+                # For JIRA, get current user accountId from raw_data if available (for better matching)
+                current_user_account_id = None
+                if provider.provider_type == "jira" and hasattr(current_user, 'raw_data'):
+                    raw_data = getattr(current_user, 'raw_data', {})
+                    if isinstance(raw_data, dict):
+                        current_user_account_id = raw_data.get("accountId")
+                
+                def is_task_assigned_to_user(task_assignee_id: Optional[str]) -> bool:
+                    """Check if task assignee ID matches current user (handles multiple ID formats)"""
+                    if not task_assignee_id:
+                        return False
+                    
+                    task_assignee_str = str(task_assignee_id)
+                    
+                    # Exact match
+                    if task_assignee_str == current_user_id_str:
+                        return True
+                    
+                    # For JIRA: also check accountId format
+                    if provider.provider_type == "jira" and current_user_account_id:
+                        if task_assignee_str == str(current_user_account_id):
+                            return True
+                    
+                    return False
+                
                 filtered_tasks = [
                     task for task in tasks
-                    if task.assignee_id and str(task.assignee_id) == current_user_id_str
+                    if is_task_assigned_to_user(task.assignee_id)
                 ]
                 
                 if len(filtered_tasks) != len(tasks):
                     # Log detailed information about filtered tasks for debugging
                     logger.warning(
                         f"Provider {provider.provider_type}: Filtered out {len(tasks) - len(filtered_tasks)} tasks "
-                        f"that were not assigned to current user (ID: {current_user_id_str}, Name: {current_user.name}). "
+                        f"that were not assigned to current user (ID: {current_user_id_str}, Name: {current_user.name}"
+                        f"{', accountId: ' + str(current_user_account_id) if current_user_account_id else ''}). "
                         f"Original count: {len(tasks)}, Filtered count: {len(filtered_tasks)}"
                     )
                     # Log sample of tasks that were filtered out
-                    filtered_out = [t for t in tasks if not (t.assignee_id and str(t.assignee_id) == current_user_id_str)]
+                    filtered_out = [t for t in tasks if not is_task_assigned_to_user(t.assignee_id)]
                     for task in filtered_out[:5]:  # Log first 5 for debugging
                         logger.debug(
                             f"  Filtered out task: ID={task.id}, Title={task.title}, "
-                            f"AssigneeID={task.assignee_id} (expected: {current_user_id_str})"
+                            f"AssigneeID={task.assignee_id} (expected: {current_user_id_str}"
+                            f"{' or ' + str(current_user_account_id) if current_user_account_id else ''})"
                         )
                 
                 # Add tasks with project_name mapping

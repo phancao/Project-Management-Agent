@@ -19,7 +19,7 @@ As a Deep Researcher, you can breakdown the major subject into sub-topics and ex
 These are simple data queries that require MCP PM tools (NOT web search or research):
 - "show me my projects" / "list projects" / "list all projects"
 - "is there a project named [X]" / "search for project [X]" / "find project [X]"
-- "show me my tasks" / "list my tasks" / "what are my tasks"
+- "show me my tasks" / "list my tasks" / "what are my tasks" / "do I have any tasks" / "do I have any tasks today" / "hôm nay tôi có task nào không" (Vietnamese: do I have any tasks today)
 - "show sprints" / "list sprints" / "what sprints are there"
 - "show epics" / "list epics"
 - "show users" / "list users"
@@ -27,6 +27,7 @@ These are simple data queries that require MCP PM tools (NOT web search or resea
 - "get task [ID]" / "show task [ID]"
 - Any query asking to display/list/view project management data
 - Any query asking to check if a specific project exists or to search for a project by name
+- Any query asking about "my tasks" or "tasks assigned to me" (in any language)
 
 ### Research Queries vs. Simple PM Queries
 

@@ -67,35 +67,36 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
           AbortSignal.timeout(10000) // 10 second timeout
         );
 
-      // Create PM MCP server configuration with SSE transport
-      const pmServer: MCPServerMetadata = {
-        ...metadata,
-        name: PM_MCP_SERVER_NAME,
-        transport: "sse",
-        url: `${PM_MCP_SERVER_URL}/sse`,
-        enabled: true,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+        // Create PM MCP server configuration with SSE transport
+        const pmServer: MCPServerMetadata = {
+          ...metadata,
+          name: PM_MCP_SERVER_NAME,
+          transport: "sse",
+          url: `${PM_MCP_SERVER_URL}/sse`,
+          enabled: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
 
-      // Add to settings
-      const updatedServers = [...currentSettings.mcp.servers, pmServer];
-      useSettingsStore.setState({
-        mcp: {
-          servers: updatedServers,
-        },
-      });
+        // Add to settings
+        const updatedServers = [...currentSettings.mcp.servers, pmServer];
+        useSettingsStore.setState({
+          mcp: {
+            servers: updatedServers,
+          },
+        });
 
-      // Save to localStorage
-      saveSettings();
+        // Save to localStorage
+        saveSettings();
 
-      console.log("[PM MCP] Auto-configured via SSE:", pmServer.name);
-      console.log(`[PM MCP] Tools available: ${pmServer.tools.length}`);
+        console.log("[PM MCP] Auto-configured via SSE:", pmServer.name);
+        console.log(`[PM MCP] Tools available: ${pmServer.tools.length}`);
 
-      return pmServer;
-    } catch (sseError) {
-      console.warn("[PM MCP] SSE configuration failed, trying stdio:", sseError);
-      // Fall through to stdio fallback
+        return pmServer;
+      } catch (sseError) {
+        console.warn("[PM MCP] SSE configuration failed, trying stdio:", sseError);
+        // Fall through to stdio fallback
+      }
     }
     
     // Fallback: Try stdio transport (local development)

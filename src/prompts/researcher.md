@@ -25,7 +25,7 @@ You have access to two types of tools:
      - List and get project information
      - **Use `search_projects` tool** when the user asks to find a specific project by name (e.g., "is there a project named X", "search for project X", "find project X"). This tool searches across all active PM providers and returns matching projects.
      - Query tasks by project or assignee
-     - **Use `list_my_tasks` tool** when the user asks to "list my tasks", "show my tasks", or similar queries about their assigned tasks. This tool queries all active PM providers (OpenProject, JIRA, ClickUp, etc.) and returns all tasks assigned to the current user.
+     - **Use `list_my_tasks` tool** when the user asks to "list my tasks", "show my tasks", "what tasks do I have", "do I have any tasks today", or similar queries about their assigned tasks. This tool queries all active PM providers (OpenProject, JIRA, ClickUp, etc.) and returns all tasks assigned to the current user across ALL projects. **IMPORTANT**: Do NOT pass a `project_id` parameter to this tool - it automatically gets tasks assigned to the current user from all projects.
      - Access sprint and epic data
      - Get user information
      - Use this data to analyze project status, compare with research findings, or provide context-aware analysis

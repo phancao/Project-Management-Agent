@@ -211,8 +211,9 @@ class PMMCPServer:
                 except Exception as e:
                     logger.error(f"[list_all_tools] ERROR: {e}", exc_info=True)
                     logger.error("=" * 80)
-                    # Return empty list on error
-                    return []
+                    # Return empty ListToolsResult on error
+                    from mcp.types import ListToolsResult
+                    return ListToolsResult(tools=[])
             
             # Verify handler is actually registered
             from mcp.types import ListToolsRequest

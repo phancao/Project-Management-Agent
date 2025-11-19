@@ -86,7 +86,7 @@ function SortableSprintSection(props: SortableSprintSectionProps) {
 
   useEffect(() => {
     if (isDragging) {
-      // Removed debug logging: logSprintDnd("Dragging sprint", { sprintId: sprint.id });
+      // Removed debug logging
     }
   }, [isDragging, sprint.id]);
 
@@ -1066,7 +1066,7 @@ export function BacklogView() {
   useEffect(() => {
     if (!sprints || sprints.length === 0) {
       setSprintOrder(createEmptySprintOrder());
-      // Removed debug logging: logSprintDnd("Reset sprint order (no sprints)");
+      // Removed debug logging
       return;
     }
 
@@ -1109,12 +1109,7 @@ export function BacklogView() {
           combined.some((id, index) => id !== existingOrder[index])
         ) {
           changed = true;
-          // Removed debug logging: logSprintDnd("Updated sprint order for category", {
-            category,
-            combined,
-            preserved,
-            missing,
-          });
+          // Removed debug logging
         }
 
         next[category] = combined;
@@ -1281,14 +1276,14 @@ export function BacklogView() {
       const taskId = activeId.replace('task-', '');
       const task = tasks.find(t => String(t.id) === taskId);
       const sourceSprintId = task?.sprint_id ? String(task.sprint_id) : null;
-      // Removed debug logging: logSprintDnd("Drag start (task)", { taskId, sourceSprintId });
+      // Removed debug logging
       setDragState({ type: 'task', id: taskId, sourceSprintId });
       return;
     }
 
     if (activeId.startsWith('sprint-')) {
       const sprintId = activeId.replace('sprint-', '');
-      // Removed debug logging: logSprintDnd("Drag start (sprint)", { sprintId });
+      // Removed debug logging
       setDragState({ type: 'sprint', id: sprintId });
       lastSprintHoverIdRef.current = sprintId;
     const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
@@ -1311,7 +1306,7 @@ export function BacklogView() {
       setOverSprintId(null);
       setOverTaskId(null);
       setOverEpicId(null);
-      // Removed debug logging: logSprintDnd("Drag over cleared (no target)");
+      // Removed debug logging
       return;
     }
 
@@ -1502,7 +1497,7 @@ export function BacklogView() {
       setOverEpicId(overId.replace('epic-', ''));
       setOverSprintId(null);
       setOverTaskId(null);
-      // Removed debug logging: logSprintDnd("Drag over epic", { epicId: overId.replace('epic-', '') });
+      // Removed debug logging
       return;
     }
     
@@ -1511,7 +1506,7 @@ export function BacklogView() {
       setOverEpicId('no-epic');
       setOverSprintId(null);
       setOverTaskId(null);
-      // Removed debug logging: logSprintDnd("Drag over no-epic zone");
+      // Removed debug logging
       return;
     }
     
@@ -1520,7 +1515,7 @@ export function BacklogView() {
       setOverSprintId(overId.replace('sprint-', ''));
       setOverTaskId(null);
       setOverEpicId(null);
-      // Removed debug logging: logSprintDnd("Drag over sprint body", { sprintId: overId.replace('sprint-', '') });
+      // Removed debug logging
       return;
     }
     
@@ -1528,7 +1523,7 @@ export function BacklogView() {
       setOverSprintId('backlog');
       setOverTaskId(null);
       setOverEpicId(null);
-      // Removed debug logging: logSprintDnd("Drag over backlog");
+      // Removed debug logging
       return;
     }
     
@@ -1570,7 +1565,7 @@ export function BacklogView() {
     setOverSprintCategory(null);
 
     if (!over) {
-      // Removed debug logging: logSprintDnd("Drag end without target", { dragType: currentDragState.type });
+      // Removed debug logging
       lastSprintCategoryRef.current = null;
       setOverSprintCategory(null);
       setSprintPlaceholder({
@@ -1854,7 +1849,7 @@ export function BacklogView() {
     }
 
     if (currentDragState.type !== 'task' || !currentDragState.id) {
-      // Removed debug logging: logSprintDnd("Drag end ignored (non-task)", { dragType: currentDragState.type });
+      // Removed debug logging
       return;
     }
 
@@ -1873,7 +1868,7 @@ export function BacklogView() {
         toast.success("Task assigned to epic", {
           description: `${draggedTask.title} has been assigned to the epic.`
         });
-        // Removed debug logging: logSprintDnd("Task assigned to epic via drag", { taskId, epicId });
+        // Removed debug logging
       } catch (error) {
         console.error("Failed to assign task to epic:", error);
         toast.error("Failed to assign task to epic", {
@@ -1945,7 +1940,7 @@ export function BacklogView() {
         toast.success("Task moved to backlog", {
           description: `${draggedTask.title} has been moved to the backlog.`
         });
-        // Removed debug logging: logSprintDnd("Task moved to backlog via drag", { taskId });
+        // Removed debug logging
         } catch (error) {
         console.error("Failed to move task to backlog:", error);
         toast.error("Failed to move task to backlog", {

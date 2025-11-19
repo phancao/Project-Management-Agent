@@ -55,13 +55,13 @@ docker-compose ps pm_mcp_server
 docker-compose logs -f pm_mcp_server
 ```
 
-### Option 2: Deploy via Docker Desktop MCP Catalog (Future)
+### Option 2: Use with Docker Desktop MCP Toolkit (Private)
 
-To make our PM MCP Server available in Docker Desktop's MCP Catalog, we need to:
+You can use Docker Desktop's MCP Toolkit with your private/local image:
 
-1. **Create an MCP Server Manifest** (metadata file)
-2. **Publish to Docker Hub or GitHub Container Registry**
-3. **Submit to Docker's MCP Catalog**
+1. **Build the image locally** (no publishing needed)
+2. **Configure Docker Desktop** to use the local image
+3. **Set up environment variables** securely through Docker Desktop UI
 
 ## 📝 Creating MCP Server Manifest
 
@@ -123,57 +123,80 @@ Create a manifest file that Docker Desktop can use to discover and configure our
 }
 ```
 
-## 🐳 Publishing to Docker Hub
+## 🔒 Private Setup (Recommended)
 
-To make the server available via Docker Desktop's catalog:
+Since you want to keep the PM MCP Server private, you can use it locally or with a private registry:
 
-### 1. Build and Tag the Image
+### Option 1: Use Local Image (Simplest)
+
+Build and use the image locally without publishing:
+
+```bash
+# Build the image locally
+docker build -f Dockerfile.mcp-server -t pm-mcp-server:latest .
+
+# Use with Docker Compose (already configured)
+docker-compose up -d pm_mcp_server
+```
+
+### Option 2: Private Docker Registry
+
+If you need to share within your organization:
 
 ```bash
 # Build the image
 docker build -f Dockerfile.mcp-server -t pm-mcp-server:latest .
 
-# Tag for Docker Hub (replace with your username)
-docker tag pm-mcp-server:latest yourusername/pm-mcp-server:latest
-docker tag pm-mcp-server:latest yourusername/pm-mcp-server:1.0.0
+# Tag for private registry (e.g., GitHub Container Registry, AWS ECR, etc.)
+docker tag pm-mcp-server:latest your-private-registry/pm-mcp-server:latest
+
+# Push to private registry
+docker push your-private-registry/pm-mcp-server:latest
 ```
 
-### 2. Push to Docker Hub
+**Private Registry Options:**
+- **GitHub Container Registry (ghcr.io)**: Free for private repos
+- **AWS ECR**: Amazon's private container registry
+- **Google Container Registry**: GCP's private registry
+- **Azure Container Registry**: Microsoft's private registry
+- **Self-hosted**: Run your own registry (Harbor, Portus, etc.)
 
-```bash
-# Login to Docker Hub
-docker login
+## 🔌 Configuring Docker Desktop MCP (Private)
 
-# Push the image
-docker push yourusername/pm-mcp-server:latest
-docker push yourusername/pm-mcp-server:1.0.0
-```
+### Manual Configuration with Local Image
 
-### 3. Create Docker Hub Repository
+To use your private PM MCP Server with Docker Desktop:
 
-1. Go to [Docker Hub](https://hub.docker.com/)
-2. Create a new repository: `pm-mcp-server`
-3. Add description and documentation
-4. Make it public (or private if preferred)
+1. **Build the image locally**:
+   ```bash
+   docker build -f Dockerfile.mcp-server -t pm-mcp-server:latest .
+   ```
 
-## 🔌 Configuring Docker Desktop MCP
-
-### Manual Configuration
-
-If you want to manually add our PM MCP Server to Docker Desktop:
-
-1. **Open Docker Desktop**
-2. **Go to Settings → Extensions → MCP**
-3. **Add Custom Server**:
+2. **Open Docker Desktop**
+3. **Go to Settings → Extensions → MCP**
+4. **Add Custom Server**:
    - **Name**: `pm-mcp-server`
-   - **Image**: `yourusername/pm-mcp-server:latest`
+   - **Image**: `pm-mcp-server:latest` (local image)
    - **Transport**: `sse`
    - **URL**: `http://localhost:8080/sse`
    - **Environment Variables**:
-     - `DATABASE_URL`: Your PostgreSQL connection string
+     - `DATABASE_URL`: Your PostgreSQL connection string (stored securely)
      - `LOG_LEVEL`: `INFO`
      - `ENABLE_AUTH`: `false`
      - `ENABLE_RBAC`: `false`
+
+### Using Private Registry Image
+
+If using a private registry:
+
+1. **Build and push to private registry**:
+   ```bash
+   docker build -f Dockerfile.mcp-server -t your-private-registry/pm-mcp-server:latest .
+   docker push your-private-registry/pm-mcp-server:latest
+   ```
+
+2. **Login to private registry in Docker Desktop**
+3. **Configure MCP server** with private registry image path
 
 ### Using Docker Compose (Current Method)
 
@@ -242,37 +265,43 @@ If you're using an AI client that supports Docker Desktop MCP:
 
 ## 📊 Comparison: Docker Compose vs Docker Desktop MCP Toolkit
 
-| Feature | Docker Compose (Current) | Docker Desktop MCP Toolkit |
-|---------|-------------------------|---------------------------|
-| **Setup** | Manual `docker-compose.yml` | One-click from catalog |
-| **Configuration** | Manual env vars | UI-based configuration |
-| **Discovery** | Manual | Catalog search |
-| **Updates** | Manual pull/rebuild | Auto-update option |
-| **Security** | Manual credential management | Secure credential storage |
+| Feature | Docker Compose (Current) | Docker Desktop MCP Toolkit (Private) |
+|---------|-------------------------|-------------------------------------|
+| **Setup** | Manual `docker-compose.yml` | UI-based configuration |
+| **Configuration** | Manual env vars | Secure UI-based configuration |
+| **Privacy** | ✅ Fully private | ✅ Private (local/private registry) |
+| **Updates** | Manual pull/rebuild | Manual (private images) |
+| **Security** | Manual credential management | Secure credential storage in Docker Desktop |
 | **Isolation** | Shared network | Isolated containers |
-| **Best For** | Development, CI/CD | End users, easy setup |
+| **Best For** | Development, CI/CD | End users, easy setup, private deployment |
 
-## 🎯 Recommended Approach
+## 🎯 Recommended Approach (Private)
 
 ### For Development
 ✅ **Use Docker Compose** (current setup)
 - Full control over configuration
 - Easy to modify and test
 - Integrated with other services
+- **Fully private** - no publishing needed
 
-### For End Users
-✅ **Use Docker Desktop MCP Toolkit** (future)
-- One-click deployment
-- Secure configuration
+### For End Users (Private)
+✅ **Use Docker Desktop MCP Toolkit with Local/Private Image**
+- One-click deployment from Docker Desktop UI
+- Secure credential storage
 - Better user experience
+- **Fully private** - use local images or private registry
+- No public publishing required
 
-## 🚀 Next Steps
+## 🚀 Next Steps (Private Setup)
 
-1. **Test Current Setup**: Verify the server works with Docker Compose
-2. **Create Manifest**: Create MCP server manifest file
-3. **Publish Image**: Push to Docker Hub
-4. **Submit to Catalog**: (Optional) Submit to Docker's MCP catalog
-5. **Documentation**: Update README with Docker Desktop instructions
+1. ✅ **Test Current Setup**: Verify the server works with Docker Compose
+2. **Build Local Image**: `docker build -f Dockerfile.mcp-server -t pm-mcp-server:latest .`
+3. **Configure Docker Desktop**: Add as custom MCP server (see above)
+4. **Set Environment Variables**: Configure securely through Docker Desktop UI
+5. **Optional - Private Registry**: If sharing within organization, use private registry
+6. **Documentation**: Update internal docs with Docker Desktop instructions
+
+**No public publishing required!** Everything stays private.
 
 ## 📚 Resources
 
@@ -281,15 +310,15 @@ If you're using an AI client that supports Docker Desktop MCP:
 - [MCP Protocol Documentation](https://modelcontextprotocol.io/)
 - [Docker Desktop Documentation](https://docs.docker.com/desktop/)
 
-## 🔍 Current Status
+## 🔍 Current Status (Private)
 
 ✅ **Containerized**: PM MCP Server is fully containerized  
 ✅ **Docker Compose**: Working with docker-compose.yml  
 ✅ **Health Checks**: Health endpoint implemented  
 ✅ **SSE Transport**: SSE transport working  
-⏳ **Docker Hub**: Not yet published  
-⏳ **MCP Catalog**: Not yet submitted  
-⏳ **Manifest**: Not yet created  
+✅ **Private**: No public publishing required  
+✅ **Local Image**: Can be built and used locally  
+✅ **Private Registry**: Can use private registry if needed  
 
 ## 💡 Quick Start
 

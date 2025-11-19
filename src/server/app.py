@@ -2311,6 +2311,10 @@ async def pm_chat_stream(request: Request):
         thread_id = body.get("thread_id", str(uuid.uuid4()))
         mcp_settings = body.get("mcp_settings", {})
         
+        # For PM chat, always enable MCP for PM tools (even if global setting is disabled)
+        # This ensures PM MCP tools are always available for PM chat endpoint
+        mcp_enabled_for_pm = True  # Always enable for PM chat
+        
         # Auto-inject PM MCP server if not already configured
         # This ensures PM tools are always available for PM chat
         if not mcp_settings.get("servers") or "pm-server" not in mcp_settings.get("servers", {}):

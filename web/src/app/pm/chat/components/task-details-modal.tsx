@@ -10,9 +10,9 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
-import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
-import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
 import { useEpics } from "~/core/api/hooks/pm/use-epics";
+import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
+import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useUsers } from "~/core/api/hooks/pm/use-users";
 import { listProviders, type ProviderConfig } from "~/core/api/pm/providers";
@@ -100,7 +100,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
     const providerId = parts[0];
     const provider = providers.find(p => p.id === providerId);
     
-    if (!provider || !provider.base_url) return null;
+    if (!provider?.base_url) return null;
 
     // Extract task ID (might be in format "provider_id:task_id" or just "task_id")
     let taskId = task.id;

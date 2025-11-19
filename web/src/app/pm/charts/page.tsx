@@ -12,10 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useProjectSummary } from "~/core/api/hooks/pm/use-analytics";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 
-import { SprintReportView } from "../chat/components/views/sprint-report-view";
+import { BurndownView } from "../chat/components/views/burndown-view";
 import { CFDView } from "../chat/components/views/cfd-view";
 import { CycleTimeView } from "../chat/components/views/cycle-time-view";
-import { BurndownView } from "../chat/components/views/burndown-view";
+import { SprintReportView } from "../chat/components/views/sprint-report-view";
 import { VelocityView } from "../chat/components/views/velocity-view";
 import { PMHeader } from "../components/pm-header";
 import { PMLoadingManager } from "../components/pm-loading-manager";

@@ -1206,7 +1206,28 @@ async def enhance_prompt(request: EnhancePromptRequest):
 async def mcp_server_metadata(request: MCPServerMetadataRequest):
     """Get information about an MCP server."""
     # Check if MCP server configuration is enabled
-    if not get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False):
+    # Exception: Allow PM MCP server queries even if global flag is disabled
+    # (PM MCP server is always available for PM chat functionality)
+    is_pm_server = False
+    if request.command:
+        # Check if this is the PM MCP server by checking the command/args
+        pm_server_script = "scripts/run_pm_mcp_server.py"
+        command_str = " ".join([request.command] + (request.args or []))
+        if pm_server_script in command_str or "run_pm_mcp_server" in command_str:
+            is_pm_server = True
+            logger.debug(f"Detected PM MCP server via command: {command_str}")
+    elif request.url:
+        # Check if URL contains pm-server, pm_mcp_server, or localhost:8080 (default PM MCP SSE port)
+        url_lower = request.url.lower()
+        if (
+            "pm" in url_lower and ("server" in url_lower or "mcp" in url_lower)
+            or "localhost:8080" in url_lower
+            or ":8080" in url_lower
+        ):
+            is_pm_server = True
+            logger.debug(f"Detected PM MCP server via URL: {request.url}")
+    
+    if not get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False) and not is_pm_server:
         raise HTTPException(
             status_code=403,
             detail=(

@@ -167,10 +167,22 @@ export async function sendMessage(
       
       // Handle error events
       if (type === "error") {
+        const hasErrorData = data && (typeof data === "object") && Object.keys(data).length > 0;
+        const errorMessage = data?.error || data?.message || "An error occurred during streaming";
+        
         if (process.env.NODE_ENV === "development") {
-          console.error(`[DEBUG] Stream error event:`, data);
+          if (hasErrorData) {
+            console.error(`[DEBUG] Stream error event:`, data);
+          } else {
+            // Empty error object - likely a benign error, log as warning
+            console.warn(`[DEBUG] Stream error event (empty):`, data);
+          }
         }
-        toast(`Error: ${data.error || data.message || "An error occurred during streaming"}`);
+        
+        // Only show toast if there's actual error data or a meaningful error message
+        if (hasErrorData || errorMessage !== "An error occurred during streaming") {
+          toast(`Error: ${errorMessage}`);
+        }
         // Continue processing - the stream may still have valid data
         continue;
       }

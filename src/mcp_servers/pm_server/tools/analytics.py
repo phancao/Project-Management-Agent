@@ -56,28 +56,14 @@ def register_analytics_tools(
             
             logger.info(f"burndown_chart called: sprint_id={sprint_id}")
             
-            # Get burndown data from PM handler
-            data = pm_handler.get_burndown_chart(sprint_id)
-            
-            if not data:
-                return [TextContent(
-                    type="text",
-                    text=f"No burndown data available for sprint {sprint_id}."
-                )]
-            
-            # Format output
-            output_lines = [f"# Burndown Chart - Sprint {sprint_id}\n\n"]
-            output_lines.append("Date | Remaining Work\n")
-            output_lines.append("-----|---------------\n")
-            
-            for point in data.get("points", []):
-                output_lines.append(
-                    f"{point.get('date')} | {point.get('remaining')}\n"
-                )
-            
+            # Burndown chart requires project_id to determine which provider to use
+            # Return a message indicating this needs project_id
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Burndown chart requires both project_id and sprint_id. "
+                     f"Please use the web interface or API endpoint "
+                     f"/api/analytics/projects/<project_id>/burndown?sprint_id={sprint_id} "
+                     f"to get burndown data for sprint {sprint_id}."
             )]
             
         except Exception as e:
@@ -117,31 +103,13 @@ def register_analytics_tools(
                 f"sprint_count={sprint_count}"
             )
             
-            # Get velocity data from PM handler
-            data = pm_handler.get_velocity_chart(project_id, sprint_count)
-            
-            if not data:
-                return [TextContent(
-                    type="text",
-                    text=f"No velocity data available for project {project_id}."
-                )]
-            
-            # Format output
-            output_lines = [f"# Velocity Chart - Project {project_id}\n\n"]
-            output_lines.append("Sprint | Completed Points\n")
-            output_lines.append("-------|------------------\n")
-            
-            for sprint in data.get("sprints", []):
-                output_lines.append(
-                    f"{sprint.get('name')} | {sprint.get('completed_points')}\n"
-                )
-            
-            avg_velocity = data.get("average_velocity", 0)
-            output_lines.append(f"\n**Average Velocity:** {avg_velocity} points/sprint\n")
-            
+            # Velocity chart is available via analytics API endpoint
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Velocity chart is available via the analytics API endpoint. "
+                     f"Please use the web interface or API endpoint "
+                     f"/api/analytics/projects/{project_id}/velocity?sprint_count={sprint_count} "
+                     f"to get velocity data for {sprint_count} sprints."
             )]
             
         except Exception as e:
@@ -161,6 +129,7 @@ def register_analytics_tools(
         
         Args:
             sprint_id (required): Sprint ID
+            project_id (required): Project ID
         
         Returns:
             Sprint report with metrics and insights
@@ -175,32 +144,22 @@ def register_analytics_tools(
             
             logger.info(f"sprint_report called: sprint_id={sprint_id}")
             
-            # Get sprint report
-            report = pm_handler.get_sprint_report(sprint_id)
-            
-            if not report:
+            # Sprint report requires project_id to determine which provider to use
+            project_id = arguments.get("project_id")
+            if not project_id:
                 return [TextContent(
                     type="text",
-                    text=f"No report data available for sprint {sprint_id}."
+                    text="Error: project_id is required for sprint_report. "
+                         "Please provide both project_id and sprint_id."
                 )]
             
-            # Format output
-            output_lines = [
-                f"# Sprint Report: {report.get('sprint_name')}\n\n",
-                f"**Duration:** {report.get('start_date')} - {report.get('end_date')}\n",
-                f"**Status:** {report.get('status')}\n\n",
-                f"## Metrics\n",
-                f"- **Planned Points:** {report.get('planned_points', 0)}\n",
-                f"- **Completed Points:** {report.get('completed_points', 0)}\n",
-                f"- **Completion Rate:** {report.get('completion_rate', 0)}%\n",
-                f"- **Total Tasks:** {report.get('total_tasks', 0)}\n",
-                f"- **Completed Tasks:** {report.get('completed_tasks', 0)}\n",
-                f"- **Carry Over:** {report.get('carry_over_tasks', 0)} tasks\n",
-            ]
-            
+            # Return a message directing users to the API
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Sprint report is available via the analytics API endpoint. "
+                     f"Please use the web interface or API endpoint "
+                     f"/api/analytics/projects/{project_id}/sprint-report?sprint_id={sprint_id} "
+                     f"to get the sprint report."
             )]
             
         except Exception as e:
@@ -275,30 +234,13 @@ def register_analytics_tools(
             
             logger.info(f"task_distribution called: project_id={project_id}")
             
-            # Get task distribution
-            distribution = pm_handler.get_task_distribution(project_id)
-            
-            if not distribution:
-                return [TextContent(
-                    type="text",
-                    text=f"No distribution data available for project {project_id}."
-                )]
-            
-            # Format output
-            output_lines = [f"# Task Distribution - Project {project_id}\n\n"]
-            
-            for member in distribution.get("members", []):
-                output_lines.append(
-                    f"**{member.get('name')}**\n"
-                    f"- Open: {member.get('open_tasks', 0)}\n"
-                    f"- In Progress: {member.get('in_progress_tasks', 0)}\n"
-                    f"- Completed: {member.get('completed_tasks', 0)}\n"
-                    f"- Total: {member.get('total_tasks', 0)}\n\n"
-                )
-            
+            # Task distribution is available via analytics API endpoint
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Task distribution is available via the analytics API endpoint. "
+                     f"Please use the web interface or API endpoint "
+                     f"/api/analytics/projects/{project_id}/work-distribution "
+                     f"to get task distribution data."
             )]
             
         except Exception as e:
@@ -338,30 +280,11 @@ def register_analytics_tools(
                 f"time_period={time_period}"
             )
             
-            # Get team performance
-            performance = pm_handler.get_team_performance(project_id, time_period)
-            
-            if not performance:
-                return [TextContent(
-                    type="text",
-                    text=f"No performance data available for project {project_id}."
-                )]
-            
-            # Format output
-            output_lines = [
-                f"# Team Performance - Last {time_period} Days\n\n",
-                f"**Project:** {performance.get('project_name')}\n\n",
-                f"## Metrics\n",
-                f"- **Tasks Completed:** {performance.get('completed_tasks', 0)}\n",
-                f"- **Average Completion Time:** {performance.get('avg_completion_time', 0)} days\n",
-                f"- **Throughput:** {performance.get('throughput', 0)} tasks/week\n",
-                f"- **Quality Score:** {performance.get('quality_score', 0)}/100\n",
-                f"- **Collaboration Score:** {performance.get('collaboration_score', 0)}/100\n",
-            ]
-            
+            # Team performance is not yet implemented
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Team performance analysis is not yet implemented. "
+                     f"Please use other analytics tools like velocity_chart or sprint_report for project {project_id}."
             )]
             
         except Exception as e:
@@ -403,35 +326,11 @@ def register_analytics_tools(
                 f"start_date={start_date}, end_date={end_date}"
             )
             
-            # Get Gantt chart data
-            data = pm_handler.get_gantt_chart(
-                project_id,
-                start_date=start_date,
-                end_date=end_date
-            )
-            
-            if not data:
-                return [TextContent(
-                    type="text",
-                    text=f"No Gantt chart data available for project {project_id}."
-                )]
-            
-            # Format output
-            output_lines = [f"# Gantt Chart - {data.get('project_name')}\n\n"]
-            output_lines.append("Task | Start | End | Duration\n")
-            output_lines.append("-----|-------|-----|----------\n")
-            
-            for task in data.get("tasks", []):
-                output_lines.append(
-                    f"{task.get('name')} | "
-                    f"{task.get('start_date', 'N/A')} | "
-                    f"{task.get('end_date', 'N/A')} | "
-                    f"{task.get('duration', 0)} days\n"
-                )
-            
+            # Gantt chart is not yet implemented
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Gantt chart is not yet implemented. "
+                     f"Please use other analytics tools like velocity_chart or sprint_report for project {project_id}."
             )]
             
         except Exception as e:
@@ -465,35 +364,11 @@ def register_analytics_tools(
             
             logger.info(f"epic_report called: epic_id={epic_id}")
             
-            # Get epic report
-            report = pm_handler.get_epic_report(epic_id)
-            
-            if not report:
-                return [TextContent(
-                    type="text",
-                    text=f"No report data available for epic {epic_id}."
-                )]
-            
-            # Format output
-            output_lines = [
-                f"# Epic Report: {report.get('name')}\n\n",
-                f"**Status:** {report.get('status')}\n",
-                f"**Progress:** {report.get('completion_percentage', 0)}%\n\n",
-                f"## Metrics\n",
-                f"- **Total Tasks:** {report.get('total_tasks', 0)}\n",
-                f"- **Completed:** {report.get('completed_tasks', 0)}\n",
-                f"- **In Progress:** {report.get('in_progress_tasks', 0)}\n",
-                f"- **Pending:** {report.get('pending_tasks', 0)}\n",
-                f"- **Blocked:** {report.get('blocked_tasks', 0)}\n\n",
-                f"## Timeline\n",
-                f"- **Started:** {report.get('start_date', 'N/A')}\n",
-                f"- **Target Completion:** {report.get('target_date', 'N/A')}\n",
-                f"- **Estimated Completion:** {report.get('estimated_completion', 'N/A')}\n",
-            ]
-            
+            # Epic report is not yet implemented
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Epic report is not yet implemented. "
+                     f"Please use other analytics tools like velocity_chart or sprint_report."
             )]
             
         except Exception as e:
@@ -527,36 +402,12 @@ def register_analytics_tools(
                 f"provider_id={provider_id}"
             )
             
-            # Get resource utilization
-            utilization = pm_handler.get_resource_utilization(
-                project_id=project_id,
-                provider_id=provider_id
-            )
-            
-            if not utilization:
-                return [TextContent(
-                    type="text",
-                    text="No resource utilization data available."
-                )]
-            
-            # Format output
-            output_lines = [
-                f"# Resource Utilization\n\n",
-                f"**Overall Utilization:** {utilization.get('overall_percentage', 0)}%\n\n",
-                f"## Team Members\n"
-            ]
-            
-            for member in utilization.get("members", []):
-                output_lines.append(
-                    f"**{member.get('name')}**\n"
-                    f"- Utilization: {member.get('utilization_percentage', 0)}%\n"
-                    f"- Active Tasks: {member.get('active_tasks', 0)}\n"
-                    f"- Capacity: {member.get('capacity_status', 'Normal')}\n\n"
-                )
-            
+            # Resource utilization is not yet implemented
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Resource utilization analysis is not yet implemented. "
+                     f"Please use other analytics tools like velocity_chart or sprint_report"
+                     f"{' for project ' + project_id if project_id else ''}."
             )]
             
         except Exception as e:
@@ -594,38 +445,12 @@ def register_analytics_tools(
                 f"user_id={user_id}, start_date={start_date}, end_date={end_date}"
             )
             
-            # Get time tracking report
-            report = pm_handler.get_time_tracking_report(
-                project_id=project_id,
-                user_id=user_id,
-                start_date=start_date,
-                end_date=end_date
-            )
-            
-            if not report:
-                return [TextContent(
-                    type="text",
-                    text="No time tracking data available."
-                )]
-            
-            # Format output
-            output_lines = [
-                f"# Time Tracking Report\n\n",
-                f"**Period:** {report.get('start_date', 'N/A')} - {report.get('end_date', 'N/A')}\n",
-                f"**Total Hours:** {report.get('total_hours', 0)}\n",
-                f"**Billable Hours:** {report.get('billable_hours', 0)}\n\n",
-                f"## Breakdown\n"
-            ]
-            
-            for entry in report.get("entries", []):
-                output_lines.append(
-                    f"- **{entry.get('task_name')}**: {entry.get('hours', 0)} hours\n"
-                    f"  User: {entry.get('user_name')}\n"
-                )
-            
+            # Time tracking report is not yet implemented
             return [TextContent(
                 type="text",
-                text="".join(output_lines)
+                text=f"Time tracking report is not yet implemented. "
+                     f"Please use other analytics tools like velocity_chart or sprint_report"
+                     f"{' for project ' + project_id if project_id else ''}."
             )]
             
         except Exception as e:

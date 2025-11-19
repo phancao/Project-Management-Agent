@@ -127,71 +127,107 @@ class PMMCPServer:
         # The handler below will be detected by the SDK and tools capability will be enabled automatically
         from mcp.types import Tool
         
-        @self.server.list_tools()
-        async def list_all_tools() -> list[Tool]:
-            """
-            List all registered PM tools.
-            
-            This handler is required for the MCP SDK to automatically enable
-            the tools capability in initialization options.
-            
-            The SDK supports both return types:
-            - list[Tool] (old style) - SDK wraps it in ListToolsResult
-            - ListToolsResult (new style) - SDK uses it directly
-            """
-            # First try to get tools from cache (if SDK populated it)
-            tools = list(self.server._tool_cache.values())
-            
-            # If cache is empty, manually build Tool objects from tracked tool names
-            # The SDK's _get_cached_tool_definition doesn't work because tools aren't in cache
-            # So we'll build basic Tool objects that allow the tools to be called
-            if not tools and self._tool_names:
-                logger.info(f"Cache empty, manually building {len(self._tool_names)} Tool objects...")
-                built_tools = []
+        logger.info("Registering list_tools handler...")
+        try:
+            @self.server.list_tools()
+            async def list_all_tools() -> list[Tool]:
+                """
+                List all registered PM tools.
                 
-                # Try _get_cached_tool_definition first (in case SDK can build them)
-                for tool_name in self._tool_names:
-                    try:
-                        tool_def = await self.server._get_cached_tool_definition(tool_name)
-                        if tool_def:
-                            built_tools.append(tool_def)
-                            logger.debug(f"Got tool definition from SDK: {tool_name}")
-                            continue
-                    except Exception as e:
-                        logger.debug(f"SDK couldn't build {tool_name}: {e}")
+                This handler is required for the MCP SDK to automatically enable
+                the tools capability in initialization options.
                 
-                # For tools that SDK couldn't build, create basic Tool objects
-                # These will allow tools to be called even without full schema
-                remaining_names = [name for name in self._tool_names if name not in [t.name for t in built_tools]]
-                if remaining_names:
-                    logger.info(f"Manually creating {len(remaining_names)} Tool objects...")
-                    for tool_name in remaining_names:
-                        # Create a basic Tool object with generic schema
-                        # The actual tool function will handle validation
-                        tool = Tool(
-                            name=tool_name,
-                            description=f"Tool: {tool_name}",
-                            inputSchema={
-                                "type": "object",
-                                "properties": {},
-                                "additionalProperties": True
-                            }
-                        )
-                        built_tools.append(tool)
-                        logger.debug(f"Created basic Tool object: {tool_name}")
+                The SDK supports both return types:
+                - list[Tool] (old style) - SDK wraps it in ListToolsResult
+                - ListToolsResult (new style) - SDK uses it directly
+                """
+                logger.info("=" * 80)
+                logger.info("[list_all_tools] Handler called!")
+                logger.info(f"[list_all_tools] Tracked tool names: {len(self._tool_names)}")
+                if self._tool_names:
+                    logger.info(f"[list_all_tools] Tool names (first 10): {self._tool_names[:10]}")
+                logger.info(f"[list_all_tools] Cache size: {len(self.server._tool_cache)}")
+                if hasattr(self.server, '_tool_cache') and self.server._tool_cache:
+                    logger.info(f"[list_all_tools] Cache keys (first 5): {list(self.server._tool_cache.keys())[:5]}")
                 
-                tools = built_tools
-                logger.info(f"Built {len(tools)} tools total ({len(built_tools) - len(remaining_names)} from SDK, {len(remaining_names)} manual)")
+                try:
+                    # First try to get tools from cache (if SDK populated it)
+                    tools = list(self.server._tool_cache.values())
+                    logger.info(f"[list_all_tools] Found {len(tools)} tools in cache")
+                    
+                    # If cache is empty, manually build Tool objects from tracked tool names
+                    # The SDK's _get_cached_tool_definition doesn't work because tools aren't in cache
+                    # So we'll build basic Tool objects that allow the tools to be called
+                    if not tools and self._tool_names:
+                        logger.info(f"[list_all_tools] Cache empty, manually building {len(self._tool_names)} Tool objects...")
+                        built_tools = []
+                        
+                        # Try _get_cached_tool_definition first (in case SDK can build them)
+                        for tool_name in self._tool_names:
+                            try:
+                                tool_def = await self.server._get_cached_tool_definition(tool_name)
+                                if tool_def:
+                                    built_tools.append(tool_def)
+                                    logger.debug(f"[list_all_tools] Got tool definition from SDK: {tool_name}")
+                                    continue
+                            except Exception as e:
+                                logger.debug(f"[list_all_tools] SDK couldn't build {tool_name}: {e}")
+                        
+                        # For tools that SDK couldn't build, create basic Tool objects
+                        # These will allow tools to be called even without full schema
+                        remaining_names = [name for name in self._tool_names if name not in [t.name for t in built_tools]]
+                        if remaining_names:
+                            logger.info(f"[list_all_tools] Manually creating {len(remaining_names)} Tool objects...")
+                            for tool_name in remaining_names:
+                                # Create a basic Tool object with generic schema
+                                # The actual tool function will handle validation
+                                tool = Tool(
+                                    name=tool_name,
+                                    description=f"Tool: {tool_name}",
+                                    inputSchema={
+                                        "type": "object",
+                                        "properties": {},
+                                        "additionalProperties": True
+                                    }
+                                )
+                                built_tools.append(tool)
+                                logger.debug(f"[list_all_tools] Created basic Tool object: {tool_name}")
+                        
+                        tools = built_tools
+                        logger.info(f"[list_all_tools] Built {len(tools)} tools total ({len(built_tools) - len(remaining_names)} from SDK, {len(remaining_names)} manual)")
+                    
+                    # If still no tools, return empty list (but log warning)
+                    if not tools:
+                        logger.warning(f"[list_all_tools] Returning 0 tools (cache empty, {len(self._tool_names)} tool names tracked)")
+                    else:
+                        logger.info(f"[list_all_tools] Returning {len(tools)} tools")
+                        logger.debug(f"[list_all_tools] Tool names: {[t.name for t in tools[:5]]}...")  # First 5
+                    
+                    logger.info("=" * 80)
+                    
+                    # Return list[Tool] - the SDK will wrap it in ListToolsResult automatically
+                    # (The SDK supports both list[Tool] and ListToolsResult, but list[Tool] is simpler)
+                    return tools
+                except Exception as e:
+                    logger.error(f"[list_all_tools] ERROR: {e}", exc_info=True)
+                    logger.error("=" * 80)
+                    # Return empty list on error
+                    return []
             
-            # If still no tools, return empty list (but log warning)
-            if not tools:
-                logger.warning(f"list_tools() returning 0 tools (cache empty, {len(self._tool_names)} tool names tracked)")
-            
-            logger.debug(f"list_tools() returning {len(tools)} tools")
-            
-            # Return list[Tool] - the SDK will wrap it in ListToolsResult automatically
-            # (The SDK supports both list[Tool] and ListToolsResult, but list[Tool] is simpler)
-            return tools
+            # Verify handler is actually registered
+            from mcp.types import ListToolsRequest
+            if ListToolsRequest in self.server.request_handlers:
+                handler = self.server.request_handlers[ListToolsRequest]
+                logger.info(f"✅ list_tools handler registered successfully")
+                logger.info(f"   Handler type: {type(handler)}")
+                logger.info(f"   Handler: {handler}")
+            else:
+                logger.error("❌ list_tools handler NOT found in request_handlers!")
+                logger.error(f"   Available handlers: {list(self.server.request_handlers.keys())}")
+                raise RuntimeError("list_tools handler not registered")
+        except Exception as e:
+            logger.error(f"❌ Failed to register list_tools handler: {e}", exc_info=True)
+            raise
     
     async def run_stdio(self) -> None:
         """
@@ -328,6 +364,17 @@ class PMMCPServer:
                 logger.debug(f"Final initialization options: {init_options}")
                 
                 try:
+                    # Verify handler is registered before starting server
+                    from mcp.types import ListToolsRequest
+                    if ListToolsRequest not in self.server.request_handlers:
+                        logger.error("❌ CRITICAL: list_tools handler NOT registered before server.run()!")
+                        logger.error(f"   Available handlers: {list(self.server.request_handlers.keys())}")
+                        raise RuntimeError("list_tools handler not registered")
+                    else:
+                        logger.info(f"✅ Verified: list_tools handler is registered before server.run()")
+                        handler = self.server.request_handlers[ListToolsRequest]
+                        logger.info(f"   Handler: {handler}")
+                    
                     logger.info("Starting server.run() - this should run indefinitely...")
                     
                     # Verify tools are actually registered by trying to list them

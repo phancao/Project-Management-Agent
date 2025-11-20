@@ -85,30 +85,30 @@ export async function* chatStream(
     }
   }
   
-  try{
-    const locale = getLocaleFromCookie();
-    
-    // Extract project context from URL if present
-    const projectId = urlParams.get('project');
-    
-    // Add project context to the message if we're in a project-specific chat
-    let enhancedMessage = userMessage;
-    if (projectId) {
-      // Add project_id explicitly in a way the LLM will extract it
-      enhancedMessage = `${userMessage}\n\nproject_id: ${projectId}`;
-    }
-    
-    // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
-    const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
-    const stream = fetchStream(resolveServiceURL(endpoint), {
-      body: JSON.stringify({
-        messages: [{ role: "user", content: enhancedMessage }],
-        locale,
-        ...params,
-      }),
-      signal: options.abortSignal,
-    });
-    
+  const locale = getLocaleFromCookie();
+  
+  // Extract project context from URL if present
+  const projectId = urlParams.get('project');
+  
+  // Add project context to the message if we're in a project-specific chat
+  let enhancedMessage = userMessage;
+  if (projectId) {
+    // Add project_id explicitly in a way the LLM will extract it
+    enhancedMessage = `${userMessage}\n\nproject_id: ${projectId}`;
+  }
+  
+  // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
+  const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
+  const stream = fetchStream(resolveServiceURL(endpoint), {
+    body: JSON.stringify({
+      messages: [{ role: "user", content: enhancedMessage }],
+      locale,
+      ...params,
+    }),
+    signal: options.abortSignal,
+  });
+  
+  try {
     for await (const event of stream) {
       yield {
         type: event.event,

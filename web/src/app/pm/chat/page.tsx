@@ -29,6 +29,9 @@ const Main = dynamic(() => import("./main"), {
       Loading Project Management...
     </div>
   ),
+  onError: (error) => {
+    console.error("Failed to load Main component:", error);
+  },
 });
 
 function ChatPageContent() {

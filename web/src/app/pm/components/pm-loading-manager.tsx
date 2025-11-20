@@ -38,8 +38,20 @@ export function PMLoadingManager() {
   useEffect(() => {
     if (state.providers.loading && !state.providers.data) {
       debug.state('Step 1: Loading providers...');
+      
+      // Add timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        debug.error('Provider loading timeout - resetting loading state');
+        setProvidersState({
+          loading: false,
+          error: new Error('Request timeout: Failed to load providers within 30 seconds'),
+          data: null,
+        });
+      }, 30000); // 30 second timeout
+      
       listProviders()
         .then((providers) => {
+          clearTimeout(timeoutId);
           debug.state('Providers loaded', { count: providers.length });
           setProvidersState({
             loading: false,
@@ -48,6 +60,7 @@ export function PMLoadingManager() {
           });
         })
         .catch((error) => {
+          clearTimeout(timeoutId);
           debug.error('Failed to load providers', error);
           setProvidersState({
             loading: false,
@@ -55,6 +68,10 @@ export function PMLoadingManager() {
             data: null,
           });
         });
+      
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }
   }, [state.providers.loading, state.providers.data, setProvidersState]);
 

@@ -9,7 +9,7 @@ This document details the latest LangGraph features we've implemented in DeerFlo
 
 **Feature**: Multi-mode streaming with server-side debug observability
 
-**Implementation**: `src/server/app.py::_stream_graph_events()`
+**Implementation**: `backend/server/app.py::_stream_graph_events()`
 
 ```python
 stream_mode=["messages", "updates", "debug"]

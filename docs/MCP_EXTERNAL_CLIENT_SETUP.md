@@ -72,7 +72,7 @@ LIMIT 1;
 
 **Option C: Via Python Script**
 ```python
-from src.mcp_servers.pm_server.auth import create_user_api_key
+from mcp_server.auth import create_user_api_key
 
 # Generate API key for user
 api_key = await create_user_api_key(

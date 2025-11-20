@@ -10,10 +10,10 @@ The SSE (Server-Sent Events) transport enables web-based agents to connect to th
 
 ```bash
 # Start on default port (8080)
-uv run python scripts/run_pm_mcp_server.py --transport sse
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse
 
 # Start on custom port
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8081 --host 0.0.0.0
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8081 --host 0.0.0.0
 ```
 
 ### 2. Verify Server is Running
@@ -361,7 +361,7 @@ curl -X POST http://localhost:8080/tools/list | jq '.tools[].name'
 
 - [PM MCP Server Architecture](PM_MCP_SERVER_ARCHITECTURE.md)
 - [PM MCP Server Status](PM_MCP_SERVER_STATUS.md)
-- [PM MCP Server README](../src/mcp_servers/pm_server/README.md)
+- [PM MCP Server README](../mcp_server/README.md)
 
 ## 📝 Example Use Cases
 

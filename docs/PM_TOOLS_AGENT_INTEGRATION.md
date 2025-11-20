@@ -10,7 +10,7 @@ PM Tools have been successfully integrated into the DeerFlow agent system, enabl
 
 ### 1. Integrated PM Tools into Agents
 
-**File**: `src/graph/nodes.py`
+**File**: `backend/graph/nodes.py`
 
 - **Researcher Agent**: Now has access to PM tools for querying project data during research
 - **Coder Agent**: Now has access to PM tools for querying project data during analysis
@@ -29,7 +29,7 @@ except Exception as e:
 
 ### 2. Updated Researcher Prompt
 
-**File**: `src/prompts/researcher.md`
+**File**: `backend/prompts/researcher.md`
 
 Added documentation about PM tools so agents know when and how to use them:
 - Explained PM tools capabilities
@@ -108,7 +108,7 @@ Agent Flow:
 
 ## 📋 Available PM Tools
 
-Agents now have access to these PM tools (from `src/tools/pm_tools.py`):
+Agents now have access to these PM tools (from `backend/tools/pm_tools.py`):
 
 1. **list_projects()** - List all projects
 2. **get_project(project_id)** - Get project details
@@ -216,8 +216,8 @@ User: "Research WBS best practices and create a WBS for our project"
 The PM handler is initialized in `ConversationFlowManager` and made available to tools:
 
 ```python
-# src/conversation/flow_manager.py
-from src.tools.pm_tools import set_pm_handler
+# backend/conversation/flow_manager.py
+from backend.tools.pm_tools import set_pm_handler
 
 # During initialization:
 self.pm_handler = PMHandler.from_single_provider(pm_provider)

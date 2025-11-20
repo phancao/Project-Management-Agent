@@ -87,7 +87,7 @@ curl -X POST http://localhost:8000/api/pm/providers/import-projects \
 The `configure_pm_provider` tool automatically gets `user_id` from the MCP connection:
 
 ```python
-# src/mcp_servers/pm_server/tools/provider_config.py
+# mcp_server/tools/provider_config.py
 
 @server.call_tool()
 async def configure_pm_provider(arguments: dict[str, Any]):

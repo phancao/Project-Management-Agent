@@ -102,7 +102,7 @@ Test coverage:
 ## 📁 Module Structure
 
 ```
-src/analytics/
+backend/analytics/
 ├── __init__.py           # Module exports
 ├── models.py             # Pydantic data models
 ├── mock_data.py          # Mock data generators
@@ -185,7 +185,7 @@ service = AnalyticsService(data_source="jira")
 
 ## 📖 Documentation
 
-- **Full docs**: `src/analytics/README.md`
+- **Full docs**: `backend/analytics/README.md`
 - **Implementation plan**: `docs/ANALYTICS_IMPLEMENTATION_PLAN.md`
 - **Tests**: `tests/test_analytics.py`
 - **Demo**: `test_analytics_demo.py`
@@ -201,7 +201,7 @@ service = AnalyticsService(data_source="jira")
 
 ### Python API
 ```python
-from src.analytics.service import AnalyticsService
+from backend.analytics.service import AnalyticsService
 
 service = AnalyticsService(data_source="mock")
 
@@ -236,7 +236,7 @@ Agent: [Uses get_team_velocity tool]
 
 ## ⚙️ Configuration
 
-Current settings (in `src/analytics/service.py`):
+Current settings (in `backend/analytics/service.py`):
 - **Data source**: "mock" (change to "jira" or "openproject" later)
 - **Cache TTL**: 300 seconds (5 minutes)
 - **Default sprint count**: 6 sprints for velocity
@@ -255,7 +255,7 @@ Current settings (in `src/analytics/service.py`):
 ## 📞 Support
 
 For questions or issues:
-1. Check the README: `src/analytics/README.md`
+1. Check the README: `backend/analytics/README.md`
 2. Review the tests: `tests/test_analytics.py`
 3. See implementation plan: `docs/ANALYTICS_IMPLEMENTATION_PLAN.md`
 

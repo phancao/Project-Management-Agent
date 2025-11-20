@@ -12,7 +12,7 @@ Headers:
   X-MCP-API-Key: mcp_a1b2c3d4e5f6...
 ```
 
-**Code Location**: `src/mcp_servers/pm_server/transports/sse.py:390-405`
+**Code Location**: `mcp_server/transports/sse.py:390-405`
 
 ```python
 @app.get("/sse")
@@ -28,7 +28,7 @@ async def sse_endpoint(request: Request):
 
 **What `validate_mcp_api_key()` does**:
 ```python
-# src/mcp_servers/pm_server/auth.py:18-63
+# mcp_server/auth.py:18-63
 
 async def validate_mcp_api_key(api_key: str) -> Optional[str]:
     # Query database
@@ -43,7 +43,7 @@ async def validate_mcp_api_key(api_key: str) -> Optional[str]:
 
 ### Step 2: Create User-Scoped MCP Server
 
-**Code Location**: `src/mcp_servers/pm_server/transports/sse.py:427-438`
+**Code Location**: `mcp_server/transports/sse.py:427-438`
 
 ```python
 # Create user-scoped MCP server instance
@@ -56,7 +56,7 @@ mcp_server._initialize_pm_handler()
 
 **What `_initialize_pm_handler()` does**:
 ```python
-# src/mcp_servers/pm_server/server.py:77-104
+# mcp_server/server.py:77-104
 
 def _initialize_pm_handler(self) -> None:
     # Get database session
@@ -72,7 +72,7 @@ def _initialize_pm_handler(self) -> None:
 
 **What `PMHandler.from_db_session_and_user()` does**:
 ```python
-# src/server/pm_handler.py:122-141
+# backend/server/pm_handler.py:122-141
 
 @classmethod
 def from_db_session_and_user(cls, db_session: Session, user_id: str):
@@ -84,7 +84,7 @@ def from_db_session_and_user(cls, db_session: Session, user_id: str):
 
 **When a tool is called (e.g., `list_projects`)**:
 
-**Code Location**: `src/server/pm_handler.py:277-320`
+**Code Location**: `backend/server/pm_handler.py:277-320`
 
 ```python
 async def list_all_projects(self) -> List[Dict[str, Any]]:
@@ -94,7 +94,7 @@ async def list_all_projects(self) -> List[Dict[str, Any]]:
 
 **What `_get_active_providers()` does**:
 ```python
-# src/server/pm_handler.py:143-166
+# backend/server/pm_handler.py:143-166
 
 def _get_active_providers(self) -> List[PMProviderConnection]:
     if not self.db:
@@ -140,7 +140,7 @@ WHERE is_active = TRUE
 
 ### Step 4: Create Provider Instance with Credentials
 
-**Code Location**: `src/server/pm_handler.py:168-201`
+**Code Location**: `backend/server/pm_handler.py:168-201`
 
 ```python
 def _create_provider_instance(self, provider: PMProviderConnection):
@@ -160,7 +160,7 @@ def _create_provider_instance(self, provider: PMProviderConnection):
 
 **What `create_pm_provider()` does**:
 ```python
-# src/pm_providers/factory.py:18-64
+# pm_providers/factory.py:18-64
 
 def create_pm_provider(...):
     config = PMProviderConfig(
@@ -175,7 +175,7 @@ def create_pm_provider(...):
 
 **What `JIRAProvider.__init__()` does**:
 ```python
-# src/pm_providers/jira.py:29-54
+# pm_providers/jira.py:29-54
 
 def __init__(self, config: PMProviderConfig):
     self.base_url = config.base_url  # "https://company.atlassian.net"
@@ -197,7 +197,7 @@ def __init__(self, config: PMProviderConfig):
 **When `list_projects` is called**:
 
 ```python
-# src/server/pm_handler.py:358-360
+# backend/server/pm_handler.py:358-360
 
 for provider in providers:  # Only user's providers
     provider_instance = self._create_provider_instance(provider)
@@ -209,7 +209,7 @@ for provider in providers:  # Only user's providers
 
 **JIRA API Call**:
 ```python
-# src/pm_providers/jira.py:list_projects()
+# pm_providers/jira.py:list_projects()
 
 url = f"{self.base_url}/rest/api/3/project"
 # self.base_url = "https://company.atlassian.net"
@@ -303,24 +303,24 @@ JIRA API returns user's projects
 
 ## Key Code Locations
 
-1. **API Key Validation**: `src/mcp_servers/pm_server/auth.py:validate_mcp_api_key()`
+1. **API Key Validation**: `mcp_server/auth.py:validate_mcp_api_key()`
    - Queries `user_mcp_api_keys` table
    - Returns `user_id`
 
-2. **User-Scoped Server**: `src/mcp_servers/pm_server/server.py:_initialize_pm_handler()`
+2. **User-Scoped Server**: `mcp_server/server.py:_initialize_pm_handler()`
    - Creates `PMHandler` with `user_id`
    - Stores `user_id` in `pm_handler.user_id`
 
-3. **Load Providers**: `src/server/pm_handler.py:_get_active_providers()`
+3. **Load Providers**: `backend/server/pm_handler.py:_get_active_providers()`
    - Queries `pm_provider_connections` table
    - Filters by `created_by = user_id`
    - Returns only user's providers
 
-4. **Create Provider**: `src/server/pm_handler.py:_create_provider_instance()`
+4. **Create Provider**: `backend/server/pm_handler.py:_create_provider_instance()`
    - Extracts credentials from database record
    - Creates `JIRAProvider` instance with credentials
 
-5. **Use Credentials**: `src/pm_providers/jira.py:JIRAProvider.__init__()`
+5. **Use Credentials**: `pm_providers/jira.py:JIRAProvider.__init__()`
    - Creates Basic Auth header with user's token
    - Ready to call JIRA API
 

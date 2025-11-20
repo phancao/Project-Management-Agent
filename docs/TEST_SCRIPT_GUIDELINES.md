@@ -76,7 +76,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 # Your imports here
-# from src.pm_providers.openproject_v13 import OpenProjectV13Provider
+# from pm_providers.openproject_v13 import OpenProjectV13Provider
 
 def main():
     """Main test function"""

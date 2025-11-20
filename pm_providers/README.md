@@ -69,7 +69,7 @@ CLICKUP_TEAM_ID=your-team-id
 ### Build a Provider Instance
 
 ```python
-from src.pm_providers import build_pm_provider
+from pm_providers import build_pm_provider
 from database import get_db_session
 
 # Get database session
@@ -195,7 +195,7 @@ Simply change `PM_PROVIDER` environment variable. All existing code continues to
 
 ```python
 # In flow_manager.py or handlers
-from src.pm_providers import build_pm_provider
+from pm_providers import build_pm_provider
 
 provider = build_pm_provider(db_session=self.db_session)
 # Use provider.create_task() instead of crud.create_task()

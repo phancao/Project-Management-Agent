@@ -19,14 +19,14 @@ The MCP Server is now **completely independent** from the backend system.
 ### Separate Code Modules
 
 **Backend**:
-- `src/server/pm_handler.py` - Backend PM Handler
+- `backend/server/pm_handler.py` - Backend PM Handler
 - `database/connection.py` - Backend database connection
 - `database/orm_models.py` - Backend database models
 
 **MCP Server**:
-- `src/mcp_servers/pm_server/pm_handler.py` - MCP Server PM Handler
-- `src/mcp_servers/pm_server/database/connection.py` - MCP Server database connection
-- `src/mcp_servers/pm_server/database/models.py` - MCP Server database models
+- `mcp_server/pm_handler.py` - MCP Server PM Handler
+- `mcp_server/database/connection.py` - MCP Server database connection
+- `mcp_server/database/models.py` - MCP Server database models
 
 ## Database Schema
 

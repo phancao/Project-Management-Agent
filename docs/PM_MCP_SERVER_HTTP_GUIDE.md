@@ -10,10 +10,10 @@ The HTTP transport provides a standard REST API for accessing PM operations. Per
 
 ```bash
 # Start on default port (8080)
-uv run python scripts/run_pm_mcp_server.py --transport http
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport http
 
 # Start on custom port
-uv run python scripts/run_pm_mcp_server.py --transport http --port 8082 --host 0.0.0.0
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport http --port 8082 --host 0.0.0.0
 ```
 
 ### 2. Access API Documentation

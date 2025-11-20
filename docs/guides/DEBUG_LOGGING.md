@@ -96,7 +96,7 @@ DEBUG_DEERFLOW=true DEBUG_AGENTS=true DEBUG_GRAPH=true DEBUG_WORKFLOW=true pytho
 You can also configure debug logging programmatically:
 
 ```python
-from src.config.debug_config import DebugConfig, set_debug_config
+from backend.config.debug_config import DebugConfig, set_debug_config
 
 # Create custom configuration
 debug_config = DebugConfig(
@@ -127,13 +127,13 @@ set_debug_config(debug_config)
 
 The system maps module names to Python logger names:
 
-- `deerflow` → `src.workflow`, `src.graph`, `src.agents`
-- `pm_provider` → `src.pm_providers`, `src.server.pm_handler`, `src.mcp_servers.pm_server`
-- `analytics` → `src.analytics`
-- `conversation` → `src.conversation`
-- `tools` → `src.tools`
-- `rag` → `src.rag`
-- `crawler` → `src.crawler`
+- `deerflow` → `backend.workflow`, `backend.graph`, `backend.agents`
+- `pm_provider` → `backend.pm_providers`, `backend.server.pm_handler`, `backend.mcp_servers.pm_server`
+- `analytics` → `backend.analytics`
+- `conversation` → `backend.conversation`
+- `tools` → `backend.tools`
+- `rag` → `backend.rag`
+- `crawler` → `backend.crawler`
 
 And more granular mappings for sub-modules.
 

@@ -61,7 +61,7 @@ OPENPROJECT_API_KEY=base64-encoded-api-key
 ### 3. Use in Your Code
 
 ```python
-from src.pm_providers import build_pm_provider, PMProject, PMTask
+from pm_providers import build_pm_provider, PMProject, PMTask
 
 # Build provider (reads from env)
 provider = build_pm_provider(db_session=db)
@@ -149,10 +149,10 @@ CLICKUP_TEAM_ID=<your-team-id>
 
 ### Modify Flow Manager to Use Providers
 
-Update `src/conversation/flow_manager.py`:
+Update `backend/conversation/flow_manager.py`:
 
 ```python
-from src.pm_providers import build_pm_provider
+from pm_providers import build_pm_provider
 
 class ConversationFlowManager:
     def __init__(self, db_session=None):
@@ -313,7 +313,7 @@ projects = await provider.list_projects()
 ### Example 1: Create WBS in OpenProject
 
 ```python
-from src.pm_providers import build_pm_provider, PMProject, PMTask
+from pm_providers import build_pm_provider, PMProject, PMTask
 
 # Configure for OpenProject
 import os
@@ -402,7 +402,7 @@ async def create_project_everywhere(name: str, description: str):
 
 ```python
 # Test script
-from src.pm_providers import build_pm_provider
+from pm_providers import build_pm_provider
 
 provider = build_pm_provider(db_session)
 if await provider.health_check():

@@ -32,7 +32,7 @@ export ENABLE_MCP_SERVER_CONFIGURATION=true
 
 ```bash
 # Start PM MCP Server with SSE transport
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 ```
 
 ### 3. Configure MCP Settings in Request

@@ -101,7 +101,7 @@ This document compares two approaches for handling Project Management (PM) opera
 The `ConversationFlowManager` has specific handler methods that directly call PM provider methods:
 
 ```python
-# Example: src/conversation/flow_manager.py
+# Example: backend/conversation/flow_manager.py
 async def _handle_list_tasks(self, context: ConversationContext):
     """Handle LIST_TASKS intent - List tasks for a project"""
     project_id = context.gathered_data.get("project_id")
@@ -152,7 +152,7 @@ Best for:
 PM operations are exposed as LangChain tools that agents can use dynamically:
 
 ```python
-# Example: src/tools/pm_tools.py
+# Example: backend/tools/pm_tools.py
 @tool
 async def list_tasks(
     project_id: Optional[str] = None,
@@ -243,9 +243,9 @@ Best for:
 
 ```python
 # Option 1: Add PM tools to DeerFlow agents (for research scenarios)
-# In src/graph/nodes.py - researcher_node or coder_node
+# In backend/graph/nodes.py - researcher_node or coder_node
 
-from src.tools.pm_tools import get_pm_tools
+from backend.tools.pm_tools import get_pm_tools
 
 async def researcher_node(state, config):
     tools = [
@@ -308,7 +308,7 @@ async def pm_researcher_node(state, config):
 ### Immediate Actions
 
 1. ✅ **Keep Current Direct Handlers** - They work well for simple operations
-2. ✅ **Add PM Tools to Tool Registry** - Already done (`src/tools/pm_tools.py`)
+2. ✅ **Add PM Tools to Tool Registry** - Already done (`backend/tools/pm_tools.py`)
 3. 🔄 **Add PM Tools to Specific Agents** - When needed for research scenarios
 
 ### Future Enhancements

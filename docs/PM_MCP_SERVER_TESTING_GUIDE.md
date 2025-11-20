@@ -72,7 +72,7 @@ curl -X POST http://localhost:8080/tools/call \
 
 ```bash
 # Start server in SSE mode
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 
 # In another terminal, run the test
 uv run python scripts/test_pm_mcp_sse.py
@@ -108,7 +108,7 @@ asyncio.run(test())
 
 ```bash
 # Start server in stdio mode
-uv run python scripts/run_pm_mcp_server.py --transport stdio
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport stdio
 
 # The server will communicate via stdin/stdout
 # You can pipe commands to it or use an MCP client
@@ -130,7 +130,7 @@ This tests:
 
 ```bash
 # Start server in HTTP mode
-uv run python scripts/run_pm_mcp_server.py --transport http --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport http --port 8080
 
 # Test endpoints
 curl http://localhost:8080/
@@ -327,7 +327,7 @@ asyncio.run(test_tools())
 docker-compose logs -f pm_mcp_server
 
 # Or if running locally
-uv run python scripts/run_pm_mcp_server.py --transport sse --log-level DEBUG
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --log-level DEBUG
 ```
 
 ### Verify Environment Variables
@@ -353,7 +353,7 @@ db.close()
 ### Verify Tool Registration
 
 ```python
-from src.mcp_servers.pm_server import PMMCPServer, PMServerConfig
+from mcp_server import PMMCPServer, PMServerConfig
 
 config = PMServerConfig(transport="stdio")
 server = PMMCPServer(config)

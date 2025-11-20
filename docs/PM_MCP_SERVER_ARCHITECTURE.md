@@ -63,7 +63,7 @@ The PM MCP Server is a standalone service that exposes Project Management operat
 ## 📁 File Structure
 
 ```
-src/mcp_servers/pm_server/
+mcp_server/
 ├── __init__.py              # Package exports
 ├── server.py                # Main MCP server implementation
 ├── tools/                   # MCP tool definitions
@@ -313,7 +313,7 @@ class AuthManager:
 ### From DeerFlow Agent
 
 ```python
-# src/graph/nodes.py
+# backend/graph/nodes.py
 async def researcher_node(state, config):
     # Load PM tools from MCP server
     mcp_client = MultiServerMCPClient({

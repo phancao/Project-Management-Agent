@@ -196,7 +196,7 @@ make dev
 
 # Hoặc manual
 docker-compose up -d postgres redis
-uv run uvicorn api.main:app --reload --port 8000
+uv run uvicorn backend.server.app:app --reload --port 8000
 cd frontend && npm run dev
 ```
 

@@ -213,7 +213,7 @@ uv sync
 uv run alembic upgrade head
 
 # Start the API server
-uv run uvicorn api.main:app --reload --port 8000
+uv run uvicorn backend.server.app:app --reload --port 8000
 ```
 
 ### Frontend Development
@@ -356,7 +356,7 @@ docker-compose -f docker-compose.test.yml up --abort-on-container-exit
 ### Test Coverage
 ```bash
 # Backend coverage
-uv run pytest --cov=src --cov-report=html
+uv run pytest --cov=backend --cov-report=html
 
 # PM feature coverage
 python tests/test_pm_features.py

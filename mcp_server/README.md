@@ -16,11 +16,11 @@ A standalone MCP (Model Context Protocol) server that exposes Project Management
 
 ```bash
 # Start the server
-uv run python scripts/run_pm_mcp_server.py --transport stdio
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport stdio
 
 # Or with custom database
 DATABASE_URL=postgresql://user:pass@host:port/db \
-  uv run python scripts/run_pm_mcp_server.py --transport stdio
+  uv run uv run uv run python scripts/run_pm_mcp_server.py --transport stdio
 ```
 
 ### 2. Configure Claude Desktop
@@ -121,7 +121,7 @@ MCP_ENABLE_AUDIT=true
 ### Command Line Options
 
 ```bash
-python scripts/run_pm_mcp_server.py --help
+uv run uv run python scripts/run_pm_mcp_server.py --help
 
 Options:
   --transport {stdio,sse,http}  Transport protocol (default: stdio)
@@ -137,7 +137,7 @@ Options:
 
 ```bash
 # Start server with SSE transport
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 ```
 
 In your agent code:
@@ -167,14 +167,14 @@ agent = create_agent("my_agent", pm_tools)
 ```bash
 MCP_ENABLE_AUTH=true \
 MCP_AUTH_SECRET=your-secret-key \
-  uv run python scripts/run_pm_mcp_server.py
+  uv run uv run uv run python scripts/run_pm_mcp_server.py
 ```
 
 ### Enable RBAC
 
 ```bash
 MCP_ENABLE_RBAC=true \
-  uv run python scripts/run_pm_mcp_server.py
+  uv run uv run uv run python scripts/run_pm_mcp_server.py
 ```
 
 ## 📊 Audit Logging
@@ -236,7 +236,7 @@ PM MCP Server
 
 ### Add New Tools
 
-1. Create or edit a tool module in `src/mcp_servers/pm_server/tools/`
+1. Create or edit a tool module in `mcp_server/tools/`
 2. Register the tool using `@server.call_tool()` decorator
 3. Return `list[TextContent]` with formatted results
 
@@ -263,7 +263,7 @@ async def my_new_tool(arguments: dict[str, Any]) -> list[TextContent]:
 
 ### Add New Transport
 
-1. Create transport module in `src/mcp_servers/pm_server/transports/`
+1. Create transport module in `mcp_server/transports/`
 2. Implement `run_<transport>()` method in `server.py`
 3. Update `PMServerConfig` to support new transport
 

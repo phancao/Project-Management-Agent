@@ -28,7 +28,7 @@ This document lists all PMTask fields and their update support status across pro
 
 ## Implementation Details
 
-### JIRA Provider (`src/pm_providers/jira.py`)
+### JIRA Provider (`pm_providers/jira.py`)
 
 **Currently Supported:**
 - ✅ `title` / `summary` - Maps to JIRA `summary` field
@@ -47,7 +47,7 @@ This document lists all PMTask fields and their update support status across pro
 - ❌ `start_date` - Not implemented
 - ❌ `due_date` - Not implemented (JIRA has `duedate` field)
 
-### OpenProject Provider (`src/pm_providers/openproject.py`)
+### OpenProject Provider (`pm_providers/openproject.py`)
 
 **Currently Supported:**
 - ✅ `title` / `subject` - Maps to OpenProject `subject` field

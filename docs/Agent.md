@@ -153,9 +153,9 @@ cd web && pnpm typecheck
 ```
 
 ### Adding New Features
-1. **New Agent**: Add agent in `src/agents/` + update graph in `src/graph/builder.py`
-2. **New Tool**: Add tool in `src/tools/` + register in agent prompts
-3. **New Workflow**: Create graph builder in `src/[feature]/graph/builder.py`
+1. **New Agent**: Add agent in `backend/agents/` + update graph in `backend/graph/builder.py`
+2. **New Tool**: Add tool in `backend/tools/` + register in agent prompts
+3. **New Workflow**: Create graph builder in `backend/[feature]/graph/builder.py`
 4. **Frontend Component**: Add to `web/src/components/` + update API in `web/src/core/api/`
 
 ### Configuration Changes

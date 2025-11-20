@@ -208,7 +208,7 @@
 
 ```bash
 # Start with stdio transport
-uv run python scripts/run_pm_mcp_server.py --transport stdio
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport stdio
 
 # Run tests
 uv run python scripts/test_pm_mcp_server.py
@@ -241,7 +241,7 @@ Add to `claude_desktop_config.json`:
 ## 📖 Documentation
 
 - **Architecture**: `docs/PM_MCP_SERVER_ARCHITECTURE.md`
-- **Usage Guide**: `src/mcp_servers/pm_server/README.md`
+- **Usage Guide**: `mcp_server/README.md`
 - **Status**: This document
 
 ## 🎯 Next Steps
@@ -269,7 +269,7 @@ Add to `claude_desktop_config.json`:
 
 ## 🔗 Related Files
 
-- `src/mcp_servers/pm_server/` - Main package
+- `mcp_server/` - Main package
 - `scripts/run_pm_mcp_server.py` - Startup script
 - `scripts/test_pm_mcp_server.py` - Test suite
 - `docs/PM_MCP_SERVER_ARCHITECTURE.md` - Architecture doc

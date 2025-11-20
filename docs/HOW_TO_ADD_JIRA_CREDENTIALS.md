@@ -138,7 +138,7 @@ User copies the MCP API key and configures Cursor:
 
 ⚠️ **The current `/api/pm/providers/import-projects` endpoint may not set `created_by` correctly!**
 
-**Current Code** (`src/server/app.py` line 2749):
+**Current Code** (`backend/server/app.py` line 2749):
 ```python
 provider = PMProviderConnection(
     name=f"{request.provider_type} - {request.base_url}",

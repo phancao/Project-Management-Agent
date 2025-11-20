@@ -73,10 +73,10 @@ The PM MCP Server includes comprehensive authentication and authorization featur
 
 ```bash
 # HTTP transport with auth enabled (default)
-uv run python scripts/run_pm_mcp_server.py --transport http --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport http --port 8080
 
 # Disable auth for testing
-uv run python scripts/run_pm_mcp_server.py --transport http --port 8080 --no-auth
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport http --port 8080 --no-auth
 ```
 
 ### 2. Generate Authentication Token
@@ -317,7 +317,7 @@ main();
 ### DeerFlow Integration
 
 ```python
-from src.tools import configure_pm_mcp_client, get_pm_mcp_tools
+from backend.tools import configure_pm_mcp_client, get_pm_mcp_tools
 
 # Configure with authentication
 configure_pm_mcp_client(

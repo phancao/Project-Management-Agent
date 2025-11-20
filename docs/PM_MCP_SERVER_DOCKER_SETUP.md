@@ -260,7 +260,7 @@ For development, you can still run locally:
 
 ```bash
 # Local development (not in Docker)
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 ```
 
 The Docker setup is primarily for production deployments.

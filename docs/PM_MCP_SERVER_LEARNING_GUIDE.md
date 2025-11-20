@@ -58,7 +58,7 @@ This guide provides a comprehensive overview of the PM MCP Server codebase, its 
 ## 📁 Directory Structure
 
 ```
-src/mcp_servers/pm_server/
+mcp_server/
 ├── __init__.py              # Package exports
 ├── server.py                # Main MCP server implementation (PMMCPServer class)
 ├── config.py                # Server configuration (PMServerConfig)
@@ -190,7 +190,7 @@ def register_<category>_tools(
 
 ### 4. PMHandler Integration
 
-The PM MCP Server uses `PMHandler` from `src/server/pm_handler.py`:
+The PM MCP Server uses `PMHandler` from `backend/server/pm_handler.py`:
 
 **PMHandler Features:**
 - **Multi-Provider Mode**: Aggregates data from all active providers
@@ -331,13 +331,13 @@ The PM MCP Server uses `PMHandler` from `src/server/pm_handler.py`:
 
 ```bash
 # stdio transport (Claude Desktop)
-uv run python scripts/run_pm_mcp_server.py --transport stdio
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport stdio
 
 # SSE transport (web agents)
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 
 # HTTP transport (REST API)
-uv run python scripts/run_pm_mcp_server.py --transport http --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport http --port 8080
 ```
 
 ### Using from DeerFlow Agents
@@ -394,9 +394,9 @@ Add to `claude_desktop_config.json`:
    ↓ (routes to tool)
 3. Tool Function (tools/*.py)
    ↓ (calls PMHandler)
-4. PMHandler (src/server/pm_handler.py)
+4. PMHandler (backend/server/pm_handler.py)
    ↓ (routes to provider)
-5. PM Provider (src/pm_providers/*.py)
+5. PM Provider (pm_providers/*.py)
    ↓ (API call)
 6. External PM System (OpenProject/JIRA/etc.)
    ↓ (response)
@@ -575,7 +575,7 @@ Test 4: PM MCP Server Connection
 ============================================================
 🔄 Testing connection to http://localhost:8080...
 ⚠️  PM MCP Server not running at http://localhost:8080
-   Start with: uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+   Start with: uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 
 ============================================================
 TEST SUMMARY
@@ -587,7 +587,7 @@ Passed: 4/4
 📝 Note: PM MCP Server is not running.
    To test full integration:
    1. Start PM MCP Server:
-      uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+      uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 
    2. Test with a chat request:
       curl -X POST http://localhost:8000/api/chat/stream \
@@ -606,7 +606,7 @@ Passed: 4/4
 **Full Integration Test** (requires server running):
 ```bash
 # Terminal 1: Start PM MCP Server
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 
 # Terminal 2: Run integration tests
 uv run python scripts/test_pm_mcp_integration.py
@@ -675,7 +675,7 @@ Passed: 3/3
 
 📝 Next steps:
    1. Start PM MCP Server with auth:
-      uv run python scripts/run_pm_mcp_server.py --transport http --port 8080
+      uv run uv run uv run python scripts/run_pm_mcp_server.py --transport http --port 8080
 
    2. Generate token:
       curl -X POST http://localhost:8080/auth/token \
@@ -722,7 +722,7 @@ Testing PM MCP Server SSE Transport
 ✅ Server instance created
 
 📝 To test the SSE server, run:
-   uv run python scripts/run_pm_mcp_server.py --transport sse --port 8081
+   uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8081
 
    Then in another terminal:
    curl http://localhost:8081/
@@ -737,7 +737,7 @@ Testing PM MCP Server SSE Transport
 **Manual SSE Testing** (requires server running):
 ```bash
 # Terminal 1: Start SSE server
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8081
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8081
 
 # Terminal 2: Test endpoints
 curl http://localhost:8081/
@@ -780,7 +780,7 @@ Testing PM MCP Server HTTP Transport
 ✅ Server instance created
 
 📝 To test the HTTP server, run:
-   uv run python scripts/run_pm_mcp_server.py --transport http --port 8082
+   uv run uv run uv run python scripts/run_pm_mcp_server.py --transport http --port 8082
 
    Then in another terminal:
    # Server info
@@ -814,7 +814,7 @@ Testing PM MCP Server HTTP Transport
 **Manual HTTP Testing** (requires server running):
 ```bash
 # Terminal 1: Start HTTP server
-uv run python scripts/run_pm_mcp_server.py --transport http --port 8082
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport http --port 8082
 
 # Terminal 2: Test endpoints
 curl http://localhost:8082/
@@ -890,7 +890,7 @@ python -c "import sys; print(sys.path)"
 **Integration test can't connect:**
 ```bash
 # Start PM MCP Server first
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 
 # Then run integration tests
 uv run python scripts/test_pm_mcp_integration.py
@@ -908,7 +908,7 @@ pip install watchdog
 watchmedo auto-restart \
   --patterns="*.py" \
   --recursive \
-  --directory=src/mcp_servers/pm_server \
+  --directory=mcp_server/pm_server \
   -- \
   uv run python scripts/test_pm_mcp_server.py
 ```
@@ -940,14 +940,14 @@ watchmedo auto-restart \
 - `docs/PM_MCP_SERVER_SSE_GUIDE.md` - SSE transport guide
 - `docs/PM_MCP_SERVER_HTTP_GUIDE.md` - HTTP transport guide
 - `docs/PM_MCP_SERVER_AUTH_GUIDE.md` - Authentication guide
-- `src/mcp_servers/pm_server/README.md` - Server README
+- `mcp_server/README.md` - Server README
 
 ## 🎓 Learning Path
 
 1. **Start Here**: Read this guide and `PM_MCP_SERVER_ARCHITECTURE.md`
 2. **Understand Core**: Study `server.py` and `config.py`
 3. **Explore Tools**: Look at `tools/projects.py` and `tools/tasks.py`
-4. **Learn PMHandler**: Read `src/server/pm_handler.py`
+4. **Learn PMHandler**: Read `backend/server/pm_handler.py`
 5. **Study Transports**: Check `transports/sse.py` and `transports/http.py`
 6. **Review Auth**: Explore `auth/manager.py` and `auth/models.py`
 7. **Run Examples**: Try the startup script and test suite

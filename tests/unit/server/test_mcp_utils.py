@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-import src.server.mcp_utils as mcp_utils
+import backend.server.mcp_utils as mcp_utils
 
 
 @pytest.mark.asyncio

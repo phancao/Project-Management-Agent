@@ -5,7 +5,7 @@ import base64
 import json
 from unittest.mock import MagicMock, patch
 
-from src.tools.tts import VolcengineTTS
+from backend.tools.tts import VolcengineTTS
 
 
 class TestVolcengineTTS:

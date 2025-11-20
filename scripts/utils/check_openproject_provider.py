@@ -3,7 +3,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database.orm_models import PMProviderConnection
-from src.config.loader import get_str_env
+from backend.config.loader import get_str_env
 
 db_url = get_str_env("DATABASE_URL", "postgresql://pm_user:pm_password@localhost:5432/project_management")
 engine = create_engine(db_url)

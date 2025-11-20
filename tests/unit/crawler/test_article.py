@@ -1,6 +1,6 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
-from src.crawler.article import Article
+from backend.crawler.article import Article
 
 
 class DummyMarkdownify:

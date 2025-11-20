@@ -18,21 +18,21 @@ async def test_deerflow_imports():
     print("🔍 Testing DeerFlow imports...")
     
     try:
-        from src.llms.llm import get_llm_by_type
+        from backend.llms.llm import get_llm_by_type
         print("✅ LLM import successful")
     except Exception as e:
         print(f"❌ LLM import failed: {e}")
         return False
     
     try:
-        from src.graph.builder import build_graph
+        from backend.graph.builder import build_graph
         print("✅ Graph builder import successful")
     except Exception as e:
         print(f"❌ Graph builder import failed: {e}")
         return False
     
     try:
-        from src.graph.types import State
+        from backend.graph.types import State
         print("✅ State import successful")
     except Exception as e:
         print(f"❌ State import failed: {e}")
@@ -52,7 +52,7 @@ async def test_llm_connection():
     print("\n🤖 Testing LLM connection...")
     
     try:
-        from src.llms.llm import get_llm_by_type
+        from backend.llms.llm import get_llm_by_type
         
         llm = get_llm_by_type("basic")
         print("✅ LLM instance created")
@@ -71,7 +71,7 @@ async def test_graph_building():
     print("\n🏗️ Testing graph building...")
     
     try:
-        from src.graph.builder import build_graph
+        from backend.graph.builder import build_graph
         
         graph = build_graph()
         print("✅ Graph built successfully")

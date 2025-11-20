@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from src.crawler.jina_client import JinaClient
+from backend.crawler.jina_client import JinaClient
 
 
 class TestJinaClient:

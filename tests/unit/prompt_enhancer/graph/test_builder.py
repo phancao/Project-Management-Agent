@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.prompt_enhancer.graph.builder import build_graph
-from src.prompt_enhancer.graph.state import PromptEnhancerState
+from backend.prompt_enhancer.graph.builder import build_graph
+from backend.prompt_enhancer.graph.state import PromptEnhancerState
 
 
 class TestBuildGraph:

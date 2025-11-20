@@ -28,7 +28,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.mcp_servers.pm_server import PMMCPServer, PMServerConfig
+from mcp_server.server import PMMCPServer
+from mcp_server.config import PMServerConfig
 
 
 def setup_logging(log_level: str) -> None:

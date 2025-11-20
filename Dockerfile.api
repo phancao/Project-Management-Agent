@@ -35,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 # Run the application
 # Use uvicorn directly with the app module path
-CMD ["uv", "run", "uvicorn", "src.server.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "backend.server.app:app", "--host", "0.0.0.0", "--port", "8000"]

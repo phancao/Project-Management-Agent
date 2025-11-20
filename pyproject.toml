@@ -81,7 +81,7 @@ filterwarnings = [
 fail_under = 25
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["backend", "mcp_server", "pm_providers", "shared"]
 
 [tool.ruff]
 line-length = 88

@@ -53,9 +53,11 @@ services:
         condition: service_healthy
     volumes:
       - ./api:/app/api
-      - ./src:/app/src
+      - ./backend:/app/backend
+      - ./pm_providers:/app/pm_providers
+      - ./shared:/app/shared
       - ./database:/app/database
-    command: uv run uvicorn src.server.app:app --host 0.0.0.0 --port 8000 --reload
+    command: uv run uvicorn backend.server.app:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -217,7 +219,9 @@ services:
       mcp_postgres:
         condition: service_healthy
     volumes:
-      - ./src:/app/src
+      - ./mcp_server:/app/mcp_server
+      - ./pm_providers:/app/pm_providers
+      - ./shared:/app/shared
       - ./database:/app/database
       - ./scripts:/app/scripts
       - ./logs:/app/logs

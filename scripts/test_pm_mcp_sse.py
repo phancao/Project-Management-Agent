@@ -20,7 +20,8 @@ async def test_sse_server():
     print("Testing PM MCP Server SSE Transport")
     print("=" * 60)
     
-    from src.mcp_servers.pm_server import PMMCPServer, PMServerConfig
+    from mcp_server.server import PMMCPServer
+    from mcp_server.config import PMServerConfig
     
     # Create config for SSE
     config = PMServerConfig(

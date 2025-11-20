@@ -3,7 +3,7 @@
 
 import json
 
-from src.utils.json_utils import (
+from backend.utils.json_utils import (
     _extract_json_from_content,
     repair_json_output,
     sanitize_tool_response,

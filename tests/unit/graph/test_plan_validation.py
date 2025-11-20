@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.graph.nodes import validate_and_fix_plan
+from backend.graph.nodes import validate_and_fix_plan
 
 
 class TestValidateAndFixPlanStepTypeRepair:

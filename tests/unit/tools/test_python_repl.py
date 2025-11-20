@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.tools.python_repl import python_repl_tool
+from backend.tools.python_repl import python_repl_tool
 
 
 class TestPythonReplTool:

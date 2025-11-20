@@ -12,8 +12,8 @@ from langchain_core.messages import (
 )
 
 from src.llms import llm as llm_module
-from src.llms.providers import dashscope as dashscope_module
-from src.llms.providers.dashscope import (
+from backend.llms.providers import dashscope as dashscope_module
+from backend.llms.providers.dashscope import (
     ChatDashscope,
     _convert_chunk_to_generation_chunk,
     _convert_delta_to_message_chunk,

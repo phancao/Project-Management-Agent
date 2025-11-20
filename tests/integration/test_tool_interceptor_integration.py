@@ -18,10 +18,10 @@ import pytest
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 
-from src.agents.agents import create_agent
-from src.agents.tool_interceptor import ToolInterceptor, wrap_tools_with_interceptor
-from src.config.configuration import Configuration
-from src.server.chat_request import ChatRequest
+from backend.agents.agents import create_agent
+from backend.agents.tool_interceptor import ToolInterceptor, wrap_tools_with_interceptor
+from backend.config.configuration import Configuration
+from backend.server.chat_request import ChatRequest
 
 
 class TestToolInterceptorIntegration:

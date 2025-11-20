@@ -18,7 +18,7 @@ async def test_conversation_imports():
     print("🔍 Testing Conversation Flow Manager imports...")
     
     try:
-        from src.conversation.flow_manager import (
+        from backend.conversation.flow_manager import (
             ConversationFlowManager, 
             IntentType, 
             FlowState,
@@ -36,7 +36,7 @@ async def test_intent_classification():
     print("\n🎯 Testing intent classification...")
     
     try:
-        from src.conversation.flow_manager import IntentClassifier, IntentType
+        from backend.conversation.flow_manager import IntentClassifier, IntentType
         
         classifier = IntentClassifier()
         
@@ -68,7 +68,7 @@ async def test_question_generation():
     print("\n❓ Testing question generation...")
     
     try:
-        from src.conversation.flow_manager import QuestionGenerator, IntentType
+        from backend.conversation.flow_manager import QuestionGenerator, IntentType
         
         generator = QuestionGenerator()
         
@@ -100,7 +100,7 @@ async def test_conversation_flow():
     print("\n💬 Testing conversation flow...")
     
     try:
-        from src.conversation.flow_manager import ConversationFlowManager
+        from backend.conversation.flow_manager import ConversationFlowManager
         
         manager = ConversationFlowManager()
         session_id = str(uuid.uuid4())
@@ -152,7 +152,7 @@ async def test_data_validation():
     print("\n✅ Testing data validation...")
     
     try:
-        from src.conversation.flow_manager import DataValidator
+        from backend.conversation.flow_manager import DataValidator
         
         validator = DataValidator()
         
@@ -194,7 +194,7 @@ async def test_context_management():
     print("\n🧠 Testing context management...")
     
     try:
-        from src.conversation.flow_manager import ConversationFlowManager
+        from backend.conversation.flow_manager import ConversationFlowManager
         
         manager = ConversationFlowManager()
         session_id = str(uuid.uuid4())
@@ -231,7 +231,7 @@ async def test_flow_states():
     print("\n🔄 Testing flow state transitions...")
     
     try:
-        from src.conversation.flow_manager import ConversationFlowManager, FlowState
+        from backend.conversation.flow_manager import ConversationFlowManager, FlowState
         
         manager = ConversationFlowManager()
         session_id = str(uuid.uuid4())

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 from langchain_core.tools import BaseTool, tool
 
-from src.agents.tool_interceptor import (
+from backend.agents.tool_interceptor import (
     ToolInterceptor,
     wrap_tools_with_interceptor,
 )

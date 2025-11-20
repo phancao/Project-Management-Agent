@@ -27,8 +27,8 @@ from uuid import uuid4
 import pytest
 
 import src.rag.milvus as milvus_mod
-from src.rag.milvus import MilvusProvider
-from src.rag.retriever import Resource
+from backend.rag.milvus import MilvusProvider
+from backend.rag.retriever import Resource
 
 
 class DummyEmbedding:

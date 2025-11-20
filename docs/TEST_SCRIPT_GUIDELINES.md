@@ -108,7 +108,7 @@ Tests the [feature/component] functionality.
 """
 
 import pytest
-from src.module import ClassOrFunction
+from backend.module import ClassOrFunction
 
 class TestFeature:
     """Test suite for [feature]"""

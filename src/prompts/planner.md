@@ -40,8 +40,12 @@ These are simple data queries that require MCP PM tools (NOT web search or resea
 
 For simple PM queries:
 1. **Set `has_enough_context: true`** - These queries don't need external research, just data retrieval from MCP PM tools
-2. **Create a simple plan** with 1-2 steps that use MCP PM tools:
-   - Step 1: Use the appropriate MCP PM tool (e.g., `list_projects`, `search_projects`, `list_my_tasks`) to retrieve the data
+2. **Create a simple plan** with 2-3 steps that follow the PM provider workflow:
+   - **Step 1 (REQUIRED)**: Always start with `list_providers` tool to check if PM providers are configured
+     - Description: "Use the `list_providers` MCP PM tool to check if any PM providers are configured. This MUST be called first before any project data operations."
+   - **Step 2 (CONDITIONAL)**: If no providers exist, configure one using `configure_pm_provider`
+     - Description: "If `list_providers` returns no active providers, use the `configure_pm_provider` MCP PM tool to set up a provider. For demo/testing, use provider_type='mock', base_url='http://localhost', name='Demo Provider' (no credentials needed)."
+   - **Step 3**: Use the appropriate MCP PM tool (e.g., `list_projects`, `search_projects`, `list_my_tasks`) to retrieve the data
      - **CRITICAL**: Be explicit about which PM tool to use:
        - For "list my projects" / "show my projects" / "list projects" → Use `list_projects` tool
        - For "is there a project named [X]" / "search for project [X]" / "find project [X]" → Use `search_projects` tool with the project name as the query parameter
@@ -60,7 +64,7 @@ For simple PM queries:
        - For "show sprints" → Use `list_sprints` tool
        - For "show epics" → Use `list_epics` tool
      - **Step description should be explicit**: 
-       - For listing projects: "Use the `list_projects` MCP PM tool to retrieve all available projects from all active PM providers (OpenProject, JIRA, ClickUp, etc.)"
+       - For listing projects: "Use the `list_projects` MCP PM tool to retrieve all available projects from all active PM providers (OpenProject, JIRA, ClickUp, etc.). **IMPORTANT**: This step should only be executed AFTER checking providers with `list_providers` and configuring a provider if needed."
        - For searching projects: "Use the `search_projects` MCP PM tool with query '[project name]' to search for projects matching the name across all active PM providers"
        - For listing my tasks: "Use the `list_my_tasks` MCP PM tool. Prioritize user intent:
          - If user says 'ALL my tasks' / 'all my tasks' / 'every task' / 'across all projects': 

@@ -27,6 +27,36 @@ You have access to two types of tools:
      - Query tasks by project or assignee
      - **Use `list_my_tasks` tool** when the user asks to "list my tasks", "show my tasks", "what tasks do I have", "do I have any tasks today", or similar queries about their assigned tasks.
      
+     **CRITICAL: PM Provider Configuration Workflow**
+     
+     Before querying any project data (projects, tasks, sprints, etc.), you MUST follow this workflow:
+     
+     1. **Check Providers First**: Always call `list_providers` tool FIRST to see if any PM providers are configured
+     2. **Configure if Needed**: If `list_providers` returns no active providers:
+        - For demo/testing: Configure a Mock provider using `configure_pm_provider` with provider_type="mock" (no credentials needed, contains demo data)
+     
+     **CRITICAL: Tool Availability**
+     - **ALWAYS try tools directly** - Don't rely on previous step findings about tool availability
+     - If a previous step says a tool is "not available" or "not recognized", **IGNORE that finding** and try the tool anyway
+     - Tool availability can change between steps, and tools are dynamically loaded
+     - The tools `list_providers` and `configure_pm_provider` ARE available - always try them if needed
+     - If you see a tool name in your available tools list, you CAN use it - don't trust previous error messages
+        - For real data: Ask user for provider credentials, then configure using `configure_pm_provider`
+     3. **Then Query Data**: Only after confirming active providers exist, call tools like `list_projects`, `list_tasks`, etc.
+     
+     **Example Workflow**:
+     - User: "list my projects"
+     - Agent actions:
+       1. Call `list_providers()` → Returns empty list or no active providers
+       2. Call `configure_pm_provider({"provider_type": "mock", "base_url": "http://localhost", "name": "Demo Provider"})` → Configures mock provider with demo data
+       3. Call `list_projects()` → Returns projects from the configured provider
+     
+     **Why This Matters**:
+     - `list_projects` will return 0 projects if no providers are configured
+     - You must configure at least one provider before project data is available
+     - Mock provider is perfect for demo/testing scenarios (no credentials needed, has demo data)
+     - Always check provider status first to avoid unnecessary errors
+     
      **CONTEXT-AWARE BEHAVIOR WITH USER INTENT PRIORITY**:
      
      **PRIORITY 1: User's explicit intent overrides context**

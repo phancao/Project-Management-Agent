@@ -894,6 +894,20 @@ async def _execute_agent_step(
     # Process the result
     response_content = result["messages"][-1].content
     
+    # Log all messages to debug tool call results
+    logger.debug(f"[{agent_name}] All messages in result: {len(result.get('messages', []))}")
+    for i, msg in enumerate(result.get("messages", [])):
+        msg_type = type(msg).__name__
+        if msg_type == "ToolMessage":
+            logger.info(f"[{agent_name}] Message {i}: ToolMessage - tool_call_id={getattr(msg, 'tool_call_id', 'N/A')}, content={str(msg.content)[:200]}")
+        elif msg_type == "AIMessage":
+            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                logger.info(f"[{agent_name}] Message {i}: AIMessage with {len(msg.tool_calls)} tool calls: {[tc.get('name', 'N/A') for tc in msg.tool_calls]}")
+            else:
+                logger.debug(f"[{agent_name}] Message {i}: AIMessage - content={str(msg.content)[:200]}")
+        else:
+            logger.debug(f"[{agent_name}] Message {i}: {msg_type} - content={str(msg.content)[:200] if hasattr(msg, 'content') else 'N/A'}")
+    
     # Sanitize response to remove extra tokens and truncate if needed
     response_content = sanitize_tool_response(str(response_content))
     
@@ -940,6 +954,26 @@ async def _setup_and_execute_agent_step(
         Command to update state and go to research_team
     """
     configurable = Configuration.from_runnable_config(config)
+    
+    # Debug logging for mcp_settings
+    logger.info(
+        f"[{agent_type}] Configuration.mcp_settings: {configurable.mcp_settings is not None}, "
+        f"type: {type(configurable.mcp_settings).__name__}"
+    )
+    if configurable.mcp_settings:
+        logger.info(
+            f"[{agent_type}] mcp_settings keys: {list(configurable.mcp_settings.keys()) if isinstance(configurable.mcp_settings, dict) else 'N/A'}"
+        )
+        if isinstance(configurable.mcp_settings, dict) and "servers" in configurable.mcp_settings:
+            logger.info(
+                f"[{agent_type}] mcp_settings['servers'] keys: {list(configurable.mcp_settings['servers'].keys())}"
+            )
+            for server_name, server_config in configurable.mcp_settings["servers"].items():
+                logger.info(
+                    f"[{agent_type}] Server '{server_name}' in mcp_settings: transport={server_config.get('transport')}, "
+                    f"has_url={'url' in server_config}, has_command={'command' in server_config}"
+                )
+    
     mcp_servers = {}
     enabled_tools = {}
 
@@ -965,8 +999,39 @@ async def _setup_and_execute_agent_step(
                 f"[{agent_type}] Connecting to {len(mcp_servers)} MCP server(s): "
                 f"{', '.join(mcp_servers.keys())}"
             )
+            # Detailed logging of each server config
+            for server_name, server_config in mcp_servers.items():
+                logger.info(
+                    f"[{agent_type}] Server '{server_name}' config: transport={server_config.get('transport')}, "
+                    f"has_url={'url' in server_config}, has_command={'command' in server_config}, "
+                    f"config_keys={list(server_config.keys())}"
+                )
+                if 'url' in server_config:
+                    logger.info(f"[{agent_type}] Server '{server_name}' URL: {server_config['url']}")
+                if 'transport' in server_config:
+                    logger.info(f"[{agent_type}] Server '{server_name}' transport type: {type(server_config['transport']).__name__}, value: {repr(server_config['transport'])}")
+            logger.info(
+                f"[{agent_type}] MCP server configs: {json.dumps(mcp_servers, indent=2, default=str)}"
+            )
+            logger.info(f"[{agent_type}] Creating MultiServerMCPClient with {len(mcp_servers)} server(s)...")
+            # Log the exact dict being passed
+            logger.info(f"[{agent_type}] Passing to MultiServerMCPClient: {json.dumps(mcp_servers, indent=2, default=str)}")
             client = MultiServerMCPClient(mcp_servers)
+            logger.info(f"[{agent_type}] MultiServerMCPClient created. Checking connections...")
+            # Verify what connections were actually stored
+            for server_name, connection in client.connections.items():
+                logger.info(
+                    f"[{agent_type}] Stored connection '{server_name}': transport={connection.get('transport')}, "
+                    f"has_url={'url' in connection}, keys={list(connection.keys())}, "
+                    f"connection_type={type(connection).__name__}"
+                )
+                # Deep inspection of the connection
+                if isinstance(connection, dict):
+                    logger.info(
+                        f"[{agent_type}] Connection '{server_name}' dict contents: {json.dumps(connection, indent=2, default=str)}"
+                    )
             loaded_tools = default_tools[:]
+            logger.info(f"[{agent_type}] Calling client.get_tools()...")
             all_tools = await client.get_tools()
             logger.info(
                 f"[{agent_type}] Retrieved {len(all_tools)} tools from MCP servers"

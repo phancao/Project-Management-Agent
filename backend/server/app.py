@@ -20,27 +20,27 @@ from langgraph.store.memory import InMemoryStore
 from langgraph.types import Command
 from psycopg_pool import AsyncConnectionPool
 
-from backend.config.configuration import get_recursion_limit
-from backend.config.loader import get_bool_env, get_str_env
-from backend.config.report_style import ReportStyle
-from backend.config.tools import SELECTED_RAG_PROVIDER
-from backend.graph.builder import build_graph_with_memory
-from backend.graph.checkpoint import chat_stream_message
-from backend.graph.utils import (
+from src.config.configuration import get_recursion_limit
+from src.config.loader import get_bool_env, get_str_env
+from src.config.report_style import ReportStyle
+from src.config.tools import SELECTED_RAG_PROVIDER
+from src.graph.builder import build_graph_with_memory
+from src.graph.checkpoint import chat_stream_message
+from src.graph.utils import (
     build_clarified_topic_from_history,
     reconstruct_clarification_history,
 )
-from backend.llms.llm import get_configured_llm_models
-from backend.podcast.graph.builder import build_graph as build_podcast_graph
-from backend.ppt.graph.builder import build_graph as build_ppt_graph
-from backend.prompt_enhancer.graph.builder import (
+from src.llms.llm import get_configured_llm_models
+from src.podcast.graph.builder import build_graph as build_podcast_graph
+from src.ppt.graph.builder import build_graph as build_ppt_graph
+from src.prompt_enhancer.graph.builder import (
     build_graph as build_prompt_enhancer_graph
 )
-from backend.prose.graph.builder import build_graph as build_prose_graph
-from backend.rag.builder import build_retriever
-from backend.rag.milvus import load_examples
-from backend.rag.retriever import Resource
-from backend.server.chat_request import (
+from src.prose.graph.builder import build_graph as build_prose_graph
+from src.rag.builder import build_retriever
+from src.rag.milvus import load_examples
+from src.rag.retriever import Resource
+from src.server.chat_request import (
     ChatRequest,
     EnhancePromptRequest,
     GeneratePodcastRequest,
@@ -48,25 +48,25 @@ from backend.server.chat_request import (
     GenerateProseRequest,
     TTSRequest,
 )
-from backend.server.config_request import ConfigResponse
-from backend.server.mcp_request import (
+from src.server.config_request import ConfigResponse
+from src.server.mcp_request import (
     MCPServerMetadataRequest,
     MCPServerMetadataResponse,
 )
-from backend.server.mcp_utils import load_mcp_tools
-from backend.server.rag_request import (
+from src.server.mcp_utils import load_mcp_tools
+from src.server.rag_request import (
     RAGConfigResponse,
     RAGResourceRequest,
     RAGResourcesResponse,
 )
-from backend.server.pm_provider_request import (
+from src.server.pm_provider_request import (
     ProjectImportRequest,
     ProviderUpdateRequest,
 )
 from pydantic import BaseModel
 from src.tools import VolcengineTTS
-from backend.utils.json_utils import sanitize_args
-from backend.utils.log_sanitizer import (
+from src.utils.json_utils import sanitize_args
+from src.utils.log_sanitizer import (
     sanitize_agent_name,
     sanitize_log_input,
     sanitize_thread_id,
@@ -905,15 +905,17 @@ async def _astream_workflow_generator(
         f"enable_deep_thinking={enable_deep_thinking}"
     )
     workflow_config = {
-        "thread_id": thread_id,
-        "resources": resources,
-        "max_plan_iterations": max_plan_iterations,
-        "max_step_num": max_step_num,
-        "max_search_results": max_search_results,
-        "mcp_settings": mcp_settings,
-        "report_style": report_style.value,
-        "enable_deep_thinking": enable_deep_thinking,
-        "interrupt_before_tools": interrupt_before_tools,
+        "configurable": {
+            "thread_id": thread_id,
+            "resources": resources,
+            "max_plan_iterations": max_plan_iterations,
+            "max_step_num": max_step_num,
+            "max_search_results": max_search_results,
+            "mcp_settings": mcp_settings,
+            "report_style": report_style.value,
+            "enable_deep_thinking": enable_deep_thinking,
+            "interrupt_before_tools": interrupt_before_tools,
+        },
         "recursion_limit": get_recursion_limit(),
     }
 
@@ -1318,7 +1320,7 @@ async def pm_list_projects(request: Request):
     """List all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1335,11 +1337,48 @@ async def pm_list_projects(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/pm/projects/{project_id}")
+async def pm_get_project(project_id: str):
+    """Get a single project by ID"""
+    try:
+        from database.connection import get_db_session
+        from backend.server.pm_handler import PMHandler
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            projects = await handler.list_all_projects()
+            project = next((p for p in projects if p.get("id") == project_id), None)
+            
+            if not project:
+                raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+            
+            return project
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+    except Exception as e:
+        logger.error(f"Failed to get project: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/pm/mock/regenerate")
 async def pm_regenerate_mock_dataset():
     """Regenerate the mock dataset served by MockPMProvider."""
-    from pm_providers.models import PMProviderConfig
-    from pm_providers.mock_provider import MockPMProvider
+    from src.pm_providers.models import PMProviderConfig
+    from src.pm_providers.mock_provider import MockPMProvider
 
     provider = MockPMProvider(
         PMProviderConfig(
@@ -1357,7 +1396,7 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
     """Create a new task within the specified project"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1402,7 +1441,7 @@ async def pm_list_tasks(request: Request, project_id: str):
     """List all tasks for a project"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1411,7 +1450,7 @@ async def pm_list_tasks(request: Request, project_id: str):
             # Check if project_id has provider prefix
             if ":" not in project_id:
                 # Fallback: use global flow_manager if no provider_id prefix
-                from backend.conversation.flow_manager import (
+                from src.conversation.flow_manager import (
                     ConversationFlowManager
                 )
                 global flow_manager
@@ -1514,7 +1553,7 @@ async def pm_project_timeline(project_id: str):
     """Return sprint + task scheduling data for timeline views."""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1556,7 +1595,7 @@ async def pm_list_my_tasks(request: Request):
     """List tasks assigned to current user across all active PM providers"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1581,7 +1620,7 @@ async def pm_list_all_tasks(request: Request):
     """List all tasks across all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1606,7 +1645,7 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
     """Update a task"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         updates = await request.json()
         
@@ -1670,7 +1709,7 @@ async def pm_list_users(request: Request, project_id: str):
     """List all users for a project"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1794,7 +1833,7 @@ async def pm_list_sprints(
     """List all sprints for a project"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1803,7 +1842,7 @@ async def pm_list_sprints(
             # Check if project_id has provider prefix
             if ":" not in project_id:
                 # Fallback: use global flow_manager if no provider_id prefix
-                from backend.conversation.flow_manager import ConversationFlowManager
+                from src.conversation.flow_manager import ConversationFlowManager
                 
                 global flow_manager
                 if flow_manager is None:
@@ -1865,7 +1904,7 @@ async def pm_list_epics(request: Request, project_id: str):
     """List all epics for a project"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1899,7 +1938,7 @@ async def pm_create_epic(request: Request, project_id: str):
     """Create a new epic for a project"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         epic_data = await request.json()
         
@@ -1935,7 +1974,7 @@ async def pm_update_epic(request: Request, project_id: str, epic_id: str):
     """Update an epic for a project"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         updates = await request.json()
         
@@ -1971,7 +2010,7 @@ async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str
     """Assign a task to an epic"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         epic_data = await request.json()
         epic_id = epic_data.get("epic_id")
@@ -2007,7 +2046,7 @@ async def pm_remove_task_from_epic(request: Request, project_id: str, task_id: s
     """Remove a task from its epic"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2038,7 +2077,7 @@ async def pm_assign_task_to_sprint(request: Request, project_id: str, task_id: s
     """Assign a task to a sprint"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         sprint_data = await request.json()
         sprint_id = sprint_data.get("sprint_id")
@@ -2075,7 +2114,7 @@ async def pm_assign_task_to_user(project_id: str, task_id: str, payload: TaskAss
     """Assign or unassign a task to a user"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2115,7 +2154,7 @@ async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: st
     """Move a task to the backlog"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2146,7 +2185,7 @@ async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
     """Delete an epic for a project"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2184,7 +2223,7 @@ async def pm_list_labels(request: Request, project_id: str):
     """List all labels for a project"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2228,7 +2267,7 @@ async def pm_list_statuses(
     """
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2273,7 +2312,7 @@ async def pm_list_priorities(
     """
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2311,7 +2350,7 @@ async def pm_list_priorities(
 async def pm_chat_stream(request: Request):
     """Stream chat responses for Project Management tasks"""
     try:
-        from backend.conversation.flow_manager import ConversationFlowManager
+        from src.conversation.flow_manager import ConversationFlowManager
         from database.connection import get_db_session
         from fastapi.responses import StreamingResponse
         import asyncio
@@ -2341,67 +2380,115 @@ async def pm_chat_stream(request: Request):
         thread_id = body.get("thread_id", str(uuid.uuid4()))
         mcp_settings = body.get("mcp_settings", {})
         
+        logger.info(f"[PM-CHAT] Starting auto-injection check...")
+        logger.info(
+            f"[PM-CHAT] Initial mcp_settings keys: {list(mcp_settings.keys())}, has_servers: {bool(mcp_settings.get('servers'))}"
+        )
+        
         # For PM chat, always enable MCP for PM tools (even if global setting is disabled)
         # This ensures PM MCP tools are always available for PM chat endpoint
         mcp_enabled_for_pm = True  # Always enable for PM chat
         
         # Auto-inject PM MCP server if not already configured
         # This ensures PM tools are always available for PM chat
-        if not mcp_settings.get("servers") or "pm-server" not in mcp_settings.get("servers", {}):
+        has_servers = bool(mcp_settings.get("servers"))
+        has_pm_server = "pm-server" in mcp_settings.get("servers", {})
+        
+        # Check if existing pm-server has SSE config (if not, we should override it)
+        existing_pm_server = mcp_settings.get("servers", {}).get("pm-server", {}) if has_pm_server else {}
+        existing_has_sse = existing_pm_server.get("transport") in ["sse", "http", "streamable_http"] and "url" in existing_pm_server
+        
+        # Define all PM tool names FIRST (before checking if we need to inject)
+        # These match the tools registered in the PM MCP server
+        all_tool_names = [
+            # Provider configuration tools (MUST be first for workflow)
+            "list_providers", "configure_pm_provider",
+            # Project tools
+            "list_projects", "get_project", "create_project", 
+            "update_project", "delete_project", "search_projects",
+            # Task tools
+            "list_my_tasks", "list_tasks", "get_task", "create_task",
+            "update_task", "delete_task", "assign_task", 
+            "update_task_status", "search_tasks",
+            # Sprint tools
+            "list_sprints", "get_sprint", "create_sprint",
+            "update_sprint", "delete_sprint", "start_sprint",
+            "complete_sprint", "add_task_to_sprint", 
+            "remove_task_from_sprint", "get_sprint_tasks",
+            # Epic tools
+            "list_epics", "get_epic", "create_epic",
+            "update_epic", "delete_epic", "link_task_to_epic",
+            "unlink_task_from_epic", "get_epic_progress",
+            # User tools
+            "list_users", "get_current_user", "get_user",
+            "search_users", "get_user_workload",
+            # Analytics tools
+            "burndown_chart", "velocity_chart", "sprint_report",
+            "project_health", "task_distribution", "team_performance",
+            "gantt_chart", "epic_report", "resource_utilization",
+            "time_tracking_report",
+            # Task interaction tools
+            "add_task_comment", "get_task_comments", "add_task_watcher",
+            "bulk_update_tasks", "link_related_tasks",
+        ]
+        
+        # Check if we need to inject or update
+        # Always update if: no servers, no pm-server, no SSE config, OR tool count is wrong
+        existing_enabled_tools = existing_pm_server.get("enabled_tools", [])
+        has_correct_tool_count = len(existing_enabled_tools) == len(all_tool_names)
+        has_list_providers = "list_providers" in existing_enabled_tools
+        has_configure_pm_provider = "configure_pm_provider" in existing_enabled_tools
+        
+        needs_injection = (
+            not mcp_settings.get("servers") 
+            or "pm-server" not in mcp_settings.get("servers", {}) 
+            or not existing_has_sse
+            or not has_correct_tool_count
+            or not has_list_providers
+            or not has_configure_pm_provider
+        )
+        
+        logger.info(
+            f"[PM-CHAT] Auto-inject check: has_servers={has_servers}, has_pm_server={has_pm_server}, "
+            f"existing_has_sse={existing_has_sse}, existing_tool_count={len(existing_enabled_tools)}, "
+            f"expected_tool_count={len(all_tool_names)}, has_list_providers={has_list_providers}, "
+            f"has_configure_pm_provider={has_configure_pm_provider}, needs_injection={needs_injection}"
+        )
+        
+        # Always inject/update PM MCP server config to ensure latest tool list is used
+        # This ensures list_providers and configure_pm_provider are always included
+        if needs_injection:
             try:
-                # Use stdio transport for PM MCP server
+                # Ensure servers dict exists
                 if "servers" not in mcp_settings:
                     mcp_settings["servers"] = {}
                 
-                # Define all PM tool names (hardcoded for reliability)
-                # These match the tools registered in the PM MCP server
-                # We don't need PMServerConfig - just need the script path and tool names
-                all_tool_names = [
-                    # Project tools
-                    "list_projects", "get_project", "create_project", 
-                    "update_project", "delete_project", "search_projects",
-                    # Task tools
-                    "list_my_tasks", "list_tasks", "get_task", "create_task",
-                    "update_task", "delete_task", "assign_task", 
-                    "update_task_status", "search_tasks",
-                    # Sprint tools
-                    "list_sprints", "get_sprint", "create_sprint",
-                    "update_sprint", "delete_sprint", "start_sprint",
-                    "complete_sprint", "add_task_to_sprint", 
-                    "remove_task_from_sprint", "get_sprint_tasks",
-                    # Epic tools
-                    "list_epics", "get_epic", "create_epic",
-                    "update_epic", "delete_epic", "link_task_to_epic",
-                    "unlink_task_from_epic", "get_epic_progress",
-                    # User tools
-                    "list_users", "get_current_user", "get_user",
-                    "search_users", "get_user_workload",
-                    # Analytics tools
-                    "burndown_chart", "velocity_chart", "sprint_report",
-                    "project_health", "task_distribution", "team_performance",
-                    "gantt_chart", "epic_report", "resource_utilization",
-                    "time_tracking_report",
-                    # Task interaction tools
-                    "add_task_comment", "get_task_comments", "add_task_watcher",
-                    "bulk_update_tasks", "link_related_tasks",
-                ]
-                
+                # all_tool_names is already defined above (line 2402)
                 # Determine transport and connection method
                 # Priority: 1) Environment variable (Docker/remote), 2) Local stdio (development)
                 pm_mcp_url = get_str_env("PM_MCP_SERVER_URL", None)
                 pm_mcp_transport = get_str_env("PM_MCP_TRANSPORT", "stdio")
                 
+                logger.info(
+                    f"[PM-CHAT] MCP config check: url={pm_mcp_url}, transport={pm_mcp_transport}, "
+                    f"url_is_set={bool(pm_mcp_url)}, transport_valid={pm_mcp_transport in ['sse', 'http', 'streamable_http']}"
+                )
+                
                 if pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
                     # Use HTTP/SSE transport (Docker or remote service)
+                    # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
                     mcp_settings["servers"]["pm-server"] = {
                         "transport": pm_mcp_transport,
                         "url": pm_mcp_url,
-                        "enabled_tools": all_tool_names,
+                        "enabled_tools": all_tool_names,  # This includes list_providers and configure_pm_provider
                         "add_to_agents": ["researcher", "coder"],
                     }
                     logger.info(
-                        f"[PM-CHAT] Auto-injected PM MCP server via {pm_mcp_transport} at {pm_mcp_url} "
-                        f"with {len(all_tool_names)} tools (Docker/remote mode)"
+                        f"[PM-CHAT] Auto-injected/updated PM MCP server via {pm_mcp_transport} at {pm_mcp_url} "
+                        f"with {len(all_tool_names)} tools (includes list_providers, configure_pm_provider) (Docker/remote mode)"
+                    )
+                    logger.debug(
+                        f"[PM-CHAT] Enabled tools: {all_tool_names[:5]}... (total: {len(all_tool_names)})"
                     )
                 else:
                     # Fallback to stdio transport (local development)
@@ -2411,16 +2498,20 @@ async def pm_chat_stream(request: Request):
                     script_path = os.path.join(project_root, "scripts", "run_pm_mcp_server.py")
                     python_cmd = sys.executable
                     
+                    # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
                     mcp_settings["servers"]["pm-server"] = {
                         "transport": "stdio",
                         "command": python_cmd,
                         "args": [script_path, "--transport", "stdio"],
-                        "enabled_tools": all_tool_names,
+                        "enabled_tools": all_tool_names,  # This includes list_providers and configure_pm_provider
                         "add_to_agents": ["researcher", "coder"],
                     }
                     logger.info(
-                        f"[PM-CHAT] Auto-injected PM MCP server via stdio (local development) "
-                        f"with {len(all_tool_names)} tools"
+                        f"[PM-CHAT] Auto-injected/updated PM MCP server via stdio (local development) "
+                        f"with {len(all_tool_names)} tools (includes list_providers, configure_pm_provider)"
+                    )
+                    logger.debug(
+                        f"[PM-CHAT] Enabled tools (first 5): {all_tool_names[:5]}, total: {len(all_tool_names)}"
                     )
                     logger.debug(
                         f"[PM-CHAT] PM MCP server config: "
@@ -2510,7 +2601,7 @@ async def pm_chat_stream(request: Request):
                         try:
                             # Ensure PM handler is set for tools before agents run
                             if fm.pm_handler:
-                                from backend.tools.pm_tools import set_pm_handler
+                                from src.tools.pm_tools import set_pm_handler
                                 set_pm_handler(fm.pm_handler)
                                 logger.info(
                                     "[PM-CHAT-TIMING] PM handler set for "
@@ -2529,7 +2620,7 @@ async def pm_chat_stream(request: Request):
                                 
                             # Use _astream_workflow_generator to get properly
                             # formatted research events
-                            from backend.config.report_style import ReportStyle
+                            from src.config.report_style import ReportStyle
                             
                             # Convert report_style string to enum
                             report_style_map = {
@@ -2576,7 +2667,7 @@ async def pm_chat_stream(request: Request):
                                 
                             # Store research result
                             if final_research_state:
-                                from backend.conversation.flow_manager import (
+                                from src.conversation.flow_manager import (
                                     ConversationContext,
                                     FlowState,
                                     IntentType,
@@ -2744,7 +2835,7 @@ async def pm_import_projects(request: ProjectImportRequest):
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
-        from pm_providers.factory import create_pm_provider
+        from src.pm_providers.factory import create_pm_provider
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2857,7 +2948,7 @@ async def pm_get_provider_projects(provider_id: str):
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
-        from pm_providers.factory import create_pm_provider
+        from src.pm_providers.factory import create_pm_provider
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -3086,7 +3177,7 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
 async def pm_test_connection(request: ProjectImportRequest):
     """Test connection to a provider"""
     try:
-        from pm_providers.factory import create_pm_provider
+        from src.pm_providers.factory import create_pm_provider
         
         # Create provider instance
         provider_instance = create_pm_provider(
@@ -3163,10 +3254,10 @@ async def pm_delete_provider(provider_id: str):
 # Analytics Endpoints
 # ============================================================================
 
-from backend.analytics.service import AnalyticsService
-from backend.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
+from src.analytics.service import AnalyticsService
+from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
 from database.orm_models import PMProviderConnection
-from backend.server.pm_handler import PMHandler
+from src.server.pm_handler import PMHandler
 
 
 def get_analytics_service(project_id: str, db) -> AnalyticsService:
@@ -3184,8 +3275,8 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         # Check if this is the Mock Project - use MockPMProvider
         if project_id.startswith("mock:"):
             logger.info(f"[Analytics] Using MockPMProvider for project: {project_id}")
-            from pm_providers.mock_provider import MockPMProvider
-            from pm_providers.models import PMProviderConfig
+            from src.pm_providers.mock_provider import MockPMProvider
+            from src.pm_providers.models import PMProviderConfig
             
             config = PMProviderConfig(
                 provider_type="mock",

@@ -905,15 +905,17 @@ async def _astream_workflow_generator(
         f"enable_deep_thinking={enable_deep_thinking}"
     )
     workflow_config = {
-        "thread_id": thread_id,
-        "resources": resources,
-        "max_plan_iterations": max_plan_iterations,
-        "max_step_num": max_step_num,
-        "max_search_results": max_search_results,
-        "mcp_settings": mcp_settings,
-        "report_style": report_style.value,
-        "enable_deep_thinking": enable_deep_thinking,
-        "interrupt_before_tools": interrupt_before_tools,
+        "configurable": {
+            "thread_id": thread_id,
+            "resources": resources,
+            "max_plan_iterations": max_plan_iterations,
+            "max_step_num": max_step_num,
+            "max_search_results": max_search_results,
+            "mcp_settings": mcp_settings,
+            "report_style": report_style.value,
+            "enable_deep_thinking": enable_deep_thinking,
+            "interrupt_before_tools": interrupt_before_tools,
+        },
         "recursion_limit": get_recursion_limit(),
     }
 
@@ -1330,6 +1332,43 @@ async def pm_list_projects(request: Request):
             db.close()
     except Exception as e:
         logger.error(f"Failed to list projects: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pm/projects/{project_id}")
+async def pm_get_project(project_id: str):
+    """Get a single project by ID"""
+    try:
+        from database.connection import get_db_session
+        from backend.server.pm_handler import PMHandler
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            handler = PMHandler.from_db_session(db)
+            projects = await handler.list_all_projects()
+            project = next((p for p in projects if p.get("id") == project_id), None)
+            
+            if not project:
+                raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+            
+            return project
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        error_msg = str(ve)
+        if "Invalid provider ID format" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        elif "Provider not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+    except Exception as e:
+        logger.error(f"Failed to get project: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -2341,67 +2380,115 @@ async def pm_chat_stream(request: Request):
         thread_id = body.get("thread_id", str(uuid.uuid4()))
         mcp_settings = body.get("mcp_settings", {})
         
+        logger.info(f"[PM-CHAT] Starting auto-injection check...")
+        logger.info(
+            f"[PM-CHAT] Initial mcp_settings keys: {list(mcp_settings.keys())}, has_servers: {bool(mcp_settings.get('servers'))}"
+        )
+        
         # For PM chat, always enable MCP for PM tools (even if global setting is disabled)
         # This ensures PM MCP tools are always available for PM chat endpoint
         mcp_enabled_for_pm = True  # Always enable for PM chat
         
         # Auto-inject PM MCP server if not already configured
         # This ensures PM tools are always available for PM chat
-        if not mcp_settings.get("servers") or "pm-server" not in mcp_settings.get("servers", {}):
+        has_servers = bool(mcp_settings.get("servers"))
+        has_pm_server = "pm-server" in mcp_settings.get("servers", {})
+        
+        # Check if existing pm-server has SSE config (if not, we should override it)
+        existing_pm_server = mcp_settings.get("servers", {}).get("pm-server", {}) if has_pm_server else {}
+        existing_has_sse = existing_pm_server.get("transport") in ["sse", "http", "streamable_http"] and "url" in existing_pm_server
+        
+        # Define all PM tool names FIRST (before checking if we need to inject)
+        # These match the tools registered in the PM MCP server
+        all_tool_names = [
+            # Provider configuration tools (MUST be first for workflow)
+            "list_providers", "configure_pm_provider",
+            # Project tools
+            "list_projects", "get_project", "create_project", 
+            "update_project", "delete_project", "search_projects",
+            # Task tools
+            "list_my_tasks", "list_tasks", "get_task", "create_task",
+            "update_task", "delete_task", "assign_task", 
+            "update_task_status", "search_tasks",
+            # Sprint tools
+            "list_sprints", "get_sprint", "create_sprint",
+            "update_sprint", "delete_sprint", "start_sprint",
+            "complete_sprint", "add_task_to_sprint", 
+            "remove_task_from_sprint", "get_sprint_tasks",
+            # Epic tools
+            "list_epics", "get_epic", "create_epic",
+            "update_epic", "delete_epic", "link_task_to_epic",
+            "unlink_task_from_epic", "get_epic_progress",
+            # User tools
+            "list_users", "get_current_user", "get_user",
+            "search_users", "get_user_workload",
+            # Analytics tools
+            "burndown_chart", "velocity_chart", "sprint_report",
+            "project_health", "task_distribution", "team_performance",
+            "gantt_chart", "epic_report", "resource_utilization",
+            "time_tracking_report",
+            # Task interaction tools
+            "add_task_comment", "get_task_comments", "add_task_watcher",
+            "bulk_update_tasks", "link_related_tasks",
+        ]
+        
+        # Check if we need to inject or update
+        # Always update if: no servers, no pm-server, no SSE config, OR tool count is wrong
+        existing_enabled_tools = existing_pm_server.get("enabled_tools", [])
+        has_correct_tool_count = len(existing_enabled_tools) == len(all_tool_names)
+        has_list_providers = "list_providers" in existing_enabled_tools
+        has_configure_pm_provider = "configure_pm_provider" in existing_enabled_tools
+        
+        needs_injection = (
+            not mcp_settings.get("servers") 
+            or "pm-server" not in mcp_settings.get("servers", {}) 
+            or not existing_has_sse
+            or not has_correct_tool_count
+            or not has_list_providers
+            or not has_configure_pm_provider
+        )
+        
+        logger.info(
+            f"[PM-CHAT] Auto-inject check: has_servers={has_servers}, has_pm_server={has_pm_server}, "
+            f"existing_has_sse={existing_has_sse}, existing_tool_count={len(existing_enabled_tools)}, "
+            f"expected_tool_count={len(all_tool_names)}, has_list_providers={has_list_providers}, "
+            f"has_configure_pm_provider={has_configure_pm_provider}, needs_injection={needs_injection}"
+        )
+        
+        # Always inject/update PM MCP server config to ensure latest tool list is used
+        # This ensures list_providers and configure_pm_provider are always included
+        if needs_injection:
             try:
-                # Use stdio transport for PM MCP server
+                # Ensure servers dict exists
                 if "servers" not in mcp_settings:
                     mcp_settings["servers"] = {}
                 
-                # Define all PM tool names (hardcoded for reliability)
-                # These match the tools registered in the PM MCP server
-                # We don't need PMServerConfig - just need the script path and tool names
-                all_tool_names = [
-                    # Project tools
-                    "list_projects", "get_project", "create_project", 
-                    "update_project", "delete_project", "search_projects",
-                    # Task tools
-                    "list_my_tasks", "list_tasks", "get_task", "create_task",
-                    "update_task", "delete_task", "assign_task", 
-                    "update_task_status", "search_tasks",
-                    # Sprint tools
-                    "list_sprints", "get_sprint", "create_sprint",
-                    "update_sprint", "delete_sprint", "start_sprint",
-                    "complete_sprint", "add_task_to_sprint", 
-                    "remove_task_from_sprint", "get_sprint_tasks",
-                    # Epic tools
-                    "list_epics", "get_epic", "create_epic",
-                    "update_epic", "delete_epic", "link_task_to_epic",
-                    "unlink_task_from_epic", "get_epic_progress",
-                    # User tools
-                    "list_users", "get_current_user", "get_user",
-                    "search_users", "get_user_workload",
-                    # Analytics tools
-                    "burndown_chart", "velocity_chart", "sprint_report",
-                    "project_health", "task_distribution", "team_performance",
-                    "gantt_chart", "epic_report", "resource_utilization",
-                    "time_tracking_report",
-                    # Task interaction tools
-                    "add_task_comment", "get_task_comments", "add_task_watcher",
-                    "bulk_update_tasks", "link_related_tasks",
-                ]
-                
+                # all_tool_names is already defined above (line 2402)
                 # Determine transport and connection method
                 # Priority: 1) Environment variable (Docker/remote), 2) Local stdio (development)
                 pm_mcp_url = get_str_env("PM_MCP_SERVER_URL", None)
                 pm_mcp_transport = get_str_env("PM_MCP_TRANSPORT", "stdio")
                 
+                logger.info(
+                    f"[PM-CHAT] MCP config check: url={pm_mcp_url}, transport={pm_mcp_transport}, "
+                    f"url_is_set={bool(pm_mcp_url)}, transport_valid={pm_mcp_transport in ['sse', 'http', 'streamable_http']}"
+                )
+                
                 if pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
                     # Use HTTP/SSE transport (Docker or remote service)
+                    # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
                     mcp_settings["servers"]["pm-server"] = {
                         "transport": pm_mcp_transport,
                         "url": pm_mcp_url,
-                        "enabled_tools": all_tool_names,
+                        "enabled_tools": all_tool_names,  # This includes list_providers and configure_pm_provider
                         "add_to_agents": ["researcher", "coder"],
                     }
                     logger.info(
-                        f"[PM-CHAT] Auto-injected PM MCP server via {pm_mcp_transport} at {pm_mcp_url} "
-                        f"with {len(all_tool_names)} tools (Docker/remote mode)"
+                        f"[PM-CHAT] Auto-injected/updated PM MCP server via {pm_mcp_transport} at {pm_mcp_url} "
+                        f"with {len(all_tool_names)} tools (includes list_providers, configure_pm_provider) (Docker/remote mode)"
+                    )
+                    logger.debug(
+                        f"[PM-CHAT] Enabled tools: {all_tool_names[:5]}... (total: {len(all_tool_names)})"
                     )
                 else:
                     # Fallback to stdio transport (local development)
@@ -2411,16 +2498,20 @@ async def pm_chat_stream(request: Request):
                     script_path = os.path.join(project_root, "scripts", "run_pm_mcp_server.py")
                     python_cmd = sys.executable
                     
+                    # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
                     mcp_settings["servers"]["pm-server"] = {
                         "transport": "stdio",
                         "command": python_cmd,
                         "args": [script_path, "--transport", "stdio"],
-                        "enabled_tools": all_tool_names,
+                        "enabled_tools": all_tool_names,  # This includes list_providers and configure_pm_provider
                         "add_to_agents": ["researcher", "coder"],
                     }
                     logger.info(
-                        f"[PM-CHAT] Auto-injected PM MCP server via stdio (local development) "
-                        f"with {len(all_tool_names)} tools"
+                        f"[PM-CHAT] Auto-injected/updated PM MCP server via stdio (local development) "
+                        f"with {len(all_tool_names)} tools (includes list_providers, configure_pm_provider)"
+                    )
+                    logger.debug(
+                        f"[PM-CHAT] Enabled tools (first 5): {all_tool_names[:5]}, total: {len(all_tool_names)}"
                     )
                     logger.debug(
                         f"[PM-CHAT] PM MCP server config: "

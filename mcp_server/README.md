@@ -238,28 +238,50 @@ PM MCP Server
 
 1. Create or edit a tool module in `mcp_server/tools/`
 2. Register the tool using `@server.call_tool()` decorator
-3. Return `list[TextContent]` with formatted results
+3. **CRITICAL**: Store tool function in `tool_functions` dict (see Troubleshooting section)
+4. Use correct function signature: `(tool_name: str, arguments: dict[str, Any])`
+5. Return `list[TextContent]` with formatted results
 
 Example:
 
 ```python
-@server.call_tool()
-async def my_new_tool(arguments: dict[str, Any]) -> list[TextContent]:
-    """Tool description."""
-    try:
-        # Your logic here
-        result = pm_handler.do_something()
-        
-        return [TextContent(
-            type="text",
-            text=f"Result: {result}"
-        )]
-    except Exception as e:
-        return [TextContent(
-            type="text",
-            text=f"Error: {str(e)}"
-        )]
+def register_my_tools(
+    server: Any,
+    pm_handler: Any,
+    config: Any,
+    tool_names: list[str] | None = None,
+    tool_functions: dict[str, Any] | None = None,  # ✅ REQUIRED
+) -> int:
+    tool_count = 0
+    
+    @server.call_tool()
+    async def my_new_tool(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:  # ✅ Correct signature
+        """Tool description."""
+        try:
+            # Your logic here
+            result = pm_handler.do_something()
+            
+            return [TextContent(
+                type="text",
+                text=f"Result: {result}"
+            )]
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"Error: {str(e)}"
+            )]
+    
+    # ✅ CRITICAL: Store in both tool_names AND tool_functions
+    if tool_names is not None:
+        tool_names.append("my_new_tool")
+    if tool_functions is not None:
+        tool_functions["my_new_tool"] = my_new_tool  # ✅ REQUIRED
+    tool_count += 1
+    
+    return tool_count
 ```
+
+**⚠️ IMPORTANT**: See the "Tools not being recognized/callable" section in Troubleshooting for detailed explanation of why this is critical.
 
 ### Add New Transport
 
@@ -300,6 +322,64 @@ chmod +x scripts/run_pm_mcp_server.py
 # Check database permissions
 # Ensure user has access to pm_provider_connections table
 ```
+
+### Tools not being recognized/callable (CRITICAL)
+
+**Symptom:**
+- Tools appear in `list_tools` but return "Tool not found" or "takes 1 positional argument but 2 were given" errors
+- Routing handler logs show: `Tool 'tool_name' not found in tool_functions`
+- Agent reports tools as "unavailable" despite being in enabled tools list
+
+**Root Cause:**
+When registering new tools, you MUST:
+1. **Store tool functions in `tool_functions` dict** - The routing handler uses this dict to find and call tools
+2. **Use correct function signature** - Tools must accept `(tool_name: str, arguments: dict[str, Any])` to match the routing handler
+
+**Fix:**
+
+When creating a new tool registration function (e.g., `register_my_tools`):
+
+```python
+def register_my_tools(
+    server: Any,
+    pm_handler: Any,
+    config: Any,
+    tool_names: list[str] | None = None,
+    tool_functions: dict[str, Any] | None = None,  # ✅ REQUIRED parameter
+) -> int:
+    tool_count = 0
+    
+    @server.call_tool()
+    async def my_tool(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:  # ✅ Correct signature
+        """Tool description."""
+        # Your tool logic here
+        return [TextContent(type="text", text="Result")]
+    
+    # ✅ CRITICAL: Store in both tool_names AND tool_functions
+    if tool_names is not None:
+        tool_names.append("my_tool")
+    if tool_functions is not None:
+        tool_functions["my_tool"] = my_tool  # ✅ REQUIRED - routing handler uses this
+    tool_count += 1
+    
+    return tool_count
+```
+
+**Common Mistakes:**
+1. ❌ Forgetting to add `tool_functions` parameter
+2. ❌ Forgetting to store function: `tool_functions["my_tool"] = my_tool`
+3. ❌ Wrong signature: `async def my_tool(arguments)` instead of `async def my_tool(tool_name: str, arguments: dict[str, Any])`
+4. ❌ Only storing in `tool_names` but not in `tool_functions`
+
+**Verification:**
+After fixing, check logs for:
+- ✅ `[ROUTER] Found tool function for 'my_tool'`
+- ✅ `[ROUTER] Tool 'my_tool' completed successfully`
+- ❌ NOT: `Tool 'my_tool' not found in tool_functions`
+- ❌ NOT: `takes 1 positional argument but 2 were given`
+
+**Reference Implementation:**
+See `mcp_server/tools/projects.py` for correct pattern, or `mcp_server/tools/provider_config.py` (after fix applied on 2025-11-20).
 
 ## 📝 License
 

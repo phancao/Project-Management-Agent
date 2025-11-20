@@ -43,6 +43,24 @@ def register_project_tools(
         """
         List all accessible projects across all PM providers.
         
+        **IMPORTANT WORKFLOW - READ THIS FIRST**:
+        Before calling this tool, you MUST follow this sequence:
+        1. **First**: Call `list_providers` to check if any providers are configured
+        2. **If no active providers exist**: Call `configure_pm_provider` to set up a provider
+           - For demo/testing: Use provider_type="mock" (no credentials needed, has demo data)
+           - For real data: User must provide credentials
+        3. **Then**: Call `list_projects` to retrieve projects
+        
+        **Why This Matters**:
+        - This tool will return 0 projects if no providers are configured
+        - You cannot retrieve projects without at least one active provider
+        - Always check provider status first using `list_providers`
+        
+        **If This Tool Returns 0 Projects**:
+        - Check if providers exist: Call `list_providers` first
+        - If no providers: Configure one using `configure_pm_provider`
+        - If providers exist but no projects: The providers may not have any projects yet
+        
         Args:
             provider_id (optional): Filter projects by provider ID
             search (optional): Search term for project name/description
@@ -50,6 +68,7 @@ def register_project_tools(
         
         Returns:
             List of projects with id, name, description, provider info, etc.
+            Returns empty list if no providers are configured or no projects exist.
         """
         try:
             logger.info("=" * 80)
@@ -101,10 +120,30 @@ def register_project_tools(
             
             # Format response
             if not projects:
-                return [TextContent(
-                    type="text",
-                    text="No projects found."
-                )]
+                # Check if it's because no providers exist
+                active_providers = pm_handler._get_active_providers()
+                if not active_providers:
+                    return [TextContent(
+                        type="text",
+                        text="❌ ERROR: Cannot list projects - No active PM providers configured!\n\n"
+                             "**REQUIRED ACTION:** You MUST call `list_providers` FIRST before calling `list_projects`.\n\n"
+                             "**Correct Workflow:**\n"
+                             "1. ⚠️ STOP - Do not call list_projects again until providers are configured\n"
+                             "2. ✅ Call `list_providers` to check provider status\n"
+                             "3. ✅ If no providers exist, call `configure_pm_provider` with:\n"
+                             "   - provider_type='mock' (for demo/testing, no credentials needed)\n"
+                             "   - base_url='http://localhost'\n"
+                             "   - name='Demo Provider'\n"
+                             "4. ✅ Then call `list_projects` again\n\n"
+                             "**Why this happened:** You called `list_projects` without checking if providers exist first. "
+                             "Always call `list_providers` before any project-related operations."
+                    )]
+                else:
+                    return [TextContent(
+                        type="text",
+                        text=f"No projects found. {len(active_providers)} active provider(s) configured, "
+                             "but they don't have any projects yet."
+                    )]
             
             # Create formatted output
             output_lines = [f"Found {len(projects)} projects:\n"]

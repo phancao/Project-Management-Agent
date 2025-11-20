@@ -17,6 +17,7 @@ def register_provider_config_tools(
     pm_handler: Any,
     config: Any,
     tool_names: list[str] | None = None,
+    tool_functions: dict[str, Any] | None = None,
 ) -> int:
     """
     Register PM provider configuration tools.
@@ -35,17 +36,125 @@ def register_provider_config_tools(
     """
     tool_count = 0
     
-    # Tool: configure_pm_provider
+    # Tool: list_providers
     @server.call_tool()
-    async def configure_pm_provider(arguments: dict[str, Any]) -> list[TextContent]:
+    async def list_providers(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
         """
-        Configure a PM provider (JIRA, OpenProject, ClickUp) for the current user.
+        List all configured PM providers (both active and inactive).
         
-        This tool allows users to add their PM provider credentials directly
-        from Cursor without needing a web UI.
+        **CRITICAL**: Use this tool FIRST before attempting to list projects or tasks.
+        If this returns no active providers, you MUST configure a provider using
+        `configure_pm_provider` before you can retrieve any project data.
+        
+        **Workflow**:
+        1. Call this tool first to check provider status
+        2. If no active providers exist, use `configure_pm_provider` to set one up
+        3. For demo/testing: Configure provider_type="mock" (no credentials needed)
+        4. Then call `list_projects`, `list_tasks`, etc.
         
         Args:
-            provider_type (required): Type of provider - "jira", "openproject", "clickup"
+            active_only (optional): If True, only return active providers (default: False)
+        
+        Returns:
+            List of providers with:
+            - id: Provider ID
+            - name: Provider name
+            - provider_type: Type (jira, openproject, clickup, mock)
+            - is_active: Whether provider is active
+            - base_url: Provider base URL
+            - status: Configuration status message
+        """
+        try:
+            from ..database.connection import get_mcp_db_session
+            from ..database.models import PMProviderConnection
+            
+            active_only = arguments.get("active_only", False)
+            
+            # Get MCP Server database session
+            db = next(get_mcp_db_session())
+            try:
+                query = db.query(PMProviderConnection)
+                if active_only:
+                    query = query.filter(PMProviderConnection.is_active == True)
+                
+                providers = query.all()
+                
+                if not providers:
+                    return [TextContent(
+                        type="text",
+                        text="No PM providers configured. "
+                             "Use the 'configure_pm_provider' tool to set up a provider. "
+                             "For demo/testing, use provider_type='mock' (no credentials needed)."
+                    )]
+                
+                # Format provider list
+                output_lines = [f"Found {len(providers)} provider(s):\n"]
+                for i, provider in enumerate(providers, 1):
+                    status = "✅ Active" if provider.is_active else "❌ Inactive"
+                    output_lines.append(
+                        f"{i}. **{provider.name}** ({status})\n"
+                        f"   ID: {provider.id}\n"
+                        f"   Type: {provider.provider_type}\n"
+                        f"   URL: {provider.base_url}\n"
+                    )
+                
+                active_count = sum(1 for p in providers if p.is_active)
+                output_lines.append(f"\nActive providers: {active_count}/{len(providers)}")
+                
+                if active_count == 0:
+                    output_lines.append(
+                        "\n⚠️ No active providers found. "
+                        "Use 'configure_pm_provider' to set up a provider before listing projects."
+                    )
+                
+                return [TextContent(
+                    type="text",
+                    text="\n".join(output_lines)
+                )]
+                
+            finally:
+                db.close()
+                
+        except Exception as e:
+            logger.error(f"Error listing providers: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error listing providers: {str(e)}"
+            )]
+    
+    # Track tool name and store function reference after function is defined
+    if tool_names is not None:
+        tool_names.append("list_providers")
+    if tool_functions is not None:
+        tool_functions["list_providers"] = list_providers
+    tool_count += 1
+    
+    # Tool: configure_pm_provider
+    @server.call_tool()
+    async def configure_pm_provider(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Configure a PM provider (JIRA, OpenProject, ClickUp, Mock) for the current user.
+        
+        **WHEN TO USE THIS TOOL**:
+        - After calling `list_providers` and finding no active providers
+        - When user asks to "list my projects" but no providers are configured
+        - When you need to set up a provider before retrieving project data
+        
+        **WORKFLOW**:
+        1. Call `list_providers` first to check current provider status
+        2. If no active providers exist, use this tool to configure one
+        3. For demo/testing: Use provider_type="mock" (no credentials needed, has demo data)
+        4. For real providers: User must provide credentials (api_key, api_token, etc.)
+        5. After configuration, call `list_projects` to retrieve projects
+        
+        **Mock Provider (Recommended for Testing)**:
+        - No credentials required
+        - Contains demo projects, tasks, sprints, epics
+        - Perfect for testing and demonstrations
+        - Example: configure_pm_provider({"provider_type": "mock", "base_url": "http://localhost", "name": "Demo Provider"})
+        
+        Args:
+            provider_type (required): Type of provider - "jira", "openproject", "clickup", "mock"
             base_url (required): Base URL of the provider (e.g., "https://company.atlassian.net")
             api_token (optional): API token for JIRA
             api_key (optional): API key for OpenProject or ClickUp
@@ -55,9 +164,16 @@ def register_provider_config_tools(
             name (optional): Custom name for this provider connection
         
         Returns:
-            Success message with provider ID
+            Success message with provider ID and number of projects found, or error message
         
-        Example:
+        Example for Mock provider (demo data, no credentials):
+            configure_pm_provider({
+                "provider_type": "mock",
+                "base_url": "http://localhost",
+                "name": "Mock Provider (Demo Data)"
+            })
+        
+        Example for JIRA:
             configure_pm_provider({
                 "provider_type": "jira",
                 "base_url": "https://company.atlassian.net",
@@ -104,14 +220,21 @@ def register_provider_config_tools(
             if not provider_type:
                 return [TextContent(
                     type="text",
-                    text="Error: provider_type is required (jira, openproject, clickup)"
+                    text="Error: provider_type is required (jira, openproject, clickup, mock)"
                 )]
             
-            if not base_url:
+            # Mock provider doesn't need base_url or credentials
+            if provider_type != "mock" and not base_url:
                 return [TextContent(
                     type="text",
-                    text="Error: base_url is required"
+                    text="Error: base_url is required (except for mock provider)"
                 )]
+            
+            # Mock provider: no validation needed, just create it
+            if provider_type == "mock":
+                # Mock provider doesn't need base_url, but we'll use a default
+                if not base_url:
+                    base_url = "http://localhost"
             
             # Provider-specific validation
             if provider_type == "jira":
@@ -185,24 +308,37 @@ def register_provider_config_tools(
                 
                 # Test connection
                 try:
-                    provider_instance = create_pm_provider(
-                        provider_type=provider_type,
-                        base_url=base_url,
-                        api_key=arguments.get("api_key"),
-                        api_token=arguments.get("api_token"),
-                        username=arguments.get("username"),
-                        organization_id=arguments.get("organization_id"),
-                        workspace_id=arguments.get("workspace_id"),
-                    )
+                    # Handle mock provider separately (not in factory)
+                    if provider_type == "mock":
+                        from pm_providers.mock_provider import MockPMProvider
+                        from pm_providers.models import PMProviderConfig
+                        # Mock provider needs base_url as string
+                        mock_base_url = base_url or "http://localhost"
+                        config = PMProviderConfig(
+                            provider_type="mock",
+                            base_url=mock_base_url,
+                        )
+                        provider_instance = MockPMProvider(config)
+                    else:
+                        provider_instance = create_pm_provider(
+                            provider_type=provider_type,
+                            base_url=base_url,
+                            api_key=arguments.get("api_key"),
+                            api_token=arguments.get("api_token"),
+                            username=arguments.get("username"),
+                            organization_id=arguments.get("organization_id"),
+                            workspace_id=arguments.get("workspace_id"),
+                        )
                     
-                    # Test health check
-                    is_healthy = await provider_instance.health_check()
-                    if not is_healthy:
-                        return [TextContent(
-                            type="text",
-                            text=f"Warning: Provider configured (ID: {provider.id}) but health check failed. "
-                                 f"Please verify your credentials."
-                        )]
+                    # Test health check (mock provider always returns True)
+                    if provider_type != "mock":
+                        is_healthy = await provider_instance.health_check()
+                        if not is_healthy:
+                            return [TextContent(
+                                type="text",
+                                text=f"Warning: Provider configured (ID: {provider.id}) but health check failed. "
+                                     f"Please verify your credentials."
+                            )]
                     
                     # Try to list projects to verify
                     projects = await provider_instance.list_projects()
@@ -237,8 +373,11 @@ def register_provider_config_tools(
                 text=f"Error configuring provider: {str(e)}"
             )]
     
+    # Track tool name and store function reference after function is defined
     if tool_names is not None:
         tool_names.append("configure_pm_provider")
+    if tool_functions is not None:
+        tool_functions["configure_pm_provider"] = configure_pm_provider
     tool_count += 1
     
     logger.info(f"Registered {tool_count} provider configuration tool(s)")

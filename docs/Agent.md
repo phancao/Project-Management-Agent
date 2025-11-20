@@ -137,7 +137,7 @@ pytest tests/integration/
 pytest tests/unit/config/test_configuration.py
 
 # With coverage
-pytest --cov=src tests/ --cov-report=html
+pytest --cov=backend tests/ --cov-report=html
 ```
 
 ### Code Quality

@@ -255,13 +255,13 @@ python run_tests.py deerflow --verbose
 uv add pytest-cov
 
 # Run tests with coverage
-uv run pytest --cov=src --cov=api --cov=database tests/
+uv run pytest --cov=backend --cov=api --cov=database tests/
 ```
 
 ### Coverage report
 ```bash
 # Generate HTML coverage report
-uv run pytest --cov=src --cov-report=html tests/
+uv run pytest --cov=backend --cov-report=html tests/
 open htmlcov/index.html
 ```
 

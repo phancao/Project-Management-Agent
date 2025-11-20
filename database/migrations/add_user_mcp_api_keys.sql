@@ -42,3 +42,11 @@ COMMENT ON COLUMN user_mcp_api_keys.name IS 'Optional name for the key (e.g., "C
 COMMENT ON COLUMN user_mcp_api_keys.last_used_at IS 'Timestamp of last API key usage';
 COMMENT ON COLUMN user_mcp_api_keys.expires_at IS 'Optional expiration date for the key';
 
+
+
+
+
+
+
+
+

@@ -304,3 +304,11 @@ JIRA_USERNAME=user@company.com
 - **Each provider instance** uses credentials only for the duration of API calls
 - **Security**: Credentials stored securely, access controlled, never committed to git
 
+
+
+
+
+
+
+
+

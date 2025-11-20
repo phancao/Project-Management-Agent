@@ -249,3 +249,11 @@ curl -X POST http://localhost:8000/api/pm/providers/import-projects \
 
 **The key is**: Either add an MCP tool for configuration, or users call the API directly (no web UI needed).
 
+
+
+
+
+
+
+
+

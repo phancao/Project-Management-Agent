@@ -60,11 +60,13 @@ export function PMLoadingManager() {
         .then((providers) => {
           clearTimeout(timeoutId);
           debug.state('Providers loaded', { count: providers.length });
+          console.log('[PMLoadingManager] Providers loaded:', providers);
           setProvidersState({
             loading: false,
             error: null,
             data: providers,
           });
+          console.log('[PMLoadingManager] State updated, providers count:', providers.length);
         })
         .catch((error) => {
           clearTimeout(timeoutId);
@@ -89,7 +91,7 @@ export function PMLoadingManager() {
         clearTimeout(timeoutId);
       };
     }
-  }, [state.providers.loading, state.providers.data, setProvidersState]);
+  }, [state.providers.loading, state.providers.data, state.providers.error, setProvidersState]);
 
   // Step 2: Load filter data after providers are loaded
   // Use the existing hooks but sync their state with our loading context
@@ -111,14 +113,37 @@ export function PMLoadingManager() {
 
   // Sync projects state
   useEffect(() => {
+    console.log('[PMLoadingManager] Projects sync effect', {
+      providersLoading: state.providers.loading,
+      providersData: state.providers.data?.length,
+      providersDataExists: !!state.providers.data,
+      providersError: state.providers.error?.message,
+      projectsLoading,
+      projectsCount: projects.length,
+      projectsError: projectsError?.message,
+    });
+    
     if (!state.providers.loading && state.providers.data) {
+      console.log('[PMLoadingManager] Syncing projects state', {
+        loading: projectsLoading,
+        count: projects.length,
+        error: projectsError?.message,
+      });
       setProjectsState({
         loading: projectsLoading,
         error: projectsError,
         data: projects,
       });
+    } else if (state.providers.loading) {
+      console.log('[PMLoadingManager] Providers still loading, waiting...');
+    } else if (!state.providers.data) {
+      console.log('[PMLoadingManager] No providers data yet', {
+        loading: state.providers.loading,
+        error: state.providers.error?.message,
+        data: state.providers.data,
+      });
     }
-  }, [projects, projectsLoading, projectsError, state.providers.loading, state.providers.data, setProjectsState]);
+  }, [projects, projectsLoading, projectsError, state.providers.loading, state.providers.data, state.providers.error, setProjectsState]);
 
   // Sync sprints state (only load if project is selected)
   useEffect(() => {

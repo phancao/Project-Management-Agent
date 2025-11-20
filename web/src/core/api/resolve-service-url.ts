@@ -4,7 +4,9 @@
 import { env } from "~/env";
 
 export function resolveServiceURL(path: string) {
-  let BASE_URL = env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/";
+  // Use direct backend connection (CORS is properly configured)
+  // Next.js API route proxies exist as backup if browser blocking occurs
+  let BASE_URL = env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/";
   if (!BASE_URL.endsWith("/")) {
     BASE_URL += "/";
   }

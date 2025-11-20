@@ -88,3 +88,11 @@ MCP Server works independently:
 - Credentials stored in MCP Server's own database
 - No dependency on backend system
 
+
+
+
+
+
+
+
+

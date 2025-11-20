@@ -14,11 +14,34 @@ export interface Project {
 }
 
 const fetchProjects = async (): Promise<Project[]> => {
-  const response = await fetch(resolveServiceURL("pm/projects"));
-  if (!response.ok) {
-    throw new Error("Failed to fetch projects");
+  const url = resolveServiceURL("pm/projects");
+  console.log('[useProjects] Fetching projects from:', url);
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      // Remove timeout for now to see if request completes
+      // The backend responds in ~0.75s, so 10s timeout should be fine
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      console.error('[useProjects] Failed to fetch projects:', response.status, errorText);
+      throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    console.log('[useProjects] Projects loaded:', data.length, data);
+    return data;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[useProjects] Request was aborted');
+      throw new Error('Request was aborted');
+    }
+    console.error('[useProjects] Network error fetching projects:', error);
+    throw error;
   }
-  return response.json();
 };
 
 export function useProjects() {

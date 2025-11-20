@@ -342,3 +342,11 @@ providers_b = handler_b._get_active_providers()
 
 This ensures that when User A connects to the MCP Server, they only see and use their own JIRA/OpenProject credentials, and User B sees only their own credentials.
 
+
+
+
+
+
+
+
+

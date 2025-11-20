@@ -127,3 +127,11 @@ async def configure_pm_provider(arguments: dict[str, Any]):
 
 **NO WEB UI NEEDED!** Everything happens in Cursor or via direct API calls.
 
+
+
+
+
+
+
+
+

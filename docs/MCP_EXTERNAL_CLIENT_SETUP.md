@@ -285,3 +285,11 @@ ORDER BY last_used_at DESC NULLS LAST;
 
 This ensures that when User A connects via Cursor, they only see their own JIRA/OpenProject projects, and User B sees only their own projects.
 
+
+
+
+
+
+
+
+

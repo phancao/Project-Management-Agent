@@ -37,6 +37,15 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   const pathname = usePathname();
   const { projects, loading: projectsLoading, refresh: refreshProjects } = useProjects();
   const { state: loadingState } = usePMLoading();
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('[PMHeader] Projects state:', {
+      projectsCount: projects.length,
+      projectsLoading,
+      projects: projects.map(p => ({ id: p.id, name: p.name })),
+    });
+  }, [projects, projectsLoading]);
   const [providers, setProviders] = useState<Array<{ id: string; provider_type: string; base_url: string }>>([]);
   const [regeneratingMockData, setRegeneratingMockData] = useState(false);
   const [projectComboboxOpen, setProjectComboboxOpen] = useState(false);

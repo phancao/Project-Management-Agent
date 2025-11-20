@@ -325,3 +325,11 @@ POST /api/users/me/mcp-keys
 
 **Key Point**: The JIRA credentials are stored in `pm_provider_connections` with `created_by = user_id`, so when Cursor connects with the MCP API key, the server knows which user's JIRA credentials to use.
 
+
+
+
+
+
+
+
+

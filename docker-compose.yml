@@ -42,6 +42,12 @@ services:
       # PM MCP Server connection (use Docker service name for internal communication)
       - PM_MCP_SERVER_URL=http://pm_mcp_server:8080/sse
       - PM_MCP_TRANSPORT=sse
+      # SECURITY: API key for backend to authenticate with MCP server
+      # The MCP server stores sensitive credentials (PM provider API keys, tokens)
+      # This key authenticates the backend service to prevent unauthorized access
+      # Generate a key using: python -c "import secrets; print('mcp_' + secrets.token_bytes(32).hex())"
+      # Set in .env file or docker-compose.override.yml
+      - PM_MCP_API_KEY=${PM_MCP_API_KEY:-}
       # LLM Configuration via environment variables (alternative to conf.yaml)
       - BASIC_MODEL__base_url=https://api.openai.com/v1
       - BASIC_MODEL__model=gpt-4o-mini

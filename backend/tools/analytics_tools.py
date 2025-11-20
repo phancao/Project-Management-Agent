@@ -10,19 +10,10 @@ import json
 
 from backend.analytics.service import AnalyticsService
 from backend.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
-from pm_providers.mock_provider import MockPMProvider
-from pm_providers.models import PMProviderConfig
 
-
-# Initialize analytics service with provider-backed mock data
-_mock_config = PMProviderConfig(
-    provider_type="mock",
-    base_url="mock://demo",
-    api_key="mock-key",
-)
-_mock_provider = MockPMProvider(_mock_config)
-_mock_adapter = PMProviderAnalyticsAdapter(_mock_provider)
-_analytics_service = AnalyticsService(adapter=_mock_adapter)
+# Analytics service will be initialized on-demand based on project_id
+# No default mock provider - analytics tools require real project data
+_analytics_service = None
 
 
 @tool
@@ -55,11 +46,21 @@ async def get_sprint_burndown(
         - "How much work is remaining in this sprint?"
     """
     try:
-        chart_data = await _analytics_service.get_burndown_chart(
-            project_id=project_id,
-            sprint_id=sprint_id,
-            scope_type=scope_type
-        )
+        # Get analytics service for this project
+        from database.connection import get_db_session
+        from backend.server.app import get_analytics_service
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            chart_data = await analytics_service.get_burndown_chart(
+                project_id=project_id,
+                sprint_id=sprint_id,
+                scope_type=scope_type
+            )
+        finally:
+            db.close()
         
         # Return simplified version for AI agent
         result = {
@@ -111,10 +112,20 @@ async def get_team_velocity(
         - "How many story points should we commit to in the next sprint?"
     """
     try:
-        chart_data = await _analytics_service.get_velocity_chart(
-            project_id=project_id,
-            sprint_count=sprint_count
-        )
+        # Get analytics service for this project
+        from database.connection import get_db_session
+        from backend.server.app import get_analytics_service
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            chart_data = await analytics_service.get_velocity_chart(
+                project_id=project_id,
+                sprint_count=sprint_count
+            )
+        finally:
+            db.close()
         
         # Return simplified version for AI agent
         result = {
@@ -170,10 +181,20 @@ async def get_sprint_report(
         - "Prepare a sprint review for sprint 3"
     """
     try:
-        report = await _analytics_service.get_sprint_report(
-            sprint_id=sprint_id,
-            project_id=project_id
-        )
+        # Get analytics service for this project
+        from database.connection import get_db_session
+        from backend.server.app import get_analytics_service
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            report = await analytics_service.get_sprint_report(
+                sprint_id=sprint_id,
+                project_id=project_id
+            )
+        finally:
+            db.close()
         
         # Return full report (it's already structured for consumption)
         result = {
@@ -220,8 +241,18 @@ async def get_project_analytics_summary(project_id: str) -> str:
         - "Show me project health metrics"
     """
     try:
-        summary = await _analytics_service.get_project_summary(project_id=project_id)
-        return json.dumps(summary, indent=2)
+        # Get analytics service for this project
+        from database.connection import get_db_session
+        from backend.server.app import get_analytics_service
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            summary = await analytics_service.get_project_summary(project_id=project_id)
+            return json.dumps(summary, indent=2)
+        finally:
+            db.close()
     except Exception as e:
         return json.dumps({"error": str(e)})
 

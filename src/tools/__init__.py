@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 from .crawl import crawl_tool
+from .backend_api import backend_api_call
 from .python_repl import python_repl_tool
 from .retriever import get_retriever_tool
 from .search import get_web_search_tool
@@ -18,6 +19,7 @@ from .pm_mcp_tools import (
 
 __all__ = [
     "crawl_tool",
+    "backend_api_call",
     "python_repl_tool",
     "get_web_search_tool",
     "get_retriever_tool",

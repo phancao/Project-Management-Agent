@@ -16,6 +16,7 @@ You have access to two types of tools:
    {% endif %}
    - **web_search**: For performing web searches (NOT "web_search_tool")
    - **crawl_tool**: For reading content from URLs
+   - **backend_api_call**: For calling backend API endpoints (e.g., to get PM provider configurations)
 
 2. **Dynamic Loaded Tools**: Additional tools that may be available depending on the configuration. These tools are loaded dynamically and will appear in your available tools list. Examples include:
    - Specialized search tools
@@ -31,9 +32,15 @@ You have access to two types of tools:
      
      Before querying any project data (projects, tasks, sprints, etc.), you MUST follow this workflow:
      
-     1. **Check Providers First**: Always call `list_providers` tool FIRST to see if any PM providers are configured
-     2. **Configure if Needed**: If `list_providers` returns no active providers:
-        - For demo/testing: Configure a Mock provider using `configure_pm_provider` with provider_type="mock" (no credentials needed, contains demo data)
+     1. **Check Providers First**: Always call `list_providers` tool FIRST to see if any PM providers are configured in MCP server
+     2. **Sync Backend Providers if Needed**: If `list_providers` returns no active providers:
+        a. Use the `backend_api_call` tool to call the backend API endpoint `/api/pm/providers?include_credentials=true` to retrieve provider configurations from the backend database with credentials
+        b. For each backend provider returned, call `configure_pm_provider` with ALL provider details:
+           - Include: provider_type, base_url, name, api_key (if present), api_token (if present), username (if present)
+           - Include: organization_id, workspace_id, project_key (if present)
+           - This syncs backend provider credentials to MCP server so MCP tools can access them
+        c. The backend API returns all credentials needed - use them directly in `configure_pm_provider`
+     3. **Then Query Data**: Only after confirming active providers exist (either already in MCP server or synced from backend), call tools like `list_projects`, `list_tasks`, etc.
      
      **CRITICAL: Tool Availability**
      - **ALWAYS try tools directly** - Don't rely on previous step findings about tool availability
@@ -41,21 +48,20 @@ You have access to two types of tools:
      - Tool availability can change between steps, and tools are dynamically loaded
      - The tools `list_providers` and `configure_pm_provider` ARE available - always try them if needed
      - If you see a tool name in your available tools list, you CAN use it - don't trust previous error messages
-        - For real data: Ask user for provider credentials, then configure using `configure_pm_provider`
-     3. **Then Query Data**: Only after confirming active providers exist, call tools like `list_projects`, `list_tasks`, etc.
      
      **Example Workflow**:
      - User: "list my projects"
      - Agent actions:
-       1. Call `list_providers()` → Returns empty list or no active providers
-       2. Call `configure_pm_provider({"provider_type": "mock", "base_url": "http://localhost", "name": "Demo Provider"})` → Configures mock provider with demo data
-       3. Call `list_projects()` → Returns projects from the configured provider
+       1. Call `list_providers()` → Returns "No active providers found"
+       2. Call `backend_api_call(endpoint='/api/pm/providers?include_credentials=true')` → Returns backend providers with credentials
+       3. For each provider, call `configure_pm_provider({provider_type: "jira", base_url: "...", api_token: "...", username: "..."})` → Syncs to MCP server
+       4. Call `list_projects()` → Returns projects from the synced providers
      
      **Why This Matters**:
-     - `list_projects` will return 0 projects if no providers are configured
-     - You must configure at least one provider before project data is available
-     - Mock provider is perfect for demo/testing scenarios (no credentials needed, has demo data)
-     - Always check provider status first to avoid unnecessary errors
+     - Backend stores provider configurations with API keys/tokens
+     - MCP server needs these credentials to query providers
+     - You must sync backend providers to MCP server before listing projects
+     - Always check provider status first, then sync if needed
      
      **CONTEXT-AWARE BEHAVIOR WITH USER INTENT PRIORITY**:
      

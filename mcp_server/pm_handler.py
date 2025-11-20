@@ -50,6 +50,8 @@ class MCPPMHandler:
         
         If user_id is set, only returns providers where created_by = user_id.
         Otherwise, returns all active providers.
+        
+        NOTE: Mock providers are excluded - they are UI-only and not used in AI/MCP conversations.
         """
         if not self.db:
             return []
@@ -65,8 +67,11 @@ class MCPPMHandler:
             )
             logger.info(f"[MCP PMHandler] Filtering providers by user_id: {self.user_id}")
         
+        # Exclude mock providers - they are UI-only and not used in MCP Server
+        query = query.filter(PMProviderConnection.provider_type != "mock")
+        
         providers = query.all()
-        logger.info(f"[MCP PMHandler] Found {len(providers)} active provider(s)")
+        logger.info(f"[MCP PMHandler] Found {len(providers)} active provider(s) (mock providers excluded)")
         return providers
     
     def _create_provider_instance(self, provider: PMProviderConnection) -> BasePMProvider:
@@ -102,6 +107,14 @@ class MCPPMHandler:
             f"username={username_value}, "
             f"has_api_token={bool(api_token_value)}"
         )
+        
+        # Mock providers are UI-only and should not be used in MCP Server
+        # They should be filtered out before reaching this point
+        if provider.provider_type == "mock":
+            raise ValueError(
+                "Mock providers are UI-only and not supported in MCP Server. "
+                "Please use real provider types (jira, openproject, etc.)"
+            )
         
         return create_pm_provider(
             provider_type=provider.provider_type,

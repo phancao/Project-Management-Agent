@@ -1376,16 +1376,11 @@ async def pm_get_project(project_id: str):
 
 @app.post("/api/pm/mock/regenerate")
 async def pm_regenerate_mock_dataset():
-    """Regenerate the mock dataset served by MockPMProvider."""
-    from src.pm_providers.models import PMProviderConfig
-    from src.pm_providers.mock_provider import MockPMProvider
-
-    provider = MockPMProvider(
-        PMProviderConfig(
-            provider_type="mock",
-            base_url="mock://demo",
-            api_key="mock-key",
-        )
+    """Mock provider endpoint - no longer supported."""
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=410,  # Gone
+        detail="Mock provider is no longer supported. Please use real PM providers (JIRA, OpenProject, etc.)"
     )
     metadata = await provider.regenerate_mock_data()
     return {"status": "ok", "metadata": metadata}
@@ -2477,12 +2472,49 @@ async def pm_chat_stream(request: Request):
                 if pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
                     # Use HTTP/SSE transport (Docker or remote service)
                     # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
+                    
+                    # SECURITY: Authenticate backend connection to MCP server
+                    # The MCP server stores sensitive credentials (API keys, tokens) for PM providers
+                    # We must authenticate even for internal Docker network connections
+                    mcp_api_key = get_str_env("PM_MCP_API_KEY", None)
+                    if not mcp_api_key:
+                        logger.warning(
+                            "[PM-CHAT] PM_MCP_API_KEY not set! Backend connection to MCP server is unauthenticated. "
+                            "This is a security risk as the MCP server stores sensitive provider credentials. "
+                            "Set PM_MCP_API_KEY environment variable to enable authentication."
+                        )
+                    
+                    # Try to get user_id from request headers (for user-scoped provider configuration)
+                    # The SSE transport supports X-User-ID header for user authentication
+                    user_id = None
+                    try:
+                        user_id = request.headers.get("X-User-ID")
+                    except Exception:
+                        pass  # Request may not be available in this context
+                    
+                    # Build headers dict for MCP server connection
+                    headers = {}
+                    
+                    # SECURITY: Add MCP API key for backend authentication
+                    if mcp_api_key:
+                        headers["X-MCP-API-Key"] = mcp_api_key
+                        logger.debug("[PM-CHAT] Adding MCP API key to headers for backend authentication")
+                    
+                    # Add user_id header if available (for user-scoped provider configuration)
+                    if user_id:
+                        headers["X-User-ID"] = user_id
+                        logger.info(f"[PM-CHAT] Passing user_id via headers: {user_id}")
+                    
                     mcp_settings["servers"]["pm-server"] = {
                         "transport": pm_mcp_transport,
                         "url": pm_mcp_url,
                         "enabled_tools": all_tool_names,  # This includes list_providers and configure_pm_provider
                         "add_to_agents": ["researcher", "coder"],
                     }
+                    # Add headers (API key for authentication, user_id for user-scoping)
+                    if headers:
+                        mcp_settings["servers"]["pm-server"]["headers"] = headers
+                        logger.debug(f"[PM-CHAT] Added {len(headers)} header(s) to MCP server connection")
                     logger.info(
                         f"[PM-CHAT] Auto-injected/updated PM MCP server via {pm_mcp_transport} at {pm_mcp_url} "
                         f"with {len(all_tool_names)} tools (includes list_providers, configure_pm_provider) (Docker/remote mode)"
@@ -2777,8 +2809,13 @@ async def pm_chat_stream(request: Request):
 # PM Provider Management Endpoints
 
 @app.get("/api/pm/providers")
-async def pm_list_providers():
-    """List all configured PM providers"""
+async def pm_list_providers(include_credentials: bool = False):
+    """
+    List all configured PM providers.
+    
+    Args:
+        include_credentials: If True, include API keys/tokens in response (for LLM to sync to MCP server)
+    """
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
@@ -2790,8 +2827,10 @@ async def pm_list_providers():
             providers = db.query(PMProviderConnection).filter(
                 PMProviderConnection.is_active.is_(True)
             ).all()
-            return [
-                {
+            
+            result = []
+            for p in providers:
+                provider_data = {
                     "id": str(p.id),
                     "name": p.name,
                     "provider_type": p.provider_type,
@@ -2799,9 +2838,17 @@ async def pm_list_providers():
                     "username": p.username,
                     "organization_id": p.organization_id,
                     "workspace_id": p.workspace_id,
+                    "project_key": p.project_key,
                 }
-                for p in providers
-            ]
+                # Include credentials only if requested (for LLM to sync to MCP server)
+                if include_credentials:
+                    if p.api_key:
+                        provider_data["api_key"] = p.api_key
+                    if p.api_token:
+                        provider_data["api_token"] = p.api_token
+                result.append(provider_data)
+            
+            return result
         finally:
             db.close()
     except Exception as e:
@@ -3272,20 +3319,10 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         AnalyticsService configured with real data adapter
     """
     try:
-        # Check if this is the Mock Project - use MockPMProvider
+        # Mock providers are no longer supported - all analytics require real providers
         if project_id.startswith("mock:"):
-            logger.info(f"[Analytics] Using MockPMProvider for project: {project_id}")
-            from src.pm_providers.mock_provider import MockPMProvider
-            from src.pm_providers.models import PMProviderConfig
-            
-            config = PMProviderConfig(
-                provider_type="mock",
-                base_url="mock://demo",
-                api_key="mock-key"
-            )
-            mock_provider = MockPMProvider(config)
-            adapter = PMProviderAnalyticsAdapter(mock_provider)
-            return AnalyticsService(adapter=adapter)
+            logger.warning(f"[Analytics] Mock projects are no longer supported: {project_id}")
+            return AnalyticsService()  # Return empty service
         
         # Parse project ID to get provider UUID
         if ":" not in project_id:

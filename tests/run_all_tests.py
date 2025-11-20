@@ -122,10 +122,11 @@ async def main():
     
     # Define test suites
     test_suites = [
-        ("DeerFlow Integration", "tests/test_deerflow.py"),
-        ("Conversation Flow Manager", "tests/test_conversation_flow.py"),
-        ("Database Models", "tests/test_database.py"),
-        ("FastAPI Endpoints", "tests/test_api.py"),
+        ("DeerFlow Integration", "tests/backend/test_deerflow.py"),
+        ("Conversation Flow Manager", "tests/backend/test_conversation_flow.py"),
+        ("Database Models", "tests/shared/test_database.py"),
+        ("FastAPI Endpoints", "tests/backend/test_api.py"),
+        ("PM Features", "tests/pm_providers/test_pm_features.py"),
     ]
     
     # Run test suites

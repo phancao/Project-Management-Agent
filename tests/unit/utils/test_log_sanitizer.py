@@ -10,7 +10,7 @@ by escaping dangerous characters in user-controlled input before logging.
 
 import pytest
 
-from src.utils.log_sanitizer import (
+from backend.utils.log_sanitizer import (
     create_safe_log_message,
     sanitize_agent_name,
     sanitize_feedback,

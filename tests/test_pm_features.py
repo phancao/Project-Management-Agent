@@ -19,12 +19,12 @@ async def test_pm_provider_imports():
     
     try:
         from src.pm_providers import build_pm_provider
-        from src.pm_providers.models import (
+        from pm_providers.models import (
             PMProject, PMTask, PMSprint, PMUser,
             PMProviderConfig, PMStatus, PMPriority
         )
-        from src.pm_providers.openproject import OpenProjectProvider
-        from src.pm_providers.base import BasePMProvider
+        from pm_providers.openproject import OpenProjectProvider
+        from pm_providers.base import BasePMProvider
         
         print("✅ PM Provider imports successful")
         return True
@@ -39,8 +39,8 @@ async def test_time_tracking_methods():
     print("\n⏱️ Testing time tracking methods...")
     
     try:
-        from src.pm_providers.openproject import OpenProjectProvider
-        from src.pm_providers.models import PMProviderConfig
+        from pm_providers.openproject import OpenProjectProvider
+        from pm_providers.models import PMProviderConfig
         import inspect
         
         # Check if OpenProjectProvider has time tracking methods
@@ -77,7 +77,7 @@ async def test_burndown_chart_handler():
     print("\n📊 Testing burndown chart handler...")
     
     try:
-        from src.conversation.flow_manager import ConversationFlowManager
+        from backend.conversation.flow_manager import ConversationFlowManager
         import inspect
         
         # Get flow manager instance
@@ -106,7 +106,7 @@ async def test_team_assignments_handler():
     print("\n👥 Testing team assignments handler...")
     
     try:
-        from src.conversation.flow_manager import ConversationFlowManager
+        from backend.conversation.flow_manager import ConversationFlowManager
         import inspect
         
         # Get flow manager instance
@@ -135,7 +135,7 @@ async def test_time_tracking_handler():
     print("\n⏱️ Testing time tracking handler...")
     
     try:
-        from src.conversation.flow_manager import ConversationFlowManager
+        from backend.conversation.flow_manager import ConversationFlowManager
         import inspect
         
         # Get flow manager instance
@@ -192,7 +192,7 @@ async def test_iso8601_duration_formatting():
     print("\n⏱️ Testing ISO 8601 duration formatting...")
     
     try:
-        from src.pm_providers.openproject import OpenProjectProvider
+        from pm_providers.openproject import OpenProjectProvider
         
         # Create provider instance without calling __init__
         provider = OpenProjectProvider.__new__(OpenProjectProvider)
@@ -228,7 +228,7 @@ async def test_iso8601_duration_parsing():
     print("\n⏱️ Testing ISO 8601 duration parsing...")
     
     try:
-        from src.pm_providers.openproject import OpenProjectProvider
+        from pm_providers.openproject import OpenProjectProvider
         
         # Test _parse_duration_to_hours
         test_cases = [
@@ -263,7 +263,7 @@ async def test_data_extraction_for_burndown():
     print("\n🔍 Testing data extraction for burndown chart...")
     
     try:
-        from src.conversation.flow_manager import DataExtractor, IntentType
+        from backend.conversation.flow_manager import DataExtractor, IntentType
         
         extractor = DataExtractor()
         

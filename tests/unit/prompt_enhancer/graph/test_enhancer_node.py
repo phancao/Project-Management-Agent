@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain.schema import HumanMessage, SystemMessage
 
-from src.config.report_style import ReportStyle
-from src.prompt_enhancer.graph.enhancer_node import prompt_enhancer_node
-from src.prompt_enhancer.graph.state import PromptEnhancerState
+from backend.config.report_style import ReportStyle
+from backend.prompt_enhancer.graph.enhancer_node import prompt_enhancer_node
+from backend.prompt_enhancer.graph.state import PromptEnhancerState
 
 
 @pytest.fixture

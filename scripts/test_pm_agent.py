@@ -100,7 +100,7 @@ async def test_pm_agent_simple_query():
         print("\n💬 Testing query: 'List my projects'")
         
         # Create initial state
-        from src.graph.types import State
+        from backend.graph.types import State
         
         state = State(
             messages=[{"role": "user", "content": "List my projects"}],
@@ -141,8 +141,8 @@ async def test_pm_agent_node():
     print("=" * 60)
     
     try:
-        from src.graph.nodes import pm_agent_node
-        from src.graph.types import State
+        from backend.graph.nodes import pm_agent_node
+        from backend.graph.types import State
         from langchain_core.runnables import RunnableConfig
         
         # Configure PM MCP client

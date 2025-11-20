@@ -1,7 +1,7 @@
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from src.utils.context_manager import ContextManager
+from backend.utils.context_manager import ContextManager
 
 
 class TestContextManager:

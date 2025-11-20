@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from src.config import SearchEngine
-from src.tools.search import get_web_search_tool
+from backend.tools.search import get_web_search_tool
 
 
 class TestGetWebSearchTool:

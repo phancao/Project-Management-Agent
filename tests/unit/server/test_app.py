@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessageChunk, ToolMessage
 from langgraph.types import Command
 
-from src.config.report_style import ReportStyle
-from src.server.app import _astream_workflow_generator, _make_event, app
+from backend.config.report_style import ReportStyle
+from backend.server.app import _astream_workflow_generator, _make_event, app
 
 
 @pytest.fixture

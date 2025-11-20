@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import src.graph.builder as builder_mod
+import backend.graph.builder as builder_mod
 
 
 @pytest.fixture

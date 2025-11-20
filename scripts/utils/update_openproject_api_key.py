@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from database.orm_models import PMProviderConnection
-from src.config.loader import get_str_env
+from backend.config.loader import get_str_env
 
 # Load environment variables
 load_dotenv()

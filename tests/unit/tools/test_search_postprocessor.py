@@ -1,6 +1,6 @@
 import pytest
 
-from src.tools.search_postprocessor import SearchResultPostProcessor
+from backend.tools.search_postprocessor import SearchResultPostProcessor
 
 
 class TestSearchResultPostProcessor:

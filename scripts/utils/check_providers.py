@@ -9,7 +9,7 @@ sys.path.insert(0, str(project_root))
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from database.orm_models import PMProviderConnection  # noqa: E402
-from src.config.loader import get_str_env  # noqa: E402
+from backend.config.loader import get_str_env  # noqa: E402
 
 
 def check_providers():

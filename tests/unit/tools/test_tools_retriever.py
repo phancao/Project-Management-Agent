@@ -10,7 +10,7 @@ from langchain_core.callbacks import (
 )
 
 from src.rag import Chunk, Document, Resource, Retriever
-from src.tools.retriever import RetrieverInput, RetrieverTool, get_retriever_tool
+from backend.tools.retriever import RetrieverInput, RetrieverTool, get_retriever_tool
 
 
 def test_retriever_input_model():

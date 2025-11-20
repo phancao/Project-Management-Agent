@@ -24,8 +24,8 @@ from typing import List, Dict, Any, Optional
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.pm_providers.openproject_v13 import OpenProjectV13Provider
-from src.pm_providers.models import PMProviderConfig
+from pm_providers.openproject_v13 import OpenProjectV13Provider
+from pm_providers.models import PMProviderConfig
 
 # Configuration - MUST use https://openproject.bstarsolutions.com
 OPENPROJECT_URL = "https://openproject.bstarsolutions.com"
@@ -39,7 +39,7 @@ try:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
         from database.orm_models import PMProviderConnection
-        from src.config.loader import get_str_env
+        from backend.config.loader import get_str_env
         from dotenv import load_dotenv
         
         load_dotenv()

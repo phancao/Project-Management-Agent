@@ -21,7 +21,7 @@ async def test_auth_models():
     print("=" * 60)
     
     try:
-        from src.mcp_servers.pm_server.auth.models import (
+        from mcp_server.auth.models import (
             User, Token, Role, Permission, ROLE_PERMISSIONS
         )
         
@@ -74,8 +74,8 @@ async def test_auth_manager():
     print("=" * 60)
     
     try:
-        from src.mcp_servers.pm_server.auth.manager import AuthManager
-        from src.mcp_servers.pm_server.auth.models import Role, Permission
+        from mcp_server.auth.manager import AuthManager
+        from mcp_server.auth.models import Role, Permission
         
         # Create auth manager
         auth_manager = AuthManager()
@@ -138,7 +138,7 @@ async def test_auth_integration():
     print("=" * 60)
     
     try:
-        from src.mcp_servers.pm_server.auth import (
+        from mcp_server.auth import (
             AuthManager,
             User,
             Role,

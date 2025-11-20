@@ -22,7 +22,7 @@ import pytest
 # Add src directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../"))
 
-from src.server.app import _process_tool_call_chunks, _validate_tool_call_chunks
+from backend.server.app import _process_tool_call_chunks, _validate_tool_call_chunks
 
 
 class TestProcessToolCallChunks:

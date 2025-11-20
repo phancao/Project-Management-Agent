@@ -3,7 +3,7 @@
 
 import pytest
 
-from src.rag.retriever import Chunk, Document, Resource, Retriever
+from backend.rag.retriever import Chunk, Document, Resource, Retriever
 
 
 def test_chunk_init():

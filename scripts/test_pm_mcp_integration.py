@@ -30,9 +30,9 @@ async def test_mcp_tool_loading():
     print("=" * 60)
     
     try:
-        from src.graph.nodes import _setup_and_execute_agent_step
-        from src.graph.types import State
-        from src.config.configuration import Configuration
+        from backend.graph.nodes import _setup_and_execute_agent_step
+        from backend.graph.types import State
+        from backend.config.configuration import Configuration
         from langchain_core.runnables import RunnableConfig
         
         # Create MCP configuration
@@ -92,8 +92,8 @@ async def test_researcher_node_config():
     print("=" * 60)
     
     try:
-        from src.graph.nodes import researcher_node
-        from src.graph.types import State
+        from backend.graph.nodes import researcher_node
+        from backend.graph.types import State
         from langchain_core.runnables import RunnableConfig
         
         # Create state
@@ -144,8 +144,8 @@ async def test_coder_node_config():
     print("=" * 60)
     
     try:
-        from src.graph.nodes import coder_node
-        from src.graph.types import State
+        from backend.graph.nodes import coder_node
+        from backend.graph.types import State
         from langchain_core.runnables import RunnableConfig
         
         # Create state

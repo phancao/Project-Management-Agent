@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.graph.nodes import (
+from backend.graph.nodes import (
     _execute_agent_step,
     _setup_and_execute_agent_step,
     coordinator_node,
@@ -20,7 +20,7 @@ with patch("src.llms.llm.get_llm_by_type", return_value=MagicMock()):
     from langgraph.types import Command
 
     from src.config import SearchEngine
-    from src.graph.nodes import background_investigation_node
+    from backend.graph.nodes import background_investigation_node
 
 
 # Mock data
@@ -1441,7 +1441,7 @@ async def test_clarification_workflow_integration():
 
 def test_clarification_parameters_combinations():
     """Test various combinations of clarification parameters."""
-    from src.graph.nodes import needs_clarification
+    from backend.graph.nodes import needs_clarification
 
     test_cases = [
         # (enable_clarification, clarification_rounds, max_rounds, is_complete, expected)
@@ -1468,7 +1468,7 @@ def test_clarification_parameters_combinations():
 
 def test_handoff_tools():
     """Test that handoff tools are properly defined."""
-    from src.graph.nodes import handoff_after_clarification, handoff_to_planner
+    from backend.graph.nodes import handoff_after_clarification, handoff_to_planner
 
     # Test handoff_to_planner tool - use invoke() method
     result = handoff_to_planner.invoke(
@@ -1898,7 +1898,7 @@ def test_clarification_no_history_defaults_to_topic():
 
 def test_planner_node_issue_650_missing_step_type_basic():
     """Test planner_node with missing step_type fields (Issue #650)."""
-    from src.graph.nodes import validate_and_fix_plan
+    from backend.graph.nodes import validate_and_fix_plan
 
     # Simulate LLM response with missing step_type (Issue #650 scenario)
     llm_response = {
@@ -1934,7 +1934,7 @@ def test_planner_node_issue_650_missing_step_type_basic():
 
 def test_planner_node_issue_650_water_footprint_scenario():
     """Test the exact water footprint query scenario from Issue #650."""
-    from src.graph.nodes import validate_and_fix_plan
+    from backend.graph.nodes import validate_and_fix_plan
 
     # Approximate the exact plan structure that caused Issue #650
     # "How many liters of water are required to produce 1 kg of beef?"
@@ -1978,7 +1978,7 @@ def test_planner_node_issue_650_water_footprint_scenario():
 
 def test_planner_node_issue_650_validation_error_fixed():
     """Test that the validation error from Issue #650 is now prevented."""
-    from src.graph.nodes import validate_and_fix_plan
+    from backend.graph.nodes import validate_and_fix_plan
 
     # This is the exact type of response that caused the error in Issue #650
     malformed_response = {
@@ -2010,7 +2010,7 @@ def test_planner_node_issue_650_validation_error_fixed():
 
 def test_human_feedback_node_issue_650_plan_parsing():
     """Test human_feedback_node with Issue #650 plan that has missing step_type."""
-    from src.graph.nodes import human_feedback_node
+    from backend.graph.nodes import human_feedback_node
 
     # Plan with missing step_type fields
     state = {
@@ -2050,7 +2050,7 @@ def test_human_feedback_node_issue_650_plan_parsing():
 
 def test_plan_validation_with_all_issue_650_error_scenarios():
     """Test all variations of Issue #650 error scenarios."""
-    from src.graph.nodes import validate_and_fix_plan
+    from backend.graph.nodes import validate_and_fix_plan
 
     test_scenarios = [
         # Missing step_type with need_search=true

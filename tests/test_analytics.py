@@ -11,12 +11,12 @@ Tests cover:
 import pytest
 from datetime import date, datetime, timedelta
 
-from src.analytics.mock_data import MockDataGenerator
-from src.analytics.models import WorkItemType, TaskStatus, Priority
-from src.analytics.calculators.burndown import BurndownCalculator
-from src.analytics.calculators.velocity import VelocityCalculator
-from src.analytics.calculators.sprint_report import SprintReportCalculator
-from src.analytics.service import AnalyticsService
+from backend.analytics.mock_data import MockDataGenerator
+from backend.analytics.models import WorkItemType, TaskStatus, Priority
+from backend.analytics.calculators.burndown import BurndownCalculator
+from backend.analytics.calculators.velocity import VelocityCalculator
+from backend.analytics.calculators.sprint_report import SprintReportCalculator
+from backend.analytics.service import AnalyticsService
 
 
 class TestMockDataGenerator:
@@ -275,7 +275,7 @@ class TestAnalyticsTools:
     
     def test_import_analytics_tools(self):
         """Test that analytics tools can be imported"""
-        from src.tools.analytics_tools import (
+        from backend.tools.analytics_tools import (
             get_sprint_burndown,
             get_team_velocity,
             get_sprint_report,
@@ -289,7 +289,7 @@ class TestAnalyticsTools:
     
     def test_burndown_tool_execution(self):
         """Test burndown tool can execute"""
-        from src.tools.analytics_tools import get_sprint_burndown
+        from backend.tools.analytics_tools import get_sprint_burndown
         import json
         
         result = get_sprint_burndown.invoke({
@@ -304,7 +304,7 @@ class TestAnalyticsTools:
     
     def test_velocity_tool_execution(self):
         """Test velocity tool can execute"""
-        from src.tools.analytics_tools import get_team_velocity
+        from backend.tools.analytics_tools import get_team_velocity
         import json
         
         result = get_team_velocity.invoke({

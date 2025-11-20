@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.rag.vikingdb_knowledge_base import VikingDBKnowledgeBaseProvider, parse_uri
+from backend.rag.vikingdb_knowledge_base import VikingDBKnowledgeBaseProvider, parse_uri
 
 
 # Dummy classes to mock dependencies

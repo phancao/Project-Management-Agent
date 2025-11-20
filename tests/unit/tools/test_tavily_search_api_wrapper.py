@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 import requests
 
-from src.tools.tavily_search.tavily_search_api_wrapper import (
+from backend.tools.tavily_search.tavily_search_api_wrapper import (
     EnhancedTavilySearchAPIWrapper,
 )
 

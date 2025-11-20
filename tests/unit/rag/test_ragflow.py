@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.rag.ragflow import RAGFlowProvider, parse_uri
+from backend.rag.ragflow import RAGFlowProvider, parse_uri
 
 
 # Dummy classes to mock dependencies

@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from src.tools.tavily_search.tavily_search_api_wrapper import (
+from backend.tools.tavily_search.tavily_search_api_wrapper import (
     EnhancedTavilySearchAPIWrapper,
 )
-from src.tools.tavily_search.tavily_search_results_with_images import (
+from backend.tools.tavily_search.tavily_search_results_with_images import (
     TavilySearchWithImages,
 )
 

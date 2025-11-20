@@ -8,7 +8,7 @@ import mongomock
 import pytest
 from postgres_mock_utils import PostgreSQLMockInstance
 
-import src.graph.checkpoint as checkpoint
+import backend.graph.checkpoint as checkpoint
 
 POSTGRES_URL = "postgresql://postgres:postgres@localhost:5432/checkpointing_db"
 MONGO_URL = "mongodb://admin:admin@localhost:27017/checkpointing_db?authSource=admin"

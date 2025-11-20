@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.rag.dify import DifyProvider, parse_uri
+from backend.rag.dify import DifyProvider, parse_uri
 
 
 # Dummy classes to mock dependencies

@@ -19,9 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../"))
-
+# Import the functions to test
 from backend.server.app import _process_tool_call_chunks, _validate_tool_call_chunks
 
 
@@ -108,7 +106,7 @@ class TestProcessToolCallChunks:
         ]
         
         # This should trigger a warning
-        with patch('src.server.app.logger') as mock_logger:
+        with patch('backend.server.app.logger') as mock_logger:
             result = _process_tool_call_chunks(chunks)
             
             # Verify warning was logged
@@ -177,7 +175,7 @@ class TestProcessToolCallChunks:
             {"name": "tool_c", "args": '{}', "id": "call_3", "index": 2},
         ]
         
-        with patch('src.server.app.logger') as mock_logger:
+        with patch('backend.server.app.logger') as mock_logger:
             result = _process_tool_call_chunks(chunks)
             
             # Should have debug logs for multiple indices
@@ -203,7 +201,7 @@ class TestValidateToolCallChunks:
             {"name": "web_search", "args": '{}', "id": "call_1", "index": 0},
         ]
         
-        with patch('src.server.app.logger') as mock_logger:
+        with patch('backend.server.app.logger') as mock_logger:
             _validate_tool_call_chunks(chunks)
             
             # Should have logged debug info
@@ -216,7 +214,7 @@ class TestValidateToolCallChunks:
             {"name": "tool_2", "args": '{}', "id": "call_2", "index": 1},
         ]
         
-        with patch('src.server.app.logger') as mock_logger:
+        with patch('backend.server.app.logger') as mock_logger:
             _validate_tool_call_chunks(chunks)
             
             # Should have logged about multiple indices

@@ -10,7 +10,7 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import TextContent
 
-from src.server.pm_handler import PMHandler
+from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ _debug_logger = logging.getLogger("src.mcp_servers.pm_server.tools.tasks")
 
 def register_task_tools(
     server: Server,
-    pm_handler: PMHandler,
+    pm_handler: MCPPMHandler,
     config: PMServerConfig,
     tool_names: list[str] | None = None
 ) -> int:

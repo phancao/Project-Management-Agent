@@ -10,7 +10,7 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import Tool, TextContent
 
-from src.server.pm_handler import PMHandler
+from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
 
 logger = logging.getLogger(__name__)
@@ -18,9 +18,10 @@ logger = logging.getLogger(__name__)
 
 def register_project_tools(
     server: Server,
-    pm_handler: PMHandler,
+    pm_handler: MCPPMHandler,
     config: PMServerConfig,
-    tool_names: list[str] | None = None
+    tool_names: list[str] | None = None,
+    tool_functions: dict[str, Any] | None = None
 ) -> int:
     """
     Register project-related MCP tools.
@@ -38,7 +39,7 @@ def register_project_tools(
     
     # Tool 1: list_projects
     @server.call_tool()
-    async def list_projects(arguments: dict[str, Any]) -> list[TextContent]:
+    async def list_projects(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
         """
         List all accessible projects across all PM providers.
         
@@ -138,9 +139,11 @@ def register_project_tools(
                      "Please check the backend logs for more details."
             )]
     
-    # Track tool name after function is defined
+    # Track tool name and store function reference after function is defined
     if tool_names is not None:
         tool_names.append("list_projects")
+    if tool_functions is not None:
+        tool_functions["list_projects"] = list_projects
     tool_count += 1
     
     # Tool 2: get_project

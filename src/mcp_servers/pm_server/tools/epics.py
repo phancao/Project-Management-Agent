@@ -10,7 +10,7 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import TextContent
 
-from src.server.pm_handler import PMHandler
+from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def register_epic_tools(
     server: Server,
-    pm_handler: PMHandler,
+    pm_handler: MCPPMHandler,
     config: PMServerConfig,
     tool_names: list[str] | None = None
 ) -> int:

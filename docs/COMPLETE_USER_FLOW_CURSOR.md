@@ -290,3 +290,11 @@ INSERT INTO user_mcp_api_keys (
 
 **The JIRA API key is collected once via the Web UI, then automatically used by the MCP Server when Cursor connects.**
 
+
+
+
+
+
+
+
+

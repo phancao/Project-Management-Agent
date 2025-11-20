@@ -69,7 +69,7 @@ export function useConfig(): {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           const res = await fetch(resolveServiceURL("./config"), {
-            signal: AbortSignal.timeout(5000), // 5 second timeout
+            signal: AbortSignal.timeout(10000), // 10 second timeout (increased from 5s)
           });
 
           if (!res.ok) {

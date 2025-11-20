@@ -196,3 +196,11 @@ MCP Server → Uses JIRA API Token → Calls JIRA API → Gets user's projects
 
 Both keys are needed, but they serve different purposes in the authentication chain!
 
+
+
+
+
+
+
+
+

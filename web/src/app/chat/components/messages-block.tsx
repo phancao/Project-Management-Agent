@@ -59,7 +59,12 @@ export function MessagesBlock({ className }: { className?: string }) {
             abortSignal: abortController.signal,
           },
         );
-      } catch {}
+      } catch (error) {
+        // Only log non-abort errors (abort is expected when user cancels)
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Failed to send message:', error);
+        }
+      }
     },
     [feedback],
   );

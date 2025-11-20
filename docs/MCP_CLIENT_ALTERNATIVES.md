@@ -300,3 +300,11 @@ open http://localhost:3000/pm/chat
 **You don't need Claude Desktop!** Your DeerFlow web interface already provides everything you need, and if you want a code editor with PM tools, Cursor or VS Code + Continue are excellent alternatives.
 
 
+
+
+
+
+
+
+
+

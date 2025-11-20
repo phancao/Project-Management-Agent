@@ -9,14 +9,24 @@ export async function* fetchStream(
   url: string,
   init: RequestInit,
 ): AsyncIterable<StreamEvent> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-cache",
-    },
-    ...init,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+      },
+      ...init,
+    });
+  } catch (error) {
+    // Handle network errors (connection refused, timeout, etc.)
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new Error(`Network error: Unable to connect to the server. Please check that the backend is running at ${url}`);
+    }
+    throw error;
+  }
+  
   if (response.status !== 200) {
     throw new Error(`Failed to fetch from ${url}: ${response.status}`);
   }

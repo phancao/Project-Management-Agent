@@ -115,8 +115,13 @@ export async function* chatStream(
         data: JSON.parse(event.data),
       } as ChatEvent;
     }
-  }catch(e){
-    console.error(e);
+  } catch (e) {
+    // Re-throw the error so it can be caught by the caller (sendMessage)
+    // This prevents uncaught promise rejections
+    if (e instanceof Error) {
+      throw e;
+    }
+    throw new Error(String(e));
   }
 }
 

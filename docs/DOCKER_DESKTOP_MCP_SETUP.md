@@ -42,9 +42,37 @@ Before configuring Docker Desktop, note down these environment variables:
 - `MCP_HOST`: Host to bind (default: `0.0.0.0`)
 - `MCP_PORT`: Port to use (default: `8080`)
 
-## 📋 Step 3: Configure Docker Desktop MCP Toolkit
+## 📋 Step 3: Enable MCP Toolkit (If Not Visible)
 
-### Option A: Using Docker Desktop UI (Recommended)
+If you don't see the MCP section in Docker Desktop settings, try these steps:
+
+### Enable Beta/Experimental Features
+
+1. **Open Docker Desktop**
+2. **Go to Settings** → **General**
+3. **Enable Beta Features** (if available)
+4. **Enable Experimental Features** (if available)
+5. **Restart Docker Desktop**
+
+### Check Extensions
+
+1. **Go to Settings** → **Extensions**
+2. **Look for "MCP Toolkit"** or "MCP" in the list
+3. **Install/Enable** if it's available but not enabled
+
+### Alternative: Tag Image with `mcp/` Prefix
+
+Some versions require images to be tagged with `mcp/` prefix:
+
+```bash
+docker tag pm-mcp-server:latest mcp/pm-mcp-server:latest
+```
+
+Then use `mcp/pm-mcp-server:latest` as the image name in Docker Desktop.
+
+## 📋 Step 4: Configure Docker Desktop MCP Toolkit
+
+### Option A: Using Docker Desktop UI (If Available)
 
 1. **Open Docker Desktop**
    - Launch Docker Desktop application
@@ -52,6 +80,7 @@ Before configuring Docker Desktop, note down these environment variables:
 2. **Navigate to MCP Settings**
    - Click the **Settings** icon (gear) in the top right
    - Go to **Extensions** → **MCP** (or search for "MCP" in settings)
+   - If not visible, see Step 3 above
 
 3. **Add Custom MCP Server**
    - Click **"Add Server"** or **"+"** button
@@ -131,7 +160,22 @@ If Docker Desktop supports configuration files, create `docker-desktop-mcp-confi
 }
 ```
 
-## 📋 Step 4: Verify the Setup
+### Option B: Use Docker Compose (Already Working!)
+
+**Good news!** Your PM MCP Server is already running via Docker Compose and working perfectly:
+
+```bash
+# Check status
+docker-compose ps pm_mcp_server
+
+# It's already running and healthy! ✅
+```
+
+You can continue using Docker Compose - it's actually simpler and gives you more control. The MCP Toolkit UI is just a convenience feature, but Docker Compose works just as well (or better) for private/local servers.
+
+See `docs/DOCKER_DESKTOP_MCP_ALTERNATIVE.md` for details on using Docker Compose.
+
+## 📋 Step 5: Verify the Setup
 
 ### Check Container Status
 
@@ -182,7 +226,7 @@ curl -X POST http://localhost:8080/tools/call \
   }' | jq
 ```
 
-## 📋 Step 5: Connect AI Clients
+## 📋 Step 6: Connect AI Clients
 
 ### Claude Desktop
 

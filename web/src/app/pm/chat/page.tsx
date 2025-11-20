@@ -3,7 +3,6 @@
 
 "use client";
 
-import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -11,6 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PMHeader } from "../components/pm-header";
 import { PMLoadingProvider } from "../context/pm-loading-context";
 import { PMLoadingManager } from "../components/pm-loading-manager";
+import Main from "./main";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -19,18 +19,6 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       retry: 1,
     },
-  },
-});
-
-const Main = dynamic(() => import("./main"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full w-full items-center justify-center">
-      Loading Project Management...
-    </div>
-  ),
-  onError: (error) => {
-    console.error("Failed to load Main component:", error);
   },
 });
 

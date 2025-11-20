@@ -54,7 +54,7 @@ services:
       - ./api:/app/api
       - ./src:/app/src
       - ./database:/app/database
-    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uv run uvicorn src.server.app:app --host 0.0.0.0 --port 8000 --reload
 
   # Next.js Frontend
   frontend:

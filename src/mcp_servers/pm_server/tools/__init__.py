@@ -21,6 +21,7 @@ from .epics import register_epic_tools
 from .users import register_user_tools
 from .analytics import register_analytics_tools
 from .task_interactions import register_task_interaction_tools
+from .provider_config import register_provider_config_tools
 
 __all__ = [
     "register_project_tools",
@@ -30,5 +31,6 @@ __all__ = [
     "register_user_tools",
     "register_analytics_tools",
     "register_task_interaction_tools",
+    "register_provider_config_tools",
 ]
 

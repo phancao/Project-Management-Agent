@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.server.pm_handler import PMHandler
+from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
 from ..auth import AuthManager, AuthMiddleware, create_auth_router
 from ..auth.middleware import get_current_user, get_optional_user
@@ -55,7 +55,7 @@ class ServerInfo(BaseModel):
 
 
 def create_http_app(
-    pm_handler: PMHandler,
+    pm_handler: MCPPMHandler,
     config: PMServerConfig,
     enable_auth: bool = True
 ) -> FastAPI:

@@ -61,9 +61,13 @@ class PMServerConfig:
     @classmethod
     def from_env(cls) -> "PMServerConfig":
         """Create config from environment variables."""
+        default_db_url = os.getenv(
+            "DATABASE_URL",
+            "postgresql://postgres:postgres@localhost:5432/pm_agent"
+        )
         return cls(
             server_name=os.getenv("MCP_SERVER_NAME", "pm-server"),
-            database_url=os.getenv("DATABASE_URL", cls.database_url),
+            database_url=os.getenv("DATABASE_URL", default_db_url),
             transport=os.getenv("MCP_TRANSPORT", "stdio"),
             host=os.getenv("MCP_HOST", "localhost"),
             port=int(os.getenv("MCP_PORT", "8080")),

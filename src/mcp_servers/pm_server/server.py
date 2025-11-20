@@ -12,8 +12,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import ToolsCapability
 from sqlalchemy.orm import Session
 
-from database.connection import get_db_session
-from src.server.pm_handler import PMHandler
+from .database.connection import get_mcp_db_session, init_mcp_db
+from .pm_handler import MCPPMHandler
 from .config import PMServerConfig
 from .tools import (
     register_project_tools,
@@ -24,6 +24,7 @@ from .tools import (
     register_analytics_tools,
     register_task_interaction_tools,
 )
+from .tools.provider_config import register_provider_config_tools
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +37,20 @@ class PMMCPServer:
     Supports multiple PM providers (OpenProject, JIRA, ClickUp, Internal DB).
     """
     
-    def __init__(self, config: PMServerConfig | None = None):
+    def __init__(self, config: PMServerConfig | None = None, user_id: str | None = None):
         """
         Initialize PM MCP Server.
         
         Args:
             config: Server configuration. If None, loads from environment.
+            user_id: Optional user ID for user-scoped credential loading.
+                     If provided, only loads providers where created_by = user_id.
         """
         self.config = config or PMServerConfig.from_env()
         self.config.validate()
+        
+        # User context for credential scoping
+        self.user_id = user_id
         
         # Initialize MCP server
         self.server = Server(self.config.server_name)
@@ -53,7 +59,7 @@ class PMMCPServer:
         self.db_session: Session | None = None
         
         # PM Handler (will be initialized when server starts)
-        self.pm_handler: PMHandler | None = None
+        self.pm_handler: MCPPMHandler | None = None
         
         # Tool registry
         self.registered_tools: list[str] = []
@@ -61,29 +67,40 @@ class PMMCPServer:
         # Track registered tool names for list_tools
         # This list will be populated as tools are registered
         self._tool_names: list[str] = []
+        # Store tool function references for direct access (bypassing CallToolRequest routing bug)
+        self._tool_functions: dict[str, Any] = {}
         
         logger.info(
             f"PM MCP Server initialized: {self.config.server_name} v{self.config.server_version}"
         )
     
     def _initialize_pm_handler(self) -> None:
-        """Initialize PM Handler with database session."""
+        """Initialize PM Handler with database session and user context."""
         if self.pm_handler is not None:
             return
         
         logger.info("Initializing PM Handler...")
         
-        # Get database session
-        self.db_session = next(get_db_session())
+        # Get MCP Server database session (independent from backend)
+        self.db_session = next(get_mcp_db_session())
         
-        # Initialize PMHandler in multi-provider mode
-        self.pm_handler = PMHandler.from_db_session(self.db_session)
+        # Initialize PMHandler with user context if provided
+        if self.user_id:
+            logger.info(f"Initializing PM Handler for user: {self.user_id}")
+            self.pm_handler = MCPPMHandler.from_db_session_and_user(
+                self.db_session, 
+                user_id=self.user_id
+            )
+        else:
+            logger.info("Initializing PM Handler for all users (backward compatible)")
+            self.pm_handler = MCPPMHandler.from_db_session(self.db_session)
         
         # Get provider count
         provider_count = len(self.pm_handler._get_active_providers())
         
         logger.info(
-            f"PM Handler initialized with {provider_count} active providers"
+            f"PM Handler initialized with {provider_count} active provider(s)"
+            + (f" for user {self.user_id}" if self.user_id else " (all users)")
         )
     
     def _register_all_tools(self) -> None:
@@ -95,6 +112,7 @@ class PMMCPServer:
         
         # Register tools from each module
         tool_modules = [
+            ("provider_config", register_provider_config_tools),  # Add provider config tools first
             ("projects", register_project_tools),
             ("tasks", register_task_tools),
             ("sprints", register_sprint_tools),
@@ -106,13 +124,18 @@ class PMMCPServer:
         
         for module_name, register_func in tool_modules:
             try:
-                # Pass tool_names list to registration functions so they can track tool names
-                # Use try/except to handle functions that don't accept tool_names parameter yet
+                # Pass tool_names list and tool_functions dict to registration functions
+                # so they can track tool names and store function references
                 import inspect
                 sig = inspect.signature(register_func)
-                if len(sig.parameters) >= 4:
+                if len(sig.parameters) >= 5:
+                    # New signature: (server, pm_handler, config, tool_names, tool_functions)
+                    count = register_func(self.server, self.pm_handler, self.config, self._tool_names, self._tool_functions)
+                elif len(sig.parameters) >= 4:
+                    # Old signature: (server, pm_handler, config, tool_names)
                     count = register_func(self.server, self.pm_handler, self.config, self._tool_names)
                 else:
+                    # Very old signature: (server, pm_handler, config)
                     count = register_func(self.server, self.pm_handler, self.config)
                 self.registered_tools.extend([f"{module_name}.*"])
                 logger.info(f"Registered {count} {module_name} tools")
@@ -122,6 +145,49 @@ class PMMCPServer:
         
         logger.info(f"Total tools registered: {len(self.registered_tools)}")
         
+        # CRITICAL: Create a single routing handler for all tool calls
+        # The SDK's call_tool() decorator overwrites the handler each time, so we need
+        # a single handler that routes to the correct tool function based on tool_name
+        logger.info("Creating single routing handler for all tool calls...")
+        from mcp.types import CallToolRequest, CallToolResult, TextContent
+        
+        # Store reference to tool_functions for the routing handler
+        tool_functions = self._tool_functions
+        
+        @self.server.call_tool()
+        async def route_tool_call(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
+            """
+            Single routing handler for all tool calls.
+            Routes to the correct tool function based on tool_name.
+            """
+            logger.info(f"[ROUTER] Routing tool call: {tool_name}")
+            
+            # Get the tool function from our stored functions
+            if tool_name not in tool_functions:
+                logger.error(f"[ROUTER] Tool '{tool_name}' not found in tool_functions")
+                logger.error(f"[ROUTER] Available tools: {list(tool_functions.keys())[:10]}")
+                return [TextContent(
+                    type="text",
+                    text=f"Error: Tool '{tool_name}' not found. Available tools: {', '.join(list(tool_functions.keys())[:10])}"
+                )]
+            
+            tool_func = tool_functions[tool_name]
+            logger.info(f"[ROUTER] Found tool function for '{tool_name}': {tool_func}")
+            
+            try:
+                # Call the tool function with (tool_name, arguments)
+                result = await tool_func(tool_name, arguments)
+                logger.info(f"[ROUTER] Tool '{tool_name}' completed successfully")
+                return result
+            except Exception as e:
+                logger.error(f"[ROUTER] Error calling tool '{tool_name}': {e}", exc_info=True)
+                return [TextContent(
+                    type="text",
+                    text=f"Error calling tool '{tool_name}': {str(e)}"
+                )]
+        
+        logger.info(f"✅ Routing handler created. {len(tool_functions)} tools available for routing.")
+        
         # CRITICAL: Register list_tools handler so the SDK automatically enables tools capability
         # The MCP SDK (v1.21.2) automatically enables tools capability when @server.list_tools() is registered
         # The handler below will be detected by the SDK and tools capability will be enabled automatically
@@ -130,7 +196,7 @@ class PMMCPServer:
         logger.info("Registering list_tools handler...")
         try:
             @self.server.list_tools()
-            async def list_all_tools() -> list[Tool]:
+            async def list_all_tools(request=None) -> list[Tool]:
                 """
                 List all registered PM tools.
                 
@@ -456,18 +522,14 @@ class PMMCPServer:
             self._register_all_tools()
             
             # Create FastAPI app with SSE endpoints
-            from .transports.sse import create_sse_app, register_tool_with_sse
+            from .transports.sse import create_sse_app
             
             app = create_sse_app(self.pm_handler, self.config, mcp_server_instance=self)
             
-            # Register all MCP tools with SSE app
-            # We need to convert MCP tools to SSE-compatible format
-            logger.info("Registering tools with SSE transport...")
-            
-            # Get all tools from the MCP server
-            # Note: MCP server tools are registered via decorators, so we need
-            # to extract them and register with SSE app
-            # For now, we'll create a mapping
+            # Tools are automatically handled by the MCP server through the SSE transport
+            # The new SSE implementation uses EventSourceResponse and memory streams
+            # All tool calls are routed through the MCP server's native handlers
+            logger.info(f"SSE transport initialized - {len(self._tool_names)} tools available via MCP server")
             
             # Import uvicorn for running FastAPI
             import uvicorn

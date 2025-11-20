@@ -45,7 +45,8 @@ class PMHandler:
     def __init__(
         self, 
         db_session: Optional[Session] = None,
-        single_provider: Optional[BasePMProvider] = None
+        single_provider: Optional[BasePMProvider] = None,
+        user_id: Optional[str] = None
     ):
         """
         Initialize PM handler.
@@ -56,9 +57,13 @@ class PMHandler:
             single_provider: Optional single provider instance to use.
                             If provided, operates in single-provider mode.
                             If None, operates in multi-provider mode using db_session.
+            user_id: Optional user ID to filter providers by user.
+                     If provided, only returns providers where created_by = user_id.
+                     If None, returns all active providers (backward compatible).
         """
         self.db = db_session
         self.single_provider = single_provider
+        self.user_id = user_id
         self._mode = "single" if single_provider else "multi"
     
     @staticmethod
@@ -95,29 +100,70 @@ class PMHandler:
     @classmethod
     def from_db_session(
         cls,
-        db_session: Session
+        db_session: Session,
+        user_id: Optional[str] = None
     ) -> "PMHandler":
         """
         Create PMHandler instance for multi-provider mode.
         
-        This aggregates data from all active providers in the database.
-        Useful for API endpoints that need to show data from all providers.
+        This aggregates data from active providers in the database.
+        If user_id is provided, only aggregates from that user's providers.
         
         Args:
             db_session: Database session for querying providers
+            user_id: Optional user ID to filter providers by user.
+                     If None, aggregates from all active providers.
             
         Returns:
             PMHandler configured for multi-provider mode
         """
-        return cls(db_session=db_session)
+        return cls(db_session=db_session, user_id=user_id)
+    
+    @classmethod
+    def from_db_session_and_user(
+        cls,
+        db_session: Session,
+        user_id: str
+    ) -> "PMHandler":
+        """
+        Create PMHandler instance for specific user.
+        
+        This is a convenience method that explicitly creates a user-scoped handler.
+        Only returns providers where created_by = user_id.
+        
+        Args:
+            db_session: Database session for querying providers
+            user_id: User ID to filter providers
+            
+        Returns:
+            PMHandler configured for user-scoped multi-provider mode
+        """
+        return cls(db_session=db_session, user_id=user_id)
     
     def _get_active_providers(self) -> List[PMProviderConnection]:
-        """Get all active PM providers from database"""
+        """
+        Get active PM providers from database.
+        
+        If user_id is set, only returns providers where created_by = user_id.
+        Otherwise, returns all active providers (backward compatible).
+        """
         if not self.db:
             return []
-        return self.db.query(PMProviderConnection).filter(
+        
+        query = self.db.query(PMProviderConnection).filter(
             PMProviderConnection.is_active.is_(True)
-        ).all()
+        )
+        
+        # Filter by user if user_id is provided
+        if self.user_id:
+            query = query.filter(
+                PMProviderConnection.created_by == self.user_id
+            )
+            logger.info(f"[PMHandler] Filtering providers by user_id: {self.user_id}")
+        
+        providers = query.all()
+        logger.info(f"[PMHandler] Found {len(providers)} active provider(s)")
+        return providers
     
     def _create_provider_instance(self, provider: PMProviderConnection):
         """

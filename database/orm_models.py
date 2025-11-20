@@ -477,3 +477,21 @@ class ProjectSyncMapping(Base):
     sync_config = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class UserMCPAPIKey(Base):
+    """User MCP API Key model for external client authentication"""
+    __tablename__ = "user_mcp_api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    api_key = Column(String(255), nullable=False, unique=True)
+    name = Column(String(255), nullable=True)  # Optional: "Cursor", "VS Code", etc.
+    last_used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", backref="mcp_api_keys")

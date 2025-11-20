@@ -10,7 +10,7 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import TextContent
 
-from src.server.pm_handler import PMHandler
+from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def register_task_interaction_tools(
     server: Server,
-    pm_handler: PMHandler,
+    pm_handler: MCPPMHandler,
     config: PMServerConfig,
     tool_names: list[str] | None = None
 ) -> int:
@@ -219,7 +219,7 @@ def register_task_interaction_tools(
     
     # Tool 5: link_related_tasks
     @server.call_tool()
-    async def link_related_tasks(arguments: dict[str, Any]) -> list[TextContent]:
+    async def link_related_tasks(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
         """
         Link two tasks as related (blocks, depends on, etc.).
         

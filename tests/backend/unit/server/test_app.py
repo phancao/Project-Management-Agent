@@ -84,8 +84,8 @@ async def test_astream_workflow_generator_preserves_clarification_history():
         return IteratorObject()
 
     with (
-        patch("src.server.app._process_initial_messages"),
-        patch("src.server.app._stream_graph_events", side_effect=empty_async_iterator),
+        patch("backend.server.app._process_initial_messages"),
+        patch("backend.server.app._stream_graph_events", side_effect=empty_async_iterator),
     ):
         generator = _astream_workflow_generator(
             messages=messages,
@@ -655,8 +655,8 @@ class TestAstreamWorkflowGenerator:
             events.append(event)
 
     @pytest.mark.asyncio
-    @patch("backend.server.app.graph")
-    async def test_astream_workflow_generator_interrupt_event(self, mock_graph):
+    @patch("backend.server.app._stream_graph_events")
+    async def test_astream_workflow_generator_interrupt_event(self, mock_stream):
         # Mock interrupt data
         mock_interrupt = MagicMock()
         mock_interrupt.ns = ["interrupt_id"]
@@ -664,10 +664,17 @@ class TestAstreamWorkflowGenerator:
 
         interrupt_data = {"__interrupt__": [mock_interrupt]}
 
-        async def mock_astream(*args, **kwargs):
-            yield ("agent1", "step1", interrupt_data)
+        async def mock_stream_events(*args, **kwargs):
+            # _stream_graph_events yields events directly
+            yield _make_event("interrupt", {
+                "thread_id": "test_thread",
+                "id": "interrupt_id",
+                "role": "assistant",
+                "content": "Plan requires approval",
+                "finish_reason": "interrupt",
+            })
 
-        mock_graph.astream = mock_astream
+        mock_stream.side_effect = mock_stream_events
 
         generator = _astream_workflow_generator(
             messages=[],
@@ -696,16 +703,22 @@ class TestAstreamWorkflowGenerator:
         assert "interrupt_id" in events[0]
 
     @pytest.mark.asyncio
-    @patch("backend.server.app.graph")
-    async def test_astream_workflow_generator_tool_message(self, mock_graph):
+    @patch("backend.server.app._stream_graph_events")
+    async def test_astream_workflow_generator_tool_message(self, mock_stream):
         # Mock tool message
-        mock_tool_message = ToolMessage(content="Tool result", tool_call_id="tool_123")
-        mock_tool_message.id = "msg_456"
+        async def mock_stream_events(*args, **kwargs):
+            # _stream_graph_events yields events directly
+            from backend.server.app import _make_event
+            yield _make_event("tool_call_result", {
+                "thread_id": "test_thread",
+                "agent": "agent1",
+                "id": "msg_456",
+                "role": "assistant",
+                "content": "Tool result",
+                "tool_call_id": "tool_123",
+            })
 
-        async def mock_astream(*args, **kwargs):
-            yield ("agent1:subagent", "step1", (mock_tool_message, {}))
-
-        mock_graph.astream = mock_astream
+        mock_stream.side_effect = mock_stream_events
 
         generator = _astream_workflow_generator(
             messages=[],
@@ -734,21 +747,23 @@ class TestAstreamWorkflowGenerator:
         assert "tool_123" in events[0]
 
     @pytest.mark.asyncio
-    @patch("backend.server.app.graph")
+    @patch("backend.server.app._stream_graph_events")
     async def test_astream_workflow_generator_ai_message_with_tool_calls(
-        self, mock_graph
+        self, mock_stream
     ):
         # Mock AI message with tool calls
-        mock_ai_message = AIMessageChunk(content="Making tool call")
-        mock_ai_message.id = "msg_789"
-        mock_ai_message.response_metadata = {"finish_reason": "tool_calls"}
-        mock_ai_message.tool_calls = [{"name": "search", "args": {"query": "test"}}]
-        mock_ai_message.tool_call_chunks = [{"name": "search"}]
+        async def mock_stream_events(*args, **kwargs):
+            from backend.server.app import _make_event
+            yield _make_event("tool_calls", {
+                "thread_id": "test_thread",
+                "agent": "agent1",
+                "id": "msg_789",
+                "role": "assistant",
+                "content": "Making tool call",
+                "tool_calls": [{"name": "search", "args": {"query": "test"}}],
+            })
 
-        async def mock_astream(*args, **kwargs):
-            yield ("agent1:subagent", "step1", (mock_ai_message, {}))
-
-        mock_graph.astream = mock_astream
+        mock_stream.side_effect = mock_stream_events
 
         generator = _astream_workflow_generator(
             messages=[],
@@ -777,21 +792,23 @@ class TestAstreamWorkflowGenerator:
         assert "tool_calls" in events[0]
 
     @pytest.mark.asyncio
-    @patch("backend.server.app.graph")
+    @patch("backend.server.app._stream_graph_events")
     async def test_astream_workflow_generator_ai_message_with_tool_call_chunks(
-        self, mock_graph
+        self, mock_stream
     ):
         # Mock AI message with only tool call chunks
-        mock_ai_message = AIMessageChunk(content="Streaming tool call")
-        mock_ai_message.id = "msg_101"
-        mock_ai_message.response_metadata = {}
-        mock_ai_message.tool_calls = []
-        mock_ai_message.tool_call_chunks = [{"name": "search", "index": 0}]
+        async def mock_stream_events(*args, **kwargs):
+            from backend.server.app import _make_event
+            yield _make_event("tool_call_chunks", {
+                "thread_id": "test_thread",
+                "agent": "agent1",
+                "id": "msg_101",
+                "role": "assistant",
+                "content": "Streaming tool call",
+                "tool_call_chunks": [{"name": "search", "index": 0}],
+            })
 
-        async def mock_astream(*args, **kwargs):
-            yield ("agent1:subagent", "step1", (mock_ai_message, {}))
-
-        mock_graph.astream = mock_astream
+        mock_stream.side_effect = mock_stream_events
 
         generator = _astream_workflow_generator(
             messages=[],
@@ -819,19 +836,21 @@ class TestAstreamWorkflowGenerator:
         assert "Streaming tool call" in events[0]
 
     @pytest.mark.asyncio
-    @patch("backend.server.app.graph")
-    async def test_astream_workflow_generator_with_finish_reason(self, mock_graph):
+    @patch("backend.server.app._stream_graph_events")
+    async def test_astream_workflow_generator_with_finish_reason(self, mock_stream):
         # Mock AI message with finish reason
-        mock_ai_message = AIMessageChunk(content="Complete response")
-        mock_ai_message.id = "msg_finish"
-        mock_ai_message.response_metadata = {"finish_reason": "stop"}
-        mock_ai_message.tool_calls = []
-        mock_ai_message.tool_call_chunks = []
+        async def mock_stream_events(*args, **kwargs):
+            from backend.server.app import _make_event
+            yield _make_event("message_chunk", {
+                "thread_id": "test_thread",
+                "agent": "agent1",
+                "id": "msg_finish",
+                "role": "assistant",
+                "content": "Complete response",
+                "finish_reason": "stop",
+            })
 
-        async def mock_astream(*args, **kwargs):
-            yield ("agent1:subagent", "step1", (mock_ai_message, {}))
-
-        mock_graph.astream = mock_astream
+        mock_stream.side_effect = mock_stream_events
 
         generator = _astream_workflow_generator(
             messages=[],

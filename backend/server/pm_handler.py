@@ -66,18 +66,6 @@ class PMHandler:
         self.user_id = user_id
         self._mode = "single" if single_provider else "multi"
     
-    @staticmethod
-    def is_mock_project(project_id: str) -> bool:
-        """
-        Check if a project ID is for the Mock Project.
-        
-        Args:
-            project_id: Project ID to check
-            
-        Returns:
-            True if this is a mock project, False otherwise
-        """
-        return project_id.startswith("mock:")
     
     @classmethod
     def from_single_provider(
@@ -230,19 +218,6 @@ class PMHandler:
         Raises:
             ValueError: If provider_id format is invalid or provider not found
         """
-        # Check if this is a mock project - return MockPMProvider
-        if self.is_mock_project(project_id):
-            from pm_providers.mock_provider import MockPMProvider
-            from pm_providers.models import PMProviderConfig
-            
-            logger.info(f"[PMHandler] Using MockPMProvider for project: {project_id}")
-            config = PMProviderConfig(
-                provider_type="mock",
-                base_url="mock://demo",
-                api_key="mock-key"
-            )
-            return MockPMProvider(config)
-        
         if ":" not in project_id:
             raise ValueError(f"Invalid project_id format: {project_id}")
         
@@ -323,35 +298,6 @@ class PMHandler:
             return []
         
         all_projects = []
-
-        # Always include Mock provider demo project for onboarding/demo usage
-        try:
-            from pm_providers.mock_provider import MockPMProvider
-            from pm_providers.models import PMProviderConfig
-
-            mock_provider = MockPMProvider(
-                PMProviderConfig(
-                    provider_type="mock",
-                    base_url="mock://demo",
-                    api_key="mock-key"
-                )
-            )
-            mock_projects = await mock_provider.list_projects()
-            for project in mock_projects:
-                all_projects.append({
-                    "id": f"mock:{project.id}",
-                    "name": project.name,
-                    "description": project.description or "",
-                    "status": (
-                        project.status.value
-                        if project.status and hasattr(project.status, "value")
-                        else str(project.status) if project.status else "None"
-                    ),
-                    "provider_id": "mock",
-                    "provider_type": "mock",
-                })
-        except Exception as mock_error:
-            logger.warning("Failed to load mock projects: %s", mock_error)
 
         for provider in providers:
             try:

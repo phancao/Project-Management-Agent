@@ -1376,16 +1376,11 @@ async def pm_get_project(project_id: str):
 
 @app.post("/api/pm/mock/regenerate")
 async def pm_regenerate_mock_dataset():
-    """Regenerate the mock dataset served by MockPMProvider."""
-    from src.pm_providers.models import PMProviderConfig
-    from src.pm_providers.mock_provider import MockPMProvider
-
-    provider = MockPMProvider(
-        PMProviderConfig(
-            provider_type="mock",
-            base_url="mock://demo",
-            api_key="mock-key",
-        )
+    """Mock provider endpoint - no longer supported."""
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=410,  # Gone
+        detail="Mock provider is no longer supported. Please use real PM providers (JIRA, OpenProject, etc.)"
     )
     metadata = await provider.regenerate_mock_data()
     return {"status": "ok", "metadata": metadata}
@@ -3272,20 +3267,10 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         AnalyticsService configured with real data adapter
     """
     try:
-        # Check if this is the Mock Project - use MockPMProvider
+        # Mock providers are no longer supported - all analytics require real providers
         if project_id.startswith("mock:"):
-            logger.info(f"[Analytics] Using MockPMProvider for project: {project_id}")
-            from src.pm_providers.mock_provider import MockPMProvider
-            from src.pm_providers.models import PMProviderConfig
-            
-            config = PMProviderConfig(
-                provider_type="mock",
-                base_url="mock://demo",
-                api_key="mock-key"
-            )
-            mock_provider = MockPMProvider(config)
-            adapter = PMProviderAnalyticsAdapter(mock_provider)
-            return AnalyticsService(adapter=adapter)
+            logger.warning(f"[Analytics] Mock projects are no longer supported: {project_id}")
+            return AnalyticsService()  # Return empty service
         
         # Parse project ID to get provider UUID
         if ":" not in project_id:

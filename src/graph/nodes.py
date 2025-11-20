@@ -21,6 +21,7 @@ from src.prompts.planner_model import Plan
 from src.prompts.template import apply_prompt_template
 from src.tools import (
     crawl_tool,
+    backend_api_call,
     get_retriever_tool,
     get_web_search_tool,
     python_repl_tool,
@@ -1128,7 +1129,7 @@ async def researcher_node(
     configurable = Configuration.from_runnable_config(config)
     logger.debug(f"[researcher_node] Max search results: {configurable.max_search_results}")
     
-    tools = [get_web_search_tool(configurable.max_search_results), crawl_tool]
+    tools = [get_web_search_tool(configurable.max_search_results), crawl_tool, backend_api_call]
     retriever_tool = get_retriever_tool(state.get("resources", []))
     if retriever_tool:
         logger.debug(f"[researcher_node] Adding retriever tool to tools list")
@@ -1165,7 +1166,7 @@ async def coder_node(
     logger.info("Coder node is coding.")
     logger.debug(f"[coder_node] Starting coder agent with python_repl_tool")
     
-    tools = [python_repl_tool]
+    tools = [python_repl_tool, backend_api_call]
     
     # PM tools are loaded via MCP configuration in _setup_and_execute_agent_step
     # No need to manually add PM tools here

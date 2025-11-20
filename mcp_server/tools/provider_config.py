@@ -6,10 +6,36 @@ This enables users to add their credentials without needing a web UI.
 """
 
 import logging
+from datetime import datetime
 from typing import Any
+from uuid import UUID
 from mcp.types import TextContent
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
+
+
+def _register_tool(
+    tool_func: Any,
+    tool_names: list[str] | None = None,
+    tool_functions: dict[str, Any] | None = None,
+) -> None:
+    """
+    Helper function to register a tool function.
+    
+    Automatically extracts the tool name from the function name and registers it.
+    This avoids hardcoding tool names and reduces errors.
+    
+    Args:
+        tool_func: The tool function to register
+        tool_names: Optional list to track tool names
+        tool_functions: Optional dict to store tool functions for routing
+    """
+    tool_name = tool_func.__name__
+    if tool_names is not None:
+        tool_names.append(tool_name)
+    if tool_functions is not None:
+        tool_functions[tool_name] = tool_func
 
 
 def register_provider_config_tools(
@@ -77,6 +103,9 @@ def register_provider_config_tools(
                 if active_only:
                     query = query.filter(PMProviderConnection.is_active == True)
                 
+                # Exclude mock providers - they are UI-only and not used in MCP Server
+                query = query.filter(PMProviderConnection.provider_type != "mock")
+                
                 providers = query.all()
                 
                 if not providers:
@@ -84,7 +113,8 @@ def register_provider_config_tools(
                         type="text",
                         text="No PM providers configured. "
                              "Use the 'configure_pm_provider' tool to set up a provider. "
-                             "For demo/testing, use provider_type='mock' (no credentials needed)."
+                             "Note: Mock providers are UI-only and not supported in MCP Server. "
+                             "Please configure a real provider (jira, openproject, openproject_v13, clickup) with proper credentials."
                     )]
                 
                 # Format provider list
@@ -122,18 +152,19 @@ def register_provider_config_tools(
                 text=f"Error listing providers: {str(e)}"
             )]
     
-    # Track tool name and store function reference after function is defined
-    if tool_names is not None:
-        tool_names.append("list_providers")
-    if tool_functions is not None:
-        tool_functions["list_providers"] = list_providers
+    # Register tool automatically using helper function
+    _register_tool(list_providers, tool_names, tool_functions)
     tool_count += 1
     
     # Tool: configure_pm_provider
     @server.call_tool()
     async def configure_pm_provider(tool_name: str, arguments: dict[str, Any]) -> list[TextContent]:
         """
-        Configure a PM provider (JIRA, OpenProject, ClickUp, Mock) for the current user.
+        Configure a PM provider (JIRA, OpenProject, ClickUp) for the current user.
+        
+        **IMPORTANT**: Mock providers are UI-only and NOT supported in MCP Server.
+        Do NOT configure mock providers using this tool. Mock providers are only
+        available in the web UI for demonstration purposes.
         
         **WHEN TO USE THIS TOOL**:
         - After calling `list_providers` and finding no active providers
@@ -143,18 +174,12 @@ def register_provider_config_tools(
         **WORKFLOW**:
         1. Call `list_providers` first to check current provider status
         2. If no active providers exist, use this tool to configure one
-        3. For demo/testing: Use provider_type="mock" (no credentials needed, has demo data)
-        4. For real providers: User must provide credentials (api_key, api_token, etc.)
-        5. After configuration, call `list_projects` to retrieve projects
-        
-        **Mock Provider (Recommended for Testing)**:
-        - No credentials required
-        - Contains demo projects, tasks, sprints, epics
-        - Perfect for testing and demonstrations
-        - Example: configure_pm_provider({"provider_type": "mock", "base_url": "http://localhost", "name": "Demo Provider"})
+        3. For real providers: User must provide credentials (api_key, api_token, etc.)
+        4. After configuration, call `list_projects` to retrieve projects
         
         Args:
-            provider_type (required): Type of provider - "jira", "openproject", "clickup", "mock"
+            provider_type (required): Type of provider - "jira", "openproject", "openproject_v13", "clickup"
+            NOTE: "mock" is NOT supported - mock providers are UI-only
             base_url (required): Base URL of the provider (e.g., "https://company.atlassian.net")
             api_token (optional): API token for JIRA
             api_key (optional): API key for OpenProject or ClickUp
@@ -165,13 +190,6 @@ def register_provider_config_tools(
         
         Returns:
             Success message with provider ID and number of projects found, or error message
-        
-        Example for Mock provider (demo data, no credentials):
-            configure_pm_provider({
-                "provider_type": "mock",
-                "base_url": "http://localhost",
-                "name": "Mock Provider (Demo Data)"
-            })
         
         Example for JIRA:
             configure_pm_provider({
@@ -203,6 +221,7 @@ def register_provider_config_tools(
                 user_id = pm_handler.user_id
                 logger.info(f"[configure_pm_provider] Got user_id from pm_handler: {user_id}")
             
+            # User ID is required for all provider configurations
             if not user_id:
                 logger.warning("[configure_pm_provider] No user_id found in context")
                 return [TextContent(
@@ -210,7 +229,7 @@ def register_provider_config_tools(
                     text="Error: User ID not found in MCP connection context. "
                          "Please ensure you're connected with a valid MCP API key. "
                          "The configure_pm_provider tool requires user authentication. "
-                         "Make sure you're connecting with X-MCP-API-Key header."
+                         "Make sure you're connecting with X-MCP-API-Key header or X-User-ID header."
                 )]
             
             # Validate required fields
@@ -220,21 +239,31 @@ def register_provider_config_tools(
             if not provider_type:
                 return [TextContent(
                     type="text",
-                    text="Error: provider_type is required (jira, openproject, clickup, mock)"
+                    text="Error: provider_type is required (jira, openproject, openproject_v13, clickup). "
+                         "Note: mock providers are UI-only and not supported in MCP Server."
                 )]
             
-            # Mock provider doesn't need base_url or credentials
-            if provider_type != "mock" and not base_url:
+            # Reject mock provider configuration - mock providers are UI-only
+            if provider_type == "mock":
                 return [TextContent(
                     type="text",
-                    text="Error: base_url is required (except for mock provider)"
+                    text="Error: Mock providers are UI-only and cannot be configured in MCP Server. "
+                         "Mock providers are only available in the web UI for demonstration purposes. "
+                         "Please use a real provider type (jira, openproject, openproject_v13, clickup) "
+                         "with proper credentials."
                 )]
             
-            # Mock provider: no validation needed, just create it
-            if provider_type == "mock":
-                # Mock provider doesn't need base_url, but we'll use a default
-                if not base_url:
-                    base_url = "http://localhost"
+            # All real providers require base_url
+            if not base_url:
+                return [TextContent(
+                    type="text",
+                    text="Error: base_url is required for all provider types"
+                )]
+            
+            # Normalize base_url to prevent duplicates (remove trailing slash)
+            # This ensures 'http://example.com' and 'http://example.com/' are treated as the same
+            if base_url:
+                base_url = base_url.rstrip('/')
             
             # Provider-specific validation
             if provider_type == "jira":
@@ -272,11 +301,32 @@ def register_provider_config_tools(
             # Get MCP Server database session (independent from backend)
             db = next(get_mcp_db_session())
             try:
+                # Ensure the user exists in database
+                from ..database.models import User
+                from uuid import UUID
+                user_id_uuid = UUID(user_id) if isinstance(user_id, str) else user_id
+                user = db.query(User).filter(User.id == user_id_uuid).first()
+                if not user:
+                    # User should exist if authenticated, but create if missing
+                    user = User(
+                        id=user_id_uuid,
+                        email=f"user_{user_id_uuid}@mcp",
+                        name="MCP User",
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    )
+                    db.add(user)
+                    db.commit()
+                    logger.info(f"[configure_pm_provider] Created user: {user_id}")
+                
                 # Check if provider already exists for this user
+                # Normalize stored base_url for comparison (remove trailing slash)
+                # This prevents duplicates from URL format differences
                 existing = db.query(PMProviderConnection).filter(
-                    PMProviderConnection.created_by == user_id,
+                    PMProviderConnection.created_by == user_id_uuid,
                     PMProviderConnection.provider_type == provider_type,
-                    PMProviderConnection.base_url == base_url,
+                    # Use func.rtrim to normalize base_url in database for comparison
+                    func.rtrim(PMProviderConnection.base_url, '/') == base_url,
                     PMProviderConnection.is_active == True
                 ).first()
                 
@@ -298,7 +348,7 @@ def register_provider_config_tools(
                     username=arguments.get("username"),
                     organization_id=arguments.get("organization_id"),
                     workspace_id=arguments.get("workspace_id"),
-                    created_by=user_id,  # ✅ User-scoped
+                    created_by=user_id_uuid,  # ✅ User-scoped (UUID format)
                     is_active=True
                 )
                 
@@ -308,32 +358,19 @@ def register_provider_config_tools(
                 
                 # Test connection
                 try:
-                    # Handle mock provider separately (not in factory)
-                    if provider_type == "mock":
-                        from pm_providers.mock_provider import MockPMProvider
-                        from pm_providers.models import PMProviderConfig
-                        # Mock provider needs base_url as string
-                        mock_base_url = base_url or "http://localhost"
-                        config = PMProviderConfig(
-                            provider_type="mock",
-                            base_url=mock_base_url,
-                        )
-                        provider_instance = MockPMProvider(config)
-                    else:
-                        provider_instance = create_pm_provider(
-                            provider_type=provider_type,
-                            base_url=base_url,
-                            api_key=arguments.get("api_key"),
-                            api_token=arguments.get("api_token"),
-                            username=arguments.get("username"),
-                            organization_id=arguments.get("organization_id"),
-                            workspace_id=arguments.get("workspace_id"),
-                        )
+                    provider_instance = create_pm_provider(
+                        provider_type=provider_type,
+                        base_url=base_url,
+                        api_key=arguments.get("api_key"),
+                        api_token=arguments.get("api_token"),
+                        username=arguments.get("username"),
+                        organization_id=arguments.get("organization_id"),
+                        workspace_id=arguments.get("workspace_id"),
+                    )
                     
-                    # Test health check (mock provider always returns True)
-                    if provider_type != "mock":
-                        is_healthy = await provider_instance.health_check()
-                        if not is_healthy:
+                    # Test health check
+                    is_healthy = await provider_instance.health_check()
+                    if not is_healthy:
                             return [TextContent(
                                 type="text",
                                 text=f"Warning: Provider configured (ID: {provider.id}) but health check failed. "
@@ -373,11 +410,8 @@ def register_provider_config_tools(
                 text=f"Error configuring provider: {str(e)}"
             )]
     
-    # Track tool name and store function reference after function is defined
-    if tool_names is not None:
-        tool_names.append("configure_pm_provider")
-    if tool_functions is not None:
-        tool_functions["configure_pm_provider"] = configure_pm_provider
+    # Register tool automatically using helper function
+    _register_tool(configure_pm_provider, tool_names, tool_functions)
     tool_count += 1
     
     logger.info(f"Registered {tool_count} provider configuration tool(s)")

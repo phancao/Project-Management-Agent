@@ -30,6 +30,7 @@ services:
 
   # FastAPI Backend
   api:
+    container_name: pm-backend-api
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -191,6 +192,7 @@ services:
 
   # PM MCP Server - Dedicated service for MCP protocol
   pm_mcp_server:
+    container_name: pm-mcp-server
     build:
       context: .
       dockerfile: Dockerfile.mcp-server

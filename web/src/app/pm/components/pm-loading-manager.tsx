@@ -5,6 +5,7 @@
 
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { listProviders } from "~/core/api/pm/providers";
 import { usePMLoading } from "../context/pm-loading-context";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
@@ -36,16 +37,22 @@ export function PMLoadingManager() {
 
   // Step 1: Load providers
   useEffect(() => {
-    if (state.providers.loading && !state.providers.data) {
+    // Only load if we're in loading state and don't have data yet
+    if (state.providers.loading && !state.providers.data && !state.providers.error) {
       debug.state('Step 1: Loading providers...');
       
       // Add timeout to prevent infinite loading
       const timeoutId = setTimeout(() => {
         debug.error('Provider loading timeout - resetting loading state');
+        const timeoutError = new Error('Request timeout: Failed to load providers within 30 seconds. Please check if the backend server is running.');
         setProvidersState({
           loading: false,
-          error: new Error('Request timeout: Failed to load providers within 30 seconds'),
+          error: timeoutError,
           data: null,
+        });
+        toast.error("Provider loading timeout", {
+          description: timeoutError.message,
+          duration: 10000,
         });
       }, 30000); // 30 second timeout
       
@@ -62,10 +69,19 @@ export function PMLoadingManager() {
         .catch((error) => {
           clearTimeout(timeoutId);
           debug.error('Failed to load providers', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorObj = error instanceof Error ? error : new Error(String(error));
+          
           setProvidersState({
             loading: false,
-            error: error instanceof Error ? error : new Error(String(error)),
+            error: errorObj,
             data: null,
+          });
+          
+          // Show error toast to user
+          toast.error("Failed to load providers", {
+            description: errorMessage,
+            duration: 10000, // Show for 10 seconds
           });
         });
       

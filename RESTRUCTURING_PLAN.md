@@ -79,9 +79,9 @@ frontend/                    # Frontend (keep as is)
 ## Migration Steps
 
 1. **Create new directories**
-2. **Move MCP server code** from `src/mcp_servers/pm_server/` to `mcp-server/`
-3. **Move PM providers** from `src/pm_providers/` to `pm-providers/`
-4. **Move backend code** from `src/` (excluding mcp_servers and pm_providers) to `backend/`
+2. **Move MCP server code** from `mcp_server/` to `mcp-server/`
+3. **Move PM providers** from `pm_providers/` to `pm-providers/`
+4. **Move backend code** from `backend/` (excluding mcp_servers and pm_providers) to `backend/`
 5. **Move shared code** (database, config) to `shared/`
 6. **Update imports** across all files
 7. **Update Dockerfiles** and docker-compose.yml
@@ -91,18 +91,18 @@ frontend/                    # Frontend (keep as is)
 ## Import Path Changes
 
 ### Before → After
-- `src.mcp_servers.pm_server.*` → `mcp_server.*`
-- `src.pm_providers.*` → `pm_providers.*`
-- `src.server.*` → `backend.server.*`
-- `src.agents.*` → `backend.agents.*`
-- `src.analytics.*` → `backend.analytics.*`
-- `src.conversation.*` → `backend.conversation.*`
-- `src.graph.*` → `backend.graph.*`
-- `src.handlers.*` → `backend.handlers.*`
-- `src.llms.*` → `backend.llms.*`
-- `src.prompts.*` → `backend.prompts.*`
-- `src.rag.*` → `backend.rag.*`
-- `src.tools.*` → `backend.tools.*`
-- `src.utils.*` → `backend.utils.*`
+- `backend.mcp_servers.pm_server.*` → `mcp_server.*`
+- `backend.pm_providers.*` → `pm_providers.*`
+- `backend.server.*` → `backend.server.*`
+- `backend.agents.*` → `backend.agents.*`
+- `backend.analytics.*` → `backend.analytics.*`
+- `backend.conversation.*` → `backend.conversation.*`
+- `backend.graph.*` → `backend.graph.*`
+- `backend.handlers.*` → `backend.handlers.*`
+- `backend.llms.*` → `backend.llms.*`
+- `backend.prompts.*` → `backend.prompts.*`
+- `backend.rag.*` → `backend.rag.*`
+- `backend.tools.*` → `backend.tools.*`
+- `backend.utils.*` → `backend.utils.*`
 - `database.*` → `shared.database.*` (or keep as `database.*` if preferred)
 

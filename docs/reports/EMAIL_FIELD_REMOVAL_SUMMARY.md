@@ -2,11 +2,11 @@
 
 ## ✅ Changes Made
 
-### 1. Backend API (`src/server/project_import_request.py`)
+### 1. Backend API (`backend/server/project_import_request.py`)
 - ❌ Removed `email` field from `ProjectImportRequest`
 - ✅ Updated `username` field description to clarify: "For JIRA Cloud, use your email address"
 
-### 2. Backend Endpoints (`src/server/app.py`)
+### 2. Backend Endpoints (`backend/server/app.py`)
 - ✅ Updated `save_provider_config()` to use `username` only
 - ✅ Updated `update_provider()` to use `username` only
 - ✅ Removed email → username mapping logic (no longer needed)

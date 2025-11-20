@@ -52,7 +52,7 @@ CREATE TABLE pm_provider_connections (
 Modify `PMMCPServer` to accept and store user context:
 
 ```python
-# src/mcp_servers/pm_server/server.py
+# mcp_server/server.py
 class PMMCPServer:
     def __init__(self, config: PMServerConfig | None = None, user_id: str | None = None):
         self.config = config or PMServerConfig.from_env()
@@ -80,7 +80,7 @@ class PMMCPServer:
 #### Step 2: Modify PMHandler to Filter by User
 
 ```python
-# src/server/pm_handler.py
+# backend/server/pm_handler.py
 class PMHandler:
     def __init__(
         self, 
@@ -123,7 +123,7 @@ class PMHandler:
 #### Step 3: Extract User from SSE Connection
 
 ```python
-# src/mcp_servers/pm_server/transports/sse.py
+# mcp_server/transports/sse.py
 @app.get("/sse")
 async def sse_endpoint(request: Request):
     """SSE endpoint with user authentication."""
@@ -148,7 +148,7 @@ async def sse_endpoint(request: Request):
 #### Step 4: Store User Context Per Connection
 
 ```python
-# src/mcp_servers/pm_server/transports/sse.py
+# mcp_server/transports/sse.py
 # Store user context per SSE connection
 connection_user_map = {}
 

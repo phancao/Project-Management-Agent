@@ -49,7 +49,7 @@ export function useBurndownChart(projectId: string | null, sprintId?: string, sc
 - Handles errors and extracts error details from response
 - Returns a `ChartResponse` object
 
-### 2. Backend API Endpoint (`src/server/app.py`)
+### 2. Backend API Endpoint (`backend/server/app.py`)
 
 ```python
 @app.get("/api/analytics/projects/{project_id}/burndown")
@@ -98,7 +98,7 @@ async def get_burndown_chart(
 - Calls analytics service method
 - Returns JSON response
 
-### 3. Analytics Service (`src/analytics/service.py`)
+### 3. Analytics Service (`backend/analytics/service.py`)
 
 ```python
 class AnalyticsService:
@@ -155,7 +155,7 @@ class AnalyticsService:
 - Caches result for performance
 - Returns `ChartResponse` with series and metadata
 
-### 4. Analytics Adapter (`src/analytics/adapters/pm_adapter.py`)
+### 4. Analytics Adapter (`backend/analytics/adapters/pm_adapter.py`)
 
 ```python
 class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
@@ -225,7 +225,7 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
 - Determines completion status
 - Returns dictionary with sprint info and tasks
 
-### 5. Calculator (`src/analytics/calculators/burndown.py`)
+### 5. Calculator (`backend/analytics/calculators/burndown.py`)
 
 ```python
 class BurndownCalculator:

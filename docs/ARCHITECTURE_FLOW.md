@@ -17,7 +17,7 @@ The Project Management Agent follows a **Plan-Based Multi-Step Execution** archi
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 2. FASTAPI SERVER (src/server/app.py:906)                           │
+│ 2. FASTAPI SERVER (backend/server/app.py:906)                           │
 │    - Parses JSON request                                            │
 │    - Extracts message & thread_id                                   │
 │    - Gets database session                                          │
@@ -125,7 +125,7 @@ The Project Management Agent follows a **Plan-Based Multi-Step Execution** archi
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 8. PM PROVIDER (src/pm_providers/openproject.py)                    │
+│ 8. PM PROVIDER (pm_providers/openproject.py)                    │
 │                                                                      │
 │    a) HTTP Request to OpenProject:                                  │
 │       GET /api/v3/work_packages?                                  │
@@ -169,7 +169,7 @@ The Project Management Agent follows a **Plan-Based Multi-Step Execution** archi
 ## Key Components
 
 ### 1. ConversationFlowManager (Singleton)
-- **Location**: `src/conversation/flow_manager.py`
+- **Location**: `backend/conversation/flow_manager.py`
 - **Responsibility**: Orchestrates entire conversation flow
 - **State Management**: Maintains `self.contexts[thread_id]` for each session
 - **Key Methods**:
@@ -179,7 +179,7 @@ The Project Management Agent follows a **Plan-Based Multi-Step Execution** archi
   - `_execute_pm_step()` - Routes to specific handlers
 
 ### 2. PM Planner (LLM-Based)
-- **Prompt**: `src/prompts/pm_planner.md`
+- **Prompt**: `backend/prompts/pm_planner.md`
 - **Model**: PMPlan Pydantic model (pm_planner_model.py)
 - **Input**: User message + context + history
 - **Output**: `{overall_thought, steps: [{step_type, title, description}]}`

@@ -35,7 +35,7 @@
 
 ### 1. Routing Code Changes ✅
 
-**Location**: `src/conversation/flow_manager.py`
+**Location**: `backend/conversation/flow_manager.py`
 
 **Change Verified**:
 ```python
@@ -56,7 +56,7 @@ else:
 
 ### 2. Research Phase Handler ✅
 
-**Location**: `src/conversation/flow_manager.py` - `_handle_research_phase()`
+**Location**: `backend/conversation/flow_manager.py` - `_handle_research_phase()`
 
 **Change Verified**:
 ```python
@@ -71,7 +71,7 @@ if self.run_deerflow_workflow:
 
 ### 3. Query Building ✅
 
-**Location**: `src/conversation/flow_manager.py`
+**Location**: `backend/conversation/flow_manager.py`
 
 **Change Verified**:
 ```python

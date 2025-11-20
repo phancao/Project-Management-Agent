@@ -142,6 +142,6 @@ Continue with current implementation, but consider:
 Our current implementation is correct and follows LangGraph best practices. The `"debug"` mode could add value for observability but isn't necessary for the core functionality.
 
 ## Current Code Location
-- Stream processing: `src/server/app.py::_stream_graph_events()`
-- Event generation: `src/server/app.py::_make_event()`
+- Stream processing: `backend/server/app.py::_stream_graph_events()`
+- Event generation: `backend/server/app.py::_make_event()`
 - State update extraction: Lines 545-625 in `_stream_graph_events()`

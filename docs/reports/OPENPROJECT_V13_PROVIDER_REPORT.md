@@ -7,7 +7,7 @@ Successfully created a dedicated OpenProject v13 provider (`OpenProjectV13Provid
 ## Completed Tasks
 
 ### 1. ✅ Created OpenProject v13 Provider
-- **File**: `src/pm_providers/openproject_v13.py`
+- **File**: `pm_providers/openproject_v13.py`
 - **Class**: `OpenProjectV13Provider`
 - Cloned from v16 provider and adapted for v13 API compatibility
 
@@ -19,10 +19,10 @@ Successfully created a dedicated OpenProject v13 provider (`OpenProjectV13Provid
 - **API Structure**: Both use HAL+JSON format with `_links` and `_embedded`
 
 ### 3. ✅ Provider Registration
-- **Factory** (`src/pm_providers/factory.py`):
+- **Factory** (`pm_providers/factory.py`):
   - Added support for `openproject_v13` provider type
   - Supports `openproject`, `openproject_v13`, and `openproject_v16`
-- **Builder** (`src/pm_providers/builder.py`):
+- **Builder** (`pm_providers/builder.py`):
   - Checks `OPENPROJECT_VERSION` environment variable
   - Uses v13 provider if `OPENPROJECT_VERSION=13`
   - Defaults to v16 provider otherwise
@@ -85,7 +85,7 @@ The test script will verify:
 
 ### Using Factory
 ```python
-from src.pm_providers.factory import create_pm_provider
+from pm_providers.factory import create_pm_provider
 
 # Create v13 provider
 provider = create_pm_provider(
@@ -127,13 +127,13 @@ python test_openproject_v13_provider.py http://localhost:8081 your_api_key [proj
 ## Files Created/Modified
 
 ### Created
-- `src/pm_providers/openproject_v13.py` - v13 provider implementation
+- `pm_providers/openproject_v13.py` - v13 provider implementation
 - `test_openproject_v13_provider.py` - Comprehensive test script
 - `docs/reports/OPENPROJECT_V13_PROVIDER_REPORT.md` - This report
 
 ### Modified
-- `src/pm_providers/factory.py` - Added v13 provider support
-- `src/pm_providers/builder.py` - Added v13 provider support with version detection
+- `pm_providers/factory.py` - Added v13 provider support
+- `pm_providers/builder.py` - Added v13 provider support with version detection
 
 ## Notes
 

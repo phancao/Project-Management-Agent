@@ -126,7 +126,7 @@ uv run python server.py
 
 **PM MCP Server:**
 ```bash
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 ```
 
 **Configuration:**

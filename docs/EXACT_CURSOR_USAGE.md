@@ -73,7 +73,7 @@ This document shows **exactly** what users type in Cursor and which MCP tool get
 
 **Tool Name**: `configure_pm_provider`
 
-**Location**: `src/mcp_servers/pm_server/tools/provider_config.py`
+**Location**: `mcp_server/tools/provider_config.py`
 
 **Tool Signature**:
 ```python
@@ -127,7 +127,7 @@ POST /sse (via MCP protocol)
 
 ### Step 3: MCP Server Executes Tool
 
-**Code**: `src/mcp_servers/pm_server/tools/provider_config.py:configure_pm_provider()`
+**Code**: `mcp_server/tools/provider_config.py:configure_pm_provider()`
 
 ```python
 async def configure_pm_provider(arguments: dict[str, Any]):
@@ -237,7 +237,7 @@ You can now use list_projects, create_task, and other PM tools.
 
 **Which MCP tool gets called:**
 - Tool name: `configure_pm_provider`
-- Location: `src/mcp_servers/pm_server/tools/provider_config.py`
+- Location: `mcp_server/tools/provider_config.py`
 - Registered: Automatically when MCP Server starts
 
 **What the tool does:**

@@ -10,7 +10,7 @@ Implement server-side analytics and chart generation for project management data
 
 ### Module Structure
 ```
-src/analytics/
+backend/analytics/
 ├── __init__.py
 ├── models.py              # Data models for chart data
 ├── mock_data.py          # Mock data generators
@@ -80,9 +80,9 @@ src/analytics/
    - Realistic date ranges and patterns
 
 #### Deliverables:
-- `src/analytics/models.py` - Data models
-- `src/analytics/mock_data.py` - Mock data generators
-- `src/analytics/service.py` - Base analytics service class
+- `backend/analytics/models.py` - Data models
+- `backend/analytics/mock_data.py` - Mock data generators
+- `backend/analytics/service.py` - Base analytics service class
 
 ---
 
@@ -357,8 +357,8 @@ src/analytics/
 ### Adding to FastAPI (api/main.py)
 
 ```python
-from src.analytics.service import AnalyticsService
-from src.analytics.models import ChartResponse
+from backend.analytics.service import AnalyticsService
+from backend.analytics.models import ChartResponse
 
 analytics_service = AnalyticsService()
 
@@ -382,7 +382,7 @@ async def get_burndown(
 
 ## AI Agent Integration
 
-### Adding Analytics Tools (src/tools/analytics_tools.py)
+### Adding Analytics Tools (backend/tools/analytics_tools.py)
 
 ```python
 from langchain.tools import tool
@@ -399,7 +399,7 @@ def get_sprint_burndown(sprint_id: str) -> dict:
     Returns:
         Burndown chart data with ideal and actual lines
     """
-    from src.analytics.service import AnalyticsService
+    from backend.analytics.service import AnalyticsService
     service = AnalyticsService()
     return service.get_burndown_chart(sprint_id=sprint_id)
 
@@ -416,7 +416,7 @@ def get_team_velocity(project_id: str, sprint_count: int = 6) -> dict:
     Returns:
         Velocity chart with committed vs completed story points
     """
-    from src.analytics.service import AnalyticsService
+    from backend.analytics.service import AnalyticsService
     service = AnalyticsService()
     return service.get_velocity_chart(project_id=project_id, sprint_count=sprint_count)
 
@@ -426,8 +426,8 @@ def get_team_velocity(project_id: str, sprint_count: int = 6) -> dict:
 ### Register with Agent
 
 ```python
-# In src/config/tools.py or agent configuration
-from src.tools.analytics_tools import (
+# In backend/config/tools.py or agent configuration
+from backend.tools.analytics_tools import (
     get_sprint_burndown,
     get_team_velocity,
     get_cfd,
@@ -478,7 +478,7 @@ When ready to connect to real JIRA/OpenProject data:
 
 1. **Create data adapters**:
 ```python
-# src/analytics/adapters/jira_adapter.py
+# backend/analytics/adapters/jira_adapter.py
 class JiraAnalyticsAdapter:
     def get_sprint_data(self, sprint_id: str) -> SprintData:
         # Fetch from JIRA

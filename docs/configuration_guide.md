@@ -89,7 +89,7 @@ CODE_MODEL:
   temperature: 0.6
   top_p: 0.90
 ```
-In addition, you need to set the `AGENT_LLM_MAP` in `src/config/agents.py` to use the correct model for each agent. For example:
+In addition, you need to set the `AGENT_LLM_MAP` in `backend/config/agents.py` to use the correct model for each agent. For example:
 
 ```python
 # Define agent-LLM mapping

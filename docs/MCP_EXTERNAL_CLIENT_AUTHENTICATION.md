@@ -88,7 +88,7 @@ VALUES (
 Modify SSE endpoint to authenticate via API key:
 
 ```python
-# src/mcp_servers/pm_server/transports/sse.py
+# mcp_server/transports/sse.py
 
 @app.get("/sse")
 async def sse_endpoint(request: Request):
@@ -126,7 +126,7 @@ async def sse_endpoint(request: Request):
 ### 4. API Key Validation Function
 
 ```python
-# src/mcp_servers/pm_server/auth.py
+# mcp_server/auth.py
 
 from database.orm_models import UserMCPAPIKey
 from database.connection import get_db_session

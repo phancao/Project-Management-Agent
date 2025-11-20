@@ -10,7 +10,7 @@ The PM MCP Server provides comprehensive project management capabilities to Deer
 
 ```bash
 # Start with SSE transport (for web-based agents)
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 ```
 
 ### 2. Auto-Configuration
@@ -209,7 +209,7 @@ export PM_MCP_SERVER_URL=http://localhost:8080
 **Solutions**:
 1. ✅ Start PM MCP Server:
    ```bash
-   uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+   uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
    ```
 
 2. ✅ Check server logs for errors

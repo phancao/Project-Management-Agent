@@ -242,7 +242,7 @@ netstat -an | findstr 8080  # Windows
 **For stdio Transport**:
 ```bash
 # Test the command manually
-uv run python scripts/run_pm_mcp_server.py --transport stdio
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport stdio
 
 # Check if command exists and is executable
 which uv

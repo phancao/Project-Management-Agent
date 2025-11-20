@@ -12,17 +12,17 @@ When asking "list my tasks", the system only listed tasks from OpenProject, not 
 2. PM handler was initialized in single-provider mode, so only one provider was queried
 
 **Solution:**
-1. **Added `list_my_tasks` tool** to `src/tools/pm_tools.py`:
+1. **Added `list_my_tasks` tool** to `backend/tools/pm_tools.py`:
    - Calls `handler.list_my_tasks()` which handles multi-provider mode
    - Queries all active providers (OpenProject, JIRA, ClickUp)
    
-2. **Changed PM handler initialization** in `src/conversation/flow_manager.py`:
+2. **Changed PM handler initialization** in `backend/conversation/flow_manager.py`:
    - Now uses `PMHandler.from_db_session(db_session)` for multi-provider mode
    - Queries all active providers from the database
 
 **Files Changed:**
-- `src/tools/pm_tools.py`: Added `list_my_tasks` tool and included it in `get_pm_tools()`
-- `src/conversation/flow_manager.py`: Changed PM handler initialization to multi-provider mode
+- `backend/tools/pm_tools.py`: Added `list_my_tasks` tool and included it in `get_pm_tools()`
+- `backend/conversation/flow_manager.py`: Changed PM handler initialization to multi-provider mode
 
 ---
 
@@ -36,7 +36,7 @@ Project with ID 77d99cdd-96f5-4113-82f3-4e408c9e678e not found.
 ```
 
 **Root Cause:**
-The `/api/pm/chat/stream` endpoint in `src/server/app.py` was calling `generate_pm_plan()` which tried to access a project from the database. For research queries that don't involve a specific project, this caused a "Project not found" error.
+The `/api/pm/chat/stream` endpoint in `backend/server/app.py` was calling `generate_pm_plan()` which tried to access a project from the database. For research queries that don't involve a specific project, this caused a "Project not found" error.
 
 **Solution:**
 Modified the API endpoint to skip PM plan generation and route all queries directly to DeerFlow (Option 2 approach):
@@ -46,7 +46,7 @@ Modified the API endpoint to skip PM plan generation and route all queries direc
 3. **Use original message**: Use the original user message instead of trying to extract project information
 
 **Files Changed:**
-- `src/server/app.py`: 
+- `backend/server/app.py`: 
   - Removed PM plan generation step in `/api/pm/chat/stream` endpoint
   - Changed to always route to DeerFlow
   - Simplified research query to use original user message
@@ -77,10 +77,10 @@ Modified the API endpoint to skip PM plan generation and route all queries direc
 
 ## Related Files
 
-- `src/conversation/flow_manager.py`: PM handler initialization
-- `src/server/pm_handler.py`: Multi-provider aggregation logic
-- `src/tools/pm_tools.py`: PM tools including new `list_my_tasks` tool
-- `src/server/app.py`: API endpoint for PM chat streaming (`/api/pm/chat/stream`)
+- `backend/conversation/flow_manager.py`: PM handler initialization
+- `backend/server/pm_handler.py`: Multi-provider aggregation logic
+- `backend/tools/pm_tools.py`: PM tools including new `list_my_tasks` tool
+- `backend/server/app.py`: API endpoint for PM chat streaming (`/api/pm/chat/stream`)
 
 ---
 

@@ -72,7 +72,7 @@ OPENPROJECT_API_KEY=<your-base64-encoded-key>
 
 ```python
 # Test script
-from src.pm_providers import build_pm_provider
+from pm_providers import build_pm_provider
 from database import get_db_session
 
 db = next(get_db_session())

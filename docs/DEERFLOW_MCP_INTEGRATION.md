@@ -29,7 +29,7 @@ DeerFlow Agent → MCP Client → PM MCP Server → PMHandler → PM Providers
 
 ```bash
 # Start with SSE transport (recommended for DeerFlow)
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 ```
 
 ### 2. Configure DeerFlow Agents
@@ -39,7 +39,7 @@ There are two ways to integrate PM MCP tools:
 #### Option A: Programmatic Configuration (Recommended)
 
 ```python
-from src.tools import configure_pm_mcp_client, get_pm_mcp_tools
+from backend.tools import configure_pm_mcp_client, get_pm_mcp_tools
 
 # Configure PM MCP client
 configure_pm_mcp_client(
@@ -72,7 +72,7 @@ export PM_MCP_TRANSPORT=sse
 ### Example 1: Researcher Agent with PM Tools
 
 ```python
-# src/graph/nodes.py
+# backend/graph/nodes.py
 
 async def researcher_node(
     state: State, config: RunnableConfig
@@ -94,7 +94,7 @@ async def researcher_node(
     
     # Add PM tools via MCP
     try:
-        from src.tools import get_pm_mcp_tools, is_pm_mcp_configured
+        from backend.tools import get_pm_mcp_tools, is_pm_mcp_configured
         
         if is_pm_mcp_configured():
             pm_tools = await get_pm_mcp_tools()
@@ -102,7 +102,7 @@ async def researcher_node(
             logger.info(f"Added {len(pm_tools)} PM tools via MCP")
         else:
             # Fallback to direct PM tools
-            from src.tools import get_pm_tools
+            from backend.tools import get_pm_tools
             pm_tools = get_pm_tools()
             if pm_tools:
                 tools.extend(pm_tools)
@@ -208,7 +208,7 @@ The new MCP integration is **backward compatible**. Your existing setup will con
 
 ```python
 # Existing code (still works)
-from src.tools import get_pm_tools
+from backend.tools import get_pm_tools
 
 pm_tools = get_pm_tools()  # Uses direct PMHandler
 ```
@@ -217,7 +217,7 @@ pm_tools = get_pm_tools()  # Uses direct PMHandler
 
 ```bash
 # Terminal 1: Start PM MCP Server
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 ```
 
 ### Step 3: Update Agent Code (Gradual)
@@ -226,11 +226,11 @@ Update one agent at a time:
 
 ```python
 # Before
-from src.tools import get_pm_tools
+from backend.tools import get_pm_tools
 pm_tools = get_pm_tools()
 
 # After
-from src.tools import configure_pm_mcp_client, get_pm_mcp_tools
+from backend.tools import configure_pm_mcp_client, get_pm_mcp_tools
 
 configure_pm_mcp_client(
     transport="sse",
@@ -266,7 +266,7 @@ curl http://localhost:8080/health
 # tests/test_pm_mcp_integration.py
 
 import pytest
-from src.tools import (
+from backend.tools import (
     configure_pm_mcp_client,
     get_pm_mcp_tools,
     is_pm_mcp_configured,
@@ -327,7 +327,7 @@ async def test_selective_tool_loading(pm_mcp_server):
 
 ```python
 # Solution: Configure before using
-from src.tools import configure_pm_mcp_client
+from backend.tools import configure_pm_mcp_client
 
 configure_pm_mcp_client(
     transport="sse",
@@ -342,14 +342,14 @@ configure_pm_mcp_client(
 curl http://localhost:8080/health
 
 # Start server if not running
-uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
+uv run uv run uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080
 ```
 
 ### Issue: Tools not loading
 
 ```python
 # Check configuration
-from src.tools import get_pm_mcp_config, is_pm_mcp_configured
+from backend.tools import get_pm_mcp_config, is_pm_mcp_configured
 
 print(f"Configured: {is_pm_mcp_configured()}")
 print(f"Config: {get_pm_mcp_config()}")

@@ -8,7 +8,7 @@ This document clarifies the difference between **MCP API Keys** and **PM Provide
 
 **Purpose**: Authenticate external clients (Cursor, VS Code, etc.) to the MCP Server
 
-**Created by**: `generate_mcp_api_key()` and `create_user_api_key()` in `src/mcp_servers/pm_server/auth.py`
+**Created by**: `generate_mcp_api_key()` and `create_user_api_key()` in `mcp_server/auth.py`
 
 **Stored in**: `user_mcp_api_keys` table
 

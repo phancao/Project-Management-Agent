@@ -13,7 +13,7 @@ The analytics module provides:
 ## Architecture
 
 ```
-src/analytics/
+backend/analytics/
 ├── __init__.py           # Module exports
 ├── models.py             # Pydantic data models
 ├── mock_data.py          # Mock data generators
@@ -29,7 +29,7 @@ src/analytics/
 ### Using the Analytics Service
 
 ```python
-from src.analytics.service import AnalyticsService
+from backend.analytics.service import AnalyticsService
 
 # Initialize with mock data
 service = AnalyticsService(data_source="mock")
@@ -62,7 +62,7 @@ summary = service.get_project_summary(
 ### Using Mock Data Directly
 
 ```python
-from src.analytics.mock_data import MockDataGenerator
+from backend.analytics.mock_data import MockDataGenerator
 
 generator = MockDataGenerator(seed=42)
 
@@ -440,7 +440,7 @@ To integrate with real JIRA/OpenProject data:
 ### 1. Create Data Adapter
 
 ```python
-# src/analytics/adapters/jira_adapter.py
+# backend/analytics/adapters/jira_adapter.py
 class JiraAnalyticsAdapter:
     def get_sprint_data(self, sprint_id: str) -> SprintData:
         # Fetch from JIRA API

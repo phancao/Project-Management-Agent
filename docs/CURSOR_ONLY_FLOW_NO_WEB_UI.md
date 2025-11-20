@@ -152,7 +152,7 @@ JIRA_USERNAME=user@company.com
 
 1. **Add tool to MCP Server:**
    ```python
-   # src/mcp_servers/pm_server/tools/providers.py
+   # mcp_server/tools/providers.py
    
    @server.call_tool()
    async def configure_pm_provider(arguments: dict[str, Any]) -> list[TextContent]:

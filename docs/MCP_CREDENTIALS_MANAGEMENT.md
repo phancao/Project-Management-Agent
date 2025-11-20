@@ -36,7 +36,7 @@ CREATE TABLE pm_provider_connections (
 
 ### How Credentials are Retrieved
 
-1. **PMHandler Initialization** (`src/server/pm_handler.py`):
+1. **PMHandler Initialization** (`backend/server/pm_handler.py`):
    ```python
    # PMHandler queries the database for active providers
    def _get_active_providers(self) -> List[PMProviderConnection]:
@@ -122,7 +122,7 @@ CLICKUP_TEAM_ID=your-team-id
 
 ### How Credentials are Retrieved
 
-1. **Builder Function** (`src/pm_providers/builder.py`):
+1. **Builder Function** (`pm_providers/builder.py`):
    ```python
    def build_pm_provider(db_session: Optional[Session] = None):
        provider_type = SELECTED_PM_PROVIDER  # From PM_PROVIDER env var
@@ -154,7 +154,7 @@ CLICKUP_TEAM_ID=your-team-id
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              PMHandler Initialization                        │
-│  (src/server/pm_handler.py)                                 │
+│  (backend/server/pm_handler.py)                                 │
 └──────────────────────┬──────────────────────────────────────┘
                        │
         ┌──────────────┴──────────────┐

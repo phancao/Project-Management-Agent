@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from database.connection import get_db_session
+from ..database.connection import get_mcp_db_session
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ async def validate_mcp_api_key(api_key: str) -> Optional[str]:
     if api_key.startswith("mcp_"):
         api_key = api_key[4:]
     
-           db: Session = next(get_mcp_db_session())
+    db: Session = next(get_mcp_db_session())
     try:
         # Import here to avoid circular dependencies
         from .database.models import UserMCPAPIKey
@@ -107,7 +107,7 @@ async def create_user_api_key(user_id: str, name: Optional[str] = None) -> Optio
     Returns:
         MCP API key (format: "mcp_xxx") if successful, None otherwise
     """
-           db: Session = next(get_mcp_db_session())
+    db: Session = next(get_mcp_db_session())
     try:
         from .database.models import UserMCPAPIKey
         
@@ -145,7 +145,7 @@ async def revoke_user_api_key(api_key: str, user_id: str) -> bool:
     Returns:
         True if successful, False otherwise
     """
-           db: Session = next(get_mcp_db_session())
+    db: Session = next(get_mcp_db_session())
     try:
         from .database.models import UserMCPAPIKey
         

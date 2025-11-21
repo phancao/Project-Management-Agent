@@ -123,7 +123,8 @@ def create_sse_app(pm_handler: MCPPMHandler, config: PMServerConfig, mcp_server_
                 except Exception as e:
                     logger.warning(f"[SSE] API key validation failed: {e}")
             
-            # Method 2: Direct user ID (for internal/testing)
+            # Method 2: Direct user ID (for internal/testing - only if API key validation failed)
+            # Note: Direct user ID is less secure, prefer API key authentication
             if not user_id:
                 user_id = (
                     request.headers.get("X-User-ID") or 
@@ -132,22 +133,30 @@ def create_sse_app(pm_handler: MCPPMHandler, config: PMServerConfig, mcp_server_
                 if user_id:
                     logger.info(f"[SSE] User ID provided directly: {user_id}")
             
-            # Create user-scoped MCP server instance if user_id is provided
-            if user_id:
-                logger.info(f"[SSE] Creating user-scoped MCP server for user: {user_id}")
-                from ..server import PMMCPServer
-                from ..config import PMServerConfig
-                user_config = PMServerConfig.from_env()
-                mcp_server = PMMCPServer(config=user_config, user_id=user_id)
-                # Initialize PM handler with user context
-                mcp_server._initialize_pm_handler()
-                # Register tools
-                mcp_server._register_all_tools()
-                logger.info(f"[SSE] User-scoped MCP server initialized for user: {user_id}")
-            else:
-                # Use global MCP server instance (backward compatible)
-                logger.info("[SSE] Using global MCP server instance (no user context)")
-                mcp_server = app.state.mcp_server
+            # SECURITY: Authentication is now REQUIRED
+            # Reject connections without valid authentication
+            if not user_id:
+                logger.warning("[SSE] Unauthenticated connection attempt rejected")
+                raise HTTPException(
+                    status_code=401,
+                    detail=(
+                        "Authentication required. "
+                        "Please provide X-MCP-API-Key header with a valid API key, "
+                        "or X-User-ID header for direct user authentication."
+                    )
+                )
+            
+            # Create user-scoped MCP server instance (authentication successful)
+            logger.info(f"[SSE] Creating user-scoped MCP server for user: {user_id}")
+            from ..server import PMMCPServer
+            from ..config import PMServerConfig
+            user_config = PMServerConfig.from_env()
+            mcp_server = PMMCPServer(config=user_config, user_id=user_id)
+            # Initialize PM handler with user context
+            mcp_server._initialize_pm_handler()
+            # Register tools
+            mcp_server._register_all_tools()
+            logger.info(f"[SSE] User-scoped MCP server initialized for user: {user_id}")
             
             if not mcp_server:
                 raise HTTPException(

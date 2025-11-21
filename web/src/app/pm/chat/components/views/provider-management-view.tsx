@@ -166,6 +166,12 @@ export function ProviderManagementView() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission
+    if (isLoading) {
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);

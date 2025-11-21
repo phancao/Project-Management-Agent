@@ -2954,26 +2954,60 @@ async def pm_import_projects(request: ProjectImportRequest):
         db = next(db_gen)
         
         try:
-            # Create provider config
-            provider = PMProviderConnection(
-                name=f"{request.provider_type} - {request.base_url}",
-                provider_type=request.provider_type,
-                base_url=request.base_url,
-                api_key=request.api_key,
-                api_token=request.api_token,
-                username=request.username,
-                organization_id=request.organization_id,
-                workspace_id=request.workspace_id,
-                is_active=True
-            )
-            db.add(provider)
+            # Normalize base_url (remove trailing slash) for duplicate checking
+            normalized_base_url = request.base_url.rstrip('/')
+            
+            # Check for existing active provider with same type and base_url
+            existing_provider = db.query(PMProviderConnection).filter(
+                PMProviderConnection.provider_type == request.provider_type,
+                PMProviderConnection.base_url == normalized_base_url,
+                PMProviderConnection.is_active.is_(True)
+            ).first()
+            
+            if existing_provider:
+                # Update existing provider instead of creating duplicate
+                logger.info(
+                    "Provider already exists with type=%s and base_url=%s, updating instead of creating duplicate",
+                    request.provider_type,
+                    normalized_base_url
+                )
+                provider = existing_provider
+                # Update fields using setattr to avoid type checker issues
+                setattr(provider, "name", f"{request.provider_type} - {normalized_base_url}")
+                if request.api_key is not None:
+                    setattr(provider, "api_key", request.api_key)
+                if request.api_token is not None:
+                    setattr(provider, "api_token", request.api_token)
+                if request.username is not None:
+                    setattr(provider, "username", request.username)
+                if request.organization_id is not None:
+                    setattr(provider, "organization_id", request.organization_id)
+                if request.workspace_id is not None:
+                    setattr(provider, "workspace_id", request.workspace_id)
+                setattr(provider, "is_active", True)
+            else:
+                # Create new provider config
+                provider = PMProviderConnection(
+                    name=f"{request.provider_type} - {normalized_base_url}",
+                    provider_type=request.provider_type,
+                    base_url=normalized_base_url,
+                    api_key=request.api_key,
+                    api_token=request.api_token,
+                    username=request.username,
+                    organization_id=request.organization_id,
+                    workspace_id=request.workspace_id,
+                    is_active=True
+                )
+                db.add(provider)
+            
             db.commit()
             db.refresh(provider)
             
             # Create provider instance and import projects
+            # Use normalized base_url for provider instance
             provider_instance = create_pm_provider(
                 provider_type=request.provider_type,
-                base_url=request.base_url,
+                base_url=normalized_base_url,
                 api_key=request.api_key,
                 api_token=request.api_token,
                 username=request.username,

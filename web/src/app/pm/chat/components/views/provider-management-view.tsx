@@ -164,6 +164,8 @@ export function ProviderManagementView() {
       username: "",
     });
     setError(null);
+    setApiKeyError(null);
+    setIsValidating(false);
   };
 
   const validateApiKey = async (): Promise<boolean> => {
@@ -664,6 +666,7 @@ export function ProviderManagementView() {
                                 (leave blank to keep existing)
                               </span>
                             )}
+                            {!editingProvider && <span className="text-red-500 ml-1">*</span>}
                           </Label>
                           <Input
                             id="api_key"
@@ -674,11 +677,26 @@ export function ProviderManagementView() {
                                 : "Enter API key"
                             }
                             value={formData.api_key}
-                            onChange={(e) =>
-                              setFormData({ ...formData, api_key: e.target.value })
-                            }
+                            onChange={(e) => {
+                              setFormData({ ...formData, api_key: e.target.value });
+                              setApiKeyError(null);
+                            }}
                             required={!editingProvider}
+                            className={apiKeyError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
+                            disabled={isValidating}
                           />
+                          {apiKeyError && (
+                            <p className="text-sm text-red-500 flex items-center gap-1">
+                              <AlertCircle className="w-4 h-4" />
+                              {apiKeyError}
+                            </p>
+                          )}
+                          {isValidating && !apiKeyError && (
+                            <p className="text-sm text-blue-500 flex items-center gap-1">
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              Testing connection...
+                            </p>
+                          )}
                         </div>
                       )}
 
@@ -710,6 +728,7 @@ export function ProviderManagementView() {
                         (leave blank to keep existing)
                       </span>
                     )}
+                    {!editingProvider && <span className="text-red-500 ml-1">*</span>}
                   </Label>
                   <Input
                     id="api_token"
@@ -720,11 +739,26 @@ export function ProviderManagementView() {
                         : "Enter API token"
                     }
                     value={formData.api_token}
-                    onChange={(e) =>
-                      setFormData({ ...formData, api_token: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setFormData({ ...formData, api_token: e.target.value });
+                      setApiKeyError(null);
+                    }}
                     required={!editingProvider}
+                    className={apiKeyError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
+                    disabled={isValidating}
                   />
+                  {apiKeyError && (
+                    <p className="text-sm text-red-500 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {apiKeyError}
+                    </p>
+                  )}
+                  {isValidating && !apiKeyError && (
+                    <p className="text-sm text-blue-500 flex items-center gap-1">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Testing connection...
+                    </p>
+                  )}
                 </div>
               </>
             )}
@@ -752,11 +786,15 @@ export function ProviderManagementView() {
                     >
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? (
+                    <Button 
+                      type="submit" 
+                      disabled={isLoading || isValidating || !!apiKeyError}
+                      className={apiKeyError ? "opacity-50 cursor-not-allowed" : ""}
+                    >
+                      {isLoading || isValidating ? (
                         <>
                           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          {editingProvider ? "Updating..." : "Connecting..."}
+                          {isValidating ? "Testing..." : editingProvider ? "Updating..." : "Connecting..."}
                         </>
                       ) : (
                         <>

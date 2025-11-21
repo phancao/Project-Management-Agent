@@ -330,31 +330,47 @@ def register_provider_config_tools(
                     PMProviderConnection.is_active == True
                 ).first()
                 
-                if existing:
-                    return [TextContent(
-                        type="text",
-                        text=f"Provider already configured: {existing.id}. "
-                             f"Use update_pm_provider to modify it."
-                    )]
-                
-                # Create provider connection
                 provider_name = arguments.get("name") or f"{provider_type} - {base_url}"
-                provider = PMProviderConnection(
-                    name=provider_name,
-                    provider_type=provider_type,
-                    base_url=base_url,
-                    api_key=arguments.get("api_key"),
-                    api_token=arguments.get("api_token"),
-                    username=arguments.get("username"),
-                    organization_id=arguments.get("organization_id"),
-                    workspace_id=arguments.get("workspace_id"),
-                    created_by=user_id_uuid,  # ✅ User-scoped (UUID format)
-                    is_active=True
-                )
                 
-                db.add(provider)
-                db.commit()
-                db.refresh(provider)
+                if existing:
+                    # Update existing provider instead of rejecting
+                    logger.info(f"[configure_pm_provider] Updating existing provider: {existing.id}")
+                    existing.name = provider_name
+                    # Update credentials if provided (use new values, fallback to existing if None)
+                    if "api_key" in arguments:
+                        existing.api_key = arguments.get("api_key")
+                    if "api_token" in arguments:
+                        existing.api_token = arguments.get("api_token")
+                    if "username" in arguments:
+                        existing.username = arguments.get("username")
+                    if "organization_id" in arguments:
+                        existing.organization_id = arguments.get("organization_id")
+                    if "workspace_id" in arguments:
+                        existing.workspace_id = arguments.get("workspace_id")
+                    existing.updated_at = datetime.utcnow()
+                    provider = existing
+                    db.commit()
+                    db.refresh(provider)
+                    logger.info(f"[configure_pm_provider] Updated provider: {provider.id}")
+                else:
+                    # Create new provider connection
+                    provider = PMProviderConnection(
+                        name=provider_name,
+                        provider_type=provider_type,
+                        base_url=base_url,
+                        api_key=arguments.get("api_key"),
+                        api_token=arguments.get("api_token"),
+                        username=arguments.get("username"),
+                        organization_id=arguments.get("organization_id"),
+                        workspace_id=arguments.get("workspace_id"),
+                        created_by=user_id_uuid,  # ✅ User-scoped (UUID format)
+                        is_active=True
+                    )
+                    
+                    db.add(provider)
+                    db.commit()
+                    db.refresh(provider)
+                    logger.info(f"[configure_pm_provider] Created new provider: {provider.id}")
                 
                 # Test connection
                 try:
@@ -371,11 +387,11 @@ def register_provider_config_tools(
                     # Test health check
                     is_healthy = await provider_instance.health_check()
                     if not is_healthy:
-                            return [TextContent(
-                                type="text",
-                                text=f"Warning: Provider configured (ID: {provider.id}) but health check failed. "
-                                     f"Please verify your credentials."
-                            )]
+                        return [TextContent(
+                            type="text",
+                            text=f"Warning: Provider configured (ID: {provider.id}) but health check failed. "
+                                 f"Please verify your credentials."
+                        )]
                     
                     # Try to list projects to verify
                     projects = await provider_instance.list_projects()

@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from ..database.connection import get_mcp_db_session
+from mcp_server.database.connection import get_mcp_db_session
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +32,35 @@ async def validate_mcp_api_key(api_key: str) -> Optional[str]:
     if api_key.startswith("Bearer "):
         api_key = api_key[7:]
     
-    # Remove "mcp_" prefix if present (for consistency)
-    if api_key.startswith("mcp_"):
-        api_key = api_key[4:]
+    # Store original key for logging
+    original_key = api_key
     
     db: Session = next(get_mcp_db_session())
     try:
         # Import here to avoid circular dependencies
-        from .database.models import UserMCPAPIKey
+        from mcp_server.database.models import UserMCPAPIKey
         
+        # Try to find key with original format first (with or without mcp_ prefix)
         key_record = db.query(UserMCPAPIKey).filter(
-            UserMCPAPIKey.api_key == api_key,
+            UserMCPAPIKey.api_key == original_key,
             UserMCPAPIKey.is_active == True
         ).first()
+        
+        # If not found and key has mcp_ prefix, try without prefix
+        if not key_record and original_key.startswith("mcp_"):
+            key_without_prefix = original_key[4:]
+            key_record = db.query(UserMCPAPIKey).filter(
+                UserMCPAPIKey.api_key == key_without_prefix,
+                UserMCPAPIKey.is_active == True
+            ).first()
+        
+        # If not found and key doesn't have mcp_ prefix, try with prefix
+        if not key_record and not original_key.startswith("mcp_"):
+            key_with_prefix = f"mcp_{original_key}"
+            key_record = db.query(UserMCPAPIKey).filter(
+                UserMCPAPIKey.api_key == key_with_prefix,
+                UserMCPAPIKey.is_active == True
+            ).first()
         
         if not key_record:
             logger.warning(f"Invalid API key attempted: {api_key[:10]}...")
@@ -109,7 +125,7 @@ async def create_user_api_key(user_id: str, name: Optional[str] = None) -> Optio
     """
     db: Session = next(get_mcp_db_session())
     try:
-        from .database.models import UserMCPAPIKey
+        from mcp_server.database.models import UserMCPAPIKey
         
         api_key = generate_mcp_api_key()
         
@@ -147,7 +163,7 @@ async def revoke_user_api_key(api_key: str, user_id: str) -> bool:
     """
     db: Session = next(get_mcp_db_session())
     try:
-        from .database.models import UserMCPAPIKey
+        from mcp_server.database.models import UserMCPAPIKey
         
         key_record = db.query(UserMCPAPIKey).filter(
             UserMCPAPIKey.api_key == api_key,

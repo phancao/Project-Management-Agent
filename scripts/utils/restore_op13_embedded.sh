@@ -4,12 +4,18 @@ set -euo pipefail
 # Restore a SQL dump into the embedded PostgreSQL inside the OpenProject v13 app container
 #
 # Usage:
-#   scripts/restore_op13_embedded.sh /path/to/openproject.sql
+#   scripts/restore_op13_embedded.sh /path/to/openproject.sql [user_email]
+#
+# Arguments:
+#   /path/to/openproject.sql - Path to the SQL dump file
+#   user_email (optional)     - Email of user to setup permissions and generate token for
+#                               Default: cao.phan@galaxytechnology.vn
 #
 # Notes:
 # - This targets the embedded DB inside the app container (not the external DB container)
 # - It will terminate active connections, drop and recreate the openproject DB, restore the dump,
 #   and print basic verification counts.
+# - After restore, it will setup the specified user's permissions (add to all projects) and generate an API token
 
 DUMP_FILE="${1:-}"
 APP_CONTAINER="${APP_CONTAINER:-project-management-agent-openproject_v13-1}"
@@ -156,4 +162,20 @@ else
   echo "⚠ Token test failed (HTTP ${STATUS}). Token still saved to /tmp/op13_token.txt"
 fi
 
+echo ""
+echo "9) Setup user permissions and generate API token..."
+# Copy the Ruby script into the container
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+docker cp "${SCRIPT_DIR}/setup_user_permissions_and_token.rb" "${APP_CONTAINER}:/tmp/setup_user_permissions_and_token.rb"
+
+# Run the script to setup user permissions and generate token
+USER_EMAIL="${2:-cao.phan@galaxytechnology.vn}"
+echo "   Checking user: ${USER_EMAIL}"
+docker exec "${APP_CONTAINER}" bash -lc "export RAILS_ENV=production && cd /app && ./bin/rails runner /tmp/setup_user_permissions_and_token.rb '${USER_EMAIL}' Member" || {
+  echo "⚠ Failed to setup user permissions or generate token"
+  echo "   (This is non-fatal - restore completed successfully)"
+}
+
+echo ""
+echo "✅ Database restore and user setup completed!"
 

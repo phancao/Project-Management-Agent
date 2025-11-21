@@ -97,7 +97,10 @@ def register_project_tools(
             # Get projects from PM handler
             logger.info("[MCP-TOOL] Calling pm_handler.list_all_projects()...")
             projects = await pm_handler.list_all_projects()
+            provider_errors = getattr(pm_handler, '_last_provider_errors', [])
             logger.info(f"[MCP-TOOL] Retrieved {len(projects)} projects from PMHandler")
+            if provider_errors:
+                logger.warning(f"[MCP-TOOL] {len(provider_errors)} provider(s) failed to retrieve projects")
             
             # Apply provider_id filter if specified
             if provider_id:
@@ -139,20 +142,109 @@ def register_project_tools(
                              "Always call `list_providers` before any project-related operations."
                     )]
                 else:
+                    # Build detailed provider status report
+                    output_lines = [
+                        f"📊 **Provider Status Report** ({len(active_providers)} active provider(s)):\n\n"
+                    ]
+                    
+                    # Get provider info for all providers
+                    provider_status = {}
+                    for provider in active_providers:
+                        provider_status[str(provider.id)] = {
+                            "name": provider.name or f"{provider.provider_type} ({provider.base_url})",
+                            "type": provider.provider_type,
+                            "base_url": provider.base_url,
+                            "projects_count": 0,
+                            "status": "success"
+                        }
+                    
+                    # Count projects per provider
+                    for project in projects:
+                        provider_id = project.get('provider_id')
+                        if provider_id in provider_status:
+                            provider_status[provider_id]["projects_count"] += 1
+                    
+                    # Mark failed providers
+                    for err in provider_errors:
+                        provider_id = err['provider_id']
+                        if provider_id in provider_status:
+                            provider_status[provider_id]["status"] = "failed"
+                            provider_status[provider_id]["error"] = err['error']
+                    
+                    # Output provider status
+                    for provider_id, status in provider_status.items():
+                        if status["status"] == "failed":
+                            output_lines.append(
+                                f"❌ **{status['name']}** ({status['type']}):\n"
+                                f"   Status: Failed to retrieve projects\n"
+                                f"   Error: {status.get('error', 'Unknown error')}\n\n"
+                            )
+                        else:
+                            output_lines.append(
+                                f"✅ **{status['name']}** ({status['type']}):\n"
+                                f"   Projects: {status['projects_count']} project(s)\n"
+                                f"   URL: {status['base_url']}\n\n"
+                            )
+                    
+                    # Add summary
+                    successful_providers = [s for s in provider_status.values() if s["status"] == "success"]
+                    total_projects = sum(s["projects_count"] for s in successful_providers)
+                    
+                    if total_projects == 0:
+                        output_lines.append(
+                            f"**Summary:** No projects found across all providers.\n"
+                            f"- {len(successful_providers)} provider(s) connected successfully but have no projects\n"
+                            f"- {len(provider_errors)} provider(s) failed to connect\n\n"
+                        )
+                        if provider_errors:
+                            output_lines.append(
+                                "**Troubleshooting:**\n"
+                                "- Check provider connection settings (base_url, API key)\n"
+                                "- Verify API credentials are correct\n"
+                                "- Ensure provider services are accessible\n"
+                                "- Use `configure_pm_provider` to update provider settings if needed\n"
+                            )
+                    
                     return [TextContent(
                         type="text",
-                        text=f"No projects found. {len(active_providers)} active provider(s) configured, "
-                             "but they don't have any projects yet."
+                        text="".join(output_lines)
                     )]
             
             # Create formatted output
-            output_lines = [f"Found {len(projects)} projects:\n"]
-            for i, project in enumerate(projects, 1):
-                output_lines.append(
-                    f"{i}. **{project.get('name')}** (ID: {project.get('id')})\n"
-                    f"   Provider: {project.get('provider_type')} ({project.get('provider_id')})\n"
-                    f"   Description: {project.get('description', 'N/A')}\n"
-                )
+            output_lines = [f"✅ Found {len(projects)} project(s) from {len(set(p.get('provider_id') for p in projects))} provider(s):\n\n"]
+            
+            # Group projects by provider
+            projects_by_provider = {}
+            for project in projects:
+                provider_id = project.get('provider_id')
+                if provider_id not in projects_by_provider:
+                    projects_by_provider[provider_id] = []
+                projects_by_provider[provider_id].append(project)
+            
+            # Output projects grouped by provider
+            project_num = 1
+            for provider_id, provider_projects in projects_by_provider.items():
+                provider_type = provider_projects[0].get('provider_type', 'unknown')
+                output_lines.append(f"**Provider: {provider_type}** ({len(provider_projects)} project(s)):\n")
+                for project in provider_projects:
+                    output_lines.append(
+                        f"{project_num}. **{project.get('name')}** (ID: {project.get('id')})\n"
+                        f"   Description: {project.get('description', 'N/A')}\n"
+                        f"   Status: {project.get('status', 'N/A')}\n"
+                    )
+                    project_num += 1
+                output_lines.append("\n")
+            
+            # Add provider errors if any
+            if provider_errors:
+                error_lines = [
+                    f"\n⚠️ **Note: {len(provider_errors)} provider(s) failed to retrieve projects:**\n"
+                ]
+                for err in provider_errors:
+                    error_lines.append(
+                        f"- **{err['provider_name']}** ({err['provider_type']}): {err['error']}\n"
+                    )
+                output_lines.extend(error_lines)
             
             return [TextContent(
                 type="text",

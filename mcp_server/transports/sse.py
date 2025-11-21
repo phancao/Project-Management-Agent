@@ -24,6 +24,22 @@ from starlette.responses import Response
 from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
 
+# Import validate_mcp_api_key from auth.py module
+# The auth package's __init__.py should re-export it from auth.py
+# If that doesn't work, we'll import it directly from the package
+try:
+    # Try importing from the auth package (which should have it from __init__.py)
+    from mcp_server.auth import validate_mcp_api_key
+    if validate_mcp_api_key is None:
+        raise ImportError("validate_mcp_api_key is None")
+except (ImportError, AttributeError):
+    # If package import fails, the package's __init__.py should handle it
+    # But as a last resort, try importing the function directly
+    validate_mcp_api_key = None
+    import logging
+    _logger = logging.getLogger(__name__)
+    _logger.error("[SSE] Failed to import validate_mcp_api_key from mcp_server.auth package")
+
 logger = logging.getLogger(__name__)
 
 
@@ -116,12 +132,15 @@ def create_sse_app(pm_handler: MCPPMHandler, config: PMServerConfig, mcp_server_
             
             if api_key:
                 try:
-                    from ..auth import validate_mcp_api_key
-                    user_id = await validate_mcp_api_key(api_key)
-                    if user_id:
-                        logger.info(f"[SSE] User identified via API key: {user_id}")
+                    # Use the pre-imported validate_mcp_api_key function
+                    if validate_mcp_api_key is None:
+                        logger.error("[SSE] validate_mcp_api_key is not available - import failed")
+                    else:
+                        user_id = await validate_mcp_api_key(api_key)
+                        if user_id:
+                            logger.info(f"[SSE] User identified via API key: {user_id}")
                 except Exception as e:
-                    logger.warning(f"[SSE] API key validation failed: {e}")
+                    logger.warning(f"[SSE] API key validation failed: {e}", exc_info=True)
             
             # Method 2: Direct user ID (for internal/testing - only if API key validation failed)
             # Note: Direct user ID is less secure, prefer API key authentication

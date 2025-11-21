@@ -40,15 +40,20 @@ These are simple data queries that require MCP PM tools (NOT web search or resea
 
 For simple PM queries:
 1. **Set `has_enough_context: true`** - These queries don't need external research, just data retrieval from MCP PM tools
-2. **Create a simple plan** with 3-5 steps that follow the PM provider workflow:
+2. **Create a plan with 4-6 steps** that follow the PM provider workflow. **CRITICAL**: You MUST create separate steps for each action - do not combine multiple actions into one step description:
    - **Step 1 (REQUIRED)**: Always start with `list_providers` MCP tool to check if PM providers are configured in MCP server
      - Description: "Use the `list_providers` MCP PM tool to check if any PM providers are configured in the MCP server. This MUST be called first before any project data operations."
-   - **Step 2 (CONDITIONAL)**: If `list_providers` returns no active providers, get backend providers and configure them
-     - Description: "If `list_providers` returns no active providers, you need to sync backend provider configurations to the MCP server. First, use the `backend_api_call` tool to call the backend API endpoint `/api/pm/providers?include_credentials=true` to retrieve all configured providers from the backend database with their credentials (api_key, api_token, username, etc.). Then, for each provider returned, call the `configure_pm_provider` MCP PM tool with ALL the provider's configuration details (provider_type, base_url, name, api_key, api_token, username, organization_id, workspace_id, project_key, etc.). This syncs the backend provider credentials to the MCP server so that MCP tools can access them."
-     - **CRITICAL**: The backend stores provider configurations with API keys/tokens. These need to be synced to MCP server before listing projects. Use the `backend_api_call` tool with endpoint `/api/pm/providers?include_credentials=true` to get providers with credentials, then use those credentials when calling `configure_pm_provider`.
-   - **Step 3**: Use the appropriate MCP PM tool (e.g., `list_projects`, `search_projects`, `list_my_tasks`) to retrieve the data
+   - **Step 2 (REQUIRED)**: Test if providers work by calling `list_projects` to verify they can retrieve data
+     - Description: "Use the `list_projects` MCP PM tool to test if the configured providers can actually retrieve projects. This verifies that providers are working correctly."
+   - **Step 3 (REQUIRED)**: Check backend API to verify if projects should exist
+     - Description: "**CRITICAL**: Call `backend_api_call(endpoint='/api/pm/projects')` to check how many projects the backend API has. This is REQUIRED - always execute this step after Step 2. Compare the backend project count with the MCP result from Step 2. If backend has 1+ projects but MCP returned 0, this indicates a mismatch and Step 4 is required."
+   - **Step 4 (REQUIRED IF mismatch detected in Step 3)**: Re-configure providers in MCP server using backend credentials
+     - Description: "**CRITICAL**: This step is REQUIRED if Step 3 shows the backend has 1+ projects but Step 2 returned 0 projects. In this case, you MUST configure providers in the MCP server using backend credentials. First, use the `backend_api_call` tool to call `/api/pm/providers?include_credentials=true` to retrieve all configured providers from the backend database with their credentials (api_key, api_token, username, etc.). Then, for each provider returned, call the `configure_pm_provider` MCP PM tool with ALL the provider's configuration details (provider_type, base_url, name, api_key, api_token, username, organization_id, workspace_id, project_key, etc.). This configures the providers in MCP server so that MCP tools can access them. Note: `configure_pm_provider` will update existing providers if they have the same base_url, so it's safe to call even if providers already exist. **DO NOT skip this step if there's a mismatch** - you MUST re-configure providers."
+     - **CRITICAL**: The backend stores provider configurations with API keys/tokens. These need to be configured in MCP server before listing projects. Use the `backend_api_call` tool with endpoint `/api/pm/providers?include_credentials=true` to get providers with credentials, then use those credentials when calling `configure_pm_provider`.
+   - **Step 5 (REQUIRED)**: Use the appropriate MCP PM tool (e.g., `list_projects`, `search_projects`, `list_my_tasks`) to retrieve the data
+     - **CRITICAL**: This step MUST be executed after Steps 1-4. Do NOT stop after getting providers - you MUST call the PM tool to retrieve the actual data. If Step 4 was executed (re-configuring providers), this step will verify that the re-configuration worked by retrieving projects.
      - **CRITICAL**: Be explicit about which PM tool to use:
-       - For "list my projects" / "show my projects" / "list projects" → Use `list_projects` tool
+       - For "list my projects" / "show my projects" / "list projects" → Use `list_projects` MCP tool (NOT backend_api_call)
        - For "is there a project named [X]" / "search for project [X]" / "find project [X]" → Use `search_projects` tool with the project name as the query parameter
        - For "list my tasks" / "show my tasks" / "what tasks do I have" / "do I have any tasks" → 
          **Context-aware behavior with user intent priority**: 
@@ -65,7 +70,7 @@ For simple PM queries:
        - For "show sprints" → Use `list_sprints` tool
        - For "show epics" → Use `list_epics` tool
      - **Step description should be explicit**: 
-       - For listing projects: "Use the `list_projects` MCP PM tool to retrieve all available projects from all active PM providers (OpenProject, JIRA, ClickUp, etc.). **IMPORTANT**: This step should only be executed AFTER checking providers with `list_providers` and syncing backend providers to MCP server if needed."
+       - For listing projects: "Use the `list_projects` MCP PM tool to retrieve all available projects from all active PM providers (OpenProject, JIRA, ClickUp, etc.). **CRITICAL**: This step MUST be executed AFTER checking providers with `list_providers` and syncing backend providers to MCP server if needed. **DO NOT** use `backend_api_call` to get projects - you MUST use the `list_projects` MCP tool. The response from this tool will contain the actual project data that should be presented to the user."
        - For searching projects: "Use the `search_projects` MCP PM tool with query '[project name]' to search for projects matching the name across all active PM providers"
        - For listing my tasks: "Use the `list_my_tasks` MCP PM tool. Prioritize user intent:
          - If user says 'ALL my tasks' / 'all my tasks' / 'every task' / 'across all projects': 

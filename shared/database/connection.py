@@ -8,7 +8,6 @@ from typing import Generator
 from urllib.parse import urlparse, urlunparse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ def _is_running_in_docker() -> bool:
     
     # Check cgroup (more reliable)
     try:
-        with open("/proc/self/cgroup", "r") as f:
+        with open("/proc/self/cgroup", "r", encoding="utf-8") as f:
             content = f.read()
             if "docker" in content or "containerd" in content:
                 return True
@@ -59,10 +58,11 @@ def _convert_localhost_to_docker_service(database_url: str) -> str:
         
         # Map localhost:port to Docker service names
         # Based on docker-compose.yml service definitions
+        # NOTE: OpenProject databases (5433, 5434) are NOT included here because
+        # OpenProject is a separate system that should only be accessed via API.
+        # Direct database access to OpenProject is not allowed.
         docker_service_map = {
             5432: "postgres",           # Main PostgreSQL database
-            5433: "openproject_db",     # OpenProject v16 database
-            5434: "openproject_db_v13", # OpenProject v13 database
             5435: "mcp_postgres",       # MCP Server database
         }
         
@@ -80,12 +80,17 @@ def _convert_localhost_to_docker_service(database_url: str) -> str:
             new_parsed = parsed._replace(netloc=new_netloc)
             new_url = urlunparse(new_parsed)
             logger.info(
-                f"Converting localhost database URL to Docker service: "
-                f"{database_url} -> {new_url}"
+                "Converting localhost database URL to Docker service: %s -> %s",
+                database_url,
+                new_url
             )
             return new_url
-    except Exception as e:
-        logger.warning(f"Failed to convert localhost database URL {database_url}: {e}")
+    except (ValueError, AttributeError) as e:
+        logger.warning(
+            "Failed to convert localhost database URL %s: %s",
+            database_url,
+            e
+        )
     
     return database_url
 
@@ -150,22 +155,13 @@ def init_db():
     Initialize the database by creating all tables
     Note: This should be called after all models are imported
     """
-    import logging
-    logger = logging.getLogger(__name__)
     # Import all models to ensure they're registered with Base
-    from database.orm_models import (
-        Base, User, Project, ProjectGoal, TeamMember, Task, TaskDependency,
-        ResearchSession, KnowledgeBaseItem, ConversationSession, ConversationMessage,
-        ProjectTemplate, ProjectMetric, IntentClassification, IntentFeedback,
-        IntentMetric, LearnedIntentPattern, Sprint, SprintTask,
-        PMProviderConnection, ProjectSyncMapping,
-        MockProject, MockUser, MockSprint, MockEpic, MockTask
-    )
+    from database.orm_models import Base  # noqa: F401
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.warning(f"Database initialization warning: {e}")
+    except (ConnectionError, OSError, RuntimeError) as e:
+        logger.warning("Database initialization warning: %s", e)
 
 
 def close_db():

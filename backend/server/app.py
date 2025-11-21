@@ -73,8 +73,16 @@ from src.utils.log_sanitizer import (
     sanitize_tool_name,
     sanitize_user_content,
 )
+from src.server.version import get_version_info, log_version_info
 
 logger = logging.getLogger(__name__)
+# Enable DEBUG logging for PM-CHAT headers debugging
+# The logger name in runtime is 'backend.server.app' due to import path
+# CRITICAL: Set root logger to INFO to allow DEBUG messages from our loggers
+# Root logger defaults to WARNING which filters out DEBUG/INFO
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("backend.server.app").setLevel(logging.DEBUG)
+logging.getLogger("src.server.app").setLevel(logging.DEBUG)  # Also set for src path
 
 # Configure Windows event loop policy for PostgreSQL compatibility
 # On Windows, psycopg requires a selector-based event loop,
@@ -112,10 +120,22 @@ app = FastAPI(
     version="0.1.0",
 )
 
+@app.on_event("startup")
+async def startup_event():
+    """Log version information on startup"""
+    log_version_info()
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Docker health checks"""
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": get_version_info()["commit_hash"]}
+
+
+@app.get("/version")
+async def get_version():
+    """Get version and build information"""
+    return get_version_info()
 
 # Add CORS middleware
 # It's recommended to load the allowed origins from an environment variable
@@ -2450,6 +2470,69 @@ async def pm_chat_stream(request: Request):
             f"has_configure_pm_provider={has_configure_pm_provider}, needs_injection={needs_injection}"
         )
         
+        # CRITICAL: Always ensure headers are added, even if injection isn't needed
+        # Headers are required for MCP server authentication
+        logger.info("[PM-CHAT] DEBUG: Starting headers creation...")
+        pm_mcp_url = get_str_env("PM_MCP_SERVER_URL", "") or None
+        pm_mcp_transport = get_str_env("PM_MCP_TRANSPORT", "stdio")
+        mcp_api_key = get_str_env("PM_MCP_API_KEY", "") or None
+
+        logger.info(
+            f"[PM-CHAT] DEBUG: Env vars - "
+            f"pm_mcp_url={pm_mcp_url}, "
+            f"pm_mcp_transport={pm_mcp_transport}, "
+            f"mcp_api_key={'SET' if mcp_api_key else 'NOT SET'} "
+            f"(length: {len(mcp_api_key) if mcp_api_key else 0})"
+        )
+
+        # Build headers for authentication (always needed for SSE transport)
+        headers = {}
+        logger.info(
+            f"[PM-CHAT] DEBUG: Checking condition - "
+            f"mcp_api_key={bool(mcp_api_key)}, "
+            f"pm_mcp_url={bool(pm_mcp_url)}, "
+            f"transport in list={pm_mcp_transport in ['sse', 'http', 'streamable_http']}"
+        )
+        if mcp_api_key and pm_mcp_url and pm_mcp_transport in [
+                "sse", "http", "streamable_http"
+        ]:
+            headers["X-MCP-API-Key"] = mcp_api_key
+            logger.info(
+                f"[PM-CHAT] Adding MCP API key to headers "
+                f"(key length: {len(mcp_api_key)})"
+            )
+        elif not mcp_api_key and pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
+            logger.warning(
+                "[PM-CHAT] PM_MCP_API_KEY is None or empty! "
+                "MCP server authentication will fail."
+            )
+        else:
+            logger.warning(
+                f"[PM-CHAT] DEBUG: Headers condition failed - "
+                f"mcp_api_key={bool(mcp_api_key)}, "
+                f"pm_mcp_url={bool(pm_mcp_url)}, "
+                f"transport={pm_mcp_transport}, "
+                f"transport_valid={pm_mcp_transport in ['sse', 'http', 'streamable_http']}"
+            )
+
+        # Try to get user_id from request headers
+        user_id = None
+        try:
+            user_id = request.headers.get("X-User-ID")
+        except Exception:
+            pass
+
+        if user_id:
+            headers["X-User-ID"] = user_id
+            logger.info(f"[PM-CHAT] Passing user_id via headers: {user_id}")
+
+        logger.info(
+            f"[PM-CHAT] Headers dict status: {len(headers)} header(s), "
+            f"keys={list(headers.keys())}, "
+            f"has_api_key={bool(headers.get('X-MCP-API-Key'))}, "
+            f"has_user_id={bool(headers.get('X-User-ID'))}"
+        )
+
         # Always inject/update PM MCP server config to ensure latest tool list is used
         # This ensures list_providers and configure_pm_provider are always included
         if needs_injection:
@@ -2459,25 +2542,48 @@ async def pm_chat_stream(request: Request):
                     mcp_settings["servers"] = {}
                 
                 # all_tool_names is already defined above (line 2402)
-                # Determine transport and connection method
-                # Priority: 1) Environment variable (Docker/remote), 2) Local stdio (development)
-                pm_mcp_url = get_str_env("PM_MCP_SERVER_URL", None)
-                pm_mcp_transport = get_str_env("PM_MCP_TRANSPORT", "stdio")
-                
+                # pm_mcp_url, pm_mcp_transport, mcp_api_key, user_id, and headers are already defined above
+
                 logger.info(
                     f"[PM-CHAT] MCP config check: url={pm_mcp_url}, transport={pm_mcp_transport}, "
                     f"url_is_set={bool(pm_mcp_url)}, transport_valid={pm_mcp_transport in ['sse', 'http', 'streamable_http']}"
                 )
-                
+
                 if pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
                     # Use HTTP/SSE transport (Docker or remote service)
                     # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
+                    # Headers are already created above (before needs_injection check)
+
                     mcp_settings["servers"]["pm-server"] = {
                         "transport": pm_mcp_transport,
                         "url": pm_mcp_url,
                         "enabled_tools": all_tool_names,  # This includes list_providers and configure_pm_provider
                         "add_to_agents": ["researcher", "coder"],
                     }
+                    # CRITICAL: Always add headers (API key for authentication, user_id for user-scoping)
+                    # Headers are required for MCP server authentication
+                    logger.info(
+                        f"[PM-CHAT] DEBUG: Before adding headers - "
+                        f"headers dict has {len(headers)} key(s): {list(headers.keys())}"
+                    )
+                    if headers:
+                        mcp_settings["servers"]["pm-server"]["headers"] = headers
+                        # Log headers with masked API key for debugging
+                        masked_headers = {
+                            k: (v[:10] + '...' if len(v) > 10 else v)
+                            if k == 'X-MCP-API-Key' else v
+                            for k, v in headers.items()
+                        }
+                        logger.info(
+                            f"[PM-CHAT] Added {len(headers)} header(s) to MCP "
+                            f"server connection: {masked_headers}"
+                        )
+                    else:
+                        logger.error(
+                            "[PM-CHAT] ERROR: Headers dict is empty! "
+                            "MCP server authentication will fail. "
+                            "Check environment variables and headers creation logic."
+                        )
                     logger.info(
                         f"[PM-CHAT] Auto-injected/updated PM MCP server via {pm_mcp_transport} at {pm_mcp_url} "
                         f"with {len(all_tool_names)} tools (includes list_providers, configure_pm_provider) (Docker/remote mode)"
@@ -2524,7 +2630,9 @@ async def pm_chat_stream(request: Request):
         max_search_results = body.get("max_search_results", 3)
         max_step_num = body.get("max_step_num", 3)
         max_plan_iterations = body.get("max_plan_iterations", 1)
-        enable_background_investigation = body.get("enable_background_investigation", True)
+        # Disable background investigation for PM queries to avoid Tavily validation errors
+        # PM queries should go directly to PM tools without web search
+        enable_background_investigation = body.get("enable_background_investigation", False)
         enable_deep_thinking = body.get("enable_deep_thinking", False)
         enable_clarification = body.get("enable_clarification", False)
         max_clarification_rounds = body.get("max_clarification_rounds", 3)
@@ -2772,8 +2880,13 @@ async def pm_chat_stream(request: Request):
 # PM Provider Management Endpoints
 
 @app.get("/api/pm/providers")
-async def pm_list_providers():
-    """List all configured PM providers"""
+async def pm_list_providers(include_credentials: bool = False):
+    """List all configured PM providers
+    
+    Args:
+        include_credentials: If True, include sensitive credentials (api_key, api_token, project_key) in response.
+                           This is used by agents to configure providers in MCP server.
+    """
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
@@ -2785,8 +2898,10 @@ async def pm_list_providers():
             providers = db.query(PMProviderConnection).filter(
                 PMProviderConnection.is_active.is_(True)
             ).all()
-            return [
-                {
+            
+            result = []
+            for p in providers:
+                provider_data = {
                     "id": str(p.id),
                     "name": p.name,
                     "provider_type": p.provider_type,
@@ -2795,8 +2910,16 @@ async def pm_list_providers():
                     "organization_id": p.organization_id,
                     "workspace_id": p.workspace_id,
                 }
-                for p in providers
-            ]
+                
+                # Include credentials if requested (for agent use)
+                if include_credentials:
+                    provider_data["api_key"] = p.api_key if p.api_key else None
+                    provider_data["api_token"] = p.api_token if p.api_token else None
+                    provider_data["project_key"] = p.project_key if p.project_key else None
+                
+                result.append(provider_data)
+            
+            return result
         finally:
             db.close()
     except Exception as e:

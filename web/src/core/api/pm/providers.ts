@@ -184,12 +184,28 @@ export async function getProviderProjects(
 
   const data = await response.json();
   
-  // Backend returns an array, wrap it in the expected format
-  const projectsArray = Array.isArray(data) ? data : [];
+  // Backend returns either an array (old format) or an object (new format)
+  if (Array.isArray(data)) {
+    // Old format: array of projects
+    return {
+      success: true,
+      total_projects: data.length,
+      projects: data,
+    };
+  } else if (data && typeof data === 'object') {
+    // New format: object with success, total_projects, projects
+    return {
+      success: data.success !== false, // Default to true if not specified
+      total_projects: data.total_projects || data.projects?.length || 0,
+      projects: data.projects || [],
+    };
+  }
+  
+  // Fallback: empty result
   return {
     success: true,
-    total_projects: projectsArray.length,
-    projects: projectsArray,
+    total_projects: 0,
+    projects: [],
   };
 }
 

@@ -2957,12 +2957,30 @@ async def pm_import_projects(request: ProjectImportRequest):
             # Normalize base_url (remove trailing slash) for duplicate checking
             normalized_base_url = request.base_url.rstrip('/')
             
-            # Check for existing active provider with same type and base_url
-            existing_provider = db.query(PMProviderConnection).filter(
+            # Check for existing active provider with same type and (same URL OR same token)
+            # Duplicate if: same provider_type AND (same base_url OR same api_key/api_token)
+            query = db.query(PMProviderConnection).filter(
                 PMProviderConnection.provider_type == request.provider_type,
-                PMProviderConnection.base_url == normalized_base_url,
                 PMProviderConnection.is_active.is_(True)
-            ).first()
+            )
+            
+            # Build OR condition: same URL OR same token
+            from sqlalchemy import or_
+            conditions = [PMProviderConnection.base_url == normalized_base_url]
+            
+            # Add token condition based on provider type
+            if request.api_key:
+                conditions.append(PMProviderConnection.api_key == request.api_key)
+            if request.api_token:
+                conditions.append(PMProviderConnection.api_token == request.api_token)
+            
+            # Apply OR condition if we have token conditions
+            if len(conditions) > 1:
+                query = query.filter(or_(*conditions))
+            else:
+                query = query.filter(conditions[0])
+            
+            existing_provider = query.first()
             
             if existing_provider:
                 # Update existing provider instead of creating duplicate

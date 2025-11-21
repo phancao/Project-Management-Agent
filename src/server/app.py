@@ -3243,8 +3243,10 @@ async def pm_get_provider_projects(provider_id: str):
                 error_msg = str(ve)
                 if "requires" in error_msg.lower() and ("api_key" in error_msg.lower() or "api_token" in error_msg.lower()):
                     return {
+                        "success": True,
+                        "total_projects": 0,
                         "projects": [],
-                        "total": 0,
+                        "errors": [],
                         "message": "API key or token is required. Please update the provider configuration with valid credentials."
                     }
                 raise HTTPException(
@@ -3323,15 +3325,20 @@ async def pm_get_provider_projects(provider_id: str):
                         detail=f"Failed to fetch projects: {error_msg}"
                     )
             
-            return [
-                {
-                    "id": str(p.id),
-                    "name": p.name,
-                    "description": p.description or "",
-                    "status": str(p.status) if hasattr(p, 'status') else None,
-                }
-                for p in projects
-            ]
+            return {
+                "success": True,
+                "total_projects": len(projects),
+                "projects": [
+                    {
+                        "id": str(p.id),
+                        "name": p.name,
+                        "description": p.description or "",
+                        "status": str(p.status) if hasattr(p, 'status') else None,
+                    }
+                    for p in projects
+                ],
+                "errors": []
+            }
         finally:
             db.close()
     except HTTPException:

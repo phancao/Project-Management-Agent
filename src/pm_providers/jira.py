@@ -66,6 +66,8 @@ class JIRAProvider(BasePMProvider):
         start_at = 0
         max_results = 50  # JIRA API default page size
         
+        logger.info(f"JIRA: Fetching projects from {url}")
+        
         while True:
             # JIRA API v3: Remove 'recent' parameter to get ALL projects
             # Use pagination to fetch all pages
@@ -76,9 +78,12 @@ class JIRAProvider(BasePMProvider):
                 "expand": "description,lead,url,projectKeys"
             }
             
+            logger.info(f"JIRA: Requesting projects with params: startAt={start_at}, maxResults={max_results}")
             response = requests.get(
                 url, headers=self.headers, params=params, timeout=30
             )
+            
+            logger.info(f"JIRA: Response status: {response.status_code}")
             
             # Provide better error messages for common issues
             if response.status_code == 401:
@@ -97,9 +102,11 @@ class JIRAProvider(BasePMProvider):
             response.raise_for_status()
             
             projects_data = response.json()
+            logger.info(f"JIRA: Received response type: {type(projects_data)}, length: {len(projects_data) if isinstance(projects_data, list) else 'N/A'}")
             
             # Handle empty response
             if not projects_data:
+                logger.info("JIRA: Empty response, breaking loop")
                 break
             
             # Response is typically a list of projects

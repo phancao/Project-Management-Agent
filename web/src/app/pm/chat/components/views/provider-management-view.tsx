@@ -39,24 +39,16 @@ import {
   listProviders,
   getProviderProjects,
   updateProvider,
-  // getProviderTypes, // Not used - endpoint doesn't exist yet
   type ProviderConfig,
   type ProjectImportRequest,
   type ProjectInfo,
 } from "~/core/api/pm/providers";
+import { PROVIDER_TYPES, getProviderIcon } from "~/app/pm/utils/provider-utils";
 import { cn } from "~/lib/utils";
 
 export function ProviderManagementView() {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(true);
-  const [providerTypes, setProviderTypes] = useState<
-    Array<{ type: string; display_name: string }>
-  >([
-    { type: "openproject", display_name: "OpenProject v16" },
-    { type: "openproject_v13", display_name: "OpenProject v13" },
-    { type: "jira", display_name: "JIRA" },
-    { type: "clickup", display_name: "ClickUp" },
-  ]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -260,19 +252,6 @@ export function ProviderManagementView() {
     await loadProjectsForProvider(config);
   };
 
-  const getProviderIcon = (type: string) => {
-    switch (type) {
-      case "openproject":
-      case "openproject_v13":
-        return "🔧";
-      case "jira":
-        return "🎯";
-      case "clickup":
-        return "📋";
-      default:
-        return "📦";
-    }
-  };
 
   return (
     <div className="h-full flex flex-col">
@@ -514,7 +493,7 @@ export function ProviderManagementView() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {providerTypes.map((type) => (
+                  {PROVIDER_TYPES.map((type) => (
                     <SelectItem key={type.type} value={type.type}>
                       {type.display_name}
                     </SelectItem>

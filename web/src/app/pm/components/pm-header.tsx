@@ -17,7 +17,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "~/components/ui/command";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
-import { usePMLoading } from "../context/pm-loading-context";
+import { useProviders } from "~/core/api/hooks/pm/use-providers";
+import {
+  getProviderTypeFromProjectId,
+  getProviderBadgeConfig,
+  extractProviderId,
+} from "../utils/provider-utils";
 
 import { ThemeToggle } from "../../../components/deer-flow/theme-toggle";
 import { Tooltip } from "../../../components/deer-flow/tooltip";
@@ -36,87 +41,24 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   const router = useRouter();
   const pathname = usePathname();
   const { projects, loading: projectsLoading, refresh: refreshProjects } = useProjects();
-  const { state: loadingState } = usePMLoading();
-  
-  // Debug logging
-  useEffect(() => {
-    console.log('[PMHeader] Projects state:', {
-      projectsCount: projects.length,
-      projectsLoading,
-      projects: projects.map(p => ({ id: p.id, name: p.name })),
-    });
-  }, [projects, projectsLoading]);
-  const [providers, setProviders] = useState<Array<{ id: string; provider_type: string; base_url: string }>>([]);
+  const { mappings } = useProviders();
   const [regeneratingMockData, setRegeneratingMockData] = useState(false);
   const [projectComboboxOpen, setProjectComboboxOpen] = useState(false);
   
   const selectedProjectId = propSelectedProjectId || new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('project');
 
-  // Use providers from loading context
-  useEffect(() => {
-    if (loadingState.providers.data) {
-      const mapped = loadingState.providers.data.map((p: any) => ({
-        id: p.id || '',
-        provider_type: p.provider_type || '',
-        base_url: p.base_url || ''
-      })).filter((p: any) => p.id && p.provider_type && p.base_url);
-      setProviders(mapped);
-    }
-  }, [loadingState.providers.data]);
-
-  // Create mapping from provider_id to provider_type
-  const providerTypeMap = useMemo(() => {
-    const map = new Map<string, string>();
-    providers.forEach(p => {
-      if (p.id && p.provider_type) {
-        map.set(p.id, p.provider_type);
-      }
-    });
-    return map;
-  }, [providers]);
-
-  // Create mapping from provider_id to base_url
-  const providerUrlMap = useMemo(() => {
-    const map = new Map<string, string>();
-    providers.forEach(p => {
-      if (p.id && p.base_url) {
-        map.set(p.id, p.base_url);
-      }
-    });
-    return map;
-  }, [providers]);
-
   // Helper to get provider type from project ID
   const getProviderType = (projectId: string | undefined): string | null => {
-    if (!projectId) return null;
-    if (projectId.startsWith("mock:")) {
-      return "mock";
-    }
-    const parts = projectId.split(":");
-    if (parts.length >= 2) {
-      const providerId: string | undefined = parts[0];
-      if (!providerId) return null;
-      return providerTypeMap.get(providerId) || null;
-    }
-    return null;
+    return getProviderTypeFromProjectId(projectId, mappings.typeMap);
   };
 
-  // Helper to get provider color/badge
+  // Helper to get provider badge component
   const getProviderBadge = (providerType: string | null) => {
     if (!providerType) return null;
-    const config = {
-      jira: { label: "JIRA", color: "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200" },
-      openproject: { label: "OP", color: "bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200" },
-      clickup: { label: "CU", color: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" },
-      mock: { label: "DEMO", color: "bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200" },
-    } as const;
-    const badge = config[providerType as keyof typeof config] || { 
-      label: providerType.toUpperCase().slice(0, 2), 
-      color: "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200" 
-    };
+    const config = getProviderBadgeConfig(providerType);
     return (
-      <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${badge.color}`}>
-        {badge.label}
+      <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${config.color}`}>
+        {config.label}
       </span>
     );
   };
@@ -144,13 +86,10 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
     projects.forEach(project => {
       if (project.id?.startsWith("mock:")) return; // Skip mock projects
       
-      // Get provider ID from project ID
-      const parts = project.id?.split(":");
-      if (!parts || parts.length < 2) return;
+      const providerId = extractProviderId(project.id);
+      if (!providerId || providerId === "mock") return;
       
-      const providerId = parts[0];
-      const baseUrl = providerUrlMap.get(providerId);
-      
+      const baseUrl = mappings.urlMap.get(providerId);
       if (!baseUrl) return;
       
       if (!grouped.has(providerId)) {
@@ -160,10 +99,11 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
     });
     
     return grouped;
-  }, [projects, providerUrlMap]);
+  }, [projects, mappings.urlMap]);
 
   // Helper to extract domain from URL
-  const getDomainFromUrl = (url: string): string => {
+  const getDomainFromUrl = (url: string | undefined): string => {
+    if (!url) return '';
     try {
       // Remove protocol if present
       let cleanUrl = url.replace(/^https?:\/\//, '');
@@ -171,7 +111,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
       cleanUrl = cleanUrl.replace(/\/$/, '');
       // Extract domain (everything before the first /)
       const domain = cleanUrl.split('/')[0];
-      return domain;
+      return domain || url;
     } catch {
       return url;
     }

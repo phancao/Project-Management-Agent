@@ -3033,54 +3033,79 @@ async def pm_import_projects(request: ProjectImportRequest):
             db.refresh(provider)
             
             # Create provider instance and import projects
-            # Use normalized base_url for provider instance
-            provider_instance = create_pm_provider(
-                provider_type=request.provider_type,
-                base_url=normalized_base_url,
-                api_key=request.api_key,
-                api_token=request.api_token,
-                username=request.username,
-                organization_id=request.organization_id,
-                workspace_id=request.workspace_id,
-            )
-            
-            try:
-                projects = await provider_instance.list_projects()
-            except Exception as api_error:
-                error_msg = str(api_error)
-                # Handle specific HTTP errors
-                if "401" in error_msg or "Unauthorized" in error_msg:
-                    raise HTTPException(
-                        status_code=401,
-                        detail=(
-                            "Authentication failed. "
-                            "Please check your API key/token."
+            # Only test connection if API key/token is provided
+            projects = []
+            if request.api_key or request.api_token:
+                try:
+                    provider_instance = create_pm_provider(
+                        provider_type=request.provider_type,
+                        base_url=normalized_base_url,
+                        api_key=request.api_key,
+                        api_token=request.api_token,
+                        username=request.username,
+                        organization_id=request.organization_id,
+                        workspace_id=request.workspace_id,
+                    )
+                    
+                    try:
+                        projects = await provider_instance.list_projects()
+                    except Exception as api_error:
+                        error_msg = str(api_error)
+                        # Handle specific HTTP errors
+                        if "401" in error_msg or "Unauthorized" in error_msg:
+                            raise HTTPException(
+                                status_code=401,
+                                detail=(
+                                    "Authentication failed. "
+                                    "Please check your API key/token."
+                                )
+                            )
+                        elif "404" in error_msg or "Not Found" in error_msg:
+                            raise HTTPException(
+                                status_code=404,
+                                detail=(
+                                    "Provider API endpoint not found. "
+                                    "Please check the base URL."
+                                )
+                            )
+                        elif (
+                            "Connection" in error_msg
+                            or "refused" in error_msg.lower()
+                        ):
+                            raise HTTPException(
+                                status_code=503,
+                                detail=(
+                                    "Cannot connect to provider. "
+                                    "Please check if the service is running."
+                                )
+                            )
+                        else:
+                            raise HTTPException(
+                                status_code=500,
+                                detail=f"Failed to fetch projects: {error_msg}"
+                            )
+                except ValueError as ve:
+                    # Handle provider initialization errors (e.g., missing API key)
+                    error_msg = str(ve)
+                    if "requires" in error_msg.lower() and ("api_key" in error_msg.lower() or "api_token" in error_msg.lower()):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=(
+                                "API key or token is required for this provider. "
+                                "Please provide an API key/token to test the connection."
+                            )
                         )
-                    )
-                elif "404" in error_msg or "Not Found" in error_msg:
                     raise HTTPException(
-                        status_code=404,
-                        detail=(
-                            "Provider API endpoint not found. "
-                            "Please check the base URL."
-                        )
+                        status_code=400,
+                        detail=f"Invalid provider configuration: {error_msg}"
                     )
-                elif (
-                    "Connection" in error_msg
-                    or "refused" in error_msg.lower()
-                ):
-                    raise HTTPException(
-                        status_code=503,
-                        detail=(
-                            "Cannot connect to provider. "
-                            "Please check if the service is running."
-                        )
-                    )
-                else:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Failed to fetch projects: {error_msg}"
-                    )
+            else:
+                # No API key provided - allow creating provider but skip connection test
+                logger.info(
+                    "Provider created without API key/token. "
+                    "Connection test skipped. Provider ID: %s",
+                    str(provider.id)
+                )
             
             return {
                 "success": True,

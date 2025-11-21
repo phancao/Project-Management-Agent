@@ -33,14 +33,18 @@ You have access to two types of tools:
      Before querying any project data (projects, tasks, sprints, etc.), you MUST follow this workflow:
      
      1. **Check Providers First**: Always call `list_providers` tool FIRST to see if any PM providers are configured in MCP server
-     2. **Sync Backend Providers if Needed**: If `list_providers` returns no active providers:
-        a. Use the `backend_api_call` tool to call the backend API endpoint `/api/pm/providers?include_credentials=true` to retrieve provider configurations from the backend database with credentials
-        b. For each backend provider returned, call `configure_pm_provider` with ALL provider details:
-           - Include: provider_type, base_url, name, api_key (if present), api_token (if present), username (if present)
-           - Include: organization_id, workspace_id, project_key (if present)
-           - This syncs backend provider credentials to MCP server so MCP tools can access them
-        c. The backend API returns all credentials needed - use them directly in `configure_pm_provider`
-     3. **Then Query Data**: Only after confirming active providers exist (either already in MCP server or synced from backend), call tools like `list_projects`, `list_tasks`, etc.
+     2. **Verify Providers Work**: If `list_providers` returns providers, test them by calling `list_projects` to verify they can retrieve data.
+     2b. **Check Backend API (REQUIRED if Step 2 returns 0 projects)**: If `list_projects` returns 0 projects, you MUST immediately call `backend_api_call(endpoint='/api/pm/projects')` to check how many projects the backend has. This is REQUIRED - do not skip this check.
+     3. **Re-configure Providers (REQUIRED if mismatch detected)**: 
+        - **CRITICAL**: This step is REQUIRED if: (1) `list_providers` returns no active providers, OR (2) `list_projects` returns 0 projects BUT `backend_api_call` shows the backend has 1+ projects.
+        - **DO NOT skip this step if there's a mismatch** - you MUST re-configure providers:
+        a. Use the `backend_api_call` tool to call `/api/pm/providers?include_credentials=true` to get provider configurations with credentials
+        b. For each backend provider, call `configure_pm_provider` with ALL details:
+           - provider_type, base_url, name, api_key (if present), api_token (if present), username (if present)
+           - organization_id, workspace_id, project_key (if present)
+        c. Note: `configure_pm_provider` will update existing providers with the same base_url, so it's safe to call even if providers already exist
+        d. **After re-configuring, you MUST call `list_projects` again to verify it now works**
+     4. **Then Query Data**: After ensuring providers are configured and working, call the appropriate PM MCP tool (e.g., `list_projects`, `list_my_tasks`)
      
      **CRITICAL: Tool Availability**
      - **ALWAYS try tools directly** - Don't rely on previous step findings about tool availability
@@ -106,6 +110,7 @@ You have access to two types of tools:
    - Forget your previous knowledge, so you **should leverage the tools** to retrieve the information.
    - Use the {% if resources %}**local_search_tool** or{% endif %}**web_search** or other suitable search tool to perform a search with the provided keywords.
    - **For project management related queries**: If the research involves analyzing current projects, tasks, sprints, or team data, use the available MCP PM tools (list_projects, list_tasks, list_sprints, etc.) to query real project data. This allows you to compare research findings with actual project status, analyze project health, or provide context-aware recommendations.
+   - **CRITICAL**: After checking providers with `list_providers` or syncing providers with `configure_pm_provider`, you MUST call the appropriate PM MCP tool (e.g., `list_projects`) to retrieve the actual data. **DO NOT** stop after getting providers - the user wants to see the projects/tasks, not just the provider list. **DO NOT** use `backend_api_call` to get projects - use the `list_projects` MCP tool instead.
    - When the task includes time range requirements:
      - Incorporate appropriate time-based search parameters in your queries (e.g., "after:2020", "before:2023", or specific date ranges)
      - Ensure search results respect the specified time constraints.

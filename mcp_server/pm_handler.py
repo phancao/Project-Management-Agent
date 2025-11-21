@@ -139,6 +139,7 @@ class MCPPMHandler:
             return []
         
         all_projects = []
+        provider_errors = []  # Track errors per provider
         
         for provider in providers:
             try:
@@ -159,12 +160,27 @@ class MCPPMHandler:
                         "provider_id": str(provider.id),
                         "provider_type": provider.provider_type,
                     })
+                logger.info(
+                    f"[MCP PMHandler] Successfully retrieved {len(projects)} projects "
+                    f"from provider {provider.id} ({provider.provider_type})"
+                )
             except Exception as e:
+                error_msg = str(e)
                 logger.error(
                     f"[MCP PMHandler] Error listing projects from provider {provider.id}: {e}",
                     exc_info=True
                 )
+                # Store error info for reporting
+                provider_errors.append({
+                    "provider_id": str(provider.id),
+                    "provider_name": provider.name or f"{provider.provider_type} ({provider.base_url})",
+                    "provider_type": provider.provider_type,
+                    "error": error_msg
+                })
                 continue
+        
+        # Store errors in handler for tool to access
+        self._last_provider_errors = provider_errors
         
         return all_projects
     

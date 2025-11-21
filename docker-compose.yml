@@ -37,6 +37,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://pm_user:pm_password@postgres:5432/project_management
       - REDIS_URL=redis://redis:6379
+      # OpenAI API Key - use environment variable or conf.yaml
+      # NOTE: Set OPENAI_API_KEY in .env file or use conf.yaml
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ENVIRONMENT=production
       # PM MCP Server connection (use Docker service name for internal communication)
@@ -52,7 +54,7 @@ services:
       # LLM Configuration via environment variables (alternative to conf.yaml)
       - BASIC_MODEL__base_url=https://api.openai.com/v1
       - BASIC_MODEL__model=gpt-4o-mini
-      - BASIC_MODEL__api_key=${OPENAI_API_KEY} # Use environment variable
+      - BASIC_MODEL__api_key=${OPENAI_API_KEY} # Use environment variable from .env file
     ports:
       - "8000:8000"
     depends_on:

@@ -39,6 +39,7 @@ import {
   listProviders,
   getProviderProjects,
   updateProvider,
+  deleteProvider,
   type ProviderConfig,
   type ProjectImportRequest,
   type ProjectInfo,
@@ -54,6 +55,8 @@ export function ProviderManagementView() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [providerToDelete, setProviderToDelete] = useState<ProviderConfig | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<ProjectImportRequest>({
@@ -252,6 +255,46 @@ export function ProviderManagementView() {
     await loadProjectsForProvider(config);
   };
 
+  const handleDeleteClick = (provider: ProviderConfig) => {
+    if (!provider.id) {
+      setError("Provider ID is missing");
+      return;
+    }
+    setProviderToDelete(provider);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!providerToDelete?.id) {
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    setDeleteConfirmOpen(false);
+
+    try {
+      await deleteProvider(providerToDelete.id);
+      setSuccessMessage("Provider deleted successfully!");
+      // Remove from local state
+      setProviders((prev) => prev.filter((p) => p.id !== providerToDelete.id));
+      // Remove projects for this provider
+      setProjects((prev) => {
+        const newProjects = { ...prev };
+        delete newProjects[providerToDelete.id!];
+        return newProjects;
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete provider",
+      );
+    } finally {
+      setIsLoading(false);
+      setProviderToDelete(null);
+    }
+  };
+
 
   return (
     <div className="h-full flex flex-col">
@@ -354,7 +397,12 @@ export function ProviderManagementView() {
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteClick(provider)}
+                        disabled={isLoading || !provider.id}
+                      >
                         <Trash2 className="w-4 h-4 text-red-600" />
                       </Button>
                     </div>
@@ -630,6 +678,48 @@ export function ProviderManagementView() {
                     </Button>
                   </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Provider</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the provider{" "}
+              <strong>{providerToDelete?.provider_type.toUpperCase()}</strong> at{" "}
+              <strong>{providerToDelete?.base_url}</strong>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDeleteConfirmOpen(false);
+                setProviderToDelete(null);
+              }}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -176,13 +176,25 @@ export function ProviderManagementView() {
       formData.provider_type === "clickup";
     const needsApiToken = formData.provider_type === "jira";
     
-    if (needsApiKey && !formData.api_key?.trim()) {
-      setApiKeyError("API key is required");
-      return false;
+    // For JIRA, both username (email) and API token are required
+    if (needsApiToken) {
+      if (!formData.username?.trim()) {
+        setApiKeyError("Email address (username) is required for JIRA");
+        return false;
+      }
+      if (!formData.api_token?.trim()) {
+        // When editing, if no new token provided, we'll use existing one from backend
+        if (!editingProvider) {
+          setApiKeyError("API token is required");
+          return false;
+        }
+        // For editing, if no new token provided, skip validation (will use existing)
+        return true;
+      }
     }
     
-    if (needsApiToken && !formData.api_token?.trim()) {
-      setApiKeyError("API token is required");
+    if (needsApiKey && !formData.api_key?.trim()) {
+      setApiKeyError("API key is required");
       return false;
     }
     
@@ -207,7 +219,15 @@ export function ProviderManagementView() {
           request.api_token = formData.api_token;
         }
         
-        if (formData.username) {
+        // For JIRA, username is required
+        if (formData.provider_type === "jira") {
+          if (!formData.username?.trim()) {
+            setApiKeyError("Email address (username) is required for JIRA");
+            setIsValidating(false);
+            return false;
+          }
+          request.username = formData.username;
+        } else if (formData.username) {
           request.username = formData.username;
         }
         
@@ -708,17 +728,27 @@ export function ProviderManagementView() {
                     <span className="text-muted-foreground ml-1">
                       (use your email address for JIRA Cloud)
                     </span>
+                    <span className="text-red-500 ml-1">*</span>
                   </Label>
                   <Input
                     id="username"
                     type="email"
                     placeholder="your-email@example.com"
                     value={formData.username}
-                    onChange={(e) =>
-                      setFormData({ ...formData, username: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setFormData({ ...formData, username: e.target.value });
+                      setApiKeyError(null); // Clear error when user types
+                    }}
                     required
+                    className={apiKeyError && apiKeyError.includes("Email") ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
+                    disabled={isValidating}
                   />
+                  {apiKeyError && apiKeyError.includes("Email") && (
+                    <p className="text-sm text-red-500 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {apiKeyError}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="api_token">

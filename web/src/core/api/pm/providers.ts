@@ -68,104 +68,60 @@ export async function importProjectsFromProvider(
 
 export async function listProviders(): Promise<ProviderConfig[]> {
   const url = resolveServiceURL("pm/providers");
-  console.log('[listProviders] Fetching providers from:', url);
-  console.log('[listProviders] Full URL details:', {
-    url,
-    protocol: new URL(url).protocol,
-    hostname: new URL(url).hostname,
-    port: new URL(url).port,
-  });
-  
-  // Create AbortController for timeout
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    console.error('[listProviders] Request timeout after 15 seconds, aborting...');
-    controller.abort();
-  }, 15000); // 15 second timeout
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   
-  let response: Response;
   try {
-    const startTime = Date.now();
-    console.log('[listProviders] Starting fetch at', new Date().toISOString());
-    response = await fetch(url, {
+    const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       signal: controller.signal,
-      // Add cache control to prevent caching issues
       cache: 'no-store',
     });
     clearTimeout(timeoutId);
-    const duration = Date.now() - startTime;
-    console.log('[listProviders] Fetch completed in', duration, 'ms, status:', response.status);
-    console.log('[listProviders] Response headers:', Object.fromEntries(response.headers.entries()));
-  } catch (error) {
-    clearTimeout(timeoutId);
-    // Catch network errors (connection refused, timeout, etc.)
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('[listProviders] Network error:', errorMessage, error);
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Request timeout: Failed to fetch providers within 15 seconds. The backend server may be slow or unresponsive.`);
-    }
-    throw new Error(`Network error: ${errorMessage}. Please check if the backend server is running at ${url}`);
-  }
 
-  if (!response.ok) {
-    // Extract error detail from backend response
-    let errorMessage = "Failed to fetch providers";
-    try {
-      const errorData = await response.json();
-      errorMessage = errorData.detail || errorMessage;
-    } catch {
-      // If response is not JSON, use status text
-      errorMessage = response.statusText || errorMessage;
+    if (!response.ok) {
+      let errorMessage = "Failed to fetch providers";
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.detail || errorMessage;
+      } catch {
+        errorMessage = response.statusText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    
+    if (!Array.isArray(data)) {
+      throw new Error("Invalid response format: expected an array of providers");
     }
     
-    // Throw error with detailed message so it can be displayed to user
-    throw new Error(errorMessage);
-  }
-
-  let data: any;
-  try {
-    data = await response.json();
-    console.log('[listProviders] Raw API response:', data);
+    // Map and filter in one pass for better performance
+    return data
+      .filter((p: any): p is any => p?.id && p?.provider_type)
+      .map((p: any): ProviderConfig => ({
+        id: p.id,
+        provider_type: p.provider_type,
+        base_url: p.base_url || '',
+        username: p.username,
+        organization_id: p.organization_id,
+        workspace_id: p.workspace_id,
+      }));
   } catch (error) {
-    console.error('[listProviders] Failed to parse JSON:', error);
-    throw new Error("Failed to parse response from server. The response may not be valid JSON.");
-  }
-  
-  // Map database response to ProviderConfig format
-  // Note: API keys/tokens are not returned for security
-  // When loading projects, we'll need to use the saved provider's credentials
-  if (!Array.isArray(data)) {
-    console.error('[listProviders] Invalid response format, expected array, got:', typeof data, data);
-    throw new Error("Invalid response format: expected an array of providers");
-  }
-  
-  const mappedProviders: (ProviderConfig | null)[] = data.map((p: any) => {
-    if (!p || !p.id || !p.provider_type) {
-      console.warn("[listProviders] Invalid provider data:", p);
-      return null;
+    clearTimeout(timeoutId);
+    
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout: Failed to fetch providers within 15 seconds. The backend server may be slow or unresponsive.');
+      }
+      if (error.message.startsWith('Request timeout') || error.message.startsWith('Invalid response format')) {
+        throw error; // Re-throw already formatted errors
+      }
+      throw new Error(`Network error: ${error.message}. Please check if the backend server is running at ${url}`);
     }
-    return {
-      id: p.id,
-      provider_type: p.provider_type,
-      base_url: p.base_url || '',
-      username: p.username || null,
-      organization_id: p.organization_id || null,
-      workspace_id: p.workspace_id || null,
-      // api_key and api_token are not returned from list endpoint for security
-      // They will be retrieved when needed for project loading
-    };
-  });
-  
-  const mapped: ProviderConfig[] = mappedProviders.filter(
-    (p): p is ProviderConfig => p !== null
-  );
-  
-  console.log('[listProviders] Mapped providers:', mapped);
-  return mapped;
+    throw new Error(`Network error: ${String(error)}. Please check if the backend server is running at ${url}`);
+  }
 }
 
 export async function getProviderTypes(): Promise<

@@ -15,7 +15,8 @@ import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
 import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
 import { useUsers } from "~/core/api/hooks/pm/use-users";
-import { listProviders, type ProviderConfig } from "~/core/api/pm/providers";
+import { useProviders } from "~/core/api/hooks/pm/use-providers";
+import type { ProviderConfig } from "~/core/api/pm/providers";
 
 interface TaskDetailsModalProps {
   task: Task | null;
@@ -31,22 +32,13 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null); // Store the task ID being edited
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [providers, setProviders] = useState<ProviderConfig[]>([]);
+  const { providers } = useProviders();
   
   // Fetch statuses, priorities, epics, and users for the project (hooks must be called before early return)
   const { statuses } = useStatuses(projectId ?? undefined, "task");
   const { priorities, loading: prioritiesLoading, error: prioritiesError } = usePriorities(projectId ?? undefined);
   const { epics } = useEpics(projectId ?? undefined);
   const { users, loading: usersLoading } = useUsers(projectId ?? undefined);
-
-  // Load providers on mount
-  useEffect(() => {
-    listProviders()
-      .then(setProviders)
-      .catch((err) => {
-        console.error("Failed to load providers:", err);
-      });
-  }, []);
   
   // Log errors only
   useEffect(() => {

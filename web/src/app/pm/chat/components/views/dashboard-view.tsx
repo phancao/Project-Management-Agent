@@ -14,7 +14,11 @@ import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { useMyTasks, useAllTasks } from "~/core/api/hooks/pm/use-tasks";
 import type { Task } from "~/core/api/hooks/pm/use-tasks";
-import { listProviders } from "~/core/api/pm/providers";
+import { useProviders } from "~/core/api/hooks/pm/use-providers";
+import {
+  getProviderTypeFromProjectId,
+  getProviderBadgeConfig,
+} from "~/app/pm/utils/provider-utils";
 
 import { TaskDetailsModal } from "../task-details-modal";
 
@@ -29,65 +33,20 @@ export function DashboardView() {
   const pathname = usePathname();
   const activeProjectId = searchParams.get('project');
   const isOverview = pathname?.includes('/overview') ?? false;
-  const [providers, setProviders] = useState<Array<{ id: string; provider_type: string }>>([]);
-
-  // Fetch providers to map project IDs to provider types
-  useEffect(() => {
-    listProviders().then((providers) => {
-      const mapped = providers.map(p => ({
-        id: p.id || '',
-        provider_type: p.provider_type || ''
-      })).filter(p => p.id && p.provider_type);
-      setProviders(mapped);
-    }).catch((error) => {
-      console.error("Failed to fetch providers:", error);
-      toast.error(
-        "Failed to load providers",
-        {
-          description: error instanceof Error ? error.message : "Unknown error",
-        }
-      );
-    });
-  }, []);
-
-  // Create mapping from provider_id to provider_type
-  const providerTypeMap = useMemo(() => {
-    const map = new Map<string, string>();
-    providers.forEach(p => {
-      if (p.id && p.provider_type) {
-        map.set(p.id, p.provider_type);
-      }
-    });
-    return map;
-  }, [providers]);
+  const { mappings } = useProviders();
 
   // Helper to get provider type from project ID
   const getProviderType = (projectId: string | undefined): string | null => {
-    if (!projectId) return null;
-    const parts = projectId.split(":");
-    if (parts.length >= 2) {
-      const providerId: string | undefined = parts[0];
-      if (!providerId) return null;
-      return providerTypeMap.get(providerId) || null;
-    }
-    return null;
+    return getProviderTypeFromProjectId(projectId, mappings.typeMap);
   };
 
-  // Helper to get provider badge
+  // Helper to get provider badge component
   const getProviderBadge = (providerType: string | null) => {
     if (!providerType) return null;
-    const config = {
-      jira: { label: "JIRA", color: "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200" },
-      openproject: { label: "OP", color: "bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200" },
-      clickup: { label: "CU", color: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" },
-    };
-    const badge = config[providerType as keyof typeof config] || { 
-      label: providerType.toUpperCase().slice(0, 2), 
-      color: "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200" 
-    };
+    const config = getProviderBadgeConfig(providerType);
     return (
-      <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${badge.color}`}>
-        {badge.label}
+      <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${config.color}`}>
+        {config.label}
       </span>
     );
   };

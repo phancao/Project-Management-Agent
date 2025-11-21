@@ -4,6 +4,8 @@ SQLAlchemy ORM models for Project Management Agent
 These models match the database schema in database/schema.sql
 """
 
+from typing import List, Optional
+
 from sqlalchemy import (
     Column,
     String,
@@ -23,10 +25,10 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 
-Base = declarative_base()
+Base = declarative_base()  # type: ignore
 
 
-class User(Base):
+class User(Base):  # type: ignore
     """User model"""
     __tablename__ = "users"
 
@@ -42,7 +44,7 @@ class User(Base):
     conversation_sessions = relationship("ConversationSession", back_populates="user")
 
 
-class Project(Base):
+class Project(Base):  # type: ignore
     """Project model"""
     __tablename__ = "projects"
 
@@ -69,7 +71,7 @@ class Project(Base):
     sprints = relationship("Sprint", back_populates="project", cascade="all, delete-orphan")
 
 
-class ProjectGoal(Base):
+class ProjectGoal(Base):  # type: ignore
     """Project goal model"""
     __tablename__ = "project_goals"
 
@@ -84,7 +86,7 @@ class ProjectGoal(Base):
     project = relationship("Project", back_populates="goals")
 
 
-class TeamMember(Base):
+class TeamMember(Base):  # type: ignore
     """Team member model"""
     __tablename__ = "team_members"
 
@@ -92,7 +94,7 @@ class TeamMember(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"))
     role = Column(String(100))
-    skills = Column(ARRAY(Text))
+    skills: Column[List[Optional[str]]] = Column(ARRAY(Text))  # type: ignore[assignment]
     hourly_rate = Column(Float)
     joined_at = Column(DateTime, default=datetime.utcnow)
 
@@ -104,7 +106,7 @@ class TeamMember(Base):
     )
 
 
-class Task(Base):
+class Task(Base):  # type: ignore
     """Task model"""
     __tablename__ = "tasks"
 
@@ -132,7 +134,7 @@ class Task(Base):
     # dependencies = relationship("TaskDependency", back_populates="task", cascade="all, delete-orphan")  # Commented out to avoid SQLAlchemy join ambiguity
 
 
-class TaskDependency(Base):
+class TaskDependency(Base):  # type: ignore
     """Task dependency model"""
     __tablename__ = "task_dependencies"
 
@@ -150,7 +152,7 @@ class TaskDependency(Base):
     )
 
 
-class ResearchSession(Base):
+class ResearchSession(Base):  # type: ignore
     """Research session model"""
     __tablename__ = "research_sessions"
 
@@ -161,7 +163,7 @@ class ResearchSession(Base):
     status = Column(String(50), default='active')
     research_data = Column(JSON)
     findings = Column(Text)
-    sources = Column(ARRAY(Text))
+    sources: Column[List[Optional[str]]] = Column(ARRAY(Text))  # type: ignore[assignment]
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
@@ -169,7 +171,7 @@ class ResearchSession(Base):
     project = relationship("Project", back_populates="research_sessions")
 
 
-class KnowledgeBaseItem(Base):
+class KnowledgeBaseItem(Base):  # type: ignore
     """Knowledge base item model with vector embeddings"""
     __tablename__ = "knowledge_base"
 
@@ -186,7 +188,7 @@ class KnowledgeBaseItem(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class ConversationSession(Base):
+class ConversationSession(Base):  # type: ignore
     """Conversation session model"""
     __tablename__ = "conversation_sessions"
 
@@ -205,7 +207,7 @@ class ConversationSession(Base):
     messages = relationship("ConversationMessage", back_populates="session", cascade="all, delete-orphan")
 
 
-class ConversationMessage(Base):
+class ConversationMessage(Base):  # type: ignore
     """Conversation message model"""
 
     __tablename__ = "conversation_messages"
@@ -224,7 +226,7 @@ class ConversationMessage(Base):
 # ==================== Mock Provider Tables ====================
 
 
-class ProjectTemplate(Base):
+class ProjectTemplate(Base):  # type: ignore
     """Project template model"""
     __tablename__ = "project_templates"
 
@@ -239,7 +241,7 @@ class ProjectTemplate(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class ProjectMetric(Base):
+class ProjectMetric(Base):  # type: ignore
     """Project metric model"""
     __tablename__ = "project_metrics"
 
@@ -254,7 +256,7 @@ class ProjectMetric(Base):
     project = relationship("Project", back_populates="metrics")
 
 
-class IntentClassification(Base):
+class IntentClassification(Base):  # type: ignore
     """Intent classification history for self-learning"""
     __tablename__ = "intent_classifications"
 
@@ -271,7 +273,7 @@ class IntentClassification(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-class IntentFeedback(Base):
+class IntentFeedback(Base):  # type: ignore
     """User feedback on intent classification"""
     __tablename__ = "intent_feedback"
 
@@ -284,7 +286,7 @@ class IntentFeedback(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-class IntentMetric(Base):
+class IntentMetric(Base):  # type: ignore
     """Intent classification success metrics"""
     __tablename__ = "intent_metrics"
 
@@ -296,7 +298,7 @@ class IntentMetric(Base):
     last_updated = Column(DateTime, default=datetime.utcnow)
 
 
-class LearnedIntentPattern(Base):
+class LearnedIntentPattern(Base):  # type: ignore
     """Learned patterns for intent classification"""
     __tablename__ = "learned_intent_patterns"
 
@@ -311,7 +313,7 @@ class LearnedIntentPattern(Base):
     last_used_at = Column(DateTime, default=datetime.utcnow)
 
 
-class Sprint(Base):
+class Sprint(Base):  # type: ignore
     """Sprint model"""
     __tablename__ = "sprints"
 
@@ -334,7 +336,7 @@ class Sprint(Base):
     sprint_tasks = relationship("SprintTask", back_populates="sprint", cascade="all, delete-orphan")
 
 
-class SprintTask(Base):
+class SprintTask(Base):  # type: ignore
     """Sprint task junction model"""
     __tablename__ = "sprint_tasks"
 
@@ -350,7 +352,7 @@ class SprintTask(Base):
     task = relationship("Task", foreign_keys=[task_id])
 
 
-class PMProviderConnection(Base):
+class PMProviderConnection(Base):  # type: ignore
     """PM provider connection model"""
     __tablename__ = "pm_provider_connections"
 
@@ -372,7 +374,7 @@ class PMProviderConnection(Base):
     last_sync_at = Column(DateTime, nullable=True)
 
 
-class ProjectSyncMapping(Base):
+class ProjectSyncMapping(Base):  # type: ignore
     """Project sync mapping model"""
     __tablename__ = "project_sync_mappings"
 
@@ -387,7 +389,7 @@ class ProjectSyncMapping(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class UserMCPAPIKey(Base):
+class UserMCPAPIKey(Base):  # type: ignore
     """User MCP API Key model for external client authentication"""
     __tablename__ = "user_mcp_api_keys"
 

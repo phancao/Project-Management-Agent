@@ -63,6 +63,7 @@ from src.server.pm_provider_request import (
     ProjectImportRequest,
     ProviderUpdateRequest,
 )
+from src.server.pm_handler import PMHandler
 from pydantic import BaseModel
 from src.tools import VolcengineTTS
 from src.utils.json_utils import sanitize_args
@@ -1340,7 +1341,6 @@ async def pm_list_projects(_request: Request):
     """List all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1362,7 +1362,6 @@ async def pm_get_project(project_id: str):
     """Get a single project by ID"""
     try:
         from database.connection import get_db_session
-        from backend.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1408,7 +1407,6 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
     """Create a new task within the specified project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1449,11 +1447,10 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
 
 
 @app.get("/api/pm/projects/{project_id}/tasks")
-async def pm_list_tasks(request: Request, project_id: str):
+async def pm_list_tasks(_request: Request, project_id: str):
     """List all tasks for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1565,7 +1562,6 @@ async def pm_project_timeline(project_id: str):
     """Return sprint + task scheduling data for timeline views."""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1603,11 +1599,10 @@ async def pm_project_timeline(project_id: str):
 
 
 @app.get("/api/pm/tasks/my")
-async def pm_list_my_tasks(request: Request):
+async def pm_list_my_tasks(_request: Request):
     """List tasks assigned to current user across all active PM providers"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1628,11 +1623,10 @@ async def pm_list_my_tasks(request: Request):
 
 
 @app.get("/api/pm/tasks/all")
-async def pm_list_all_tasks(request: Request):
+async def pm_list_all_tasks(_request: Request):
     """List all tasks across all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1657,7 +1651,6 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
     """Update a task"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         updates = await request.json()
         
@@ -1723,11 +1716,10 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
 
 
 @app.get("/api/pm/projects/{project_id}/users")
-async def pm_list_users(request: Request, project_id: str):
+async def pm_list_users(_request: Request, project_id: str):
     """List all users for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1850,14 +1842,13 @@ async def pm_list_users(request: Request, project_id: str):
 
 @app.get("/api/pm/projects/{project_id}/sprints")
 async def pm_list_sprints(
-    request: Request, 
+    _request: Request, 
     project_id: str,
     state: Optional[str] = None
 ):
     """List all sprints for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1924,11 +1915,10 @@ async def pm_list_sprints(
 
 
 @app.get("/api/pm/projects/{project_id}/epics")
-async def pm_list_epics(request: Request, project_id: str):
+async def pm_list_epics(_request: Request, project_id: str):
     """List all epics for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1962,7 +1952,6 @@ async def pm_create_epic(request: Request, project_id: str):
     """Create a new epic for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         epic_data = await request.json()
         
@@ -1998,7 +1987,6 @@ async def pm_update_epic(request: Request, project_id: str, epic_id: str):
     """Update an epic for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         updates = await request.json()
         
@@ -2034,7 +2022,6 @@ async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str
     """Assign a task to an epic"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         epic_data = await request.json()
         epic_id = epic_data.get("epic_id")
@@ -2066,11 +2053,10 @@ async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/pm/projects/{project_id}/tasks/{task_id}/remove-epic")
-async def pm_remove_task_from_epic(request: Request, project_id: str, task_id: str):
+async def pm_remove_task_from_epic(_request: Request, project_id: str, task_id: str):
     """Remove a task from its epic"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2101,7 +2087,6 @@ async def pm_assign_task_to_sprint(request: Request, project_id: str, task_id: s
     """Assign a task to a sprint"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         sprint_data = await request.json()
         sprint_id = sprint_data.get("sprint_id")
@@ -2138,7 +2123,6 @@ async def pm_assign_task_to_user(project_id: str, task_id: str, payload: TaskAss
     """Assign or unassign a task to a user"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2174,11 +2158,10 @@ async def pm_assign_task_to_user(project_id: str, task_id: str, payload: TaskAss
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/pm/projects/{project_id}/tasks/{task_id}/move-to-backlog")
-async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: str):
+async def pm_move_task_to_backlog(_request: Request, project_id: str, task_id: str):
     """Move a task to the backlog"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2205,11 +2188,10 @@ async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: st
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/pm/projects/{project_id}/epics/{epic_id}")
-async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
+async def pm_delete_epic(_request: Request, project_id: str, epic_id: str):
     """Delete an epic for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2243,11 +2225,10 @@ async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
 
 
 @app.get("/api/pm/projects/{project_id}/labels")
-async def pm_list_labels(request: Request, project_id: str):
+async def pm_list_labels(_request: Request, project_id: str):
     """List all labels for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2278,7 +2259,7 @@ async def pm_list_labels(request: Request, project_id: str):
 
 @app.get("/api/pm/projects/{project_id}/statuses")
 async def pm_list_statuses(
-    request: Request,
+    _request: Request,
     project_id: str,
     entity_type: str = "task"
 ):
@@ -2291,7 +2272,6 @@ async def pm_list_statuses(
     """
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2324,7 +2304,7 @@ async def pm_list_statuses(
 
 @app.get("/api/pm/projects/{project_id}/priorities")
 async def pm_list_priorities(
-    request: Request,
+    _request: Request,
     project_id: str
 ):
     """
@@ -2336,7 +2316,6 @@ async def pm_list_priorities(
     """
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -3372,7 +3351,7 @@ async def pm_delete_provider(provider_id: str):
                 )
             
             # Soft delete by deactivating
-            provider.is_active = False  # type: ignore
+            provider.is_active = False  # type: ignore[assignment]
             db.commit()
             
             return {"success": True, "message": "Provider deactivated"}
@@ -3392,7 +3371,6 @@ async def pm_delete_provider(provider_id: str):
 from src.analytics.service import AnalyticsService
 from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
 from database.orm_models import PMProviderConnection
-from src.server.pm_handler import PMHandler
 
 
 def get_analytics_service(project_id: str, db) -> AnalyticsService:

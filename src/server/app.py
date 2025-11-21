@@ -2954,31 +2954,45 @@ async def pm_import_projects(request: ProjectImportRequest):
         db = next(db_gen)
         
         try:
-            # Normalize base_url (remove trailing slash) for duplicate checking
-            normalized_base_url = request.base_url.rstrip('/')
+            # Import URL conversion function to normalize URLs consistently
+            from src.pm_providers.factory import _convert_localhost_to_docker_service
+            
+            # Normalize base_url: remove trailing slash AND convert localhost to Docker service
+            # This ensures duplicate detection works even when URLs are converted for Docker
+            original_base_url = request.base_url.rstrip('/')
+            normalized_base_url = _convert_localhost_to_docker_service(original_base_url)
             
             # Check for existing active provider with same type and (same URL OR same token)
             # Duplicate if: same provider_type AND (same base_url OR same api_key/api_token)
+            # We need to check for both original and converted URLs in case DB has either
+            from sqlalchemy import or_
+            
+            # Build URL conditions: check for both original and converted URLs
+            url_conditions = [PMProviderConnection.base_url == normalized_base_url]
+            if original_base_url != normalized_base_url:
+                # Only add original URL condition if it's different from converted
+                url_conditions.append(PMProviderConnection.base_url == original_base_url)
+            
+            # Build token conditions
+            token_conditions = []
+            if request.api_key:
+                token_conditions.append(PMProviderConnection.api_key == request.api_key)
+            if request.api_token:
+                token_conditions.append(PMProviderConnection.api_token == request.api_token)
+            
+            # Combine all conditions: (same URL OR same token)
+            all_conditions = url_conditions + token_conditions
+            
             query = db.query(PMProviderConnection).filter(
                 PMProviderConnection.provider_type == request.provider_type,
                 PMProviderConnection.is_active.is_(True)
             )
             
-            # Build OR condition: same URL OR same token
-            from sqlalchemy import or_
-            conditions = [PMProviderConnection.base_url == normalized_base_url]
-            
-            # Add token condition based on provider type
-            if request.api_key:
-                conditions.append(PMProviderConnection.api_key == request.api_key)
-            if request.api_token:
-                conditions.append(PMProviderConnection.api_token == request.api_token)
-            
-            # Apply OR condition if we have token conditions
-            if len(conditions) > 1:
-                query = query.filter(or_(*conditions))
-            else:
-                query = query.filter(conditions[0])
+            # Apply OR condition if we have multiple conditions
+            if len(all_conditions) > 1:
+                query = query.filter(or_(*all_conditions))
+            elif len(all_conditions) == 1:
+                query = query.filter(all_conditions[0])
             
             existing_provider = query.first()
             

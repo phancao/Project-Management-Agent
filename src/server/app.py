@@ -2637,8 +2637,9 @@ async def pm_chat_stream(request: Request):
                     )
             except Exception as e:
                 logger.warning(
-                    f"[PM-CHAT] Failed to auto-inject PM MCP server: {e}. "
-                    "PM MCP tools may not be available."
+                    "[PM-CHAT] Failed to auto-inject PM MCP server: %s. "
+                    "PM MCP tools may not be available.",
+                    e
                 )
         
         locale = body.get("locale", "en-US")
@@ -3654,7 +3655,7 @@ async def get_cycle_time_chart(
         logger.warning("Cycle time chart unavailable: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to get cycle time chart: {e}", exc_info=True)
+        logger.error("Failed to get cycle time chart: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

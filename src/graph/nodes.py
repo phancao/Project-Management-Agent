@@ -1005,10 +1005,16 @@ async def _setup_and_execute_agent_step(
                 logger.info(
                     f"[{agent_type}] Server '{server_name}' config: transport={server_config.get('transport')}, "
                     f"has_url={'url' in server_config}, has_command={'command' in server_config}, "
-                    f"config_keys={list(server_config.keys())}"
+                    f"has_headers={'headers' in server_config}, config_keys={list(server_config.keys())}"
                 )
                 if 'url' in server_config:
                     logger.info(f"[{agent_type}] Server '{server_name}' URL: {server_config['url']}")
+                if 'headers' in server_config:
+                    headers = server_config['headers']
+                    # Log headers but mask sensitive values
+                    masked_headers = {k: (v[:10] + '...' if len(v) > 10 else v) if k == 'X-MCP-API-Key' else v 
+                                     for k, v in headers.items()}
+                    logger.info(f"[{agent_type}] Server '{server_name}' headers: {masked_headers}")
                 if 'transport' in server_config:
                     logger.info(f"[{agent_type}] Server '{server_name}' transport type: {type(server_config['transport']).__name__}, value: {repr(server_config['transport'])}")
             logger.info(

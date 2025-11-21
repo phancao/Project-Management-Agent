@@ -45,9 +45,10 @@ services:
       # SECURITY: API key for backend to authenticate with MCP server
       # The MCP server stores sensitive credentials (PM provider API keys, tokens)
       # This key authenticates the backend service to prevent unauthorized access
-      # Generate a key using: python -c "import secrets; print('mcp_' + secrets.token_bytes(32).hex())"
-      # Set in .env file or docker-compose.override.yml
-      - PM_MCP_API_KEY=${PM_MCP_API_KEY:-}
+      # Generated API key for system user (00000000-0000-0000-0000-000000000000)
+      # Default value: mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3
+      # Can be overridden via .env file: PM_MCP_API_KEY=your_key_here
+      - PM_MCP_API_KEY=${PM_MCP_API_KEY:-mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3}
       # LLM Configuration via environment variables (alternative to conf.yaml)
       - BASIC_MODEL__base_url=https://api.openai.com/v1
       - BASIC_MODEL__model=gpt-4o-mini

@@ -73,6 +73,11 @@ from src.utils.log_sanitizer import (
     sanitize_tool_name,
     sanitize_user_content,
 )
+# Analytics imports (used in get_analytics_service function)
+from src.analytics.service import AnalyticsService
+from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
+from database.orm_models import PMProviderConnection
+from backend.server.pm_handler import PMHandler
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +103,7 @@ class PMTaskCreateRequest(BaseModel):
 class TaskAssignmentRequest(BaseModel):
     assignee_id: Optional[str] = None
 
+
 if os.name == "nt":
     # WindowsSelectorEventLoopPolicy is available on Windows
     asyncio.set_event_loop_policy(
@@ -111,6 +117,7 @@ app = FastAPI(
     description="API for Deer",
     version="0.1.0",
 )
+
 
 @app.get("/health")
 async def health_check():
@@ -190,28 +197,28 @@ def _validate_tool_call_chunks(tool_call_chunks):
     """Validate and log tool call chunk structure for debugging."""
     if not tool_call_chunks:
         return
-    
+
     logger.debug(f"Validating tool_call_chunks: count={len(tool_call_chunks)}")
-    
+
     indices_seen = set()
     tool_ids_seen = set()
-    
+
     for i, chunk in enumerate(tool_call_chunks):
         index = chunk.get("index")
         tool_id = chunk.get("id")
         name = chunk.get("name", "")
         has_args = "args" in chunk
-        
+
         logger.debug(
             f"Chunk {i}: index={index}, id={tool_id}, name={name}, "
             f"has_args={has_args}, type={chunk.get('type')}"
         )
-        
+
         if index is not None:
             indices_seen.add(index)
         if tool_id:
             tool_ids_seen.add(tool_id)
-    
+
     if len(indices_seen) > 1:
         logger.debug(
             f"Multiple indices detected: {sorted(indices_seen)} - "
@@ -222,11 +229,11 @@ def _validate_tool_call_chunks(tool_call_chunks):
 def _process_tool_call_chunks(tool_call_chunks):
     """
     Process tool call chunks with proper index-based grouping.
-    
+
     This function handles the concatenation of tool call chunks that belong
     to the same tool call (same index) while properly segregating chunks
     from different tool calls (different indices).
-    
+
     The issue: In streaming, LangChain's ToolCallChunk concatenates string
     attributes (name, args) when chunks have the same index. We need to:
     1. Group chunks by index
@@ -236,17 +243,17 @@ def _process_tool_call_chunks(tool_call_chunks):
     """
     if not tool_call_chunks:
         return []
-    
+
     _validate_tool_call_chunks(tool_call_chunks)
-    
+
     chunks = []
     # Group chunks by index to handle streaming accumulation
     chunk_by_index = {}
-    
+
     for chunk in tool_call_chunks:
         index = chunk.get("index")
         chunk_id = chunk.get("id")
-        
+
         if index is not None:
             # Create or update entry for this index
             if index not in chunk_by_index:
@@ -257,12 +264,12 @@ def _process_tool_call_chunks(tool_call_chunks):
                     "index": index,
                     "type": chunk.get("type", ""),
                 }
-            
+
             # Validate and accumulate tool name
             chunk_name = chunk.get("name", "")
             if chunk_name:
                 stored_name = chunk_by_index[index]["name"]
-                
+
                 # Check for index collision with different tool names
                 if stored_name and stored_name != chunk_name:
                     logger.warning(
@@ -275,11 +282,11 @@ def _process_tool_call_chunks(tool_call_chunks):
                     # Keep the first name to prevent concatenation
                 else:
                     chunk_by_index[index]["name"] = chunk_name
-            
+
             # Update ID if new one provided
             if chunk_id and not chunk_by_index[index]["id"]:
                 chunk_by_index[index]["id"] = chunk_id
-            
+
             # Accumulate arguments
             if chunk.get("args"):
                 chunk_by_index[index]["args"] += chunk.get("args", "")
@@ -293,7 +300,7 @@ def _process_tool_call_chunks(tool_call_chunks):
                 "index": 0,
                 "type": chunk.get("type", ""),
             })
-    
+
     # Convert indexed chunks to list, sorted by index for proper order
     for index in sorted(chunk_by_index.keys()):
         chunk_data = chunk_by_index[index]
@@ -303,7 +310,7 @@ def _process_tool_call_chunks(tool_call_chunks):
             f"Processed tool call: index={index}, name={chunk_data['name']}, "
             f"id={chunk_data['id']}"
         )
-    
+
     return chunks
 
 
@@ -404,7 +411,7 @@ async def _process_message_chunk(
         f"agent={safe_agent_name}"
     )
     logger.debug(f"[{safe_thread_id}] Extracted agent_name: {safe_agent_name}")
-    
+
     event_stream_message = _create_event_stream_message(
         message_chunk, message_metadata, thread_id, agent_name
     )
@@ -414,7 +421,7 @@ async def _process_message_chunk(
         logger.debug(f"[{safe_thread_id}] Processing ToolMessage")
         tool_call_id = message_chunk.tool_call_id
         event_stream_message["tool_call_id"] = tool_call_id
-        
+
         # Validate tool_call_id for debugging
         if tool_call_id:
             safe_tool_id = sanitize_log_input(tool_call_id, max_length=100)
@@ -426,7 +433,7 @@ async def _process_message_chunk(
             logger.warning(
                 f"[{safe_thread_id}] ToolMessage received without tool_call_id"
             )
-        
+
         logger.debug(f"[{safe_thread_id}] Yielding tool_call_result event")
         yield _make_event("tool_call_result", event_stream_message)
     elif isinstance(message_chunk, AIMessageChunk):
@@ -449,7 +456,7 @@ async def _process_message_chunk(
                 f"{safe_tool_names}"
             )
             event_stream_message["tool_calls"] = message_chunk.tool_calls
-            
+
             # Process tool_call_chunks with proper index-based grouping
             processed_chunks = _process_tool_call_chunks(
                 message_chunk.tool_call_chunks
@@ -464,7 +471,7 @@ async def _process_message_chunk(
                     f"[{safe_thread_id}] Tool calls: {safe_tool_names}, "
                     f"Processed chunks: {len(processed_chunks)}"
                 )
-            
+
             logger.debug(f"[{safe_thread_id}] Yielding tool_calls event")
             yield _make_event("tool_calls", event_stream_message)
         elif message_chunk.tool_call_chunks:
@@ -477,14 +484,14 @@ async def _process_message_chunk(
             processed_chunks = _process_tool_call_chunks(
                 message_chunk.tool_call_chunks
             )
-            
+
             # Emit separate events for chunks with different indices
             # (tool call boundaries)
             if processed_chunks:
                 prev_chunk = None
                 for chunk in processed_chunks:
                     current_index = chunk.get("index")
-                    
+
                     # Log index transitions to detect tool call boundaries
                     if prev_chunk is not None and (
                         current_index != prev_chunk.get("index")
@@ -496,9 +503,9 @@ async def _process_message_chunk(
                             f"index {prev_chunk.get('index')} "
                             f"({prev_name}) -> {current_index} ({curr_name})"
                         )
-                    
+
                     prev_chunk = chunk
-                
+
                 # Include all processed chunks in the event
                 event_stream_message["tool_call_chunks"] = processed_chunks
                 safe_chunk_names = [
@@ -509,7 +516,7 @@ async def _process_message_chunk(
                     f"[{safe_thread_id}] Streamed {len(processed_chunks)} "
                     f"tool call chunk(s): {safe_chunk_names}"
                 )
-            
+
             logger.debug(f"[{safe_thread_id}] Yielding tool_call_chunks event")
             yield _make_event("tool_call_chunks", event_stream_message)
         else:
@@ -543,7 +550,7 @@ async def _stream_graph_events(
     graph_instance, workflow_input, workflow_config, thread_id
 ):
     """Stream events from the graph using latest LangGraph features.
-    
+
     Features:
     - messages: Streams LangChain messages (agent responses, tool calls)
     - updates: Streams state updates by node (plan updates, observations)
@@ -557,7 +564,7 @@ async def _stream_graph_events(
     try:
         event_count = 0
         debug_event_count = 0
-        
+
         # Use latest LangGraph streaming with debug mode for observability
         # debug events processed server-side only, not streamed to client
         async for agent, stream_type, event_data in graph_instance.astream(
@@ -569,7 +576,7 @@ async def _stream_graph_events(
         ):
             event_count += 1
             safe_agent = sanitize_agent_name(agent)
-            
+
             # Process debug events for server-side observability
             if stream_type == "debug":
                 debug_event_count += 1
@@ -577,7 +584,7 @@ async def _stream_graph_events(
                     event_type = event_data.get("type", "unknown")
                     step = event_data.get("step", 0)
                     timestamp = event_data.get("timestamp", "")
-                    
+
                     if event_type == "task":
                         # Node task started
                         payload = event_data.get("payload", {})
@@ -595,13 +602,14 @@ async def _stream_graph_events(
                         error = payload.get("error")
                         if error:
                             logger.error(
-                                f"[{safe_thread_id}] ❌ Task failed: {task_name} "
-                                f"(id={task_id}, step={step}): {error}"
+                                f"[{safe_thread_id}] ❌ Task failed: "
+                                f"{task_name} (id={task_id}, "
+                                f"step={step}): {error}"
                             )
                         else:
                             logger.info(
-                                f"[{safe_thread_id}] ✅ Task completed: {task_name} "
-                                f"(id={task_id}, step={step})"
+                                f"[{safe_thread_id}] ✅ Task completed: "
+                                f"{task_name} (id={task_id}, step={step})"
                             )
                     elif event_type == "checkpoint":
                         # State checkpoint created
@@ -609,28 +617,28 @@ async def _stream_graph_events(
                             f"[{safe_thread_id}] 💾 Checkpoint created "
                             f"(step={step}, timestamp={timestamp})"
                         )
-                
+
                 # Debug events are not streamed to client (too verbose)
                 continue
-            
+
             # Process messages and updates for client streaming
             logger.debug(
                 f"[{safe_thread_id}] Graph event #{event_count} received "
                 f"from agent: {safe_agent}, type: {stream_type}"
             )
-            
+
             if stream_type == "messages":
                 # Process message chunks (agent responses, tool calls)
                 if isinstance(event_data, (list, tuple)) and len(event_data) > 0:
                     message_chunk, message_metadata = (
-                        event_data[0], 
+                        event_data[0],
                         event_data[1] if len(event_data) > 1 else {}
                     )
                     async for event in _process_message_chunk(
                         message_chunk, message_metadata, thread_id, agent
                     ):
                         yield event
-            
+
             elif stream_type == "updates":
                 # Process state updates (plan updates, observations)
                 if isinstance(event_data, dict):
@@ -656,7 +664,7 @@ async def _stream_graph_events(
                             f"ns={ns_value}, value_len={value_len}"
                         )
                         yield _create_interrupt_event(thread_id, event_data)
-                    
+
                     # Process node-specific state updates
                     # With stream_mode=["messages", "updates"], updates come as
                     # dicts keyed by node name
@@ -666,7 +674,7 @@ async def _stream_graph_events(
                             or node_name == "__interrupt__"
                         ):
                             continue
-                        
+
                         # Stream plan updates
                         if "current_plan" in node_update:
                             current_plan = node_update.get("current_plan")
@@ -698,7 +706,7 @@ async def _stream_graph_events(
                                         }
                                         for step in current_plan.steps
                                     ] if current_plan.steps else []
-                                
+
                                 # Stream plan update event
                                 logger.info(
                                     f"[{safe_thread_id}] Streaming plan update "
@@ -714,7 +722,7 @@ async def _stream_graph_events(
                                         "plan": plan_data,
                                     }
                                 )
-                        
+
                         # Stream step execution updates
                         if "observations" in node_update:
                             observations = node_update.get("observations", [])
@@ -738,7 +746,7 @@ async def _stream_graph_events(
                                         "step_index": len(observations) - 1,
                                     }
                                 )
-                        
+
                         # Stream messages from state updates
                         # (e.g., reporter's final report)
                         # NOTE: For reporter messages, we DON'T stream from
@@ -785,12 +793,12 @@ async def _stream_graph_events(
                                         ):
                                             yield event
                                         break
-                    
+
                     logger.debug(
                         f"[{safe_thread_id}] Processed state update from "
                         f"{safe_agent}"
                     )
-        
+
         logger.info(
             f"[{safe_thread_id}] ✅ Streaming completed: {event_count} events, "
             f"{debug_event_count} debug events processed"
@@ -921,13 +929,13 @@ async def _astream_workflow_generator(
 
     checkpoint_saver = get_bool_env("LANGGRAPH_CHECKPOINT_SAVER", False)
     checkpoint_url = get_str_env("LANGGRAPH_CHECKPOINT_DB_URL", "")
-    
+
     logger.debug(
         f"[{safe_thread_id}] Checkpoint configuration: "
         f"saver_enabled={checkpoint_saver}, "
         f"url_configured={bool(checkpoint_url)}"
     )
-    
+
     # Handle checkpointer if configured
     connection_kwargs = {
         "autocommit": True,
@@ -1224,7 +1232,8 @@ async def mcp_server_metadata(request: MCPServerMetadataRequest):
             is_pm_server = True
             logger.debug(f"Detected PM MCP server via command: {command_str}")
     elif request.url:
-        # Check if URL contains pm-server, pm_mcp_server, or localhost:8080 (default PM MCP SSE port)
+        # Check if URL contains pm-server, pm_mcp_server, or localhost:8080
+        # (default PM MCP SSE port)
         url_lower = request.url.lower()
         if (
             "pm" in url_lower and ("server" in url_lower or "mcp" in url_lower)
@@ -1233,8 +1242,11 @@ async def mcp_server_metadata(request: MCPServerMetadataRequest):
         ):
             is_pm_server = True
             logger.debug(f"Detected PM MCP server via URL: {request.url}")
-    
-    if not get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False) and not is_pm_server:
+
+    if (
+        not get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False)
+        and not is_pm_server
+    ):
         raise HTTPException(
             status_code=403,
             detail=(
@@ -1321,10 +1333,10 @@ async def pm_list_projects(request: Request):
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.list_all_projects()
@@ -1343,18 +1355,18 @@ async def pm_get_project(project_id: str):
     try:
         from database.connection import get_db_session
         from backend.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             projects = await handler.list_all_projects()
             project = next((p for p in projects if p.get("id") == project_id), None)
-            
+
             if not project:
                 raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-            
+
             return project
         finally:
             db.close()
@@ -1382,8 +1394,6 @@ async def pm_regenerate_mock_dataset():
         status_code=410,  # Gone
         detail="Mock provider is no longer supported. Please use real PM providers (JIRA, OpenProject, etc.)"
     )
-    metadata = await provider.regenerate_mock_data()
-    return {"status": "ok", "metadata": metadata}
 
 
 @app.post("/api/pm/projects/{project_id}/tasks")
@@ -1437,10 +1447,10 @@ async def pm_list_tasks(request: Request, project_id: str):
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             # Check if project_id has provider prefix
             if ":" not in project_id:
@@ -1452,12 +1462,12 @@ async def pm_list_tasks(request: Request, project_id: str):
                 if flow_manager is None:
                     flow_manager = ConversationFlowManager(db_session=db)
                 fm = flow_manager
-                
+
                 if not fm.pm_provider:
                     raise HTTPException(
                         status_code=503, detail="PM Provider not configured"
                     )
-                
+
                 tasks = await fm.pm_provider.list_tasks(
                     project_id=project_id
                 )
@@ -1474,7 +1484,7 @@ async def pm_list_tasks(request: Request, project_id: str):
                                 assignee_map[task.assignee_id] = user.name
                         except Exception:
                             pass
-                
+
                 return [
                     {
                         "id": str(t.id),
@@ -1506,7 +1516,7 @@ async def pm_list_tasks(request: Request, project_id: str):
                     }
                     for t in tasks
                 ]
-            
+
             # Use PMHandler for provider-prefixed project IDs
             handler = PMHandler.from_db_session(db)
             tasks = await handler.list_project_tasks(project_id)
@@ -1591,10 +1601,10 @@ async def pm_list_my_tasks(request: Request):
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.list_my_tasks()
@@ -1616,10 +1626,10 @@ async def pm_list_all_tasks(request: Request):
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.list_all_tasks()
@@ -1641,28 +1651,32 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         updates = await request.json()
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             provider = handler._get_provider_for_project(project_id)
-            
-            logger.info(f"Updating task {task_id} in project {project_id} with updates: {updates}")
-            
+
+            logger.info(
+                f"Updating task {task_id} in project {project_id} with updates: {updates}"
+            )
+
             # Update the task using the provider
             updated_task = await provider.update_task(task_id, updates)
-            
-            logger.info(f"Task {task_id} updated successfully: {updated_task.title}")
-            
+
+            logger.info(
+                f"Task {task_id} updated successfully: {updated_task.title}"
+            )
+
             # Get project name for response
             actual_project_id = project_id.split(":")[-1]
             project = await provider.get_project(actual_project_id)
             project_name = project.name if project else "Unknown"
-            
+
             # Convert to dict format
             result = handler._task_to_dict(updated_task, project_name)
             logger.info(f"Returning updated task data: {result}")
@@ -1705,10 +1719,10 @@ async def pm_list_users(request: Request, project_id: str):
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             provider_instance = handler._get_provider_for_project(project_id)
@@ -1747,14 +1761,16 @@ async def pm_list_users(request: Request, project_id: str):
                 # Handle HTTP errors (403, 401, etc.) gracefully
                 error_msg = str(http_err)
                 status_code = getattr(http_err.response, 'status_code', None) if hasattr(http_err, 'response') else None
-                
+
                 if status_code in (403, 401):
                     logger.warning(
                         "[pm_list_users] Provider returned %s Forbidden/Unauthorized for users endpoint, returning empty list. Error: %s",
                         status_code, error_msg
                     )
                     return []
-                logger.error(f"Failed to list users (HTTP {status_code}): {http_err}")
+                logger.error(
+                    f"Failed to list users (HTTP {status_code}): {http_err}"
+                )
                 import traceback
                 logger.error(traceback.format_exc())
                 raise HTTPException(
@@ -1797,7 +1813,12 @@ async def pm_list_users(request: Request, project_id: str):
         error_msg = str(ve)
         # For JIRA username/auth issues, return empty list instead of error
         if "JIRA requires email" in error_msg or "JIRA requires" in error_msg or "username" in error_msg.lower() or "api_token" in error_msg.lower():
-            logger.warning(f"[pm_list_users] Outer handler: JIRA authentication issue, returning empty user list. Error: {error_msg}")
+            logger.warning(
+
+                f"[pm_list_users] Outer handler: JIRA authentication issue, returning empty user list. Error: {error_msg}"
+
+            )
+
             return []
         if "Invalid provider ID format" in error_msg:
             raise HTTPException(status_code=400, detail=error_msg)
@@ -1811,7 +1832,12 @@ async def pm_list_users(request: Request, project_id: str):
         error_msg = str(e)
         # For JIRA username/auth issues, return empty list instead of error
         if "JIRA requires" in error_msg or "username" in error_msg.lower():
-            logger.warning(f"[pm_list_users] Outer handler: JIRA configuration issue, returning empty user list. Error: {error_msg}")
+            logger.warning(
+
+                f"[pm_list_users] Outer handler: JIRA configuration issue, returning empty user list. Error: {error_msg}"
+
+            )
+
             return []
         logger.error(f"Failed to list users: {e}")
         import traceback
@@ -1821,7 +1847,7 @@ async def pm_list_users(request: Request, project_id: str):
 
 @app.get("/api/pm/projects/{project_id}/sprints")
 async def pm_list_sprints(
-    request: Request, 
+    request: Request,
     project_id: str,
     state: Optional[str] = None
 ):
@@ -1829,28 +1855,28 @@ async def pm_list_sprints(
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             # Check if project_id has provider prefix
             if ":" not in project_id:
                 # Fallback: use global flow_manager if no provider_id prefix
                 from src.conversation.flow_manager import ConversationFlowManager
-                
+
                 global flow_manager
                 if flow_manager is None:
                     flow_manager = ConversationFlowManager(db_session=db)
                 fm = flow_manager
-                
+
                 if not fm.pm_provider:
                     raise HTTPException(
                         status_code=503, detail="PM Provider not configured"
                     )
-                
+
                 sprints = await fm.pm_provider.list_sprints(project_id=project_id)
-                
+
                 return [
                     {
                         "id": str(s.id),
@@ -1869,7 +1895,7 @@ async def pm_list_sprints(
                     }
                     for s in sprints
                 ]
-            
+
             # Use PMHandler for provider-prefixed project IDs
             handler = PMHandler.from_db_session(db)
             return await handler.list_project_sprints(project_id, state=state)
@@ -1900,10 +1926,10 @@ async def pm_list_epics(request: Request, project_id: str):
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.list_project_epics(project_id)
@@ -1934,12 +1960,12 @@ async def pm_create_epic(request: Request, project_id: str):
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         epic_data = await request.json()
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.create_project_epic(project_id, epic_data)
@@ -1970,12 +1996,12 @@ async def pm_update_epic(request: Request, project_id: str, epic_id: str):
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         updates = await request.json()
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.update_project_epic(project_id, epic_id, updates)
@@ -2006,15 +2032,15 @@ async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         epic_data = await request.json()
         epic_id = epic_data.get("epic_id")
         if not epic_id:
             raise HTTPException(status_code=400, detail="epic_id is required")
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.assign_task_to_epic(project_id, task_id, epic_id)
@@ -2036,16 +2062,17 @@ async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/pm/projects/{project_id}/tasks/{task_id}/remove-epic")
 async def pm_remove_task_from_epic(request: Request, project_id: str, task_id: str):
     """Remove a task from its epic"""
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.remove_task_from_epic(project_id, task_id)
@@ -2067,21 +2094,22 @@ async def pm_remove_task_from_epic(request: Request, project_id: str, task_id: s
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/pm/projects/{project_id}/tasks/{task_id}/assign-sprint")
 async def pm_assign_task_to_sprint(request: Request, project_id: str, task_id: str):
     """Assign a task to a sprint"""
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         sprint_data = await request.json()
         sprint_id = sprint_data.get("sprint_id")
         if not sprint_id:
             raise HTTPException(status_code=400, detail="sprint_id is required")
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.assign_task_to_sprint(project_id, task_id, sprint_id)
@@ -2144,16 +2172,17 @@ async def pm_assign_task_to_user(project_id: str, task_id: str, payload: TaskAss
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/pm/projects/{project_id}/tasks/{task_id}/move-to-backlog")
 async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: str):
     """Move a task to the backlog"""
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.move_task_to_backlog(project_id, task_id)
@@ -2175,16 +2204,17 @@ async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: st
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/api/pm/projects/{project_id}/epics/{epic_id}")
 async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
     """Delete an epic for a project"""
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             success = await handler.delete_project_epic(project_id, epic_id)
@@ -2219,10 +2249,10 @@ async def pm_list_labels(request: Request, project_id: str):
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             return await handler.list_project_labels(project_id)
@@ -2255,18 +2285,18 @@ async def pm_list_statuses(
 ):
     """
     Get list of available statuses for an entity type in a project.
-    
+
     This is used by UI/UX to create status columns in Kanban boards and combo boxes.
-    
+
     Returns status objects with id, name, color, etc.
     """
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             logger.info(f"[pm_list_statuses] project_id={project_id}")
@@ -2300,29 +2330,33 @@ async def pm_list_priorities(
 ):
     """
     Get list of available priorities for a project.
-    
+
     This is used by UI/UX to populate priority dropdowns/selectors.
-    
+
     Returns priority objects with id, name, color, etc.
     """
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             handler = PMHandler.from_db_session(db)
             logger.info(f"Listing priorities for project_id: {project_id}")
             priorities = await handler.list_project_priorities(project_id)
-            logger.info(f"Found {len(priorities)} priorities for project {project_id}")
+            logger.info(
+                f"Found {len(priorities)} priorities for project {project_id}"
+            )
             return {"priorities": priorities}
         finally:
             db.close()
     except ValueError as ve:
         error_msg = str(ve)
-        logger.error(f"ValueError listing priorities for {project_id}: {error_msg}")
+        logger.error(
+            f"ValueError listing priorities for {project_id}: {error_msg}"
+        )
         if "Invalid provider ID format" in error_msg:
             raise HTTPException(status_code=400, detail=error_msg)
         elif "Provider not found" in error_msg:
@@ -2348,67 +2382,66 @@ async def pm_chat_stream(request: Request):
         from src.conversation.flow_manager import ConversationFlowManager
         from database.connection import get_db_session
         from fastapi.responses import StreamingResponse
-        import asyncio
         import json
         import uuid
         import time
-            
+
         try:
             body = await request.json()
         except Exception as e:
             logger.error(f"Failed to parse request body: {e}")
             raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
-        
+
         # Validate required fields
         messages = body.get("messages", [])
         if not messages or not isinstance(messages, list) or len(messages) == 0:
             raise HTTPException(status_code=400, detail="messages array is required and cannot be empty")
-        
+
         user_message = messages[0].get("content", "")
         if not user_message or not isinstance(user_message, str):
             raise HTTPException(status_code=400, detail="Message content is required and must be a string")
-        
+
         # Note: We don't strip project_id here - let the agent decide based on tool descriptions
-        # The tool description and prompts should guide the agent to ignore project_id 
+        # The tool description and prompts should guide the agent to ignore project_id
         # when the user asks for "all my tasks" vs "my tasks in project X"
-        
+
         thread_id = body.get("thread_id", str(uuid.uuid4()))
         mcp_settings = body.get("mcp_settings", {})
-        
-        logger.info(f"[PM-CHAT] Starting auto-injection check...")
+
+        logger.info("[PM-CHAT] Starting auto-injection check...")
         logger.info(
             f"[PM-CHAT] Initial mcp_settings keys: {list(mcp_settings.keys())}, has_servers: {bool(mcp_settings.get('servers'))}"
         )
-        
+
         # For PM chat, always enable MCP for PM tools (even if global setting is disabled)
         # This ensures PM MCP tools are always available for PM chat endpoint
-        mcp_enabled_for_pm = True  # Always enable for PM chat
-        
+        # Note: mcp_enabled_for_pm is always True for PM chat endpoint
+
         # Auto-inject PM MCP server if not already configured
         # This ensures PM tools are always available for PM chat
         has_servers = bool(mcp_settings.get("servers"))
         has_pm_server = "pm-server" in mcp_settings.get("servers", {})
-        
+
         # Check if existing pm-server has SSE config (if not, we should override it)
         existing_pm_server = mcp_settings.get("servers", {}).get("pm-server", {}) if has_pm_server else {}
         existing_has_sse = existing_pm_server.get("transport") in ["sse", "http", "streamable_http"] and "url" in existing_pm_server
-        
+
         # Define all PM tool names FIRST (before checking if we need to inject)
         # These match the tools registered in the PM MCP server
         all_tool_names = [
             # Provider configuration tools (MUST be first for workflow)
             "list_providers", "configure_pm_provider",
             # Project tools
-            "list_projects", "get_project", "create_project", 
+            "list_projects", "get_project", "create_project",
             "update_project", "delete_project", "search_projects",
             # Task tools
             "list_my_tasks", "list_tasks", "get_task", "create_task",
-            "update_task", "delete_task", "assign_task", 
+            "update_task", "delete_task", "assign_task",
             "update_task_status", "search_tasks",
             # Sprint tools
             "list_sprints", "get_sprint", "create_sprint",
             "update_sprint", "delete_sprint", "start_sprint",
-            "complete_sprint", "add_task_to_sprint", 
+            "complete_sprint", "add_task_to_sprint",
             "remove_task_from_sprint", "get_sprint_tasks",
             # Epic tools
             "list_epics", "get_epic", "create_epic",
@@ -2426,30 +2459,69 @@ async def pm_chat_stream(request: Request):
             "add_task_comment", "get_task_comments", "add_task_watcher",
             "bulk_update_tasks", "link_related_tasks",
         ]
-        
+
         # Check if we need to inject or update
         # Always update if: no servers, no pm-server, no SSE config, OR tool count is wrong
         existing_enabled_tools = existing_pm_server.get("enabled_tools", [])
         has_correct_tool_count = len(existing_enabled_tools) == len(all_tool_names)
         has_list_providers = "list_providers" in existing_enabled_tools
         has_configure_pm_provider = "configure_pm_provider" in existing_enabled_tools
-        
+
         needs_injection = (
-            not mcp_settings.get("servers") 
-            or "pm-server" not in mcp_settings.get("servers", {}) 
+            not mcp_settings.get("servers")
+            or "pm-server" not in mcp_settings.get("servers", {})
             or not existing_has_sse
             or not has_correct_tool_count
             or not has_list_providers
             or not has_configure_pm_provider
         )
-        
+
         logger.info(
             f"[PM-CHAT] Auto-inject check: has_servers={has_servers}, has_pm_server={has_pm_server}, "
             f"existing_has_sse={existing_has_sse}, existing_tool_count={len(existing_enabled_tools)}, "
             f"expected_tool_count={len(all_tool_names)}, has_list_providers={has_list_providers}, "
             f"has_configure_pm_provider={has_configure_pm_provider}, needs_injection={needs_injection}"
         )
-        
+
+        # CRITICAL: Always ensure headers are added, even if injection isn't needed
+        # Headers are required for MCP server authentication
+        pm_mcp_url = get_str_env("PM_MCP_SERVER_URL", "") or None
+        pm_mcp_transport = get_str_env("PM_MCP_TRANSPORT", "stdio")
+        mcp_api_key = get_str_env("PM_MCP_API_KEY", "") or None
+
+        # Build headers for authentication (always needed for SSE transport)
+        headers = {}
+        if mcp_api_key and pm_mcp_url and pm_mcp_transport in [
+                "sse", "http", "streamable_http"
+        ]:
+            headers["X-MCP-API-Key"] = mcp_api_key
+            logger.info(
+                f"[PM-CHAT] Adding MCP API key to headers "
+                f"(key length: {len(mcp_api_key)})"
+            )
+        elif not mcp_api_key and pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
+            logger.warning(
+                "[PM-CHAT] PM_MCP_API_KEY is None or empty! "
+                "MCP server authentication will fail."
+            )
+
+        # Try to get user_id from request headers
+        user_id = None
+        try:
+            user_id = request.headers.get("X-User-ID")
+        except Exception:
+            pass
+
+        if user_id:
+            headers["X-User-ID"] = user_id
+            logger.info(f"[PM-CHAT] Passing user_id via headers: {user_id}")
+
+        if headers:
+            logger.info(
+                f"[PM-CHAT] Headers dict created with {len(headers)} header(s): "
+                f"{list(headers.keys())}"
+            )
+
         # Always inject/update PM MCP server config to ensure latest tool list is used
         # This ensures list_providers and configure_pm_provider are always included
         if needs_injection:
@@ -2457,64 +2529,40 @@ async def pm_chat_stream(request: Request):
                 # Ensure servers dict exists
                 if "servers" not in mcp_settings:
                     mcp_settings["servers"] = {}
-                
+
                 # all_tool_names is already defined above (line 2402)
-                # Determine transport and connection method
-                # Priority: 1) Environment variable (Docker/remote), 2) Local stdio (development)
-                pm_mcp_url = get_str_env("PM_MCP_SERVER_URL", None)
-                pm_mcp_transport = get_str_env("PM_MCP_TRANSPORT", "stdio")
-                
+                # pm_mcp_url, pm_mcp_transport, mcp_api_key, user_id, and headers are already defined above
+
                 logger.info(
                     f"[PM-CHAT] MCP config check: url={pm_mcp_url}, transport={pm_mcp_transport}, "
                     f"url_is_set={bool(pm_mcp_url)}, transport_valid={pm_mcp_transport in ['sse', 'http', 'streamable_http']}"
                 )
-                
+
                 if pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
                     # Use HTTP/SSE transport (Docker or remote service)
                     # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
-                    
-                    # SECURITY: Authenticate backend connection to MCP server
-                    # The MCP server stores sensitive credentials (API keys, tokens) for PM providers
-                    # We must authenticate even for internal Docker network connections
-                    mcp_api_key = get_str_env("PM_MCP_API_KEY", None)
-                    if not mcp_api_key:
-                        logger.warning(
-                            "[PM-CHAT] PM_MCP_API_KEY not set! Backend connection to MCP server is unauthenticated. "
-                            "This is a security risk as the MCP server stores sensitive provider credentials. "
-                            "Set PM_MCP_API_KEY environment variable to enable authentication."
-                        )
-                    
-                    # Try to get user_id from request headers (for user-scoped provider configuration)
-                    # The SSE transport supports X-User-ID header for user authentication
-                    user_id = None
-                    try:
-                        user_id = request.headers.get("X-User-ID")
-                    except Exception:
-                        pass  # Request may not be available in this context
-                    
-                    # Build headers dict for MCP server connection
-                    headers = {}
-                    
-                    # SECURITY: Add MCP API key for backend authentication
-                    if mcp_api_key:
-                        headers["X-MCP-API-Key"] = mcp_api_key
-                        logger.debug("[PM-CHAT] Adding MCP API key to headers for backend authentication")
-                    
-                    # Add user_id header if available (for user-scoped provider configuration)
-                    if user_id:
-                        headers["X-User-ID"] = user_id
-                        logger.info(f"[PM-CHAT] Passing user_id via headers: {user_id}")
-                    
+                    # Headers are already created above (before needs_injection check)
+
                     mcp_settings["servers"]["pm-server"] = {
                         "transport": pm_mcp_transport,
                         "url": pm_mcp_url,
                         "enabled_tools": all_tool_names,  # This includes list_providers and configure_pm_provider
                         "add_to_agents": ["researcher", "coder"],
                     }
-                    # Add headers (API key for authentication, user_id for user-scoping)
+                    # CRITICAL: Always add headers (API key for authentication, user_id for user-scoping)
+                    # Headers are required for MCP server authentication
                     if headers:
                         mcp_settings["servers"]["pm-server"]["headers"] = headers
-                        logger.debug(f"[PM-CHAT] Added {len(headers)} header(s) to MCP server connection")
+                        # Log headers with masked API key for debugging
+                        masked_headers = {
+                            k: (v[:10] + '...' if len(v) > 10 else v)
+                            if k == 'X-MCP-API-Key' else v
+                            for k, v in headers.items()
+                        }
+                        logger.info(
+                            f"[PM-CHAT] Added {len(headers)} header(s) to MCP "
+                            f"server connection: {masked_headers}"
+                        )
                     logger.info(
                         f"[PM-CHAT] Auto-injected/updated PM MCP server via {pm_mcp_transport} at {pm_mcp_url} "
                         f"with {len(all_tool_names)} tools (includes list_providers, configure_pm_provider) (Docker/remote mode)"
@@ -2529,7 +2577,7 @@ async def pm_chat_stream(request: Request):
                     project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
                     script_path = os.path.join(project_root, "scripts", "run_pm_mcp_server.py")
                     python_cmd = sys.executable
-                    
+
                     # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
                     mcp_settings["servers"]["pm-server"] = {
                         "transport": "stdio",
@@ -2556,7 +2604,18 @@ async def pm_chat_stream(request: Request):
                     f"[PM-CHAT] Failed to auto-inject PM MCP server: {e}. "
                     "PM MCP tools may not be available."
                 )
-        
+        else:
+            # needs_injection = False, but we still need to ensure headers are added
+            if has_pm_server and headers and pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
+                # Update existing pm-server with headers
+                existing_headers = mcp_settings["servers"]["pm-server"].get("headers")
+                if not existing_headers or not existing_headers.get("X-MCP-API-Key"):
+                    mcp_settings["servers"]["pm-server"]["headers"] = headers
+                    logger.info(
+                        f"[PM-CHAT] Added {len(headers)} header(s) to existing pm-server config "
+                        f"(injection not needed, but headers were missing)"
+                    )
+
         locale = body.get("locale", "en-US")
         max_search_results = body.get("max_search_results", 3)
         max_step_num = body.get("max_step_num", 3)
@@ -2566,7 +2625,7 @@ async def pm_chat_stream(request: Request):
         enable_clarification = body.get("enable_clarification", False)
         max_clarification_rounds = body.get("max_clarification_rounds", 3)
         report_style_str = body.get("report_style", "academic")
-            
+
         # Get database session
         try:
             db_gen = get_db_session()
@@ -2579,7 +2638,7 @@ async def pm_chat_stream(request: Request):
                 status_code=503,
                 detail=f"Database connection failed: {str(e)}"
             )
-            
+
         try:
             # Use global flow manager singleton to maintain session contexts
             global flow_manager
@@ -2591,30 +2650,32 @@ async def pm_chat_stream(request: Request):
                     )
                 fm = flow_manager
             except Exception as e:
-                logger.error(f"Failed to initialize ConversationFlowManager: {e}")
+                logger.error(
+                    f"Failed to initialize ConversationFlowManager: {e}"
+                )
                 import traceback
                 logger.error(traceback.format_exc())
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to initialize conversation manager: {str(e)}"
                 )
-                
+
             async def generate_stream() -> AsyncIterator[str]:
                 """Generate SSE stream of chat responses with progress."""
                 api_start = time.time()
                 logger.info("[PM-CHAT-TIMING] generate_stream started")
-                    
+
                 try:
                     # Option 2: Route everything to DeerFlow (skip PM plan generation)
                     # This avoids project ID errors for research queries
                     # All queries go through DeerFlow agents which decide what tools to use
                     needs_research = True  # Always route to DeerFlow with Option 2
-                    
+
                     logger.info(
                         f"[PM-CHAT-TIMING] Routing to DeerFlow (Option 2) - "
                         f"{time.time() - api_start:.2f}s"
                     )
-                        
+
                     # Route all queries to DeerFlow
                     if needs_research:
                         initial_chunk = {
@@ -2629,7 +2690,7 @@ async def pm_chat_stream(request: Request):
                         }
                         yield "event: message_chunk\n"
                         yield f"data: {json.dumps(initial_chunk)}\n\n"
-                            
+
                         try:
                             # Ensure PM handler is set for tools before agents run
                             if fm.pm_handler:
@@ -2639,21 +2700,21 @@ async def pm_chat_stream(request: Request):
                                     "[PM-CHAT-TIMING] PM handler set for "
                                     "DeerFlow agents"
                                 )
-                            
+
                             # Use original message for research query (Option 2: agents decide what to do)
                             research_query = user_message
-                                
+
                             research_start = time.time()
                             logger.info(
                                 f"[PM-CHAT-TIMING] Starting DeerFlow "
                                 f"research: {time.time() - api_start:.2f}s"
                             )
                             final_research_state = None
-                                
+
                             # Use _astream_workflow_generator to get properly
                             # formatted research events
                             from src.config.report_style import ReportStyle
-                            
+
                             # Convert report_style string to enum
                             report_style_map = {
                                 "academic": ReportStyle.ACADEMIC,
@@ -2663,12 +2724,12 @@ async def pm_chat_stream(request: Request):
                                 "strategic_investment": ReportStyle.STRATEGIC_INVESTMENT,
                             }
                             report_style = report_style_map.get(report_style_str, ReportStyle.ACADEMIC)
-                            
+
                             logger.info(
                                 f"[PM-CHAT] Using mcp_settings: {bool(mcp_settings)}, "
                                 f"locale: {locale}, report_style: {report_style_str}"
                             )
-                                
+
                             async for event in _astream_workflow_generator(
                                 messages=[
                                     {"role": "user", "content": research_query}
@@ -2691,12 +2752,12 @@ async def pm_chat_stream(request: Request):
                             ):
                                 # Yield formatted DeerFlow events directly
                                 yield event
-                                
+
                             # Collect final state for storing research context
                             final_research_state = {
                                 "final_report": "Research completed"
                             }
-                                
+
                             # Store research result
                             if final_research_state:
                                 from src.conversation.flow_manager import (
@@ -2705,7 +2766,7 @@ async def pm_chat_stream(request: Request):
                                     IntentType,
                                 )
                                 from datetime import datetime
-                                    
+
                                 if thread_id not in fm.contexts:
                                     fm.contexts[thread_id] = (
                                         ConversationContext(
@@ -2721,7 +2782,7 @@ async def pm_chat_stream(request: Request):
                                             updated_at=datetime.now()
                                         )
                                     )
-                                    
+
                                 context = fm.contexts[thread_id]
                                 context.gathered_data['research_context'] = (
                                     "Research completed"
@@ -2739,14 +2800,14 @@ async def pm_chat_stream(request: Request):
                                 f"[PM-CHAT-TIMING] DeerFlow research "
                                 f"completed: {research_duration:.2f}s"
                             )
-                            
+
                         except Exception as research_error:
                             logger.error(
                                 f"DeerFlow streaming failed: {research_error}"
                             )
                             import traceback
                             logger.error(traceback.format_exc())
-                            
+
                             # Yield error message to client
                             error_chunk = {
                                 "id": str(uuid.uuid4()),
@@ -2761,7 +2822,7 @@ async def pm_chat_stream(request: Request):
                             }
                             yield "event: message_chunk\n"
                             yield f"data: {json.dumps(error_chunk)}\n\n"
-                        
+
                         # Option 2: All queries handled by DeerFlow, skip process_message
                         # This avoids project ID errors for research queries
                         logger.info(
@@ -2769,12 +2830,12 @@ async def pm_chat_stream(request: Request):
                             "DeerFlow handled the query"
                         )
                         # DeerFlow already streamed all responses, so we're done
-                        
+
                     logger.info(
                         f"[PM-CHAT-TIMING] Total response time: "
                         f"{time.time() - api_start:.2f}s"
                     )
-                    
+
                 except Exception as e:
                     error_message = f"Error: {str(e)}"
                     error_data = {
@@ -2787,7 +2848,7 @@ async def pm_chat_stream(request: Request):
                     }
                     yield "event: message_chunk\n"
                     yield f"data: {json.dumps(error_data)}\n\n"
-                
+
             return StreamingResponse(
                 generate_stream(),
                 media_type="text/event-stream",
@@ -2798,7 +2859,7 @@ async def pm_chat_stream(request: Request):
             )
         finally:
             db.close()
-        
+
     except Exception as e:
         logger.error(f"PM chat error: {e}")
         import traceback
@@ -2812,22 +2873,22 @@ async def pm_chat_stream(request: Request):
 async def pm_list_providers(include_credentials: bool = False):
     """
     List all configured PM providers.
-    
+
     Args:
         include_credentials: If True, include API keys/tokens in response (for LLM to sync to MCP server)
     """
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             providers = db.query(PMProviderConnection).filter(
                 PMProviderConnection.is_active.is_(True)
             ).all()
-            
+
             result = []
             for p in providers:
                 provider_data = {
@@ -2847,7 +2908,7 @@ async def pm_list_providers(include_credentials: bool = False):
                     if p.api_token:
                         provider_data["api_token"] = p.api_token
                 result.append(provider_data)
-            
+
             return result
         finally:
             db.close()
@@ -2857,7 +2918,7 @@ async def pm_list_providers(include_credentials: bool = False):
         logger.error(f"Failed to list providers: {error_msg}")
         import traceback
         logger.error(traceback.format_exc())
-        
+
         # Return proper error response so the issue can be identified
         # and fixed immediately
         if "connection" in error_msg.lower() or "Connection refused" in error_msg:
@@ -2883,10 +2944,10 @@ async def pm_import_projects(request: ProjectImportRequest):
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
         from src.pm_providers.factory import create_pm_provider
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             # Create provider config
             provider = PMProviderConnection(
@@ -2903,7 +2964,7 @@ async def pm_import_projects(request: ProjectImportRequest):
             db.add(provider)
             db.commit()
             db.refresh(provider)
-            
+
             # Create provider instance and import projects
             provider_instance = create_pm_provider(
                 provider_type=request.provider_type,
@@ -2914,7 +2975,7 @@ async def pm_import_projects(request: ProjectImportRequest):
                 organization_id=request.organization_id,
                 workspace_id=request.workspace_id,
             )
-            
+
             try:
                 projects = await provider_instance.list_projects()
             except Exception as api_error:
@@ -2952,7 +3013,7 @@ async def pm_import_projects(request: ProjectImportRequest):
                         status_code=500,
                         detail=f"Failed to fetch projects: {error_msg}"
                     )
-            
+
             return {
                 "success": True,
                 "provider_config_id": str(provider.id),
@@ -2996,10 +3057,10 @@ async def pm_get_provider_projects(provider_id: str):
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
         from src.pm_providers.factory import create_pm_provider
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             from uuid import UUID
             try:
@@ -3008,28 +3069,28 @@ async def pm_get_provider_projects(provider_id: str):
                 raise HTTPException(
                     status_code=400, detail="Invalid provider ID format"
                 )
-            
+
             provider = db.query(PMProviderConnection).filter(
                 PMProviderConnection.id == provider_uuid,
                 PMProviderConnection.is_active.is_(True)
             ).first()
-            
+
             if not provider:
                 raise HTTPException(
                     status_code=404, detail="Provider not found"
                 )
-            
+
             # Prepare API key - handle empty strings and None
             api_key_value = None
             if provider.api_key:
                 api_key_str = str(provider.api_key).strip()
                 api_key_value = api_key_str if api_key_str else None
-            
+
             api_token_value = None
             if provider.api_token:
                 api_token_str = str(provider.api_token).strip()
                 api_token_value = api_token_str if api_token_str else None
-            
+
             # Log API key status (masked for security)
             has_api_key = bool(api_key_value)
             has_api_token = bool(api_token_value)
@@ -3040,7 +3101,7 @@ async def pm_get_provider_projects(provider_id: str):
                 f"has_api_token={has_api_token}, "
                 f"username={provider.username}"
             )
-            
+
             # Create provider instance
             provider_instance = create_pm_provider(
                 provider_type=str(provider.provider_type),
@@ -3063,7 +3124,7 @@ async def pm_get_provider_projects(provider_id: str):
                     else None
                 ),
             )
-            
+
             try:
                 projects = await provider_instance.list_projects()
             except Exception as api_error:
@@ -3074,19 +3135,20 @@ async def pm_get_provider_projects(provider_id: str):
                     f"({provider.provider_type}): {error_msg}"
                 )
                 logger.error(traceback.format_exc())
-                
+
                 # Handle specific HTTP errors
                 # Check for 403 Forbidden errors (from requests library or custom messages)
                 # First check if the exception has a response attribute (requests.HTTPError)
                 status_code = None
-                if hasattr(api_error, 'response') and hasattr(api_error.response, 'status_code'):
-                    status_code = api_error.response.status_code
-                
+                if isinstance(api_error, requests.exceptions.HTTPError):
+                    if hasattr(api_error, 'response') and api_error.response is not None:
+                        status_code = api_error.response.status_code
+
                 # Check for 403 errors
                 if (
                     status_code == 403
-                    or "403" in error_msg 
-                    or "Forbidden" in error_msg 
+                    or "403" in error_msg
+                    or "Forbidden" in error_msg
                     or "forbidden" in error_msg.lower()
                 ):
                     # Use custom message if it contains "forbidden" or "permission"
@@ -3133,7 +3195,7 @@ async def pm_get_provider_projects(provider_id: str):
                         status_code=500,
                         detail=f"Failed to fetch projects: {error_msg}"
                     )
-            
+
             return [
                 {
                     "id": str(p.id),
@@ -3160,10 +3222,10 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             from uuid import UUID
             try:
@@ -3172,16 +3234,16 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
                 raise HTTPException(
                     status_code=400, detail="Invalid provider ID format"
                 )
-            
+
             provider = db.query(PMProviderConnection).filter(
                 PMProviderConnection.id == provider_uuid
             ).first()
-            
+
             if not provider:
                 raise HTTPException(
                     status_code=404, detail="Provider not found"
                 )
-            
+
             # Update fields if provided
             update_data = request.model_dump(exclude_unset=True)
             for key, value in update_data.items():
@@ -3196,10 +3258,10 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
                     elif value is None and key in ['api_key', 'api_token']:
                         # Explicitly allow None for API keys to clear them
                         setattr(provider, key, None)
-            
+
             db.commit()
             db.refresh(provider)
-            
+
             return {
                 "id": str(provider.id),
                 "name": provider.name,
@@ -3225,7 +3287,7 @@ async def pm_test_connection(request: ProjectImportRequest):
     """Test connection to a provider"""
     try:
         from src.pm_providers.factory import create_pm_provider
-        
+
         # Create provider instance
         provider_instance = create_pm_provider(
             provider_type=request.provider_type,
@@ -3236,10 +3298,10 @@ async def pm_test_connection(request: ProjectImportRequest):
             organization_id=request.organization_id,
             workspace_id=request.workspace_id,
         )
-        
+
         # Test by listing projects
         projects = await provider_instance.list_projects()
-        
+
         return {
             "success": True,
             "message": (
@@ -3261,10 +3323,10 @@ async def pm_delete_provider(provider_id: str):
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             from uuid import UUID
             try:
@@ -3273,20 +3335,20 @@ async def pm_delete_provider(provider_id: str):
                 raise HTTPException(
                     status_code=400, detail="Invalid provider ID format"
                 )
-            
+
             provider = db.query(PMProviderConnection).filter(
                 PMProviderConnection.id == provider_uuid
             ).first()
-            
+
             if not provider:
                 raise HTTPException(
                     status_code=404, detail="Provider not found"
                 )
-            
+
             # Soft delete by deactivating
             provider.is_active = False  # type: ignore
             db.commit()
-            
+
             return {"success": True, "message": "Provider deactivated"}
         finally:
             db.close()
@@ -3301,59 +3363,62 @@ async def pm_delete_provider(provider_id: str):
 # Analytics Endpoints
 # ============================================================================
 
-from src.analytics.service import AnalyticsService
-from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
-from database.orm_models import PMProviderConnection
-from src.server.pm_handler import PMHandler
-
 
 def get_analytics_service(project_id: str, db) -> AnalyticsService:
     """
     Get analytics service configured for the project's PM provider.
-    
+
     Args:
         project_id: Project ID (format: "uuid:project_key" or just "project_id")
         db: Database session
-    
+
     Returns:
         AnalyticsService configured with real data adapter
     """
     try:
         # Mock providers are no longer supported - all analytics require real providers
         if project_id.startswith("mock:"):
-            logger.warning(f"[Analytics] Mock projects are no longer supported: {project_id}")
+            logger.warning(
+                f"[Analytics] Mock projects are no longer supported: {project_id}"
+            )
             return AnalyticsService()  # Return empty service
-        
+
         # Parse project ID to get provider UUID
         if ":" not in project_id:
             # Invalid format - return empty data, not mock
-            logger.warning(f"Invalid project ID format: {project_id}, returning empty data")
+            logger.warning(
+                f"Invalid project ID format: {project_id}, returning empty data"
+            )
             return AnalyticsService()
-        
+
         provider_uuid, _ = project_id.split(":", 1)
-        
+
         # Get PM provider from database using UUID (id field is UUID type)
         provider_conn = db.query(PMProviderConnection).filter(
             PMProviderConnection.id == provider_uuid,
             PMProviderConnection.is_active.is_(True)
         ).first()
-        
+
         if not provider_conn:
-            logger.warning(f"Provider with UUID {provider_uuid} not found, returning empty data")
+            logger.warning(
+                f"Provider with UUID {provider_uuid} not found, returning empty data"
+            )
             return AnalyticsService()
-        
+
         # Create PM handler for this provider
         pm_handler = PMHandler.from_db_session(db)
         provider_instance = pm_handler._create_provider_instance(provider_conn)
-        
+
         # Create analytics adapter
         adapter = PMProviderAnalyticsAdapter(provider_instance)
-        
-        logger.info(f"[Analytics] Created analytics service with real data for project {project_id}")
-        
+
+        logger.info(
+            f"[Analytics] Created analytics service with real data for project {project_id}"
+        )
+
         # Return analytics service with real data
         return AnalyticsService(adapter=adapter)
-    
+
     except Exception as e:
         logger.error(f"Error creating analytics service for project {project_id}: {e}", exc_info=True)
         # Return empty data on error (no mock fallback)
@@ -3367,14 +3432,17 @@ async def get_burndown_chart(
     scope_type: str = "story_points"
 ):
     """Get burndown chart for a project/sprint"""
-    logger.info(f"[get_burndown_chart] ========== BURNDOWN REQUEST START ==========")
-    logger.info(f"[get_burndown_chart] project_id={project_id}, sprint_id={sprint_id}, scope_type={scope_type}")
+    logger.info("[get_burndown_chart] ========== BURNDOWN REQUEST START ==========")
+    logger.info(
+        f"[get_burndown_chart] project_id={project_id}, "
+        f"sprint_id={sprint_id}, scope_type={scope_type}"
+    )
     try:
         from database.connection import get_db_session
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             analytics_service = get_analytics_service(project_id, db)
             # Extract actual project ID if in provider_id:project_id format
@@ -3383,13 +3451,16 @@ async def get_burndown_chart(
                 if ":" in project_id
                 else project_id
             )
-            logger.info(f"[get_burndown_chart] Using actual_project_id={actual_project_id}, sprint_id={sprint_id}")
+            logger.info(
+                f"[get_burndown_chart] Using actual_project_id="
+                f"{actual_project_id}, sprint_id={sprint_id}"
+            )
             chart = await analytics_service.get_burndown_chart(
                 project_id=actual_project_id,
                 sprint_id=sprint_id,
                 scope_type=scope_type  # type: ignore
             )
-            logger.info(f"[get_burndown_chart] Success: returning chart data")
+            logger.info("[get_burndown_chart] Success: returning chart data")
             return chart.model_dump()
         finally:
             try:
@@ -3411,10 +3482,10 @@ async def get_velocity_chart(
     """Get velocity chart for a project"""
     try:
         from database.connection import get_db_session
-        
+
         db_gen = get_db_session()
         db = next(db_gen)
-        
+
         try:
             analytics_service = get_analytics_service(project_id, db)
             # Extract actual project ID if in provider_id:project_id format
@@ -3602,7 +3673,10 @@ async def get_work_distribution_chart(
         logger.warning("Work distribution chart unavailable: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to get work distribution chart: {e}", exc_info=True)
+        logger.error(
+            f"Failed to get work distribution chart: {e}",
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -143,7 +143,7 @@ export async function listProviders(): Promise<ProviderConfig[]> {
     throw new Error("Invalid response format: expected an array of providers");
   }
   
-  const mapped = data.map((p: any) => {
+  const mappedProviders: (ProviderConfig | null)[] = data.map((p: any) => {
     if (!p || !p.id || !p.provider_type) {
       console.warn("[listProviders] Invalid provider data:", p);
       return null;
@@ -158,7 +158,11 @@ export async function listProviders(): Promise<ProviderConfig[]> {
       // api_key and api_token are not returned from list endpoint for security
       // They will be retrieved when needed for project loading
     };
-  }).filter((p): p is ProviderConfig => p !== null);
+  });
+  
+  const mapped: ProviderConfig[] = mappedProviders.filter(
+    (p): p is ProviderConfig => p !== null
+  );
   
   console.log('[listProviders] Mapped providers:', mapped);
   return mapped;

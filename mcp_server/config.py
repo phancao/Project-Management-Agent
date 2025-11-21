@@ -32,7 +32,10 @@ class PMServerConfig:
     port: int = 8080
     
     # Authentication
-    enable_auth: bool = False
+    # Default to True for security - API keys are required for third-party providers
+    enable_auth: bool = field(
+        default_factory=lambda: os.getenv("MCP_ENABLE_AUTH", "true").lower() == "true"
+    )
     auth_token_secret: str = field(
         default_factory=lambda: os.getenv("MCP_AUTH_SECRET", "")
     )

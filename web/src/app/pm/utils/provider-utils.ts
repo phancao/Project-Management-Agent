@@ -53,7 +53,7 @@ export function extractProviderId(projectId: string | undefined): string | null 
   if (!projectId) return null;
   if (projectId.startsWith("mock:")) return "mock";
   const parts = projectId.split(":");
-  return parts.length >= 2 ? parts[0] : null;
+  return parts.length >= 2 ? (parts[0] || null) : null;
 }
 
 /**

@@ -3,7 +3,7 @@
 
 import { useMemo } from "react";
 import { usePMLoading } from "~/app/pm/context/pm-loading-context";
-import type { ProviderConfig } from "~/core/api/pm/providers";
+import type { ProviderConfig as PMProviderConfig } from "~/app/pm/types";
 
 export interface ProviderMappings {
   typeMap: Map<string, string>;
@@ -16,7 +16,7 @@ export interface ProviderMappings {
  * Returns providers and pre-computed mappings for efficient lookups
  */
 export function useProviders(): {
-  providers: ProviderConfig[];
+  providers: PMProviderConfig[];
   loading: boolean;
   error: Error | null;
   mappings: ProviderMappings;

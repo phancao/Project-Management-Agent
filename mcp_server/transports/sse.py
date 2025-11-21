@@ -23,22 +23,8 @@ from starlette.responses import Response
 
 from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
-
-# Import validate_mcp_api_key from auth.py module
-# The auth package's __init__.py should re-export it from auth.py
-# If that doesn't work, we'll import it directly from the package
-try:
-    # Try importing from the auth package (which should have it from __init__.py)
-    from mcp_server.auth import validate_mcp_api_key
-    if validate_mcp_api_key is None:
-        raise ImportError("validate_mcp_api_key is None")
-except (ImportError, AttributeError):
-    # If package import fails, the package's __init__.py should handle it
-    # But as a last resort, try importing the function directly
-    validate_mcp_api_key = None
-    import logging
-    _logger = logging.getLogger(__name__)
-    _logger.error("[SSE] Failed to import validate_mcp_api_key from mcp_server.auth package")
+from ..services.auth_service import AuthService
+from ..services.user_context import UserContext
 
 logger = logging.getLogger(__name__)
 
@@ -120,62 +106,18 @@ def create_sse_app(pm_handler: MCPPMHandler, config: PMServerConfig, mcp_server_
         from sse_starlette import EventSourceResponse
         
         try:
-            # Extract user ID from request
-            user_id = None
+            # Extract user ID using authentication service
+            # Determine if auth is required based on config
+            require_auth = AuthService.should_require_auth(config)
+            user_id = await AuthService.extract_user_id(request, require_auth=require_auth)
             
-            # Method 1: MCP API Key (recommended for external clients)
-            api_key = (
-                request.headers.get("X-MCP-API-Key") or
-                request.headers.get("Authorization") or
-                request.query_params.get("api_key")
-            )
-            
-            if api_key:
-                try:
-                    # Use the pre-imported validate_mcp_api_key function
-                    if validate_mcp_api_key is None:
-                        logger.error("[SSE] validate_mcp_api_key is not available - import failed")
-                    else:
-                        user_id = await validate_mcp_api_key(api_key)
-                        if user_id:
-                            logger.info(f"[SSE] User identified via API key: {user_id}")
-                except Exception as e:
-                    logger.warning(f"[SSE] API key validation failed: {e}", exc_info=True)
-            
-            # Method 2: Direct user ID (for internal/testing - only if API key validation failed)
-            # Note: Direct user ID is less secure, prefer API key authentication
-            if not user_id:
-                user_id = (
-                    request.headers.get("X-User-ID") or 
-                    request.query_params.get("user_id")
-                )
-                if user_id:
-                    logger.info(f"[SSE] User ID provided directly: {user_id}")
-            
-            # SECURITY: Authentication is now REQUIRED
-            # Reject connections without valid authentication
-            if not user_id:
-                logger.warning("[SSE] Unauthenticated connection attempt rejected")
-                raise HTTPException(
-                    status_code=401,
-                    detail=(
-                        "Authentication required. "
-                        "Please provide X-MCP-API-Key header with a valid API key, "
-                        "or X-User-ID header for direct user authentication."
-                    )
-                )
-            
-            # Create user-scoped MCP server instance (authentication successful)
-            logger.info(f"[SSE] Creating user-scoped MCP server for user: {user_id}")
-            from ..server import PMMCPServer
-            from ..config import PMServerConfig
-            user_config = PMServerConfig.from_env()
-            mcp_server = PMMCPServer(config=user_config, user_id=user_id)
-            # Initialize PM handler with user context
-            mcp_server._initialize_pm_handler()
-            # Register tools
-            mcp_server._register_all_tools()
-            logger.info(f"[SSE] User-scoped MCP server initialized for user: {user_id}")
+            # Create user-scoped MCP server instance
+            if user_id:
+                mcp_server = UserContext.create_user_scoped_server(user_id, config)
+            else:
+                # Fallback to global server (backward compatibility, not recommended)
+                logger.warning("[SSE] Using global MCP server instance (no user context)")
+                mcp_server = app.state.mcp_server
             
             if not mcp_server:
                 raise HTTPException(

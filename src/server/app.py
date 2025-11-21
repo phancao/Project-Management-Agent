@@ -3042,6 +3042,16 @@ async def pm_import_projects(request: ProjectImportRequest):
                     )
                 )
             
+            # For JIRA, username (email) is also required
+            if request.provider_type == "jira" and not request.username:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Email address (username) is required for JIRA. "
+                        "For JIRA Cloud, use your email address."
+                    )
+                )
+            
             # Test connection before saving - create provider instance and verify it works
             try:
                 provider_instance = create_pm_provider(
@@ -3405,27 +3415,84 @@ async def pm_test_connection(request: ProjectImportRequest):
     try:
         from src.pm_providers.factory import create_pm_provider
         
+        # Validate API key/token is provided
+        if not request.api_key and not request.api_token:
+            return {
+                "success": False,
+                "message": "API key or token is required"
+            }
+        
+        # For JIRA, username (email) is also required
+        if request.provider_type == "jira" and not request.username:
+            return {
+                "success": False,
+                "message": "Email address (username) is required for JIRA. For JIRA Cloud, use your email address."
+            }
+        
+        # Normalize base_url
+        normalized_base_url = request.base_url.rstrip('/') if request.base_url else ""
+        if not normalized_base_url:
+            return {
+                "success": False,
+                "message": "Base URL is required"
+            }
+        
         # Create provider instance
-        provider_instance = create_pm_provider(
-            provider_type=request.provider_type,
-            base_url=request.base_url,
-            api_key=request.api_key,
-            api_token=request.api_token,
-            username=request.username,
-            organization_id=request.organization_id,
-            workspace_id=request.workspace_id,
-        )
+        try:
+            provider_instance = create_pm_provider(
+                provider_type=request.provider_type,
+                base_url=normalized_base_url,
+                api_key=request.api_key,
+                api_token=request.api_token,
+                username=request.username,
+                organization_id=request.organization_id,
+                workspace_id=request.workspace_id,
+            )
+        except ValueError as ve:
+            error_msg = str(ve)
+            if "requires" in error_msg.lower() and ("api_key" in error_msg.lower() or "api_token" in error_msg.lower()):
+                return {
+                    "success": False,
+                    "message": "API key or token is required for this provider"
+                }
+            return {
+                "success": False,
+                "message": f"Invalid provider configuration: {error_msg}"
+            }
         
         # Test by listing projects
-        projects = await provider_instance.list_projects()
-        
-        return {
-            "success": True,
-            "message": (
-                f"Connection successful. "
-                f"Found {len(projects)} project(s)."
-            ),
-        }
+        try:
+            projects = await provider_instance.list_projects()
+            return {
+                "success": True,
+                "message": (
+                    f"Connection successful. "
+                    f"Found {len(projects)} project(s)."
+                ),
+            }
+        except Exception as api_error:
+            error_msg = str(api_error)
+            # Handle specific HTTP errors
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                return {
+                    "success": False,
+                    "message": "Authentication failed. Please check your API key/token."
+                }
+            elif "404" in error_msg or "Not Found" in error_msg:
+                return {
+                    "success": False,
+                    "message": "Provider API endpoint not found. Please check the base URL."
+                }
+            elif "Connection" in error_msg or "refused" in error_msg.lower():
+                return {
+                    "success": False,
+                    "message": "Cannot connect to provider. Please check if the service is running."
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"Connection failed: {error_msg}"
+                }
     except Exception as e:
         logger.error("Connection test failed: %s", e)
         return {

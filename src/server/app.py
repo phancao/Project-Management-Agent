@@ -3205,27 +3205,41 @@ async def pm_get_provider_projects(provider_id: str):
             )
             
             # Create provider instance
-            provider_instance = create_pm_provider(
-                provider_type=str(provider.provider_type),
-                base_url=str(provider.base_url),
-                api_key=api_key_value,
-                api_token=api_token_value,
-                username=(
-                    str(provider.username).strip()
-                    if provider.username
-                    else None
-                ),
-                organization_id=(
-                    str(provider.organization_id)
-                    if provider.organization_id
-                    else None
-                ),
-                workspace_id=(
-                    str(provider.workspace_id)
-                    if provider.workspace_id
-                    else None
-                ),
-            )
+            try:
+                provider_instance = create_pm_provider(
+                    provider_type=str(provider.provider_type),
+                    base_url=str(provider.base_url),
+                    api_key=api_key_value,
+                    api_token=api_token_value,
+                    username=(
+                        str(provider.username).strip()
+                        if provider.username
+                        else None
+                    ),
+                    organization_id=(
+                        str(provider.organization_id)
+                        if provider.organization_id
+                        else None
+                    ),
+                    workspace_id=(
+                        str(provider.workspace_id)
+                        if provider.workspace_id
+                        else None
+                    ),
+                )
+            except ValueError as ve:
+                # Handle provider initialization errors (e.g., missing API key)
+                error_msg = str(ve)
+                if "requires" in error_msg.lower() and ("api_key" in error_msg.lower() or "api_token" in error_msg.lower()):
+                    return {
+                        "projects": [],
+                        "total": 0,
+                        "message": "API key or token is required. Please update the provider configuration with valid credentials."
+                    }
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid provider configuration: {error_msg}"
+                )
             
             try:
                 projects = await provider_instance.list_projects()

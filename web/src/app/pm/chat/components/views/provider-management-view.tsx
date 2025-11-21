@@ -57,6 +57,8 @@ export function ProviderManagementView() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [providerToDelete, setProviderToDelete] = useState<ProviderConfig | null>(null);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<ProjectImportRequest>({
@@ -164,19 +166,100 @@ export function ProviderManagementView() {
     setError(null);
   };
 
+  const validateApiKey = async (): Promise<boolean> => {
+    // Check if API key/token is required and provided
+    const needsApiKey = 
+      formData.provider_type === "openproject" ||
+      formData.provider_type === "openproject_v13" ||
+      formData.provider_type === "clickup";
+    const needsApiToken = formData.provider_type === "jira";
+    
+    if (needsApiKey && !formData.api_key?.trim()) {
+      setApiKeyError("API key is required");
+      return false;
+    }
+    
+    if (needsApiToken && !formData.api_token?.trim()) {
+      setApiKeyError("API token is required");
+      return false;
+    }
+    
+    // Test connection if API key/token is provided
+    if ((needsApiKey && formData.api_key?.trim()) || (needsApiToken && formData.api_token?.trim())) {
+      setIsValidating(true);
+      setApiKeyError(null);
+      
+      try {
+        const request: ProjectImportRequest = {
+          provider_type: formData.provider_type,
+          base_url: formData.base_url.trim(),
+          import_options: {
+            skip_existing: true,
+            auto_sync: false,
+          },
+        };
+        
+        if (needsApiKey) {
+          request.api_key = formData.api_key;
+        } else if (needsApiToken) {
+          request.api_token = formData.api_token;
+        }
+        
+        if (formData.username) {
+          request.username = formData.username;
+        }
+        
+        if (formData.organization_id) {
+          request.organization_id = formData.organization_id;
+        }
+        
+        if (formData.workspace_id) {
+          request.workspace_id = formData.workspace_id;
+        }
+        
+        const { testProviderConnection } = await import("~/core/api/pm/providers");
+        const result = await testProviderConnection(request);
+        
+        if (!result.success) {
+          setApiKeyError(result.message || "Connection test failed");
+          return false;
+        }
+        
+        setApiKeyError(null);
+        return true;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Connection test failed";
+        setApiKeyError(errorMessage);
+        return false;
+      } finally {
+        setIsValidating(false);
+      }
+    }
+    
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Prevent double submission
-    if (isLoading) {
+    if (isLoading || isValidating) {
       return;
     }
     
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
+    setApiKeyError(null);
 
     try {
+      // Validate API key first
+      const isValid = await validateApiKey();
+      if (!isValid) {
+        setIsLoading(false);
+        return;
+      }
+      
       // Prepare request based on provider type
       const request: ProjectImportRequest = {
         provider_type: formData.provider_type,

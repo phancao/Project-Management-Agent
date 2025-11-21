@@ -237,3 +237,20 @@ export async function testProviderConnection(
 
   return response.json();
 }
+
+export async function deleteProvider(providerId: string): Promise<void> {
+  const response = await fetch(
+    resolveServiceURL(`pm/providers/${providerId}`),
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to delete provider");
+  }
+}

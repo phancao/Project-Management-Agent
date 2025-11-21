@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from .database.models import PMProviderConnection
 from pm_providers.factory import create_pm_provider
 from pm_providers.base import BasePMProvider
-from pm_providers.models import PMTask, PMProject, PMSprint
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +42,7 @@ class MCPPMHandler:
         self.db = db_session
         self.user_id = user_id
         self._mode = "multi"  # MCP Server always uses multi-provider mode
+        self._last_provider_errors: List[Dict[str, Any]] = []  # Track provider errors
     
     def _get_active_providers(self) -> List[PMProviderConnection]:
         """
@@ -65,13 +65,19 @@ class MCPPMHandler:
             query = query.filter(
                 PMProviderConnection.created_by == self.user_id
             )
-            logger.info(f"[MCP PMHandler] Filtering providers by user_id: {self.user_id}")
+            logger.info(
+                "[MCP PMHandler] Filtering providers by user_id: %s",
+                self.user_id
+            )
         
         # Exclude mock providers - they are UI-only and not used in MCP Server
         query = query.filter(PMProviderConnection.provider_type != "mock")
         
         providers = query.all()
-        logger.info(f"[MCP PMHandler] Found {len(providers)} active provider(s) (mock providers excluded)")
+        logger.info(
+            "[MCP PMHandler] Found %d active provider(s) (mock providers excluded)",
+            len(providers)
+        )
         return providers
     
     def _create_provider_instance(self, provider: PMProviderConnection) -> BasePMProvider:
@@ -102,10 +108,11 @@ class MCPPMHandler:
             username_value = username_str if username_str else None
         
         logger.info(
-            f"[MCP PMHandler._create_provider_instance] Creating provider: "
-            f"type={provider.provider_type}, "
-            f"username={username_value}, "
-            f"has_api_token={bool(api_token_value)}"
+            "[MCP PMHandler._create_provider_instance] Creating provider: "
+            "type=%s, username=%s, has_api_token=%s",
+            provider.provider_type,
+            username_value,
+            bool(api_token_value)
         )
         
         # Mock providers are UI-only and should not be used in MCP Server
@@ -117,13 +124,13 @@ class MCPPMHandler:
             )
         
         return create_pm_provider(
-            provider_type=provider.provider_type,
-            base_url=provider.base_url,
+            provider_type=str(provider.provider_type),
+            base_url=str(provider.base_url),
             api_key=api_key_value,
             api_token=api_token_value,
             username=username_value,
-            organization_id=provider.organization_id,
-            workspace_id=provider.workspace_id,
+            organization_id=str(provider.organization_id) if provider.organization_id else None,
+            workspace_id=str(provider.workspace_id) if provider.workspace_id else None,
         )
     
     async def list_all_projects(self) -> List[Dict[str, Any]]:
@@ -161,13 +168,18 @@ class MCPPMHandler:
                         "provider_type": provider.provider_type,
                     })
                 logger.info(
-                    f"[MCP PMHandler] Successfully retrieved {len(projects)} projects "
-                    f"from provider {provider.id} ({provider.provider_type})"
+                    "[MCP PMHandler] Successfully retrieved %d projects "
+                    "from provider %s (%s)",
+                    len(projects),
+                    provider.id,
+                    provider.provider_type
                 )
-            except Exception as e:
+            except (ValueError, ConnectionError, RuntimeError) as e:
                 error_msg = str(e)
                 logger.error(
-                    f"[MCP PMHandler] Error listing projects from provider {provider.id}: {e}",
+                    "[MCP PMHandler] Error listing projects from provider %s: %s",
+                    provider.id,
+                    e,
                     exc_info=True
                 )
                 # Store error info for reporting
@@ -188,7 +200,6 @@ class MCPPMHandler:
         self,
         project_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
-        status: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         List all tasks from all active providers.
@@ -230,7 +241,6 @@ class MCPPMHandler:
                 tasks = await provider_instance.list_tasks(
                     project_id=actual_project_id,
                     assignee_id=assignee_id,
-                    status=status,
                 )
                 
                 # Prefix task ID with provider_id
@@ -249,15 +259,17 @@ class MCPPMHandler:
                             if t.priority and hasattr(t.priority, 'value')
                             else str(t.priority) if t.priority else "None"
                         ),
-                        "assignee": t.assignee or "",
+                        "assignee": getattr(t, "assignee", None) or getattr(t, "assignee_id", None) or "",
                         "project_id": f"{provider.id}:{t.project_id}",
                         "project_name": project_map.get(str(t.project_id), ""),
                         "provider_id": str(provider.id),
                         "provider_type": provider.provider_type,
                     })
-            except Exception as e:
+            except (ValueError, ConnectionError, RuntimeError) as e:
                 logger.error(
-                    f"[MCP PMHandler] Error listing tasks from provider {provider.id}: {e}",
+                    "[MCP PMHandler] Error listing tasks from provider %s: %s",
+                    provider.id,
+                    e,
                     exc_info=True
                 )
                 continue

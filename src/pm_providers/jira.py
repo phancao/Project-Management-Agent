@@ -104,9 +104,17 @@ class JIRAProvider(BasePMProvider):
             projects_data = response.json()
             logger.info(f"JIRA: Received response type: {type(projects_data)}, length: {len(projects_data) if isinstance(projects_data, list) else 'N/A'}")
             
+            # Log first few characters of response for debugging (but not full response for security)
+            if isinstance(projects_data, list):
+                logger.info(f"JIRA: Response is a list with {len(projects_data)} items")
+                if len(projects_data) > 0:
+                    logger.info(f"JIRA: First project keys: {[p.get('key', 'N/A') for p in projects_data[:3]]}")
+            elif isinstance(projects_data, dict):
+                logger.info(f"JIRA: Response is a dict with keys: {list(projects_data.keys())[:10]}")
+            
             # Handle empty response
             if not projects_data:
-                logger.info("JIRA: Empty response, breaking loop")
+                logger.warning("JIRA: Empty response from API - this might indicate no projects exist or permission issues")
                 break
             
             # Response is typically a list of projects

@@ -3164,10 +3164,11 @@ async def pm_get_provider_projects(provider_id: str):
                 
                 # Handle specific HTTP errors
                 # Check for 403 Forbidden errors (from requests library or custom messages)
-                # First check if the exception has a response attribute (requests.HTTPError)
+                # First check if the exception is a requests.HTTPError with response attribute
                 status_code = None
-                if hasattr(api_error, 'response') and hasattr(api_error.response, 'status_code'):
-                    status_code = api_error.response.status_code
+                if isinstance(api_error, requests.exceptions.HTTPError):
+                    if hasattr(api_error, 'response') and api_error.response is not None:
+                        status_code = api_error.response.status_code
                 
                 # Check for 403 errors
                 if (

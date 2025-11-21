@@ -6,13 +6,91 @@ PM Provider Factory
 
 Factory function to create PM provider instances from configuration parameters.
 """
+import os
+import logging
 from typing import Optional
+from urllib.parse import urlparse, urlunparse
 from .base import BasePMProvider
 from .models import PMProviderConfig
 from .openproject import OpenProjectProvider
 from .openproject_v13 import OpenProjectV13Provider
 from .jira import JIRAProvider
 from .clickup import ClickUpProvider
+
+logger = logging.getLogger(__name__)
+
+
+def _is_running_in_docker() -> bool:
+    """
+    Detect if code is running inside a Docker container.
+    
+    Returns:
+        True if running in Docker, False otherwise
+    """
+    # Check for Docker-specific files
+    if os.path.exists("/.dockerenv"):
+        return True
+    
+    # Check cgroup (more reliable)
+    try:
+        with open("/proc/self/cgroup", "r", encoding="utf-8") as f:
+            content = f.read()
+            if "docker" in content or "containerd" in content:
+                return True
+    except (FileNotFoundError, IOError):
+        pass
+    
+    return False
+
+
+def _convert_localhost_to_docker_service(base_url: str) -> str:
+    """
+    Convert localhost URLs to Docker service names when running in containers.
+    
+    This fixes connection issues where containers try to connect to localhost
+    but need to use Docker service names instead.
+    
+    Args:
+        base_url: Original base URL (may contain localhost)
+        
+    Returns:
+        Converted URL with Docker service name if applicable
+    """
+    if not _is_running_in_docker():
+        return base_url
+    
+    try:
+        parsed = urlparse(base_url)
+        hostname = parsed.hostname
+        port = parsed.port
+        
+        # Map localhost:port to Docker service names
+        # Based on docker-compose.yml service definitions
+        docker_service_map = {
+            8080: ("openproject", 80),      # OpenProject v16
+            8081: ("openproject_v13", 80),  # OpenProject v13
+        }
+        
+        if hostname in ("localhost", "127.0.0.1") and port in docker_service_map:
+            service_name, service_port = docker_service_map[port]
+            # Reconstruct URL with Docker service name
+            new_netloc = f"{service_name}:{service_port}"
+            new_parsed = parsed._replace(netloc=new_netloc)
+            new_url = urlunparse(new_parsed)
+            logger.info(
+                "Converting localhost PM provider URL to Docker service: %s -> %s",
+                base_url,
+                new_url
+            )
+            return new_url
+    except (ValueError, AttributeError) as e:
+        logger.warning(
+            "Failed to convert localhost PM provider URL %s: %s",
+            base_url,
+            e
+        )
+    
+    return base_url
 
 
 def create_pm_provider(
@@ -43,9 +121,12 @@ def create_pm_provider(
         ValueError: If provider_type is unsupported or required parameters
             are missing
     """
+    # Convert localhost URLs to Docker service names when running in Docker
+    converted_base_url = _convert_localhost_to_docker_service(base_url)
+    
     config = PMProviderConfig(
         provider_type=provider_type,
-        base_url=base_url,
+        base_url=converted_base_url,
         api_key=api_key,
         api_token=api_token,
         username=username,

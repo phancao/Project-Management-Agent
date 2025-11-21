@@ -3173,7 +3173,7 @@ async def pm_get_provider_projects(provider_id: str):
                     status_code=404, detail="Provider not found"
                 )
             
-            # Prepare API key - handle empty strings and None
+            # Check if API key/token is available
             api_key_value = None
             if provider.api_key:
                 api_key_str = str(provider.api_key).strip()
@@ -3184,15 +3184,24 @@ async def pm_get_provider_projects(provider_id: str):
                 api_token_str = str(provider.api_token).strip()
                 api_token_value = api_token_str if api_token_str else None
             
+            # If no API key/token, return empty projects list
+            if not api_key_value and not api_token_value:
+                return {
+                    "projects": [],
+                    "total": 0,
+                    "message": "API key or token is required to fetch projects. Please update the provider configuration."
+                }
+            
             # Log API key status (masked for security)
             has_api_key = bool(api_key_value)
             has_api_token = bool(api_token_value)
             logger.info(
-                f"Creating provider instance: type={provider.provider_type}, "
-                f"base_url={provider.base_url}, "
-                f"has_api_key={has_api_key}, "
-                f"has_api_token={has_api_token}, "
-                f"username={provider.username}"
+                "Creating provider instance: type=%s, base_url=%s, has_api_key=%s, has_api_token=%s, username=%s",
+                provider.provider_type,
+                provider.base_url,
+                has_api_key,
+                has_api_token,
+                provider.username
             )
             
             # Create provider instance

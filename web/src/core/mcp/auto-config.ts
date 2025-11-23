@@ -18,7 +18,7 @@ export async function checkPMMCPServerAvailable(): Promise<boolean> {
   try {
     const response = await fetch(`${PM_MCP_SERVER_URL}/health`, {
       method: "GET",
-      signal: AbortSignal.timeout(3000), // 3 second timeout
+      signal: AbortSignal.timeout(5000), // 5 second timeout
     });
     return response.ok;
   } catch {
@@ -49,11 +49,11 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
   try {
     // Check if server is available via SSE (Docker)
     const isAvailable = await checkPMMCPServerAvailable();
-    
+
     if (isAvailable) {
       // Server is running in Docker with SSE transport
       console.log("[PM MCP] Server available via SSE at", PM_MCP_SERVER_URL);
-      
+
       try {
         // Query metadata via SSE transport
         const sseConfig: SimpleSSEMCPServerMetadata = {
@@ -61,10 +61,10 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
           name: PM_MCP_SERVER_NAME,
           url: `${PM_MCP_SERVER_URL}/sse`,
         };
-        
+
         const metadata = await queryMCPServerMetadata(
           sseConfig,
-          AbortSignal.timeout(10000) // 10 second timeout
+          AbortSignal.timeout(60000) // 60 second timeout
         );
 
         // Create PM MCP server configuration with SSE transport
@@ -98,7 +98,7 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
         // Fall through to stdio fallback
       }
     }
-    
+
     // Fallback: Try stdio transport (local development)
     // PM MCP server runs via stdio when not in Docker
     try {
@@ -112,10 +112,10 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
           "stdio",
         ],
       };
-      
+
       const metadata = await queryMCPServerMetadata(
         serverConfig,
-        AbortSignal.timeout(10000) // 10 second timeout
+        AbortSignal.timeout(60000) // 60 second timeout
       );
 
       // Create PM MCP server configuration with stdio transport
@@ -167,7 +167,7 @@ export function useAutoConfigurePMMCP() {
 
   // Check on mount and periodically (every 5 minutes)
   void autoConfigurePMMCPServer();
-  
+
   const interval = setInterval(() => {
     void autoConfigurePMMCPServer();
   }, 5 * 60 * 1000); // 5 minutes

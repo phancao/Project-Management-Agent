@@ -63,6 +63,7 @@ from src.server.pm_provider_request import (
     ProjectImportRequest,
     ProviderUpdateRequest,
 )
+from src.server.pm_handler import PMHandler
 from pydantic import BaseModel
 from src.tools import VolcengineTTS
 from src.utils.json_utils import sanitize_args
@@ -161,6 +162,9 @@ graph = build_graph_with_memory()
 
 # Global ConversationFlowManager singleton to maintain session contexts
 flow_manager = None
+
+# Initialize PM Handler for project management operations
+pm_handler = PMHandler()
 
 
 @app.post("/api/chat/stream")
@@ -1272,12 +1276,24 @@ async def mcp_server_metadata(request: MCPServerMetadataRequest):
         if request.timeout_seconds is not None:
             timeout = request.timeout_seconds
 
+        logger.info(f"MCP Metadata Request: url={request.url}, transport={request.transport}, is_pm_server={is_pm_server}")
+        logger.info(f"PM_MCP_SERVER_URL env var: {os.getenv('PM_MCP_SERVER_URL')}")
+
+        # If this is the PM MCP server, use the internal Docker URL if available
+        # This fixes the issue where frontend sends localhost:8080 but backend needs pm_mcp_server:8080
+        target_url = request.url
+        if is_pm_server:
+            internal_url = os.getenv("PM_MCP_SERVER_URL")
+            if internal_url and request.transport == "sse":
+                logger.info(f"Rewriting PM MCP server URL from {request.url} to {internal_url}")
+                target_url = internal_url
+
         # Load tools from the MCP server using the utility function
         tools = await load_mcp_tools(
             server_type=request.transport,
             command=request.command,
             args=request.args,
-            url=request.url,
+            url=target_url,
             env=request.env,
             headers=request.headers,
             timeout_seconds=timeout,

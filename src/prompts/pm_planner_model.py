@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,16 @@ class PMStepType(str, Enum):
     UPDATE_SPRINT = "update_sprint"
     TIME_TRACKING = "time_tracking"
     BURNDOWN_CHART = "burndown_chart"
+    # Analytics & Insights
+    ANALYZE_VELOCITY = "analyze_velocity"
+    ANALYZE_BURNDOWN = "analyze_burndown"
+    ANALYZE_SPRINT_HEALTH = "analyze_sprint_health"
+    ANALYZE_TASK_DISTRIBUTION = "analyze_task_distribution"
+    GENERATE_INSIGHTS = "generate_insights"
+    COMPARE_SPRINTS = "compare_sprints"
+    IDENTIFY_BOTTLENECKS = "identify_bottlenecks"
+    PREDICT_COMPLETION = "predict_completion"
+    RECOMMEND_ACTIONS = "recommend_actions"
     UNKNOWN = "unknown"
 
 
@@ -57,6 +67,14 @@ class PMPlan(BaseModel):
     overall_thought: str = Field(
         ..., 
         description="Overall approach and reasoning"
+    )
+    replanning_reason: Optional[str] = Field(
+        default=None,
+        description="Reason for replanning (only present in revised plans)"
+    )
+    is_revision: bool = Field(
+        default=False,
+        description="Whether this is a revised plan based on execution results"
     )
     steps: List[PMStep] = Field(
         default_factory=list,
@@ -111,6 +129,26 @@ class SprintPlanSummary(BaseModel):
     tasks_count: int = Field(..., description="Number of tasks assigned")
     team_members: List[str] = Field(..., description="List of team member names")
     sprint_goal: str = Field(..., description="One sentence describing the sprint goal")
+
+
+class ExecutionContext(BaseModel):
+    """Context from previous execution for replanning"""
+    completed_steps: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Steps that completed successfully with their results"
+    )
+    failed_steps: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Steps that failed with error details"
+    )
+    discovered_info: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="New information discovered during execution"
+    )
+    iteration_number: int = Field(
+        default=0,
+        description="Current planning iteration number"
+    )
 
 
 class SprintPlan(BaseModel):

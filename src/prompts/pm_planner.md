@@ -42,6 +42,15 @@ Available step types:
 - **create_report**: Generate project reports
 - **gantt_chart**: Create timeline/Gantt chart
 - **dependency_analysis**: Analyze task dependencies
+- **analyze_velocity**: Analyze team velocity over recent sprints
+- **analyze_burndown**: Analyze sprint burndown patterns
+- **analyze_sprint_health**: Analyze sprint health indicators
+- **analyze_task_distribution**: Analyze task distribution across team
+- **generate_insights**: Generate insights from analytics data
+- **compare_sprints**: Compare metrics across multiple sprints
+- **identify_bottlenecks**: Identify bottlenecks and blockers
+- **predict_completion**: Predict project/sprint completion
+- **recommend_actions**: Provide data-driven recommendations
 - **unknown**: Unclear or unsupported task
 
 # Output Format
@@ -615,6 +624,108 @@ Output:
 }
 ```
 
+## Example 23: Sprint Analysis
+
+User: "Analyze Sprint 1 performance"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will analyze sprint velocity, burndown pattern, and generate actionable insights.",
+  "steps": [
+    {
+      "step_type": "analyze_velocity",
+      "title": "Analyze Sprint Velocity",
+      "description": "Calculate velocity and compare with team average",
+      "requires_context": false
+    },
+    {
+      "step_type": "analyze_burndown",
+      "title": "Analyze Burndown Pattern",
+      "description": "Check if work was completed steadily or rushed at end",
+      "requires_context": true
+    },
+    {
+      "step_type": "generate_insights",
+      "title": "Generate Insights",
+      "description": "Identify patterns, risks, and improvement opportunities",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 24: Multi-Sprint Comparison
+
+User: "Compare last 3 sprints and give recommendations"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will compare sprint metrics and provide data-driven recommendations.",
+  "steps": [
+    {
+      "step_type": "compare_sprints",
+      "title": "Compare Sprint Metrics",
+      "description": "Analyze velocity, completion rate, and scope changes across 3 sprints",
+      "requires_context": false
+    },
+    {
+      "step_type": "identify_bottlenecks",
+      "title": "Identify Bottlenecks",
+      "description": "Find recurring issues and blockers across sprints",
+      "requires_context": true
+    },
+    {
+      "step_type": "recommend_actions",
+      "title": "Recommend Actions",
+      "description": "Provide specific, actionable recommendations based on analysis",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 25: Project Health Check
+
+User: "Is my project on track?"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will analyze project health by checking velocity trends, task distribution, and predicting completion.",
+  "steps": [
+    {
+      "step_type": "analyze_velocity",
+      "title": "Analyze Velocity Trend",
+      "description": "Check if velocity is stable, improving, or declining",
+      "requires_context": false
+    },
+    {
+      "step_type": "analyze_task_distribution",
+      "title": "Analyze Task Distribution",
+      "description": "Check if workload is balanced across team",
+      "requires_context": true
+    },
+    {
+      "step_type": "predict_completion",
+      "title": "Predict Completion Date",
+      "description": "Estimate project completion based on current velocity",
+      "requires_context": true
+    },
+    {
+      "step_type": "generate_insights",
+      "title": "Generate Health Report",
+      "description": "Summarize project health with risks and recommendations",
+      "requires_context": true
+    }
+  ]
+}
+```
+
 # Guidelines
 
 1. **Identify all tasks**: If user says "Create WBS AND plan sprints", create multiple steps
@@ -624,6 +735,7 @@ Output:
 5. **Support all languages**: Detect and respond in user's language
 6. **Match step_type correctly**: Choose the right type from available options
 7. **Research when needed**: Add a "research" step if tasks require external knowledge or estimation
+8. **Analytics for insights**: Use analytics steps when user asks about performance, health, or trends
 
 ## When to Use Research Step
 
@@ -639,6 +751,16 @@ Skip research when:
 - Direct updates (update task status, priority)
 - Switching context (switch project, sprint, task)
 - User provides all needed information explicitly
+
+## When to Use Analytics Steps
+
+Use analytics steps when user asks about:
+- **Performance**: "How is the team performing?" → analyze_velocity, analyze_sprint_health
+- **Trends**: "Is velocity improving?" → compare_sprints, analyze_velocity
+- **Health**: "Is project on track?" → analyze_velocity, predict_completion, generate_insights
+- **Distribution**: "Is work balanced?" → analyze_task_distribution
+- **Bottlenecks**: "What's blocking us?" → identify_bottlenecks
+- **Recommendations**: "What should we improve?" → generate_insights, recommend_actions
 
 # Output Instructions
 

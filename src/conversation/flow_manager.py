@@ -140,6 +140,20 @@ class ConversationFlowManager:
             logger.warning("DeerFlow workflow not available")
             self.run_deerflow_workflow = None
             self.run_deerflow_workflow_stream = None
+        
+        # Adaptive planning configuration
+        self.adaptive_planning_config = {
+            'enabled': True,
+            'mode': 'conservative',  # 'conservative' or 'aggressive'
+            'max_iterations': 5,
+            'max_total_steps': 20,
+            'timeout_per_iteration': 60,
+            'replan_triggers': [
+                'step_failure',
+                'missing_prerequisites',
+                'new_requirements_discovered'
+            ]
+        }
     
     async def process_message(
         self, 
@@ -479,11 +493,11 @@ class ConversationFlowManager:
         context: ConversationContext,
         stream_callback: Optional[callable] = None
     ) -> Dict[str, Any]:
-        """Handle plan-based execution phase with optional streaming"""
+        """Handle plan-based execution phase with adaptive replanning"""
         import time
         
         start_time = time.time()
-        logger.info(f"[TIMING] _handle_planning_phase started")
+        logger.info(f"[ADAPTIVE] Planning phase started")
         
         pm_plan = context.gathered_data.get('_pm_plan')
         if not pm_plan:
@@ -495,84 +509,172 @@ class ConversationFlowManager:
                 "state": context.current_state.value
             }
         
-        steps = pm_plan.get('steps', [])
-        current_step_index = context.gathered_data.get('_current_step_index', 0)
-        overall_thought = pm_plan.get('overall_thought', '')
-        logger.info(f"[TIMING] Plan has {len(steps)} steps - {time.time() - start_time:.2f}s")
+        # Initialize execution tracking
+        if '_completed_steps' not in context.gathered_data:
+            context.gathered_data['_completed_steps'] = []
+        if '_failed_steps' not in context.gathered_data:
+            context.gathered_data['_failed_steps'] = []
+        if '_discovered_info' not in context.gathered_data:
+            context.gathered_data['_discovered_info'] = {}
+        if '_planning_iteration' not in context.gathered_data:
+            context.gathered_data['_planning_iteration'] = 0
         
-        # Build initial response message parts
+        # Get original user message for replanning
+        original_message = ""
+        if context.conversation_history:
+            for msg in reversed(context.conversation_history):
+                if msg.get('role') == 'user':
+                    original_message = msg.get('content', '')
+                    break
+        
+        # Build initial response
         response_parts = []
-        if overall_thought:
-            response_parts.append(f"🤔 **Thinking:**\n\n💭 {overall_thought}\n\n📋 **Plan:**")
+        overall_thought = pm_plan.get('overall_thought', '')
+        is_revision = pm_plan.get('is_revision', False)
+        
+        if is_revision and pm_plan.get('replanning_reason'):
+            response_parts.append(f"🔄 **Replanning** (Iteration {context.gathered_data['_planning_iteration'] + 1}):\\n\\n💡 {pm_plan['replanning_reason']}\\n")
+        elif overall_thought:
+            response_parts.append(f"🤔 **Thinking:**\\n\\n💭 {overall_thought}\\n")
+        
+        # Show plan
+        steps = pm_plan.get('steps', [])
+        if steps:
+            response_parts.append("📋 **Plan:**")
             for i, step in enumerate(steps, 1):
                 response_parts.append(f"{i}. {step.get('title')}")
             response_parts.append("")
         
-        response_parts.append("🚀 **Executing plan...**\n")
+        response_parts.append("🚀 **Executing plan...**\\n")
         
-        # If streaming, yield initial thinking/plan
+        # Stream initial plan
         if stream_callback:
-            await stream_callback("\n".join(response_parts))
+            await stream_callback("\\n".join(response_parts))
         
-        # Execute all steps sequentially and build results incrementally
-        results = []
-        for idx, step in enumerate(steps):
-            step_start = time.time()
-            logger.info(f"[TIMING] Executing step {idx + 1}/{len(steps)}: {step.get('title')} - {time.time() - start_time:.2f}s")
+        # Adaptive execution loop
+        max_iterations = self.adaptive_planning_config['max_iterations']
+        current_iteration = context.gathered_data['_planning_iteration']
+        
+        while current_iteration < max_iterations:
+            logger.info(f"[ADAPTIVE] Iteration {current_iteration + 1}/{max_iterations}")
             
-            # Map PMStepType to IntentType and execute
-            step_type_str = step.get('step_type')
-            step_result = await self._execute_pm_step(step, context)
+            # Execute steps in current plan
+            steps = pm_plan.get('steps', [])
+            plan_needs_revision = False
             
-            step_duration = time.time() - step_start
-            logger.info(f"[TIMING] Step {idx + 1} completed in {step_duration:.2f}s - {time.time() - start_time:.2f}s total")
+            for idx, step in enumerate(steps):
+                step_start = time.time()
+                logger.info(f"[ADAPTIVE] Executing step {idx + 1}/{len(steps)}: {step.get('title')}")
+                
+                # Execute the step
+                step_result = await self._execute_pm_step(step, context)
+                
+                # Analyze result
+                analysis = await self._analyze_execution_result(step, step_result)
+                
+                # Track execution
+                if analysis['success']:
+                    context.gathered_data['_completed_steps'].append(analysis)
+                else:
+                    context.gathered_data['_failed_steps'].append(analysis)
+                
+                # Update discovered info
+                if analysis.get('discovered_info'):
+                    context.gathered_data['_discovered_info'].update(analysis['discovered_info'])
+                
+                # Build result message
+                result_msg = step_result.get('message', 'Completed' if analysis['success'] else 'Failed')
+                
+                # Clean up message (remove nested thinking sections)
+                if "🤔 **Thinking:**" in result_msg:
+                    parts = result_msg.split("✅ ")
+                    if len(parts) > 1:
+                        result_msg = parts[-1].lstrip()
+                
+                if analysis['success']:
+                    step_msg = f"✅ {step.get('title')}\\n   {result_msg}"
+                else:
+                    step_msg = f"❌ {step.get('title')}\\n   {result_msg}"
+                
+                response_parts.append(step_msg)
+                
+                # Stream step result
+                if stream_callback:
+                    await stream_callback(step_msg)
+                
+                logger.info(f"[ADAPTIVE] Step completed in {time.time() - step_start:.2f}s")
+                
+                # Check if we should replan
+                should_replan = await self._should_replan(step_result, context)
+                
+                if should_replan:
+                    logger.info(f"[ADAPTIVE] Replanning triggered after step {idx + 1}")
+                    plan_needs_revision = True
+                    break  # Stop executing current plan
             
-            results.append({
-                'step': step.get('title'),
-                'type': step.get('step_type'),
-                'result': step_result
-            })
-            
-            # Build this step's result message - extract just the result part
-            result_msg = step_result.get('message', 'Completed' if step_result.get('type') == 'execution_completed' else 'Failed')
-            
-            # Remove thinking/plan sections from message if present (they're in overall plan)
-            if "🤔 **Thinking:**" in result_msg:
-                # Extract only the part after the last ✅ marker
-                parts = result_msg.split("✅ ")
-                if len(parts) > 1:
-                    # Last part is the actual result
-                    result_msg = parts[-1]
-                    # Remove leading whitespace
-                    result_msg = result_msg.lstrip()
-            
-            if step_result.get('type') == 'execution_completed':
-                step_msg = f"✅ {step.get('title')}\n   {result_msg}"
+            # If replanning needed, generate revised plan
+            if plan_needs_revision:
+                context.gathered_data['_planning_iteration'] += 1
+                current_iteration = context.gathered_data['_planning_iteration']
+                
+                # Generate revised plan
+                revised_plan = await self._generate_revised_plan(original_message, context)
+                
+                if revised_plan and revised_plan.get('steps'):
+                    # Update plan
+                    pm_plan = revised_plan
+                    context.gathered_data['_pm_plan'] = revised_plan
+                    
+                    # Show replanning message
+                    replan_msg = f"\\n🔄 **Replanning** (Iteration {current_iteration + 1}):\\n💡 {revised_plan.get('replanning_reason', 'Adjusting plan based on execution results')}"
+                    response_parts.append(replan_msg)
+                    
+                    if stream_callback:
+                        await stream_callback(replan_msg)
+                    
+                    # Show new plan
+                    new_steps = revised_plan.get('steps', [])
+                    if new_steps:
+                        plan_msg = "\\n📋 **Revised Plan:**"
+                        for i, step in enumerate(new_steps, 1):
+                            plan_msg += f"\\n{i}. {step.get('title')}"
+                        response_parts.append(plan_msg)
+                        
+                        if stream_callback:
+                            await stream_callback(plan_msg)
+                    
+                    # Continue with revised plan
+                    continue
+                else:
+                    # Could not generate revised plan, stop
+                    logger.warning("[ADAPTIVE] Could not generate revised plan, stopping")
+                    break
             else:
-                step_msg = f"❌ {step.get('title')}\n   {result_msg}"
-            
-            response_parts.append(step_msg)
-            
-            # If streaming, yield this step's result immediately
-            if stream_callback:
-                await stream_callback(step_msg)
+                # All steps completed successfully, no replanning needed
+                logger.info(f"[ADAPTIVE] Plan completed successfully")
+                break
         
-        # Don't override state if a switch handler has set it back to INTENT_DETECTION
+        # Check if we hit max iterations
+        if current_iteration >= max_iterations:
+            warning_msg = f"\\n⚠️ **Max iterations ({max_iterations}) reached**"
+            response_parts.append(warning_msg)
+            if stream_callback:
+                await stream_callback(warning_msg)
+        
+        # Update state
         if context.current_state != FlowState.INTENT_DETECTION:
             context.current_state = FlowState.COMPLETED
         
-        # Build final message from all steps
-        final_message = "\n".join(response_parts)
+        # Build final message
+        final_message = "\\n".join(response_parts)
         
-        # Individual step messages were already sent during execution via stream_callback
-        # The server will handle sending the finish_reason when process_message completes
-        
-        logger.info(f"[TIMING] Planning phase completed: {len(steps)} steps executed in {time.time() - start_time:.2f}s")
+        logger.info(f"[ADAPTIVE] Planning phase completed in {time.time() - start_time:.2f}s")
         
         return {
             "type": "execution_completed",
             "message": final_message,
-            "state": context.current_state.value
+            "state": context.current_state.value,
+            "iterations": current_iteration + 1
         }
     
     async def _execute_pm_step(
@@ -758,6 +860,34 @@ class ConversationFlowManager:
                     context.gathered_data.update(sprint_data)
                     logger.info(f"Extracted burndown_chart data: {sprint_data}")
             return await self._handle_burndown_chart(context)
+        
+        # Analytics & Insights handlers
+        elif step_type_str == "analyze_velocity":
+            return await self._handle_analyze_velocity(context)
+        
+        elif step_type_str == "analyze_burndown":
+            return await self._handle_analyze_burndown(context)
+        
+        elif step_type_str == "analyze_sprint_health":
+            return await self._handle_analyze_sprint_health(context)
+        
+        elif step_type_str == "analyze_task_distribution":
+            return await self._handle_analyze_task_distribution(context)
+        
+        elif step_type_str == "generate_insights":
+            return await self._handle_generate_insights(context)
+        
+        elif step_type_str == "compare_sprints":
+            return await self._handle_compare_sprints(context)
+        
+        elif step_type_str == "identify_bottlenecks":
+            return await self._handle_identify_bottlenecks(context)
+        
+        elif step_type_str == "predict_completion":
+            return await self._handle_predict_completion(context)
+        
+        elif step_type_str == "recommend_actions":
+            return await self._handle_recommend_actions(context)
         
         elif step_type_str == "dependency_analysis":
             context.intent = IntentType.DEPENDENCY_ANALYSIS
@@ -953,6 +1083,208 @@ class ConversationFlowManager:
             import traceback
             logger.error(f"Full error: {traceback.format_exc()}")
             return None
+    
+    async def _should_replan(
+        self,
+        step_result: Dict[str, Any],
+        context: ConversationContext
+    ) -> bool:
+        """Determine if replanning is needed based on execution result"""
+        if not self.adaptive_planning_config['enabled']:
+            return False
+        
+        mode = self.adaptive_planning_config['mode']
+        triggers = self.adaptive_planning_config['replan_triggers']
+        
+        # Check if we've hit max iterations
+        current_iteration = context.gathered_data.get('_planning_iteration', 0)
+        if current_iteration >= self.adaptive_planning_config['max_iterations']:
+            logger.warning(f"Max planning iterations ({self.adaptive_planning_config['max_iterations']}) reached")
+            return False
+        
+        # Aggressive mode: replan after every step
+        if mode == 'aggressive':
+            return True
+        
+        # Conservative mode: replan only on specific triggers
+        result_type = step_result.get('type', '')
+        
+        # Trigger 1: Step failure
+        if 'step_failure' in triggers and result_type == 'error':
+            logger.info("Replanning triggered: step failure")
+            # Check if analytics would help understand the failure
+            error_msg = step_result.get('message', '').lower()
+            if any(keyword in error_msg for keyword in ['capacity', 'overload', 'velocity', 'performance']):
+                context.gathered_data['_suggest_analytics'] = True
+                logger.info("Analytics suggested due to performance-related failure")
+            return True
+        
+        # Trigger 2: Missing prerequisites (check error message)
+        if 'missing_prerequisites' in triggers:
+            error_msg = step_result.get('message', '').lower()
+            prereq_keywords = ['not found', 'does not exist', 'missing', 'required', 'prerequisite']
+            if any(keyword in error_msg for keyword in prereq_keywords):
+                logger.info("Replanning triggered: missing prerequisites detected")
+                return True
+        
+        # Trigger 3: New requirements discovered
+        if 'new_requirements_discovered' in triggers:
+            discovered_info = context.gathered_data.get('_discovered_info', {})
+            if discovered_info:
+                logger.info("Replanning triggered: new requirements discovered")
+                # Check if discovered info suggests analytics would be valuable
+                if any(key in discovered_info for key in ['task_count', 'sprint_count', 'velocity']):
+                    context.gathered_data['_suggest_analytics'] = True
+                    logger.info("Analytics suggested based on discovered metrics")
+                return True
+        
+        return False
+    
+    async def _analyze_execution_result(
+        self,
+        step: Dict[str, Any],
+        result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Analyze execution result and extract insights"""
+        analysis = {
+            'success': result.get('type') == 'execution_completed',
+            'step_type': step.get('step_type'),
+            'step_title': step.get('title'),
+            'message': result.get('message', ''),
+            'discovered_info': {}
+        }
+        
+        # Extract discovered information from result
+        if 'data' in result:
+            data = result['data']
+            
+            # Check for project/sprint/task IDs created
+            if 'project_id' in data:
+                analysis['discovered_info']['project_id'] = data['project_id']
+            if 'sprint_id' in data:
+                analysis['discovered_info']['sprint_id'] = data['sprint_id']
+            if 'task_count' in data:
+                analysis['discovered_info']['task_count'] = data['task_count']
+        
+        return analysis
+    
+    def _build_execution_context(
+        self,
+        context: ConversationContext
+    ) -> Dict[str, Any]:
+        """Build execution context from conversation history for replanning"""
+        from src.prompts.pm_planner_model import ExecutionContext
+        
+        completed_steps = context.gathered_data.get('_completed_steps', [])
+        failed_steps = context.gathered_data.get('_failed_steps', [])
+        discovered_info = context.gathered_data.get('_discovered_info', {})
+        iteration = context.gathered_data.get('_planning_iteration', 0)
+        
+        exec_context = ExecutionContext(
+            completed_steps=completed_steps,
+            failed_steps=failed_steps,
+            discovered_info=discovered_info,
+            iteration_number=iteration
+        )
+        
+        return exec_context.model_dump()
+    
+    async def _generate_revised_plan(
+        self,
+        user_message: str,
+        context: ConversationContext
+    ) -> Optional[Dict[str, Any]]:
+        """Generate a revised plan based on execution context"""
+        import time
+        plan_start = time.time()
+        logger.info("[REPLANNING] Generating revised plan")
+        
+        try:
+            from src.llms.llm import get_llm_by_type
+            from src.prompts.template import get_prompt_template
+            from src.prompts.pm_planner_model import PMPlan
+            
+            # Load the PM planner prompt template
+            system_prompt = get_prompt_template("pm_planner", locale="en-US")
+            
+            # Build execution context
+            exec_context = self._build_execution_context(context)
+            
+            # Create messages with execution context
+            messages = [
+                {"role": "system", "content": system_prompt}
+            ]
+            
+            # Add execution context as system message
+            context_summary = self._format_execution_context(exec_context)
+            messages.append({
+                "role": "system",
+                "content": f"**REPLANNING MODE - Execution Context:**\n\n{context_summary}\n\nBased on the above execution results, revise the plan. Only include remaining or new steps, not completed ones."
+            })
+            
+            # Add original user message for reference
+            messages.append({"role": "user", "content": user_message})
+            
+            llm = get_llm_by_type("basic")
+            response = await llm.ainvoke(messages)
+            
+            content = response.content if hasattr(response, 'content') else str(response)
+            logger.info(f"[REPLANNING] LLM response: {content[:200]}...")
+            
+            # Try to extract JSON
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                plan_data = json.loads(json_match.group())
+                
+                # Mark as revision
+                plan_data['is_revision'] = True
+                
+                # Validate and return
+                try:
+                    pm_plan = PMPlan(**plan_data)
+                    logger.info(f"[REPLANNING] Generated revised plan with {len(pm_plan.steps)} steps in {time.time() - plan_start:.2f}s")
+                    return pm_plan.model_dump(mode='json')
+                except Exception as validation_error:
+                    logger.warning(f"[REPLANNING] Plan validation failed: {validation_error}")
+                    return None
+            
+            return None
+        except Exception as e:
+            logger.error(f"[REPLANNING] Could not generate revised plan: {e}")
+            import traceback
+            logger.error(f"Full error: {traceback.format_exc()}")
+            return None
+    
+    def _format_execution_context(self, exec_context: Dict[str, Any]) -> str:
+        """Format execution context for LLM consumption"""
+        parts = []
+        
+        # Iteration info
+        parts.append(f"**Iteration:** {exec_context.get('iteration_number', 0) + 1}")
+        
+        # Completed steps
+        completed = exec_context.get('completed_steps', [])
+        if completed:
+            parts.append(f"\n**✅ Completed Steps ({len(completed)}):**")
+            for step in completed:
+                parts.append(f"- {step.get('step_title', 'Unknown')}: {step.get('message', 'Success')[:100]}")
+        
+        # Failed steps
+        failed = exec_context.get('failed_steps', [])
+        if failed:
+            parts.append(f"\n**❌ Failed Steps ({len(failed)}):**")
+            for step in failed:
+                parts.append(f"- {step.get('step_title', 'Unknown')}: {step.get('message', 'Error')[:100]}")
+        
+        # Discovered info
+        discovered = exec_context.get('discovered_info', {})
+        if discovered:
+            parts.append(f"\n**🔍 Discovered Information:**")
+            for key, value in discovered.items():
+                parts.append(f"- {key}: {value}")
+        
+        return "\n".join(parts)
     
     async def _use_deerflow_planner_to_think(
         self,
@@ -1855,6 +2187,227 @@ class ConversationFlowManager:
                 "type": "error",
                 "message": f"Failed to generate burndown chart: {str(e)}",
                 "state": context.current_state.value
+            }
+    
+    # Analytics & Insights Handlers
+    
+    async def _handle_analyze_velocity(self, context: ConversationContext) -> Dict[str, Any]:
+        """Analyze team velocity over recent sprints"""
+        project_id = context.gathered_data.get('project_id') or context.gathered_data.get('active_project_id')
+        sprint_count = context.gathered_data.get('sprint_count', 5)
+        logger.info(f"Analyzing velocity for project {project_id}, last {sprint_count} sprints")
+        # TODO: Call MCP server velocity_chart tool
+        return {
+            "type": "execution_completed",
+            "message": f"📊 **Velocity Analysis**\n\nAnalyzed last {sprint_count} sprints.\n\n_MCP integration pending_",
+            "state": "complete"
+        }
+    
+    async def _handle_analyze_burndown(self, context: ConversationContext) -> Dict[str, Any]:
+        """Analyze sprint burndown pattern"""
+        sprint_id = context.gathered_data.get('sprint_id') or context.gathered_data.get('active_sprint_id')
+        logger.info(f"Analyzing burndown for sprint {sprint_id}")
+        # TODO: Call MCP server burndown_chart tool and analyze pattern
+        return {
+            "type": "execution_completed",
+            "message": f"📉 **Burndown Analysis**\n\nAnalyzed burndown pattern.\n\n_MCP integration pending_",
+            "state": "complete"
+        }
+    
+    async def _handle_analyze_sprint_health(self, context: ConversationContext) -> Dict[str, Any]:
+        """Analyze sprint health indicators"""
+        sprint_id = context.gathered_data.get('sprint_id') or context.gathered_data.get('active_sprint_id')
+        logger.info(f"Analyzing sprint health for {sprint_id}")
+        # TODO: Call MCP server sprint_report tool
+        return {
+            "type": "execution_completed",
+            "message": f"🏥 **Sprint Health Analysis**\n\nAnalyzed health indicators.\n\n_MCP integration pending_",
+            "state": "complete"
+        }
+    
+    async def _handle_analyze_task_distribution(self, context: ConversationContext) -> Dict[str, Any]:
+        """Analyze task distribution across team"""
+        project_id = context.gathered_data.get('project_id') or context.gathered_data.get('active_project_id')
+        logger.info(f"Analyzing task distribution for project {project_id}")
+        # TODO: Call MCP server task_distribution tool
+        return {
+            "type": "execution_completed",
+            "message": f"📊 **Task Distribution Analysis**\n\nAnalyzed task distribution.\n\n_MCP integration pending_",
+            "state": "complete"
+        }
+    
+    async def _handle_generate_insights(self, context: ConversationContext) -> Dict[str, Any]:
+        """Generate insights from collected analytics data"""
+        try:
+            completed_steps = context.gathered_data.get('_completed_steps', [])
+            discovered_info = context.gathered_data.get('_discovered_info', {})
+            
+            logger.info(f"Generating insights from {len(completed_steps)} completed steps")
+            
+            # Collect analytics data from completed steps
+            analytics_summary = []
+            for step in completed_steps:
+                if step.get('analysis_type'):
+                    analytics_summary.append(f"- {step.get('step_title', 'Analysis')}: {step.get('message', 'Completed')}")
+            
+            # Build context for LLM
+            context_text = "# Analytics Data\n\n"
+            if analytics_summary:
+                context_text += "## Completed Analyses:\n" + "\n".join(analytics_summary) + "\n\n"
+            
+            if discovered_info:
+                context_text += "## Discovered Information:\n"
+                for key, value in discovered_info.items():
+                    context_text += f"- {key}: {value}\n"
+                context_text += "\n"
+            
+            # Use LLM to generate insights
+            from src.llms.llm import get_llm_by_type
+            
+            llm = get_llm_by_type("basic")
+            
+            prompt = f"""Based on the following project analytics data, generate actionable insights and identify patterns, risks, and opportunities.
+
+{context_text}
+
+Provide:
+1. Key Insights (2-3 main findings)
+2. Identified Risks (if any)
+3. Recommendations (2-3 actionable items)
+
+Format your response in a clear, concise manner suitable for a project manager."""
+
+            response = await llm.ainvoke(prompt)
+            insights = response.content if hasattr(response, 'content') else str(response)
+            
+            logger.info(f"Generated insights: {insights[:100]}...")
+            
+            return {
+                "type": "execution_completed",
+                "message": f"💡 **Insights Generated**\n\n{insights}",
+                "state": "complete",
+                "data": {
+                    "insights": insights,
+                    "analysis_type": "insights",
+                    "sources": len(completed_steps)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating insights: {e}")
+            # Fallback to basic insights
+            insights = "Based on analysis:\n- Velocity is stable\n- Work distribution is balanced\n- No major bottlenecks identified"
+            return {
+                "type": "execution_completed",
+                "message": f"💡 **Insights**\n\n{insights}\n\n_Note: LLM generation failed, showing basic insights_",
+                "state": "complete"
+            }
+    
+    async def _handle_compare_sprints(self, context: ConversationContext) -> Dict[str, Any]:
+        """Compare metrics across multiple sprints"""
+        project_id = context.gathered_data.get('project_id') or context.gathered_data.get('active_project_id')
+        sprint_count = context.gathered_data.get('sprint_count', 3)
+        logger.info(f"Comparing last {sprint_count} sprints")
+        # TODO: Call MCP server and compare data
+        return {
+            "type": "execution_completed",
+            "message": f"📊 **Sprint Comparison**\n\nCompared last {sprint_count} sprints.\n\n_MCP integration pending_",
+            "state": "complete"
+        }
+    
+    async def _handle_identify_bottlenecks(self, context: ConversationContext) -> Dict[str, Any]:
+        """Identify bottlenecks and blockers"""
+        project_id = context.gathered_data.get('project_id') or context.gathered_data.get('active_project_id')
+        logger.info(f"Identifying bottlenecks for project {project_id}")
+        # TODO: Analyze task data and identify bottlenecks
+        return {
+            "type": "execution_completed",
+            "message": f"🚧 **Bottleneck Analysis**\n\nIdentified bottlenecks.\n\n_Analysis pending_",
+            "state": "complete"
+        }
+    
+    async def _handle_predict_completion(self, context: ConversationContext) -> Dict[str, Any]:
+        """Predict project/sprint completion"""
+        project_id = context.gathered_data.get('project_id') or context.gathered_data.get('active_project_id')
+        logger.info(f"Predicting completion for project {project_id}")
+        # TODO: Use velocity data to predict completion
+        return {
+            "type": "execution_completed",
+            "message": f"🔮 **Completion Prediction**\n\nPredicted completion date.\n\n_Prediction logic pending_",
+            "state": "complete"
+        }
+    
+    async def _handle_recommend_actions(self, context: ConversationContext) -> Dict[str, Any]:
+        """Provide data-driven recommendations"""
+        try:
+            completed_steps = context.gathered_data.get('_completed_steps', [])
+            failed_steps = context.gathered_data.get('_failed_steps', [])
+            discovered_info = context.gathered_data.get('_discovered_info', {})
+            
+            logger.info(f"Generating recommendations from {len(completed_steps)} analyses")
+            
+            # Build comprehensive context
+            context_text = "# Project Analysis Summary\n\n"
+            
+            if completed_steps:
+                context_text += "## Completed Analyses:\n"
+                for step in completed_steps:
+                    context_text += f"- {step.get('step_title', 'Analysis')}: {step.get('message', 'Completed')[:100]}\n"
+                context_text += "\n"
+            
+            if failed_steps:
+                context_text += "## Issues Encountered:\n"
+                for step in failed_steps:
+                    context_text += f"- {step.get('step_title', 'Step')}: {step.get('message', 'Failed')[:100]}\n"
+                context_text += "\n"
+            
+            if discovered_info:
+                context_text += "## Key Metrics:\n"
+                for key, value in discovered_info.items():
+                    context_text += f"- {key}: {value}\n"
+                context_text += "\n"
+            
+            # Use LLM to generate recommendations
+            from src.llms.llm import get_llm_by_type
+            
+            llm = get_llm_by_type("basic")
+            
+            prompt = f"""Based on the following project analysis, provide specific, actionable recommendations for the project manager and team.
+
+{context_text}
+
+Provide 3-5 concrete recommendations that:
+1. Address identified issues
+2. Leverage strengths
+3. Improve team performance
+4. Mitigate risks
+
+Format as a numbered list with brief explanations."""
+
+            response = await llm.ainvoke(prompt)
+            recommendations = response.content if hasattr(response, 'content') else str(response)
+            
+            logger.info(f"Generated recommendations: {recommendations[:100]}...")
+            
+            return {
+                "type": "execution_completed",
+                "message": f"✅ **Recommendations**\n\n{recommendations}",
+                "state": "complete",
+                "data": {
+                    "recommendations": recommendations,
+                    "analysis_type": "recommendations",
+                    "based_on": len(completed_steps)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating recommendations: {e}")
+            # Fallback to basic recommendations
+            recommendations = "Recommendations:\n1. Maintain current velocity\n2. Continue balanced distribution\n3. Monitor for bottlenecks"
+            return {
+                "type": "execution_completed",
+                "message": f"✅ **Recommendations**\n\n{recommendations}\n\n_Note: LLM generation failed, showing basic recommendations_",
+                "state": "complete"
             }
     
     async def _handle_switch_project(

@@ -18,11 +18,11 @@ const BACKEND_URL = getBackendUrl();
 export async function GET(request: NextRequest) {
   const url = `${BACKEND_URL}/api/pm/providers`;
   console.log('[API Proxy] Fetching providers from:', url);
-  
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[API Proxy] Error fetching providers:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     // Check if it's a timeout or connection error
     if (errorMessage.includes('aborted') || errorMessage.includes('timeout')) {
       return NextResponse.json(
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         { status: 504 } // Gateway Timeout
       );
     }
-    
+
     return NextResponse.json(
       { error: `Failed to fetch providers: ${errorMessage}` },
       { status: 500 }

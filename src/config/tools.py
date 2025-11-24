@@ -12,6 +12,7 @@ load_dotenv()
 class SearchEngine(enum.Enum):
     TAVILY = "tavily"
     DUCKDUCKGO = "duckduckgo"
+    GOOGLE = "google"
     BRAVE_SEARCH = "brave_search"
     ARXIV = "arxiv"
     SEARX = "searx"

@@ -153,43 +153,45 @@ export async function sendMessage(
       const timeSinceLastActivity = now - lastActivityTime;
       lastActivityTime = now;
       const { type, data } = event;
-      
-      
+
+
       // Handle error events
       if (type === "error") {
         const hasErrorData = data && (typeof data === "object") && Object.keys(data).length > 0;
-        const errorMessage = data?.error ?? data?.message ?? "An error occurred during streaming";
-        
-        if (process.env.NODE_ENV === "development" && hasErrorData) {
+        const errorMessage = data?.error ?? data?.message ?? "";
+        const hasMeaningfulError = hasErrorData && (errorMessage || data?.detail || data?.type);
+
+        // Only log in development if there's actual error content
+        if (process.env.NODE_ENV === "development" && hasMeaningfulError) {
           console.error(`[DEBUG] Stream error event:`, data);
         }
-        
-        // Only show toast if there's actual error data or a meaningful error message
-        if (hasErrorData || errorMessage !== "An error occurred during streaming") {
-          toast(`Error: ${errorMessage}`);
+
+        // Only show toast if there's actual error data with a meaningful message
+        if (hasMeaningfulError) {
+          toast(`Error: ${errorMessage || data?.detail || "An error occurred during streaming"}`);
         }
         // Continue processing - the stream may still have valid data
         continue;
       }
-      
+
       // If we receive finish_reason, mark that stream should exit
       if (data.finish_reason === "stop") {
         receivedFinishReason = true;
       }
-      
+
       // Handle PM refresh events to update PM views
       // Type assertion needed because ChatEvent type doesn't include pm_refresh
       if ((type as string) === "pm_refresh") {
         if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("pm_refresh", { 
-            detail: { type: "pm_refresh", data } 
+          window.dispatchEvent(new CustomEvent("pm_refresh", {
+            detail: { type: "pm_refresh", data }
           }));
         }
         continue;
       }
-      
+
       let message: Message | undefined;
-      
+
       // Handle tool_call_result specially: use the message that contains the tool call
       if (type === "tool_call_result") {
         message = findMessageByToolCallId(data.tool_call_id);
@@ -206,12 +208,12 @@ export async function sendMessage(
       } else {
         // For other event types, use data.id
         messageId = data.id;
-        
+
         if (!messageId) {
           // Skip events without message ID (like plan_update, step_update, etc.)
           continue;
         }
-        
+
         if (!existsMessage(messageId)) {
           message = {
             id: messageId,
@@ -229,15 +231,15 @@ export async function sendMessage(
           hasCreatedMessage = true;
         }
       }
-      
+
       message ??= getMessage(messageId);
       if (message) {
         const previousIsStreaming = message.isStreaming;
         const previousContentLength = message.content?.length ?? 0;
         message = mergeMessage(message, event);
         const newContentLength = message.content?.length ?? 0;
-        
-        
+
+
         // If finish_reason is present, apply update immediately to ensure UI updates quickly
         // This is especially important for reporter messages to show the final report
         if (event.data.finish_reason && previousIsStreaming) {
@@ -252,9 +254,9 @@ export async function sendMessage(
         }
       }
     }
-    
+
     streamExited = true;
-    
+
   } catch (error) {
     streamExited = true;
     if (process.env.NODE_ENV === "development") {
@@ -277,13 +279,13 @@ export async function sendMessage(
     if (pendingUpdates.size > 0) {
       useStore.getState().updateMessages(Array.from(pendingUpdates.values()));
     }
-    
-    
+
+
     // Always set responding to false when stream completes
     // The loading animation should be controlled by message.isStreaming, not responding
     const previousResponding = useStore.getState().responding;
     setResponding(false);
-    
+
     // Ensure ALL streaming messages are marked as not streaming
     // This is critical to prevent UI from appearing stuck
     const state = useStore.getState();
@@ -296,7 +298,7 @@ export async function sendMessage(
       });
       useStore.setState({ messages: updatedMessages });
     }
-    
+
     // Also ensure the last message is marked as not streaming
     if (messageId) {
       const finalMessage = getMessage(messageId);
@@ -351,7 +353,7 @@ function updateMessage(message: Message) {
   if (message.agent === "reporter" && !message.isStreaming) {
     // Find researchId - either from ongoingResearchId or by looking up which research has this reporter message
     let researchId = getOngoingResearchId();
-    
+
     // If ongoingResearchId is null, find the research that has this reporter message as its report
     if (!researchId) {
       const state = useStore.getState();
@@ -371,10 +373,10 @@ function updateMessage(message: Message) {
         }
       }
     }
-    
+
     if (researchId) {
       const currentReportId = useStore.getState().researchReportIds.get(researchId);
-      
+
       if (!currentReportId || currentReportId !== message.id) {
         useStore.setState({
           researchReportIds: new Map(useStore.getState().researchReportIds).set(
@@ -555,10 +557,10 @@ export function useRenderableMessageIds() {
           return false;
         }
         seen.add(messageId);
-        
+
         const message = state.messages.get(messageId);
         if (!message) return false;
-        
+
         // Only include messages that match MessageListItem rendering conditions
         // These are the same conditions checked in MessageListItem component
         return (

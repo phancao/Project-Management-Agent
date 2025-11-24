@@ -63,7 +63,6 @@ from src.server.pm_provider_request import (
     ProjectImportRequest,
     ProviderUpdateRequest,
 )
-from src.server.pm_handler import PMHandler
 from pydantic import BaseModel
 from src.tools import VolcengineTTS
 from src.utils.json_utils import sanitize_args
@@ -74,16 +73,8 @@ from src.utils.log_sanitizer import (
     sanitize_tool_name,
     sanitize_user_content,
 )
-from src.server.version import get_version_info, log_version_info
 
 logger = logging.getLogger(__name__)
-# Enable DEBUG logging for PM-CHAT headers debugging
-# The logger name in runtime is 'backend.server.app' due to import path
-# CRITICAL: Set root logger to INFO to allow DEBUG messages from our loggers
-# Root logger defaults to WARNING which filters out DEBUG/INFO
-logging.basicConfig(level=logging.INFO)
-logging.getLogger("backend.server.app").setLevel(logging.DEBUG)
-logging.getLogger("src.server.app").setLevel(logging.DEBUG)  # Also set for src path
 
 # Configure Windows event loop policy for PostgreSQL compatibility
 # On Windows, psycopg requires a selector-based event loop,
@@ -121,30 +112,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
-@app.on_event("startup")
-async def startup_event():
-    """Log version information on startup"""
-    log_version_info()
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for Docker health checks"""
-    return {"status": "healthy", "version": get_version_info()["commit_hash"]}
-
-
-@app.get("/version")
-async def get_version():
-    """Get version and build information"""
-    return get_version_info()
-
 # Add CORS middleware
 # It's recommended to load the allowed origins from an environment variable
 # for better security and flexibility across different environments.
 allowed_origins_str = get_str_env("ALLOWED_ORIGINS", "http://localhost:3000")
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
-logger.info("Allowed origins: %s", allowed_origins)
+logger.info(f"Allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -212,7 +186,7 @@ def _validate_tool_call_chunks(tool_call_chunks):
     if not tool_call_chunks:
         return
     
-    logger.debug("Validating tool_call_chunks: count=%d", len(tool_call_chunks))
+    logger.debug(f"Validating tool_call_chunks: count={len(tool_call_chunks)}")
     
     indices_seen = set()
     tool_ids_seen = set()
@@ -224,8 +198,8 @@ def _validate_tool_call_chunks(tool_call_chunks):
         has_args = "args" in chunk
         
         logger.debug(
-            "Chunk %d: index=%s, id=%s, name=%s, has_args=%s, type=%s",
-            i, index, tool_id, name, has_args, chunk.get('type')
+            f"Chunk {i}: index={index}, id={tool_id}, name={name}, "
+            f"has_args={has_args}, type={chunk.get('type')}"
         )
         
         if index is not None:
@@ -306,7 +280,7 @@ def _process_tool_call_chunks(tool_call_chunks):
                 chunk_by_index[index]["args"] += chunk.get("args", "")
         else:
             # Handle chunks without explicit index (edge case)
-            logger.debug("Chunk without index encountered: %s", chunk)
+            logger.debug(f"Chunk without index encountered: {chunk}")
             chunks.append({
                 "name": chunk.get("name", ""),
                 "args": sanitize_args(chunk.get("args", "")),
@@ -424,7 +398,7 @@ async def _process_message_chunk(
         f"[{safe_thread_id}] _process_message_chunk started for "
         f"agent={safe_agent_name}"
     )
-    logger.debug("[%s] Extracted agent_name: %s", safe_thread_id, safe_agent_name)
+    logger.debug(f"[{safe_thread_id}] Extracted agent_name: {safe_agent_name}")
     
     event_stream_message = _create_event_stream_message(
         message_chunk, message_metadata, thread_id, agent_name
@@ -432,7 +406,7 @@ async def _process_message_chunk(
 
     if isinstance(message_chunk, ToolMessage):
         # Tool Message - Return the result of the tool call
-        logger.debug("[%s] Processing ToolMessage", safe_thread_id)
+        logger.debug(f"[{safe_thread_id}] Processing ToolMessage")
         tool_call_id = message_chunk.tool_call_id
         event_stream_message["tool_call_id"] = tool_call_id
         
@@ -448,7 +422,7 @@ async def _process_message_chunk(
                 f"[{safe_thread_id}] ToolMessage received without tool_call_id"
             )
         
-        logger.debug("[%s] Yielding tool_call_result event", safe_thread_id)
+        logger.debug(f"[{safe_thread_id}] Yielding tool_call_result event")
         yield _make_event("tool_call_result", event_stream_message)
     elif isinstance(message_chunk, AIMessageChunk):
         # AI Message - Raw message tokens
@@ -486,7 +460,7 @@ async def _process_message_chunk(
                     f"Processed chunks: {len(processed_chunks)}"
                 )
             
-            logger.debug("[%s] Yielding tool_calls event", safe_thread_id)
+            logger.debug(f"[{safe_thread_id}] Yielding tool_calls event")
             yield _make_event("tool_calls", event_stream_message)
         elif message_chunk.tool_call_chunks:
             # AI Message - Tool Call Chunks (streaming)
@@ -531,7 +505,7 @@ async def _process_message_chunk(
                     f"tool call chunk(s): {safe_chunk_names}"
                 )
             
-            logger.debug("[%s] Yielding tool_call_chunks event", safe_thread_id)
+            logger.debug(f"[{safe_thread_id}] Yielding tool_call_chunks event")
             yield _make_event("tool_call_chunks", event_stream_message)
         else:
             # AI Message - Raw message tokens
@@ -887,10 +861,10 @@ async def _astream_workflow_generator(
     latest_message_content = messages[-1]["content"] if messages else ""
     clarified_research_topic = clarified_topic or latest_message_content
     safe_topic = sanitize_user_content(clarified_research_topic)
-    logger.debug("[%s] Clarified research topic: %s", safe_thread_id, safe_topic)
+    logger.debug(f"[{safe_thread_id}] Clarified research topic: {safe_topic}")
 
     # Prepare workflow input
-    logger.debug("[%s] Preparing workflow input", safe_thread_id)
+    logger.debug(f"[{safe_thread_id}] Preparing workflow input")
     workflow_input = {
         "messages": messages,
         "plan_iterations": 0,
@@ -926,17 +900,15 @@ async def _astream_workflow_generator(
         f"enable_deep_thinking={enable_deep_thinking}"
     )
     workflow_config = {
-        "configurable": {
-            "thread_id": thread_id,
-            "resources": resources,
-            "max_plan_iterations": max_plan_iterations,
-            "max_step_num": max_step_num,
-            "max_search_results": max_search_results,
-            "mcp_settings": mcp_settings,
-            "report_style": report_style.value,
-            "enable_deep_thinking": enable_deep_thinking,
-            "interrupt_before_tools": interrupt_before_tools,
-        },
+        "thread_id": thread_id,
+        "resources": resources,
+        "max_plan_iterations": max_plan_iterations,
+        "max_step_num": max_step_num,
+        "max_search_results": max_search_results,
+        "mcp_settings": mcp_settings,
+        "report_style": report_style.value,
+        "enable_deep_thinking": enable_deep_thinking,
+        "interrupt_before_tools": interrupt_before_tools,
         "recursion_limit": get_recursion_limit(),
     }
 
@@ -1030,7 +1002,7 @@ async def _astream_workflow_generator(
             graph, workflow_input, workflow_config, thread_id
         ):
             yield event
-        logger.debug("[%s] Graph event streaming completed", safe_thread_id)
+        logger.debug(f"[{safe_thread_id}] Graph event streaming completed")
 
 
 def _make_event(event_type: str, data: dict[str, Any]):
@@ -1049,7 +1021,7 @@ def _make_event(event_type: str, data: dict[str, Any]):
 
         return f"event: {event_type}\ndata: {json_data}\n\n"
     except (TypeError, ValueError) as e:
-        logger.error("Error serializing event data: %s", e)
+        logger.error(f"Error serializing event data: {e}")
         # Return a safe error event
         error_data = json.dumps(
             {"error": "Serialization failed"}, ensure_ascii=False
@@ -1163,7 +1135,7 @@ async def generate_ppt(request: GeneratePPTRequest):
 async def generate_prose(request: GenerateProseRequest):
     try:
         sanitized_prompt = request.prompt.replace("\r\n", "").replace("\n", "")
-        logger.info("Generating prose for prompt: %s", sanitized_prompt)
+        logger.info(f"Generating prose for prompt: {sanitized_prompt}")
         workflow = build_prose_graph()
         events = workflow.astream(
             {
@@ -1189,7 +1161,7 @@ async def generate_prose(request: GenerateProseRequest):
 async def enhance_prompt(request: EnhancePromptRequest):
     try:
         sanitized_prompt = request.prompt.replace("\r\n", "").replace("\n", "")
-        logger.info("Enhancing prompt: %s", sanitized_prompt)
+        logger.info(f"Enhancing prompt: {sanitized_prompt}")
 
         # Convert string report_style to ReportStyle enum
         report_style = None
@@ -1234,28 +1206,7 @@ async def enhance_prompt(request: EnhancePromptRequest):
 async def mcp_server_metadata(request: MCPServerMetadataRequest):
     """Get information about an MCP server."""
     # Check if MCP server configuration is enabled
-    # Exception: Allow PM MCP server queries even if global flag is disabled
-    # (PM MCP server is always available for PM chat functionality)
-    is_pm_server = False
-    if request.command:
-        # Check if this is the PM MCP server by checking the command/args
-        pm_server_script = "scripts/run_pm_mcp_server.py"
-        command_str = " ".join([request.command] + (request.args or []))
-        if pm_server_script in command_str or "run_pm_mcp_server" in command_str:
-            is_pm_server = True
-            logger.debug("Detected PM MCP server via command: %s", command_str)
-    elif request.url:
-        # Check if URL contains pm-server, pm_mcp_server, or localhost:8080 (default PM MCP SSE port)
-        url_lower = request.url.lower()
-        if (
-            "pm" in url_lower and ("server" in url_lower or "mcp" in url_lower)
-            or "localhost:8080" in url_lower
-            or ":8080" in url_lower
-        ):
-            is_pm_server = True
-            logger.debug("Detected PM MCP server via URL: %s", request.url)
-    
-    if not get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False) and not is_pm_server:
+    if not get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False):
         raise HTTPException(
             status_code=403,
             detail=(
@@ -1337,10 +1288,11 @@ async def config():
 
 # PM REST endpoints for UI data fetching
 @app.get("/api/pm/projects")
-async def pm_list_projects(_request: Request):
+async def pm_list_projects(request: Request):
     """List all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1351,43 +1303,7 @@ async def pm_list_projects(_request: Request):
         finally:
             db.close()
     except Exception as e:
-        logger.error("Failed to list projects: %s", e)
-        import traceback
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/pm/projects/{project_id}")
-async def pm_get_project(project_id: str):
-    """Get a single project by ID"""
-    try:
-        from database.connection import get_db_session
-        
-        db_gen = get_db_session()
-        db = next(db_gen)
-        
-        try:
-            handler = PMHandler.from_db_session(db)
-            projects = await handler.list_all_projects()
-            project = next((p for p in projects if p.get("id") == project_id), None)
-            
-            if not project:
-                raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-            
-            return project
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except ValueError as ve:
-        error_msg = str(ve)
-        if "Invalid provider ID format" in error_msg:
-            raise HTTPException(status_code=400, detail=error_msg)
-        elif "Provider not found" in error_msg:
-            raise HTTPException(status_code=404, detail=error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
-    except Exception as e:
-        logger.error("Failed to get project: %s", e)
+        logger.error(f"Failed to list projects: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -1395,11 +1311,19 @@ async def pm_get_project(project_id: str):
 
 @app.post("/api/pm/mock/regenerate")
 async def pm_regenerate_mock_dataset():
-    """Mock provider endpoint - no longer supported."""
-    raise HTTPException(
-        status_code=410,  # Gone
-        detail="Mock provider is no longer supported. Please use real PM providers (JIRA, OpenProject, etc.)"
+    """Regenerate the mock dataset served by MockPMProvider."""
+    from src.pm_providers.models import PMProviderConfig
+    from src.pm_providers.mock_provider import MockPMProvider
+
+    provider = MockPMProvider(
+        PMProviderConfig(
+            provider_type="mock",
+            base_url="mock://demo",
+            api_key="mock-key",
+        )
     )
+    metadata = await provider.regenerate_mock_data()
+    return {"status": "ok", "metadata": metadata}
 
 
 @app.post("/api/pm/projects/{project_id}/tasks")
@@ -1407,6 +1331,7 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
     """Create a new task within the specified project"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1439,7 +1364,7 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to create task: %s", e)
+        logger.error(f"Failed to create task: {e}")
         import traceback
 
         logger.error(traceback.format_exc())
@@ -1447,10 +1372,11 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
 
 
 @app.get("/api/pm/projects/{project_id}/tasks")
-async def pm_list_tasks(_request: Request, project_id: str):
+async def pm_list_tasks(request: Request, project_id: str):
     """List all tasks for a project"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1551,7 +1477,7 @@ async def pm_list_tasks(_request: Request, project_id: str):
         # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
     except Exception as e:
-        logger.error("Failed to list tasks: %s", e)
+        logger.error(f"Failed to list tasks: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -1562,6 +1488,7 @@ async def pm_project_timeline(project_id: str):
     """Return sprint + task scheduling data for timeline views."""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1591,7 +1518,7 @@ async def pm_project_timeline(project_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to load project timeline: %s", e)
+        logger.error(f"Failed to load project timeline: {e}")
         import traceback
 
         logger.error(traceback.format_exc())
@@ -1599,10 +1526,11 @@ async def pm_project_timeline(project_id: str):
 
 
 @app.get("/api/pm/tasks/my")
-async def pm_list_my_tasks(_request: Request):
+async def pm_list_my_tasks(request: Request):
     """List tasks assigned to current user across all active PM providers"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1616,17 +1544,18 @@ async def pm_list_my_tasks(_request: Request):
         # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
     except Exception as e:
-        logger.error("Failed to list my tasks: %s", e)
+        logger.error(f"Failed to list my tasks: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/pm/tasks/all")
-async def pm_list_all_tasks(_request: Request):
+async def pm_list_all_tasks(request: Request):
     """List all tasks across all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1640,7 +1569,7 @@ async def pm_list_all_tasks(_request: Request):
         # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
     except Exception as e:
-        logger.error("Failed to list all tasks: %s", e)
+        logger.error(f"Failed to list all tasks: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -1651,6 +1580,7 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
     """Update a task"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         updates = await request.json()
         
@@ -1661,18 +1591,12 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
             handler = PMHandler.from_db_session(db)
             provider = handler._get_provider_for_project(project_id)
             
-            logger.info(
-                "Updating task %s in project %s with updates: %s",
-                task_id, project_id, updates
-            )
+            logger.info(f"Updating task {task_id} in project {project_id} with updates: {updates}")
             
             # Update the task using the provider
             updated_task = await provider.update_task(task_id, updates)
             
-            logger.info(
-                "Task %s updated successfully: %s",
-                task_id, updated_task.title
-            )
+            logger.info(f"Task {task_id} updated successfully: {updated_task.title}")
             
             # Get project name for response
             actual_project_id = project_id.split(":")[-1]
@@ -1681,7 +1605,7 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
             
             # Convert to dict format
             result = handler._task_to_dict(updated_task, project_name)
-            logger.info("Returning updated task data: %s", result)
+            logger.info(f"Returning updated task data: {result}")
             return result
         finally:
             db.close()
@@ -1709,17 +1633,18 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
         # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
     except Exception as e:
-        logger.error("Failed to update task: %s", e)
+        logger.error(f"Failed to update task: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/pm/projects/{project_id}/users")
-async def pm_list_users(_request: Request, project_id: str):
+async def pm_list_users(request: Request, project_id: str):
     """List all users for a project"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1769,7 +1694,7 @@ async def pm_list_users(_request: Request, project_id: str):
                         status_code, error_msg
                     )
                     return []
-                logger.error("Failed to list users (HTTP %d): %s", status_code, http_err)
+                logger.error(f"Failed to list users (HTTP {status_code}): {http_err}")
                 import traceback
                 logger.error(traceback.format_exc())
                 raise HTTPException(
@@ -1791,7 +1716,7 @@ async def pm_list_users(_request: Request, project_id: str):
                         error_msg
                     )
                     return []
-                logger.error("Failed to list users: %s", e)
+                logger.error(f"Failed to list users: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
                 raise HTTPException(status_code=500, detail=error_msg)
@@ -1812,10 +1737,7 @@ async def pm_list_users(_request: Request, project_id: str):
         error_msg = str(ve)
         # For JIRA username/auth issues, return empty list instead of error
         if "JIRA requires email" in error_msg or "JIRA requires" in error_msg or "username" in error_msg.lower() or "api_token" in error_msg.lower():
-            logger.warning(
-                "[pm_list_users] Outer handler: JIRA authentication issue, returning empty user list. Error: %s",
-                error_msg
-            )
+            logger.warning(f"[pm_list_users] Outer handler: JIRA authentication issue, returning empty user list. Error: {error_msg}")
             return []
         if "Invalid provider ID format" in error_msg:
             raise HTTPException(status_code=400, detail=error_msg)
@@ -1829,12 +1751,9 @@ async def pm_list_users(_request: Request, project_id: str):
         error_msg = str(e)
         # For JIRA username/auth issues, return empty list instead of error
         if "JIRA requires" in error_msg or "username" in error_msg.lower():
-            logger.warning(
-                "[pm_list_users] Outer handler: JIRA configuration issue, returning empty user list. Error: %s",
-                error_msg
-            )
+            logger.warning(f"[pm_list_users] Outer handler: JIRA configuration issue, returning empty user list. Error: {error_msg}")
             return []
-        logger.error("Failed to list users: %s", e)
+        logger.error(f"Failed to list users: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -1842,13 +1761,14 @@ async def pm_list_users(_request: Request, project_id: str):
 
 @app.get("/api/pm/projects/{project_id}/sprints")
 async def pm_list_sprints(
-    _request: Request, 
+    request: Request, 
     project_id: str,
     state: Optional[str] = None
 ):
     """List all sprints for a project"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1908,17 +1828,18 @@ async def pm_list_sprints(
         # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
     except Exception as e:
-        logger.error("Failed to list sprints: %s", e)
+        logger.error(f"Failed to list sprints: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/pm/projects/{project_id}/epics")
-async def pm_list_epics(_request: Request, project_id: str):
+async def pm_list_epics(request: Request, project_id: str):
     """List all epics for a project"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1941,7 +1862,7 @@ async def pm_list_epics(_request: Request, project_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to list epics: %s", e)
+        logger.error(f"Failed to list epics: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -1952,6 +1873,7 @@ async def pm_create_epic(request: Request, project_id: str):
     """Create a new epic for a project"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         epic_data = await request.json()
         
@@ -1976,7 +1898,7 @@ async def pm_create_epic(request: Request, project_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to create epic: %s", e)
+        logger.error(f"Failed to create epic: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -1987,6 +1909,7 @@ async def pm_update_epic(request: Request, project_id: str, epic_id: str):
     """Update an epic for a project"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         updates = await request.json()
         
@@ -2011,7 +1934,7 @@ async def pm_update_epic(request: Request, project_id: str, epic_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to update epic: %s", e)
+        logger.error(f"Failed to update epic: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -2022,6 +1945,7 @@ async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str
     """Assign a task to an epic"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         epic_data = await request.json()
         epic_id = epic_data.get("epic_id")
@@ -2047,16 +1971,17 @@ async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to assign task to epic: %s", e)
+        logger.error(f"Failed to assign task to epic: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/pm/projects/{project_id}/tasks/{task_id}/remove-epic")
-async def pm_remove_task_from_epic(_request: Request, project_id: str, task_id: str):
+async def pm_remove_task_from_epic(request: Request, project_id: str, task_id: str):
     """Remove a task from its epic"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2077,7 +2002,7 @@ async def pm_remove_task_from_epic(_request: Request, project_id: str, task_id: 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to remove task from epic: %s", e)
+        logger.error(f"Failed to remove task from epic: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -2087,6 +2012,7 @@ async def pm_assign_task_to_sprint(request: Request, project_id: str, task_id: s
     """Assign a task to a sprint"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         sprint_data = await request.json()
         sprint_id = sprint_data.get("sprint_id")
@@ -2112,7 +2038,7 @@ async def pm_assign_task_to_sprint(request: Request, project_id: str, task_id: s
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to assign task to sprint: %s", e)
+        logger.error(f"Failed to assign task to sprint: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -2123,6 +2049,7 @@ async def pm_assign_task_to_user(project_id: str, task_id: str, payload: TaskAss
     """Assign or unassign a task to a user"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2151,17 +2078,18 @@ async def pm_assign_task_to_user(project_id: str, task_id: str, payload: TaskAss
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to assign task: %s", e)
+        logger.error(f"Failed to assign task: {e}")
         import traceback
 
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/pm/projects/{project_id}/tasks/{task_id}/move-to-backlog")
-async def pm_move_task_to_backlog(_request: Request, project_id: str, task_id: str):
+async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: str):
     """Move a task to the backlog"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2182,16 +2110,17 @@ async def pm_move_task_to_backlog(_request: Request, project_id: str, task_id: s
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to move task to backlog: %s", e)
+        logger.error(f"Failed to move task to backlog: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/pm/projects/{project_id}/epics/{epic_id}")
-async def pm_delete_epic(_request: Request, project_id: str, epic_id: str):
+async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
     """Delete an epic for a project"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2218,17 +2147,18 @@ async def pm_delete_epic(_request: Request, project_id: str, epic_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to delete epic: %s", e)
+        logger.error(f"Failed to delete epic: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/pm/projects/{project_id}/labels")
-async def pm_list_labels(_request: Request, project_id: str):
+async def pm_list_labels(request: Request, project_id: str):
     """List all labels for a project"""
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2251,7 +2181,7 @@ async def pm_list_labels(_request: Request, project_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to list labels: %s", e)
+        logger.error(f"Failed to list labels: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -2259,7 +2189,7 @@ async def pm_list_labels(_request: Request, project_id: str):
 
 @app.get("/api/pm/projects/{project_id}/statuses")
 async def pm_list_statuses(
-    _request: Request,
+    request: Request,
     project_id: str,
     entity_type: str = "task"
 ):
@@ -2272,13 +2202,14 @@ async def pm_list_statuses(
     """
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
         
         try:
             handler = PMHandler.from_db_session(db)
-            logger.info("[pm_list_statuses] project_id=%s", project_id)
+            logger.info(f"[pm_list_statuses] project_id={project_id}")
             statuses = await handler.list_project_statuses(project_id, entity_type)
             return {"statuses": statuses, "entity_type": entity_type}
         finally:
@@ -2296,7 +2227,7 @@ async def pm_list_statuses(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to list statuses: %s", e)
+        logger.error(f"Failed to list statuses: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -2304,7 +2235,7 @@ async def pm_list_statuses(
 
 @app.get("/api/pm/projects/{project_id}/priorities")
 async def pm_list_priorities(
-    _request: Request,
+    request: Request,
     project_id: str
 ):
     """
@@ -2316,21 +2247,22 @@ async def pm_list_priorities(
     """
     try:
         from database.connection import get_db_session
+        from src.server.pm_handler import PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
         
         try:
             handler = PMHandler.from_db_session(db)
-            logger.info("Listing priorities for project_id: %s", project_id)
+            logger.info(f"Listing priorities for project_id: {project_id}")
             priorities = await handler.list_project_priorities(project_id)
-            logger.info("Found %d priorities for project %s", len(priorities), project_id)
+            logger.info(f"Found {len(priorities)} priorities for project {project_id}")
             return {"priorities": priorities}
         finally:
             db.close()
     except ValueError as ve:
         error_msg = str(ve)
-        logger.error("ValueError listing priorities for %s: %s", project_id, error_msg)
+        logger.error(f"ValueError listing priorities for {project_id}: {error_msg}")
         if "Invalid provider ID format" in error_msg:
             raise HTTPException(status_code=400, detail=error_msg)
         elif "Provider not found" in error_msg:
@@ -2342,7 +2274,7 @@ async def pm_list_priorities(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to list priorities for %s: %s", project_id, e)
+        logger.error(f"Failed to list priorities for {project_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -2361,309 +2293,23 @@ async def pm_chat_stream(request: Request):
         import uuid
         import time
             
-        try:
-            body = await request.json()
-        except Exception as e:
-            logger.error("Failed to parse request body: %s", e)
-            raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
-        
-        # Validate required fields
-        messages = body.get("messages", [])
-        if not messages or not isinstance(messages, list) or len(messages) == 0:
-            raise HTTPException(status_code=400, detail="messages array is required and cannot be empty")
-        
-        user_message = messages[0].get("content", "")
-        if not user_message or not isinstance(user_message, str):
-            raise HTTPException(status_code=400, detail="Message content is required and must be a string")
-        
-        # Note: We don't strip project_id here - let the agent decide based on tool descriptions
-        # The tool description and prompts should guide the agent to ignore project_id 
-        # when the user asks for "all my tasks" vs "my tasks in project X"
-        
+        body = await request.json()
+        user_message = body.get("messages", [{}])[0].get("content", "")
         thread_id = body.get("thread_id", str(uuid.uuid4()))
-        mcp_settings = body.get("mcp_settings", {})
-        
-        logger.info("[PM-CHAT] Starting auto-injection check...")
-        logger.info(
-            f"[PM-CHAT] Initial mcp_settings keys: {list(mcp_settings.keys())}, has_servers: {bool(mcp_settings.get('servers'))}"
-        )
-        
-        # For PM chat, always enable MCP for PM tools (even if global setting is disabled)
-        # This ensures PM MCP tools are always available for PM chat endpoint
-        mcp_enabled_for_pm = True  # Always enable for PM chat
-        
-        # Auto-inject PM MCP server if not already configured
-        # This ensures PM tools are always available for PM chat
-        has_servers = bool(mcp_settings.get("servers"))
-        has_pm_server = "pm-server" in mcp_settings.get("servers", {})
-        
-        # Check if existing pm-server has SSE config (if not, we should override it)
-        existing_pm_server = mcp_settings.get("servers", {}).get("pm-server", {}) if has_pm_server else {}
-        existing_has_sse = existing_pm_server.get("transport") in ["sse", "http", "streamable_http"] and "url" in existing_pm_server
-        
-        # Define all PM tool names FIRST (before checking if we need to inject)
-        # These match the tools registered in the PM MCP server
-        all_tool_names = [
-            # Provider configuration tools (MUST be first for workflow)
-            "list_providers", "configure_pm_provider",
-            # Project tools
-            "list_projects", "get_project", "create_project", 
-            "update_project", "delete_project", "search_projects",
-            # Task tools
-            "list_my_tasks", "list_tasks", "get_task", "create_task",
-            "update_task", "delete_task", "assign_task", 
-            "update_task_status", "search_tasks",
-            # Sprint tools
-            "list_sprints", "get_sprint", "create_sprint",
-            "update_sprint", "delete_sprint", "start_sprint",
-            "complete_sprint", "add_task_to_sprint", 
-            "remove_task_from_sprint", "get_sprint_tasks",
-            # Epic tools
-            "list_epics", "get_epic", "create_epic",
-            "update_epic", "delete_epic", "link_task_to_epic",
-            "unlink_task_from_epic", "get_epic_progress",
-            # User tools
-            "list_users", "get_current_user", "get_user",
-            "search_users", "get_user_workload",
-            # Analytics tools
-            "burndown_chart", "velocity_chart", "sprint_report",
-            "project_health", "task_distribution", "team_performance",
-            "gantt_chart", "epic_report", "resource_utilization",
-            "time_tracking_report",
-            # Task interaction tools
-            "add_task_comment", "get_task_comments", "add_task_watcher",
-            "bulk_update_tasks", "link_related_tasks",
-        ]
-        
-        # Check if we need to inject or update
-        # Always update if: no servers, no pm-server, no SSE config, OR tool count is wrong
-        existing_enabled_tools = existing_pm_server.get("enabled_tools", [])
-        has_correct_tool_count = len(existing_enabled_tools) == len(all_tool_names)
-        has_list_providers = "list_providers" in existing_enabled_tools
-        has_configure_pm_provider = "configure_pm_provider" in existing_enabled_tools
-        
-        needs_injection = (
-            not mcp_settings.get("servers") 
-            or "pm-server" not in mcp_settings.get("servers", {}) 
-            or not existing_has_sse
-            or not has_correct_tool_count
-            or not has_list_providers
-            or not has_configure_pm_provider
-        )
-        
-        logger.info(
-            "[PM-CHAT] Auto-inject check: has_servers=%s, has_pm_server=%s, "
-            "existing_has_sse=%s, existing_tool_count=%d, "
-            "expected_tool_count=%d, has_list_providers=%s, "
-            "has_configure_pm_provider=%s, needs_injection=%s",
-            has_servers, has_pm_server, existing_has_sse, len(existing_enabled_tools),
-            len(all_tool_names), has_list_providers, has_configure_pm_provider, needs_injection
-        )
-        
-        # CRITICAL: Always ensure headers are added, even if injection isn't needed
-        # Headers are required for MCP server authentication
-        logger.info("[PM-CHAT] DEBUG: Starting headers creation...")
-        pm_mcp_url = get_str_env("PM_MCP_SERVER_URL", "") or None
-        pm_mcp_transport = get_str_env("PM_MCP_TRANSPORT", "stdio")
-        mcp_api_key = get_str_env("PM_MCP_API_KEY", "") or None
-
-        logger.info(
-            "[PM-CHAT] DEBUG: Env vars - "
-            "pm_mcp_url=%s, pm_mcp_transport=%s, mcp_api_key=%s (length: %d)",
-            pm_mcp_url, pm_mcp_transport,
-            'SET' if mcp_api_key else 'NOT SET',
-            len(mcp_api_key) if mcp_api_key else 0
-        )
-
-        # Build headers for authentication (always needed for SSE transport)
-        headers = {}
-        logger.info(
-            "[PM-CHAT] DEBUG: Checking condition - "
-            "mcp_api_key=%s, pm_mcp_url=%s, transport in list=%s",
-            bool(mcp_api_key), bool(pm_mcp_url),
-            pm_mcp_transport in ['sse', 'http', 'streamable_http']
-        )
-        if mcp_api_key and pm_mcp_url and pm_mcp_transport in [
-                "sse", "http", "streamable_http"
-        ]:
-            headers["X-MCP-API-Key"] = mcp_api_key
-            logger.info(
-                "[PM-CHAT] Adding MCP API key to headers (key length: %d)",
-                len(mcp_api_key)
-            )
-        elif not mcp_api_key and pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
-            logger.warning(
-                "[PM-CHAT] PM_MCP_API_KEY is None or empty! "
-                "MCP server authentication will fail."
-            )
-        else:
-            logger.warning(
-                "[PM-CHAT] DEBUG: Headers condition failed - "
-                "mcp_api_key=%s, pm_mcp_url=%s, transport=%s, transport_valid=%s",
-                bool(mcp_api_key), bool(pm_mcp_url), pm_mcp_transport,
-                pm_mcp_transport in ['sse', 'http', 'streamable_http']
-            )
-
-        # Try to get user_id from request headers
-        user_id = None
-        try:
-            user_id = request.headers.get("X-User-ID")
-        except Exception:
-            pass
-
-        if user_id:
-            headers["X-User-ID"] = user_id
-            logger.info("[PM-CHAT] Passing user_id via headers: %s", user_id)
-
-        logger.info(
-            "[PM-CHAT] Headers dict status: %d header(s), keys=%s, "
-            "has_api_key=%s, has_user_id=%s",
-            len(headers), list(headers.keys()),
-            bool(headers.get('X-MCP-API-Key')), bool(headers.get('X-User-ID'))
-        )
-
-        # Always inject/update PM MCP server config to ensure latest tool list is used
-        # This ensures list_providers and configure_pm_provider are always included
-        if needs_injection:
-            try:
-                # Ensure servers dict exists
-                if "servers" not in mcp_settings:
-                    mcp_settings["servers"] = {}
-                
-                # all_tool_names is already defined above (line 2402)
-                # pm_mcp_url, pm_mcp_transport, mcp_api_key, user_id, and headers are already defined above
-
-                logger.info(
-                    "[PM-CHAT] MCP config check: url=%s, transport=%s, "
-                    "url_is_set=%s, transport_valid=%s",
-                    pm_mcp_url, pm_mcp_transport, bool(pm_mcp_url),
-                    pm_mcp_transport in ['sse', 'http', 'streamable_http']
-                )
-
-                if pm_mcp_url and pm_mcp_transport in ["sse", "http", "streamable_http"]:
-                    # Use HTTP/SSE transport (Docker or remote service)
-                    # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
-                    # Headers are already created above (before needs_injection check)
-
-                    mcp_settings["servers"]["pm-server"] = {
-                        "transport": pm_mcp_transport,
-                        "url": pm_mcp_url,
-                        "enabled_tools": all_tool_names,  # This includes list_providers and configure_pm_provider
-                        "add_to_agents": ["researcher", "coder"],
-                    }
-                    # CRITICAL: Always add headers (API key for authentication, user_id for user-scoping)
-                    # Headers are required for MCP server authentication
-                    logger.info(
-                        "[PM-CHAT] DEBUG: Before adding headers - "
-                        "headers dict has %d key(s): %s",
-                        len(headers), list(headers.keys())
-                    )
-                    if headers:
-                        mcp_settings["servers"]["pm-server"]["headers"] = headers
-                        # Log headers with masked API key for debugging
-                        masked_headers = {
-                            k: (v[:10] + '...' if len(v) > 10 else v)
-                            if k == 'X-MCP-API-Key' else v
-                            for k, v in headers.items()
-                        }
-                        logger.info(
-                            "[PM-CHAT] Added %d header(s) to MCP server connection: %s",
-                            len(headers), masked_headers
-                        )
-                    else:
-                        logger.error(
-                            "[PM-CHAT] ERROR: Headers dict is empty! "
-                            "MCP server authentication will fail. "
-                            "Check environment variables and headers creation logic."
-                        )
-                    logger.info(
-                        "[PM-CHAT] Auto-injected/updated PM MCP server via %s at %s "
-                        "with %d tools (includes list_providers, configure_pm_provider) (Docker/remote mode)",
-                        pm_mcp_transport, pm_mcp_url, len(all_tool_names)
-                    )
-                    logger.debug(
-                        "[PM-CHAT] Enabled tools: %s... (total: %d)",
-                        all_tool_names[:5], len(all_tool_names)
-                    )
-                else:
-                    # Fallback to stdio transport (local development)
-                    import os
-                    import sys
-                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-                    script_path = os.path.join(project_root, "scripts", "run_pm_mcp_server.py")
-                    python_cmd = sys.executable
-                    
-                    # Always update pm-server config to ensure latest tool list (including list_providers and configure_pm_provider)
-                    mcp_settings["servers"]["pm-server"] = {
-                        "transport": "stdio",
-                        "command": python_cmd,
-                        "args": [script_path, "--transport", "stdio"],
-                        "enabled_tools": all_tool_names,  # This includes list_providers and configure_pm_provider
-                        "add_to_agents": ["researcher", "coder"],
-                    }
-                    logger.info(
-                        "[PM-CHAT] Auto-injected/updated PM MCP server via stdio (local development) "
-                        "with %d tools (includes list_providers, configure_pm_provider)",
-                        len(all_tool_names)
-                    )
-                    logger.debug(
-                        "[PM-CHAT] Enabled tools (first 5): %s, total: %d",
-                        all_tool_names[:5], len(all_tool_names)
-                    )
-                    logger.debug(
-                        "[PM-CHAT] PM MCP server config: command=%s, args=%s, script_exists=%s",
-                        python_cmd, [script_path, '--transport', 'stdio'], os.path.exists(script_path)
-                    )
-            except Exception as e:
-                logger.warning(
-                    "[PM-CHAT] Failed to auto-inject PM MCP server: %s. "
-                    "PM MCP tools may not be available.",
-                    e
-                )
-        
-        locale = body.get("locale", "en-US")
-        max_search_results = body.get("max_search_results", 3)
-        max_step_num = body.get("max_step_num", 3)
-        max_plan_iterations = body.get("max_plan_iterations", 1)
-        # Disable background investigation for PM queries to avoid Tavily validation errors
-        # PM queries should go directly to PM tools without web search
-        enable_background_investigation = body.get("enable_background_investigation", False)
-        enable_deep_thinking = body.get("enable_deep_thinking", False)
-        enable_clarification = body.get("enable_clarification", False)
-        max_clarification_rounds = body.get("max_clarification_rounds", 3)
-        report_style_str = body.get("report_style", "academic")
             
         # Get database session
-        try:
-            db_gen = get_db_session()
-            db = next(db_gen)
-        except Exception as e:
-            logger.error("Failed to get database session: %s", e)
-            import traceback
-            logger.error(traceback.format_exc())
-            raise HTTPException(
-                status_code=503,
-                detail=f"Database connection failed: {str(e)}"
-            )
+        db_gen = get_db_session()
+        db = next(db_gen)
             
         try:
             # Use global flow manager singleton to maintain session contexts
             global flow_manager
-            try:
-                if flow_manager is None:
-                    flow_manager = ConversationFlowManager(db_session=db)
-                    logger.info(
-                        "Created global ConversationFlowManager singleton"
-                    )
-                fm = flow_manager
-            except Exception as e:
-                logger.error("Failed to initialize ConversationFlowManager: %s", e)
-                import traceback
-                logger.error(traceback.format_exc())
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to initialize conversation manager: {str(e)}"
+            if flow_manager is None:
+                flow_manager = ConversationFlowManager(db_session=db)
+                logger.info(
+                    "Created global ConversationFlowManager singleton"
                 )
+            fm = flow_manager
                 
             async def generate_stream() -> AsyncIterator[str]:
                 """Generate SSE stream of chat responses with progress."""
@@ -2719,21 +2365,6 @@ async def pm_chat_stream(request: Request):
                             # Use _astream_workflow_generator to get properly
                             # formatted research events
                             from src.config.report_style import ReportStyle
-                            
-                            # Convert report_style string to enum
-                            report_style_map = {
-                                "academic": ReportStyle.ACADEMIC,
-                                "popular_science": ReportStyle.POPULAR_SCIENCE,
-                                "news": ReportStyle.NEWS,
-                                "social_media": ReportStyle.SOCIAL_MEDIA,
-                                "strategic_investment": ReportStyle.STRATEGIC_INVESTMENT,
-                            }
-                            report_style = report_style_map.get(report_style_str, ReportStyle.ACADEMIC)
-                            
-                            logger.info(
-                                f"[PM-CHAT] Using mcp_settings: {bool(mcp_settings)}, "
-                                f"locale: {locale}, report_style: {report_style_str}"
-                            )
                                 
                             async for event in _astream_workflow_generator(
                                 messages=[
@@ -2741,18 +2372,18 @@ async def pm_chat_stream(request: Request):
                                 ],
                                 thread_id=thread_id,
                                 resources=[],
-                                max_plan_iterations=max_plan_iterations,
-                                max_step_num=max_step_num,
-                                max_search_results=max_search_results,
+                                max_plan_iterations=1,
+                                max_step_num=3,
+                                max_search_results=3,
                                 auto_accepted_plan=True,
                                 interrupt_feedback="",
-                                mcp_settings=mcp_settings,
-                                enable_background_investigation=enable_background_investigation,
-                                report_style=report_style,
-                                enable_deep_thinking=enable_deep_thinking,
-                                enable_clarification=enable_clarification,
-                                max_clarification_rounds=max_clarification_rounds,
-                                locale=locale,
+                                mcp_settings={},
+                                enable_background_investigation=True,
+                                report_style=ReportStyle.ACADEMIC,
+                                enable_deep_thinking=False,
+                                enable_clarification=False,
+                                max_clarification_rounds=3,
+                                locale="en-US",
                                 interrupt_before_tools=None
                             ):
                                 # Yield formatted DeerFlow events directly
@@ -2812,21 +2443,6 @@ async def pm_chat_stream(request: Request):
                             )
                             import traceback
                             logger.error(traceback.format_exc())
-                            
-                            # Yield error message to client
-                            error_chunk = {
-                                "id": str(uuid.uuid4()),
-                                "thread_id": thread_id,
-                                "agent": "coordinator",
-                                "role": "assistant",
-                                "content": (
-                                    f"❌ **Error during research:** {str(research_error)}\n\n"
-                                    "Please try again or contact support if the issue persists."
-                                ),
-                                "finish_reason": "stop"
-                            }
-                            yield "event: message_chunk\n"
-                            yield f"data: {json.dumps(error_chunk)}\n\n"
                         
                         # Option 2: All queries handled by DeerFlow, skip process_message
                         # This avoids project ID errors for research queries
@@ -2866,22 +2482,15 @@ async def pm_chat_stream(request: Request):
             db.close()
         
     except Exception as e:
-        logger.error("PM chat error: %s", e)
-        import traceback
-        logger.error(traceback.format_exc())
+        logger.error(f"PM chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # PM Provider Management Endpoints
 
 @app.get("/api/pm/providers")
-async def pm_list_providers(include_credentials: bool = False):
-    """List all configured PM providers
-    
-    Args:
-        include_credentials: If True, include sensitive credentials (api_key, api_token, project_key) in response.
-                           This is used by agents to configure providers in MCP server.
-    """
+async def pm_list_providers():
+    """List all configured PM providers"""
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
@@ -2893,10 +2502,8 @@ async def pm_list_providers(include_credentials: bool = False):
             providers = db.query(PMProviderConnection).filter(
                 PMProviderConnection.is_active.is_(True)
             ).all()
-            
-            result = []
-            for p in providers:
-                provider_data = {
+            return [
+                {
                     "id": str(p.id),
                     "name": p.name,
                     "provider_type": p.provider_type,
@@ -2905,22 +2512,14 @@ async def pm_list_providers(include_credentials: bool = False):
                     "organization_id": p.organization_id,
                     "workspace_id": p.workspace_id,
                 }
-                
-                # Include credentials if requested (for agent use)
-                if include_credentials:
-                    provider_data["api_key"] = p.api_key if p.api_key else None
-                    provider_data["api_token"] = p.api_token if p.api_token else None
-                    provider_data["project_key"] = p.project_key if p.project_key else None
-                
-                result.append(provider_data)
-            
-            return result
+                for p in providers
+            ]
         finally:
             db.close()
     except Exception as e:
         # Log the full error for debugging
         error_msg = str(e)
-        logger.error("Failed to list providers: %s", error_msg)
+        logger.error(f"Failed to list providers: {error_msg}")
         import traceback
         logger.error(traceback.format_exc())
         
@@ -2954,169 +2553,70 @@ async def pm_import_projects(request: ProjectImportRequest):
         db = next(db_gen)
         
         try:
-            # Normalize base_url: remove trailing slash only
-            # IMPORTANT: Store original URL in database, NOT Docker-converted URL
-            # URL conversion should only happen at runtime when making API calls
-            # This ensures:
-            # 1. Cloud deployment works (Docker service names don't exist in cloud)
-            # 2. Separate servers work (each server needs actual URLs, not Docker names)
-            # 3. Browser and backend see consistent URLs
-            normalized_base_url = request.base_url.rstrip('/')
-            
-            # Check for existing active provider with same type and (same URL OR same token)
-            # Duplicate if: same provider_type AND (same base_url OR same api_key/api_token)
-            from sqlalchemy import or_
-            
-            # Build URL conditions: use original URL for duplicate checking
-            url_conditions = [PMProviderConnection.base_url == normalized_base_url]
-            
-            # Build token conditions
-            token_conditions = []
-            if request.api_key:
-                token_conditions.append(PMProviderConnection.api_key == request.api_key)
-            if request.api_token:
-                token_conditions.append(PMProviderConnection.api_token == request.api_token)
-            
-            # Combine all conditions: (same URL OR same token)
-            all_conditions = url_conditions + token_conditions
-            
-            query = db.query(PMProviderConnection).filter(
-                PMProviderConnection.provider_type == request.provider_type,
-                PMProviderConnection.is_active.is_(True)
+            # Create provider config
+            provider = PMProviderConnection(
+                name=f"{request.provider_type} - {request.base_url}",
+                provider_type=request.provider_type,
+                base_url=request.base_url,
+                api_key=request.api_key,
+                api_token=request.api_token,
+                username=request.username,
+                organization_id=request.organization_id,
+                workspace_id=request.workspace_id,
+                is_active=True
             )
-            
-            # Apply OR condition if we have multiple conditions
-            if len(all_conditions) > 1:
-                query = query.filter(or_(*all_conditions))
-            elif len(all_conditions) == 1:
-                query = query.filter(all_conditions[0])
-            
-            existing_provider = query.first()
-            
-            if existing_provider:
-                # Update existing provider instead of creating duplicate
-                logger.info(
-                    "Provider already exists with type=%s and base_url=%s, updating instead of creating duplicate",
-                    request.provider_type,
-                    normalized_base_url
-                )
-                provider = existing_provider
-                # Update fields using setattr to avoid type checker issues
-                setattr(provider, "name", f"{request.provider_type} - {normalized_base_url}")
-                if request.api_key is not None:
-                    setattr(provider, "api_key", request.api_key)
-                if request.api_token is not None:
-                    setattr(provider, "api_token", request.api_token)
-                if request.username is not None:
-                    setattr(provider, "username", request.username)
-                if request.organization_id is not None:
-                    setattr(provider, "organization_id", request.organization_id)
-                if request.workspace_id is not None:
-                    setattr(provider, "workspace_id", request.workspace_id)
-                setattr(provider, "is_active", True)
-            else:
-                # Create new provider config
-                provider = PMProviderConnection(
-                    name=f"{request.provider_type} - {normalized_base_url}",
-                    provider_type=request.provider_type,
-                    base_url=normalized_base_url,
-                    api_key=request.api_key,
-                    api_token=request.api_token,
-                    username=request.username,
-                    organization_id=request.organization_id,
-                    workspace_id=request.workspace_id,
-                    is_active=True
-                )
-                db.add(provider)
-            
+            db.add(provider)
             db.commit()
             db.refresh(provider)
             
-            # Validate API key/token is provided
-            if not request.api_key and not request.api_token:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "API key or token is required. "
-                        "Please provide an API key/token to connect to the provider."
-                    )
-                )
+            # Create provider instance and import projects
+            provider_instance = create_pm_provider(
+                provider_type=request.provider_type,
+                base_url=request.base_url,
+                api_key=request.api_key,
+                api_token=request.api_token,
+                username=request.username,
+                organization_id=request.organization_id,
+                workspace_id=request.workspace_id,
+            )
             
-            # For JIRA, username (email) is also required
-            if request.provider_type == "jira" and not request.username:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "Email address (username) is required for JIRA. "
-                        "For JIRA Cloud, use your email address."
-                    )
-                )
-            
-            # Test connection before saving - create provider instance and verify it works
             try:
-                provider_instance = create_pm_provider(
-                    provider_type=request.provider_type,
-                    base_url=normalized_base_url,
-                    api_key=request.api_key,
-                    api_token=request.api_token,
-                    username=request.username,
-                    organization_id=request.organization_id,
-                    workspace_id=request.workspace_id,
-                )
-                
-                # Test connection by listing projects
-                try:
-                    projects = await provider_instance.list_projects()
-                except Exception as api_error:
-                    error_msg = str(api_error)
-                    # Handle specific HTTP errors
-                    if "401" in error_msg or "Unauthorized" in error_msg:
-                        raise HTTPException(
-                            status_code=401,
-                            detail=(
-                                "Authentication failed. "
-                                "Please check your API key/token."
-                            )
-                        )
-                    elif "404" in error_msg or "Not Found" in error_msg:
-                        raise HTTPException(
-                            status_code=404,
-                            detail=(
-                                "Provider API endpoint not found. "
-                                "Please check the base URL."
-                            )
-                        )
-                    elif (
-                        "Connection" in error_msg
-                        or "refused" in error_msg.lower()
-                    ):
-                        raise HTTPException(
-                            status_code=503,
-                            detail=(
-                                "Cannot connect to provider. "
-                                "Please check if the service is running."
-                            )
-                        )
-                    else:
-                        raise HTTPException(
-                            status_code=500,
-                            detail=f"Failed to fetch projects: {error_msg}"
-                        )
-            except ValueError as ve:
-                # Handle provider initialization errors (e.g., missing API key)
-                error_msg = str(ve)
-                if "requires" in error_msg.lower() and ("api_key" in error_msg.lower() or "api_token" in error_msg.lower()):
+                projects = await provider_instance.list_projects()
+            except Exception as api_error:
+                error_msg = str(api_error)
+                # Handle specific HTTP errors
+                if "401" in error_msg or "Unauthorized" in error_msg:
                     raise HTTPException(
-                        status_code=400,
+                        status_code=401,
                         detail=(
-                            "API key or token is required for this provider. "
-                            "Please provide an API key/token to test the connection."
+                            "Authentication failed. "
+                            "Please check your API key/token."
                         )
                     )
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid provider configuration: {error_msg}"
-                )
+                elif "404" in error_msg or "Not Found" in error_msg:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=(
+                            "Provider API endpoint not found. "
+                            "Please check the base URL."
+                        )
+                    )
+                elif (
+                    "Connection" in error_msg
+                    or "refused" in error_msg.lower()
+                ):
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            "Cannot connect to provider. "
+                            "Please check if the service is running."
+                        )
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to fetch projects: {error_msg}"
+                    )
             
             return {
                 "success": True,
@@ -3138,7 +2638,7 @@ async def pm_import_projects(request: ProjectImportRequest):
         finally:
             db.close()
     except Exception as e:
-        logger.error("Failed to import projects: %s", e)
+        logger.error(f"Failed to import projects: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3184,7 +2684,7 @@ async def pm_get_provider_projects(provider_id: str):
                     status_code=404, detail="Provider not found"
                 )
             
-            # Check if API key/token is available
+            # Prepare API key - handle empty strings and None
             api_key_value = None
             if provider.api_key:
                 api_key_str = str(provider.api_key).strip()
@@ -3195,64 +2695,39 @@ async def pm_get_provider_projects(provider_id: str):
                 api_token_str = str(provider.api_token).strip()
                 api_token_value = api_token_str if api_token_str else None
             
-            # If no API key/token, return empty projects list
-            if not api_key_value and not api_token_value:
-                return {
-                    "projects": [],
-                    "total": 0,
-                    "message": "API key or token is required to fetch projects. Please update the provider configuration."
-                }
-            
             # Log API key status (masked for security)
             has_api_key = bool(api_key_value)
             has_api_token = bool(api_token_value)
             logger.info(
-                "Creating provider instance: type=%s, base_url=%s, has_api_key=%s, has_api_token=%s, username=%s",
-                provider.provider_type,
-                provider.base_url,
-                has_api_key,
-                has_api_token,
-                provider.username
+                f"Creating provider instance: type={provider.provider_type}, "
+                f"base_url={provider.base_url}, "
+                f"has_api_key={has_api_key}, "
+                f"has_api_token={has_api_token}, "
+                f"username={provider.username}"
             )
             
             # Create provider instance
-            try:
-                provider_instance = create_pm_provider(
-                    provider_type=str(provider.provider_type),
-                    base_url=str(provider.base_url),
-                    api_key=api_key_value,
-                    api_token=api_token_value,
-                    username=(
-                        str(provider.username).strip()
-                        if provider.username
-                        else None
-                    ),
-                    organization_id=(
-                        str(provider.organization_id)
-                        if provider.organization_id
-                        else None
-                    ),
-                    workspace_id=(
-                        str(provider.workspace_id)
-                        if provider.workspace_id
-                        else None
-                    ),
-                )
-            except ValueError as ve:
-                # Handle provider initialization errors (e.g., missing API key)
-                error_msg = str(ve)
-                if "requires" in error_msg.lower() and ("api_key" in error_msg.lower() or "api_token" in error_msg.lower()):
-                    return {
-                        "success": True,
-                        "total_projects": 0,
-                        "projects": [],
-                        "errors": [],
-                        "message": "API key or token is required. Please update the provider configuration with valid credentials."
-                    }
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid provider configuration: {error_msg}"
-                )
+            provider_instance = create_pm_provider(
+                provider_type=str(provider.provider_type),
+                base_url=str(provider.base_url),
+                api_key=api_key_value,
+                api_token=api_token_value,
+                username=(
+                    str(provider.username).strip()
+                    if provider.username
+                    else None
+                ),
+                organization_id=(
+                    str(provider.organization_id)
+                    if provider.organization_id
+                    else None
+                ),
+                workspace_id=(
+                    str(provider.workspace_id)
+                    if provider.workspace_id
+                    else None
+                ),
+            )
             
             try:
                 projects = await provider_instance.list_projects()
@@ -3266,38 +2741,12 @@ async def pm_get_provider_projects(provider_id: str):
                 logger.error(traceback.format_exc())
                 
                 # Handle specific HTTP errors
-                # Check for 403 Forbidden errors (from requests library or custom messages)
-                # First check if the exception is a requests.HTTPError with response attribute
-                status_code = None
-                if isinstance(api_error, requests.exceptions.HTTPError):
-                    if hasattr(api_error, 'response') and api_error.response is not None:
-                        status_code = api_error.response.status_code
-                
-                # Check for 403 errors
-                if (
-                    status_code == 403
-                    or "403" in error_msg 
-                    or "Forbidden" in error_msg 
-                    or "forbidden" in error_msg.lower()
-                ):
-                    # Use custom message if it contains "forbidden" or "permission"
-                    if "forbidden" in error_msg.lower() or "permission" in error_msg.lower():
-                        detail_msg = error_msg
-                    else:
-                        detail_msg = (
-                            "Access forbidden. The API token may not have permission to list projects, "
-                            "or the account doesn't have access to any projects. Please check your provider permissions."
-                        )
-                    raise HTTPException(
-                        status_code=403,
-                        detail=detail_msg
-                    )
-                elif "401" in error_msg or "Unauthorized" in error_msg or "authentication failed" in error_msg.lower():
+                if "401" in error_msg or "Unauthorized" in error_msg:
                     raise HTTPException(
                         status_code=401,
                         detail=(
-                            error_msg if "authentication" in error_msg.lower()
-                            else "Authentication failed. Please check your API key/token."
+                            "Authentication failed. "
+                            "Please check your API key/token."
                         )
                     )
                 elif "404" in error_msg or "Not Found" in error_msg:
@@ -3325,26 +2774,21 @@ async def pm_get_provider_projects(provider_id: str):
                         detail=f"Failed to fetch projects: {error_msg}"
                     )
             
-            return {
-                "success": True,
-                "total_projects": len(projects),
-                "projects": [
-                    {
-                        "id": str(p.id),
-                        "name": p.name,
-                        "description": p.description or "",
-                        "status": str(p.status) if hasattr(p, 'status') else None,
-                    }
-                    for p in projects
-                ],
-                "errors": []
-            }
+            return [
+                {
+                    "id": str(p.id),
+                    "name": p.name,
+                    "description": p.description or "",
+                    "status": str(p.status) if hasattr(p, 'status') else None,
+                }
+                for p in projects
+            ]
         finally:
             db.close()
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to get provider projects: %s", e)
+        logger.error(f"Failed to get provider projects: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -3410,7 +2854,7 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to update provider: %s", e)
+        logger.error(f"Failed to update provider: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -3422,86 +2866,29 @@ async def pm_test_connection(request: ProjectImportRequest):
     try:
         from src.pm_providers.factory import create_pm_provider
         
-        # Validate API key/token is provided
-        if not request.api_key and not request.api_token:
-            return {
-                "success": False,
-                "message": "API key or token is required"
-            }
-        
-        # For JIRA, username (email) is also required
-        if request.provider_type == "jira" and not request.username:
-            return {
-                "success": False,
-                "message": "Email address (username) is required for JIRA. For JIRA Cloud, use your email address."
-            }
-        
-        # Normalize base_url
-        normalized_base_url = request.base_url.rstrip('/') if request.base_url else ""
-        if not normalized_base_url:
-            return {
-                "success": False,
-                "message": "Base URL is required"
-            }
-        
         # Create provider instance
-        try:
-            provider_instance = create_pm_provider(
-                provider_type=request.provider_type,
-                base_url=normalized_base_url,
-                api_key=request.api_key,
-                api_token=request.api_token,
-                username=request.username,
-                organization_id=request.organization_id,
-                workspace_id=request.workspace_id,
-            )
-        except ValueError as ve:
-            error_msg = str(ve)
-            if "requires" in error_msg.lower() and ("api_key" in error_msg.lower() or "api_token" in error_msg.lower()):
-                return {
-                    "success": False,
-                    "message": "API key or token is required for this provider"
-                }
-            return {
-                "success": False,
-                "message": f"Invalid provider configuration: {error_msg}"
-            }
+        provider_instance = create_pm_provider(
+            provider_type=request.provider_type,
+            base_url=request.base_url,
+            api_key=request.api_key,
+            api_token=request.api_token,
+            username=request.username,
+            organization_id=request.organization_id,
+            workspace_id=request.workspace_id,
+        )
         
         # Test by listing projects
-        try:
-            projects = await provider_instance.list_projects()
-            return {
-                "success": True,
-                "message": (
-                    f"Connection successful. "
-                    f"Found {len(projects)} project(s)."
-                ),
-            }
-        except Exception as api_error:
-            error_msg = str(api_error)
-            # Handle specific HTTP errors
-            if "401" in error_msg or "Unauthorized" in error_msg:
-                return {
-                    "success": False,
-                    "message": "Authentication failed. Please check your API key/token."
-                }
-            elif "404" in error_msg or "Not Found" in error_msg:
-                return {
-                    "success": False,
-                    "message": "Provider API endpoint not found. Please check the base URL."
-                }
-            elif "Connection" in error_msg or "refused" in error_msg.lower():
-                return {
-                    "success": False,
-                    "message": "Cannot connect to provider. Please check if the service is running."
-                }
-            else:
-                return {
-                    "success": False,
-                    "message": f"Connection failed: {error_msg}"
-                }
+        projects = await provider_instance.list_projects()
+        
+        return {
+            "success": True,
+            "message": (
+                f"Connection successful. "
+                f"Found {len(projects)} project(s)."
+            ),
+        }
     except Exception as e:
-        logger.error("Connection test failed: %s", e)
+        logger.error(f"Connection test failed: {e}")
         return {
             "success": False,
             "message": f"Connection failed: {str(e)}"
@@ -3537,7 +2924,7 @@ async def pm_delete_provider(provider_id: str):
                 )
             
             # Soft delete by deactivating
-            provider.is_active = False  # type: ignore[assignment]
+            provider.is_active = False  # type: ignore
             db.commit()
             
             return {"success": True, "message": "Provider deactivated"}
@@ -3546,7 +2933,7 @@ async def pm_delete_provider(provider_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to delete provider: %s", e)
+        logger.error(f"Failed to delete provider: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3557,6 +2944,7 @@ async def pm_delete_provider(provider_id: str):
 from src.analytics.service import AnalyticsService
 from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
 from database.orm_models import PMProviderConnection
+from src.server.pm_handler import PMHandler
 
 
 def get_analytics_service(project_id: str, db) -> AnalyticsService:
@@ -3571,15 +2959,25 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         AnalyticsService configured with real data adapter
     """
     try:
-        # Mock providers are no longer supported - all analytics require real providers
+        # Check if this is the Mock Project - use MockPMProvider
         if project_id.startswith("mock:"):
-            logger.warning("[Analytics] Mock projects are no longer supported: %s", project_id)
-            return AnalyticsService()  # Return empty service
+            logger.info(f"[Analytics] Using MockPMProvider for project: {project_id}")
+            from src.pm_providers.mock_provider import MockPMProvider
+            from src.pm_providers.models import PMProviderConfig
+            
+            config = PMProviderConfig(
+                provider_type="mock",
+                base_url="mock://demo",
+                api_key="mock-key"
+            )
+            mock_provider = MockPMProvider(config)
+            adapter = PMProviderAnalyticsAdapter(mock_provider)
+            return AnalyticsService(adapter=adapter)
         
         # Parse project ID to get provider UUID
         if ":" not in project_id:
             # Invalid format - return empty data, not mock
-            logger.warning("Invalid project ID format: %s, returning empty data", project_id)
+            logger.warning(f"Invalid project ID format: {project_id}, returning empty data")
             return AnalyticsService()
         
         provider_uuid, _ = project_id.split(":", 1)
@@ -3591,7 +2989,7 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         ).first()
         
         if not provider_conn:
-            logger.warning("Provider with UUID %s not found, returning empty data", provider_uuid)
+            logger.warning(f"Provider with UUID {provider_uuid} not found, returning empty data")
             return AnalyticsService()
         
         # Create PM handler for this provider
@@ -3601,13 +2999,13 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         # Create analytics adapter
         adapter = PMProviderAnalyticsAdapter(provider_instance)
         
-        logger.info("[Analytics] Created analytics service with real data for project %s", project_id)
+        logger.info(f"[Analytics] Created analytics service with real data for project {project_id}")
         
         # Return analytics service with real data
         return AnalyticsService(adapter=adapter)
     
     except Exception as e:
-        logger.error("Error creating analytics service for project %s: %s", project_id, e, exc_info=True)
+        logger.error(f"Error creating analytics service for project {project_id}: {e}", exc_info=True)
         # Return empty data on error (no mock fallback)
         return AnalyticsService()
 
@@ -3619,8 +3017,8 @@ async def get_burndown_chart(
     scope_type: str = "story_points"
 ):
     """Get burndown chart for a project/sprint"""
-    logger.info("[get_burndown_chart] ========== BURNDOWN REQUEST START ==========")
-    logger.info("[get_burndown_chart] project_id=%s, sprint_id=%s, scope_type=%s", project_id, sprint_id, scope_type)
+    logger.info(f"[get_burndown_chart] ========== BURNDOWN REQUEST START ==========")
+    logger.info(f"[get_burndown_chart] project_id={project_id}, sprint_id={sprint_id}, scope_type={scope_type}")
     try:
         from database.connection import get_db_session
         
@@ -3635,13 +3033,13 @@ async def get_burndown_chart(
                 if ":" in project_id
                 else project_id
             )
-            logger.info("[get_burndown_chart] Using actual_project_id=%s, sprint_id=%s", actual_project_id, sprint_id)
+            logger.info(f"[get_burndown_chart] Using actual_project_id={actual_project_id}, sprint_id={sprint_id}")
             chart = await analytics_service.get_burndown_chart(
                 project_id=actual_project_id,
                 sprint_id=sprint_id,
                 scope_type=scope_type  # type: ignore
             )
-            logger.info("[get_burndown_chart] Success: returning chart data")
+            logger.info(f"[get_burndown_chart] Success: returning chart data")
             return chart.model_dump()
         finally:
             try:
@@ -3649,7 +3047,7 @@ async def get_burndown_chart(
             except StopIteration:
                 pass
     except Exception as e:
-        logger.error("Failed to get burndown chart: %s", e, exc_info=True)
+        logger.error(f"Failed to get burndown chart: {e}", exc_info=True)
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -3686,7 +3084,7 @@ async def get_velocity_chart(
             except StopIteration:
                 pass
     except Exception as e:
-        logger.error("Failed to get velocity chart: %s", e, exc_info=True)
+        logger.error(f"Failed to get velocity chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3719,7 +3117,7 @@ async def get_sprint_report(
         logger.warning("Sprint report unavailable: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error("Failed to get sprint report: %s", e, exc_info=True)
+        logger.error(f"Failed to get sprint report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3749,7 +3147,7 @@ async def get_project_summary(project_id: str):
         logger.warning("Project summary unavailable: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error("Failed to get project summary: %s", e, exc_info=True)
+        logger.error(f"Failed to get project summary: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3783,7 +3181,7 @@ async def get_cfd_chart(
         logger.warning("CFD chart unavailable: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error("Failed to get CFD chart: %s", e, exc_info=True)
+        logger.error(f"Failed to get CFD chart: {e}", exc_info=True)
         import traceback
         logger.error(traceback.format_exc())
         error_detail = str(e)
@@ -3820,7 +3218,7 @@ async def get_cycle_time_chart(
         logger.warning("Cycle time chart unavailable: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error("Failed to get cycle time chart: %s", e, exc_info=True)
+        logger.error(f"Failed to get cycle time chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3854,7 +3252,7 @@ async def get_work_distribution_chart(
         logger.warning("Work distribution chart unavailable: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error("Failed to get work distribution chart: %s", e, exc_info=True)
+        logger.error(f"Failed to get work distribution chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3888,5 +3286,5 @@ async def get_issue_trend_chart(
         logger.warning("Issue trend chart unavailable: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error("Failed to get issue trend chart: %s", e, exc_info=True)
+        logger.error(f"Failed to get issue trend chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

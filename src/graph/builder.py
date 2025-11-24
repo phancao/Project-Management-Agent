@@ -23,7 +23,7 @@ def continue_to_running_research_team(state: State):
     current_plan = state.get("current_plan")
     if not current_plan:
         return "planner"
-    
+
     # Handle case where current_plan might be a string (legacy)
     if isinstance(current_plan, str):
         return "planner"

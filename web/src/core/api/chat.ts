@@ -64,64 +64,49 @@ export async function* chatStream(
   },
   options: { abortSignal?: AbortSignal } = {},
 ) {
-  // Determine which endpoint to use based on current path
-  const isPMChat = typeof window !== "undefined" && window.location.pathname.startsWith("/pm/chat");
+  if (
+    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY ||
+    (typeof window !== "undefined" && window.location.search.includes("mock")) ||
+    (typeof window !== "undefined" && window.location.search.includes("replay="))
+  ) 
+    return yield* chatReplayStream(userMessage, params, options);
   
-  // Extract URL params once for reuse
-  const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  
-  // Skip replay mode for PM chat - always use real API
-  // Replay mode is only for demos/static website mode
-  if (!isPMChat) {
-    // Check for replay parameter with actual value
-    const hasReplayParam = urlParams.has("replay") && urlParams.get("replay")?.trim() !== "";
+  try{
+    const locale = getLocaleFromCookie();
     
-    if (
-      env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY ||
-      (typeof window !== "undefined" && window.location.search.includes("mock")) ||
-      hasReplayParam
-    ) {
-      return yield* chatReplayStream(userMessage, params, options);
+    // Determine which endpoint to use based on current path
+    const isPMChat = typeof window !== "undefined" && window.location.pathname.startsWith("/pm/chat");
+    
+    // Extract project context from URL if present
+    const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    const projectId = urlParams.get('project');
+    
+    // Add project context to the message if we're in a project-specific chat
+    let enhancedMessage = userMessage;
+    if (projectId) {
+      // Add project_id explicitly in a way the LLM will extract it
+      enhancedMessage = `${userMessage}\n\nproject_id: ${projectId}`;
     }
-  }
-  
-  const locale = getLocaleFromCookie();
-  
-  // Extract project context from URL if present
-  const projectId = urlParams.get('project');
-  
-  // Add project context to the message if we're in a project-specific chat
-  let enhancedMessage = userMessage;
-  if (projectId) {
-    // Add project_id explicitly in a way the LLM will extract it
-    enhancedMessage = `${userMessage}\n\nproject_id: ${projectId}`;
-  }
-  
-  // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
-  const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
-  const stream = fetchStream(resolveServiceURL(endpoint), {
-    body: JSON.stringify({
-      messages: [{ role: "user", content: enhancedMessage }],
-      locale,
-      ...params,
-    }),
-    signal: options.abortSignal,
-  });
-  
-  try {
+    
+    // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
+    const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
+    const stream = fetchStream(resolveServiceURL(endpoint), {
+      body: JSON.stringify({
+        messages: [{ role: "user", content: enhancedMessage }],
+        locale,
+        ...params,
+      }),
+      signal: options.abortSignal,
+    });
+    
     for await (const event of stream) {
       yield {
         type: event.event,
         data: JSON.parse(event.data),
       } as ChatEvent;
     }
-  } catch (e) {
-    // Re-throw the error so it can be caught by the caller (sendMessage)
-    // This prevents uncaught promise rejections
-    if (e instanceof Error) {
-      throw e;
-    }
-    throw new Error(String(e));
+  }catch(e){
+    console.error(e);
   }
 }
 
@@ -162,12 +147,10 @@ async function* chatReplayStream(
   } else {
     const searchString = typeof window !== "undefined" ? window.location.search : "";
     const replayId = extractReplayIdFromSearchParams(searchString);
-    if (replayId && replayId.trim() !== "") {
-      // Only use replay if we have a valid, non-empty replay ID
+    if (replayId) {
       replayFilePath = `/replay/${replayId}.txt`;
     } else {
-      // No valid replay ID found - fallback to default only if explicitly in replay mode
-      // This should not happen in normal usage since we check for replay= parameter before entering this function
+      // Fallback to a default replay
       replayFilePath = `/replay/eiffel-tower-vs-tallest-building.txt`;
     }
   }

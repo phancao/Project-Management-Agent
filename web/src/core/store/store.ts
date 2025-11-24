@@ -128,12 +128,6 @@ export async function sendMessage(
   let messageId: string | undefined;
   const pendingUpdates = new Map<string, Message>();
   let updateTimer: NodeJS.Timeout | undefined;
-  let eventCount = 0;
-  let hasCreatedMessage = false;
-  let streamExited = false;
-  const streamStartTime = Date.now();
-  let lastActivityTime = streamStartTime;
-  let receivedFinishReason = false;
 
   const scheduleUpdate = () => {
     if (updateTimer) clearTimeout(updateTimer);
@@ -148,50 +142,21 @@ export async function sendMessage(
 
   try {
     for await (const event of stream) {
-      eventCount++;
-      const now = Date.now();
-      const timeSinceLastActivity = now - lastActivityTime;
-      lastActivityTime = now;
       const { type, data } = event;
-
-
-      // Handle error events
-      if (type === "error") {
-        const hasErrorData = data && (typeof data === "object") && Object.keys(data).length > 0;
-        const errorMessage = data?.error ?? data?.message ?? "";
-        const hasMeaningfulError = hasErrorData && (errorMessage || data?.detail || data?.type);
-
-        // Only log in development if there's actual error content
-        if (process.env.NODE_ENV === "development" && hasMeaningfulError) {
-          console.error(`[DEBUG] Stream error event:`, data);
-        }
-
-        // Only show toast if there's actual error data with a meaningful message
-        if (hasMeaningfulError) {
-          toast(`Error: ${errorMessage || data?.detail || "An error occurred during streaming"}`);
-        }
-        // Continue processing - the stream may still have valid data
-        continue;
-      }
-
-      // If we receive finish_reason, mark that stream should exit
-      if (data.finish_reason === "stop") {
-        receivedFinishReason = true;
-      }
-
+      
       // Handle PM refresh events to update PM views
       // Type assertion needed because ChatEvent type doesn't include pm_refresh
       if ((type as string) === "pm_refresh") {
         if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("pm_refresh", {
-            detail: { type: "pm_refresh", data }
+          window.dispatchEvent(new CustomEvent("pm_refresh", { 
+            detail: { type: "pm_refresh", data } 
           }));
         }
         continue;
       }
-
+      
       let message: Message | undefined;
-
+      
       // Handle tool_call_result specially: use the message that contains the tool call
       if (type === "tool_call_result") {
         message = findMessageByToolCallId(data.tool_call_id);
@@ -208,12 +173,7 @@ export async function sendMessage(
       } else {
         // For other event types, use data.id
         messageId = data.id;
-
-        if (!messageId) {
-          // Skip events without message ID (like plan_update, step_update, etc.)
-          continue;
-        }
-
+        
         if (!existsMessage(messageId)) {
           message = {
             id: messageId,
@@ -228,18 +188,35 @@ export async function sendMessage(
             interruptFeedback,
           };
           appendMessage(message);
-          hasCreatedMessage = true;
         }
       }
-
+      
       message ??= getMessage(messageId);
       if (message) {
         const previousIsStreaming = message.isStreaming;
         const previousContentLength = message.content?.length ?? 0;
         message = mergeMessage(message, event);
         const newContentLength = message.content?.length ?? 0;
-
-
+        
+        // Debug logging for reporter messages
+        if (message.agent === "reporter") {
+          if (event.type === "message_chunk" && event.data.content) {
+            console.log(
+              `[DEBUG] Reporter message chunk: id=${message.id}, ` +
+              `content_length=${newContentLength}, ` +
+              `chunk_length=${event.data.content.length}`
+            );
+          }
+          if (event.data.finish_reason) {
+            console.log(
+              `[DEBUG] Reporter finished: id=${message.id}, ` +
+              `content_length=${newContentLength}, ` +
+              `isStreaming=${message.isStreaming}, ` +
+              `finish_reason=${event.data.finish_reason}`
+            );
+          }
+        }
+        
         // If finish_reason is present, apply update immediately to ensure UI updates quickly
         // This is especially important for reporter messages to show the final report
         if (event.data.finish_reason && previousIsStreaming) {
@@ -254,14 +231,7 @@ export async function sendMessage(
         }
       }
     }
-
-    streamExited = true;
-
-  } catch (error) {
-    streamExited = true;
-    if (process.env.NODE_ENV === "development") {
-      console.error("[DEBUG] Stream error:", error);
-    }
+  } catch {
     toast("An error occurred while generating the response. Please try again.");
     // Update message status.
     // TODO: const isAborted = (error as Error).name === "AbortError";
@@ -274,39 +244,13 @@ export async function sendMessage(
     }
     useStore.getState().setOngoingResearch(null);
   } finally {
+    setResponding(false);
     // Ensure all pending updates are processed.
     if (updateTimer) clearTimeout(updateTimer);
     if (pendingUpdates.size > 0) {
       useStore.getState().updateMessages(Array.from(pendingUpdates.values()));
     }
 
-
-    // Always set responding to false when stream completes
-    // The loading animation should be controlled by message.isStreaming, not responding
-    const previousResponding = useStore.getState().responding;
-    setResponding(false);
-
-    // Ensure ALL streaming messages are marked as not streaming
-    // This is critical to prevent UI from appearing stuck
-    const state = useStore.getState();
-    const streamingMessages = Array.from(state.messages.values()).filter(m => m.isStreaming);
-    if (streamingMessages.length > 0) {
-      const updatedMessages = new Map(state.messages);
-      streamingMessages.forEach(msg => {
-        msg.isStreaming = false;
-        updatedMessages.set(msg.id, msg);
-      });
-      useStore.setState({ messages: updatedMessages });
-    }
-
-    // Also ensure the last message is marked as not streaming
-    if (messageId) {
-      const finalMessage = getMessage(messageId);
-      if (finalMessage?.isStreaming) {
-        finalMessage.isStreaming = false;
-        useStore.getState().updateMessage(finalMessage);
-      }
-    }
   }
 }
 
@@ -353,7 +297,7 @@ function updateMessage(message: Message) {
   if (message.agent === "reporter" && !message.isStreaming) {
     // Find researchId - either from ongoingResearchId or by looking up which research has this reporter message
     let researchId = getOngoingResearchId();
-
+    
     // If ongoingResearchId is null, find the research that has this reporter message as its report
     if (!researchId) {
       const state = useStore.getState();
@@ -373,10 +317,21 @@ function updateMessage(message: Message) {
         }
       }
     }
-
+    
     if (researchId) {
       const currentReportId = useStore.getState().researchReportIds.get(researchId);
-
+      const contentLength = message.content?.length ?? 0;
+      const contentChunksLength = message.contentChunks?.length ?? 0;
+      
+      console.log(
+        `[DEBUG] Reporter message update: ` +
+        `researchId=${researchId}, ` +
+        `messageId=${message.id}, ` +
+        `content_length=${contentLength}, ` +
+        `contentChunks_length=${contentChunksLength}, ` +
+        `currentReportId=${currentReportId}`
+      );
+      
       if (!currentReportId || currentReportId !== message.id) {
         useStore.setState({
           researchReportIds: new Map(useStore.getState().researchReportIds).set(
@@ -384,13 +339,24 @@ function updateMessage(message: Message) {
             message.id,
           ),
         });
+        console.log(`[DEBUG] Set researchReportIds[${researchId}] = ${message.id}`);
       }
       // Always auto-open the research when report finishes so user can see the results immediately
       // This ensures the report content is visible without requiring user to click "Open"
       const currentOpenResearchId = useStore.getState().openResearchId;
       useStore.getState().openResearch(researchId);
+      console.log(
+        `[DEBUG] Auto-opened research: ` +
+        `previousOpenResearchId=${currentOpenResearchId}, ` +
+        `newOpenResearchId=${researchId}`
+      );
       // Clear ongoingResearchId to stop the loading indicator
       useStore.getState().setOngoingResearch(null);
+      console.log(`[DEBUG] Cleared ongoingResearchId`);
+    } else {
+      console.warn(
+        `[DEBUG] Reporter message update: Could not find researchId for reporter message ${message.id}`
+      );
     }
   }
   useStore.getState().updateMessage(message);
@@ -557,10 +523,10 @@ export function useRenderableMessageIds() {
           return false;
         }
         seen.add(messageId);
-
+        
         const message = state.messages.get(messageId);
         if (!message) return false;
-
+        
         // Only include messages that match MessageListItem rendering conditions
         // These are the same conditions checked in MessageListItem component
         return (

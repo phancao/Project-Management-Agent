@@ -138,10 +138,10 @@ services:
       OPENPROJECT_DATABASE_PASSWORD: openproject
       OPENPROJECT_DATABASE_DB_NAME: openproject
       OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY:-development-secret-key-change-in-production}
-      OPENPROJECT_HOST__NAME: localhost:8080
+      OPENPROJECT_HOST__NAME: localhost:8082
       OPENPROJECT_HTTPS: "false"
     ports:
-      - "8080:80"
+      - "8082:80"
     depends_on:
       openproject_db:
         condition: service_healthy

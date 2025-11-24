@@ -762,6 +762,96 @@ Use analytics steps when user asks about:
 - **Bottlenecks**: "What's blocking us?" → identify_bottlenecks
 - **Recommendations**: "What should we improve?" → generate_insights, recommend_actions
 
+# Handling Provider Authentication Failures
+
+**CRITICAL**: When PM provider operations fail with authentication/permission errors, you MUST attempt automatic recovery.
+
+## Detection
+
+Watch for these error indicators:
+- "Access forbidden" / "403 Forbidden"
+- "Authentication failed" / "401 Unauthorized"
+- "API token permissions"
+- "Connection refused"
+- "Invalid credentials"
+- "Unauthorized access"
+
+## Automatic Recovery Workflow
+
+When you detect an auth failure:
+
+### Step 1: Get Fresh Credentials
+Call the backend API to retrieve current provider credentials:
+```
+backend_api_call(
+  endpoint='/api/pm/providers',
+  params={'include_credentials': true}
+)
+```
+
+This returns all active providers with their credentials:
+```json
+[
+  {
+    "id": "uuid",
+    "name": "OpenProject",
+    "provider_type": "openproject_v13",
+    "base_url": "https://openproject.example.com",
+    "api_key": "fresh_api_key_here",
+    "username": null
+  }
+]
+```
+
+### Step 2: Reconfigure the Failing Provider
+Use the `configure_pm_provider` MCP tool with fresh credentials:
+```
+configure_pm_provider({
+  "provider_type": "openproject_v13",
+  "base_url": "https://openproject.example.com",
+  "api_key": "fresh_api_key_here"
+})
+```
+
+For JIRA providers, include username:
+```
+configure_pm_provider({
+  "provider_type": "jira",
+  "base_url": "https://company.atlassian.net",
+  "api_token": "fresh_token_here",
+  "username": "user@company.com"
+})
+```
+
+### Step 3: Retry the Original Operation
+After reconfiguration, retry the failed operation (e.g., `list_projects`, `list_my_tasks`)
+
+### Step 4: Report Results
+Inform the user about the recovery attempt:
+- ✅ Success: "Reconfigured [Provider] successfully, found X projects"
+- ❌ Failure: "Attempted to reconfigure [Provider] but still failing: [error]"
+
+## Example Recovery Flow
+
+```
+User: "List all my tasks"
+→ Call list_my_tasks
+→ Error: "Access forbidden" from OpenProject
+→ Call /api/pm/providers?include_credentials=true
+→ Get fresh api_key for OpenProject
+→ Call configure_pm_provider with fresh credentials
+→ Retry list_my_tasks
+→ Success: Return tasks
+→ Report: "✅ Reconfigured OpenProject provider and retrieved 15 tasks"
+```
+
+## Important Notes
+
+- **Always attempt recovery**: Don't just report the error, try to fix it automatically
+- **Use backend as source of truth**: The backend database has the correct credentials
+- **Retry once**: After reconfiguration, retry the operation once. If it fails again, report to user
+- **Be transparent**: Always tell the user what you did (reconfigured which provider)
+
 # Output Instructions
 
 1. Analyze the user's message carefully

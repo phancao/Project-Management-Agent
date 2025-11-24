@@ -234,6 +234,83 @@ class MCPPMHandler:
                 continue
         
         return all_tasks
+
+    async def list_project_tasks(
+        self,
+        project_id: str,
+        assignee_id: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List tasks for a specific project."""
+        return await self.list_all_tasks(
+            project_id=project_id,
+            assignee_id=assignee_id,
+            status=status
+        )
+
+    async def list_my_tasks(self) -> List[Dict[str, Any]]:
+        """
+        List all tasks assigned to the current user across all providers.
+        
+        Returns:
+            List of tasks with provider_id prefix in task.id
+        """
+        providers = self._get_active_providers()
+        
+        if not providers:
+            return []
+        
+        all_tasks = []
+        
+        for provider in providers:
+            try:
+                provider_instance = self._create_provider_instance(provider)
+                
+                # Get current user
+                current_user = await provider_instance.get_current_user()
+                if not current_user:
+                    logger.warning(f"[MCP PMHandler] Provider {provider.id} does not support get_current_user or returned None")
+                    continue
+                
+                logger.info(f"[MCP PMHandler] Found current user for provider {provider.id}: {current_user.id} ({current_user.name})")
+                
+                # Fetch projects for this provider to build name mapping
+                projects = await provider_instance.list_projects()
+                project_map = {str(p.id): p.name for p in projects}
+                
+                # List tasks assigned to this user
+                tasks = await provider_instance.list_tasks(assignee_id=current_user.id)
+                
+                # Prefix task ID with provider_id
+                for t in tasks:
+                    all_tasks.append({
+                        "id": f"{provider.id}:{t.id}",
+                        "title": t.title,
+                        "description": t.description or "",
+                        "status": (
+                            t.status.value
+                            if t.status and hasattr(t.status, 'value')
+                            else str(t.status) if t.status else "None"
+                        ),
+                        "priority": (
+                            t.priority.value
+                            if t.priority and hasattr(t.priority, 'value')
+                            else str(t.priority) if t.priority else "None"
+                        ),
+                        "assignee": t.assignee or current_user.name,
+                        "project_id": f"{provider.id}:{t.project_id}",
+                        "project_name": project_map.get(str(t.project_id), ""),
+                        "provider_id": str(provider.id),
+                        "provider_type": provider.provider_type,
+                    })
+            except Exception as e:
+                logger.error(
+                    f"[MCP PMHandler] Error listing my tasks from provider {provider.id}: {e}",
+                    exc_info=True
+                )
+                continue
+        
+        return all_tasks
     
     @classmethod
     def from_db_session(

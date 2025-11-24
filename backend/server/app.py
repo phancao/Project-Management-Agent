@@ -1470,6 +1470,8 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
 @app.get("/api/pm/projects/{project_id}/tasks")
 async def pm_list_tasks(request: Request, project_id: str):
     """List all tasks for a project"""
+    print(f"DEBUG: pm_list_tasks called with project_id={project_id}")
+    logger.info(f"DEBUG: pm_list_tasks called with project_id={project_id}")
     try:
         from database.connection import get_db_session
         from src.server.pm_handler import PMHandler
@@ -1479,74 +1481,75 @@ async def pm_list_tasks(request: Request, project_id: str):
         
         try:
             # Check if project_id has provider prefix
-            if ":" not in project_id:
-                # Fallback: use global flow_manager if no provider_id prefix
-                from src.conversation.flow_manager import (
-                    ConversationFlowManager
-                )
+            if ":" in project_id:
+                # Use PMHandler for provider-prefixed project IDs
+                handler = PMHandler.from_db_session(db)
+                tasks = await handler.list_project_tasks(project_id)
+                return tasks
+            else:
+                # No prefix - try to find project in any provider
+                handler = PMHandler.from_db_session(db)
+                
+                # First try legacy flow_manager if configured
+                from src.conversation.flow_manager import ConversationFlowManager
                 global flow_manager
                 if flow_manager is None:
                     flow_manager = ConversationFlowManager(db_session=db)
-                fm = flow_manager
                 
-                if not fm.pm_provider:
-                    raise HTTPException(
-                        status_code=503, detail="PM Provider not configured"
-                    )
+                if flow_manager.pm_provider:
+                    # Legacy path
+                    tasks = await flow_manager.pm_provider.list_tasks(project_id=project_id)
+                    # ... (legacy mapping logic omitted for brevity, assuming we prefer PMHandler path if possible)
+                    # Actually, let's just use PMHandler logic which is more robust
+                    pass
                 
-                tasks = await fm.pm_provider.list_tasks(
-                    project_id=project_id
+                # Search for project in all providers
+                projects = await handler.list_all_projects()
+                target_project = None
+                for p in projects:
+                    # p['id'] is "provider_id:project_id"
+                    if p['id'].endswith(f":{project_id}") or p['id'] == project_id:
+                        target_project = p
+                        break
+                
+                if target_project:
+                    # Found it! Use the prefixed ID
+                    tasks = await handler.list_project_tasks(target_project['id'])
+                    return tasks
+                
+                # If not found, and legacy provider is configured, try legacy
+                if flow_manager.pm_provider:
+                     tasks = await flow_manager.pm_provider.list_tasks(project_id=project_id)
+                     # Map legacy tasks
+                     assignee_map = {}
+                     for task in tasks:
+                        if task.assignee_id and task.assignee_id not in assignee_map:
+                            try:
+                                user = await flow_manager.pm_provider.get_user(task.assignee_id)
+                                if user:
+                                    assignee_map[task.assignee_id] = user.name
+                            except Exception:
+                                pass
+                     return [
+                        {
+                            "id": str(t.id),
+                            "title": t.title,
+                            "description": t.description,
+                            "status": (t.status.value if hasattr(t.status, 'value') else str(t.status)),
+                            "priority": (t.priority.value if hasattr(t.priority, 'value') else str(t.priority)),
+                            "estimated_hours": t.estimated_hours,
+                            "start_date": (t.start_date.isoformat() if t.start_date else None),
+                            "due_date": (t.due_date.isoformat() if t.due_date else None),
+                            "assigned_to": assignee_map.get(t.assignee_id),
+                            "assignee_id": str(t.assignee_id) if t.assignee_id else None,
+                        }
+                        for t in tasks
+                     ]
+
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Project {project_id} not found in any active provider"
                 )
-                # Continue with assignee map logic below
-                assignee_map = {}
-                for task in tasks:
-                    if (task.assignee_id and
-                            task.assignee_id not in assignee_map):
-                        try:
-                            user = await fm.pm_provider.get_user(
-                                task.assignee_id
-                            )
-                            if user:
-                                assignee_map[task.assignee_id] = user.name
-                        except Exception:
-                            pass
-                
-                return [
-                    {
-                        "id": str(t.id),
-                        "title": t.title,
-                        "description": t.description,
-                        "status": (
-                            t.status.value
-                            if hasattr(t.status, 'value')
-                            else str(t.status)
-                        ),
-                        "priority": (
-                            t.priority.value
-                            if hasattr(t.priority, 'value')
-                            else str(t.priority)
-                        ),
-                        "estimated_hours": t.estimated_hours,
-                        "start_date": (
-                            t.start_date.isoformat() if t.start_date else None
-                        ),
-                        "due_date": (
-                            t.due_date.isoformat() if t.due_date else None
-                        ),
-                        "assigned_to": (
-                            assignee_map.get(t.assignee_id)
-                            if t.assignee_id
-                            else None
-                        ),
-                        "assignee_id": str(t.assignee_id) if t.assignee_id else None,
-                    }
-                    for t in tasks
-                ]
-            
-            # Use PMHandler for provider-prefixed project IDs
-            handler = PMHandler.from_db_session(db)
-            tasks = await handler.list_project_tasks(project_id)
-            return tasks
         finally:
             db.close()
     except ValueError as ve:

@@ -181,10 +181,10 @@ services:
       OPENPROJECT_DB_PASSWORD: openproject
       OPENPROJECT_DB_DATABASE: openproject
       OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY_V13:-development-secret-key-v13-change-in-production}
-      OPENPROJECT_HOST__NAME: localhost:8081
+      OPENPROJECT_HOST__NAME: localhost:8083
       OPENPROJECT_HTTPS: "false"
     ports:
-      - "8081:80"
+      - "8083:80"
     depends_on:
       openproject_db_v13:
         condition: service_healthy
@@ -198,7 +198,9 @@ services:
       start_period: 180s # OpenProject takes time to start
 
   # MCP Server Database (separate from backend)
+  # MCP Server Database (separate from backend)
   mcp_postgres:
+    container_name: mcp-postgres
     image: pgvector/pgvector:pg15
     environment:
       POSTGRES_DB: mcp_server
@@ -222,7 +224,7 @@ services:
       context: .
       dockerfile: Dockerfile.mcp-server
     environment:
-      - DATABASE_URL=postgresql://mcp_user:mcp_password@mcp_postgres:5432/mcp_server
+      - DATABASE_URL=postgresql://mcp_user:mcp_password@mcp-postgres:5432/mcp_server
       - LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
       - ENABLE_AUTH=${MCP_ENABLE_AUTH:-false}
       - ENABLE_RBAC=${MCP_ENABLE_RBAC:-false}

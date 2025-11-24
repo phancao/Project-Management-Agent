@@ -185,23 +185,42 @@ def register_provider_config_tools(
                 
                 # Test connection
                 try:
-                    provider_instance = create_pm_provider(
-                        provider_type=provider_type,
-                        base_url=base_url,
-                        api_key=arguments.get("api_key"),
-                        api_token=arguments.get("api_token"),
-                        username=arguments.get("username"),
-                        organization_id=arguments.get("organization_id"),
-                        workspace_id=arguments.get("workspace_id"),
-                    )
-                    
-                    # Test health check
-                    is_healthy = await provider_instance.health_check()
+                    # Helper to test connection
+                    async def test_provider_connection(url_to_test):
+                        provider_instance = create_pm_provider(
+                            provider_type=provider_type,
+                            base_url=url_to_test,
+                            api_key=arguments.get("api_key"),
+                            api_token=arguments.get("api_token"),
+                            username=arguments.get("username"),
+                            organization_id=arguments.get("organization_id"),
+                            workspace_id=arguments.get("workspace_id"),
+                        )
+                        return await provider_instance.health_check(), provider_instance
+
+                    # First try: Use the URL exactly as provided
+                    is_healthy, provider_instance = await test_provider_connection(base_url)
+
+                    # Retry logic for Docker 'localhost' issue
+                    if not is_healthy and "localhost" in base_url:
+                        logger.info(f"Connection to {base_url} failed. Trying host.docker.internal...")
+                        docker_url = base_url.replace("localhost", "host.docker.internal")
+                        is_healthy_docker, _ = await test_provider_connection(docker_url)
+                        
+                        if is_healthy_docker:
+                            logger.info(f"Connection successful using {docker_url}")
+                            # Update the provider in DB to use the working URL
+                            provider.base_url = docker_url
+                            db.commit()
+                            db.refresh(provider)
+                            base_url = docker_url # Update local var for success message
+                            is_healthy = True
+
                     if not is_healthy:
                         return [TextContent(
                             type="text",
                             text=f"Warning: Provider configured (ID: {provider.id}) but health check failed. "
-                                 f"Please verify your credentials."
+                                 f"Please verify your credentials and ensure the URL is accessible from the agent container."
                         )]
                     
                     # Try to list projects to verify
@@ -213,6 +232,7 @@ def register_provider_config_tools(
                              f"Provider ID: {provider.id}\n"
                              f"Name: {provider_name}\n"
                              f"Type: {provider_type}\n"
+                             f"URL: {base_url}\n"
                              f"Found {len(projects)} project(s).\n"
                              f"You can now use list_projects, create_task, and other PM tools."
                     )]

@@ -218,7 +218,16 @@ class OpenProjectProvider(BasePMProvider):
         # Include priority in embedded data for better parsing
         params["include"] = "priority,status,assignee,project,version,parent"
         
-        response = requests.get(url, headers=self.headers, params=params)
+        logger.info(f"OpenProject list_tasks: URL={url}, params={params}")
+        
+        try:
+            response = requests.get(url, headers=self.headers, params=params)
+            logger.info(f"OpenProject list_tasks response: {response.status_code}")
+            if not response.ok:
+                logger.error(f"OpenProject list_tasks failed: {response.text}")
+        except Exception as e:
+            logger.error(f"OpenProject list_tasks request exception: {e}")
+            raise
         
         # Log if filter returns no results
         if assignee_id:

@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Management Agent - Architecture Deep Dive</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 8px;
+        }
+        h3 {
+            color: #7f8c8d;
+            margin-top: 30px;
+        }
+        .mermaid {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+            border: 1px solid #e1e4e8;
+        }
+        code {
+            background: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        @media print {
+            body {
+                background: white;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏗️ Project Management Agent - Architecture Deep Dive</h1>
+        
+        <h2>🎯 System Architecture</h2>
+        <h3>Complete System Overview</h3>
+        <div class="mermaid">
+graph TB
+    subgraph "Frontend Layer"
+        UI[Next.js UI]
+        Chat[Chat Interface]
+        Dashboard[Project Dashboard]
+        Tasks[Task Management]
+    end
+
+    subgraph "API Gateway Layer"
+        FastAPI[FastAPI Server]
+        WS[WebSocket Handler]
+        REST[REST Endpoints]
+        Auth[Authentication]
+    end
+
+    subgraph "Agent Layer"
+        FlowMgr[Conversation Flow Manager]
+        DeerFlow[DeerFlow Research Agent]
+        PMAgent[PM Agent]
+        CustomAgents[Custom Agents]
+    end
+
+    subgraph "MCP Layer"
+        MCPServer[MCP Server]
+        MCPTools[MCP Tools]
+        MCPAuth[MCP Auth]
+    end
+
+    subgraph "Provider Layer"
+        PMHandler[PM Handler]
+        InternalProvider[Internal Provider]
+        OpenProjectProvider[OpenProject Provider]
+        JiraProvider[JIRA Provider - Stub]
+        ClickUpProvider[ClickUp Provider - Stub]
+    end
+
+    subgraph "Data Layer"
+        MainDB[(PostgreSQL - Main)]
+        MCPDB[(PostgreSQL - MCP)]
+        VectorDB[(Qdrant - Vectors)]
+        Cache[(Redis - Cache)]
+    end
+
+    subgraph "External Systems"
+        OpenAI[OpenAI API]
+        OpenProject[OpenProject Instance]
+        Search[DuckDuckGo Search]
+    end
+
+    UI --> FastAPI
+    Chat --> FastAPI
+    Dashboard --> FastAPI
+    Tasks --> FastAPI
+
+    FastAPI --> WS
+    FastAPI --> REST
+    FastAPI --> Auth
+
+    REST --> FlowMgr
+    REST --> PMHandler
+    WS --> FlowMgr
+
+    FlowMgr --> DeerFlow
+    FlowMgr --> PMAgent
+    FlowMgr --> CustomAgents
+
+    DeerFlow --> MCPServer
+    PMAgent --> MCPServer
+
+    MCPServer --> MCPTools
+    MCPServer --> MCPAuth
+
+    MCPTools --> PMHandler
+
+    PMHandler --> InternalProvider
+    PMHandler --> OpenProjectProvider
+    PMHandler --> JiraProvider
+    PMHandler --> ClickUpProvider
+
+    InternalProvider --> MainDB
+    OpenProjectProvider --> OpenProject
+    
+    DeerFlow --> OpenAI
+    DeerFlow --> Search
+    PMAgent --> OpenAI
+
+    MCPAuth --> MCPDB
+    FlowMgr --> Cache
+    DeerFlow --> VectorDB
+        </div>
+
+        <h2>🔄 Data Flow Patterns</h2>
+        
+        <h3>Pattern 1: Research Query Flow</h3>
+        <div class="mermaid">
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant FastAPI
+    participant Workflow
+    participant DeerFlow
+    participant Search
+    participant LLM
+    participant VectorDB
+
+    User->>Frontend: "Research quantum computing"
+    Frontend->>FastAPI: POST /api/chat
+    FastAPI->>Workflow: run_agent_workflow_async()
+    
+    Workflow->>DeerFlow: Initialize research
+    
+    alt Background Investigation Enabled
+        DeerFlow->>Search: Web search
+        Search-->>DeerFlow: Search results
+    end
+    
+    alt Clarification Needed
+        DeerFlow->>LLM: Check if clarification needed
+        LLM-->>DeerFlow: Clarification questions
+        DeerFlow-->>User: Ask clarifying questions
+        User->>DeerFlow: Provide answers
+    end
+    
+    DeerFlow->>LLM: Generate research plan
+    LLM-->>DeerFlow: Research plan
+    
+    loop For each research step
+        DeerFlow->>Search: Execute search
+        Search-->>DeerFlow: Results
+        DeerFlow->>LLM: Analyze results
+        LLM-->>DeerFlow: Analysis
+    end
+    
+    DeerFlow->>VectorDB: Store research results
+    DeerFlow->>LLM: Generate final report
+    LLM-->>DeerFlow: Report
+    
+    DeerFlow-->>Workflow: Research complete
+    Workflow-->>FastAPI: Stream results
+    FastAPI-->>Frontend: SSE stream
+    Frontend-->>User: Display results
+        </div>
+
+        <h3>Pattern 2: Direct PM Operation (UI)</h3>
+        <div class="mermaid">
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant FastAPI
+    participant PMHandler
+    participant Provider
+    participant ExternalPM
+
+    User->>Frontend: Create new task
+    Frontend->>FastAPI: POST /api/pm/projects/{id}/tasks
+    FastAPI->>PMHandler: create_task(task_data)
+    PMHandler->>Provider: create_task(PMTask)
+    
+    alt Internal Provider
+        Provider->>Database: INSERT task
+        Database-->>Provider: Task created
+    else OpenProject Provider
+        Provider->>ExternalPM: POST /api/v3/work_packages
+        ExternalPM-->>Provider: Work package created
+        Provider->>Provider: Transform to PMTask
+    end
+    
+    Provider-->>PMHandler: PMTask
+    PMHandler-->>FastAPI: Task response
+    FastAPI-->>Frontend: JSON response
+    Frontend-->>User: Task created confirmation
+        </div>
+
+        <h3>Pattern 3: Conversational PM Operation (MCP)</h3>
+        <div class="mermaid">
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant FastAPI
+    participant DeerFlow
+    participant MCPServer
+    participant PMHandler
+    participant Provider
+    participant ExternalPM
+
+    User->>Frontend: "Show me sprint 4 progress"
+    Frontend->>FastAPI: POST /api/chat
+    FastAPI->>DeerFlow: Process query
+    
+    DeerFlow->>DeerFlow: Classify intent
+    DeerFlow->>MCPServer: Call list_sprints tool
+    
+    MCPServer->>MCPServer: Authenticate request
+    MCPServer->>PMHandler: list_sprints(project_id)
+    PMHandler->>Provider: list_sprints(project_id)
+    
+    Provider->>ExternalPM: GET /api/v3/versions
+    ExternalPM-->>Provider: Sprint data
+    Provider->>Provider: Transform to PMSprint[]
+    
+    Provider-->>PMHandler: PMSprint[]
+    PMHandler-->>MCPServer: Sprint list
+    MCPServer-->>DeerFlow: Tool result
+    
+    DeerFlow->>DeerFlow: Analyze sprint data
+    DeerFlow->>MCPServer: Call get_sprint_tasks tool
+    MCPServer->>PMHandler: get_sprint_tasks(sprint_id)
+    PMHandler->>Provider: list_tasks(sprint_id=sprint_id)
+    Provider->>ExternalPM: GET /api/v3/work_packages
+    ExternalPM-->>Provider: Tasks
+    Provider-->>PMHandler: PMTask[]
+    PMHandler-->>MCPServer: Task list
+    MCPServer-->>DeerFlow: Tool result
+    
+    DeerFlow->>DeerFlow: Calculate progress metrics
+    DeerFlow-->>FastAPI: Formatted response
+    FastAPI-->>Frontend: Stream response
+    Frontend-->>User: "Sprint 4 is 65% complete..."
+        </div>
+
+        <h2>🗄️ Database Architecture</h2>
+        
+        <h3>Main Database Schema</h3>
+        <div class="mermaid">
+erDiagram
+    USERS ||--o{ PROJECTS : owns
+    USERS ||--o{ TEAM_MEMBERS : "is member"
+    PROJECTS ||--o{ TASKS : contains
+    PROJECTS ||--o{ SPRINTS : has
+    PROJECTS ||--o{ TEAM_MEMBERS : has
+    TASKS ||--o{ TASKS : "parent of"
+    TASKS }o--|| USERS : "assigned to"
+    SPRINTS ||--o{ TASKS : contains
+    PROJECTS ||--o{ RESEARCH_SESSIONS : "researched for"
+    USERS ||--o{ CONVERSATION_SESSIONS : has
+    PROJECTS ||--o{ PROJECT_METRICS : tracks
+
+    USERS {
+        uuid id PK
+        string email
+        string username
+        string password_hash
+        timestamp created_at
+    }
+
+    PROJECTS {
+        uuid id PK
+        string name
+        text description
+        string status
+        uuid owner_id FK
+        date start_date
+        date end_date
+    }
+
+    TASKS {
+        uuid id PK
+        string title
+        text description
+        string status
+        string priority
+        uuid project_id FK
+        uuid parent_task_id FK
+        uuid assignee_id FK
+        float estimated_hours
+        float actual_hours
+        date due_date
+    }
+
+    SPRINTS {
+        uuid id PK
+        string name
+        uuid project_id FK
+        date start_date
+        date end_date
+        string status
+        float capacity_hours
+        text goal
+    }
+
+    TEAM_MEMBERS {
+        uuid id PK
+        uuid project_id FK
+        uuid user_id FK
+        string role
+        timestamp joined_at
+    }
+        </div>
+
+        <h3>MCP Database Schema</h3>
+        <div class="mermaid">
+erDiagram
+    USERS ||--o{ API_KEYS : has
+    USERS ||--o{ PM_PROVIDER_CONNECTIONS : owns
+    PM_PROVIDER_CONNECTIONS ||--o{ PROJECT_SYNC_MAPPINGS : has
+
+    USERS {
+        uuid id PK
+        string username
+        string email
+        string password_hash
+        boolean is_active
+    }
+
+    API_KEYS {
+        uuid id PK
+        uuid user_id FK
+        string key_hash
+        string name
+        timestamp expires_at
+        timestamp last_used_at
+    }
+
+    PM_PROVIDER_CONNECTIONS {
+        uuid id PK
+        string name
+        string provider_type
+        string base_url
+        string api_key
+        string api_token
+        uuid user_id FK
+        jsonb additional_config
+    }
+
+    PROJECT_SYNC_MAPPINGS {
+        uuid id PK
+        uuid internal_project_id
+        uuid provider_connection_id FK
+        string external_project_id
+        boolean sync_enabled
+        timestamp last_sync_at
+        jsonb sync_config
+    }
+        </div>
+
+        <h2>🔧 Component Details</h2>
+        
+        <h3>1. DeerFlow Workflow</h3>
+        <div class="mermaid">
+graph LR
+    Start[User Input] --> Clarify{Needs Clarification?}
+    Clarify -->|Yes| AskQuestions[Ask Questions]
+    AskQuestions --> GetAnswers[Get Answers]
+    GetAnswers --> Investigate
+    Clarify -->|No| Investigate[Background Investigation]
+    
+    Investigate --> Plan[Generate Research Plan]
+    Plan --> Execute[Execute Plan Steps]
+    Execute --> Reflect[Reflect on Results]
+    Reflect --> Complete{Plan Complete?}
+    Complete -->|No| Plan
+    Complete -->|Yes| Report[Generate Report]
+    Report --> End[Return Results]
+        </div>
+
+        <h3>2. PM Provider Architecture</h3>
+        <div class="mermaid">
+graph TB
+    subgraph "Application Layer"
+        FlowManager[Flow Manager]
+        Handlers[Handlers]
+        API[API Endpoints]
+    end
+
+    subgraph "Abstraction Layer"
+        Factory[Provider Factory]
+        Base[BasePMProvider Interface]
+    end
+
+    subgraph "Implementation Layer"
+        Internal[Internal Provider]
+        OpenProject[OpenProject Provider]
+        JIRA[JIRA Provider]
+        ClickUp[ClickUp Provider]
+    end
+
+    subgraph "Data Layer"
+        DB[(PostgreSQL)]
+        OPInstance[OpenProject Instance]
+        JIRACloud[JIRA Cloud]
+        ClickUpAPI[ClickUp API]
+    end
+
+    FlowManager --> Factory
+    Handlers --> Factory
+    API --> Factory
+
+    Factory --> Base
+    Base --> Internal
+    Base --> OpenProject
+    Base --> JIRA
+    Base --> ClickUp
+
+    Internal --> DB
+    OpenProject --> OPInstance
+    JIRA --> JIRACloud
+    ClickUp --> ClickUpAPI
+        </div>
+
+        <h3>3. MCP Server Architecture</h3>
+        <div class="mermaid">
+graph TB
+    subgraph "Transport Layer"
+        SSE[SSE Transport]
+        HTTP[HTTP Transport]
+        STDIO[STDIO Transport]
+    end
+
+    subgraph "Server Core"
+        MCPServer[MCP Server]
+        ToolRegistry[Tool Registry]
+        Auth[Authentication]
+        RBAC[RBAC]
+    end
+
+    subgraph "Tools"
+        ProjectTools[Project Tools]
+        TaskTools[Task Tools]
+        SprintTools[Sprint Tools]
+        UserTools[User Tools]
+        AnalyticsTools[Analytics Tools]
+    end
+
+    subgraph "Services"
+        PMHandler[PM Handler]
+        ProviderFactory[Provider Factory]
+    end
+
+    SSE --> MCPServer
+    HTTP --> MCPServer
+    STDIO --> MCPServer
+
+    MCPServer --> ToolRegistry
+    MCPServer --> Auth
+    MCPServer --> RBAC
+
+    ToolRegistry --> ProjectTools
+    ToolRegistry --> TaskTools
+    ToolRegistry --> SprintTools
+    ToolRegistry --> UserTools
+    ToolRegistry --> AnalyticsTools
+
+    ProjectTools --> PMHandler
+    TaskTools --> PMHandler
+    SprintTools --> PMHandler
+    UserTools --> PMHandler
+    AnalyticsTools --> PMHandler
+
+    PMHandler --> ProviderFactory
+        </div>
+
+        <h2>🚀 Deployment Architecture</h2>
+        
+        <h3>Docker Compose Services</h3>
+        <div class="mermaid">
+graph TB
+    subgraph "Frontend Services"
+        Frontend[frontend:3000]
+    end
+
+    subgraph "Backend Services"
+        API[api:8000]
+        MCPServer[pm_mcp_server:8080]
+    end
+
+    subgraph "Database Services"
+        MainDB[postgres:5432]
+        MCPDB[mcp_postgres:5435]
+        VectorDB[qdrant:6333]
+        Cache[redis:6379]
+    end
+
+    subgraph "External PM Services"
+        OPDB[openproject_db:5433]
+        OP[openproject:8080]
+        OPDB13[openproject_db_v13:5434]
+        OP13[openproject_v13:8081]
+    end
+
+    Frontend --> API
+    API --> MainDB
+    API --> Cache
+    API --> MCPServer
+    MCPServer --> MCPDB
+    MCPServer --> OP
+    MCPServer --> OP13
+    API --> VectorDB
+    OP --> OPDB
+    OP13 --> OPDB13
+        </div>
+
+        <h2>🔐 Authentication & Authorization Flow</h2>
+        <div class="mermaid">
+sequenceDiagram
+    participant Client
+    participant FastAPI
+    participant Auth
+    participant MCPServer
+    participant MCPAuth
+    participant Database
+
+    Client->>FastAPI: Request with credentials
+    FastAPI->>Auth: Validate credentials
+    Auth->>Database: Check user
+    Database-->>Auth: User data
+    Auth-->>FastAPI: JWT token
+    FastAPI-->>Client: Token
+
+    Client->>FastAPI: Request with JWT
+    FastAPI->>Auth: Validate JWT
+    Auth-->>FastAPI: User context
+
+    FastAPI->>MCPServer: Request with API key
+    MCPServer->>MCPAuth: Validate API key
+    MCPAuth->>Database: Check API key
+    Database-->>MCPAuth: Key valid + user
+    MCPAuth->>MCPAuth: Check RBAC permissions
+    MCPAuth-->>MCPServer: Authorized
+    MCPServer-->>FastAPI: Response
+    FastAPI-->>Client: Response
+        </div>
+
+        <h2>📊 Agent Workflow States</h2>
+        <div class="mermaid">
+stateDiagram-v2
+    [*] --> Initialize
+    Initialize --> Clarification: enable_clarification=true
+    Initialize --> Investigation: enable_clarification=false
+    
+    Clarification --> CheckClarityNeeded
+    CheckClarityNeeded --> AskQuestion: Needs clarification
+    CheckClarityNeeded --> Investigation: Clear enough
+    AskQuestion --> ReceiveAnswer
+    ReceiveAnswer --> CheckClarityNeeded
+    
+    Investigation --> Planning: Background research done
+    Planning --> Execution
+    Execution --> Reflection
+    Reflection --> Planning: Need more steps
+    Reflection --> Finalization: Plan complete
+    
+    Finalization --> [*]
+        </div>
+
+        <hr style="margin: 40px 0;">
+        <p style="text-align: center; color: #7f8c8d;">
+            <strong>Project Management Agent - Architecture Documentation</strong><br>
+            Generated: 2025-11-22<br>
+            All diagrams rendered with Mermaid.js
+        </p>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>

@@ -177,7 +177,29 @@ class AnalyticsService:
             return cached
         
         if not self.adapter:
-            raise ValueError("Analytics adapter not configured for this project.")
+            logger.info("No analytics adapter configured for project %s", project_id)
+            # Return empty sprint report with informative message
+            return SprintReport(
+                sprint_id=sprint_id,
+                sprint_name=f"Sprint {sprint_id}",
+                project_id=project_id,
+                start_date=date.today(),
+                end_date=date.today(),
+                status="unknown",
+                planned_points=0,
+                completed_points=0,
+                added_points=0,
+                removed_points=0,
+                completion_rate=0.0,
+                velocity=0.0,
+                total_tasks=0,
+                completed_tasks=0,
+                in_progress_tasks=0,
+                todo_tasks=0,
+                team_members=[],
+                summary="Analytics adapter not configured. Sprint data unavailable.",
+                recommendations=["Configure analytics adapter to access sprint metrics and reports."]
+            )
 
         sprint_data_payload = await self.adapter.get_sprint_report_data(sprint_id, project_id)
         if sprint_data_payload is None:
@@ -212,7 +234,16 @@ class AnalyticsService:
             return cached
 
         if not self.adapter:
-            raise ValueError("Analytics adapter not configured for this project.")
+            logger.info("No analytics adapter configured for project %s", project_id)
+            return {
+                "project_id": project_id,
+                "message": "Analytics adapter not configured. Project metrics unavailable.",
+                "current_sprint": None,
+                "velocity": {"average": 0, "latest": 0, "trend": "unknown"},
+                "overall_stats": {"total_items": 0, "completed_items": 0, "completion_rate": 0},
+                "team_size": 0,
+                "recent_trends": []
+            }
 
         velocity_payloads = await self.adapter.get_velocity_data(project_id, sprint_count=3)
         if not velocity_payloads:

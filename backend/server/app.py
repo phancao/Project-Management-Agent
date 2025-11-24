@@ -2978,11 +2978,44 @@ async def pm_import_projects(request: ProjectImportRequest):
         db = next(db_gen)
         
         try:
-            # Create provider config
+            # Helper to create provider instance
+            def create_provider_internal(url_to_use):
+                return create_pm_provider(
+                    provider_type=request.provider_type,
+                    base_url=url_to_use,
+                    api_key=request.api_key,
+                    api_token=request.api_token,
+                    username=request.username,
+                    organization_id=request.organization_id,
+                    workspace_id=request.workspace_id,
+                )
+
+            try:
+                # First try: Use the URL exactly as provided
+                provider_instance = create_provider_internal(request.base_url)
+                projects = await provider_instance.list_projects()
+                final_base_url = request.base_url
+            except Exception as e:
+                # Retry logic for Docker 'localhost' issue
+                if "localhost" in request.base_url and ("Connection refused" in str(e) or "Cannot connect" in str(e) or "111" in str(e)):
+                    logger.info(f"Connection to {request.base_url} failed. Trying host.docker.internal...")
+                    docker_url = request.base_url.replace("localhost", "host.docker.internal")
+                    try:
+                        provider_instance = create_provider_internal(docker_url)
+                        projects = await provider_instance.list_projects()
+                        final_base_url = docker_url
+                        logger.info(f"Connection successful using {docker_url}")
+                    except Exception as docker_e:
+                        # If both fail, raise the original error
+                        raise e
+                else:
+                    raise e
+
+            # Create provider config with the WORKING URL
             provider = PMProviderConnection(
-                name=f"{request.provider_type} - {request.base_url}",
+                name=f"{request.provider_type} - {final_base_url}",
                 provider_type=request.provider_type,
-                base_url=request.base_url,
+                base_url=final_base_url,
                 api_key=request.api_key,
                 api_token=request.api_token,
                 username=request.username,
@@ -2994,55 +3027,43 @@ async def pm_import_projects(request: ProjectImportRequest):
             db.commit()
             db.refresh(provider)
             
-            # Create provider instance and import projects
-            provider_instance = create_pm_provider(
-                provider_type=request.provider_type,
-                base_url=request.base_url,
-                api_key=request.api_key,
-                api_token=request.api_token,
-                username=request.username,
-                organization_id=request.organization_id,
-                workspace_id=request.workspace_id,
-            )
-            
-            try:
-                projects = await provider_instance.list_projects()
-            except Exception as api_error:
-                error_msg = str(api_error)
-                # Handle specific HTTP errors
-                if "401" in error_msg or "Unauthorized" in error_msg:
-                    raise HTTPException(
-                        status_code=401,
-                        detail=(
-                            "Authentication failed. "
-                            "Please check your API key/token."
-                        )
+        except Exception as api_error:
+            error_msg = str(api_error)
+            # Handle specific HTTP errors
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                raise HTTPException(
+                    status_code=401,
+                    detail=(
+                        "Authentication failed. "
+                        "Please check your API key/token."
                     )
-                elif "404" in error_msg or "Not Found" in error_msg:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=(
-                            "Provider API endpoint not found. "
-                            "Please check the base URL."
-                        )
+                )
+            elif "404" in error_msg or "Not Found" in error_msg:
+                raise HTTPException(
+                    status_code=404,
+                    detail=(
+                        "Provider API endpoint not found. "
+                        "Please check the base URL."
                     )
-                elif (
-                    "Connection" in error_msg
-                    or "refused" in error_msg.lower()
-                ):
-                    raise HTTPException(
-                        status_code=503,
-                        detail=(
-                            "Cannot connect to provider. "
-                            "Please check if the service is running."
-                        )
+                )
+            elif (
+                "Connection" in error_msg
+                or "refused" in error_msg.lower()
+            ):
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "Cannot connect to provider. "
+                        "Please check if the service is running."
                     )
-                else:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Failed to fetch projects: {error_msg}"
-                    )
-            
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to fetch projects: {error_msg}"
+                )
+        
+        else:
             return {
                 "success": True,
                 "provider_config_id": str(provider.id),
@@ -3316,19 +3337,37 @@ async def pm_test_connection(request: ProjectImportRequest):
     try:
         from src.pm_providers.factory import create_pm_provider
         
-        # Create provider instance
-        provider_instance = create_pm_provider(
-            provider_type=request.provider_type,
-            base_url=request.base_url,
-            api_key=request.api_key,
-            api_token=request.api_token,
-            username=request.username,
-            organization_id=request.organization_id,
-            workspace_id=request.workspace_id,
-        )
-        
-        # Test by listing projects
-        projects = await provider_instance.list_projects()
+        # Helper to test connection
+        async def test_connection_internal(url_to_test):
+            provider_instance = create_pm_provider(
+                provider_type=request.provider_type,
+                base_url=url_to_test,
+                api_key=request.api_key,
+                api_token=request.api_token,
+                username=request.username,
+                organization_id=request.organization_id,
+                workspace_id=request.workspace_id,
+            )
+            return await provider_instance.list_projects()
+
+        try:
+            # First try: Use the URL exactly as provided
+            projects = await test_connection_internal(request.base_url)
+            used_url = request.base_url
+        except Exception as e:
+            # Retry logic for Docker 'localhost' issue
+            if "localhost" in request.base_url and ("Connection refused" in str(e) or "Cannot connect" in str(e) or "111" in str(e)):
+                logger.info(f"Connection to {request.base_url} failed. Trying host.docker.internal...")
+                docker_url = request.base_url.replace("localhost", "host.docker.internal")
+                try:
+                    projects = await test_connection_internal(docker_url)
+                    used_url = docker_url
+                    logger.info(f"Connection successful using {docker_url}")
+                except Exception as docker_e:
+                    # If both fail, raise the original error (or the new one)
+                    raise e
+            else:
+                raise e
         
         return {
             "success": True,
@@ -3336,6 +3375,7 @@ async def pm_test_connection(request: ProjectImportRequest):
                 f"Connection successful. "
                 f"Found {len(projects)} project(s)."
             ),
+            "corrected_base_url": used_url if used_url != request.base_url else None
         }
     except Exception as e:
         logger.error(f"Connection test failed: {e}")

@@ -40,18 +40,43 @@ These are simple data queries that require MCP PM tools (NOT web search or resea
 
 For simple PM queries:
 1. **Set `has_enough_context: true`** - These queries don't need external research, just data retrieval from MCP PM tools
-2. **Create a plan with 4-6 steps** that follow the PM provider workflow. **CRITICAL**: You MUST create separate steps for each action - do not combine multiple actions into one step description:
-   - **Step 1 (REQUIRED)**: Always start with `list_providers` MCP tool to check if PM providers are configured in MCP server
+2. **Create a plan with granular steps** that follow the PM provider workflow. **CRITICAL RULE**: Each MCP tool call or API call MUST be a separate step. This ensures users can track the status of each individual operation. Do NOT combine multiple tool calls into one step description.
+
+   **Step Structure (create separate steps for each tool call)**:
+   - **Step 1 (REQUIRED)**: List providers
      - Description: "Use the `list_providers` MCP PM tool to check if any PM providers are configured in the MCP server. This MUST be called first before any project data operations."
-   - **Step 2 (REQUIRED)**: Test if providers work by calling `list_projects` to verify they can retrieve data
+     - **One tool call = one step**: This calls `list_providers()` once, so it's one step.
+   
+   - **Steps 2, 3, 4... (One step per provider)**: Check health of each provider individually (OPTIONAL - only if needed)
+     - After Step 1 returns providers, if you need to verify their health, create ONE SEPARATE STEP for EACH provider to check its health.
+     - Description format: "Use the `check_provider_health` MCP PM tool with provider_id '[provider_id]' to check the health of [provider_name] (base_url: [url]). This verifies that the provider is reachable and can connect."
+     - Example: If Step 1 returns 3 providers, create Step 2, Step 3, and Step 4 - each checking one provider's health.
+     - **One tool call = one step**: Each health check is a separate tool call, so each gets its own step.
+     - **When to include**: Only include these steps if health verification is explicitly needed. For simple queries like "list my projects", you can skip health checks and proceed directly to listing.
+   
+   - **Step N+1 (REQUIRED)**: Test providers by listing projects
      - Description: "Use the `list_projects` MCP PM tool to test if the configured providers can actually retrieve projects. This verifies that providers are working correctly."
-   - **Step 3 (REQUIRED)**: Check backend API to verify if projects should exist
-     - Description: "**CRITICAL**: Call `backend_api_call(endpoint='/api/pm/projects')` to check how many projects the backend API has. This is REQUIRED - always execute this step after Step 2. Compare the backend project count with the MCP result from Step 2. If backend has 1+ projects but MCP returned 0, this indicates a mismatch and Step 4 is required."
-   - **Step 4 (REQUIRED IF mismatch detected in Step 3)**: Re-configure providers in MCP server using backend credentials
-     - Description: "**CRITICAL**: This step is REQUIRED if Step 3 shows the backend has 1+ projects but Step 2 returned 0 projects. In this case, you MUST configure providers in the MCP server using backend credentials. First, use the `backend_api_call` tool to call `/api/pm/providers?include_credentials=true` to retrieve all configured providers from the backend database with their credentials (api_key, api_token, username, etc.). Then, for each provider returned, call the `configure_pm_provider` MCP PM tool with ALL the provider's configuration details (provider_type, base_url, name, api_key, api_token, username, organization_id, workspace_id, project_key, etc.). This configures the providers in MCP server so that MCP tools can access them. Note: `configure_pm_provider` will update existing providers if they have the same base_url, so it's safe to call even if providers already exist. **DO NOT skip this step if there's a mismatch** - you MUST re-configure providers."
-     - **CRITICAL**: The backend stores provider configurations with API keys/tokens. These need to be configured in MCP server before listing projects. Use the `backend_api_call` tool with endpoint `/api/pm/providers?include_credentials=true` to get providers with credentials, then use those credentials when calling `configure_pm_provider`.
-   - **Step 5 (REQUIRED)**: Use the appropriate MCP PM tool (e.g., `list_projects`, `search_projects`, `list_my_tasks`) to retrieve the data
-     - **CRITICAL**: This step MUST be executed after Steps 1-4. Do NOT stop after getting providers - you MUST call the PM tool to retrieve the actual data. If Step 4 was executed (re-configuring providers), this step will verify that the re-configuration worked by retrieving projects.
+     - **One tool call = one step**: This calls `list_projects()` once, so it's one step.
+   
+   - **Step N+2 (REQUIRED)**: Check backend API to verify project count
+     - Description: "Call `backend_api_call(endpoint='/api/pm/projects')` to check how many projects the backend API has. Compare the backend project count with the MCP result from the previous step. If backend has 1+ projects but MCP returned 0, this indicates a mismatch and provider reconfiguration is required."
+     - **One tool call = one step**: This calls `backend_api_call()` once, so it's one step.
+   
+   - **Step N+3 (REQUIRED IF mismatch detected)**: Get backend provider configurations
+     - Description: "Call `backend_api_call(endpoint='/api/pm/providers?include_credentials=true')` to retrieve all configured providers from the backend database with their credentials (api_key, api_token, username, etc.). This is needed to reconfigure providers in the MCP server."
+     - **One tool call = one step**: This calls `backend_api_call()` once, so it's one step.
+     - **When to include**: Only include this step if Step N+2 detected a mismatch (backend has projects but MCP returned 0).
+   
+   - **Steps N+4, N+5, N+6... (One step per provider for reconfiguration)**: Reconfigure each provider individually
+     - For EACH provider returned from Step N+3, create ONE SEPARATE STEP to reconfigure it.
+     - Description format: "Use the `configure_pm_provider` MCP PM tool to reconfigure [provider_name] (provider_type: [type], base_url: [url]) with the latest credentials from the backend. Include ALL configuration details: provider_type, base_url, name, api_key (if present), api_token (if present), username (if present), organization_id (if present), workspace_id (if present), project_key (if present)."
+     - Example: If Step N+3 returns 2 providers, create Step N+4 and Step N+5 - one reconfigure step for each provider.
+     - **One tool call = one step**: Each `configure_pm_provider` call is separate, so each gets its own step.
+     - **When to include**: Only include these steps if Step N+3 was executed (provider reconfiguration needed).
+   
+   - **Final Step (REQUIRED)**: Use the appropriate MCP PM tool to retrieve the data
+     - **CRITICAL**: This step MUST be executed after all previous steps. Do NOT stop after getting providers - you MUST call the PM tool to retrieve the actual data.
+     - **One tool call = one step**: This should be a single MCP tool call, so it's one step.
      - **CRITICAL**: Be explicit about which PM tool to use:
        - For "list my projects" / "show my projects" / "list projects" → Use `list_projects` MCP tool (NOT backend_api_call)
        - For "is there a project named [X]" / "search for project [X]" / "find project [X]" → Use `search_projects` tool with the project name as the query parameter
@@ -78,7 +103,18 @@ For simple PM queries:
          - If user says 'list my tasks' (without 'all'):
            → If message contains 'project_id: xxx' (UI context): Extract project_id, call `list_my_tasks(project_id='xxx')`.
            → If message does NOT contain 'project_id: xxx': Call `list_my_tasks()`."
-   - Step 2 (optional): Format or present the retrieved data
+
+   **Example Plan Structure** (assuming 3 providers from Step 1, and 2 need reconfiguration):
+   
+   - Step 1: List providers → calls `list_providers()` (1 tool call = 1 step)
+   - Step 2: Test providers by listing projects → calls `list_projects()` (1 tool call = 1 step)
+   - Step 3: Check backend API project count → calls `backend_api_call(endpoint='/api/pm/projects')` (1 tool call = 1 step)
+   - Step 4: Get backend provider configurations → calls `backend_api_call(endpoint='/api/pm/providers?include_credentials=true')` (1 tool call = 1 step)
+   - Step 5: Reconfigure provider 1 (JIRA) → calls `configure_pm_provider(...)` for JIRA (1 tool call = 1 step)
+   - Step 6: Reconfigure provider 2 (OpenProject) → calls `configure_pm_provider(...)` for OpenProject (1 tool call = 1 step)
+   - Step 7: List projects → calls `list_projects()` (1 tool call = 1 step)
+   
+   **CRITICAL**: Notice that each step has exactly ONE tool call. Never combine multiple tool calls into a single step description. Each step will be executed individually and its status will be visible to the user.
 3. **Set `need_search: false`** for all steps - No web search needed
 4. **Set `step_type: "processing"`** - These are data retrieval/processing steps, not research
 5. **Important**: Even though `has_enough_context: true`, the plan steps MUST be created and will be executed to retrieve the PM data. The system will execute these steps before generating the final response.

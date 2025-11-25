@@ -57,6 +57,8 @@ services:
       - BASIC_MODEL__base_url=https://api.openai.com/v1
       - BASIC_MODEL__model=gpt-4o-mini
       - BASIC_MODEL__api_key=${OPENAI_API_KEY} # Use environment variable from .env file
+      # Agent Configuration
+      - AGENT_RECURSION_LIMIT=100 # Increase from default 25 to handle complex workflows
     ports:
       - "8000:8000"
     depends_on:

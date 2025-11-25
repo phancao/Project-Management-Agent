@@ -76,6 +76,13 @@ def create_logged_tool(base_tool_class: Type[T]) -> Type[T]:
     class LoggedTool(LoggedToolMixin, base_tool_class):
         pass
 
-    # Set a more descriptive name for the class
-    LoggedTool.__name__ = f"Logged{base_tool_class.__name__}"
+    # Set proper attributes for tool registration compatibility
+    class_name = f"Logged{base_tool_class.__name__}"
+    LoggedTool.__name__ = class_name
+    LoggedTool.__qualname__ = class_name
+    
+    # Preserve the original module to help with imports
+    if hasattr(base_tool_class, '__module__'):
+        LoggedTool.__module__ = base_tool_class.__module__
+    
     return LoggedTool

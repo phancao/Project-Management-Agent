@@ -9,19 +9,38 @@ from typing import List, Optional
 import json
 from typing import Dict, Any
 
-class BraveSearch:
+# Official Brave Search implementation using brave-search package
+import json
+from typing import Dict, Any, Optional
+from langchain.tools import BaseTool
+from langchain.callbacks.manager import CallbackManagerForToolRun
+
+class BraveSearch(BaseTool):
     """
     Official Brave Search implementation using brave-search package
     """
-    def __init__(self, api_key: str = None, **kwargs):
+    name: str = "brave_search"
+    description: str = "Search the web using Brave Search. Input should be a search query string."
+    
+    api_key: Optional[str] = None
+    brave_api: Any = None
+    
+    def __init__(self, api_key: str = None, name: str = None, **kwargs):
+        super().__init__(**kwargs)
         self.api_key = api_key or os.getenv("BRAVE_API_KEY")
+        if name:
+            self.name = name
         try:
             from brave_search import BraveSearch as BraveSearchAPI
             self.brave_api = BraveSearchAPI(api_key=self.api_key)
         except ImportError:
             self.brave_api = None
     
-    def run(self, query: str) -> str:
+    def _run(
+        self, 
+        query: str,
+        run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
         """
         Execute Brave Search query using official package
         
@@ -50,18 +69,32 @@ class BraveSearch:
         except Exception as e:
             return f"BraveSearch ERROR: {str(e)}"
 
-class DuckDuckGoSearchResults:
+class DuckDuckGoSearchResults(BaseTool):
     """
     Official DuckDuckGo Search implementation using duckduckgo-search package
     """
-    def __init__(self, **kwargs):
+    name: str = "duckduckgo_search"
+    description: str = "Search the web using DuckDuckGo. Input should be a search query string."
+    
+    num_results: int = 5
+    ddgs: Any = None
+    
+    def __init__(self, name: str = None, num_results: int = 5, **kwargs):
+        super().__init__(**kwargs)
+        if name:
+            self.name = name
+        self.num_results = num_results
         try:
             from duckduckgo_search import DDGS
             self.ddgs = DDGS()
         except ImportError:
             self.ddgs = None
     
-    def run(self, query: str) -> str:
+    def _run(
+        self, 
+        query: str,
+        run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
         """
         Execute DuckDuckGo search query
         
@@ -76,7 +109,7 @@ class DuckDuckGoSearchResults:
         
         try:
             results = []
-            for result in self.ddgs.text(query, max_results=5):
+            for result in self.ddgs.text(query, max_results=self.num_results):
                 results.append({
                     "title": result.get("title", ""),
                     "url": result.get("href", ""),

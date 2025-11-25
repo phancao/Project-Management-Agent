@@ -14,15 +14,15 @@ import type { ChatEvent } from "./types";
 
 function getLocaleFromCookie(): string {
   if (typeof document === "undefined") return "en-US";
-  
+
   // Map frontend locale codes to backend locale format
   // Frontend uses: "en", "zh"
   // Backend expects: "en-US", "zh-CN"
   const LOCALE_MAP = { "en": "en-US", "zh": "zh-CN" } as const;
-  
+
   // Initialize to raw locale format (matches cookie format)
   let rawLocale = "en";
-  
+
   // Read from cookie
   const cookies = document.cookie.split(";");
   for (const cookie of cookies) {
@@ -32,7 +32,7 @@ function getLocaleFromCookie(): string {
       break;
     }
   }
-  
+
   // Map raw locale to backend format, fallback to en-US if unmapped
   return LOCALE_MAP[rawLocale as keyof typeof LOCALE_MAP] ?? "en-US";
 }
@@ -68,26 +68,26 @@ export async function* chatStream(
     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY ||
     (typeof window !== "undefined" && window.location.search.includes("mock")) ||
     (typeof window !== "undefined" && window.location.search.includes("replay="))
-  ) 
+  )
     return yield* chatReplayStream(userMessage, params, options);
-  
-  try{
+
+  try {
     const locale = getLocaleFromCookie();
-    
+
     // Determine which endpoint to use based on current path
     const isPMChat = typeof window !== "undefined" && window.location.pathname.startsWith("/pm/chat");
-    
+
     // Extract project context from URL if present
     const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
     const projectId = urlParams.get('project');
-    
+
     // Add project context to the message if we're in a project-specific chat
     let enhancedMessage = userMessage;
     if (projectId) {
       // Add project_id explicitly in a way the LLM will extract it
       enhancedMessage = `${userMessage}\n\nproject_id: ${projectId}`;
     }
-    
+
     // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
     const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
     const stream = fetchStream(resolveServiceURL(endpoint), {
@@ -98,14 +98,30 @@ export async function* chatStream(
       }),
       signal: options.abortSignal,
     });
-    
+
     for await (const event of stream) {
-      yield {
-        type: event.event,
-        data: JSON.parse(event.data),
-      } as ChatEvent;
+      try {
+        // Skip events with null or empty data
+        if (!event.data || event.data === 'null') {
+          console.warn(`[DEBUG] Skipping event with null/empty data: event=${event.event}`);
+          continue;
+        }
+
+        const parsedData = JSON.parse(event.data);
+        yield {
+          type: event.event,
+          data: parsedData,
+        } as ChatEvent;
+      } catch (parseError) {
+        // Log serialization errors but don't crash the stream
+        console.error(`[DEBUG] Stream error event: Serialization failed`);
+        console.error(`[DEBUG] Event type: ${event.event}`);
+        console.error(`[DEBUG] Event data (raw): ${event.data?.substring(0, 200)}`);
+        console.error(`[DEBUG] Parse error:`, parseError);
+        // Continue processing other events
+      }
     }
-  }catch(e){
+  } catch (e) {
     console.error(e);
   }
 }
@@ -120,13 +136,13 @@ async function* chatReplayStream(
     max_search_results?: number;
     interrupt_feedback?: string;
   } = {
-    thread_id: "__mock__",
-    auto_accepted_plan: false,
-    max_plan_iterations: 3,
-    max_step_num: 1,
-    max_search_results: 3,
-    interrupt_feedback: undefined,
-  },
+      thread_id: "__mock__",
+      auto_accepted_plan: false,
+      max_plan_iterations: 3,
+      max_step_num: 1,
+      max_search_results: 3,
+      interrupt_feedback: undefined,
+    },
   options: { abortSignal?: AbortSignal } = {},
 ): AsyncIterable<ChatEvent> {
   const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();

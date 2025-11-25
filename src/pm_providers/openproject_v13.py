@@ -312,8 +312,16 @@ class OpenProjectV13Provider(BasePMProvider):
         # Build filters for project and/or assignee
         filters = []
         if project_id:
+            # Handle composite IDs (UUID:ID) - OpenProject expects the numeric ID
+            if ":" in project_id:
+                # Extract the numeric ID part (after the last colon)
+                op_project_id = project_id.split(":")[-1]
+                logger.info(f"OpenProject list_tasks: Parsed composite project_id '{project_id}' to '{op_project_id}'")
+            else:
+                op_project_id = project_id
+                
             filters.append({
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {"operator": "=", "values": [op_project_id]}
             })
         if assignee_id:
             filters.append({

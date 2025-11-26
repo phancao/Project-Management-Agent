@@ -347,6 +347,7 @@ class OpenProjectV13Provider(BasePMProvider):
         all_tasks_data = []
         request_url = url
         page_num = 1
+        total_count = 0  # Initialize to handle early breaks
         
         while request_url:
             logger.debug(f"Fetching page {page_num} from {request_url}")
@@ -390,9 +391,11 @@ class OpenProjectV13Provider(BasePMProvider):
             else:
                 request_url = None
         
+        # Log summary (total_count may be 0 if we broke early due to error)
+        total_msg = f"{total_count}" if total_count > 0 else "unknown (error occurred)"
         logger.info(
             f"OpenProject list_tasks: Fetched {len(all_tasks_data)} tasks "
-            f"from {page_num} page(s) (total reported: {total_count})"
+            f"from {page_num} page(s) (total reported: {total_msg})"
         )
         
         # Log if filter returns no results

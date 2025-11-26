@@ -51,6 +51,8 @@ services:
       # Default value: mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3
       # Can be overridden via .env file: PM_MCP_API_KEY=your_key_here
       - PM_MCP_API_KEY=${PM_MCP_API_KEY:-mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3}
+      # Enable MCP server configuration in workflow
+      - ENABLE_MCP_SERVER_CONFIGURATION=true
       # Search Engine Configuration - use DuckDuckGo (no API key required)
       - SEARCH_API=duckduckgo
       # LLM Configuration via environment variables (alternative to conf.yaml)

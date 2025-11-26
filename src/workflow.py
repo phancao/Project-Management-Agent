@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import logging
+import os
 
 from src.config.configuration import get_recursion_limit
 from src.graph import build_graph
@@ -84,6 +85,25 @@ async def run_agent_workflow_async(
             "max_step_num": max_step_num,
             "mcp_settings": {
                 "servers": {
+                    "pm-server": {
+                        "transport": "sse",
+                        "url": "http://pm_mcp_server:8080/sse",
+                        "headers": {
+                            "X-MCP-API-Key": os.getenv("PM_MCP_API_KEY", "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3")
+                        },
+                        "enabled_tools": [
+                            "list_projects",
+                            "get_project",
+                            "list_sprints",
+                            "get_sprint",
+                            "list_tasks",
+                            "list_my_tasks",
+                            "get_task",
+                            "update_task",
+                            "create_task"
+                        ],
+                        "add_to_agents": ["researcher", "coder"],
+                    },
                     "mcp-github-trending": {
                         "transport": "stdio",
                         "command": "uvx",
@@ -228,6 +248,25 @@ async def run_agent_workflow_stream(
             "max_step_num": max_step_num,
             "mcp_settings": {
                 "servers": {
+                    "pm-server": {
+                        "transport": "sse",
+                        "url": "http://pm_mcp_server:8080/sse",
+                        "headers": {
+                            "X-MCP-API-Key": os.getenv("PM_MCP_API_KEY", "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3")
+                        },
+                        "enabled_tools": [
+                            "list_projects",
+                            "get_project",
+                            "list_sprints",
+                            "get_sprint",
+                            "list_tasks",
+                            "list_my_tasks",
+                            "get_task",
+                            "update_task",
+                            "create_task"
+                        ],
+                        "add_to_agents": ["researcher", "coder"],
+                    },
                     "mcp-github-trending": {
                         "transport": "stdio",
                         "command": "uvx",

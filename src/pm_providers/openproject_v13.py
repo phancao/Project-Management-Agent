@@ -1045,13 +1045,22 @@ class OpenProjectV13Provider(BasePMProvider):
         
         # Filter by project_id if provided
         # (versions don't have project filter in API)
+        # Filter by project_id if provided
+        # (versions don't have project filter in API)
         if project_id:
+            # Handle composite IDs (UUID:ID) - OpenProject uses the numeric ID in hrefs
+            if ":" in project_id:
+                op_project_id = project_id.split(":")[-1]
+                logger.info(f"OpenProject list_sprints: Parsed composite project_id '{project_id}' to '{op_project_id}'")
+            else:
+                op_project_id = project_id
+                
             sprints_data = [
                 sprint for sprint in sprints_data
                 if sprint.get("_links", {})
                 .get("definingProject", {})
                 .get("href", "")
-                .endswith(f"/projects/{project_id}")
+                .endswith(f"/projects/{op_project_id}")
             ]
         
         # Filter by state if provided

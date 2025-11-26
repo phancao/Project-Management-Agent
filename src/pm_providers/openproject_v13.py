@@ -350,8 +350,20 @@ class OpenProjectV13Provider(BasePMProvider):
         
         while request_url:
             logger.debug(f"Fetching page {page_num} from {request_url}")
-            response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
-            response.raise_for_status()
+            try:
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+                response.raise_for_status()
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 500:
+                    logger.error(
+                        f"OpenProject returned 500 Internal Server Error for project {project_id}. "
+                        f"This may indicate database issues (e.g., disk space full). "
+                        f"Returning partial results: {len(all_tasks_data)} tasks fetched so far."
+                    )
+                    # Return what we have so far instead of crashing
+                    break
+                else:
+                    raise
             
             data = response.json()
             tasks_data = data.get("_embedded", {}).get("elements", [])

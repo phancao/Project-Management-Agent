@@ -56,7 +56,7 @@ class OpenProjectV13Provider(BasePMProvider):
             auth_string.encode()
         ).decode()
         self.headers = {
-            "Content-Type": "application/json",
+            # "Content-Type": "application/json",  # Removed to avoid issues with GET requests
             "Authorization": f"Basic {credentials}"
         }
         
@@ -320,9 +320,10 @@ class OpenProjectV13Provider(BasePMProvider):
             else:
                 op_project_id = project_id
                 
-            filters.append({
-                "project": {"operator": "=", "values": [op_project_id]}
-            })
+            # Use nested endpoint for better reliability
+            url = f"{self.base_url}/api/v3/projects/{op_project_id}/work_packages"
+        else:
+            url = f"{self.base_url}/api/v3/work_packages"
         if assignee_id:
             filters.append({
                 "assignee": {"operator": "=", "values": [assignee_id]}
@@ -333,18 +334,18 @@ class OpenProjectV13Provider(BasePMProvider):
             params = {
                 "filters": json_lib.dumps(filters),
                 "pageSize": 100,
-                "include": "priority,status,assignee,project,version,parent"
+                # "include": "priority,status,assignee,project,version,parent"
             }
             logger.info(f"OpenProject list_tasks with filters: {params}")
         else:
             params = {
                 "pageSize": 100,
-                "include": "priority,status,assignee,project,version,parent"
+                # "include": "priority,status,assignee,project,version,parent"
             }
         
         # Fetch all pages using pagination (exact pattern from test script)
         all_tasks_data = []
-        request_url = f"{self.base_url}/api/v3/work_packages"
+        request_url = url
         page_num = 1
         
         while request_url:

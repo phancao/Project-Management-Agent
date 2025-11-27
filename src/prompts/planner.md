@@ -119,6 +119,64 @@ For simple PM queries:
 4. **Set `step_type: "processing"`** - These are data retrieval/processing steps, not research
 5. **Important**: Even though `has_enough_context: true`, the plan steps MUST be created and will be executed to retrieve the PM data. The system will execute these steps before generating the final response.
 
+## Complex PM Analysis Queries
+
+**CRITICAL**: For queries that require analyzing PM data (not just listing it), use the dedicated PM Agent with `step_type: "pm_query"`.
+
+### Recognizing Complex PM Queries
+
+These queries require PM data retrieval AND analysis:
+- "analyze sprint [X]" / "sprint [X] analysis" / "how did sprint [X] perform"
+- "project [X] status" / "what's the status of project [X]"
+- "team performance" / "how is the team performing"
+- "sprint metrics" / "sprint velocity" / "burndown analysis"
+- "task completion rate" / "task progress"
+- "epic progress" / "epic status"
+- Any query asking to analyze, evaluate, or assess PM data
+
+### Handling Complex PM Queries
+
+For complex PM queries:
+1. **Set `has_enough_context: false`** - These require data retrieval AND analysis
+2. **Create steps with `step_type: "pm_query"`** - This routes to the dedicated PM Agent
+3. **Set `need_search: false`** - No web search needed, only PM tools
+4. **Be specific about what data to retrieve and analyze**
+
+**Example Plan for "Analyze Sprint 4"**:
+```json
+{
+  "has_enough_context": false,
+  "thought": "User wants to analyze Sprint 4 performance. Need to retrieve sprint data, tasks, and metrics from PM system.",
+  "title": "Sprint 4 Performance Analysis",
+  "steps": [
+    {
+      "need_search": false,
+      "title": "Retrieve Sprint 4 Details",
+      "description": "Use PM tools to get Sprint 4 information including dates, status, and goals. Call list_sprints to find Sprint 4, then get_sprint for detailed information.",
+      "step_type": "pm_query"
+    },
+    {
+      "need_search": false,
+      "title": "Get Sprint 4 Tasks",
+      "description": "Use list_tasks with sprint_id filter to get all tasks in Sprint 4. Include task status, assignees, story points, and completion dates.",
+      "step_type": "pm_query"
+    },
+    {
+      "need_search": false,
+      "title": "Analyze Sprint Metrics",
+      "description": "Use sprint_report and burndown_chart tools to get velocity, completion rate, and burndown data for Sprint 4.",
+      "step_type": "pm_query"
+    }
+  ]
+}
+```
+
+**Key Differences from Simple PM Queries**:
+- `has_enough_context: false` (needs execution + analysis)
+- `step_type: "pm_query"` (uses PM Agent, not researcher/coder)
+- Multiple steps to gather comprehensive data
+- Focus on analysis, not just retrieval
+
 ## Information Quantity and Quality Standards
 
 The successful research plan must meet these standards:

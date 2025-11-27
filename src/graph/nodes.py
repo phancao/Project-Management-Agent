@@ -999,17 +999,25 @@ async def _setup_and_execute_agent_step(
     # Extract MCP server configuration for this agent type
     if configurable.mcp_settings:
         for server_name, server_config in configurable.mcp_settings["servers"].items():
-            if (
-                server_config["enabled_tools"]
-                and agent_type in server_config["add_to_agents"]
-            ):
+            # Check if this agent should use this MCP server
+            # enabled_tools can be None (all tools), empty list (no tools), or list of specific tools
+            if agent_type in server_config["add_to_agents"]:
+                enabled_tools_config = server_config["enabled_tools"]
+                # Skip if explicitly set to empty list (no tools)
+                if enabled_tools_config is not None and len(enabled_tools_config) == 0:
+                    continue
+                    
                 mcp_servers[server_name] = {
                     k: v
                     for k, v in server_config.items()
                     if k in ("transport", "command", "args", "url", "env", "headers")
                 }
-                for tool_name in server_config["enabled_tools"]:
-                    enabled_tools[tool_name] = server_name
+                # If enabled_tools is None, we'll enable all tools from this server
+                # If it's a list, we'll only enable those specific tools
+                if enabled_tools_config is not None:
+                    for tool_name in enabled_tools_config:
+                        enabled_tools[tool_name] = server_name
+                # If None, we don't populate enabled_tools here - all tools will be added later
 
     # Create and execute agent with MCP tools if available
     if mcp_servers:
@@ -1081,9 +1089,12 @@ async def _setup_and_execute_agent_step(
             added_count = 0
             list_my_tasks_added = False
             for tool in all_tools:
-                if tool.name in enabled_tools:
+                # If enabled_tools is empty, enable ALL tools from all connected servers
+                # Otherwise, only enable tools that are in the enabled_tools dict
+                if not enabled_tools or tool.name in enabled_tools:
+                    server_name = enabled_tools.get(tool.name, "unknown") if enabled_tools else list(mcp_servers.keys())[0] if mcp_servers else "unknown"
                     tool.description = (
-                        f"Powered by '{enabled_tools[tool.name]}'.\n{tool.description}"
+                        f"Powered by '{server_name}'.\n{tool.description}"
                     )
                     loaded_tools.append(tool)
                     added_count += 1
@@ -1091,7 +1102,7 @@ async def _setup_and_execute_agent_step(
                         list_my_tasks_added = True
                     logger.info(
                         f"[{agent_type}] Added MCP tool: {tool.name} "
-                        f"(from {enabled_tools[tool.name]})"
+                        f"(from {server_name})"
                     )
             
             logger.info(

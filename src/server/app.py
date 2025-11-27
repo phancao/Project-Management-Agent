@@ -729,24 +729,53 @@ async def _stream_graph_events(
                                         for step in current_plan.steps
                                     ] if current_plan.steps else []
                                 
-                                # Stream plan update event
-                                logger.info(
-                                    f"[{safe_thread_id}] Streaming plan update "
-                                    f"from {node_name}: "
-                                    f"{len(plan_data.get('steps', []))} steps"
-                                )
-                                yield _make_event(
-                                    "plan_update",
-                                    {
-                                        "thread_id": thread_id,
-                                        "agent": node_name,
-                                        "role": "assistant",
-                                        "plan": plan_data,
-                                    }
-                                )
+                                # Debug current_plan structure
+                                try:
+                                    logger.info(f"[{safe_thread_id}] Inspecting current_plan: type={type(current_plan)}")
+                                    if hasattr(current_plan, 'title'):
+                                        logger.info(f"[{safe_thread_id}] current_plan.title type: {type(current_plan.title)}")
+                                    if hasattr(current_plan, 'steps'):
+                                        logger.info(f"[{safe_thread_id}] current_plan.steps type: {type(current_plan.steps)}")
+                                        if current_plan.steps:
+                                            first_step = current_plan.steps[0]
+                                            logger.info(f"[{safe_thread_id}] First step type: {type(first_step)}")
+                                            if hasattr(first_step, 'step_type'):
+                                                logger.info(f"[{safe_thread_id}] First step step_type type: {type(first_step.step_type)}")
+                                except Exception as e:
+                                    logger.error(f"[{safe_thread_id}] Error inspecting current_plan: {e}")
+
+                                try:
+                                    # Stream plan update event
+                                    logger.info(
+                                        f"[{safe_thread_id}] Streaming plan update "
+                                        f"from {node_name}: "
+                                        f"{len(plan_data.get('steps', []))} steps"
+                                    )
+                                    yield _make_event(
+                                        "plan_update",
+                                        {
+                                            "thread_id": thread_id,
+                                            "agent": node_name,
+                                            "role": "assistant",
+                                            "plan": plan_data,
+                                        }
+                                    )
+                                except Exception as e:
+                                    logger.error(f"[{safe_thread_id}] Error streaming plan_update: {e}")
+                                    # Try to identify non-serializable item
+                                    try:
+                                        json.dumps(plan_data)
+                                    except TypeError as json_err:
+                                        logger.error(f"[{safe_thread_id}] JSON serialization error in plan_data: {json_err}")
                                 
                                 # Also emit step_progress for current step
                                 # Emit progress for each step in the plan
+                                logger.info(f"[{safe_thread_id}] Checking for step_progress emission. current_plan type: {type(current_plan)}")
+                                if hasattr(current_plan, 'steps'):
+                                    logger.info(f"[{safe_thread_id}] current_plan has steps. Count: {len(current_plan.steps) if current_plan.steps else 0}")
+                                else:
+                                    logger.info(f"[{safe_thread_id}] current_plan does NOT have steps attribute")
+
                                 if hasattr(current_plan, 'steps') and current_plan.steps:
                                     # Count completed steps to determine current step
                                     completed_count = sum(

@@ -160,7 +160,7 @@ def get_default_mcp_settings() -> dict:
                     )
                 },
                 "enabled_tools": None,  # Enable all 55 PM tools
-                "add_to_agents": ["researcher", "coder"],
+                "add_to_agents": ["researcher", "coder", "pm_agent"],
             },
             "mcp-github-trending": {
                 "transport": "stdio",

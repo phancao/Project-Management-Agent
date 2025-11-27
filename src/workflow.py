@@ -92,7 +92,7 @@ async def run_agent_workflow_async(
                             "X-MCP-API-Key": os.getenv("PM_MCP_API_KEY", "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3")
                         },
                         "enabled_tools": None,  # Enable all available PM tools (55 total)
-                        "add_to_agents": ["researcher", "coder"],
+                        "add_to_agents": ["researcher", "coder", "pm_agent"],
                     },
                     "mcp-github-trending": {
                         "transport": "stdio",
@@ -245,7 +245,7 @@ async def run_agent_workflow_stream(
                             "X-MCP-API-Key": os.getenv("PM_MCP_API_KEY", "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3")
                         },
                         "enabled_tools": None,  # Enable all available PM tools (55 total)
-                        "add_to_agents": ["researcher", "coder"],
+                        "add_to_agents": ["researcher", "coder", "pm_agent"],
                     },
                     "mcp-github-trending": {
                         "transport": "stdio",

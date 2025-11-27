@@ -212,6 +212,9 @@ def get_default_mcp_settings() -> dict:
 async def chat_stream(request: ChatRequest):
     # Check if MCP server configuration is enabled
     mcp_enabled = get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False)
+    
+    # Debug logging for MCP settings
+    logger.info(f"[chat_stream] mcp_enabled={mcp_enabled}, request.mcp_settings={request.mcp_settings}")
 
     # Validate MCP settings if provided
     if request.mcp_settings and not mcp_enabled:
@@ -228,6 +231,19 @@ async def chat_stream(request: ChatRequest):
     if thread_id == "__default__":
         thread_id = str(uuid4())
 
+    # Determine MCP settings to use
+    # If mcp_enabled and no valid mcp_settings from request, use defaults
+    if mcp_enabled:
+        if request.mcp_settings and isinstance(request.mcp_settings, dict) and request.mcp_settings.get("servers"):
+            mcp_settings_to_use = request.mcp_settings
+            logger.info(f"[chat_stream] Using request mcp_settings with servers: {list(request.mcp_settings['servers'].keys())}")
+        else:
+            mcp_settings_to_use = get_default_mcp_settings()
+            logger.info(f"[chat_stream] Using default mcp_settings with servers: {list(mcp_settings_to_use['servers'].keys())}")
+    else:
+        mcp_settings_to_use = {}
+        logger.info("[chat_stream] MCP disabled, using empty mcp_settings")
+
     return StreamingResponse(
         _astream_workflow_generator(
             request.model_dump()["messages"],
@@ -238,7 +254,7 @@ async def chat_stream(request: ChatRequest):
             request.max_search_results or 3,
             request.auto_accepted_plan or False,
             request.interrupt_feedback or "",
-            (request.mcp_settings if mcp_enabled and request.mcp_settings and request.mcp_settings.get("servers") else get_default_mcp_settings()) if mcp_enabled else {},
+            mcp_settings_to_use,
             request.enable_background_investigation or True,
             request.report_style or ReportStyle.ACADEMIC,
             request.enable_deep_thinking or False,
@@ -2568,6 +2584,10 @@ async def pm_chat_stream(request: Request):
                             # formatted research events
                             from src.config.report_style import ReportStyle
                                 
+                            # Use default MCP settings to ensure PM tools are available
+                            pm_mcp_settings = get_default_mcp_settings()
+                            logger.info(f"[PM-CHAT] Using default MCP settings with servers: {list(pm_mcp_settings.get('servers', {}).keys())}")
+                            
                             async for event in _astream_workflow_generator(
                                 messages=[
                                     {"role": "user", "content": research_query}
@@ -2579,7 +2599,7 @@ async def pm_chat_stream(request: Request):
                                 max_search_results=3,
                                 auto_accepted_plan=True,
                                 interrupt_feedback="",
-                                mcp_settings={},
+                                mcp_settings=pm_mcp_settings,
                                 enable_background_investigation=True,
                                 report_style=ReportStyle.ACADEMIC,
                                 enable_deep_thinking=False,

@@ -71,14 +71,14 @@ These are simple data queries that require MCP PM tools (NOT web search or resea
 - "show me my projects" / "list projects" / "list all projects"
 - "is there a project named [X]" / "search for project [X]" / "find project [X]"
 - "show me my tasks" / "list my tasks" / "what are my tasks" / "do I have any tasks" / "do I have any tasks today" / "hôm nay tôi có task nào không" (Vietnamese: do I have any tasks today)
-- "show sprints" / "list sprints" / "what sprints are there"
-- "show epics" / "list epics"
 - "show users" / "list users"
 - "get project [ID]" / "show project [ID]"
 - "get task [ID]" / "show task [ID]"
-- Any query asking to display/list/view project management data
+- Any query asking to display/list/view project management data (EXCEPT sprints, epics, or analytics - see Complex PM Queries)
 - Any query asking to check if a specific project exists or to search for a project by name
 - Any query asking about "my tasks" or "tasks assigned to me" (in any language)
+
+**IMPORTANT**: Sprint, epic, and analytics queries should use `step_type: "pm_query"` (see Complex PM Queries section below)
 
 ### Research Queries vs. Simple PM Queries
 
@@ -91,7 +91,8 @@ These are simple data queries that require MCP PM tools (NOT web search or resea
 
 For simple PM queries:
 1. **Set `has_enough_context: true`** - These queries don't need external research, just data retrieval from MCP PM tools
-2. **Create a plan with granular steps** that follow the PM provider workflow. **CRITICAL RULE**: Each MCP tool call or API call MUST be a separate step. This ensures users can track the status of each individual operation. Do NOT combine multiple tool calls into one step description.
+2. **IMPORTANT**: Use `step_type: "pm_query"` for ALL PM-related queries (projects, tasks, users, etc.)
+3. **Create a plan with granular steps** that follow the PM provider workflow. **CRITICAL RULE**: Each MCP tool call or API call MUST be a separate step. This ensures users can track the status of each individual operation. Do NOT combine multiple tool calls into one step description.
 
    **Step Structure (create separate steps for each tool call)**:
    - **Step 1 (REQUIRED)**: List providers
@@ -143,8 +144,6 @@ For simple PM queries:
              → Call `list_my_tasks(project_id="xxx")` with the extracted value
              → Example: Message "list my tasks\n\nproject_id: abc-123" → Extract "abc-123", call `list_my_tasks(project_id="abc-123")`
            → If message does NOT contain "project_id: xxx": User wants ALL tasks. Call `list_my_tasks()`.
-       - For "show sprints" → Use `list_sprints` tool
-       - For "show epics" → Use `list_epics` tool
      - **Step description should be explicit**: 
        - For listing projects: "Use the `list_projects` MCP PM tool to retrieve all available projects from all active PM providers (OpenProject, JIRA, ClickUp, etc.). **CRITICAL**: This step MUST be executed AFTER checking providers with `list_providers` and syncing backend providers to MCP server if needed. **DO NOT** use `backend_api_call` to get projects - you MUST use the `list_projects` MCP tool. The response from this tool will contain the actual project data that should be presented to the user."
        - For searching projects: "Use the `search_projects` MCP PM tool with query '[project name]' to search for projects matching the name across all active PM providers"
@@ -166,9 +165,9 @@ For simple PM queries:
    - Step 7: List projects → calls `list_projects()` (1 tool call = 1 step)
    
    **CRITICAL**: Notice that each step has exactly ONE tool call. Never combine multiple tool calls into a single step description. Each step will be executed individually and its status will be visible to the user.
-3. **Set `need_search: false`** for all steps - No web search needed
-4. **Set `step_type: "processing"`** - These are data retrieval/processing steps, not research
-5. **Important**: Even though `has_enough_context: true`, the plan steps MUST be created and will be executed to retrieve the PM data. The system will execute these steps before generating the final response.
+4. **Set `need_search: false`** for all steps - No web search needed
+5. **Set `step_type: "pm_query"`** - ALL PM-related queries should use "pm_query" to route to the PM Agent
+6. **Important**: Even though `has_enough_context: true`, the plan steps MUST be created and will be executed to retrieve the PM data. The system will execute these steps before generating the final response.
 
 ## Complex PM Analysis Queries
 
@@ -176,14 +175,15 @@ For simple PM queries:
 
 ### Recognizing Complex PM Queries
 
-These queries require PM data retrieval AND analysis:
-- "analyze sprint [X]" / "sprint [X] analysis" / "how did sprint [X] perform"
-- "project [X] status" / "what's the status of project [X]"
-- "team performance" / "how is the team performing"
-- "sprint metrics" / "sprint velocity" / "burndown analysis"
-- "task completion rate" / "task progress"
-- "epic progress" / "epic status"
+These queries require PM data retrieval AND/OR analysis using the PM Agent:
+- **Sprint queries**: "show sprints" / "list sprints" / "what sprints are there" / "list all sprints"
+- **Sprint analysis**: "analyze sprint [X]" / "sprint [X] analysis" / "how did sprint [X] perform"
+- **Epic queries**: "show epics" / "list epics" / "epic progress" / "epic status"
+- **Project status**: "project [X] status" / "what's the status of project [X]"
+- **Team metrics**: "team performance" / "how is the team performing"
+- **Analytics**: "sprint metrics" / "sprint velocity" / "burndown analysis" / "task completion rate" / "task progress"
 - Any query asking to analyze, evaluate, or assess PM data
+- Any query about sprints, epics, or analytics (even simple listing)
 
 ### Handling Complex PM Queries
 

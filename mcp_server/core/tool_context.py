@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from .provider_manager import ProviderManager
 from .analytics_manager import AnalyticsManager
+from ..pm_handler import MCPPMHandler
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,12 @@ class ToolContext:
         
         self.analytics_manager = AnalyticsManager(
             provider_manager=self.provider_manager
+        )
+        
+        # Initialize PM handler for backward compatibility
+        self.pm_handler = MCPPMHandler(
+            db_session=db_session,
+            user_id=user_id
         )
         
         logger.info(

@@ -26,9 +26,10 @@ def register_sprint_tools_v2(
         tool_description = getattr(tool_class, "_mcp_description", "")
         tool_input_schema = getattr(tool_class, "_mcp_input_schema", {"type": "object", "properties": {}, "additionalProperties": True})
         
+        # Fix closure bug: capture tool_instance in default argument
         @server.call_tool()
-        async def tool_handler(name: str = tool_name, arguments: dict[str, Any] = None):
-            return await tool_instance(arguments or {})
+        async def tool_handler(name: str = tool_name, arguments: dict[str, Any] = None, _tool_instance=tool_instance):
+            return await _tool_instance(arguments or {})
         
         if tool_names is not None:
             tool_names.append(tool_name)

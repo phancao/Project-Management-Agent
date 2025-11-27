@@ -34,14 +34,20 @@ def register_task_tools_v2(
         tool_description = getattr(tool_class, "_mcp_description", "")
         tool_input_schema = getattr(tool_class, "_mcp_input_schema", {"type": "object", "properties": {}, "additionalProperties": True})
         
-        @server.call_tool()
-        async def tool_handler(name: str = tool_name, arguments: dict[str, Any] = None):
-            return await tool_instance(arguments or {})
+        # IMPORTANT: Create a new scope to capture tool_instance correctly
+        # Without this, all handlers would reference the last tool_instance due to closure
+        def create_handler(instance):
+            @server.call_tool()
+            async def tool_handler(name: str = tool_name, arguments: dict[str, Any] = None):
+                return await instance(arguments or {})
+            return tool_handler
+        
+        handler = create_handler(tool_instance)
         
         if tool_names is not None:
             tool_names.append(tool_name)
         if tool_functions is not None:
-            tool_functions[tool_name] = tool_handler
+            tool_functions[tool_name] = handler
         if hasattr(server, '_tool_cache'):
             server._tool_cache[tool_name] = Tool(name=tool_name, description=tool_description, inputSchema=tool_input_schema)
         

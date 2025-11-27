@@ -75,6 +75,8 @@ class PMProviderConnection(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_sync_at = Column(DateTime, nullable=True)
+    # Backend provider ID - used to map backend provider IDs to MCP provider IDs
+    backend_provider_id = Column(UUID(as_uuid=True), nullable=True, unique=True)
 
     # Relationships
     user = relationship("User", back_populates="provider_connections")

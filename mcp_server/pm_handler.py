@@ -44,6 +44,33 @@ class MCPPMHandler:
         self._mode = "multi"  # MCP Server always uses multi-provider mode
         self._last_provider_errors: List[Dict[str, Any]] = []  # Track provider errors
     
+    def _find_provider_by_backend_id(self, backend_provider_id: str) -> Optional[PMProviderConnection]:
+        """
+        Find an MCP server provider that matches a backend provider ID.
+        
+        Since MCP server and backend have separate databases, we need to match
+        providers by their configuration (base_url, provider_type) rather than ID.
+        
+        This method queries the backend API to get the provider's configuration,
+        then finds the matching provider in the MCP server's database.
+        
+        Args:
+            backend_provider_id: Provider ID from the backend database
+            
+        Returns:
+            Matching PMProviderConnection from MCP server, or None if not found
+        """
+        # For now, we'll search all active providers since we can't easily
+        # query the backend API from here. The actual_project_id should be
+        # enough to find the right data across providers.
+        # 
+        # TODO: In the future, we could:
+        # 1. Query backend API to get provider config by ID
+        # 2. Match by base_url and provider_type
+        # 3. Cache the mapping for performance
+        logger.info(f"[MCP PMHandler] Looking for provider matching backend ID: {backend_provider_id}")
+        return None  # Return None to search all providers
+    
     def _get_active_providers(self) -> List[PMProviderConnection]:
         """
         Get active PM providers from MCP Server database.
@@ -61,12 +88,17 @@ class MCPPMHandler:
         )
         
         # Filter by user if user_id is provided
+        # Include providers where created_by matches OR created_by is NULL (shared/synced providers)
         if self.user_id:
+            from sqlalchemy import or_
             query = query.filter(
-                PMProviderConnection.created_by == self.user_id
+                or_(
+                    PMProviderConnection.created_by == self.user_id,
+                    PMProviderConnection.created_by.is_(None)  # Include synced/shared providers
+                )
             )
             logger.info(
-                "[MCP PMHandler] Filtering providers by user_id: %s",
+                "[MCP PMHandler] Filtering providers by user_id: %s (including shared providers)",
                 self.user_id
             )
         
@@ -108,7 +140,7 @@ class MCPPMHandler:
             username_value = username_str if username_str else None
         
         logger.info(
-            "[MCP PMHandler._create_provider_instance] Creating provider: "
+            "[MCP PMHandler] Creating PM connection: "
             "type=%s, username=%s, has_api_token=%s",
             provider.provider_type,
             username_value,
@@ -149,6 +181,7 @@ class MCPPMHandler:
         provider_errors = []  # Track errors per provider
         
         for provider in providers:
+            pm_system_name = f"{provider.provider_type} ({provider.base_url})"
             try:
                 provider_instance = self._create_provider_instance(provider)
                 projects = await provider_instance.list_projects()
@@ -168,24 +201,22 @@ class MCPPMHandler:
                         "provider_type": provider.provider_type,
                     })
                 logger.info(
-                    "[MCP PMHandler] Successfully retrieved %d projects "
-                    "from provider %s (%s)",
+                    "[MCP PMHandler] Found %d projects in %s",
                     len(projects),
-                    provider.id,
-                    provider.provider_type
+                    pm_system_name
                 )
             except (ValueError, ConnectionError, RuntimeError) as e:
                 error_msg = str(e)
                 logger.error(
-                    "[MCP PMHandler] Error listing projects from provider %s: %s",
-                    provider.id,
+                    "[MCP PMHandler] Error fetching projects from %s: %s",
+                    pm_system_name,
                     e,
                     exc_info=True
                 )
                 # Store error info for reporting
                 provider_errors.append({
                     "provider_id": str(provider.id),
-                    "provider_name": provider.name or f"{provider.provider_type} ({provider.base_url})",
+                    "provider_name": provider.name or pm_system_name,
                     "provider_type": provider.provider_type,
                     "error": error_msg
                 })
@@ -226,6 +257,7 @@ class MCPPMHandler:
             provider_id, actual_project_id = project_id.split(":", 1)
         
         for provider in providers:
+            pm_system_name = f"{provider.provider_type} ({provider.base_url})"
             # Filter by provider_id if specified
             if provider_id and str(provider.id) != provider_id:
                 continue
@@ -233,11 +265,11 @@ class MCPPMHandler:
             try:
                 provider_instance = self._create_provider_instance(provider)
                 
-                # Fetch projects for this provider to build name mapping
+                # Fetch projects for this PM system to build name mapping
                 projects = await provider_instance.list_projects()
                 project_map = {str(p.id): p.name for p in projects}
                 
-                # List tasks
+                # List tasks from the project
                 tasks = await provider_instance.list_tasks(
                     project_id=actual_project_id,
                     assignee_id=assignee_id,
@@ -267,8 +299,8 @@ class MCPPMHandler:
                     })
             except (ValueError, ConnectionError, RuntimeError) as e:
                 logger.error(
-                    "[MCP PMHandler] Error listing tasks from provider %s: %s",
-                    provider.id,
+                    "[MCP PMHandler] Error fetching tasks from %s: %s",
+                    pm_system_name,
                     e,
                     exc_info=True
                 )
@@ -292,8 +324,10 @@ class MCPPMHandler:
             List of sprints with provider_id prefix in sprint.id
         """
         providers = self._get_active_providers()
+        logger.info(f"[MCP PMHandler] list_all_sprints: project_id={project_id}, status={status}, providers_count={len(providers)}")
         
         if not providers:
+            logger.warning("[MCP PMHandler] No active providers found!")
             return []
         
         all_sprints = []
@@ -304,19 +338,54 @@ class MCPPMHandler:
         if project_id and ":" in project_id:
             provider_id, actual_project_id = project_id.split(":", 1)
         
+        logger.info(f"[MCP PMHandler] Parsed: provider_id={provider_id}, actual_project_id={actual_project_id}")
+        
+        # Check if the provider_id matches any MCP server provider
+        # If not, it might be a backend provider ID - search all providers
+        provider_id_matches_mcp = False
+        if provider_id:
+            for p in providers:
+                if str(p.id) == provider_id:
+                    provider_id_matches_mcp = True
+                    break
+        
+        if provider_id and not provider_id_matches_mcp:
+            logger.warning(
+                f"[MCP PMHandler] Provider ID {provider_id} not found in MCP server. "
+                f"This may be a backend provider ID. Searching all providers by project_id={actual_project_id}"
+            )
+            # Clear provider_id to search all providers
+            provider_id = None
+        
         for provider in providers:
-            # Filter by provider_id if specified
+            provider_name = f"{provider.provider_type} ({provider.base_url})"
+            logger.info(f"[MCP PMHandler] Checking PM connection: {provider_name}")
+            # Filter by provider_id if it matches an MCP provider
             if provider_id and str(provider.id) != provider_id:
+                logger.info(f"[MCP PMHandler] Skipping {provider_name} (doesn't match requested provider)")
                 continue
             
             try:
                 provider_instance = self._create_provider_instance(provider)
+                logger.info(f"[MCP PMHandler] Fetching sprints from {provider_name} for project_id={actual_project_id}")
                 
-                # List sprints
-                sprints = await provider_instance.list_sprints(
-                    project_id=actual_project_id,
-                    status=status,
-                )
+                # List sprints for the project
+                # Note: Some PM systems may not support status filter
+                try:
+                    sprints = await provider_instance.list_sprints(
+                        project_id=actual_project_id,
+                        status=status,
+                    )
+                except TypeError as e:
+                    if "status" in str(e):
+                        # PM system doesn't support status filter, try without it
+                        logger.info(f"[MCP PMHandler] {provider_name} doesn't support status filter, retrying without it")
+                        sprints = await provider_instance.list_sprints(
+                            project_id=actual_project_id,
+                        )
+                    else:
+                        raise
+                logger.info(f"[MCP PMHandler] Found {len(sprints)} sprints in project {actual_project_id} from {provider_name}")
                 
                 # Prefix sprint ID with provider_id
                 for s in sprints:
@@ -336,8 +405,8 @@ class MCPPMHandler:
                     })
             except (ValueError, ConnectionError, RuntimeError) as e:
                 logger.error(
-                    "[MCP PMHandler] Error listing sprints from provider %s: %s",
-                    provider.id,
+                    "[MCP PMHandler] Error fetching sprints from %s: %s",
+                    provider_name,
                     e,
                     exc_info=True
                 )

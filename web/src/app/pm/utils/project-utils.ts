@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { Project } from "../types";
+import type { ProviderConfig } from "~/core/api/pm/providers";
 
 /**
  * Utility functions for working with projects
@@ -23,6 +24,43 @@ export function extractProjectKey(projectId: string): string {
 export function extractProviderId(projectId: string): string | null {
   const parts = projectId.split(':');
   return parts.length > 1 ? parts[0] : null;
+}
+
+/**
+ * Convert a project ID to use MCP provider ID instead of backend provider ID.
+ * 
+ * This is needed because:
+ * - Backend and MCP Server have separate databases
+ * - They have different provider IDs for the same provider
+ * - AI Agent uses MCP Server, so it needs MCP provider ID
+ * 
+ * @param projectId - Project ID in format "backend_provider_id:project_key"
+ * @param providers - List of providers with both backend ID and MCP provider ID
+ * @returns Project ID in format "mcp_provider_id:project_key" or original if no mapping found
+ */
+export function convertToMCPProjectId(
+  projectId: string,
+  providers: ProviderConfig[]
+): string {
+  const backendProviderId = extractProviderId(projectId);
+  const projectKey = extractProjectKey(projectId);
+  
+  if (!backendProviderId) {
+    // No provider prefix, return as-is
+    return projectId;
+  }
+  
+  // Find the provider by backend ID
+  const provider = providers.find(p => p.id === backendProviderId);
+  
+  if (provider?.mcp_provider_id) {
+    // Use MCP provider ID
+    return `${provider.mcp_provider_id}:${projectKey}`;
+  }
+  
+  // No MCP provider ID found, return original
+  // (MCP Server will use fallback logic to search all providers)
+  return projectId;
 }
 
 /**

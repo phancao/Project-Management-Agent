@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 
 from ..config import PMServerConfig
+from .models import Base
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,10 @@ def init_mcp_db(config: PMServerConfig | None = None) -> None:
         autoflush=False,
         expire_on_commit=False,
     )
+    
+    # Create all tables if they don't exist
+    Base.metadata.create_all(bind=_engine)
+    logger.info("MCP Server database tables created/verified")
     
     logger.info("MCP Server database connection initialized")
 

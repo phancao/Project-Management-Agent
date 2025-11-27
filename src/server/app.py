@@ -106,10 +106,45 @@ if os.name == "nt":
 
 INTERNAL_SERVER_ERROR_DETAIL = "Internal Server Error"
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for FastAPI app.
+    
+    Handles startup and shutdown events.
+    """
+    # Startup: Sync providers to MCP Server
+    logger.info("[Startup] Starting provider sync to MCP Server...")
+    try:
+        from src.server.mcp_sync import check_and_sync_providers
+        import asyncio
+        
+        # Run sync in background to not block startup
+        async def startup_sync():
+            await asyncio.sleep(5)  # Wait for MCP Server to be ready
+            try:
+                result = await check_and_sync_providers()
+                logger.info(f"[Startup] Provider sync completed: {result}")
+            except Exception as e:
+                logger.warning(f"[Startup] Provider sync failed (non-fatal): {e}")
+        
+        asyncio.create_task(startup_sync())
+    except Exception as e:
+        logger.warning(f"[Startup] Failed to start provider sync: {e}")
+    
+    yield
+    
+    # Shutdown: cleanup if needed
+    logger.info("[Shutdown] Backend API shutting down...")
+
+
 app = FastAPI(
     title="DeerFlow API",
     description="API for Deer",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -203,7 +238,7 @@ async def chat_stream(request: ChatRequest):
             request.max_search_results or 3,
             request.auto_accepted_plan or False,
             request.interrupt_feedback or "",
-            (request.mcp_settings if mcp_enabled and request.mcp_settings else get_default_mcp_settings()) if mcp_enabled else {},
+            (request.mcp_settings if mcp_enabled and request.mcp_settings and request.mcp_settings.get("servers") else get_default_mcp_settings()) if mcp_enabled else {},
             request.enable_background_investigation or True,
             request.report_style or ReportStyle.ACADEMIC,
             request.enable_deep_thinking or False,
@@ -2661,6 +2696,7 @@ async def pm_list_providers():
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
+        from src.server.mcp_sync import get_mcp_provider_id
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2678,6 +2714,8 @@ async def pm_list_providers():
                     "username": p.username,
                     "organization_id": p.organization_id,
                     "workspace_id": p.workspace_id,
+                    # Include MCP provider ID for AI Agent context
+                    "mcp_provider_id": get_mcp_provider_id(p),
                 }
                 for p in providers
             ]
@@ -2715,6 +2753,7 @@ async def pm_import_projects(request: ProjectImportRequest):
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
         from src.pm_providers.factory import create_pm_provider
+        from src.server.mcp_sync import sync_provider_to_mcp, MCPSyncError, set_mcp_provider_id
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2735,6 +2774,32 @@ async def pm_import_projects(request: ProjectImportRequest):
             db.add(provider)
             db.commit()
             db.refresh(provider)
+            
+            # Sync provider to MCP Server
+            mcp_sync_result = None
+            mcp_sync_error = None
+            try:
+                mcp_sync_result = await sync_provider_to_mcp(
+                    backend_provider_id=str(provider.id),
+                    name=provider.name,
+                    provider_type=provider.provider_type,
+                    base_url=provider.base_url,
+                    api_key=request.api_key,
+                    api_token=request.api_token,
+                    username=request.username,
+                    organization_id=request.organization_id,
+                    workspace_id=request.workspace_id,
+                    is_active=True,
+                    test_connection=False,  # We'll test below
+                )
+                # Store MCP provider ID in additional_config
+                if mcp_sync_result and mcp_sync_result.get("success"):
+                    set_mcp_provider_id(provider, mcp_sync_result["mcp_provider_id"])
+                    db.commit()
+                    logger.info(f"[pm_import_projects] Provider synced to MCP: {mcp_sync_result}")
+            except MCPSyncError as e:
+                mcp_sync_error = str(e)
+                logger.warning(f"[pm_import_projects] MCP sync failed (non-fatal): {e}")
             
             # Create provider instance and import projects
             provider_instance = create_pm_provider(
@@ -2785,7 +2850,8 @@ async def pm_import_projects(request: ProjectImportRequest):
                         detail=f"Failed to fetch projects: {error_msg}"
                     )
             
-            return {
+            # Build response with MCP sync info
+            response = {
                 "success": True,
                 "provider_config_id": str(provider.id),
                 "total_projects": len(projects),
@@ -2800,8 +2866,14 @@ async def pm_import_projects(request: ProjectImportRequest):
                     }
                     for p in projects
                 ],
-                "errors": []
+                "errors": [],
+                "mcp_sync": {
+                    "success": mcp_sync_result.get("success") if mcp_sync_result else False,
+                    "mcp_provider_id": mcp_sync_result.get("mcp_provider_id") if mcp_sync_result else None,
+                    "error": mcp_sync_error,
+                }
             }
+            return response
         finally:
             db.close()
     except Exception as e:
@@ -2967,6 +3039,7 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
+        from src.server.mcp_sync import sync_provider_to_mcp, MCPSyncError, set_mcp_provider_id
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -3007,6 +3080,33 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
             db.commit()
             db.refresh(provider)
             
+            # Sync updated provider to MCP Server
+            # This is critical for keeping credentials in sync (e.g., after token refresh)
+            mcp_sync_result = None
+            mcp_sync_error = None
+            try:
+                mcp_sync_result = await sync_provider_to_mcp(
+                    backend_provider_id=str(provider.id),
+                    name=provider.name,
+                    provider_type=provider.provider_type,
+                    base_url=provider.base_url,
+                    api_key=provider.api_key,
+                    api_token=provider.api_token,
+                    username=provider.username,
+                    organization_id=provider.organization_id,
+                    workspace_id=provider.workspace_id,
+                    is_active=provider.is_active,
+                    test_connection=False,
+                )
+                # Update MCP provider ID if sync succeeded
+                if mcp_sync_result and mcp_sync_result.get("success"):
+                    set_mcp_provider_id(provider, mcp_sync_result["mcp_provider_id"])
+                    db.commit()
+                    logger.info(f"[pm_update_provider] Provider synced to MCP: {mcp_sync_result}")
+            except MCPSyncError as e:
+                mcp_sync_error = str(e)
+                logger.warning(f"[pm_update_provider] MCP sync failed (non-fatal): {e}")
+            
             return {
                 "id": str(provider.id),
                 "name": provider.name,
@@ -3015,6 +3115,11 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
                 "username": provider.username,
                 "organization_id": provider.organization_id,
                 "workspace_id": provider.workspace_id,
+                "mcp_sync": {
+                    "success": mcp_sync_result.get("success") if mcp_sync_result else False,
+                    "mcp_provider_id": mcp_sync_result.get("mcp_provider_id") if mcp_sync_result else None,
+                    "error": mcp_sync_error,
+                }
             }
         finally:
             db.close()
@@ -3062,12 +3167,248 @@ async def pm_test_connection(request: ProjectImportRequest):
         }
 
 
+@app.post("/api/pm/providers/{provider_id}/sync")
+async def pm_sync_provider_to_mcp(provider_id: str):
+    """
+    Manually sync a provider to MCP Server.
+    
+    Use this when:
+    - Provider credentials were updated outside the normal flow
+    - MCP Server was down during a previous sync
+    - Token expired and was refreshed manually
+    """
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import PMProviderConnection
+        from src.server.mcp_sync import sync_provider_to_mcp, MCPSyncError, set_mcp_provider_id
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            from uuid import UUID
+            try:
+                provider_uuid = UUID(provider_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, detail="Invalid provider ID format"
+                )
+            
+            provider = db.query(PMProviderConnection).filter(
+                PMProviderConnection.id == provider_uuid
+            ).first()
+            
+            if not provider:
+                raise HTTPException(
+                    status_code=404, detail="Provider not found"
+                )
+            
+            # Sync to MCP Server
+            mcp_sync_result = await sync_provider_to_mcp(
+                backend_provider_id=str(provider.id),
+                name=provider.name,
+                provider_type=provider.provider_type,
+                base_url=provider.base_url,
+                api_key=provider.api_key,
+                api_token=provider.api_token,
+                username=provider.username,
+                organization_id=provider.organization_id,
+                workspace_id=provider.workspace_id,
+                is_active=provider.is_active,
+                test_connection=True,  # Test connection on manual sync
+            )
+            
+            # Update MCP provider ID
+            if mcp_sync_result and mcp_sync_result.get("success"):
+                set_mcp_provider_id(provider, mcp_sync_result["mcp_provider_id"])
+                db.commit()
+            
+            return {
+                "success": True,
+                "provider_id": str(provider.id),
+                "mcp_sync": mcp_sync_result,
+            }
+        finally:
+            db.close()
+    except MCPSyncError as e:
+        logger.error(f"MCP sync failed: {e}")
+        raise HTTPException(status_code=503, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to sync provider: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pm/providers/sync-all")
+async def pm_sync_all_providers_to_mcp():
+    """
+    Sync all active providers to MCP Server.
+    
+    Use this for:
+    - Initial setup after MCP Server deployment
+    - Periodic reconciliation
+    - Recovery after MCP Server restart
+    """
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import PMProviderConnection
+        from src.server.mcp_sync import bulk_sync_providers_to_mcp, MCPSyncError, set_mcp_provider_id
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Get all active providers
+            providers = db.query(PMProviderConnection).filter(
+                PMProviderConnection.is_active.is_(True)
+            ).all()
+            
+            if not providers:
+                return {
+                    "success": True,
+                    "message": "No active providers to sync",
+                    "synced": 0,
+                    "failed": 0,
+                }
+            
+            # Build sync requests
+            sync_requests = []
+            for provider in providers:
+                sync_requests.append({
+                    "backend_provider_id": str(provider.id),
+                    "name": provider.name,
+                    "provider_type": provider.provider_type,
+                    "base_url": provider.base_url,
+                    "api_key": provider.api_key,
+                    "api_token": provider.api_token,
+                    "username": provider.username,
+                    "organization_id": provider.organization_id,
+                    "workspace_id": provider.workspace_id,
+                    "is_active": provider.is_active,
+                    "test_connection": False,  # Skip connection test for bulk sync
+                })
+            
+            # Bulk sync
+            result = await bulk_sync_providers_to_mcp(
+                providers=sync_requests,
+                delete_missing=False,  # Don't delete orphaned MCP providers
+            )
+            
+            # Update MCP provider IDs for successful syncs
+            for sync_result in result.get("results", []):
+                if sync_result.get("success") and sync_result.get("mcp_provider_id"):
+                    backend_id = sync_result.get("backend_provider_id")
+                    for provider in providers:
+                        if str(provider.id) == backend_id:
+                            set_mcp_provider_id(provider, sync_result["mcp_provider_id"])
+                            break
+            
+            db.commit()
+            
+            return {
+                "success": result.get("success", False),
+                "message": f"Synced {result.get('synced', 0)} of {len(providers)} providers",
+                "total": len(providers),
+                "synced": result.get("synced", 0),
+                "failed": result.get("failed", 0),
+                "errors": result.get("errors", []),
+            }
+        finally:
+            db.close()
+    except MCPSyncError as e:
+        logger.error(f"Bulk MCP sync failed: {e}")
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to sync providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pm/providers/check-sync")
+async def pm_check_and_sync_providers():
+    """
+    Check all providers and sync any that are out of sync with MCP Server.
+    
+    This endpoint:
+    1. Checks each provider's connection health in MCP Server
+    2. Re-syncs any providers that have connection issues
+    3. Reports which providers are healthy/unhealthy
+    
+    Use this for:
+    - Manual health check
+    - After token refresh
+    - Troubleshooting sync issues
+    """
+    try:
+        from src.server.mcp_sync import check_and_sync_providers
+        
+        result = await check_and_sync_providers()
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to check and sync providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pm/providers/sync-status")
+async def pm_get_sync_status():
+    """
+    Get the sync status between Backend and MCP Server.
+    
+    Shows which providers are synced and which need attention.
+    """
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import PMProviderConnection
+        from src.server.mcp_sync import get_mcp_sync_status, get_mcp_provider_id
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Get Backend providers
+            backend_providers = db.query(PMProviderConnection).all()
+            
+            # Get MCP Server status
+            mcp_status = await get_mcp_sync_status()
+            
+            # Build comparison
+            backend_list = []
+            for provider in backend_providers:
+                mcp_id = get_mcp_provider_id(provider)
+                backend_list.append({
+                    "backend_provider_id": str(provider.id),
+                    "mcp_provider_id": mcp_id,
+                    "name": provider.name,
+                    "provider_type": provider.provider_type,
+                    "base_url": provider.base_url,
+                    "is_active": provider.is_active,
+                    "synced": bool(mcp_id),
+                })
+            
+            return {
+                "backend": {
+                    "total": len(backend_providers),
+                    "active": sum(1 for p in backend_providers if p.is_active),
+                    "synced": sum(1 for p in backend_list if p["synced"]),
+                    "providers": backend_list,
+                },
+                "mcp_server": mcp_status,
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to get sync status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/api/pm/providers/{provider_id}")
 async def pm_delete_provider(provider_id: str):
     """Delete (deactivate) a provider"""
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
+        from src.server.mcp_sync import delete_provider_from_mcp, MCPSyncError
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -3094,7 +3435,28 @@ async def pm_delete_provider(provider_id: str):
             provider.is_active = False  # type: ignore
             db.commit()
             
-            return {"success": True, "message": "Provider deactivated"}
+            # Sync deletion to MCP Server
+            mcp_sync_result = None
+            mcp_sync_error = None
+            try:
+                mcp_sync_result = await delete_provider_from_mcp(
+                    backend_provider_id=str(provider.id),
+                    hard_delete=False,  # Just deactivate, don't hard delete
+                )
+                logger.info(f"[pm_delete_provider] Provider deleted from MCP: {mcp_sync_result}")
+            except MCPSyncError as e:
+                mcp_sync_error = str(e)
+                logger.warning(f"[pm_delete_provider] MCP sync failed (non-fatal): {e}")
+            
+            return {
+                "success": True,
+                "message": "Provider deactivated",
+                "mcp_sync": {
+                    "success": mcp_sync_result.get("success") if mcp_sync_result else False,
+                    "action": mcp_sync_result.get("action") if mcp_sync_result else None,
+                    "error": mcp_sync_error,
+                }
+            }
         finally:
             db.close()
     except HTTPException:

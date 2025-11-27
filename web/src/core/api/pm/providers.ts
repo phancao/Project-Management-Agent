@@ -12,6 +12,8 @@ export interface ProviderConfig {
   username?: string;
   organization_id?: string;
   workspace_id?: string;
+  // MCP Server provider ID - used for AI Agent context
+  mcp_provider_id?: string;
 }
 
 export interface ProjectImportRequest {
@@ -42,6 +44,12 @@ export interface ProjectImportResponse {
   projects: ProjectInfo[];
   errors: Array<{ error: string; type?: string }>;
   message?: string;
+  // MCP sync result
+  mcp_sync?: {
+    success: boolean;
+    mcp_provider_id?: string;
+    error?: string;
+  };
 }
 
 export async function importProjectsFromProvider(
@@ -107,6 +115,8 @@ export async function listProviders(): Promise<ProviderConfig[]> {
         username: p.username,
         organization_id: p.organization_id,
         workspace_id: p.workspace_id,
+        // Include MCP provider ID for AI Agent context
+        mcp_provider_id: p.mcp_provider_id,
       }));
   } catch (error) {
     clearTimeout(timeoutId);

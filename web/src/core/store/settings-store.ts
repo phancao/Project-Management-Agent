@@ -116,9 +116,9 @@ export const getChatStreamSettings = () => {
             url: cur.url,
           };
         }
-        // PM MCP server should be added to both researcher and coder
+        // PM MCP server should be added to researcher, coder, and pm_agent
         const addToAgents = cur.name === "pm-server" || cur.name.includes("pm")
-          ? ["researcher", "coder"]
+          ? ["researcher", "coder", "pm_agent"]
           : ["researcher"];
 
         return {

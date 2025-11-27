@@ -746,28 +746,33 @@ async def _stream_graph_events(
                                 )
                                 
                                 # Also emit step_progress for current step
-                                # Find the first unexecuted step
+                                # Emit progress for each step in the plan
                                 if hasattr(current_plan, 'steps') and current_plan.steps:
-                                    for idx, step in enumerate(current_plan.steps):
-                                        if not hasattr(step, 'execution_res') or not step.execution_res:
-                                            # This is the current step being executed
-                                            logger.info(
-                                                f"[{safe_thread_id}] Streaming step progress: "
-                                                f"Step {idx + 1}/{len(current_plan.steps)}: {step.title}"
-                                            )
-                                            yield _make_event(
-                                                "step_progress",
-                                                {
-                                                    "thread_id": thread_id,
-                                                    "agent": node_name,
-                                                    "role": "assistant",
-                                                    "step_title": step.title,
-                                                    "step_description": step.description if hasattr(step, 'description') else "",
-                                                    "step_index": idx,
-                                                    "total_steps": len(current_plan.steps),
-                                                }
-                                            )
-                                            break  # Only emit for the first unexecuted step
+                                    # Count completed steps to determine current step
+                                    completed_count = sum(
+                                        1 for step in current_plan.steps 
+                                        if hasattr(step, 'execution_res') and step.execution_res
+                                    )
+                                    # Current step is the first incomplete one, or the last one if all complete
+                                    current_step_idx = min(completed_count, len(current_plan.steps) - 1)
+                                    current_step = current_plan.steps[current_step_idx]
+                                    
+                                    logger.info(
+                                        f"[{safe_thread_id}] Streaming step progress: "
+                                        f"Step {current_step_idx + 1}/{len(current_plan.steps)}: {current_step.title}"
+                                    )
+                                    yield _make_event(
+                                        "step_progress",
+                                        {
+                                            "thread_id": thread_id,
+                                            "agent": node_name,
+                                            "role": "assistant",
+                                            "step_title": current_step.title,
+                                            "step_description": current_step.description if hasattr(current_step, 'description') else "",
+                                            "step_index": current_step_idx,
+                                            "total_steps": len(current_plan.steps),
+                                        }
+                                    )
                         
                         # Stream step execution updates
                         if "observations" in node_update:

@@ -312,6 +312,8 @@ def planner_node(
                 update={
                     "messages": [AIMessage(content=full_response, name="planner")],
                     "current_plan": new_plan,
+                    "total_steps": len(new_plan.steps),
+                    "current_step_index": 0,  # Reset to first step
                 },
                 goto="research_team",
             )
@@ -322,6 +324,8 @@ def planner_node(
                 update={
                     "messages": [AIMessage(content=full_response, name="planner")],
                     "current_plan": new_plan,
+                    "total_steps": len(new_plan.steps) if new_plan.steps else 0,
+                    "current_step_index": 0,
                 },
                 goto="reporter",
             )
@@ -387,11 +391,14 @@ def human_feedback_node(
         else:
             return Command(goto="__end__")
 
+    validated_plan = Plan.model_validate(new_plan)
     return Command(
         update={
-            "current_plan": Plan.model_validate(new_plan),
+            "current_plan": validated_plan,
             "plan_iterations": plan_iterations,
             "locale": new_plan["locale"],
+            "total_steps": len(validated_plan.steps) if validated_plan.steps else 0,
+            "current_step_index": 0,  # Reset to first step
         },
         goto=goto,
     )
@@ -879,6 +886,10 @@ async def _execute_agent_step(
         detailed_error = f"[ERROR] {agent_name.capitalize()} Agent Error\n\nStep: {current_step.title}\n\nError Details:\n{str(e)}\n\nPlease check the logs for more information."
         current_step.execution_res = detailed_error
 
+        # Calculate the current step index even on error
+        completed_count = sum(1 for step in current_plan.steps if step.execution_res)
+        current_step_index = min(completed_count, len(current_plan.steps) - 1)
+
         return Command(
             update={
                 "messages": [
@@ -888,6 +899,7 @@ async def _execute_agent_step(
                     )
                 ],
                 "observations": observations + [detailed_error],
+                "current_step_index": current_step_index,  # Update step progress even on error
             },
             goto="research_team",
         )
@@ -918,6 +930,11 @@ async def _execute_agent_step(
     current_step.execution_res = response_content
     logger.info(f"Step '{current_step.title}' execution completed by {agent_name}")
 
+    # Calculate the current step index (number of completed steps)
+    completed_count = sum(1 for step in current_plan.steps if step.execution_res)
+    current_step_index = min(completed_count, len(current_plan.steps) - 1)
+    logger.info(f"Step progress: {completed_count}/{len(current_plan.steps)} steps completed (current_step_index={current_step_index})")
+
     return Command(
         update={
             "messages": [
@@ -927,6 +944,7 @@ async def _execute_agent_step(
                 )
             ],
             "observations": observations + [response_content],
+            "current_step_index": current_step_index,  # Update step progress
         },
         goto="research_team",
     )

@@ -23,6 +23,8 @@ class State(MessagesState):
     resources: list[Resource] = []
     plan_iterations: int = 0
     current_plan: Plan | str = None
+    current_step_index: int = 0  # Track which step is currently being executed (0-based)
+    total_steps: int = 0  # Total number of steps in the plan
     final_report: str = ""
     auto_accepted_plan: bool = False
     enable_background_investigation: bool = True

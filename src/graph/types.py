@@ -29,6 +29,7 @@ class State(MessagesState):
     auto_accepted_plan: bool = False
     enable_background_investigation: bool = True
     background_investigation_results: str = None
+    project_id: str = ""  # PM project ID for PM Agent queries
 
     # Clarification state tracking (disabled by default)
     enable_clarification: bool = (

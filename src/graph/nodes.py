@@ -6,6 +6,7 @@ import logging
 import os
 from functools import partial
 from typing import Annotated, Literal
+import re
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
@@ -42,6 +43,38 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def extract_project_id(text: str) -> str:
+    """
+    Extract project_id from text.
+    
+    Looks for patterns like:
+    - project_id: <id>
+    - project_id=<id>
+    - project: <id>
+    
+    Returns empty string if not found.
+    """
+    if not text:
+        return ""
+    
+    # Try different patterns
+    patterns = [
+        r'project_id:\s*([^\s\n]+)',
+        r'project_id=([^\s\n]+)',
+        r'project:\s*([^\s\n]+)',
+        r'project=([^\s\n]+)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            project_id = match.group(1).strip()
+            logger.info(f"Extracted project_id: {project_id}")
+            return project_id
+    
+    return ""
 
 
 @tool
@@ -224,6 +257,32 @@ def planner_node(
     configurable = Configuration.from_runnable_config(config)
     plan_iterations = state["plan_iterations"] if state.get("plan_iterations", 0) else 0
 
+    # Extract project_id from research topic or messages
+    project_id = state.get("project_id", "")
+    if not project_id:
+        # Try to extract from research_topic
+        research_topic = state.get("research_topic", "")
+        project_id = extract_project_id(research_topic)
+        
+        # If not found, try from clarified_research_topic
+        if not project_id:
+            clarified_topic = state.get("clarified_research_topic", "")
+            project_id = extract_project_id(clarified_topic)
+        
+        # If still not found, try from messages
+        if not project_id:
+            for msg in state.get("messages", []):
+                content = get_message_content(msg)
+                if content:
+                    project_id = extract_project_id(content)
+                    if project_id:
+                        break
+        
+        if project_id:
+            import sys
+            sys.stderr.write(f"\n📌 EXTRACTED PROJECT_ID: {project_id}\n")
+            sys.stderr.flush()
+
     # For clarification feature: use the clarified research topic (complete history)
     if state.get("enable_clarification", False) and state.get(
         "clarified_research_topic"
@@ -314,6 +373,7 @@ def planner_node(
                     "current_plan": new_plan,
                     "total_steps": len(new_plan.steps),
                     "current_step_index": 0,  # Reset to first step
+                    "project_id": project_id,  # Pass project_id to agents
                 },
                 goto="research_team",
             )
@@ -326,6 +386,7 @@ def planner_node(
                     "current_plan": new_plan,
                     "total_steps": len(new_plan.steps) if new_plan.steps else 0,
                     "current_step_index": 0,
+                    "project_id": project_id,  # Pass project_id to agents
                 },
                 goto="reporter",
             )
@@ -333,6 +394,7 @@ def planner_node(
         update={
             "messages": [AIMessage(content=full_response, name="planner")],
             "current_plan": full_response,
+            "project_id": project_id,  # Pass project_id to agents
         },
         goto="human_feedback",
     )
@@ -761,11 +823,20 @@ async def _execute_agent_step(
     state: State, agent, agent_name: str
 ) -> Command[Literal["research_team"]]:
     """Helper function to execute a step using the specified agent."""
+    import sys
+    sys.stderr.write(f"\n⚡ EXECUTE_AGENT_STEP: agent_name='{agent_name}'\n")
+    sys.stderr.flush()
+    
     logger.debug(f"[_execute_agent_step] Starting execution for agent: {agent_name}")
     
     current_plan = state.get("current_plan")
     plan_title = current_plan.title
     observations = state.get("observations", [])
+    
+    import sys
+    sys.stderr.write(f"\n📋 PLAN INFO: plan_title='{plan_title}'\n")
+    sys.stderr.flush()
+    
     logger.debug(f"[_execute_agent_step] Plan title: {plan_title}, observations count: {len(observations)}")
 
     # Find the first unexecuted step
@@ -795,10 +866,14 @@ async def _execute_agent_step(
             completed_steps_info += f"<finding>\n{step.execution_res}\n</finding>\n\n"
 
     # Prepare the input for the agent with completed steps info
+    # Include project_id if available (for PM Agent)
+    project_id = state.get("project_id", "")
+    project_id_info = f"\n\n## Project ID\n\n{project_id}" if project_id else ""
+    
     agent_input = {
         "messages": [
             HumanMessage(
-                content=f"# Research Topic\n\n{plan_title}\n\n{completed_steps_info}# Current Step\n\n## Title\n\n{current_step.title}\n\n## Description\n\n{current_step.description}\n\n## Locale\n\n{state.get('locale', 'en-US')}"
+                content=f"# Research Topic\n\n{plan_title}\n\n{completed_steps_info}# Current Step\n\n## Title\n\n{current_step.title}\n\n## Description\n\n{current_step.description}{project_id_info}\n\n## Locale\n\n{state.get('locale', 'en-US')}"
             )
         ]
     }
@@ -826,6 +901,10 @@ async def _execute_agent_step(
         )
 
     # Invoke the agent
+    import sys
+    sys.stderr.write(f"\n🎯 INVOKING AGENT: agent_name='{agent_name}', step='{current_step.title if current_step else 'N/A'}'\n")
+    sys.stderr.flush()
+    
     default_recursion_limit = 25
     try:
         env_value_str = os.getenv("AGENT_RECURSION_LIMIT", str(default_recursion_limit))
@@ -848,6 +927,19 @@ async def _execute_agent_step(
         )
         recursion_limit = default_recursion_limit
 
+    import sys
+    sys.stderr.write(f"\n📥 AGENT INPUT: messages_count={len(agent_input.get('messages', []))}\n")
+    if agent_input.get('messages'):
+        first_msg = agent_input['messages'][0]
+        msg_type = type(first_msg).__name__
+        msg_content = str(first_msg.content) if hasattr(first_msg, 'content') else 'N/A'
+        # Check if project_id is in content
+        has_project_id = 'project_id' in msg_content.lower() or 'd7e300c6' in msg_content
+        sys.stderr.write(f"📥 First message type: {msg_type}\n")
+        sys.stderr.write(f"📥 Content length: {len(msg_content)}, has_project_id: {has_project_id}\n")
+        sys.stderr.write(f"📥 Content preview: {msg_content[:800]}...\n")
+    sys.stderr.flush()
+    
     logger.info(f"Agent input: {agent_input}")
     logger.debug(
         f"[{agent_name}] Agent input details: "
@@ -866,8 +958,26 @@ async def _execute_agent_step(
         result = await agent.ainvoke(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )
+        
+        import sys
+        # Check if agent made tool calls
+        last_message = result.get("messages", [])[-1] if result.get("messages") else None
+        tool_calls_made = []
+        response_preview = ""
+        if last_message:
+            if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+                tool_calls_made = [tc.get('name', 'unknown') for tc in last_message.tool_calls]
+            if hasattr(last_message, 'content'):
+                response_preview = str(last_message.content)[:300]
+        sys.stderr.write(f"\n✅ AGENT COMPLETED: agent_name='{agent_name}', tool_calls={tool_calls_made}\n")
+        sys.stderr.write(f"✅ Response preview: {response_preview}...\n")
+        sys.stderr.flush()
+        
     except Exception as e:
         import traceback
+        import sys
+        sys.stderr.write(f"\n❌ AGENT ERROR: agent_name='{agent_name}', error={str(e)}\n")
+        sys.stderr.flush()
 
         error_traceback = traceback.format_exc()
         error_message = f"Error executing {agent_name} agent for step '{current_step.title}': {str(e)}"
@@ -935,10 +1045,15 @@ async def _execute_agent_step(
     current_step_index = min(completed_count, len(current_plan.steps) - 1)
     logger.info(f"Step progress: {completed_count}/{len(current_plan.steps)} steps completed (current_step_index={current_step_index})")
 
+    import sys
+    from langchain_core.messages import AIMessage
+    sys.stderr.write(f"\n🔄 RETURNING RESULT: agent_name='{agent_name}', message_type='AIMessage', content_len={len(response_content)}\n")
+    sys.stderr.flush()
+    
     return Command(
         update={
             "messages": [
-                HumanMessage(
+                AIMessage(
                     content=response_content,
                     name=agent_name,
                 )
@@ -1118,6 +1233,10 @@ async def _setup_and_execute_agent_step(
                         f"(from {server_name})"
                     )
             
+            import sys
+            sys.stderr.write(f"\n🔧 [{agent_type}] TOOLS LOADED: {added_count} MCP tools added (total: {len(loaded_tools)})\n")
+            sys.stderr.write(f"🔧 [{agent_type}] Tool names: {[tool.name for tool in loaded_tools]}\n")
+            sys.stderr.flush()
             logger.info(
                 f"[{agent_type}] Added {added_count} MCP tools to agent "
                 f"(total tools: {len(loaded_tools)})"
@@ -1126,6 +1245,8 @@ async def _setup_and_execute_agent_step(
                 f"[{agent_type}] list_my_tasks tool added to agent: {list_my_tasks_added}"
             )
             if not list_my_tasks_added:
+                sys.stderr.write(f"\n❌ [{agent_type}] ERROR: list_my_tasks NOT ADDED!\n")
+                sys.stderr.flush()
                 logger.error(
                     f"[{agent_type}] ERROR: list_my_tasks tool was NOT added to agent! "
                     f"This means the tool was either not discovered or not in enabled_tools filter."
@@ -1256,6 +1377,9 @@ async def pm_agent_node(
     This agent ONLY has access to PM tools (no web search) and is specifically
     designed to retrieve and analyze data from the connected PM system.
     """
+    import sys
+    sys.stderr.write("\n🚨🚨🚨 PM_AGENT_NODE CALLED 🚨🚨🚨\n")
+    sys.stderr.flush()
     logger.error("🚨🚨🚨 PM_AGENT_NODE CALLED - THIS SHOULD APPEAR IN LOGS! 🚨🚨🚨")
     logger.info("PM Agent node is analyzing project management data.")
     logger.debug(f"[pm_agent_node] Starting PM agent with PM tools only")

@@ -83,6 +83,16 @@ def apply_prompt_template(
             template = env.get_template(f"{prompt_name}.md")
         
         system_prompt = template.render(**state_vars)
-        return [{"role": "system", "content": system_prompt}] + state["messages"]
+        result = [{"role": "system", "content": system_prompt}] + state["messages"]
+        
+        import sys
+        sys.stderr.write(f"\n📝 APPLY_PROMPT_TEMPLATE: prompt_name='{prompt_name}', result_count={len(result)}\n")
+        sys.stderr.write(f"📝 System prompt preview: {system_prompt[:200]}...\n")
+        sys.stderr.flush()
+        
+        return result
     except Exception as e:
+        import sys
+        sys.stderr.write(f"\n❌ APPLY_PROMPT_TEMPLATE ERROR: prompt_name='{prompt_name}', error={str(e)}\n")
+        sys.stderr.flush()
         raise ValueError(f"Error applying template {prompt_name} for locale {locale}: {e}")

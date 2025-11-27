@@ -159,8 +159,8 @@ def get_default_mcp_settings() -> dict:
                         "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
                     )
                 },
-                "enabled_tools": None,  # Enable all 55 PM tools
-                "add_to_agents": ["researcher", "coder", "pm_agent"],
+                "enabled_tools": None,  # Enable all PM tools
+                "add_to_agents": ["pm_agent"],  # Only PM Agent should have PM tools
             },
             "mcp-github-trending": {
                 "transport": "stdio",
@@ -882,11 +882,25 @@ async def _stream_graph_events(
                             messages = node_update.get("messages", [])
                             if messages:
                                 # Get the latest message
+                                import sys
+                                sys.stderr.write(f"\n🔍 CHECKING MESSAGES: node_name='{node_name}', messages_count={len(messages)}\n")
+                                for msg in messages:
+                                    msg_type = type(msg).__name__
+                                    msg_name = getattr(msg, 'name', 'N/A')
+                                    is_ai = isinstance(msg, AIMessage)
+                                    name_match = msg_name == node_name
+                                    sys.stderr.write(f"🔍 Message: type={msg_type}, name={msg_name}, is_AIMessage={is_ai}, name_matches={name_match}\n")
+                                sys.stderr.flush()
+                                
                                 for msg in messages:
                                     if (
                                         isinstance(msg, AIMessage)
                                         and msg.name == node_name
                                     ):
+                                        import sys
+                                        sys.stderr.write(f"\n✨ STREAMING MESSAGE: node_name='{node_name}', content_len={len(msg.content)}\n")
+                                        sys.stderr.flush()
+                                        
                                         logger.debug(
                                             f"[{safe_thread_id}] "
                                             f"Streaming {node_name} message "
@@ -1035,6 +1049,23 @@ async def _astream_workflow_generator(
         f"report_style={report_style.value}, "
         f"enable_deep_thinking={enable_deep_thinking}"
     )
+    # FORCE FIX: Ensure pm_agent is in add_to_agents for pm-server
+    # This overrides any incorrect frontend configuration
+    logger.info(f"[{safe_thread_id}] DEBUG: mcp_settings type={type(mcp_settings)}, value={mcp_settings}")
+    if mcp_settings and "servers" in mcp_settings:
+        for server_name, server_config in mcp_settings["servers"].items():
+            if server_name == "pm-server" or "pm" in server_name.lower():
+                current_agents = server_config.get("add_to_agents", [])
+                if "pm_agent" not in current_agents:
+                    logger.warning(
+                        f"[{safe_thread_id}] FORCE FIX: Adding 'pm_agent' to add_to_agents for '{server_name}'. "
+                        f"Current: {current_agents}"
+                    )
+                    server_config["add_to_agents"] = current_agents + ["pm_agent"]
+                    logger.info(
+                        f"[{safe_thread_id}] FORCE FIX: Updated add_to_agents to {server_config['add_to_agents']}"
+                    )
+    
     workflow_config = {
         "thread_id": thread_id,
         "resources": resources,

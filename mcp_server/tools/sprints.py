@@ -62,8 +62,8 @@ def register_sprint_tools(
                 f"list_sprints called: project_id={project_id}, status={status}"
             )
             
-            # Get sprints from PM handler using list_project_sprints
-            sprints = await pm_handler.list_project_sprints(project_id, state=status)
+            # Get sprints from PM handler
+            sprints = await pm_handler.list_all_sprints(project_id=project_id, status=status)
             
             if not sprints:
                 return [TextContent(
@@ -118,19 +118,8 @@ def register_sprint_tools(
             
             logger.info(f"get_sprint called: sprint_id={sprint_id}")
             
-            # Get sprint by searching all projects
-            # Extract project_id from sprint_id if in format "project_id:sprint_id"
-            if ":" in sprint_id:
-                project_id_part, sprint_id_part = sprint_id.split(":", 1)
-                sprints = await pm_handler.list_project_sprints(project_id_part)
-                sprint = next((s for s in sprints if str(s.get("id")) == sprint_id_part), None)
-            else:
-                # Search all projects - need project_id to search
-                return [TextContent(
-                    type="text",
-                    text=f"Sprint ID format should be 'project_id:sprint_id'. "
-                         f"Please provide project_id to search for sprint {sprint_id}."
-                )]
+            # Get sprint from PM handler
+            sprint = await pm_handler.get_sprint(sprint_id)
             
             if not sprint:
                 return [TextContent(

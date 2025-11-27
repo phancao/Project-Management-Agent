@@ -276,6 +276,129 @@ class MCPPMHandler:
         
         return all_tasks
     
+    async def list_all_sprints(
+        self,
+        project_id: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        List all sprints from all active providers.
+        
+        Args:
+            project_id: Optional project ID (with provider_id prefix)
+            status: Optional status filter (active, planned, closed)
+        
+        Returns:
+            List of sprints with provider_id prefix in sprint.id
+        """
+        providers = self._get_active_providers()
+        
+        if not providers:
+            return []
+        
+        all_sprints = []
+        
+        # Parse project_id if it has provider prefix
+        provider_id = None
+        actual_project_id = project_id
+        if project_id and ":" in project_id:
+            provider_id, actual_project_id = project_id.split(":", 1)
+        
+        for provider in providers:
+            # Filter by provider_id if specified
+            if provider_id and str(provider.id) != provider_id:
+                continue
+            
+            try:
+                provider_instance = self._create_provider_instance(provider)
+                
+                # List sprints
+                sprints = await provider_instance.list_sprints(
+                    project_id=actual_project_id,
+                    status=status,
+                )
+                
+                # Prefix sprint ID with provider_id
+                for s in sprints:
+                    all_sprints.append({
+                        "id": f"{provider.id}:{s.id}",
+                        "name": s.name,
+                        "status": (
+                            s.status.value
+                            if s.status and hasattr(s.status, 'value')
+                            else str(s.status) if s.status else "None"
+                        ),
+                        "start_date": str(s.start_date) if s.start_date else None,
+                        "end_date": str(s.end_date) if s.end_date else None,
+                        "project_id": f"{provider.id}:{s.project_id}" if s.project_id else None,
+                        "provider_id": str(provider.id),
+                        "provider_type": provider.provider_type,
+                    })
+            except (ValueError, ConnectionError, RuntimeError) as e:
+                logger.error(
+                    "[MCP PMHandler] Error listing sprints from provider %s: %s",
+                    provider.id,
+                    e,
+                    exc_info=True
+                )
+                continue
+        
+        return all_sprints
+    
+    async def get_sprint(
+        self,
+        sprint_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get a specific sprint by ID.
+        
+        Args:
+            sprint_id: Sprint ID (with provider_id prefix)
+        
+        Returns:
+            Sprint details or None if not found
+        """
+        if ":" not in sprint_id:
+            raise ValueError("sprint_id must include provider_id prefix (format: provider_id:sprint_id)")
+        
+        provider_id, actual_sprint_id = sprint_id.split(":", 1)
+        
+        providers = self._get_active_providers()
+        provider = next((p for p in providers if str(p.id) == provider_id), None)
+        
+        if not provider:
+            raise ValueError(f"Provider {provider_id} not found or access denied")
+        
+        try:
+            provider_instance = self._create_provider_instance(provider)
+            sprint = await provider_instance.get_sprint(actual_sprint_id)
+            
+            if not sprint:
+                return None
+            
+            return {
+                "id": f"{provider.id}:{sprint.id}",
+                "name": sprint.name,
+                "status": (
+                    sprint.status.value
+                    if sprint.status and hasattr(sprint.status, 'value')
+                    else str(sprint.status) if sprint.status else "None"
+                ),
+                "start_date": str(sprint.start_date) if sprint.start_date else None,
+                "end_date": str(sprint.end_date) if sprint.end_date else None,
+                "project_id": f"{provider.id}:{sprint.project_id}" if sprint.project_id else None,
+                "provider_id": str(provider.id),
+                "provider_type": provider.provider_type,
+            }
+        except (ValueError, ConnectionError, RuntimeError) as e:
+            logger.error(
+                "[MCP PMHandler] Error getting sprint %s: %s",
+                sprint_id,
+                e,
+                exc_info=True
+            )
+            raise
+    
     @classmethod
     def from_db_session(
         cls,

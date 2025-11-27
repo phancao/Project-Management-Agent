@@ -40,7 +40,7 @@ export interface MessageChunkEvent
       content?: string;
       reasoning_content?: string;
     }
-  > {}
+  > { }
 
 export interface ToolCallsEvent
   extends GenericEvent<
@@ -49,7 +49,7 @@ export interface ToolCallsEvent
       tool_calls: ToolCall[];
       tool_call_chunks: ToolCallChunk[];
     }
-  > {}
+  > { }
 
 export interface ToolCallChunksEvent
   extends GenericEvent<
@@ -57,7 +57,7 @@ export interface ToolCallChunksEvent
     {
       tool_call_chunks: ToolCallChunk[];
     }
-  > {}
+  > { }
 
 export interface ToolCallResultEvent
   extends GenericEvent<
@@ -66,7 +66,7 @@ export interface ToolCallResultEvent
       tool_call_id: string;
       content?: string;
     }
-  > {}
+  > { }
 
 export interface InterruptEvent
   extends GenericEvent<
@@ -74,11 +74,24 @@ export interface InterruptEvent
     {
       options: Option[];
     }
-  > {}
+  > { }
+
+export interface StepProgressEvent
+  extends GenericEvent<
+    "step_progress",
+    {
+      step_title: string;
+      step_description?: string;
+      step_index: number;
+      total_steps: number;
+    }
+  > { }
 
 export type ChatEvent =
   | MessageChunkEvent
   | ToolCallsEvent
   | ToolCallChunksEvent
   | ToolCallResultEvent
-  | InterruptEvent;
+  | InterruptEvent
+  | StepProgressEvent;
+

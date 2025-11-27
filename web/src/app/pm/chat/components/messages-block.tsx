@@ -25,6 +25,7 @@ import { cn } from "~/lib/utils";
 import { ConversationStarter } from "./conversation-starter";
 import { InputBox } from "./input-box";
 import { MessageListView } from "./message-list-view";
+import { ResearchBlock } from "./research-block";
 import { Welcome } from "./welcome";
 
 export function MessagesBlock({ className }: { className?: string }) {
@@ -32,6 +33,7 @@ export function MessagesBlock({ className }: { className?: string }) {
   const messageIds = useMessageIds();
   const messageCount = messageIds.length;
   const responding = useStore((state) => state.responding);
+  const openResearchId = useStore((state) => state.openResearchId);
   const { isReplay } = useReplay();
   const { title: replayTitle, hasError: replayHasError } = useReplayMetadata();
   const [replayStarted, setReplayStarted] = useState(false);
@@ -92,11 +94,19 @@ export function MessagesBlock({ className }: { className?: string }) {
   }, [fastForwarding]);
   return (
     <div className={cn("flex h-full flex-col", className)}>
-      <MessageListView
-        className="flex flex-grow"
-        onFeedback={handleFeedback}
-        onSendMessage={handleSend}
-      />
+      {/* Show ResearchBlock (report) when available, otherwise show MessageListView */}
+      {openResearchId ? (
+        <ResearchBlock
+          className="flex-grow overflow-auto"
+          researchId={openResearchId}
+        />
+      ) : (
+        <MessageListView
+          className="flex flex-grow"
+          onFeedback={handleFeedback}
+          onSendMessage={handleSend}
+        />
+      )}
       {!isReplay ? (
         <div className="relative flex h-42 shrink-0 pb-4">
           {!responding && messageCount === 0 && (

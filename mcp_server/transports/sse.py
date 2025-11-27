@@ -25,6 +25,7 @@ from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
 from ..services.auth_service import AuthService
 from ..services.user_context import UserContext
+from ..api.provider_sync import router as provider_sync_router
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,9 @@ def create_sse_app(pm_handler: MCPPMHandler, config: PMServerConfig, mcp_server_
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Include provider sync API router
+    app.include_router(provider_sync_router)
     
     # Store references
     app.state.pm_handler = pm_handler

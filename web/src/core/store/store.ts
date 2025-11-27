@@ -220,6 +220,7 @@ export async function sendMessage(
         // If finish_reason is present, apply update immediately to ensure UI updates quickly
         // This is especially important for reporter messages to show the final report
         if (event.data.finish_reason && previousIsStreaming) {
+          console.log(`[DEBUG] Message finished: agent=${message.agent}, id=${message.id}, finish_reason=${event.data.finish_reason}, content_length=${message.content?.length ?? 0}`);
           // Immediately update using helper function to trigger UI re-render and run reporter logic
           updateMessage(message);
           // Remove from pending updates to avoid duplicate update
@@ -278,13 +279,19 @@ function findMessageByToolCallId(toolCallId: string) {
 }
 
 function appendMessage(message: Message) {
+  console.log(`[DEBUG] appendMessage called: agent=${message.agent}, id=${message.id}, content_length=${message.content?.length ?? 0}`);
+  
   if (
     message.agent === "coder" ||
     message.agent === "reporter" ||
     message.agent === "researcher"
   ) {
-    if (!getOngoingResearchId()) {
+    const ongoingResearchId = getOngoingResearchId();
+    console.log(`[DEBUG] Research agent message: agent=${message.agent}, ongoingResearchId=${ongoingResearchId}`);
+    
+    if (!ongoingResearchId) {
       const id = message.id;
+      console.log(`[DEBUG] Creating new research with id=${id}`);
       appendResearch(id);
       openResearch(id);
     }
@@ -394,10 +401,13 @@ function appendResearch(researchId: string) {
 
 function appendResearchActivity(message: Message) {
   const researchId = getOngoingResearchId();
+  console.log(`[DEBUG] appendResearchActivity: agent=${message.agent}, messageId=${message.id}, researchId=${researchId}`);
+  
   if (researchId) {
     const researchActivityIds = useStore.getState().researchActivityIds;
     const current = researchActivityIds.get(researchId)!;
     if (!current.includes(message.id)) {
+      console.log(`[DEBUG] Adding message ${message.id} to research ${researchId} activities`);
       useStore.setState({
         researchActivityIds: new Map(researchActivityIds).set(researchId, [
           ...current,
@@ -406,13 +416,17 @@ function appendResearchActivity(message: Message) {
       });
     }
     if (message.agent === "reporter") {
+      console.log(`[DEBUG] 🎯 REPORTER MESSAGE DETECTED! Setting researchReportIds[${researchId}] = ${message.id}`);
       useStore.setState({
         researchReportIds: new Map(useStore.getState().researchReportIds).set(
           researchId,
           message.id,
         ),
       });
+      console.log(`[DEBUG] researchReportIds after update:`, [...useStore.getState().researchReportIds.entries()]);
     }
+  } else {
+    console.log(`[DEBUG] ⚠️ No researchId found for message ${message.id} (agent=${message.agent})`);
   }
 }
 

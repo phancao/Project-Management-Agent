@@ -60,12 +60,17 @@ class ProviderManager:
         )
         
         # Filter by user if user_id is provided
+        # Include providers where created_by matches OR created_by is NULL (shared/synced providers)
         if self.user_id:
+            from sqlalchemy import or_
             query = query.filter(
-                PMProviderConnection.created_by == self.user_id
+                or_(
+                    PMProviderConnection.created_by == self.user_id,
+                    PMProviderConnection.created_by.is_(None)  # Include synced/shared providers
+                )
             )
             logger.info(
-                "[ProviderManager] Filtering providers by user_id: %s",
+                "[ProviderManager] Filtering providers by user_id: %s (including shared providers)",
                 self.user_id
             )
         
@@ -84,7 +89,7 @@ class ProviderManager:
         Get provider connection by ID.
         
         Args:
-            provider_id: Provider UUID
+            provider_id: Provider UUID (can be MCP provider ID or backend provider ID)
         
         Returns:
             PMProviderConnection or None if not found
@@ -92,13 +97,28 @@ class ProviderManager:
         if not self.db:
             return None
         
+        # First try to find by MCP provider ID
         provider_conn = self.db.query(PMProviderConnection).filter(
             PMProviderConnection.id == provider_id
         ).first()
         
+        # If not found, try to find by backend_provider_id (for synced providers)
+        if not provider_conn:
+            provider_conn = self.db.query(PMProviderConnection).filter(
+                PMProviderConnection.backend_provider_id == provider_id
+            ).first()
+            if provider_conn:
+                logger.info(
+                    "[ProviderManager] Found provider by backend_provider_id=%s, "
+                    "mcp_id=%s",
+                    provider_id,
+                    provider_conn.id
+                )
+        
         # Check user access if user_id is set
+        # Allow access if created_by matches OR created_by is NULL (shared/synced providers)
         if provider_conn and self.user_id:
-            if provider_conn.created_by != self.user_id:
+            if provider_conn.created_by is not None and provider_conn.created_by != self.user_id:
                 logger.warning(
                     "[ProviderManager] User %s attempted to access provider %s "
                     "owned by %s",
@@ -150,7 +170,7 @@ class ProviderManager:
             "api_key": api_key_value,
             "api_token": api_token_value,
             "username": provider.username,
-            "password": provider.password,
+            "password": getattr(provider, "password", None),  # password may not exist in all models
         }
         
         logger.info(

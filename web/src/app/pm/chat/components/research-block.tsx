@@ -35,9 +35,19 @@ export function ResearchBlock({
   const reportStreaming = useStore((state) =>
     reportId ? (state.messages.get(reportId)?.isStreaming ?? false) : false,
   );
+  const reportContent = useStore((state) =>
+    reportId ? state.messages.get(reportId)?.content : undefined,
+  );
   const { isReplay } = useReplay();
+  
+  // Debug logging
+  useEffect(() => {
+    console.log(`[DEBUG] ResearchBlock render: researchId=${researchId}, reportId=${reportId}, hasReport=${hasReport}, activeTab=${activeTab}, reportContent_length=${reportContent?.length ?? 0}`);
+  }, [researchId, reportId, hasReport, activeTab, reportContent]);
+  
   useEffect(() => {
     if (hasReport) {
+      console.log(`[DEBUG] ResearchBlock: hasReport=true, switching to report tab`);
       setActiveTab("report");
     }
   }, [hasReport]);

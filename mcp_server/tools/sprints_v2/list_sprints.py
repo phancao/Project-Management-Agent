@@ -9,18 +9,15 @@ from ..decorators import mcp_tool
     input_schema={
         "type": "object",
         "properties": {
-            "project_id": {"type": "string", "description": "Project ID"}
+            "project_id": {"type": "string", "description": "Project ID (format: provider_id:project_key)"},
+            "status": {"type": "string", "description": "Optional status filter (active, planned, closed)"}
         },
         "required": ["project_id"]
     }
 )
 class ListSprintsTool(ReadTool):
-    async def execute(self, project_id: str, **kwargs) -> dict[str, Any]:
-        provider_id, actual_project_id = self._parse_project_id(project_id)
-        provider = await self.context.provider_manager.get_provider(provider_id)
-        sprints = await provider.list_sprints(actual_project_id)
+    async def execute(self, project_id: str, status: str = None, **kwargs) -> dict[str, Any]:
+        # Use the PM handler to list sprints across all providers
+        sprints = await self.context.pm_handler.list_all_sprints(project_id=project_id, status=status)
         return {"sprints": sprints, "total": len(sprints)}
-    
-    def _parse_project_id(self, project_id: str) -> tuple[str, str]:
-        return project_id.split(":", 1) if ":" in project_id else (str(self.context.provider_manager.get_active_providers()[0].id), project_id)
 

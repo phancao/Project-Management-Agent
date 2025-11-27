@@ -14,7 +14,7 @@ from src.analytics.models import (
     TaskStatus,
     Priority,
 )
-from src.pm_providers.models import PMTask
+from pm_providers.models import PMTask
 
 logger = logging.getLogger(__name__)
 from src.analytics.calculators.burndown import BurndownCalculator

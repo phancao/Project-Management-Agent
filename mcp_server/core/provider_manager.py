@@ -163,24 +163,20 @@ class ProviderManager:
             api_token_str = str(provider.api_token).strip()
             api_token_value = api_token_str if api_token_str else None
         
-        # Create provider config
-        provider_config = {
-            "provider_type": provider.provider_type,
-            "base_url": provider.base_url,
-            "api_key": api_key_value,
-            "api_token": api_token_value,
-            "username": provider.username,
-            "password": getattr(provider, "password", None),  # password may not exist in all models
-        }
-        
         logger.info(
             "[ProviderManager] Creating provider instance: %s at %s",
             provider.provider_type,
             provider.base_url
         )
         
-        # Create provider instance using factory
-        provider_instance = create_pm_provider(provider_config)
+        # Create provider instance using factory with keyword arguments
+        provider_instance = create_pm_provider(
+            provider_type=provider.provider_type,
+            base_url=provider.base_url,
+            api_key=api_key_value,
+            api_token=api_token_value,
+            username=provider.username,
+        )
         
         # Cache the instance
         self._provider_cache[cache_key] = provider_instance

@@ -138,6 +138,41 @@ graph = build_graph_with_memory()
 flow_manager = None
 
 
+def get_default_mcp_settings() -> dict:
+    """Get default MCP settings for PM tools and other MCP servers.
+    
+    This provides a default configuration when the frontend doesn't send
+    mcp_settings in the request. Matches the configuration in workflow.py.
+    
+    Returns:
+        dict: MCP server configuration with PM server and GitHub trending
+    """
+    import os
+    return {
+        "servers": {
+            "pm-server": {
+                "transport": "sse",
+                "url": "http://pm_mcp_server:8080/sse",
+                "headers": {
+                    "X-MCP-API-Key": os.getenv(
+                        "PM_MCP_API_KEY",
+                        "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+                    )
+                },
+                "enabled_tools": None,  # Enable all 55 PM tools
+                "add_to_agents": ["researcher", "coder"],
+            },
+            "mcp-github-trending": {
+                "transport": "stdio",
+                "command": "uvx",
+                "args": ["mcp-github-trending"],
+                "enabled_tools": ["get_github_trending_repositories"],
+                "add_to_agents": ["researcher"],
+            }
+        }
+    }
+
+
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
     # Check if MCP server configuration is enabled
@@ -168,7 +203,7 @@ async def chat_stream(request: ChatRequest):
             request.max_search_results or 3,
             request.auto_accepted_plan or False,
             request.interrupt_feedback or "",
-            (request.mcp_settings if mcp_enabled else {}) or {},
+            (request.mcp_settings if mcp_enabled and request.mcp_settings else get_default_mcp_settings()) if mcp_enabled else {},
             request.enable_background_investigation or True,
             request.report_style or ReportStyle.ACADEMIC,
             request.enable_deep_thinking or False,

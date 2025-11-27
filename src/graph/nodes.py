@@ -1221,3 +1221,30 @@ async def coder_node(
         "coder",
         tools,
     )
+
+
+async def pm_agent_node(
+    state: State, config: RunnableConfig
+) -> Command[Literal["research_team"]]:
+    """
+    Dedicated PM Agent node for project management queries.
+    
+    This agent ONLY has access to PM tools (no web search) and is specifically
+    designed to retrieve and analyze data from the connected PM system.
+    """
+    logger.info("PM Agent node is analyzing project management data.")
+    logger.debug(f"[pm_agent_node] Starting PM agent with PM tools only")
+    
+    # PM Agent has NO web search or code execution tools
+    # It ONLY has access to PM tools which are loaded via MCP configuration
+    # in _setup_and_execute_agent_step
+    tools = []  # No additional tools - PM tools only via MCP
+    
+    logger.info(f"[pm_agent_node] PM Agent will use PM tools exclusively (loaded via MCP)")
+    
+    return await _setup_and_execute_agent_step(
+        state,
+        config,
+        "pm_agent",
+        tools,
+    )

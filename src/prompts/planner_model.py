@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class StepType(str, Enum):
     RESEARCH = "research"
     PROCESSING = "processing"
+    PM_QUERY = "pm_query"  # Project Management query - uses PM agent with PM tools only
 
 
 class Step(BaseModel):

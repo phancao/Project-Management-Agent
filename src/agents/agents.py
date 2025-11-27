@@ -36,6 +36,11 @@ def create_agent(
     Returns:
         A configured agent graph
     """
+    import sys
+    sys.stderr.write(f"\n🤖 CREATE_AGENT: name='{agent_name}', type='{agent_type}', tools_count={len(tools)}, template='{prompt_template}'\n")
+    sys.stderr.write(f"🤖 Tool names: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in tools]}\n")
+    sys.stderr.flush()
+    
     logger.debug(
         f"Creating agent '{agent_name}' of type '{agent_type}' "
         f"with {len(tools)} tools and template '{prompt_template}'"
@@ -63,15 +68,27 @@ def create_agent(
     logger.debug(f"Agent '{agent_name}' using LLM type: {llm_type}")
     
     logger.debug(f"Creating ReAct agent '{agent_name}'")
+    
+    import sys
+    llm = get_llm_by_type(llm_type)
+    sys.stderr.write(f"\n🔨 CREATING REACT AGENT: name='{agent_name}', llm_type='{llm_type}', llm_class={type(llm).__name__}\n")
+    sys.stderr.write(f"🔨 Tools being passed: {len(processed_tools)} tools\n")
+    sys.stderr.write(f"🔨 Tool names: {[t.name if hasattr(t, 'name') else str(t) for t in processed_tools]}\n")
+    sys.stderr.flush()
+    
     agent = create_react_agent(
         name=agent_name,
-        model=get_llm_by_type(llm_type),
+        model=llm,
         tools=processed_tools,
         prompt=lambda state: apply_prompt_template(
             prompt_template, state, locale=state.get("locale", "en-US")
         ),
         pre_model_hook=pre_model_hook,
     )
+    
+    sys.stderr.write(f"\n🔨 REACT AGENT CREATED: name='{agent_name}'\n")
+    sys.stderr.flush()
+    
     logger.info(f"Agent '{agent_name}' created successfully")
     
     return agent

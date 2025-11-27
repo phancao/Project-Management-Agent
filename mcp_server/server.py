@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from .database.connection import get_mcp_db_session, init_mcp_db
 from .pm_handler import MCPPMHandler
 from .config import PMServerConfig
+from .core.tool_context import ToolContext
 from .tools import (
     register_project_tools,
     register_task_tools,
@@ -25,6 +26,11 @@ from .tools import (
     register_task_interaction_tools,
 )
 from .tools.provider_config import register_provider_config_tools
+from .tools.analytics_v2.register import register_analytics_tools_v2
+from .tools.projects_v2.register import register_project_tools_v2
+from .tools.tasks_v2.register import register_task_tools_v2
+from .tools.sprints_v2.register import register_sprint_tools_v2
+from .tools.epics_v2.register import register_epic_tools_v2
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +66,9 @@ class PMMCPServer:
         
         # PM Handler (will be initialized when server starts)
         self.pm_handler: MCPPMHandler | None = None
+        
+        # Tool Context (NEW: provides unified context for refactored tools)
+        self.tool_context: ToolContext | None = None
         
         # Tool registry
         self.registered_tools: list[str] = []
@@ -102,6 +111,14 @@ class PMMCPServer:
             f"PM Handler initialized with {provider_count} active provider(s)"
             + (f" for user {self.user_id}" if self.user_id else " (all users)")
         )
+        
+        # Initialize Tool Context (NEW: for refactored tools)
+        logger.info("Initializing Tool Context...")
+        self.tool_context = ToolContext(
+            db_session=self.db_session,
+            user_id=self.user_id
+        )
+        logger.info("Tool Context initialized")
     
     def _register_all_tools(self) -> None:
         """Register all PM tools with the MCP server."""
@@ -112,14 +129,15 @@ class PMMCPServer:
         
         # Register tools from each module
         tool_modules = [
-            ("provider_config", register_provider_config_tools),  # Add provider config tools first
-            ("projects", register_project_tools),
-            ("tasks", register_task_tools),
-            ("sprints", register_sprint_tools),
-            ("epics", register_epic_tools),
-            ("users", register_user_tools),
-            ("analytics", register_analytics_tools),
-            ("task_interactions", register_task_interaction_tools),
+            ("provider_config", register_provider_config_tools),  # Provider config tools
+            ("users", register_user_tools),  # User tools
+            ("task_interactions", register_task_interaction_tools),  # Task interactions
+            # V2 Tools (NEW: Refactored with new architecture)
+            ("analytics_v2", register_analytics_tools_v2),  # Analytics tools (refactored)
+            ("projects_v2", register_project_tools_v2),  # Project tools (hybrid)
+            ("tasks_v2", register_task_tools_v2),  # Task tools (hybrid)
+            ("sprints_v2", register_sprint_tools_v2),  # Sprint tools (hybrid)
+            ("epics_v2", register_epic_tools_v2),  # Epic tools (hybrid)
         ]
         
         for module_name, register_func in tool_modules:
@@ -128,7 +146,14 @@ class PMMCPServer:
                 # so they can track tool names and store function references
                 import inspect
                 sig = inspect.signature(register_func)
-                if len(sig.parameters) >= 5:
+                param_names = list(sig.parameters.keys())
+                
+                # NEW: Check if function expects tool_context (for refactored tools)
+                if "context" in param_names:
+                    # Refactored tools signature: (server, context, tool_names, tool_functions)
+                    logger.info(f"[{module_name}] Using refactored tools signature (with context)")
+                    count = register_func(self.server, self.tool_context, self._tool_names, self._tool_functions)
+                elif len(sig.parameters) >= 5:
                     # New signature: (server, pm_handler, config, tool_names, tool_functions)
                     count = register_func(self.server, self.pm_handler, self.config, self._tool_names, self._tool_functions)
                 elif len(sig.parameters) >= 4:

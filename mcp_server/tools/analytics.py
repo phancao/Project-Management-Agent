@@ -5,21 +5,92 @@ MCP tools for analytics, charts, and reports across all PM providers.
 """
 
 import logging
-from typing import Any
+import json
+from typing import Any, Tuple
 
 from mcp.server import Server
 from mcp.types import TextContent
 
 from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
+from ..database.models import PMProviderConnection
+
+# Import analytics service and adapter
+from src.analytics.service import AnalyticsService
+from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
 
 logger = logging.getLogger(__name__)
+
+
+async def _get_analytics_service(
+    project_id: str,
+    pm_handler: MCPPMHandler
+) -> Tuple[AnalyticsService, str]:
+    """
+    Get analytics service for a specific project.
+    
+    Args:
+        project_id: Project ID (may be composite "provider_id:project_key")
+        pm_handler: PM handler instance
+    
+    Returns:
+        Tuple of (AnalyticsService, actual_project_id)
+    
+    Raises:
+        ValueError: If provider not found or no active providers
+    """
+    # Extract provider_id from composite project_id
+    if ":" in project_id:
+        provider_id, actual_project_id = project_id.split(":", 1)
+    else:
+        # Fallback: get first active provider
+        providers = pm_handler._get_active_providers()
+        if not providers:
+            raise ValueError("No active PM providers found")
+        provider_id = str(providers[0].id)
+        actual_project_id = project_id
+    
+    logger.info(
+        f"[_get_analytics_service] Getting analytics for project_id={project_id}, "
+        f"provider_id={provider_id}, actual_project_id={actual_project_id}"
+    )
+    
+    # Get provider connection from database
+    if not pm_handler.db:
+        raise ValueError("Database session not available")
+    
+    provider_conn = pm_handler.db.query(PMProviderConnection).filter(
+        PMProviderConnection.id == provider_id
+    ).first()
+    
+    if not provider_conn:
+        raise ValueError(f"Provider {provider_id} not found")
+    
+    logger.info(
+        f"[_get_analytics_service] Found provider: {provider_conn.provider_type} "
+        f"at {provider_conn.base_url}"
+    )
+    
+    # Create PM provider instance
+    provider = pm_handler._create_provider_instance(provider_conn)
+    
+    # Create analytics adapter
+    adapter = PMProviderAnalyticsAdapter(provider)
+    
+    # Create analytics service
+    service = AnalyticsService(adapter=adapter)
+    
+    logger.info(
+        f"[_get_analytics_service] Created analytics service for "
+        f"project {actual_project_id}"
+    )
+    
+    return service, actual_project_id
 
 
 def register_analytics_tools(
     server: Server,
     pm_handler: MCPPMHandler,
-    config: PMServerConfig,
     tool_names: list[str] | None = None
 ) -> int:
     """
@@ -39,32 +110,75 @@ def register_analytics_tools(
     @server.call_tool()
     async def burndown_chart(arguments: dict[str, Any]) -> list[TextContent]:
         """
-        Generate burndown chart data for a sprint.
+        Generate burndown chart data for a sprint to track progress.
+        
+        Shows how much work remains in a sprint over time, comparing actual progress 
+        against an ideal burndown line. Use this to check if a sprint is on track, 
+        identify if the team is ahead or behind schedule, and forecast sprint completion.
         
         Args:
-            sprint_id (required): Sprint ID
+            project_id (required): Project ID (format: "provider_uuid:project_key")
+            sprint_id (optional): Sprint ID (uses current/active sprint if not provided)
+            scope_type (optional): What to measure - "story_points", "tasks", or "hours" (default: "story_points")
         
         Returns:
-            Burndown chart data
+            JSON with burndown data including total scope, remaining work, completion 
+            percentage, and whether the sprint is on track.
+        
+        Example usage:
+            - "Show me the burndown for Sprint 4"
+            - "Is our current sprint on track?"
+            - "How much work is remaining in this sprint?"
         """
         try:
-            sprint_id = arguments.get("sprint_id")
-            if not sprint_id:
+            project_id = arguments.get("project_id")
+            if not project_id:
                 return [TextContent(
                     type="text",
-                    text="Error: sprint_id is required"
+                    text="Error: project_id is required. Please provide the project ID."
                 )]
             
-            logger.info(f"burndown_chart called: sprint_id={sprint_id}")
+            sprint_id = arguments.get("sprint_id")
+            scope_type = arguments.get("scope_type", "story_points")
             
-            # Burndown chart requires project_id to determine which provider to use
-            # Return a message indicating this needs project_id
+            logger.info(
+                f"[burndown_chart] Called with project_id={project_id}, "
+                f"sprint_id={sprint_id}, scope_type={scope_type}"
+            )
+            
+            # Get analytics service
+            service, actual_project_id = await _get_analytics_service(project_id, pm_handler)
+            
+            # Get burndown data
+            chart_data = await service.get_burndown_chart(
+                project_id=actual_project_id,
+                sprint_id=sprint_id,
+                scope_type=scope_type
+            )
+            
+            # Format for LLM consumption
+            result = {
+                "sprint": chart_data.title,
+                "scope_type": scope_type,
+                "total_scope": chart_data.metadata.get("total_scope"),
+                "remaining": chart_data.metadata.get("remaining"),
+                "completed": chart_data.metadata.get("completed"),
+                "completion_percentage": chart_data.metadata.get("completion_percentage"),
+                "on_track": chart_data.metadata.get("on_track"),
+                "status": chart_data.metadata.get("status"),
+                "scope_changes": chart_data.metadata.get("scope_changes", {}),
+                "days_elapsed": chart_data.metadata.get("days_elapsed"),
+                "days_remaining": chart_data.metadata.get("days_remaining")
+            }
+            
+            logger.info(
+                f"[burndown_chart] Success: {result['completion_percentage']}% complete, "
+                f"on_track={result['on_track']}"
+            )
+            
             return [TextContent(
                 type="text",
-                text=f"Burndown chart requires both project_id and sprint_id. "
-                     f"Please use the web interface or API endpoint "
-                     f"/api/analytics/projects/<project_id>/burndown?sprint_id={sprint_id} "
-                     f"to get burndown data for sprint {sprint_id}."
+                text=json.dumps(result, indent=2)
             )]
             
         except Exception as e:
@@ -82,37 +196,89 @@ def register_analytics_tools(
     @server.call_tool()
     async def velocity_chart(arguments: dict[str, Any]) -> list[TextContent]:
         """
-        Calculate team velocity over recent sprints.
+        Get team velocity data showing performance over recent sprints.
+        
+        Velocity measures how much work a team completes in each sprint. Use this to 
+        forecast future capacity for sprint planning, track team performance trends over 
+        time, identify if velocity is increasing/decreasing/stable, and assess team 
+        predictability (how often they deliver what they commit to).
         
         Args:
-            project_id (required): Project ID
-            sprint_count (optional): Number of sprints to analyze (default: 5)
+            project_id (required): Project ID (format: "provider_uuid:project_key")
+            sprint_count (optional): Number of recent sprints to analyze (default: 5, recommended: 3-10)
         
         Returns:
-            Velocity chart data
+            JSON with velocity data including committed vs completed story points per sprint, 
+            average velocity, trend, and predictability score.
+        
+        Example usage:
+            - "What's our team's velocity?"
+            - "Show me velocity for the last 10 sprints"
+            - "Is our velocity improving?"
+            - "How many story points should we commit to in the next sprint?"
         """
         try:
             project_id = arguments.get("project_id")
             if not project_id:
                 return [TextContent(
                     type="text",
-                    text="Error: project_id is required"
+                    text="Error: project_id is required. Please provide the project ID."
                 )]
             
             sprint_count = arguments.get("sprint_count", 5)
             
             logger.info(
-                f"velocity_chart called: project_id={project_id}, "
+                f"[velocity_chart] Called with project_id={project_id}, "
                 f"sprint_count={sprint_count}"
             )
             
-            # Velocity chart is available via analytics API endpoint
+            # Get analytics service
+            service, actual_project_id = await _get_analytics_service(project_id, pm_handler)
+            
+            # Get velocity data
+            chart_data = await service.get_velocity_chart(
+                project_id=actual_project_id,
+                sprint_count=sprint_count
+            )
+            
+            # Extract sprint data from series
+            sprints_data = []
+            if len(chart_data.series) >= 2:
+                committed_series = chart_data.series[0]
+                completed_series = chart_data.series[1]
+                
+                for i, point in enumerate(committed_series.data):
+                    sprints_data.append({
+                        "sprint": point.label,
+                        "committed": point.value,
+                        "completed": completed_series.data[i].value if i < len(completed_series.data) else 0,
+                        "completion_rate": (
+                            (completed_series.data[i].value / point.value * 100)
+                            if point.value > 0 and i < len(completed_series.data)
+                            else 0
+                        )
+                    })
+            
+            # Format for LLM consumption
+            result = {
+                "average_velocity": chart_data.metadata.get("average_velocity"),
+                "median_velocity": chart_data.metadata.get("median_velocity"),
+                "latest_velocity": chart_data.metadata.get("latest_velocity"),
+                "trend": chart_data.metadata.get("trend"),
+                "predictability_score": chart_data.metadata.get("predictability_score"),
+                "sprint_count": chart_data.metadata.get("sprint_count"),
+                "velocity_range": chart_data.metadata.get("velocity_range", {}),
+                "sprints": sprints_data
+            }
+            
+            logger.info(
+                f"[velocity_chart] Success: avg={result['average_velocity']}, "
+                f"trend={result['trend']}, predictability={result['predictability_score']}"
+            )
+            
             return [TextContent(
                 type="text",
-                text=f"Velocity chart is available via the analytics API endpoint. "
-                     f"Please use the web interface or API endpoint "
-                     f"/api/analytics/projects/{project_id}/velocity?sprint_count={sprint_count} "
-                     f"to get velocity data for {sprint_count} sprints."
+                text=json.dumps(result, indent=2)
             )]
             
         except Exception as e:
@@ -130,41 +296,124 @@ def register_analytics_tools(
     @server.call_tool()
     async def sprint_report(arguments: dict[str, Any]) -> list[TextContent]:
         """
-        Generate comprehensive sprint report.
+        Get a comprehensive sprint summary report with key metrics and insights.
+        
+        This report provides a complete overview of a sprint's performance, including:
+        - Sprint duration and dates
+        - Commitment vs actual delivery
+        - Scope changes during the sprint
+        - Work breakdown by type (stories, bugs, tasks)
+        - Team capacity and utilization
+        - Key highlights and concerns
+        
+        Use this for sprint reviews, retrospectives, or to understand sprint outcomes.
         
         Args:
+            project_id (required): Project ID (format: "provider_uuid:project_key")
             sprint_id (required): Sprint ID
-            project_id (required): Project ID
         
         Returns:
-            Sprint report with metrics and insights
+            JSON with comprehensive sprint report including metrics, achievements, 
+            and areas of concern.
+        
+        Example usage:
+            - "Give me a summary of Sprint 4"
+            - "How did our last sprint go?"
+            - "What were the key achievements in Sprint 4?"
+            - "Prepare a sprint review for Sprint 4"
         """
         try:
-            sprint_id = arguments.get("sprint_id")
-            if not sprint_id:
-                return [TextContent(
-                    type="text",
-                    text="Error: sprint_id is required"
-                )]
-            
-            logger.info(f"sprint_report called: sprint_id={sprint_id}")
-            
-            # Sprint report requires project_id to determine which provider to use
             project_id = arguments.get("project_id")
+            sprint_id = arguments.get("sprint_id")
+            
             if not project_id:
                 return [TextContent(
                     type="text",
-                    text="Error: project_id is required for sprint_report. "
-                         "Please provide both project_id and sprint_id."
+                    text="Error: project_id is required. Please provide the project ID."
                 )]
             
-            # Return a message directing users to the API
+            if not sprint_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: sprint_id is required. Please provide the sprint ID."
+                )]
+            
+            logger.info(
+                f"[sprint_report] Called with project_id={project_id}, "
+                f"sprint_id={sprint_id}"
+            )
+            
+            # Get analytics service
+            service, actual_project_id = await _get_analytics_service(project_id, pm_handler)
+            
+            # Get sprint report
+            report = await service.get_sprint_report(
+                sprint_id=sprint_id,
+                project_id=actual_project_id
+            )
+            
+            # Convert to dict for JSON serialization
+            # Handle both dict and object return types
+            if isinstance(report, dict):
+                result = report
+            else:
+                result = {
+                    "sprint_id": getattr(report, "sprint_id", None),
+                    "sprint_name": getattr(report, "sprint_name", None),
+                    "duration": {
+                        "start": (
+                            getattr(report.duration, "start", None).isoformat()
+                            if hasattr(report, "duration") and getattr(report.duration, "start", None)
+                            else None
+                        ),
+                        "end": (
+                            getattr(report.duration, "end", None).isoformat()
+                            if hasattr(report, "duration") and getattr(report.duration, "end", None)
+                            else None
+                        ),
+                        "days": (
+                            getattr(report.duration, "days", None)
+                            if hasattr(report, "duration")
+                            else None
+                        )
+                    } if hasattr(report, "duration") else {},
+                    "commitment": {
+                        "planned_points": getattr(report.commitment, "planned_points", 0),
+                        "completed_points": getattr(report.commitment, "completed_points", 0),
+                        "completion_rate": getattr(report.commitment, "completion_rate", 0),
+                        "planned_items": getattr(report.commitment, "planned_items", 0),
+                        "completed_items": getattr(report.commitment, "completed_items", 0)
+                    } if hasattr(report, "commitment") else {},
+                    "scope_changes": {
+                        "added": getattr(report.scope_changes, "added", 0),
+                        "removed": getattr(report.scope_changes, "removed", 0),
+                        "net_change": getattr(report.scope_changes, "net_change", 0),
+                        "scope_stability": getattr(report.scope_changes, "scope_stability", 0)
+                    } if hasattr(report, "scope_changes") else {},
+                    "work_breakdown": getattr(report, "work_breakdown", {}),
+                    "team_performance": {
+                        "velocity": getattr(report.team_performance, "velocity", 0),
+                        "capacity_hours": getattr(report.team_performance, "capacity_hours", 0),
+                        "capacity_used": getattr(report.team_performance, "capacity_used", 0),
+                        "capacity_utilized": getattr(report.team_performance, "capacity_utilized", 0),
+                        "team_size": getattr(report.team_performance, "team_size", 0)
+                    } if hasattr(report, "team_performance") else {},
+                    "highlights": getattr(report, "highlights", []),
+                    "concerns": getattr(report, "concerns", [])
+                }
+            
+            completion_rate = result.get("commitment", {}).get("completion_rate", 0)
+            velocity = result.get("team_performance", {}).get("velocity", 0)
+            sprint_name = result.get("sprint_name", "Unknown")
+            
+            logger.info(
+                f"[sprint_report] Success: {sprint_name}, "
+                f"completion={completion_rate:.1%}, velocity={velocity}"
+            )
+            
             return [TextContent(
                 type="text",
-                text=f"Sprint report is available via the analytics API endpoint. "
-                     f"Please use the web interface or API endpoint "
-                     f"/api/analytics/projects/{project_id}/sprint-report?sprint_id={sprint_id} "
-                     f"to get the sprint report."
+                text=json.dumps(result, indent=2)
             )]
             
         except Exception as e:
@@ -182,33 +431,54 @@ def register_analytics_tools(
     @server.call_tool()
     async def project_health(arguments: dict[str, Any]) -> list[TextContent]:
         """
-        Analyze project health indicators.
+        Get a high-level analytics summary for a project.
+        
+        Provides a quick overview of project health, including:
+        - Current sprint status and progress
+        - Team velocity trends
+        - Overall completion statistics
+        - Team size
+        
+        Use this for project status updates or quick health checks.
         
         Args:
-            project_id (required): Project ID
+            project_id (required): Project ID (format: "provider_uuid:project_key")
         
         Returns:
-            Project health metrics and status
+            JSON with project summary including current sprint info, velocity metrics, 
+            and overall statistics.
+        
+        Example usage:
+            - "How is the project going?"
+            - "Give me a project status update"
+            - "What's the current sprint progress?"
+            - "Show me project health metrics"
         """
         try:
             project_id = arguments.get("project_id")
             if not project_id:
                 return [TextContent(
                     type="text",
-                    text="Error: project_id is required"
+                    text="Error: project_id is required. Please provide the project ID."
                 )]
             
-            logger.info(f"project_health called: project_id={project_id}")
+            logger.info(f"[project_health] Called with project_id={project_id}")
             
-            # Get project health via analytics service
-            # Note: project_health is not yet implemented in AnalyticsService
-            # Return a message indicating this feature is not available
+            # Get analytics service
+            service, actual_project_id = await _get_analytics_service(project_id, pm_handler)
+            
+            # Get project summary
+            summary = await service.get_project_summary(project_id=actual_project_id)
+            
+            logger.info(
+                f"[project_health] Success: current_sprint={summary.get('current_sprint', {}).get('name')}, "
+                f"velocity={summary.get('velocity', {}).get('average')}"
+            )
+            
             return [TextContent(
                 type="text",
-                text=f"Project health analysis is not yet implemented. "
-                     f"Please use other analytics tools like velocity_chart or sprint_report for project {project_id}."
+                text=json.dumps(summary, indent=2)
             )]
-            
             
         except Exception as e:
             logger.error(f"Error in project_health: {e}", exc_info=True)

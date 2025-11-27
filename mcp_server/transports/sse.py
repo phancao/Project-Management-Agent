@@ -412,17 +412,29 @@ def create_sse_app(pm_handler: MCPPMHandler, config: PMServerConfig, mcp_server_
             if not mcp_server:
                 return {"tools": []}
             
-            # Get tools from MCP server
-            tools_result = await mcp_server.server.list_tools()
+            # Get tools from MCP server's internal registry
+            # The _tool_names list contains all registered tool names
             tools = []
-            for tool in tools_result.tools:
-                tools.append({
-                    "name": tool.name,
-                    "description": tool.description,
-                    "inputSchema": tool.inputSchema.model_dump() if hasattr(tool.inputSchema, 'model_dump') else tool.inputSchema
-                })
+            for tool_name in mcp_server._tool_names:
+                # Get tool function from registry
+                tool_func = mcp_server._tool_functions.get(tool_name)
+                if tool_func:
+                    # Extract description from function docstring
+                    description = tool_func.__doc__ or f"Tool: {tool_name}"
+                    description = description.strip().split('\n')[0] if description else f"Tool: {tool_name}"
+                    
+                    tools.append({
+                        "name": tool_name,
+                        "description": description
+                    })
+                else:
+                    # Fallback if function not found
+                    tools.append({
+                        "name": tool_name,
+                        "description": f"Tool: {tool_name}"
+                    })
             
-            return {"tools": tools}
+            return {"tools": tools, "count": len(tools)}
         except Exception as e:
             logger.error(f"Error listing tools: {e}", exc_info=True)
             return {"tools": [], "error": str(e)}

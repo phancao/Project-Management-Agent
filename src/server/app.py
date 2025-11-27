@@ -744,6 +744,30 @@ async def _stream_graph_events(
                                         "plan": plan_data,
                                     }
                                 )
+                                
+                                # Also emit step_progress for current step
+                                # Find the first unexecuted step
+                                if hasattr(current_plan, 'steps') and current_plan.steps:
+                                    for idx, step in enumerate(current_plan.steps):
+                                        if not hasattr(step, 'execution_res') or not step.execution_res:
+                                            # This is the current step being executed
+                                            logger.info(
+                                                f"[{safe_thread_id}] Streaming step progress: "
+                                                f"Step {idx + 1}/{len(current_plan.steps)}: {step.title}"
+                                            )
+                                            yield _make_event(
+                                                "step_progress",
+                                                {
+                                                    "thread_id": thread_id,
+                                                    "agent": node_name,
+                                                    "role": "assistant",
+                                                    "step_title": step.title,
+                                                    "step_description": step.description if hasattr(step, 'description') else "",
+                                                    "step_index": idx,
+                                                    "total_steps": len(current_plan.steps),
+                                                }
+                                            )
+                                            break  # Only emit for the first unexecuted step
                         
                         # Stream step execution updates
                         if "observations" in node_update:

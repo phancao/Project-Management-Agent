@@ -22,6 +22,8 @@ export function mergeMessage(message: Message, event: ChatEvent) {
     mergeToolCallResultMessage(message, event);
   } else if (event.type === "interrupt") {
     mergeInterruptMessage(message, event);
+  } else if (event.type === "step_progress") {
+    mergeStepProgressMessage(message, event);
   }
   if (event.data.finish_reason) {
     message.finishReason = event.data.finish_reason;
@@ -105,4 +107,11 @@ function mergeToolCallResultMessage(
 function mergeInterruptMessage(message: Message, event: InterruptEvent) {
   message.isStreaming = false;
   message.options = event.data.options;
+}
+
+function mergeStepProgressMessage(message: Message, event: import("../api").StepProgressEvent) {
+  message.currentStep = event.data.step_title;
+  message.currentStepDescription = event.data.step_description;
+  message.currentStepIndex = event.data.step_index;
+  message.totalSteps = event.data.total_steps;
 }

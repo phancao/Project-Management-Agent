@@ -46,18 +46,18 @@ export function ResearchActivitiesBlock({
     state.researchActivityIds.get(researchId),
   )!;
   const ongoing = useStore((state) => state.ongoingResearchId === researchId);
-  
+
   return (
     <>
       <ul className={cn("flex flex-col py-4", className)}>
         {activityIds.map(
           (activityId, i) => {
             if (i === 0) return null;
-            
+
             // Performance optimization: limit animations for large lists
             const shouldAnimate = i < MAX_ANIMATED_ITEMS;
             const animationDelay = shouldAnimate ? Math.min(i * ANIMATION_DELAY_MULTIPLIER, 0.5) : 0;
-            
+
             return (
               <motion.li
                 key={activityId}
@@ -78,10 +78,49 @@ export function ResearchActivitiesBlock({
           },
         )}
       </ul>
-      {ongoing && <LoadingAnimation className="mx-4 my-12" />}
+      {ongoing && (
+        <>
+          <StepProgressIndicator researchId={researchId} />
+          <LoadingAnimation className="mx-4 my-12" />
+        </>
+      )}
     </>
   );
 }
+
+const StepProgressIndicator = React.memo(({ researchId }: { researchId: string }) => {
+  const activityIds = useStore((state) =>
+    state.researchActivityIds.get(researchId),
+  )!;
+  const lastActivityId = activityIds[activityIds.length - 1];
+  const message = useMessage(lastActivityId);
+
+  if (message?.currentStep) {
+    return (
+      <div className="mx-4 my-4 flex items-center text-sm text-gray-500 dark:text-gray-400">
+        <motion.div
+          className="flex items-center gap-2"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+          <span className="italic">
+            {message.currentStep}
+            {message.currentStepIndex !== undefined && message.totalSteps && (
+              <span className="ml-2 text-xs opacity-70">
+                ({message.currentStepIndex + 1}/{message.totalSteps})
+              </span>
+            )}
+          </span>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return null;
+});
+StepProgressIndicator.displayName = "StepProgressIndicator";
 
 const ActivityMessage = React.memo(({ messageId }: { messageId: string }) => {
   const message = useMessage(messageId);
@@ -148,7 +187,7 @@ function WebSearchToolCall({ toolCall }: { toolCall: ToolCallRuntime }) {
   const searchResults = useMemo<SearchResult[]>(() => {
     let results: SearchResult[] | undefined = undefined;
     let parseError = false;
-    
+
     try {
       if (toolCall.result) {
         results = parseJSON(toolCall.result, []);
@@ -158,7 +197,7 @@ function WebSearchToolCall({ toolCall }: { toolCall: ToolCallRuntime }) {
       console.warn("Failed to parse search results:", error);
       results = undefined;
     }
-    
+
     if (Array.isArray(results)) {
       results.forEach((result) => {
         if (result.type === "page") {
@@ -169,7 +208,7 @@ function WebSearchToolCall({ toolCall }: { toolCall: ToolCallRuntime }) {
       // If parsing failed, still try to show something useful
       results = [];
     }
-    
+
     return results;
   }, [toolCall.result]);
   const pageResults = useMemo(
@@ -251,21 +290,21 @@ function WebSearchToolCall({ toolCall }: { toolCall: ToolCallRuntime }) {
                       delay: Math.min(i * 0.05, 0.2),
                       ease: "easeOut",
                     } : undefined}
-              >
-                <a
-                  className="flex flex-col gap-2 overflow-hidden rounded-md opacity-75 transition-opacity duration-300 hover:opacity-100"
-                  href={searchResult.image_url}
-                  target="_blank"
-                >
-                  <Image
-                    src={searchResult.image_url}
-                    alt={searchResult.image_description}
-                    className="bg-accent h-40 w-40 max-w-full rounded-md bg-cover bg-center bg-no-repeat"
-                    imageClassName="hover:scale-110"
-                    imageTransition
-                  />
-                </a>
-              </motion.li>
+                  >
+                    <a
+                      className="flex flex-col gap-2 overflow-hidden rounded-md opacity-75 transition-opacity duration-300 hover:opacity-100"
+                      href={searchResult.image_url}
+                      target="_blank"
+                    >
+                      <Image
+                        src={searchResult.image_url}
+                        alt={searchResult.image_description}
+                        className="bg-accent h-40 w-40 max-w-full rounded-md bg-cover bg-center bg-no-repeat"
+                        imageClassName="hover:scale-110"
+                        imageTransition
+                      />
+                    </a>
+                  </motion.li>
                 );
               })}
           </ul>

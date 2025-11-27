@@ -248,6 +248,7 @@ services:
       - ./database:/app/database
       - ./scripts:/app/scripts
       - ./logs:/app/logs
+      - ./src:/app/src
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
       interval: 30s

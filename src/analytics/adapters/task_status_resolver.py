@@ -16,7 +16,7 @@ Each provider has different ways to mark tasks as "done":
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
-from src.pm_providers.models import PMTask
+from pm_providers.models import PMTask
 
 
 class TaskStatusResolver(ABC):

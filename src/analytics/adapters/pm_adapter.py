@@ -15,8 +15,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, date
 from collections import defaultdict
 
-from src.pm_providers.base import BasePMProvider
-from src.pm_providers.models import PMTask, PMSprint, PMProject
+from pm_providers.base import BasePMProvider
+from pm_providers.models import PMTask, PMSprint, PMProject
 from .base import BaseAnalyticsAdapter
 from .task_status_resolver import TaskStatusResolver, create_task_status_resolver
 
@@ -62,6 +62,20 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         if ":" in project_id:
             return project_id.split(":", 1)[1]
         return project_id
+    
+    def _extract_sprint_key(self, sprint_id: str) -> str:
+        """
+        Extract the sprint key from a composite sprint ID.
+        
+        Args:
+            sprint_id: Either "provider_uuid:sprint_key" or just "sprint_key"
+        
+        Returns:
+            The sprint key portion (numeric ID for OpenProject)
+        """
+        if ":" in sprint_id:
+            return sprint_id.split(":", 1)[1]
+        return sprint_id
 
     async def get_burndown_data(
         self,
@@ -93,10 +107,13 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 sprint_id = sprint.id
                 logger.info(f"[PMProviderAnalyticsAdapter] Using active sprint: {sprint.name} (id={sprint_id})")
             else:
+                # Extract the actual sprint key (numeric ID) from composite ID
+                sprint_key = self._extract_sprint_key(sprint_id)
+                logger.info(f"[PMProviderAnalyticsAdapter] Extracting sprint: {sprint_id} -> sprint_key={sprint_key}")
                 try:
-                    sprint = await self.provider.get_sprint(sprint_id)
+                    sprint = await self.provider.get_sprint(sprint_key)
                     if sprint:
-                        logger.info(f"[PMProviderAnalyticsAdapter] Found sprint: {sprint.name} (id={sprint_id})")
+                        logger.info(f"[PMProviderAnalyticsAdapter] Found sprint: {sprint.name} (id={sprint_key})")
                 except NotImplementedError as exc:
                     provider_name = getattr(
                         getattr(self.provider, "config", None), "provider_type", self.provider.__class__.__name__
@@ -350,12 +367,14 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         project_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Fetch sprint report data from PM provider"""
-        logger.info(f"[PMProviderAnalyticsAdapter] Fetching sprint report data: sprint={sprint_id}")
+        # Extract the actual sprint key (numeric ID) from composite ID
+        sprint_key = self._extract_sprint_key(sprint_id)
+        logger.info(f"[PMProviderAnalyticsAdapter] Fetching sprint report data: sprint={sprint_id} -> sprint_key={sprint_key}")
         
         try:
-            # Get sprint
+            # Get sprint using the extracted sprint key
             try:
-                sprint = await self.provider.get_sprint(sprint_id)
+                sprint = await self.provider.get_sprint(sprint_key)
             except NotImplementedError as exc:
                 provider_name = getattr(
                     getattr(self.provider, "config", None), "provider_type", self.provider.__class__.__name__
@@ -372,7 +391,9 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             proj_id = project_id or sprint.project_id
             project_key = self._extract_project_key(proj_id)
             all_tasks = await self.provider.list_tasks(project_id=project_key)
-            sprint_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
+            # Filter tasks by sprint_key (compare as strings to handle type mismatches)
+            sprint_tasks = [t for t in all_tasks if str(t.sprint_id) == sprint_key]
+            logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks in sprint {sprint_key}")
             
             # Get team members (unique assignees)
             team_members = list(set(t.assignee_id for t in sprint_tasks if t.assignee_id))

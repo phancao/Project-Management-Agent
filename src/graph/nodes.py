@@ -998,15 +998,21 @@ async def _setup_and_execute_agent_step(
 
     # Extract MCP server configuration for this agent type
     if configurable.mcp_settings:
+        logger.info(f"[{agent_type}] Processing MCP settings for agent")
         for server_name, server_config in configurable.mcp_settings["servers"].items():
+            logger.info(f"[{agent_type}] Checking server '{server_name}', add_to_agents={server_config.get('add_to_agents')}")
             # Check if this agent should use this MCP server
             # enabled_tools can be None (all tools), empty list (no tools), or list of specific tools
             if agent_type in server_config["add_to_agents"]:
+                logger.info(f"[{agent_type}] Agent IS in add_to_agents for '{server_name}'")
                 enabled_tools_config = server_config["enabled_tools"]
+                logger.info(f"[{agent_type}] enabled_tools_config={enabled_tools_config}, type={type(enabled_tools_config)}")
                 # Skip if explicitly set to empty list (no tools)
                 if enabled_tools_config is not None and len(enabled_tools_config) == 0:
+                    logger.info(f"[{agent_type}] Skipping server '{server_name}' - enabled_tools is empty list")
                     continue
                     
+                logger.info(f"[{agent_type}] Adding server '{server_name}' to mcp_servers")
                 mcp_servers[server_name] = {
                     k: v
                     for k, v in server_config.items()
@@ -1015,9 +1021,16 @@ async def _setup_and_execute_agent_step(
                 # If enabled_tools is None, we'll enable all tools from this server
                 # If it's a list, we'll only enable those specific tools
                 if enabled_tools_config is not None:
+                    logger.info(f"[{agent_type}] Adding {len(enabled_tools_config)} specific tools to enabled_tools")
                     for tool_name in enabled_tools_config:
                         enabled_tools[tool_name] = server_name
+                else:
+                    logger.info(f"[{agent_type}] enabled_tools is None - will enable ALL tools from '{server_name}'")
                 # If None, we don't populate enabled_tools here - all tools will be added later
+            else:
+                logger.info(f"[{agent_type}] Agent NOT in add_to_agents for '{server_name}'")
+        
+        logger.info(f"[{agent_type}] After processing: mcp_servers={list(mcp_servers.keys())}, enabled_tools count={len(enabled_tools)}")
 
     # Create and execute agent with MCP tools if available
     if mcp_servers:

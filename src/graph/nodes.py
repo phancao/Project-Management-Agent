@@ -1256,6 +1256,7 @@ async def pm_agent_node(
     This agent ONLY has access to PM tools (no web search) and is specifically
     designed to retrieve and analyze data from the connected PM system.
     """
+    logger.error("🚨🚨🚨 PM_AGENT_NODE CALLED - THIS SHOULD APPEAR IN LOGS! 🚨🚨🚨")
     logger.info("PM Agent node is analyzing project management data.")
     logger.debug(f"[pm_agent_node] Starting PM agent with PM tools only")
     

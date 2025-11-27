@@ -827,6 +827,49 @@ async def _stream_graph_events(
                                     }
                                 )
                         
+                        # Stream step progress updates when current_step_index changes
+                        if "current_step_index" in node_update or "total_steps" in node_update:
+                            current_step_index = node_update.get("current_step_index")
+                            total_steps = node_update.get("total_steps")
+                            
+                            # Get current plan to extract step details
+                            current_plan = node_update.get("current_plan")
+                            if not current_plan:
+                                # Try to get from previous state if not in update
+                                try:
+                                    current_plan = event_data.get("current_plan")
+                                except:
+                                    pass
+                            
+                            if current_step_index is not None and total_steps is not None and current_plan:
+                                # Get the current step details
+                                step_title = f"Step {current_step_index + 1}"
+                                step_description = ""
+                                
+                                if hasattr(current_plan, 'steps') and current_plan.steps:
+                                    if current_step_index < len(current_plan.steps):
+                                        current_step = current_plan.steps[current_step_index]
+                                        step_title = current_step.title
+                                        step_description = current_step.description if hasattr(current_step, 'description') else ""
+                                
+                                logger.info(
+                                    f"[{safe_thread_id}] Streaming step progress: "
+                                    f"Step {current_step_index + 1}/{total_steps}: {step_title}"
+                                )
+                                
+                                yield _make_event(
+                                    "step_progress",
+                                    {
+                                        "thread_id": thread_id,
+                                        "agent": node_name,
+                                        "role": "assistant",
+                                        "step_title": step_title,
+                                        "step_description": step_description,
+                                        "step_index": current_step_index,
+                                        "total_steps": total_steps,
+                                    }
+                                )
+                        
                         # Stream messages from state updates
                         # (e.g., reporter's final report)
                         # NOTE: For reporter messages, we DON'T stream from

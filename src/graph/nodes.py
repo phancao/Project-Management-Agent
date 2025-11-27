@@ -1144,15 +1144,24 @@ async def researcher_node(
     # PM tools are loaded via MCP configuration in _setup_and_execute_agent_step
     # No need to manually add PM tools here
     
-    # Add Analytics tools for project insights
-    try:
-        analytics_tools = get_analytics_tools()
-        if analytics_tools:
-            tools.extend(analytics_tools)
-            logger.info(f"[researcher_node] Added {len(analytics_tools)} analytics tools to researcher agent")
-            logger.debug(f"[researcher_node] Analytics tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in analytics_tools]}")
-    except Exception as e:
-        logger.warning(f"[researcher_node] Could not add analytics tools: {e}")
+    # NOTE: Analytics tools are temporarily disabled because they conflict with MCP PM tools
+    # The LLM prefers calling analytics tools (get_sprint_report, get_team_velocity, etc.)
+    # but these tools fail because there's no analytics adapter configured.
+    # The actual working tools are the MCP PM tools (list_sprints, list_tasks, get_sprint)
+    # which are loaded via MCP configuration below.
+    #
+    # TODO: Either fix analytics tools to work as wrappers around MCP tools,
+    # or improve MCP tool descriptions so LLM understands when to use them.
+    
+    # # Add Analytics tools for project insights
+    # try:
+    #     analytics_tools = get_analytics_tools()
+    #     if analytics_tools:
+    #         tools.extend(analytics_tools)
+    #         logger.info(f"[researcher_node] Added {len(analytics_tools)} analytics tools to researcher agent")
+    #         logger.debug(f"[researcher_node] Analytics tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in analytics_tools]}")
+    # except Exception as e:
+    #     logger.warning(f"[researcher_node] Could not add analytics tools: {e}")
     
     logger.info(f"[researcher_node] Researcher tools count: {len(tools)}")
     logger.debug(f"[researcher_node] Researcher tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in tools]}")
@@ -1177,15 +1186,16 @@ async def coder_node(
     # PM tools are loaded via MCP configuration in _setup_and_execute_agent_step
     # No need to manually add PM tools here
     
-    # Add Analytics tools for data analysis
-    try:
-        analytics_tools = get_analytics_tools()
-        if analytics_tools:
-            tools.extend(analytics_tools)
-            logger.info(f"[coder_node] Added {len(analytics_tools)} analytics tools to coder agent")
-            logger.debug(f"[coder_node] Analytics tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in analytics_tools]}")
-    except Exception as e:
-        logger.warning(f"[coder_node] Could not add analytics tools: {e}")
+    # NOTE: Analytics tools are temporarily disabled (same reason as researcher_node)
+    # # Add Analytics tools for data analysis
+    # try:
+    #     analytics_tools = get_analytics_tools()
+    #     if analytics_tools:
+    #         tools.extend(analytics_tools)
+    #         logger.info(f"[coder_node] Added {len(analytics_tools)} analytics tools to coder agent")
+    #         logger.debug(f"[coder_node] Analytics tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in analytics_tools]}")
+    # except Exception as e:
+    #     logger.warning(f"[coder_node] Could not add analytics tools: {e}")
     
     return await _setup_and_execute_agent_step(
         state,

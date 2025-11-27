@@ -182,6 +182,13 @@ async def chat_stream(request: ChatRequest):
                 "MCP features."
             ),
         )
+    
+    # Use default MCP settings if enabled but not provided in request
+    mcp_settings = request.mcp_settings or {}
+    if mcp_enabled and not mcp_settings:
+        from src.server.mcp_utils import get_default_mcp_settings
+        mcp_settings = get_default_mcp_settings()
+        logger.info(f"Using default MCP settings: {list(mcp_settings.keys())}")
 
     thread_id = request.thread_id or "__default__"
     if thread_id == "__default__":
@@ -197,7 +204,7 @@ async def chat_stream(request: ChatRequest):
             request.max_search_results or 3,
             request.auto_accepted_plan or False,
             request.interrupt_feedback or "",
-            (request.mcp_settings if mcp_enabled else {}) or {},
+            mcp_settings if mcp_enabled else {},
             request.enable_background_investigation or True,
             request.report_style or ReportStyle.ACADEMIC,
             request.enable_deep_thinking or False,
@@ -697,31 +704,42 @@ async def _stream_graph_events(
                             if current_plan:
                                 # Extract plan information
                                 plan_data = {}
-                                if hasattr(current_plan, 'title'):
-                                    plan_data["title"] = current_plan.title
-                                if hasattr(current_plan, 'steps'):
-                                    plan_data["steps"] = [
-                                        {
-                                            "title": step.title,
-                                            "description": step.description,
-                                            "step_type": (
-                                                step.step_type.value
-                                                if hasattr(
-                                                    step.step_type, 'value'
-                                                )
-                                                else str(step.step_type)
-                                            ) if hasattr(
-                                                step, 'step_type'
-                                            ) else None,
-                                            "execution_res": (
-                                                step.execution_res
-                                                if hasattr(
-                                                    step, 'execution_res'
-                                                ) else None
-                                            ),
-                                        }
-                                        for step in current_plan.steps
-                                    ] if current_plan.steps else []
+                                try:
+                                    if hasattr(current_plan, 'title'):
+                                        # Handle case where title might be a method (e.g. in some Pydantic versions or mocks)
+                                        if callable(current_plan.title):
+                                            plan_data["title"] = current_plan.title()
+                                        else:
+                                            plan_data["title"] = current_plan.title
+                                    
+                                    if hasattr(current_plan, 'steps') and current_plan.steps:
+                                        plan_steps = []
+                                        for step in current_plan.steps:
+                                            # Safely extract step_type
+                                            step_type_val = None
+                                            if hasattr(step, 'step_type'):
+                                                st = step.step_type
+                                                if hasattr(st, 'value'):
+                                                    step_type_val = st.value
+                                                else:
+                                                    step_type_val = str(st)
+                                            
+                                            # Safely extract execution_res
+                                            exec_res = getattr(step, 'execution_res', None)
+                                            
+                                            plan_steps.append({
+                                                "title": step.title,
+                                                "description": step.description,
+                                                "step_type": step_type_val,
+                                                "execution_res": exec_res,
+                                            })
+                                        plan_data["steps"] = plan_steps
+                                    else:
+                                        plan_data["steps"] = []
+                                except Exception as e:
+                                    logger.error(f"[{safe_thread_id}] Error constructing plan_data: {e}")
+                                    # Fallback to empty plan to avoid breaking the stream
+                                    plan_data = {"title": "Error processing plan", "steps": []}
                                 
                                 # Stream plan update event
                                 logger.info(
@@ -738,6 +756,35 @@ async def _stream_graph_events(
                                         "plan": plan_data,
                                     }
                                 )
+                                
+                                # Also emit step_progress for current step
+                                # Emit progress for each step in the plan
+                                if hasattr(current_plan, 'steps') and current_plan.steps:
+                                    # Count completed steps to determine current step
+                                    completed_count = sum(
+                                        1 for step in current_plan.steps 
+                                        if hasattr(step, 'execution_res') and step.execution_res
+                                    )
+                                    # Current step is the first incomplete one, or the last one if all complete
+                                    current_step_idx = min(completed_count, len(current_plan.steps) - 1)
+                                    current_step = current_plan.steps[current_step_idx]
+                                    
+                                    logger.info(
+                                        f"[{safe_thread_id}] Streaming step progress: "
+                                        f"Step {current_step_idx + 1}/{len(current_plan.steps)}: {current_step.title}"
+                                    )
+                                    yield _make_event(
+                                        "step_progress",
+                                        {
+                                            "thread_id": thread_id,
+                                            "agent": node_name,
+                                            "role": "assistant",
+                                            "step_title": current_step.title,
+                                            "step_description": current_step.description if hasattr(current_step, 'description') else "",
+                                            "step_index": current_step_idx,
+                                            "total_steps": len(current_plan.steps),
+                                        }
+                                    )
                         
                         # Stream step execution updates
                         if "observations" in node_update:

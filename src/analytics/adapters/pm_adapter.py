@@ -76,6 +76,57 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         if ":" in sprint_id:
             return sprint_id.split(":", 1)[1]
         return sprint_id
+    
+    async def _resolve_sprint_id(self, sprint_id: str, project_key: str) -> tuple[str, Optional[Any]]:
+        """
+        Resolve a sprint identifier to a numeric sprint ID and sprint object.
+        
+        Handles various formats:
+        - Numeric ID: "613" -> returns ("613", sprint_object)
+        - Composite ID: "uuid:613" -> extracts "613", returns ("613", sprint_object)
+        - Sprint name: "Sprint 4" or "sprint-4" -> looks up by name, returns (numeric_id, sprint_object)
+        
+        Args:
+            sprint_id: Sprint identifier (ID, composite ID, or name)
+            project_key: Project key for listing sprints
+        
+        Returns:
+            Tuple of (resolved_sprint_id, sprint_object) or raises ValueError
+        """
+        # Extract sprint key from composite ID
+        sprint_key = self._extract_sprint_key(sprint_id)
+        
+        # Check if it's a numeric ID
+        if sprint_key.isdigit():
+            try:
+                sprint = await self.provider.get_sprint(sprint_key)
+                if sprint:
+                    return sprint_key, sprint
+            except Exception as e:
+                logger.warning(f"[PMProviderAnalyticsAdapter] get_sprint({sprint_key}) failed: {e}")
+        
+        # Not a numeric ID or lookup failed - try to find by name
+        logger.info(f"[PMProviderAnalyticsAdapter] Sprint '{sprint_key}' is not a numeric ID, searching by name...")
+        
+        # Normalize the sprint name for comparison
+        search_name = sprint_key.lower().replace("-", " ").replace("_", " ").strip()
+        
+        # List all sprints and find by name
+        all_sprints = await self.provider.list_sprints(project_id=project_key)
+        
+        for sprint in all_sprints:
+            sprint_name_normalized = sprint.name.lower().replace("-", " ").replace("_", " ").strip()
+            
+            # Check for exact match or partial match
+            if sprint_name_normalized == search_name or search_name in sprint_name_normalized:
+                logger.info(f"[PMProviderAnalyticsAdapter] Resolved '{sprint_id}' to sprint ID={sprint.id} (name={sprint.name})")
+                return str(sprint.id), sprint
+        
+        # No match found
+        available_sprints = [f"{s.name} (id={s.id})" for s in all_sprints[:5]]
+        raise ValueError(
+            f"Sprint '{sprint_id}' not found. Available sprints: {available_sprints}"
+        )
 
     async def get_burndown_data(
         self,
@@ -107,13 +158,11 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 sprint_id = sprint.id
                 logger.info(f"[PMProviderAnalyticsAdapter] Using active sprint: {sprint.name} (id={sprint_id})")
             else:
-                # Extract the actual sprint key (numeric ID) from composite ID
-                sprint_key = self._extract_sprint_key(sprint_id)
-                logger.info(f"[PMProviderAnalyticsAdapter] Extracting sprint: {sprint_id} -> sprint_key={sprint_key}")
+                # Resolve sprint ID (handles numeric IDs, composite IDs, and sprint names)
+                logger.info(f"[PMProviderAnalyticsAdapter] Resolving sprint: {sprint_id}")
                 try:
-                    sprint = await self.provider.get_sprint(sprint_key)
-                    if sprint:
-                        logger.info(f"[PMProviderAnalyticsAdapter] Found sprint: {sprint.name} (id={sprint_key})")
+                    sprint_id, sprint = await self._resolve_sprint_id(sprint_id, project_key)
+                    logger.info(f"[PMProviderAnalyticsAdapter] Resolved to sprint: {sprint.name} (id={sprint_id})")
                 except NotImplementedError as exc:
                     provider_name = getattr(
                         getattr(self.provider, "config", None), "provider_type", self.provider.__class__.__name__
@@ -122,9 +171,12 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                         f"Sprint lookup not supported for provider '{provider_name}'. "
                         "Sprint analytics require get_sprint implementation."
                     ) from exc
+                except ValueError as exc:
+                    # Sprint not found by name or ID
+                    raise
                 except Exception as exc:
                     logger.warning(
-                        "[PMProviderAnalyticsAdapter] get_sprint failed for %s: %s",
+                        "[PMProviderAnalyticsAdapter] Sprint resolution failed for %s: %s",
                         sprint_id,
                         exc,
                     )
@@ -367,14 +419,30 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         project_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Fetch sprint report data from PM provider"""
-        # Extract the actual sprint key (numeric ID) from composite ID
-        sprint_key = self._extract_sprint_key(sprint_id)
-        logger.info(f"[PMProviderAnalyticsAdapter] Fetching sprint report data: sprint={sprint_id} -> sprint_key={sprint_key}")
+        logger.info(f"[PMProviderAnalyticsAdapter] Fetching sprint report data: sprint={sprint_id}")
+        
+        # Get project_key for sprint resolution
+        proj_id = project_id or ""
+        project_key = self._extract_project_key(proj_id) if proj_id else None
         
         try:
-            # Get sprint using the extracted sprint key
+            # Resolve sprint ID (handles numeric IDs, composite IDs, and sprint names)
             try:
-                sprint = await self.provider.get_sprint(sprint_key)
+                # If we don't have project_key yet, try to get it from the sprint
+                if not project_key:
+                    sprint_key = self._extract_sprint_key(sprint_id)
+                    if sprint_key.isdigit():
+                        sprint = await self.provider.get_sprint(sprint_key)
+                        if sprint:
+                            project_key = self._extract_project_key(sprint.project_id or "")
+                            sprint_id = sprint_key
+                        else:
+                            raise ValueError(f"Sprint {sprint_id} not found")
+                    else:
+                        raise ValueError(f"Cannot resolve sprint '{sprint_id}' without project_id")
+                else:
+                    sprint_id, sprint = await self._resolve_sprint_id(sprint_id, project_key)
+                    logger.info(f"[PMProviderAnalyticsAdapter] Resolved to sprint: {sprint.name} (id={sprint_id})")
             except NotImplementedError as exc:
                 provider_name = getattr(
                     getattr(self.provider, "config", None), "provider_type", self.provider.__class__.__name__
@@ -383,17 +451,18 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                     f"Sprint lookup not supported for provider '{provider_name}'. "
                     "Sprint analytics require get_sprint implementation."
                 ) from exc
+            
             if not sprint:
                 logger.warning(f"[PMProviderAnalyticsAdapter] Sprint {sprint_id} not found")
                 return None
             
             # Get all tasks in sprint
-            proj_id = project_id or sprint.project_id
-            project_key = self._extract_project_key(proj_id)
+            if not project_key:
+                project_key = self._extract_project_key(sprint.project_id or "")
             all_tasks = await self.provider.list_tasks(project_id=project_key)
-            # Filter tasks by sprint_key (compare as strings to handle type mismatches)
-            sprint_tasks = [t for t in all_tasks if str(t.sprint_id) == sprint_key]
-            logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks in sprint {sprint_key}")
+            # Filter tasks by sprint_id (compare as strings to handle type mismatches)
+            sprint_tasks = [t for t in all_tasks if str(t.sprint_id) == str(sprint_id)]
+            logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks in sprint {sprint_id}")
             
             # Get team members (unique assignees)
             team_members = list(set(t.assignee_id for t in sprint_tasks if t.assignee_id))

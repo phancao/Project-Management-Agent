@@ -257,7 +257,7 @@ class AnalyticsService:
             }
 
         # Get ALL sprints for comprehensive project view (not just 3)
-        all_velocity_payloads = await self.adapter.get_velocity_data(project_id, sprint_count=20)
+        all_velocity_payloads = await self.adapter.get_velocity_data(project_id, num_sprints=20)
         
         if not all_velocity_payloads:
             summary = {

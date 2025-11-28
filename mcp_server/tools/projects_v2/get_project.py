@@ -56,12 +56,20 @@ class GetProjectTool(ReadTool):
         project = await provider.get_project(actual_project_id)
         
         # Convert PMProject to dict if needed
-        if hasattr(project, "model_dump"):
-            project_dict = project.model_dump()
-        elif hasattr(project, "dict"):
-            project_dict = project.dict()
-        else:
-            project_dict = dict(project) if not isinstance(project, dict) else project
+        project_dict = self._to_dict(project)
+    
+    def _to_dict(self, obj) -> dict:
+        """Convert object to dictionary."""
+        if isinstance(obj, dict):
+            return obj
+        if hasattr(obj, "model_dump"):
+            return obj.model_dump()
+        if hasattr(obj, "dict"):
+            return obj.dict()
+        # For Pydantic BaseModel objects that may not have model_dump
+        if hasattr(obj, "__dict__"):
+            return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
+        raise TypeError(f"Cannot convert {type(obj).__name__} to dict")
         
         # Add provider metadata
         provider_conn = self.context.provider_manager.get_provider_by_id(provider_id)

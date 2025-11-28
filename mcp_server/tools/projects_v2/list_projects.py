@@ -149,5 +149,8 @@ class ListProjectsTool(ReadTool):
             return obj.model_dump()
         if hasattr(obj, "dict"):
             return obj.dict()
-        return dict(obj)
+        # For Pydantic BaseModel objects that may not have model_dump
+        if hasattr(obj, "__dict__"):
+            return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
+        raise TypeError(f"Cannot convert {type(obj).__name__} to dict")
 

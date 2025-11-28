@@ -220,13 +220,21 @@ class AnalyticsService:
     
     async def get_project_summary(self, project_id: str) -> Dict[str, Any]:
         """
-        Get high-level project summary with key metrics sourced from the provider.
+        Get comprehensive project summary with key metrics sourced from the provider.
+        
+        Provides a holistic view of the project including:
+        - Project overview (name, status, timeline)
+        - All sprints summary (completed, active, planned)
+        - Overall progress across all sprints
+        - Velocity trends over time
+        - Task distribution and backlog health
+        - Team performance metrics
 
         Args:
             project_id: Project identifier
 
         Returns:
-            Dictionary with project summary
+            Dictionary with comprehensive project summary
         """
         cache_key = f"project_summary_{project_id}"
         cached = self._get_from_cache(cache_key)
@@ -238,15 +246,20 @@ class AnalyticsService:
             return {
                 "project_id": project_id,
                 "message": "Analytics adapter not configured. Project metrics unavailable.",
+                "project_overview": None,
+                "sprints_summary": None,
                 "current_sprint": None,
                 "velocity": {"average": 0, "latest": 0, "trend": "unknown"},
                 "overall_stats": {"total_items": 0, "completed_items": 0, "completion_rate": 0},
+                "backlog_health": None,
                 "team_size": 0,
                 "recent_trends": []
             }
 
-        velocity_payloads = await self.adapter.get_velocity_data(project_id, sprint_count=3)
-        if not velocity_payloads:
+        # Get ALL sprints for comprehensive project view (not just 3)
+        all_velocity_payloads = await self.adapter.get_velocity_data(project_id, sprint_count=20)
+        
+        if not all_velocity_payloads:
             summary = {
                 "project_id": project_id,
                 "error": "No sprint data available",
@@ -254,21 +267,28 @@ class AnalyticsService:
             self._set_cache(cache_key, summary)
             return summary
 
-        sprints: List[SprintData] = [
+        # Convert all payloads to SprintData
+        all_sprints: List[SprintData] = [
             self._payload_to_sprint_data(payload, project_id)
             if not isinstance(payload, SprintData)
             else payload
-            for payload in velocity_payloads
+            for payload in all_velocity_payloads
         ]
-        velocity_chart = VelocityCalculator.calculate(sprints)
+        
+        # Categorize sprints
+        completed_sprints = [s for s in all_sprints if s.status and s.status.lower() in ("closed", "completed", "done")]
+        active_sprints = [s for s in all_sprints if s.status and s.status.lower() in ("active", "in_progress", "open")]
+        planned_sprints = [s for s in all_sprints if s.status and s.status.lower() in ("planned", "future", "scheduled")]
+        
+        # Calculate velocity from recent sprints (last 6 for trend)
+        recent_sprints = all_sprints[-6:] if len(all_sprints) >= 6 else all_sprints
+        velocity_chart = VelocityCalculator.calculate(recent_sprints)
 
-        latest_payload = velocity_payloads[-1]
-        latest_sprint_id = None
-        if isinstance(latest_payload, dict):
-            latest_sprint_id = latest_payload.get("sprint_id") or latest_payload.get("id")
-        elif isinstance(latest_payload, SprintData):
-            latest_sprint_id = latest_payload.id
+        # Find current/latest sprint
+        latest_sprint = active_sprints[0] if active_sprints else (all_sprints[-1] if all_sprints else None)
+        latest_sprint_id = latest_sprint.id if latest_sprint else None
 
+        # Get detailed report for latest sprint
         latest_report: Optional[SprintData] = None
         if latest_sprint_id:
             try:
@@ -279,48 +299,101 @@ class AnalyticsService:
                     latest_report = sprint_report_payload
                 elif sprint_report_payload:
                     latest_report = self._payload_to_sprint_data(sprint_report_payload, project_id)
-            except Exception as exc:  # pragma: no cover - best effort logging
+            except Exception as exc:
                 logger.warning(
                     "Failed to fetch detailed sprint report for %s: %s",
                     latest_sprint_id,
                     exc,
                 )
 
-        if latest_report is None and sprints:
-            latest_report = sprints[-1]
+        if latest_report is None and latest_sprint:
+            latest_report = latest_sprint
 
-        total_items = sum(len(sprint.work_items) for sprint in sprints)
+        # Calculate overall project stats across ALL sprints
+        total_items = sum(len(sprint.work_items) for sprint in all_sprints)
         completed_items = sum(
             len([item for item in sprint.work_items if item.status == TaskStatus.DONE])
-            for sprint in sprints
+            for sprint in all_sprints
         )
+        in_progress_items = sum(
+            len([item for item in sprint.work_items if item.status == TaskStatus.IN_PROGRESS])
+            for sprint in all_sprints
+        )
+        
+        # Calculate total story points
+        total_planned_points = sum(sprint.planned_points or 0 for sprint in all_sprints)
+        total_completed_points = sum(sprint.completed_points or 0 for sprint in all_sprints)
 
         team_size = len(latest_report.team_members) if latest_report else 0
-        progress = 0.0
+        current_progress = 0.0
         if latest_report and latest_report.planned_points:
-            progress = (
+            current_progress = (
                 (latest_report.completed_points or 0) / latest_report.planned_points * 100
             )
-
+        
+        # Calculate overall project progress
+        overall_progress = 0.0
+        if total_planned_points > 0:
+            overall_progress = (total_completed_points / total_planned_points) * 100
+        
+        # Build sprints summary
+        sprints_summary = {
+            "total_sprints": len(all_sprints),
+            "completed_sprints": len(completed_sprints),
+            "active_sprints": len(active_sprints),
+            "planned_sprints": len(planned_sprints),
+            "sprint_list": [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "status": s.status,
+                    "start_date": s.start_date.isoformat() if s.start_date else None,
+                    "end_date": s.end_date.isoformat() if s.end_date else None,
+                    "planned_points": s.planned_points,
+                    "completed_points": s.completed_points,
+                    "completion_rate": round((s.completed_points or 0) / s.planned_points * 100, 1) if s.planned_points else 0
+                }
+                for s in all_sprints
+            ]
+        }
+        
+        # Backlog health (items not in any sprint or in future sprints)
+        backlog_items = sum(len(s.work_items) for s in planned_sprints)
+        
         summary = {
             "project_id": project_id,
+            "project_overview": {
+                "total_sprints": len(all_sprints),
+                "total_story_points_planned": round(total_planned_points, 1),
+                "total_story_points_completed": round(total_completed_points, 1),
+                "overall_progress_percentage": round(overall_progress, 1),
+            },
+            "sprints_summary": sprints_summary,
             "current_sprint": {
                 "id": latest_report.id if latest_report else latest_sprint_id,
-                "name": latest_report.name if latest_report else latest_sprint_id,
+                "name": latest_report.name if latest_report else str(latest_sprint_id),
                 "status": latest_report.status if latest_report else "unknown",
-                "progress": round(progress, 1) if progress else 0,
-            },
+                "progress": round(current_progress, 1) if current_progress else 0,
+                "start_date": latest_report.start_date.isoformat() if latest_report and latest_report.start_date else None,
+                "end_date": latest_report.end_date.isoformat() if latest_report and latest_report.end_date else None,
+            } if latest_report or latest_sprint_id else None,
             "velocity": {
                 "average": velocity_chart.metadata.get("average_velocity", 0),
                 "latest": velocity_chart.metadata.get("latest_velocity", 0),
                 "trend": velocity_chart.metadata.get("trend", "stable"),
+                "history": velocity_chart.metadata.get("velocity_by_sprint", []),
             },
             "overall_stats": {
                 "total_items": total_items,
                 "completed_items": completed_items,
+                "in_progress_items": in_progress_items,
                 "completion_rate": round(completed_items / total_items * 100, 1)
                 if total_items > 0
                 else 0,
+            },
+            "backlog_health": {
+                "items_in_backlog": backlog_items,
+                "planned_sprints_count": len(planned_sprints),
             },
             "team_size": team_size,
             "recent_trends": velocity_chart.metadata.get("velocity_by_sprint", []),

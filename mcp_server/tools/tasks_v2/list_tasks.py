@@ -68,17 +68,19 @@ class ListTasksTool(ReadTool):
             provider = await self.context.provider_manager.get_provider(provider_id)
             
             # Get tasks from specific project
-            tasks = await provider.list_tasks(
+            raw_tasks = await provider.list_tasks(
                 project_id=actual_project_id,
-                assignee_id=assignee_id,
-                status=status
+                assignee_id=assignee_id
             )
             
-            # Add provider metadata
+            # Convert to dicts and add provider metadata
             provider_conn = self.context.provider_manager.get_provider_by_id(provider_id)
-            for task in tasks:
-                task["provider_id"] = str(provider_conn.id)
-                task["provider_name"] = provider_conn.name
+            tasks = []
+            for task in raw_tasks:
+                task_dict = self._to_dict(task)
+                task_dict["provider_id"] = str(provider_conn.id)
+                task_dict["provider_name"] = provider_conn.name
+                tasks.append(task_dict)
             
         else:
             # Get tasks from all providers
@@ -89,16 +91,15 @@ class ListTasksTool(ReadTool):
                 try:
                     provider = self.context.provider_manager.create_provider_instance(provider_conn)
                     provider_tasks = await provider.list_tasks(
-                        assignee_id=assignee_id,
-                        status=status
+                        assignee_id=assignee_id
                     )
                     
-                    # Add provider metadata
+                    # Convert to dicts and add provider metadata
                     for task in provider_tasks:
-                        task["provider_id"] = str(provider_conn.id)
-                        task["provider_name"] = provider_conn.name
-                    
-                    tasks.extend(provider_tasks)
+                        task_dict = self._to_dict(task)
+                        task_dict["provider_id"] = str(provider_conn.id)
+                        task_dict["provider_name"] = provider_conn.name
+                        tasks.append(task_dict)
                 except Exception as e:
                     self.context.provider_manager.record_error(str(provider_conn.id), e)
                     continue
@@ -122,4 +123,14 @@ class ListTasksTool(ReadTool):
             if not providers:
                 raise ValueError("No active PM providers found")
             return str(providers[0].id), project_id
+    
+    def _to_dict(self, obj) -> dict:
+        """Convert object to dictionary."""
+        if isinstance(obj, dict):
+            return obj
+        if hasattr(obj, "model_dump"):
+            return obj.model_dump()
+        if hasattr(obj, "dict"):
+            return obj.dict()
+        return dict(obj)
 

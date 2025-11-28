@@ -179,7 +179,7 @@ class AnalyticsManager:
         service, actual_project_id = await self.get_service(project_id)
         return await service.get_velocity_chart(
             project_id=actual_project_id,
-            num_sprints=num_sprints
+            sprint_count=num_sprints  # service uses sprint_count parameter
         )
     
     async def get_sprint_report(

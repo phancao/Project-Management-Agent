@@ -109,7 +109,13 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         logger.info(f"[PMProviderAnalyticsAdapter] Sprint '{sprint_key}' is not a numeric ID, searching by name in project '{project_key}'...")
         
         # Normalize the sprint name for comparison
+        # Handle formats like "sprint-4", "Sprint 4", "sprint_4", "4"
         search_name = sprint_key.lower().replace("-", " ").replace("_", " ").strip()
+        
+        # Also extract just the number if present (e.g., "sprint 4" -> "4")
+        import re
+        number_match = re.search(r'\d+', sprint_key)
+        search_number = number_match.group() if number_match else None
         
         # List all sprints and find by name
         try:
@@ -124,16 +130,24 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             
             # Check for exact match or partial match
             if sprint_name_normalized == search_name or search_name in sprint_name_normalized:
-                logger.info(f"[PMProviderAnalyticsAdapter] Resolved '{sprint_id}' to sprint ID={sprint.id} (name={sprint.name})")
+                logger.info(f"[PMProviderAnalyticsAdapter] Resolved '{sprint_id}' to sprint ID={sprint.id} (name={sprint.name}) via name match")
                 return str(sprint.id), sprint
+            
+            # Also try matching by sprint number (e.g., "Sprint 4" matches "4")
+            if search_number:
+                sprint_number_match = re.search(r'\d+', sprint.name)
+                if sprint_number_match and sprint_number_match.group() == search_number:
+                    logger.info(f"[PMProviderAnalyticsAdapter] Resolved '{sprint_id}' to sprint ID={sprint.id} (name={sprint.name}) via number match")
+                    return str(sprint.id), sprint
         
-        # No match found - return None instead of raising error
-        available_sprints = [f"{s.name} (id={s.id})" for s in all_sprints[:5]]
-        logger.warning(
-            f"[PMProviderAnalyticsAdapter] Sprint '{sprint_id}' not found in project '{project_key}'. "
-            f"Available sprints: {available_sprints}"
+        # No match found - raise error with helpful message
+        available_sprints = [f"{s.name} (id={s.id})" for s in all_sprints[:10]]
+        error_msg = (
+            f"Sprint '{sprint_key}' not found in project '{project_key}'. "
+            f"Available sprints ({len(all_sprints)} total): {available_sprints}"
         )
-        return None, None
+        logger.error(f"[PMProviderAnalyticsAdapter] {error_msg}")
+        raise ValueError(error_msg)
 
     async def get_burndown_data(
         self,
@@ -169,16 +183,11 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 logger.info(f"[PMProviderAnalyticsAdapter] Resolving sprint: {sprint_id}")
                 try:
                     resolved_id, sprint = await self._resolve_sprint_id(sprint_id, project_key)
-                    if resolved_id is None or sprint is None:
-                        # Sprint not found - return empty data instead of error
-                        logger.warning(f"[PMProviderAnalyticsAdapter] Sprint '{sprint_id}' not found, returning empty data")
-                        return {
-                            "sprint": {"id": sprint_id, "name": f"Sprint {sprint_id}", "status": "unknown"},
-                            "tasks": [],
-                            "message": f"Sprint '{sprint_id}' not found. Please verify the sprint name or ID."
-                        }
                     sprint_id = resolved_id
                     logger.info(f"[PMProviderAnalyticsAdapter] Resolved to sprint: {sprint.name} (id={sprint_id})")
+                except ValueError as exc:
+                    # Sprint not found by name - re-raise with context
+                    raise
                 except NotImplementedError as exc:
                     provider_name = getattr(
                         getattr(self.provider, "config", None), "provider_type", self.provider.__class__.__name__
@@ -455,19 +464,11 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                         raise ValueError(f"Cannot resolve sprint '{sprint_id}' without project_id")
                 else:
                     resolved_id, sprint = await self._resolve_sprint_id(sprint_id, project_key)
-                    if resolved_id is None or sprint is None:
-                        # Sprint not found - return empty data instead of error
-                        logger.warning(f"[PMProviderAnalyticsAdapter] Sprint '{sprint_id}' not found for report, returning empty data")
-                        return {
-                            "sprint": {"id": sprint_id, "name": f"Sprint {sprint_id}", "status": "unknown"},
-                            "tasks": [],
-                            "team_members": [],
-                            "completed_tasks": [],
-                            "incomplete_tasks": [],
-                            "message": f"Sprint '{sprint_id}' not found. Please verify the sprint name or ID."
-                        }
                     sprint_id = resolved_id
                     logger.info(f"[PMProviderAnalyticsAdapter] Resolved to sprint: {sprint.name} (id={sprint_id})")
+            except ValueError as exc:
+                # Sprint not found by name - re-raise with context
+                raise
             except NotImplementedError as exc:
                 provider_name = getattr(
                     getattr(self.provider, "config", None), "provider_type", self.provider.__class__.__name__
@@ -479,14 +480,7 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             
             if not sprint:
                 logger.warning(f"[PMProviderAnalyticsAdapter] Sprint {sprint_id} not found")
-                return {
-                    "sprint": {"id": sprint_id, "name": f"Sprint {sprint_id}", "status": "unknown"},
-                    "tasks": [],
-                    "team_members": [],
-                    "completed_tasks": [],
-                    "incomplete_tasks": [],
-                    "message": f"Sprint '{sprint_id}' not found."
-                }
+                raise ValueError(f"Sprint '{sprint_id}' not found.")
             
             # Get all tasks in sprint
             if not project_key:

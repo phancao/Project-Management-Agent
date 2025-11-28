@@ -55,15 +55,23 @@ class GetProjectTool(ReadTool):
         # Get project details
         project = await provider.get_project(actual_project_id)
         
+        # Convert PMProject to dict if needed
+        if hasattr(project, "model_dump"):
+            project_dict = project.model_dump()
+        elif hasattr(project, "dict"):
+            project_dict = project.dict()
+        else:
+            project_dict = dict(project) if not isinstance(project, dict) else project
+        
         # Add provider metadata
         provider_conn = self.context.provider_manager.get_provider_by_id(provider_id)
         if provider_conn:
-            project["provider_id"] = str(provider_conn.id)
-            project["provider_name"] = provider_conn.name
-            project["provider_type"] = provider_conn.provider_type
-            project["provider_url"] = provider_conn.base_url
+            project_dict["provider_id"] = str(provider_conn.id)
+            project_dict["provider_name"] = provider_conn.name
+            project_dict["provider_type"] = provider_conn.provider_type
+            project_dict["provider_url"] = provider_conn.base_url
         
-        return project
+        return project_dict
     
     def _parse_project_id(self, project_id: str) -> tuple[str, str]:
         """

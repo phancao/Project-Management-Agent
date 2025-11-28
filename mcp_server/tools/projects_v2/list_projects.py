@@ -102,16 +102,17 @@ class ListProjectsTool(ReadTool):
                 provider = self.context.provider_manager.create_provider_instance(provider_conn)
                 
                 # Fetch projects
-                projects = await provider.list_projects()
+                raw_projects = await provider.list_projects()
                 
-                # Add provider metadata to each project
-                for project in projects:
-                    project["provider_id"] = str(provider_conn.id)
-                    project["provider_name"] = provider_conn.name
-                    project["provider_type"] = provider_conn.provider_type
-                    project["provider_url"] = provider_conn.base_url
+                # Convert to dicts and add provider metadata to each project
+                for project in raw_projects:
+                    project_dict = self._to_dict(project)
+                    project_dict["provider_id"] = str(provider_conn.id)
+                    project_dict["provider_name"] = provider_conn.name
+                    project_dict["provider_type"] = provider_conn.provider_type
+                    project_dict["provider_url"] = provider_conn.base_url
+                    all_projects.append(project_dict)
                 
-                all_projects.extend(projects)
                 providers_queried += 1
                 
             except Exception as e:
@@ -139,4 +140,14 @@ class ListProjectsTool(ReadTool):
             "providers_queried": providers_queried,
             "providers_available": len(self.context.provider_manager.get_active_providers())
         }
+    
+    def _to_dict(self, obj) -> dict:
+        """Convert object to dictionary."""
+        if isinstance(obj, dict):
+            return obj
+        if hasattr(obj, "model_dump"):
+            return obj.model_dump()
+        if hasattr(obj, "dict"):
+            return obj.dict()
+        return dict(obj)
 

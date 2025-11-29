@@ -50,6 +50,8 @@ import {
 import { parseJSON } from "~/core/utils";
 import { cn } from "~/lib/utils";
 
+import { AnalysisBlock } from "./analysis-block";
+
 export function MessageListView({
   className,
   onFeedback,
@@ -171,12 +173,10 @@ function MessageListItem({
           </div>
         );
       } else if (startOfResearch) {
+        // Use AnalysisBlock for inline display of steps and report
         content = (
           <div className="w-full px-4">
-            <ResearchCard
-              researchId={message.id}
-              onToggleResearch={onToggleResearch}
-            />
+            <AnalysisBlock researchId={message.id} />
           </div>
         );
       } else {

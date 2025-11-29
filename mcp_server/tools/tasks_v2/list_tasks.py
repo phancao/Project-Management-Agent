@@ -34,7 +34,7 @@ from ..decorators import mcp_tool, default_value
             },
             "limit": {
                 "type": "integer",
-                "description": "Maximum number of tasks to return (default: 100)"
+                "description": "Maximum number of tasks to return (default: 50, max: 100)"
             }
         }
     }
@@ -42,13 +42,13 @@ from ..decorators import mcp_tool, default_value
 class ListTasksTool(ReadTool):
     """List tasks with filtering options."""
     
-    @default_value("limit", 100)
+    @default_value("limit", 50)
     async def execute(
         self,
         project_id: str | None = None,
         assignee_id: str | None = None,
         status: str | None = None,
-        limit: int = 100
+        limit: int = 50
     ) -> dict[str, Any]:
         """
         List tasks.
@@ -104,9 +104,10 @@ class ListTasksTool(ReadTool):
                     self.context.provider_manager.record_error(str(provider_conn.id), e)
                     continue
         
-        # Apply limit
+        # Apply limit (cap at 100 max to prevent buffer overflow)
         total = len(tasks)
-        tasks = tasks[:limit]
+        effective_limit = min(limit, 100)
+        tasks = tasks[:effective_limit]
         
         return {
             "tasks": tasks,

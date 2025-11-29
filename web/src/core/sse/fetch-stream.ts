@@ -41,7 +41,8 @@ export async function* fetchStream(
   try {
     let buffer = "";
     // Use configurable buffer size from environment, default to 1MB (1048576 bytes)
-    const MAX_BUFFER_SIZE = env.NEXT_PUBLIC_MAX_STREAM_BUFFER_SIZE ?? (1024 * 1024);
+    // Default to 10MB buffer size to handle large tool responses (e.g., list_tasks with many items)
+    const MAX_BUFFER_SIZE = env.NEXT_PUBLIC_MAX_STREAM_BUFFER_SIZE ?? (10 * 1024 * 1024);
 
     while (true) {
       const { done, value } = await reader.read();

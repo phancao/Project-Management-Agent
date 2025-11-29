@@ -4,13 +4,44 @@
 import { env } from "~/env";
 
 import type { MCPServerMetadata } from "../mcp";
-import type { Resource } from "../messages";
+import type { Message, Resource } from "../messages";
 import { extractReplayIdFromSearchParams } from "../replay/get-replay-id";
 import { fetchStream } from "../sse";
 import { sleep } from "../utils";
 
 import { resolveServiceURL } from "./resolve-service-url";
 import type { ChatEvent } from "./types";
+
+/**
+ * Build conversation history from messages for context.
+ * This extracts user and assistant messages in chronological order.
+ */
+function buildConversationHistory(
+  messages: Map<string, Message>,
+  messageIds: string[],
+  maxMessages: number = 20
+): Array<{ role: string; content: string }> {
+  const history: Array<{ role: string; content: string }> = [];
+  
+  // Get recent messages (skip the current message which will be sent separately)
+  const recentIds = messageIds.slice(-maxMessages - 1, -1);
+  
+  for (const id of recentIds) {
+    const msg = messages.get(id);
+    if (!msg) continue;
+    
+    // Only include user and assistant messages with content
+    if (msg.role === "user" && msg.content) {
+      history.push({ role: "user", content: msg.content });
+    } else if (msg.role === "assistant" && msg.content) {
+      // For assistant messages, use the agent type if available
+      const role = msg.agent === "reporter" ? "assistant" : "assistant";
+      history.push({ role, content: msg.content });
+    }
+  }
+  
+  return history;
+}
 
 function getLocaleFromCookie(): string {
   if (typeof document === "undefined") return "en-US";
@@ -61,6 +92,8 @@ export async function* chatStream(
         }
       >;
     };
+    // Conversation history for context
+    conversation_history?: Array<{ role: string; content: string }>;
   },
   options: { abortSignal?: AbortSignal } = {},
 ) {
@@ -90,9 +123,21 @@ export async function* chatStream(
 
     // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
     const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
+    
+    // Build messages array with conversation history
+    const messages: Array<{ role: string; content: string }> = [];
+    
+    // Add conversation history if provided (for context continuity)
+    if (params.conversation_history && params.conversation_history.length > 0) {
+      messages.push(...params.conversation_history);
+    }
+    
+    // Add current user message
+    messages.push({ role: "user", content: enhancedMessage });
+    
     const stream = fetchStream(resolveServiceURL(endpoint), {
       body: JSON.stringify({
-        messages: [{ role: "user", content: enhancedMessage }],
+        messages,
         locale,
         ...params,
       }),

@@ -13,6 +13,40 @@ import { parseJSON } from "../utils";
 
 import { getChatStreamSettings } from "./settings-store";
 
+/**
+ * Build conversation history from messages for context.
+ * This extracts user and assistant messages in chronological order.
+ */
+function buildConversationHistory(
+  messages: Map<string, Message>,
+  messageIds: string[],
+  maxMessages: number = 20
+): Array<{ role: string; content: string }> {
+  const history: Array<{ role: string; content: string }> = [];
+  
+  // Get recent messages (excluding the very last one which is the current user message)
+  const recentIds = messageIds.slice(Math.max(0, messageIds.length - maxMessages - 1), -1);
+  
+  for (const id of recentIds) {
+    const msg = messages.get(id);
+    if (!msg) continue;
+    
+    // Only include user and assistant messages with actual content
+    if (msg.role === "user" && msg.content && msg.content.trim()) {
+      history.push({ role: "user", content: msg.content });
+    } else if (msg.role === "assistant" && msg.content && msg.content.trim()) {
+      // Include assistant responses (reporter, coordinator, etc.)
+      // Truncate very long responses to save tokens
+      const content = msg.content.length > 2000 
+        ? msg.content.substring(0, 2000) + "... [truncated]"
+        : msg.content;
+      history.push({ role: "assistant", content });
+    }
+  }
+  
+  return history;
+}
+
 const THREAD_ID = nanoid();
 
 export const useStore = create<{
@@ -103,6 +137,15 @@ export async function sendMessage(
   }
 
   const settings = getChatStreamSettings();
+  
+  // Build conversation history from existing messages for context continuity
+  const state = useStore.getState();
+  const conversationHistory = buildConversationHistory(
+    state.messages,
+    state.messageIds,
+    20 // Max 20 previous messages for context
+  );
+  
   const stream = chatStream(
     content ?? "[REPLAY]",
     {
@@ -120,6 +163,7 @@ export async function sendMessage(
       max_search_results: settings.maxSearchResults,
       report_style: settings.reportStyle,
       mcp_settings: settings.mcpSettings,
+      conversation_history: conversationHistory,
     },
     options,
   );

@@ -589,12 +589,12 @@ export function useRenderableMessageIds() {
         
         // Only include messages that match MessageListItem rendering conditions
         // These are the same conditions checked in MessageListItem component
+        // Note: reporter is NOT included - report is shown inside AnalysisBlock
         return (
           message.role === "user" ||
           message.agent === "coordinator" ||
           message.agent === "planner" ||
           message.agent === "podcast" ||
-          message.agent === "reporter" ||
           state.researchIds.includes(messageId) // startOfResearch condition
         );
       });

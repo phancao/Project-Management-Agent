@@ -149,8 +149,8 @@ function MessageListItem({
       message.agent === "coordinator" ||
       message.agent === "planner" ||
       message.agent === "podcast" ||
-      message.agent === "reporter" ||
       startOfResearch
+      // Note: reporter is NOT included here - report is shown inside AnalysisBlock
     ) {
       // Removed debug logging
       let content: React.ReactNode;

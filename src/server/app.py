@@ -2504,6 +2504,7 @@ async def pm_chat_stream(request: Request):
     """Stream chat responses for Project Management tasks"""
     try:
         from src.conversation.flow_manager import ConversationFlowManager
+        from src.memory import get_conversation_memory
         from database.connection import get_db_session
         from fastapi.responses import StreamingResponse
         import asyncio
@@ -2512,8 +2513,32 @@ async def pm_chat_stream(request: Request):
         import time
             
         body = await request.json()
-        user_message = body.get("messages", [{}])[0].get("content", "")
+        
+        # Extract messages - support both single message and conversation history
+        raw_messages = body.get("messages", [{}])
+        user_message = raw_messages[-1].get("content", "") if raw_messages else ""
+        
+        # Extract conversation history (all messages except the last one)
+        conversation_history = body.get("conversation_history", [])
+        if not conversation_history and len(raw_messages) > 1:
+            # If no explicit history, use messages array (excluding last)
+            conversation_history = raw_messages[:-1]
+        
         thread_id = body.get("thread_id", str(uuid.uuid4()))
+        
+        logger.info(f"[PM-CHAT] Received message with {len(conversation_history)} history messages")
+        
+        # Get or create conversation memory for this thread
+        # This provides persistent storage and semantic retrieval
+        memory = get_conversation_memory(
+            thread_id,
+            short_term_limit=10,
+            enable_vector_store=False,  # Disable for now to avoid OpenAI API calls
+            enable_summarization=False,  # Disable for now
+        )
+        
+        # Add user message to memory
+        memory.add_message("user", user_message)
             
         # Get database session
         db_gen = get_db_session()
@@ -2588,10 +2613,23 @@ async def pm_chat_stream(request: Request):
                             pm_mcp_settings = get_default_mcp_settings()
                             logger.info(f"[PM-CHAT] Using default MCP settings with servers: {list(pm_mcp_settings.get('servers', {}).keys())}")
                             
+                            # Build messages with conversation history for context
+                            workflow_messages = []
+                            
+                            # Add conversation history for context continuity
+                            if conversation_history:
+                                for hist_msg in conversation_history[-10:]:  # Last 10 messages
+                                    workflow_messages.append({
+                                        "role": hist_msg.get("role", "user"),
+                                        "content": hist_msg.get("content", "")
+                                    })
+                                logger.info(f"[PM-CHAT] Added {len(workflow_messages)} history messages to context")
+                            
+                            # Add current user message
+                            workflow_messages.append({"role": "user", "content": research_query})
+                            
                             async for event in _astream_workflow_generator(
-                                messages=[
-                                    {"role": "user", "content": research_query}
-                                ],
+                                messages=workflow_messages,
                                 thread_id=thread_id,
                                 resources=[],
                                 max_plan_iterations=1,

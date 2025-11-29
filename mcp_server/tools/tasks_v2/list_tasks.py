@@ -14,7 +14,7 @@ from ..decorators import mcp_tool, default_value
     name="list_tasks",
     description=(
         "List tasks from PM providers. "
-        "Supports filtering by project, assignee, status, and more. "
+        "Supports filtering by project, assignee, sprint, status, and more. "
         "Returns task information including title, status, assignee, and dates."
     ),
     input_schema={
@@ -23,6 +23,10 @@ from ..decorators import mcp_tool, default_value
             "project_id": {
                 "type": "string",
                 "description": "Filter by project ID (format: 'provider_uuid:project_key')"
+            },
+            "sprint_id": {
+                "type": "string",
+                "description": "Filter by sprint ID (numeric ID like '613' or composite like 'provider_id:613')"
             },
             "assignee_id": {
                 "type": "string",
@@ -46,6 +50,7 @@ class ListTasksTool(ReadTool):
     async def execute(
         self,
         project_id: str | None = None,
+        sprint_id: str | None = None,
         assignee_id: str | None = None,
         status: str | None = None,
         limit: int = 50
@@ -55,6 +60,7 @@ class ListTasksTool(ReadTool):
         
         Args:
             project_id: Filter by project ID
+            sprint_id: Filter by sprint ID
             assignee_id: Filter by assignee
             status: Filter by status
             limit: Maximum results
@@ -62,6 +68,14 @@ class ListTasksTool(ReadTool):
         Returns:
             Dictionary with tasks and metadata
         """
+        # Parse sprint_id if provided (extract numeric part)
+        actual_sprint_id = None
+        if sprint_id:
+            if ":" in sprint_id:
+                actual_sprint_id = sprint_id.split(":", 1)[1]
+            else:
+                actual_sprint_id = sprint_id
+        
         # Parse project_id if provided
         if project_id:
             provider_id, actual_project_id = self._parse_project_id(project_id)
@@ -72,6 +86,13 @@ class ListTasksTool(ReadTool):
                 project_id=actual_project_id,
                 assignee_id=assignee_id
             )
+            
+            # Filter by sprint_id if provided (client-side filtering since OpenProject doesn't support it directly)
+            if actual_sprint_id:
+                raw_tasks = [
+                    task for task in raw_tasks 
+                    if self._task_in_sprint(task, actual_sprint_id)
+                ]
             
             # Convert to dicts and add provider metadata
             provider_conn = self.context.provider_manager.get_provider_by_id(provider_id)
@@ -94,6 +115,13 @@ class ListTasksTool(ReadTool):
                         assignee_id=assignee_id
                     )
                     
+                    # Filter by sprint_id if provided
+                    if actual_sprint_id:
+                        provider_tasks = [
+                            task for task in provider_tasks 
+                            if self._task_in_sprint(task, actual_sprint_id)
+                        ]
+                    
                     # Convert to dicts and add provider metadata
                     for task in provider_tasks:
                         task_dict = self._to_dict(task)
@@ -112,7 +140,8 @@ class ListTasksTool(ReadTool):
         return {
             "tasks": tasks,
             "total": total,
-            "returned": len(tasks)
+            "returned": len(tasks),
+            "sprint_filter": actual_sprint_id
         }
     
     def _parse_project_id(self, project_id: str) -> tuple[str, str]:
@@ -124,6 +153,28 @@ class ListTasksTool(ReadTool):
             if not providers:
                 raise ValueError("No active PM providers found")
             return str(providers[0].id), project_id
+    
+    def _task_in_sprint(self, task, sprint_id: str) -> bool:
+        """Check if a task belongs to a sprint."""
+        # Try to get sprint info from task
+        task_dict = self._to_dict(task) if not isinstance(task, dict) else task
+        
+        # Check version/sprint field (OpenProject uses 'version')
+        task_sprint = task_dict.get("sprint_id") or task_dict.get("version_id") or task_dict.get("version")
+        if task_sprint:
+            # Handle dict format like {"id": 613, "name": "Sprint 4"}
+            if isinstance(task_sprint, dict):
+                task_sprint_id = str(task_sprint.get("id", ""))
+            else:
+                task_sprint_id = str(task_sprint)
+            
+            # Extract numeric part if composite
+            if ":" in task_sprint_id:
+                task_sprint_id = task_sprint_id.split(":", 1)[1]
+            
+            return task_sprint_id == sprint_id
+        
+        return False
     
     def _to_dict(self, obj) -> dict:
         """Convert object to dictionary."""

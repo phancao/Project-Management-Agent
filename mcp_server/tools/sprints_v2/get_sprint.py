@@ -9,7 +9,7 @@ from ..decorators import mcp_tool, require_sprint
     input_schema={
         "type": "object",
         "properties": {
-            "sprint_id": {"type": "string", "description": "Sprint ID"}
+            "sprint_id": {"type": "string", "description": "Sprint ID (numeric ID like '613' or composite like 'provider_id:613')"}
         },
         "required": ["sprint_id"]
     }
@@ -17,8 +17,22 @@ from ..decorators import mcp_tool, require_sprint
 class GetSprintTool(ReadTool):
     @require_sprint
     async def execute(self, sprint_id: str, **kwargs) -> dict[str, Any]:
-        provider = await self._get_first_provider()
-        return await provider.get_sprint(sprint_id)
+        # Extract numeric sprint ID if composite format (provider_id:sprint_id)
+        actual_sprint_id = sprint_id
+        provider_id = None
+        
+        if ":" in sprint_id:
+            parts = sprint_id.split(":", 1)
+            provider_id = parts[0]
+            actual_sprint_id = parts[1]
+        
+        # Get provider
+        if provider_id:
+            provider = await self.context.provider_manager.get_provider(provider_id)
+        else:
+            provider = await self._get_first_provider()
+        
+        return await provider.get_sprint(actual_sprint_id)
     
     async def _get_first_provider(self):
         providers = self.context.provider_manager.get_active_providers()

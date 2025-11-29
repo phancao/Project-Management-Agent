@@ -149,6 +149,23 @@
       "errorGeneratingPodcast": "Error when generating podcast. Please try again.",
       "downloadPodcast": "Download podcast"
     },
+    "analysis": {
+      "title": "AI Analysis",
+      "analyzing": "Analyzing...",
+      "generatingInsights": "Generating insights...",
+      "complete": "Analysis complete",
+      "steps": "Steps",
+      "insights": "Insights",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "copy": "Copy",
+      "download": "Download",
+      "edit": "Edit",
+      "cancelEdit": "Cancel edit",
+      "running": "Running",
+      "completed": "Completed",
+      "error": "Error"
+    },
     "messages": {
       "replaying": "Replaying",
       "replayDescription": "DeerFlow is now replaying the conversation...",

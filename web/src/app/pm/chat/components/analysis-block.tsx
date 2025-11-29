@@ -49,11 +49,14 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
   const t = useTranslations("chat.research");
   const { isReplay } = useReplay();
   
-  // Get research data from store
+  // Get research data from store - subscribe to messages map for real-time updates
   const reportId = useStore((state) => state.researchReportIds.get(researchId));
   const activityIds = useStore((state) => state.researchActivityIds.get(researchId)) ?? [];
   const planMessageId = useStore((state) => state.researchPlanIds.get(researchId));
   const ongoing = useStore((state) => state.ongoingResearchId === researchId);
+  
+  // Subscribe to the entire messages map to get real-time tool call updates
+  const messages = useStore((state) => state.messages);
   
   const reportMessage = useMessage(reportId ?? "");
   const planMessage = useMessage(planMessageId ?? "");
@@ -69,12 +72,12 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
     return "AI Analysis";
   }, [planMessage?.content]);
   
-  // Collect all tool calls from activities
+  // Collect all tool calls from activities - now reactive to messages changes
   const toolCalls = useMemo(() => {
     const calls: Array<{ id: string; name: string; args: unknown; result?: string }> = [];
     
     for (const activityId of activityIds) {
-      const message = useStore.getState().messages.get(activityId);
+      const message = messages.get(activityId);
       if (message?.toolCalls) {
         for (const tc of message.toolCalls) {
           // Skip error results
@@ -87,7 +90,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
     }
     
     return calls;
-  }, [activityIds]);
+  }, [activityIds, messages]);
   
   // UI state
   const [stepsExpanded, setStepsExpanded] = useState(true);

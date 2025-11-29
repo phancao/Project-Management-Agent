@@ -325,10 +325,12 @@ function findMessageByToolCallId(toolCallId: string) {
 function appendMessage(message: Message) {
   console.log(`[DEBUG] appendMessage called: agent=${message.agent}, id=${message.id}, content_length=${message.content?.length ?? 0}`);
   
+  // Track research activities for all research-related agents including pm_agent
   if (
     message.agent === "coder" ||
     message.agent === "reporter" ||
-    message.agent === "researcher"
+    message.agent === "researcher" ||
+    message.agent === "pm_agent"
   ) {
     const ongoingResearchId = getOngoingResearchId();
     console.log(`[DEBUG] Research agent message: agent=${message.agent}, ongoingResearchId=${ongoingResearchId}`);

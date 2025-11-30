@@ -8,6 +8,10 @@ from .list_tasks import ListTasksTool
 from .get_task import GetTaskTool
 from .create_task import CreateTaskTool
 from .update_task import UpdateTaskTool
+from .delete_task import DeleteTaskTool
+from .assign_task import AssignTaskTool
+from .update_task_status import UpdateTaskStatusTool
+from .search_tasks import SearchTasksTool
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +29,10 @@ def register_task_tools_v2(
         GetTaskTool,
         CreateTaskTool,
         UpdateTaskTool,
-        # TODO: Add remaining tools as needed
+        DeleteTaskTool,
+        AssignTaskTool,
+        UpdateTaskStatusTool,
+        SearchTasksTool,
     ]
     
     for tool_class in tool_classes:

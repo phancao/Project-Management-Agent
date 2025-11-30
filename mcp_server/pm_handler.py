@@ -1,6 +1,24 @@
 """
 MCP Server PM Handler
 
+⚠️ DEPRECATED: This module is being replaced by PM Service.
+Use `pm_service/client/` (AsyncPMServiceClient) instead.
+
+Migration guide:
+- Old: from mcp_server.pm_handler import MCPPMHandler
+- New: from pm_service.client import AsyncPMServiceClient
+
+New MCP tools using PM Service are in:
+  mcp_server/tools/pm_service_tools/
+
+The PM Service runs on port 8001 and provides the same functionality
+with better separation of concerns and reduced context for AI assistants.
+
+This file is kept for backward compatibility and as reference.
+It will be removed in a future version.
+
+---
+
 Independent PM Handler for MCP Server.
 This is completely separate from the backend PMHandler.
 """

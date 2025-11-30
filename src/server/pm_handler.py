@@ -4,6 +4,21 @@
 """
 PM Handler - Unified abstraction layer for PM providers
 
+⚠️ DEPRECATED: This module is being replaced by PM Service.
+Use `src/server/pm_service_client.py` (PMServiceHandler) instead.
+
+Migration guide:
+- Old: from src.server.pm_handler import PMHandler
+- New: from src.server.pm_service_client import PMServiceHandler
+
+The PM Service runs on port 8001 and provides the same functionality
+with better separation of concerns and reduced context for AI assistants.
+
+This file is kept for backward compatibility and as reference.
+It will be removed in a future version.
+
+---
+
 This module provides a unified interface for interacting with PM providers,
 abstracting away the complexity of provider management from both:
 - API endpoints (multi-provider aggregation)

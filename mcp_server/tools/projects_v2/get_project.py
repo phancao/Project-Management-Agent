@@ -57,6 +57,16 @@ class GetProjectTool(ReadTool):
         
         # Convert PMProject to dict if needed
         project_dict = self._to_dict(project)
+        
+        # Add provider metadata
+        provider_conn = self.context.provider_manager.get_provider_by_id(provider_id)
+        if provider_conn:
+            project_dict["provider_id"] = str(provider_conn.id)
+            project_dict["provider_name"] = provider_conn.name
+            project_dict["provider_type"] = provider_conn.provider_type
+            project_dict["provider_url"] = provider_conn.base_url
+        
+        return project_dict
     
     def _to_dict(self, obj) -> dict:
         """Convert object to dictionary."""
@@ -70,16 +80,6 @@ class GetProjectTool(ReadTool):
         if hasattr(obj, "__dict__"):
             return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
         raise TypeError(f"Cannot convert {type(obj).__name__} to dict")
-        
-        # Add provider metadata
-        provider_conn = self.context.provider_manager.get_provider_by_id(provider_id)
-        if provider_conn:
-            project_dict["provider_id"] = str(provider_conn.id)
-            project_dict["provider_name"] = provider_conn.name
-            project_dict["provider_type"] = provider_conn.provider_type
-            project_dict["provider_url"] = provider_conn.base_url
-        
-        return project_dict
     
     def _parse_project_id(self, project_id: str) -> tuple[str, str]:
         """

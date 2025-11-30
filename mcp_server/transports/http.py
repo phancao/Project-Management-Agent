@@ -2,6 +2,7 @@
 HTTP (REST API) Transport for PM MCP Server
 
 Provides standard REST API endpoints for PM operations.
+Uses PM Service for data operations.
 """
 
 import logging
@@ -9,14 +10,11 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
-from ..auth import AuthManager, AuthMiddleware, create_auth_router
-from ..auth.middleware import get_current_user, get_optional_user
-from ..auth.models import User, Permission
+from ..core.tool_context import ToolContext
+from ..auth import AuthManager, AuthMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +53,7 @@ class ServerInfo(BaseModel):
 
 
 def create_http_app(
-    pm_handler: MCPPMHandler,
+    context: ToolContext,
     config: PMServerConfig,
     enable_auth: bool = True
 ) -> FastAPI:
@@ -63,7 +61,7 @@ def create_http_app(
     Create FastAPI application with HTTP REST API endpoints.
     
     Args:
-        pm_handler: PM handler instance
+        context: ToolContext instance
         config: Server configuration
         enable_auth: Enable authentication (default: True)
     
@@ -98,7 +96,7 @@ def create_http_app(
         logger.warning("Authentication disabled - server is open to all!")
     
     # Store instances in app state
-    app.state.pm_handler = pm_handler
+    app.state.context = context
     app.state.config = config
     app.state.auth_manager = auth_manager
     app.state.auth_enabled = enable_auth
@@ -124,7 +122,7 @@ def create_http_app(
     @app.get("/", response_model=ServerInfo)
     async def root():
         """Get server information."""
-        providers = pm_handler._get_active_providers()
+        providers = context.provider_manager.get_active_providers()
         total_tools = sum(
             len(tools) for tools in app.state.tools_by_category.values()
         )
@@ -142,7 +140,7 @@ def create_http_app(
     async def health():
         """Health check endpoint."""
         try:
-            providers = pm_handler._get_active_providers()
+            providers = context.provider_manager.get_active_providers()
             total_tools = sum(
                 len(tools) for tools in app.state.tools_by_category.values()
             )
@@ -263,7 +261,7 @@ def create_http_app(
                 error=str(e),
             )
     
-    # ========== Project Endpoints ==========
+    # ========== Project Endpoints (using PM Service) ==========
     
     @app.get("/projects")
     async def list_projects(
@@ -273,7 +271,11 @@ def create_http_app(
     ):
         """List all projects."""
         try:
-            projects = pm_handler.list_all_projects(provider_id=provider_id)
+            result = await context.pm_service.list_projects(
+                provider_id=provider_id,
+                limit=limit or 100
+            )
+            projects = result.get("items", [])
             
             if search:
                 search_lower = search.lower()
@@ -282,9 +284,6 @@ def create_http_app(
                     if search_lower in p.get("name", "").lower()
                     or search_lower in p.get("description", "").lower()
                 ]
-            
-            if limit:
-                projects = projects[:limit]
             
             return {"projects": projects, "count": len(projects)}
         except Exception as e:
@@ -295,7 +294,7 @@ def create_http_app(
     async def get_project(project_id: str):
         """Get project details."""
         try:
-            project = pm_handler.get_project(project_id)
+            project = await context.pm_service.get_project(project_id)
             if not project:
                 raise HTTPException(status_code=404, detail="Project not found")
             return project
@@ -305,7 +304,7 @@ def create_http_app(
             logger.error(f"Error getting project: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
-    # ========== Task Endpoints ==========
+    # ========== Task Endpoints (using PM Service) ==========
     
     @app.get("/tasks/my")
     async def list_my_tasks(
@@ -314,22 +313,14 @@ def create_http_app(
     ):
         """List current user's tasks."""
         try:
-            # Get all tasks assigned to current user (from all providers)
-            tasks = await pm_handler.list_my_tasks()
+            result = await context.pm_service.list_tasks(
+                status=status
+            )
+            tasks = result.get("items", [])
             
             # Apply provider_id filter if specified
             if provider_id:
                 tasks = [t for t in tasks if t.get("provider_id") == provider_id]
-            
-            # Apply status filter if specified
-            if status:
-                status_lower = status.lower()
-                tasks = [
-                    t for t in tasks
-                    if t.get("status", "").lower() == status_lower
-                    or (status_lower == "open" and t.get("status", "").lower() not in ["done", "closed", "completed"])
-                    or (status_lower == "done" and t.get("status", "").lower() in ["done", "closed", "completed"])
-                ]
             
             return {"tasks": tasks, "count": len(tasks)}
         except Exception as e:
@@ -344,11 +335,12 @@ def create_http_app(
     ):
         """List tasks in a project."""
         try:
-            tasks = pm_handler.list_tasks(
+            result = await context.pm_service.list_tasks(
                 project_id=project_id,
                 status=status,
-                assignee=assignee
+                assignee_id=assignee
             )
+            tasks = result.get("items", [])
             return {"tasks": tasks, "count": len(tasks)}
         except Exception as e:
             logger.error(f"Error listing tasks: {e}")
@@ -358,7 +350,7 @@ def create_http_app(
     async def get_task(task_id: str):
         """Get task details."""
         try:
-            task = pm_handler.get_task(task_id)
+            task = await context.pm_service.get_task(task_id)
             if not task:
                 raise HTTPException(status_code=404, detail="Task not found")
             return task
@@ -368,7 +360,7 @@ def create_http_app(
             logger.error(f"Error getting task: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
-    # ========== Sprint Endpoints ==========
+    # ========== Sprint Endpoints (using PM Service) ==========
     
     @app.get("/projects/{project_id}/sprints")
     async def list_sprints(
@@ -377,10 +369,11 @@ def create_http_app(
     ):
         """List sprints in a project."""
         try:
-            sprints = pm_handler.list_sprints(
+            result = await context.pm_service.list_sprints(
                 project_id=project_id,
                 status=status
             )
+            sprints = result.get("items", [])
             return {"sprints": sprints, "count": len(sprints)}
         except Exception as e:
             logger.error(f"Error listing sprints: {e}")
@@ -390,7 +383,7 @@ def create_http_app(
     async def get_sprint(sprint_id: str):
         """Get sprint details."""
         try:
-            sprint = pm_handler.get_sprint(sprint_id)
+            sprint = await context.pm_service.get_sprint(sprint_id)
             if not sprint:
                 raise HTTPException(status_code=404, detail="Sprint not found")
             return sprint
@@ -400,7 +393,7 @@ def create_http_app(
             logger.error(f"Error getting sprint: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
-    # ========== User Endpoints ==========
+    # ========== User Endpoints (using PM Service) ==========
     
     @app.get("/users")
     async def list_users(
@@ -409,23 +402,26 @@ def create_http_app(
     ):
         """List users."""
         try:
-            users = pm_handler.list_users(
-                project_id=project_id,
-                provider_id=provider_id
+            result = await context.pm_service.list_users(
+                project_id=project_id
             )
+            users = result.get("items", [])
             return {"users": users, "count": len(users)}
         except Exception as e:
             logger.error(f"Error listing users: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
     @app.get("/users/me")
-    async def get_current_user(provider_id: str | None = None):
+    async def get_current_user_endpoint(provider_id: str | None = None):
         """Get current user information."""
         try:
-            user = pm_handler.get_current_user(provider_id=provider_id)
-            if not user:
+            # PM Service doesn't have a "me" endpoint yet
+            # Return a placeholder or fetch from first provider
+            result = await context.pm_service.list_users(limit=1)
+            users = result.get("items", [])
+            if not users:
                 raise HTTPException(status_code=404, detail="User not found")
-            return user
+            return users[0]
         except HTTPException:
             raise
         except Exception as e:

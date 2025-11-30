@@ -21,8 +21,8 @@ from sse_starlette import EventSourceResponse
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response
 
-from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
+from ..core.tool_context import ToolContext
 from ..services.auth_service import AuthService
 from ..services.user_context import UserContext
 from ..api.provider_sync import router as provider_sync_router
@@ -42,14 +42,14 @@ class MCPListToolsRequest(BaseModel):
     pass
 
 
-def create_sse_app(pm_handler: MCPPMHandler, config: PMServerConfig, mcp_server_instance=None) -> FastAPI:
+def create_sse_app(context: ToolContext, config: PMServerConfig, mcp_server_instance=None) -> FastAPI:
     """
     Create FastAPI application with SSE endpoint for PM MCP Server.
     
     Uses MCP SDK's SseServerTransport for proper protocol implementation.
     
     Args:
-        pm_handler: PM handler instance
+        context: ToolContext instance
         config: Server configuration
         mcp_server_instance: PMMCPServer instance (required for MCP protocol)
     
@@ -75,7 +75,7 @@ def create_sse_app(pm_handler: MCPPMHandler, config: PMServerConfig, mcp_server_
     app.include_router(provider_sync_router)
     
     # Store references
-    app.state.pm_handler = pm_handler
+    app.state.context = context
     app.state.config = config
     app.state.mcp_server = mcp_server_instance
     
@@ -83,7 +83,7 @@ def create_sse_app(pm_handler: MCPPMHandler, config: PMServerConfig, mcp_server_
     async def health_check():
         """Health check endpoint"""
         try:
-            providers = pm_handler._get_active_providers()
+            providers = context.provider_manager.get_active_providers()
             return {
                 "status": "healthy",
                 "providers": len(providers),

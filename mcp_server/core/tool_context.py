@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from .provider_manager import ProviderManager
 from .analytics_manager import AnalyticsManager
-from pm_service.client import AsyncPMServiceClient, get_pm_service_client
+from pm_service.client import AsyncPMServiceClient
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class ToolContext:
             AsyncPMServiceClient instance
         """
         if self._pm_service_client is None:
-            self._pm_service_client = get_pm_service_client(self._pm_service_url)
+            self._pm_service_client = AsyncPMServiceClient(base_url=self._pm_service_url)
         return self._pm_service_client
     
     @classmethod

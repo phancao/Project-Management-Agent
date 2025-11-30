@@ -14,6 +14,10 @@ from mcp.types import Tool
 from ...core.tool_context import ToolContext
 from .list_projects import ListProjectsTool
 from .get_project import GetProjectTool
+from .create_project import CreateProjectTool
+from .update_project import UpdateProjectTool
+from .delete_project import DeleteProjectTool
+from .search_projects import SearchProjectsTool
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +49,10 @@ def register_project_tools_v2(
     tool_classes = [
         ListProjectsTool,
         GetProjectTool,
-        # TODO: Add more tools as they are refactored
-        # CreateProjectTool,
-        # UpdateProjectTool,
-        # DeleteProjectTool,
-        # SearchProjectsTool,
+        CreateProjectTool,
+        UpdateProjectTool,
+        DeleteProjectTool,
+        SearchProjectsTool,
     ]
     
     for tool_class in tool_classes:

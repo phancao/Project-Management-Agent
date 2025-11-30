@@ -6,6 +6,11 @@ from mcp.types import Tool
 from ...core.tool_context import ToolContext
 from .list_epics import ListEpicsTool
 from .get_epic import GetEpicTool
+from .create_epic import CreateEpicTool
+from .update_epic import UpdateEpicTool
+from .delete_epic import DeleteEpicTool
+from .link_task_to_epic import LinkTaskToEpicTool
+from .unlink_task_from_epic import UnlinkTaskFromEpicTool
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +23,15 @@ def register_epic_tools_v2(
     """Register epic tools (V2) - fully independent."""
     tool_count = 0
     
-    tool_classes = [ListEpicsTool, GetEpicTool]
+    tool_classes = [
+        ListEpicsTool,
+        GetEpicTool,
+        CreateEpicTool,
+        UpdateEpicTool,
+        DeleteEpicTool,
+        LinkTaskToEpicTool,
+        UnlinkTaskFromEpicTool,
+    ]
     
     for tool_class in tool_classes:
         tool_instance = tool_class(context)
@@ -26,8 +39,6 @@ def register_epic_tools_v2(
         tool_description = getattr(tool_class, "_mcp_description", "")
         tool_input_schema = getattr(tool_class, "_mcp_input_schema", {"type": "object", "properties": {}, "additionalProperties": True})
         
-        # IMPORTANT: Create a new scope to capture tool_instance correctly
-        # Without this, all handlers would reference the last tool_instance due to closure
         def create_handler(instance):
             @server.call_tool()
             async def tool_handler(name: str = tool_name, arguments: dict[str, Any] = None):

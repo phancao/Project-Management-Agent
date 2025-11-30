@@ -6,12 +6,13 @@ Provides access to core services and managers.
 """
 
 import logging
+import os
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from .provider_manager import ProviderManager
 from .analytics_manager import AnalyticsManager
-from ..pm_handler import MCPPMHandler
+from pm_service.client import AsyncPMServiceClient, get_pm_service_client
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class ToolContext:
     Provides access to:
     - Provider manager (for PM provider operations)
     - Analytics manager (for analytics operations)
+    - PM Service client (for API calls to PM Service)
     - Database session
     - User ID (for user-scoped operations)
     
@@ -32,7 +34,8 @@ class ToolContext:
     def __init__(
         self,
         db_session: Session,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        pm_service_url: Optional[str] = None
     ):
         """
         Initialize tool context.
@@ -40,9 +43,16 @@ class ToolContext:
         Args:
             db_session: Database session
             user_id: Optional user ID for user-scoped operations
+            pm_service_url: Optional PM Service URL (default from env)
         """
         self.db = db_session
         self.user_id = user_id
+        
+        # Initialize PM Service client
+        self._pm_service_url = pm_service_url or os.environ.get(
+            "PM_SERVICE_URL", "http://localhost:8001"
+        )
+        self._pm_service_client: Optional[AsyncPMServiceClient] = None
         
         # Initialize managers
         self.provider_manager = ProviderManager(
@@ -54,34 +64,41 @@ class ToolContext:
             provider_manager=self.provider_manager
         )
         
-        # Initialize PM handler for backward compatibility
-        self.pm_handler = MCPPMHandler(
-            db_session=db_session,
-            user_id=user_id
-        )
-        
         logger.info(
-            "[ToolContext] Initialized%s",
-            f" for user {user_id}" if user_id else ""
+            "[ToolContext] Initialized%s (PM Service: %s)",
+            f" for user {user_id}" if user_id else "",
+            self._pm_service_url
         )
     
-    @classmethod
-    def from_pm_handler(cls, pm_handler) -> "ToolContext":
+    @property
+    def pm_service(self) -> AsyncPMServiceClient:
         """
-        Create tool context from existing PM handler.
+        Get PM Service client.
         
-        This is for backward compatibility during migration.
+        Returns:
+            AsyncPMServiceClient instance
+        """
+        if self._pm_service_client is None:
+            self._pm_service_client = get_pm_service_client(self._pm_service_url)
+        return self._pm_service_client
+    
+    @classmethod
+    def from_db_session(
+        cls,
+        db_session: Session,
+        user_id: Optional[str] = None
+    ) -> "ToolContext":
+        """
+        Create tool context from database session.
         
         Args:
-            pm_handler: MCPPMHandler instance
+            db_session: Database session
+            user_id: Optional user ID
         
         Returns:
             ToolContext instance
         """
-        return cls(
-            db_session=pm_handler.db,
-            user_id=pm_handler.user_id
-        )
+        return cls(db_session=db_session, user_id=user_id)
     
     def clear_caches(self) -> None:
         """Clear all caches."""

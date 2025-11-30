@@ -17,7 +17,13 @@ from ..decorators import mcp_tool
 )
 class ListSprintsTool(ReadTool):
     async def execute(self, project_id: str, status: str = None, **kwargs) -> dict[str, Any]:
-        # Use the PM handler to list sprints across all providers
-        sprints = await self.context.pm_handler.list_all_sprints(project_id=project_id, status=status)
-        return {"sprints": sprints, "total": len(sprints)}
+        # Use the PM Service client to list sprints
+        result = await self.context.pm_service.list_sprints(
+            project_id=project_id,
+            status=status
+        )
+        return {
+            "sprints": result.get("items", []),
+            "total": result.get("total", 0)
+        }
 

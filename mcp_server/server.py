@@ -13,19 +13,13 @@ from mcp.types import ToolsCapability
 from sqlalchemy.orm import Session
 
 from .database.connection import get_mcp_db_session, init_mcp_db
-from .pm_handler import MCPPMHandler
 from .config import PMServerConfig
 from .core.tool_context import ToolContext
 from .tools import (
-    register_project_tools,
-    register_task_tools,
-    register_sprint_tools,
-    register_epic_tools,
     register_user_tools,
-    register_analytics_tools,
     register_task_interaction_tools,
+    register_provider_config_tools,
 )
-from .tools.provider_config import register_provider_config_tools
 from .tools.analytics_v2.register import register_analytics_tools_v2
 from .tools.projects_v2.register import register_project_tools_v2
 from .tools.tasks_v2.register import register_task_tools_v2
@@ -64,10 +58,7 @@ class PMMCPServer:
         # Database session
         self.db_session: Session | None = None
         
-        # PM Handler (will be initialized when server starts)
-        self.pm_handler: MCPPMHandler | None = None
-        
-        # Tool Context (NEW: provides unified context for refactored tools)
+        # Tool Context (provides unified context for all tools)
         self.tool_context: ToolContext | None = None
         
         # Tool registry
@@ -83,47 +74,34 @@ class PMMCPServer:
             f"PM MCP Server initialized: {self.config.server_name} v{self.config.server_version}"
         )
     
-    def _initialize_pm_handler(self) -> None:
-        """Initialize PM Handler with database session and user context."""
-        if self.pm_handler is not None:
+    def _initialize_tool_context(self) -> None:
+        """Initialize Tool Context with database session and user context."""
+        if self.tool_context is not None:
             return
         
-        logger.info("Initializing PM Handler...")
+        logger.info("Initializing Tool Context...")
         
         # Get MCP Server database session (independent from backend)
         self.db_session = next(get_mcp_db_session())
         
-        # Initialize PMHandler with user context if provided
-        if self.user_id:
-            logger.info(f"Initializing PM Handler for user: {self.user_id}")
-            self.pm_handler = MCPPMHandler.from_db_session_and_user(
-                self.db_session, 
-                user_id=self.user_id
-            )
-        else:
-            logger.info("Initializing PM Handler for all users (backward compatible)")
-            self.pm_handler = MCPPMHandler.from_db_session(self.db_session)
-        
-        # Get provider count
-        provider_count = len(self.pm_handler._get_active_providers())
-        
-        logger.info(
-            f"PM Handler initialized with {provider_count} active provider(s)"
-            + (f" for user {self.user_id}" if self.user_id else " (all users)")
-        )
-        
-        # Initialize Tool Context (NEW: for refactored tools)
-        logger.info("Initializing Tool Context...")
+        # Initialize Tool Context with user context if provided
         self.tool_context = ToolContext(
             db_session=self.db_session,
             user_id=self.user_id
         )
-        logger.info("Tool Context initialized")
+        
+        # Get provider count from provider manager
+        provider_count = len(self.tool_context.provider_manager.get_active_providers())
+        
+        logger.info(
+            f"Tool Context initialized with {provider_count} active provider(s)"
+            + (f" for user {self.user_id}" if self.user_id else " (all users)")
+        )
     
     def _register_all_tools(self) -> None:
         """Register all PM tools with the MCP server."""
-        if self.pm_handler is None:
-            raise RuntimeError("PM Handler not initialized. Call _initialize_pm_handler first.")
+        if self.tool_context is None:
+            raise RuntimeError("Tool Context not initialized. Call _initialize_tool_context first.")
         
         logger.info("Registering PM tools...")
         
@@ -148,20 +126,21 @@ class PMMCPServer:
                 sig = inspect.signature(register_func)
                 param_names = list(sig.parameters.keys())
                 
-                # NEW: Check if function expects tool_context (for refactored tools)
+                # All tools now use context-based signature
                 if "context" in param_names:
-                    # Refactored tools signature: (server, context, tool_names, tool_functions)
-                    logger.info(f"[{module_name}] Using refactored tools signature (with context)")
-                    count = register_func(self.server, self.tool_context, self._tool_names, self._tool_functions)
-                elif len(sig.parameters) >= 5:
-                    # New signature: (server, pm_handler, config, tool_names, tool_functions)
-                    count = register_func(self.server, self.pm_handler, self.config, self._tool_names, self._tool_functions)
-                elif len(sig.parameters) >= 4:
-                    # Old signature: (server, pm_handler, config, tool_names)
-                    count = register_func(self.server, self.pm_handler, self.config, self._tool_names)
+                    # Context-based signature: (server, context, tool_names, tool_functions)
+                    # or (server, context, config, tool_names, tool_functions)
+                    logger.info(f"[{module_name}] Registering with context")
+                    if "tool_functions" in param_names:
+                        count = register_func(self.server, self.tool_context, self._tool_names, self._tool_functions)
+                    elif "config" in param_names:
+                        count = register_func(self.server, self.tool_context, self.config, self._tool_names)
+                    else:
+                        count = register_func(self.server, self.tool_context, self._tool_names)
                 else:
-                    # Very old signature: (server, pm_handler, config)
-                    count = register_func(self.server, self.pm_handler, self.config)
+                    # Legacy signature - should not happen anymore
+                    logger.warning(f"[{module_name}] Using legacy signature without context")
+                    count = register_func(self.server, self.tool_context, self.config, self._tool_names)
                 self.registered_tools.extend([f"{module_name}.*"])
                 logger.info(f"Registered {count} {module_name} tools")
             except Exception as e:
@@ -330,8 +309,8 @@ class PMMCPServer:
         logger.info("Starting PM MCP Server with stdio transport...")
         
         try:
-            # Initialize PM Handler
-            self._initialize_pm_handler()
+            # Initialize Tool Context
+            self._initialize_tool_context()
             
             # Register all tools
             self._register_all_tools()
@@ -540,8 +519,8 @@ class PMMCPServer:
         )
         
         try:
-            # Initialize PM Handler
-            self._initialize_pm_handler()
+            # Initialize Tool Context
+            self._initialize_tool_context()
             
             # Register all tools
             self._register_all_tools()
@@ -549,7 +528,7 @@ class PMMCPServer:
             # Create FastAPI app with SSE endpoints
             from .transports.sse import create_sse_app
             
-            app = create_sse_app(self.pm_handler, self.config, mcp_server_instance=self)
+            app = create_sse_app(self.tool_context, self.config, mcp_server_instance=self)
             
             # Tools are automatically handled by the MCP server through the SSE transport
             # The new SSE implementation uses EventSourceResponse and memory streams
@@ -595,8 +574,8 @@ class PMMCPServer:
         )
         
         try:
-            # Initialize PM Handler
-            self._initialize_pm_handler()
+            # Initialize Tool Context
+            self._initialize_tool_context()
             
             # Register all tools
             self._register_all_tools()
@@ -604,7 +583,7 @@ class PMMCPServer:
             # Create FastAPI app with HTTP REST API
             from .transports.http import create_http_app
             
-            app = create_http_app(self.pm_handler, self.config)
+            app = create_http_app(self.tool_context, self.config)
             
             # Import uvicorn for running FastAPI
             import uvicorn
@@ -644,7 +623,7 @@ class PMMCPServer:
             self.db_session.close()
             self.db_session = None
         
-        self.pm_handler = None
+        self.tool_context = None
         
         logger.info("PM MCP Server stopped")
     

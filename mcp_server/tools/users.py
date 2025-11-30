@@ -10,7 +10,6 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import TextContent
 
-from ..pm_handler import MCPPMHandler
 from ..config import PMServerConfig
 
 logger = logging.getLogger(__name__)
@@ -18,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 def register_user_tools(
     server: Server,
-    pm_handler: MCPPMHandler,
-    config: PMServerConfig,
+    context: any,  # ToolContext instance
+    config: PMServerConfig = None,
     tool_names: list[str] | None = None
 ) -> int:
     """
@@ -27,7 +26,7 @@ def register_user_tools(
     
     Args:
         server: MCP server instance
-        pm_handler: PM handler for multi-provider operations
+        context: ToolContext instance
         config: Server configuration
     
     Returns:

@@ -40,8 +40,8 @@ def _register_tool(
 
 def register_provider_config_tools(
     server: Any,
-    pm_handler: Any,
-    config: Any,
+    context: Any,  # ToolContext or pm_handler for backward compatibility
+    config: Any = None,
     tool_names: list[str] | None = None,
     tool_functions: dict[str, Any] | None = None,
 ) -> int:
@@ -53,9 +53,10 @@ def register_provider_config_tools(
     
     Args:
         server: MCP server instance
-        pm_handler: PM handler instance (not used, but kept for consistency)
-        config: Server configuration
+        context: ToolContext instance (or pm_handler for backward compatibility)
+        config: Server configuration (optional)
         tool_names: Optional list to track tool names
+        tool_functions: Optional dict to store tool functions
         
     Returns:
         Number of tools registered
@@ -216,10 +217,10 @@ def register_provider_config_tools(
                 user_id = getattr(mcp_server, 'user_id', None)
                 logger.info(f"[configure_pm_provider] Got user_id from server instance: {user_id}")
             
-            # Fallback: try to get from pm_handler if it has user_id
-            if not user_id and hasattr(pm_handler, 'user_id'):
-                user_id = pm_handler.user_id
-                logger.info(f"[configure_pm_provider] Got user_id from pm_handler: {user_id}")
+            # Fallback: try to get from context if it has user_id
+            if not user_id and hasattr(context, 'user_id'):
+                user_id = context.user_id
+                logger.info(f"[configure_pm_provider] Got user_id from context: {user_id}")
             
             # User ID is required for all provider configurations
             if not user_id:

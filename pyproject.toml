@@ -71,7 +71,8 @@ required-version = ">=0.6.15"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --cov=backend --cov=mcp_server --cov=pm_providers --cov-report=term-missing"
+pythonpath = ["."]
+addopts = "-v --cov=backend --cov=mcp_server --cov=pm_providers --cov=pm_service --cov-report=term-missing"
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning",

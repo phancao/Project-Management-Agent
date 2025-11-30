@@ -61,6 +61,8 @@ services:
       - BASIC_MODEL__api_key=${OPENAI_API_KEY} # Use environment variable from .env file
       # Agent Configuration
       - AGENT_RECURSION_LIMIT=100 # Increase from default 25 to handle complex workflows
+      # PM Service URL for direct PM provider access
+      - PM_SERVICE_URL=http://pm-service:8001
     ports:
       - "8000:8000"
     depends_on:
@@ -70,10 +72,13 @@ services:
         condition: service_healthy
       pm_mcp_server:
         condition: service_healthy
+      pm_service:
+        condition: service_healthy
     volumes:
       - ./api:/app/api
       - ./backend:/app/backend
       - ./pm_providers:/app/pm_providers
+      - ./pm_service:/app/pm_service
       - ./shared:/app/shared
       - ./database:/app/database
       - ./conf.yaml:/app/conf.yaml

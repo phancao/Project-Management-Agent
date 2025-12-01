@@ -1256,10 +1256,12 @@ async def _setup_and_execute_agent_step(
                 f"[{agent_type}] Failed to load MCP tools: {e}",
                 exc_info=True
             )
-            # Fall back to default tools if MCP fails
-            loaded_tools = default_tools[:]
-            logger.warning(
-                f"[{agent_type}] Using default tools only due to MCP error"
+            # CRITICAL: Do NOT fall back to default tools - this causes AI to hallucinate data
+            # Instead, raise an error so the user knows PM tools aren't available
+            raise RuntimeError(
+                f"Failed to load PM tools from MCP server: {e}. "
+                "Cannot proceed without PM tools as this would cause AI to generate fake data. "
+                "Please ensure the MCP server is running and accessible."
             )
 
         llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP[agent_type])

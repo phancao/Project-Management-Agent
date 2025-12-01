@@ -184,7 +184,7 @@ class AsyncPMServiceClient:
         sprint_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
         status: Optional[str] = None,
-        limit: int = 100,
+        limit: int = 5000,
         offset: int = 0
     ) -> dict[str, Any]:
         """
@@ -195,11 +195,14 @@ class AsyncPMServiceClient:
             sprint_id: Filter by sprint ID
             assignee_id: Filter by assignee ID
             status: Filter by status
-            limit: Maximum results
+            limit: Maximum results (default: 5000 to get all tasks)
             offset: Offset for pagination
             
         Returns:
             ListResponse with tasks
+            
+        Note: The PM Service handler fetches ALL tasks from providers.
+              Use limit/offset for pagination if needed.
         """
         params = {"limit": limit, "offset": offset}
         if project_id:

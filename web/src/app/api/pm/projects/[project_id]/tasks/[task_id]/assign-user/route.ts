@@ -3,15 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-// Get backend URL - handle both with and without /api suffix
-function getBackendUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl) {
-    // Remove /api if present
-    return envUrl.replace(/\/api\/?$/, '');
-  }
-  return 'http://127.0.0.1:8000';
-}
+import { getBackendUrl } from '../../../../../../utils/get-backend-url';
 
 const BACKEND_URL = getBackendUrl();
 

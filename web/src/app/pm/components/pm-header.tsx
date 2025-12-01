@@ -89,8 +89,9 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
       const providerId = extractProviderId(project.id);
       if (!providerId || providerId === "mock") return;
       
-      const baseUrl = mappings.urlMap.get(providerId);
-      if (!baseUrl) return;
+      // Get base URL from mappings, or use a fallback if not found
+      // This allows projects to show even if provider mapping isn't loaded yet
+      const baseUrl = mappings.urlMap.get(providerId) || `Provider ${providerId.substring(0, 8)}...`;
       
       if (!grouped.has(providerId)) {
         grouped.set(providerId, { baseUrl, projects: [] });

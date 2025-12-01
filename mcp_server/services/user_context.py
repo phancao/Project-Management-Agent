@@ -45,8 +45,8 @@ class UserContext:
         # Create server with user context
         mcp_server = PMMCPServer(config=server_config, user_id=user_id)
         
-        # Initialize PM handler with user context
-        mcp_server._initialize_pm_handler()
+        # Initialize Tool Context with user context
+        mcp_server._initialize_tool_context()
         
         # Register tools
         mcp_server._register_all_tools()

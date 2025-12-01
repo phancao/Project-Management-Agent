@@ -22,24 +22,34 @@ async def list_tasks(
     sprint_id: Optional[str] = Query(None, description="Filter by sprint ID"),
     assignee_id: Optional[str] = Query(None, description="Filter by assignee ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    limit: int = Query(1000, ge=1, le=5000, description="Max items to return (default: 1000, max: 5000)"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
-    """List tasks with filters."""
+    """
+    List tasks with filters and pagination.
+    
+    The handler fetches ALL tasks from providers (providers handle their own pagination).
+    This endpoint then applies limit/offset for API-level pagination.
+    """
     handler = PMHandler(db)
-    tasks = await handler.list_tasks(
+    
+    # Handler returns ALL matching tasks (no internal limit)
+    all_tasks = await handler.list_tasks(
         project_id=project_id,
         sprint_id=sprint_id,
         assignee_id=assignee_id,
         status=status,
-        limit=limit + offset  # Get enough for pagination
     )
     
+    # Apply pagination at API level
+    total = len(all_tasks)
+    paginated_tasks = all_tasks[offset:offset + limit]
+    
     return ListResponse(
-        items=tasks[offset:offset + limit],
-        total=len(tasks),
-        returned=min(len(tasks) - offset, limit),
+        items=paginated_tasks,
+        total=total,
+        returned=len(paginated_tasks),
         offset=offset,
         limit=limit
     )

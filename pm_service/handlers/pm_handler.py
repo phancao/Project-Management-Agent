@@ -64,10 +64,28 @@ class PMHandler:
         return query.all()
     
     def get_provider_by_id(self, provider_id: str) -> Optional[PMProviderConnection]:
-        """Get provider by ID."""
-        return self.db.query(PMProviderConnection).filter(
+        """Get provider by ID (PM Service ID or backend_provider_id)."""
+        from uuid import UUID
+        
+        # First try to find by PM Service ID
+        provider = self.db.query(PMProviderConnection).filter(
             PMProviderConnection.id == provider_id
         ).first()
+        
+        if provider:
+            return provider
+        
+        # If not found, try to find by backend_provider_id
+        try:
+            backend_uuid = UUID(provider_id)
+            provider = self.db.query(PMProviderConnection).filter(
+                PMProviderConnection.backend_provider_id == backend_uuid
+            ).first()
+        except (ValueError, TypeError):
+            # provider_id is not a valid UUID, skip backend_provider_id lookup
+            pass
+        
+        return provider
     
     def create_provider_instance(self, provider_conn: PMProviderConnection) -> BasePMProvider:
         """Create provider instance from connection config."""
@@ -129,8 +147,26 @@ class PMHandler:
                 
                 for project in provider_projects[:limit]:
                     project_dict = self._to_dict(project)
+                    # Format project ID as composite: provider_id:project_id
+                    # Use backend_provider_id if available (for frontend compatibility),
+                    # otherwise use PM Service provider ID
+                    original_id = str(project_dict.get("id", ""))
+                    if ":" not in original_id:
+                        # Prefer backend_provider_id for frontend compatibility
+                        provider_id_for_project = (
+                            str(provider_conn.backend_provider_id) 
+                            if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                            else str(provider_conn.id)
+                        )
+                        project_dict["id"] = f"{provider_id_for_project}:{original_id}"
+                    # Store both provider IDs for reference
                     project_dict["provider_id"] = str(provider_conn.id)
+                    if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id:
+                        project_dict["backend_provider_id"] = str(provider_conn.backend_provider_id)
                     project_dict["provider_name"] = provider_conn.name
+                    # Ensure status is always a string (not null)
+                    if project_dict.get("status") is None:
+                        project_dict["status"] = "None"
                     projects.append(project_dict)
                     
             except Exception as e:
@@ -180,9 +216,14 @@ class PMHandler:
         sprint_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
         status: Optional[str] = None,
-        limit: int = 100
     ) -> list[dict[str, Any]]:
-        """List tasks with filters."""
+        """
+        List tasks with filters.
+        
+        Note: This method returns ALL matching tasks from providers.
+        Pagination/limiting should be handled by the API router layer.
+        The providers already handle their own pagination to fetch all data.
+        """
         tasks = []
         
         # Parse project_id if provided
@@ -227,7 +268,7 @@ class PMHandler:
                 self.record_error(str(provider_conn.id), e)
                 continue
         
-        return tasks[:limit]
+        return tasks
     
     async def get_task(self, task_id: str) -> Optional[dict[str, Any]]:
         """Get task by ID."""

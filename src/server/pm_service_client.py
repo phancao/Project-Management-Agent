@@ -1,7 +1,7 @@
 # Backend PM Service Client
 """
 PM Service client wrapper for Backend API.
-Provides the same interface as PMHandler but uses PM Service.
+Provides the same interface as the old PMHandler but uses PM Service.
 """
 
 import logging
@@ -20,8 +20,7 @@ class PMServiceHandler:
     """
     PM Service handler for Backend API.
     
-    Provides similar interface to PMHandler but uses PM Service API.
-    This allows gradual migration from direct provider calls to PM Service.
+    Provides the same interface as the old PMHandler but uses PM Service API.
     """
     
     def __init__(self, user_id: Optional[str] = None):
@@ -40,7 +39,7 @@ class PMServiceHandler:
         Create handler (db_session ignored, kept for compatibility).
         
         Args:
-            db_session: Ignored (for compatibility with PMHandler)
+            db_session: Ignored (uses PM Service instead)
             user_id: Optional user ID
             
         Returns:
@@ -51,7 +50,7 @@ class PMServiceHandler:
     # ==================== Projects ====================
     
     async def list_all_projects(self) -> list[dict[str, Any]]:
-        """List all projects."""
+        """List all projects from all providers."""
         async with self._client as client:
             result = await client.list_projects(user_id=self.user_id)
         return result.get("items", [])
@@ -84,6 +83,18 @@ class PMServiceHandler:
             )
         return result.get("items", [])
     
+    async def list_my_tasks(self) -> list[dict[str, Any]]:
+        """List tasks assigned to current user."""
+        async with self._client as client:
+            result = await client.list_tasks(assignee_id=self.user_id)
+        return result.get("items", [])
+    
+    async def list_all_tasks(self) -> list[dict[str, Any]]:
+        """List all tasks from all providers."""
+        async with self._client as client:
+            result = await client.list_tasks()
+        return result.get("items", [])
+    
     async def get_task(self, task_id: str) -> Optional[dict[str, Any]]:
         """Get task by ID."""
         async with self._client as client:
@@ -96,27 +107,20 @@ class PMServiceHandler:
     async def create_project_task(
         self,
         project_id: str,
-        title: str,
-        description: Optional[str] = None,
-        assignee_id: Optional[str] = None,
-        sprint_id: Optional[str] = None,
-        story_points: Optional[float] = None,
-        priority: Optional[str] = None,
-        task_type: Optional[str] = None,
-        parent_id: Optional[str] = None
+        task_data: dict[str, Any]
     ) -> dict[str, Any]:
         """Create a task in a project."""
         async with self._client as client:
             return await client.create_task(
                 project_id=project_id,
-                title=title,
-                description=description,
-                assignee_id=assignee_id,
-                sprint_id=sprint_id,
-                story_points=story_points,
-                priority=priority,
-                task_type=task_type,
-                parent_id=parent_id
+                title=task_data.get("title", ""),
+                description=task_data.get("description"),
+                assignee_id=task_data.get("assignee_id"),
+                sprint_id=task_data.get("sprint_id"),
+                story_points=task_data.get("story_points"),
+                priority=task_data.get("priority"),
+                task_type=task_data.get("task_type") or task_data.get("type"),
+                parent_id=task_data.get("parent_id")
             )
     
     async def update_task(
@@ -132,18 +136,69 @@ class PMServiceHandler:
                 logger.error(f"Failed to update task {task_id}: {e}")
                 return None
     
+    async def assign_task_to_user(
+        self,
+        project_id: str,
+        task_id: str,
+        assignee_id: Optional[str]
+    ) -> dict[str, Any]:
+        """Assign task to user."""
+        async with self._client as client:
+            return await client.update_task(task_id, assignee_id=assignee_id)
+    
+    async def assign_task_to_sprint(
+        self,
+        project_id: str,
+        task_id: str,
+        sprint_id: str
+    ) -> dict[str, Any]:
+        """Assign task to sprint."""
+        async with self._client as client:
+            return await client.update_task(task_id, sprint_id=sprint_id)
+    
+    async def move_task_to_backlog(
+        self,
+        project_id: str,
+        task_id: str
+    ) -> dict[str, Any]:
+        """Move task to backlog (remove from sprint)."""
+        async with self._client as client:
+            return await client.update_task(task_id, sprint_id=None)
+    
+    async def assign_task_to_epic(
+        self,
+        project_id: str,
+        task_id: str,
+        epic_id: str
+    ) -> dict[str, Any]:
+        """Assign task to epic."""
+        async with self._client as client:
+            return await client.update_task(task_id, epic_id=epic_id)
+    
+    async def remove_task_from_epic(
+        self,
+        project_id: str,
+        task_id: str
+    ) -> dict[str, Any]:
+        """Remove task from epic."""
+        async with self._client as client:
+            return await client.update_task(task_id, epic_id=None)
+    
     # ==================== Sprints ====================
     
     async def list_project_sprints(
         self,
         project_id: str,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        state: Optional[str] = None
     ) -> list[dict[str, Any]]:
         """List sprints in a project."""
+        # Use state if provided (for backward compatibility)
+        sprint_status = state or status
         async with self._client as client:
             result = await client.list_sprints(
                 project_id=project_id,
-                status=status
+                status=sprint_status
             )
         return result.get("items", [])
     
@@ -155,6 +210,64 @@ class PMServiceHandler:
             except Exception as e:
                 logger.error(f"Failed to get sprint {sprint_id}: {e}")
                 return None
+    
+    # ==================== Epics ====================
+    
+    async def list_project_epics(
+        self,
+        project_id: str
+    ) -> list[dict[str, Any]]:
+        """List epics in a project."""
+        async with self._client as client:
+            result = await client.list_epics(project_id=project_id)
+        return result.get("items", [])
+    
+    async def get_epic(self, epic_id: str) -> Optional[dict[str, Any]]:
+        """Get epic by ID."""
+        async with self._client as client:
+            try:
+                return await client.get_epic(epic_id)
+            except Exception as e:
+                logger.error(f"Failed to get epic {epic_id}: {e}")
+                return None
+    
+    async def create_project_epic(
+        self,
+        project_id: str,
+        epic_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create an epic in a project."""
+        async with self._client as client:
+            return await client.create_epic(
+                project_id=project_id,
+                name=epic_data.get("name", ""),
+                description=epic_data.get("description"),
+                color=epic_data.get("color")
+            )
+    
+    async def update_project_epic(
+        self,
+        project_id: str,
+        epic_id: str,
+        updates: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update an epic."""
+        async with self._client as client:
+            return await client.update_epic(epic_id, **updates)
+    
+    async def delete_project_epic(
+        self,
+        project_id: str,
+        epic_id: str
+    ) -> bool:
+        """Delete an epic."""
+        async with self._client as client:
+            try:
+                await client.delete_epic(epic_id)
+                return True
+            except Exception as e:
+                logger.error(f"Failed to delete epic {epic_id}: {e}")
+                return False
     
     # ==================== Users ====================
     
@@ -209,6 +322,56 @@ class PMServiceHandler:
                 is_active=is_active,
                 additional_config=additional_config
             )
+    
+    # ==================== Timeline & Analytics ====================
+    
+    async def get_project_timeline(
+        self,
+        project_id: str
+    ) -> dict[str, Any]:
+        """Get project timeline data (sprints + tasks)."""
+        sprints = await self.list_project_sprints(project_id)
+        tasks = await self.list_project_tasks(project_id)
+        
+        return {
+            "sprints": sprints,
+            "tasks": tasks,
+            "project_id": project_id
+        }
+    
+    # ==================== Labels & Statuses ====================
+    
+    async def list_project_labels(
+        self,
+        project_id: str
+    ) -> list[dict[str, Any]]:
+        """List labels/tags in a project."""
+        # Labels are not yet implemented in PM Service
+        # Return empty list for now
+        logger.warning(f"list_project_labels not implemented, returning empty list")
+        return []
+    
+    async def list_project_statuses(
+        self,
+        project_id: str,
+        entity_type: str = "task"
+    ) -> list[dict[str, Any]]:
+        """List available statuses for a project."""
+        async with self._client as client:
+            result = await client.list_statuses(
+                project_id=project_id,
+                entity_type=entity_type
+            )
+        return result.get("items", [])
+    
+    async def list_project_priorities(
+        self,
+        project_id: str
+    ) -> list[dict[str, Any]]:
+        """List available priorities for a project."""
+        async with self._client as client:
+            result = await client.list_priorities(project_id=project_id)
+        return result.get("items", [])
 
 
 # Convenience function
@@ -216,3 +379,6 @@ def get_pm_service_handler(user_id: Optional[str] = None) -> PMServiceHandler:
     """Get PM Service handler instance."""
     return PMServiceHandler(user_id=user_id)
 
+
+# Alias for backward compatibility
+PMHandler = PMServiceHandler

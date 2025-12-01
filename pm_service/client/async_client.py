@@ -497,6 +497,150 @@ class AsyncPMServiceClient:
             Delete result
         """
         return await self._request("DELETE", f"/api/v1/providers/{provider_id}")
+    
+    # ==================== Epics ====================
+    
+    async def list_epics(
+        self,
+        project_id: Optional[str] = None,
+        limit: int = 100
+    ) -> dict[str, Any]:
+        """
+        List epics.
+        
+        Args:
+            project_id: Filter by project ID
+            limit: Maximum results
+            
+        Returns:
+            ListResponse with epics
+        """
+        params = {"limit": limit}
+        if project_id:
+            params["project_id"] = project_id
+        
+        return await self._request("GET", "/api/v1/epics", params=params)
+    
+    async def get_epic(self, epic_id: str) -> dict[str, Any]:
+        """
+        Get epic by ID.
+        
+        Args:
+            epic_id: Epic ID (composite format)
+            
+        Returns:
+            Epic details
+        """
+        return await self._request("GET", f"/api/v1/epics/{epic_id}")
+    
+    async def create_epic(
+        self,
+        project_id: str,
+        name: str,
+        description: Optional[str] = None,
+        color: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        Create an epic.
+        
+        Args:
+            project_id: Project ID
+            name: Epic name
+            description: Epic description
+            color: Epic color
+            
+        Returns:
+            Created epic
+        """
+        data = {
+            "project_id": project_id,
+            "name": name
+        }
+        if description:
+            data["description"] = description
+        if color:
+            data["color"] = color
+        
+        return await self._request("POST", "/api/v1/epics", json=data)
+    
+    async def update_epic(
+        self,
+        epic_id: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        color: Optional[str] = None,
+        **kwargs
+    ) -> dict[str, Any]:
+        """
+        Update an epic.
+        
+        Args:
+            epic_id: Epic ID
+            name: New name
+            description: New description
+            color: New color
+            
+        Returns:
+            Updated epic
+        """
+        data = {}
+        if name is not None:
+            data["name"] = name
+        if description is not None:
+            data["description"] = description
+        if color is not None:
+            data["color"] = color
+        # Include any additional kwargs
+        data.update(kwargs)
+        
+        return await self._request("PUT", f"/api/v1/epics/{epic_id}", json=data)
+    
+    async def delete_epic(self, epic_id: str) -> dict[str, Any]:
+        """
+        Delete an epic.
+        
+        Args:
+            epic_id: Epic ID
+            
+        Returns:
+            Delete result
+        """
+        return await self._request("DELETE", f"/api/v1/epics/{epic_id}")
+    
+    # ==================== Statuses & Priorities ====================
+    
+    async def list_statuses(
+        self,
+        project_id: str,
+        entity_type: str = "task"
+    ) -> dict[str, Any]:
+        """
+        List available statuses for a project.
+        
+        Args:
+            project_id: Project ID
+            entity_type: Entity type (task, sprint, etc.)
+            
+        Returns:
+            ListResponse with statuses
+        """
+        params = {"entity_type": entity_type}
+        return await self._request("GET", f"/api/v1/projects/{project_id}/statuses", params=params)
+    
+    async def list_priorities(
+        self,
+        project_id: str
+    ) -> dict[str, Any]:
+        """
+        List available priorities for a project.
+        
+        Args:
+            project_id: Project ID
+            
+        Returns:
+            ListResponse with priorities
+        """
+        return await self._request("GET", f"/api/v1/projects/{project_id}/priorities")
 
 
 # Singleton instance for convenience

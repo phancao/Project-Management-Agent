@@ -147,6 +147,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker healthcheck."""
+    return {"status": "healthy", "service": "backend-api"}
+
+
 # Add CORS middleware
 # It's recommended to load the allowed origins from an environment variable
 # for better security and flexibility across different environments.
@@ -1510,7 +1517,7 @@ async def pm_list_projects(request: Request):
     """List all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1549,7 +1556,7 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
     """Create a new task within the specified project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1594,7 +1601,7 @@ async def pm_list_tasks(request: Request, project_id: str):
     """List all tasks for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1706,7 +1713,7 @@ async def pm_project_timeline(project_id: str):
     """Return sprint + task scheduling data for timeline views."""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1748,7 +1755,7 @@ async def pm_list_my_tasks(request: Request):
     """List tasks assigned to current user across all active PM providers"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1773,7 +1780,7 @@ async def pm_list_all_tasks(request: Request):
     """List all tasks across all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -1797,36 +1804,30 @@ async def pm_list_all_tasks(request: Request):
 async def pm_update_task(request: Request, task_id: str, project_id: str = Query(..., description="Project ID in format 'provider_id:project_key'")):
     """Update a task"""
     try:
-        from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler
         
         updates = await request.json()
         
-        db_gen = get_db_session()
-        db = next(db_gen)
+        handler = PMServiceHandler()
         
-        try:
-            handler = PMHandler.from_db_session(db)
-            provider = handler._get_provider_for_project(project_id)
+        # Build composite task_id if needed
+        if ":" not in task_id and ":" in project_id:
+            provider_id = project_id.split(":")[0]
+            composite_task_id = f"{provider_id}:{task_id}"
+        else:
+            composite_task_id = task_id
+        
+        logger.info(f"Updating task {composite_task_id} in project {project_id} with updates: {updates}")
+        
+        # Update the task using PM Service
+        updated_task = await handler.update_task(composite_task_id, **updates)
+        
+        if updated_task:
+            logger.info(f"Task {composite_task_id} updated successfully")
+            return updated_task
+        else:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
             
-            logger.info(f"Updating task {task_id} in project {project_id} with updates: {updates}")
-            
-            # Update the task using the provider
-            updated_task = await provider.update_task(task_id, updates)
-            
-            logger.info(f"Task {task_id} updated successfully: {updated_task.title}")
-            
-            # Get project name for response
-            actual_project_id = project_id.split(":")[-1]
-            project = await provider.get_project(actual_project_id)
-            project_name = project.name if project else "Unknown"
-            
-            # Convert to dict format
-            result = handler._task_to_dict(updated_task, project_name)
-            logger.info(f"Returning updated task data: {result}")
-            return result
-        finally:
-            db.close()
     except ValueError as ve:
         error_msg = str(ve)
         if "Invalid provider ID format" in error_msg:
@@ -1834,12 +1835,9 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
         elif "Provider not found" in error_msg:
             raise HTTPException(status_code=404, detail=error_msg)
         elif "OpenProject API error (422)" in error_msg:
-            # Preserve 422 status code for OpenProject validation errors
-            # Extract the actual error message after the status code
             detail = error_msg.replace("OpenProject API error (422): ", "")
             raise HTTPException(status_code=422, detail=detail)
         elif "OpenProject API error" in error_msg:
-            # Extract status code from error message if present
             import re
             status_match = re.search(r'\((\d+)\)', error_msg)
             status_code = int(status_match.group(1)) if status_match else 400
@@ -1848,7 +1846,6 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
         else:
             raise HTTPException(status_code=400, detail=error_msg)
     except HTTPException:
-        # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
     except Exception as e:
         logger.error(f"Failed to update task: {e}")
@@ -1861,101 +1858,27 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
 async def pm_list_users(request: Request, project_id: str):
     """List all users for a project"""
     try:
-        from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler
         
-        db_gen = get_db_session()
-        db = next(db_gen)
+        handler = PMServiceHandler()
         
         try:
-            handler = PMHandler.from_db_session(db)
-            provider_instance = handler._get_provider_for_project(project_id)
-
-            actual_project_id = (
-                project_id.split(":", 1)[1]
-                if ":" in project_id
-                else project_id
-            )
-
-            provider_type = getattr(
-                getattr(provider_instance, "config", None),
-                "provider_type",
-                provider_instance.__class__.__name__
-            )
-
-            try:
-                user_objs = await provider_instance.list_users(
-                    project_id=actual_project_id
-                )
-            except NotImplementedError:
-                raise HTTPException(
-                    status_code=501,
-                    detail=f"User listing not yet implemented for {provider_type}"
-                )
-            except ValueError as ve:
-                error_msg = str(ve)
-                if "JIRA requires" in error_msg or "username" in error_msg.lower() or "api_token" in error_msg.lower():
-                    logger.warning(
-                        "[pm_list_users] Provider authentication issue, returning empty list. Error: %s",
-                        error_msg
-                    )
-                    return []
-                raise HTTPException(status_code=400, detail=error_msg)
-            except requests.exceptions.HTTPError as http_err:
-                # Handle HTTP errors (403, 401, etc.) gracefully
-                error_msg = str(http_err)
-                status_code = getattr(http_err.response, 'status_code', None) if hasattr(http_err, 'response') else None
-                
-                if status_code in (403, 401):
-                    logger.warning(
-                        "[pm_list_users] Provider returned %s Forbidden/Unauthorized for users endpoint, returning empty list. Error: %s",
-                        status_code, error_msg
-                    )
-                    return []
-                logger.error(f"Failed to list users (HTTP {status_code}): {http_err}")
-                import traceback
-                logger.error(traceback.format_exc())
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to fetch users: {error_msg}"
-                )
-            except Exception as e:
-                error_msg = str(e)
-                # Check for 403/401 in error message
-                if "403" in error_msg or "Forbidden" in error_msg or "401" in error_msg or "Unauthorized" in error_msg:
-                    logger.warning(
-                        "[pm_list_users] Provider authentication/authorization issue, returning empty list. Error: %s",
-                        error_msg
-                    )
-                    return []
-                if "JIRA requires" in error_msg or "username" in error_msg.lower():
-                    logger.warning(
-                        "[pm_list_users] Provider configuration issue, returning empty list. Error: %s",
-                        error_msg
-                    )
-                    return []
-                logger.error(f"Failed to list users: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
-                raise HTTPException(status_code=500, detail=error_msg)
-
-            return [
-                {
-                    "id": str(u.id),
-                    "name": u.name,
-                    "email": u.email or "",
-                    "username": u.username or "",
-                    "avatar_url": u.avatar_url or "",
-                }
-                for u in user_objs
-            ]
-        finally:
-            db.close()
+            users = await handler.list_project_users(project_id)
+            return users
+        except Exception as e:
+            error_msg = str(e)
+            # Handle auth/permission errors gracefully
+            if "403" in error_msg or "Forbidden" in error_msg or "401" in error_msg or "Unauthorized" in error_msg:
+                logger.warning(f"[pm_list_users] Auth issue, returning empty list: {error_msg}")
+                return []
+            if "JIRA requires" in error_msg or "username" in error_msg.lower():
+                logger.warning(f"[pm_list_users] Config issue, returning empty list: {error_msg}")
+                return []
+            raise
+            
     except ValueError as ve:
         error_msg = str(ve)
-        # For JIRA username/auth issues, return empty list instead of error
-        if "JIRA requires email" in error_msg or "JIRA requires" in error_msg or "username" in error_msg.lower() or "api_token" in error_msg.lower():
-            logger.warning(f"[pm_list_users] Outer handler: JIRA authentication issue, returning empty user list. Error: {error_msg}")
+        if "JIRA requires" in error_msg or "username" in error_msg.lower():
             return []
         if "Invalid provider ID format" in error_msg:
             raise HTTPException(status_code=400, detail=error_msg)
@@ -1967,9 +1890,7 @@ async def pm_list_users(request: Request, project_id: str):
         raise
     except Exception as e:
         error_msg = str(e)
-        # For JIRA username/auth issues, return empty list instead of error
         if "JIRA requires" in error_msg or "username" in error_msg.lower():
-            logger.warning(f"[pm_list_users] Outer handler: JIRA configuration issue, returning empty user list. Error: {error_msg}")
             return []
         logger.error(f"Failed to list users: {e}")
         import traceback
@@ -1986,7 +1907,7 @@ async def pm_list_sprints(
     """List all sprints for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2057,7 +1978,7 @@ async def pm_list_epics(request: Request, project_id: str):
     """List all epics for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2091,7 +2012,7 @@ async def pm_create_epic(request: Request, project_id: str):
     """Create a new epic for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         epic_data = await request.json()
         
@@ -2127,7 +2048,7 @@ async def pm_update_epic(request: Request, project_id: str, epic_id: str):
     """Update an epic for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         updates = await request.json()
         
@@ -2163,7 +2084,7 @@ async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str
     """Assign a task to an epic"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         epic_data = await request.json()
         epic_id = epic_data.get("epic_id")
@@ -2199,7 +2120,7 @@ async def pm_remove_task_from_epic(request: Request, project_id: str, task_id: s
     """Remove a task from its epic"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2230,7 +2151,7 @@ async def pm_assign_task_to_sprint(request: Request, project_id: str, task_id: s
     """Assign a task to a sprint"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         sprint_data = await request.json()
         sprint_id = sprint_data.get("sprint_id")
@@ -2267,7 +2188,7 @@ async def pm_assign_task_to_user(project_id: str, task_id: str, payload: TaskAss
     """Assign or unassign a task to a user"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
 
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2307,7 +2228,7 @@ async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: st
     """Move a task to the backlog"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2338,7 +2259,7 @@ async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
     """Delete an epic for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2376,7 +2297,7 @@ async def pm_list_labels(request: Request, project_id: str):
     """List all labels for a project"""
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2420,7 +2341,7 @@ async def pm_list_statuses(
     """
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -2465,7 +2386,7 @@ async def pm_list_priorities(
     """
     try:
         from database.connection import get_db_session
-        from src.server.pm_handler import PMHandler
+        from src.server.pm_service_client import PMServiceHandler as PMHandler
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -3531,7 +3452,7 @@ async def pm_delete_provider(provider_id: str):
 from src.analytics.service import AnalyticsService
 from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
 from database.orm_models import PMProviderConnection
-from src.server.pm_handler import PMHandler
+from pm_providers.factory import create_pm_provider
 
 
 def get_analytics_service(project_id: str, db) -> AnalyticsService:
@@ -3579,9 +3500,16 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
             logger.warning(f"Provider with UUID {provider_uuid} not found, returning empty data")
             return AnalyticsService()
         
-        # Create PM handler for this provider
-        pm_handler = PMHandler.from_db_session(db)
-        provider_instance = pm_handler._create_provider_instance(provider_conn)
+        # Create provider instance directly using factory
+        provider_instance = create_pm_provider(
+            provider_type=provider_conn.provider_type,
+            base_url=provider_conn.base_url,
+            api_key=provider_conn.api_key,
+            api_token=provider_conn.api_token,
+            username=provider_conn.username,
+            organization_id=provider_conn.organization_id,
+            workspace_id=provider_conn.workspace_id
+        )
         
         # Create analytics adapter
         adapter = PMProviderAnalyticsAdapter(provider_instance)

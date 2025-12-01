@@ -1600,88 +1600,14 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
 async def pm_list_tasks(request: Request, project_id: str):
     """List all tasks for a project"""
     try:
-        from database.connection import get_db_session
-        from src.server.pm_service_client import PMServiceHandler as PMHandler
+        from src.server.pm_service_client import PMServiceHandler
         
-        db_gen = get_db_session()
-        db = next(db_gen)
+        handler = PMServiceHandler()
+        tasks = await handler.list_project_tasks(project_id)
+        return tasks
         
-        try:
-            # Check if project_id has provider prefix
-            if ":" not in project_id:
-                # Fallback: use global flow_manager if no provider_id prefix
-                from src.conversation.flow_manager import (
-                    ConversationFlowManager
-                )
-                global flow_manager
-                if flow_manager is None:
-                    flow_manager = ConversationFlowManager(db_session=db)
-                fm = flow_manager
-                
-                if not fm.pm_provider:
-                    raise HTTPException(
-                        status_code=503, detail="PM Provider not configured"
-                    )
-                
-                tasks = await fm.pm_provider.list_tasks(
-                    project_id=project_id
-                )
-                # Continue with assignee map logic below
-                assignee_map = {}
-                for task in tasks:
-                    if (task.assignee_id and
-                            task.assignee_id not in assignee_map):
-                        try:
-                            user = await fm.pm_provider.get_user(
-                                task.assignee_id
-                            )
-                            if user:
-                                assignee_map[task.assignee_id] = user.name
-                        except Exception:
-                            pass
-                
-                return [
-                    {
-                        "id": str(t.id),
-                        "title": t.title,
-                        "description": t.description,
-                        "status": (
-                            t.status.value
-                            if hasattr(t.status, 'value')
-                            else str(t.status)
-                        ),
-                        "priority": (
-                            t.priority.value
-                            if hasattr(t.priority, 'value')
-                            else str(t.priority)
-                        ),
-                        "estimated_hours": t.estimated_hours,
-                        "start_date": (
-                            t.start_date.isoformat() if t.start_date else None
-                        ),
-                        "due_date": (
-                            t.due_date.isoformat() if t.due_date else None
-                        ),
-                        "assigned_to": (
-                            assignee_map.get(t.assignee_id)
-                            if t.assignee_id
-                            else None
-                        ),
-                        "assignee_id": str(t.assignee_id) if t.assignee_id else None,
-                    }
-                    for t in tasks
-                ]
-            
-            # Use PMHandler for provider-prefixed project IDs
-            handler = PMHandler.from_db_session(db)
-            tasks = await handler.list_project_tasks(project_id)
-            return tasks
-        finally:
-            db.close()
     except ValueError as ve:
-        # Handle ValueError from PMHandler and convert to HTTPException
         error_msg = str(ve)
-        # Extract status code if present in format "(410) message"
         import re
         status_match = re.match(r'\((\d{3})\)\s*(.+)', error_msg)
         if status_match:
@@ -1689,7 +1615,6 @@ async def pm_list_tasks(request: Request, project_id: str):
             detail = status_match.group(2)
             raise HTTPException(status_code=status_code, detail=detail)
         else:
-            # Check for specific error patterns
             if "Invalid provider ID format" in error_msg:
                 raise HTTPException(status_code=400, detail=error_msg)
             elif "Provider not found" in error_msg:
@@ -1906,56 +1831,12 @@ async def pm_list_sprints(
 ):
     """List all sprints for a project"""
     try:
-        from database.connection import get_db_session
-        from src.server.pm_service_client import PMServiceHandler as PMHandler
+        from src.server.pm_service_client import PMServiceHandler
         
-        db_gen = get_db_session()
-        db = next(db_gen)
+        handler = PMServiceHandler()
+        return await handler.list_project_sprints(project_id, state=state)
         
-        try:
-            # Check if project_id has provider prefix
-            if ":" not in project_id:
-                # Fallback: use global flow_manager if no provider_id prefix
-                from src.conversation.flow_manager import ConversationFlowManager
-                
-                global flow_manager
-                if flow_manager is None:
-                    flow_manager = ConversationFlowManager(db_session=db)
-                fm = flow_manager
-                
-                if not fm.pm_provider:
-                    raise HTTPException(
-                        status_code=503, detail="PM Provider not configured"
-                    )
-                
-                sprints = await fm.pm_provider.list_sprints(project_id=project_id)
-                
-                return [
-                    {
-                        "id": str(s.id),
-                        "name": s.name,
-                        "start_date": (
-                            s.start_date.isoformat() if s.start_date else None
-                        ),
-                        "end_date": (
-                            s.end_date.isoformat() if s.end_date else None
-                        ),
-                        "status": (
-                            s.status.value
-                            if hasattr(s.status, 'value')
-                            else str(s.status)
-                        ),
-                    }
-                    for s in sprints
-                ]
-            
-            # Use PMHandler for provider-prefixed project IDs
-            handler = PMHandler.from_db_session(db)
-            return await handler.list_project_sprints(project_id, state=state)
-        finally:
-            db.close()
     except ValueError as ve:
-        # Handle ValueError from PMHandler and convert to HTTPException
         error_msg = str(ve)
         if "Invalid provider ID format" in error_msg:
             raise HTTPException(status_code=400, detail=error_msg)
@@ -1964,7 +1845,6 @@ async def pm_list_sprints(
         else:
             raise HTTPException(status_code=500, detail=error_msg)
     except HTTPException:
-        # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
     except Exception as e:
         logger.error(f"Failed to list sprints: {e}")

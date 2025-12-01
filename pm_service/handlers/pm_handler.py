@@ -441,6 +441,151 @@ class PMHandler:
         
         return None
     
+    # ==================== Epics ====================
+    
+    async def list_epics(
+        self,
+        project_id: Optional[str] = None,
+        limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """List epics."""
+        epics = []
+        
+        provider_id = None
+        actual_project_id = None
+        if project_id:
+            provider_id, actual_project_id = self._parse_composite_id(project_id)
+        
+        if provider_id:
+            providers = [self.get_provider_by_id(provider_id)]
+            providers = [p for p in providers if p]
+        else:
+            providers = self.get_active_providers()
+        
+        for provider_conn in providers:
+            try:
+                provider = self.create_provider_instance(provider_conn)
+                if hasattr(provider, 'list_epics'):
+                    provider_epics = await provider.list_epics(project_id=actual_project_id)
+                    
+                    for epic in provider_epics:
+                        epic_dict = self._to_dict(epic)
+                        epic_dict["provider_id"] = str(provider_conn.id)
+                        epic_dict["provider_name"] = provider_conn.name
+                        epics.append(epic_dict)
+                        
+            except Exception as e:
+                self.record_error(str(provider_conn.id), e)
+                continue
+        
+        return epics[:limit]
+    
+    async def get_epic(self, epic_id: str) -> Optional[dict[str, Any]]:
+        """Get epic by ID."""
+        provider_id, actual_id = self._parse_composite_id(epic_id)
+        
+        if provider_id:
+            provider_conn = self.get_provider_by_id(provider_id)
+            if provider_conn:
+                try:
+                    provider = self.create_provider_instance(provider_conn)
+                    if hasattr(provider, 'get_epic'):
+                        epic = await provider.get_epic(actual_id)
+                        if epic:
+                            epic_dict = self._to_dict(epic)
+                            epic_dict["provider_id"] = str(provider_conn.id)
+                            epic_dict["provider_name"] = provider_conn.name
+                            return epic_dict
+                except Exception as e:
+                    self.record_error(provider_id, e)
+        
+        return None
+    
+    async def create_epic(
+        self,
+        project_id: str,
+        name: str,
+        description: Optional[str] = None,
+        color: Optional[str] = None
+    ) -> Optional[dict[str, Any]]:
+        """Create a new epic."""
+        provider_id, actual_project_id = self._parse_composite_id(project_id)
+        
+        if not provider_id:
+            raise ValueError("project_id must include provider_id (format: provider_id:project_id)")
+        
+        provider_conn = self.get_provider_by_id(provider_id)
+        if not provider_conn:
+            raise ValueError(f"Provider {provider_id} not found")
+        
+        provider = self.create_provider_instance(provider_conn)
+        
+        if not hasattr(provider, 'create_epic'):
+            raise ValueError(f"Provider {provider_conn.provider_type} does not support epics")
+        
+        epic = await provider.create_epic(
+            project_id=actual_project_id,
+            name=name,
+            description=description,
+            color=color
+        )
+        
+        if epic:
+            epic_dict = self._to_dict(epic)
+            epic_dict["provider_id"] = str(provider_conn.id)
+            epic_dict["provider_name"] = provider_conn.name
+            return epic_dict
+        
+        return None
+    
+    async def update_epic(
+        self,
+        epic_id: str,
+        **updates
+    ) -> Optional[dict[str, Any]]:
+        """Update an epic."""
+        provider_id, actual_id = self._parse_composite_id(epic_id)
+        
+        if not provider_id:
+            raise ValueError("epic_id must include provider_id")
+        
+        provider_conn = self.get_provider_by_id(provider_id)
+        if not provider_conn:
+            raise ValueError(f"Provider {provider_id} not found")
+        
+        provider = self.create_provider_instance(provider_conn)
+        
+        if not hasattr(provider, 'update_epic'):
+            raise ValueError(f"Provider {provider_conn.provider_type} does not support epic updates")
+        
+        epic = await provider.update_epic(actual_id, **updates)
+        
+        if epic:
+            epic_dict = self._to_dict(epic)
+            epic_dict["provider_id"] = str(provider_conn.id)
+            epic_dict["provider_name"] = provider_conn.name
+            return epic_dict
+        
+        return None
+    
+    async def delete_epic(self, epic_id: str) -> bool:
+        """Delete an epic."""
+        provider_id, actual_id = self._parse_composite_id(epic_id)
+        
+        if not provider_id:
+            raise ValueError("epic_id must include provider_id")
+        
+        provider_conn = self.get_provider_by_id(provider_id)
+        if not provider_conn:
+            raise ValueError(f"Provider {provider_id} not found")
+        
+        provider = self.create_provider_instance(provider_conn)
+        
+        if not hasattr(provider, 'delete_epic'):
+            raise ValueError(f"Provider {provider_conn.provider_type} does not support epic deletion")
+        
+        return await provider.delete_epic(actual_id)
+    
     # ==================== Helper Methods ====================
     
     def _parse_composite_id(self, composite_id: str) -> tuple[Optional[str], str]:

@@ -89,37 +89,23 @@ class ConversationFlowManager:
         self.data_extractor = DataExtractor()
         self.db_session = db_session
         
-        # Initialize PM handler (unified abstraction layer)
+        # Initialize PM handler (unified abstraction layer via PM Service)
         self.pm_handler = None
         try:
-            from src.server.pm_handler import PMHandler
+            from src.server.pm_service_client import PMServiceHandler
             from src.tools.pm_tools import set_pm_handler
             
-            # Use multi-provider mode to query all active providers (OpenProject, JIRA, etc.)
-            # This allows agents to query tasks/projects from all configured providers
-            if db_session:
-                self.pm_handler = PMHandler.from_db_session(db_session)
-                # Set PM handler for tools to use
-                set_pm_handler(self.pm_handler)
-                logger.info("PM Handler initialized in multi-provider mode")
-            else:
-                # Fallback to single provider if no DB session
-                from src.pm_providers import build_pm_provider
-                pm_provider = build_pm_provider(db_session=db_session)
-                if pm_provider:
-                    self.pm_handler = PMHandler.from_single_provider(pm_provider)
-                    set_pm_handler(self.pm_handler)
-                    logger.info(
-                        f"PM Handler initialized with single provider: "
-                        f"{pm_provider.__class__.__name__}"
-                    )
+            # Use PM Service handler for all PM operations
+            self.pm_handler = PMServiceHandler()
+            # Set PM handler for tools to use
+            set_pm_handler(self.pm_handler)
+            logger.info("PM Handler initialized via PM Service")
         except Exception as e:
             logger.warning(f"Could not initialize PM handler: {e}")
         
-        # Keep backward compatibility - expose pm_provider directly
-        # For multi-provider mode, we don't have a single_provider, so use None
-        # Code that needs a provider should use pm_handler instead
-        self.pm_provider = self.pm_handler.single_provider if self.pm_handler and self.pm_handler.single_provider else None
+        # Keep backward compatibility - pm_provider is no longer directly available
+        # Code should use pm_handler instead
+        self.pm_provider = None
         
         # Initialize self-learning system
         self.self_learning = None

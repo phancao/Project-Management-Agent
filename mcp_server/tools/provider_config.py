@@ -41,7 +41,6 @@ def _register_tool(
 def register_provider_config_tools(
     server: Any,
     context: Any,  # ToolContext or pm_handler for backward compatibility
-    config: Any = None,
     tool_names: list[str] | None = None,
     tool_functions: dict[str, Any] | None = None,
 ) -> int:
@@ -54,7 +53,6 @@ def register_provider_config_tools(
     Args:
         server: MCP server instance
         context: ToolContext instance (or pm_handler for backward compatibility)
-        config: Server configuration (optional)
         tool_names: Optional list to track tool names
         tool_functions: Optional dict to store tool functions
         

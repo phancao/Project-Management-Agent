@@ -10,16 +10,14 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import TextContent
 
-from ..config import PMServerConfig
-
 logger = logging.getLogger(__name__)
 
 
 def register_user_tools(
     server: Server,
     context: any,  # ToolContext instance
-    config: PMServerConfig = None,
-    tool_names: list[str] | None = None
+    tool_names: list[str] | None = None,
+    tool_functions: dict[str, Any] | None = None
 ) -> int:
     """
     Register user-related MCP tools.
@@ -27,7 +25,8 @@ def register_user_tools(
     Args:
         server: MCP server instance
         context: ToolContext instance
-        config: Server configuration
+        tool_names: Optional list to track tool names
+        tool_functions: Optional dict to store tool functions
     
     Returns:
         Number of tools registered

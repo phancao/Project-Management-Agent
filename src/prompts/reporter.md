@@ -174,20 +174,34 @@ You should act as an objective and analytical reporter who:
    - Add brief commentary below the table about patterns observed
 
    ### C. 📉 Burndown Chart Analysis (300-400 words)
-   **CRITICAL: Provide INTERPRETATION and COMMENTARY, not just observations!**
+   **🔴 CRITICAL: Provide INTERPRETATION and COMMENTARY, not just observations!**
+   **⚠️ WARNING: Previous reports only listed basic numbers - you MUST provide detailed interpretation!**
    
-   For each point, include:
-   - **The observation** (e.g., "Actual line is above ideal line")
-   - **What it means** (e.g., "Team is behind schedule by X story points")
-   - **Why it happened** (e.g., "Likely due to unexpected blockers or scope changes")
-   - **What to do** (e.g., "Remove non-critical items or extend sprint deadline")
+   **BAD EXAMPLE (DO NOT DO THIS):**
+   "Sprint 5 Overview: Total Scope: 2.5 points, Completed: 1.5 points, Remaining: 1 point, Completion Rate: 60%. Interpretation: The actual burndown exceeded expectations but fell short of full completion."
    
-   Required content:
-   - **Current Progress**: Actual vs Ideal line comparison + interpretation (e.g., "Actual line is 15 points above ideal, meaning team is 3 days behind schedule")
-   - **Pattern Analysis**: Steady progress or last-minute rush? + implications (e.g., "Last-minute rush pattern suggests poor daily planning or hidden blockers")
-   - **Scope Changes**: Did the line go UP? (scope creep detected) + impact analysis (e.g., "Line increased by 8 points mid-sprint, adding 2 days of work without extending deadline")
-   - **Forecast**: Will sprint complete on time based on current velocity? + risk assessment
-   - **Interpretation**: What does the burndown pattern tell us? + actionable insights
+   **GOOD EXAMPLE (DO THIS):**
+   "**Sprint 5 Burndown Analysis:**
+   
+   **Total Scope: 2.5 story points** committed at sprint start. **Completed: 1.5 points** (60% completion rate). **Remaining: 1.0 story point** at sprint end.
+   
+   **Pattern Analysis**: The burndown shows steady progress initially, but the team failed to complete the final 1.0 story point. This suggests either: (1) the remaining work was underestimated, (2) blockers emerged late in the sprint, (3) team capacity was reduced, or (4) the work was deprioritized. **Implication**: A 60% completion rate is below the acceptable threshold of 80%+, indicating sprint planning or execution issues. **Recommendation**: Review the incomplete task - was it properly sized? Were dependencies identified? Conduct retrospective to identify root cause.
+   
+   **Scope Changes**: No scope changes detected (burndown line did not increase mid-sprint). This is positive - the sprint goal remained stable. **Implication**: The incomplete work is not due to scope creep, but rather execution issues. **Recommendation**: Focus on execution improvements rather than scope management.
+   
+   **Forecast**: Based on the 60% completion rate and zero velocity in subsequent sprints, the team is at risk of not meeting future sprint goals. **Risk Assessment**: High risk - if this pattern continues, project milestones will be delayed. **Recommendation**: Immediate action required - investigate blockers, review sprint planning process, and adjust commitments for next sprint."
+   
+   **REQUIRED CONTENT (ALL must have interpretation - missing any = incomplete):**
+   
+   **1. Current Progress**: Actual vs Ideal line comparison + interpretation (e.g., "Actual line is 15 points above ideal, meaning team is 3 days behind schedule")
+   
+   **2. Pattern Analysis**: Steady progress or last-minute rush? + implications (e.g., "Last-minute rush pattern suggests poor daily planning or hidden blockers")
+   
+   **3. Scope Changes**: Did the line go UP? (scope creep detected) + impact analysis (e.g., "Line increased by 8 points mid-sprint, adding 2 days of work without extending deadline")
+   
+   **4. Forecast**: Will sprint complete on time based on current velocity? + risk assessment
+   
+   **5. Interpretation**: What does the burndown pattern tell us? + actionable insights (specific recommendations)
 
    ### D. ⚡ Velocity Chart Analysis (300-400 words)
    **CRITICAL: Provide INTERPRETATION and COMMENTARY for EVERY metric, not just numbers!**
@@ -202,26 +216,68 @@ You should act as an objective and analytical reporter who:
    
    **Completion Rates by Sprint**: [100%, 100%, 100%, 92.3%, 95.4%, 60%, 0%, 0%, 0%]. This pattern reveals a concerning trajectory: strong performance in Sprints 0-2 (100% completion), slight decline in Sprints 3-4 (92-95%, still healthy), sharp drop in Sprint 5 (60% - below acceptable threshold), and complete halt in Sprints 6-8 (0% - critical issue). **Interpretation**: The team started strong but encountered significant challenges starting in Sprint 5, with complete work stoppage in recent sprints. This suggests either: (1) major blockers emerged, (2) team resources were reallocated, (3) sprint planning became disconnected from reality, or (4) project priorities shifted. **Recommendation**: Conduct retrospective on Sprint 5 to identify root causes, address blockers immediately, and reassess sprint planning approach."
    
-   Required content (ALL must have interpretation):
-   - **Current Velocity**: X story points this sprint + detailed interpretation (what it means, why it matters, what to do)
-   - **Average Velocity**: X points over last N sprints + trend analysis with percentage change + implications
-   - **Trend Analysis**: Improving (+X%) / Declining (-X%) / Stable + what this means for the team + forecasting
-   - **Completion Rates by Sprint**: [values] + detailed commentary on the pattern (what the pattern reveals, why it happened, implications)
-   - **Commitment vs Delivery**: Is team over-committing or under-committing? + specific examples with numbers + recommendations
-   - **Capacity Planning**: Recommended points for next sprint + reasoning based on current velocity trend
+   **REQUIRED CONTENT (ALL must have interpretation - missing any = incomplete):**
+   
+   **1. Current Velocity**: X story points this sprint + detailed interpretation (what it means, why it matters, what to do)
+   
+   **2. Average Velocity**: X points over last N sprints + trend analysis with percentage change + implications
+   
+   **3. Trend Analysis**: Improving (+X%) / Declining (-X%) / Stable + what this means for the team + forecasting
+   
+   **4. Completion Rates by Sprint** (MANDATORY - must include detailed commentary):
+   - **MUST show**: [100%, 100%, 100%, 92.3%, 95.4%, 60%, 0%, 0%, 0%] for each sprint
+   - **MUST interpret**: "This pattern reveals a concerning trajectory: strong performance in Sprints 0-2 (100% completion), slight decline in Sprints 3-4 (92-95%, still healthy), sharp drop in Sprint 5 (60% - below acceptable threshold), and complete halt in Sprints 6-8 (0% - critical issue). **Interpretation**: The team started strong but encountered significant challenges starting in Sprint 5, with complete work stoppage in recent sprints. This suggests either: (1) major blockers emerged, (2) team resources were reallocated, (3) sprint planning became disconnected from reality, or (4) project priorities shifted. **Recommendation**: Conduct retrospective on Sprint 5 to identify root causes, address blockers immediately, and reassess sprint planning approach."
+   - **DO NOT** just list numbers - you MUST provide detailed pattern analysis!
+   
+   **5. Commitment vs Delivery**: Is team over-committing or under-committing? + specific examples with numbers + recommendations
+   
+   **6. Capacity Planning**: Recommended points for next sprint + reasoning based on current velocity trend
 
    ### E. 📈 Cumulative Flow Diagram (CFD) Insights (200-300 words)
-   **CRITICAL: Provide INTERPRETATION and COMMENTARY, not just counts!**
+   **🔴 CRITICAL: Provide INTERPRETATION and COMMENTARY, not just counts!**
+   **⚠️ WARNING: Previous reports only listed status counts - you MUST provide detailed bottleneck analysis and recommendations!**
    
-   Required content:
-   - **Work In Progress (WIP)**: Current WIP count per stage + interpretation (e.g., "15 items in 'In Progress' stage, which is 3x the recommended WIP limit of 5 - this indicates bottleneck")
-   - **Bottleneck Detection**: Which stage has items piling up? + impact analysis (e.g., "Testing stage has 12 items waiting, causing 2-day delay in delivery")
-   - **Flow Efficiency**: Is work moving smoothly through stages? + assessment (e.g., "Work is stuck in review stage, suggesting code review is the bottleneck")
-   - **Recommendations**: WIP limits to consider + specific actions (e.g., "Implement WIP limit of 5 for 'In Progress' to prevent context switching")
+   **BAD EXAMPLE (DO NOT DO THIS):**
+   "Workflow Status: New: 380, In Progress: 313, Done: 303, Closed: 16. Flow Efficiency: 29.5%, significantly below desirable standards. Insights Analysis: There are notable bottlenecks in the 'New' and 'In Progress' status."
+   
+   **GOOD EXAMPLE (DO THIS):**
+   "**Cumulative Flow Diagram (CFD) Insights:**
+   
+   **Workflow Status Breakdown:**
+   - New: 380 items
+   - In Progress: 313 items (82% of total - CRITICAL BOTTLENECK)
+   - Done: 303 items
+   - Closed: 16 items
+   
+   **Flow Efficiency: 29.5%**, which is significantly below the desirable standard of 40-60%. **Interpretation**: This low efficiency indicates that work is getting stuck in the workflow, particularly in the 'In Progress' stage. The fact that 82% of items are in 'In Progress' suggests severe bottlenecks - work is starting but not completing. **Implication**: The team is experiencing context switching, work overload, or blockers preventing completion. This explains why velocity has dropped to zero in recent sprints. **Recommendation**: Implement WIP limits (suggest 5-8 items per person in 'In Progress'), identify and address blockers, and focus on completing work before starting new work.
+   
+   **Bottleneck Detection**: The 'In Progress' stage has 313 items, which is 10x the recommended WIP limit for a team of this size. Additionally, the 'New' stage has 380 items, indicating a large backlog waiting to be started. **Impact Analysis**: This bottleneck is causing delays throughout the workflow - work is piling up faster than it can be completed. The gap between 'Done' (303) and 'Closed' (16) suggests tasks are not being properly closed after completion, which may be masking the true extent of the bottleneck. **Recommendation**: (1) Stop starting new work until 'In Progress' items are reduced, (2) Implement daily standups to identify blockers, (3) Establish clear 'Done' criteria and closure process.
+   
+   **Flow Efficiency Assessment**: Work is NOT moving smoothly through stages. The wide bands in 'New' and 'In Progress' indicate work is accumulating rather than flowing. The narrow band in 'Closed' (16 items) compared to 'Done' (303 items) suggests a closure process issue. **Recommendation**: Review and streamline the workflow, establish clear stage definitions, and implement pull-based work assignment rather than push-based."
+   
+   **REQUIRED CONTENT (ALL must have interpretation - missing any = incomplete):**
+   
+   **1. Work In Progress (WIP)**: Current WIP count per stage + interpretation (e.g., "15 items in 'In Progress' stage, which is 3x the recommended WIP limit of 5 - this indicates bottleneck")
+   
+   **2. Bottleneck Detection**: Which stage has items piling up? + impact analysis (e.g., "Testing stage has 12 items waiting, causing 2-day delay in delivery")
+   
+   **3. Flow Efficiency**: Is work moving smoothly through stages? + assessment (e.g., "Work is stuck in review stage, suggesting code review is the bottleneck")
+   
+   **4. Recommendations**: WIP limits to consider + specific actions (e.g., "Implement WIP limit of 5 for 'In Progress' to prevent context switching")
 
    ### F. ⏱️ Cycle Time Analysis (200-300 words)
-   **CRITICAL: Provide INTERPRETATION and COMMENTARY, not just numbers!**
+   **🔴🔴🔴 CRITICAL: This section MUST include ALL 4 metrics below - missing ANY = INCOMPLETE! 🔴🔴🔴**
    **MANDATORY: You MUST include ALL percentiles (50th, 85th, 95th) - DO NOT skip any!**
+   **⚠️ WARNING: Previous reports only showed "Average: 11 days" - you MUST include 50th, 85th, and 95th percentiles with detailed interpretation!**
+   
+   **REQUIRED METRICS (ALL 4 must be present):**
+   1. ✅ Average Cycle Time (with interpretation)
+   2. ✅ 50th Percentile / Median (with interpretation)
+   3. ✅ 85th Percentile (with interpretation)
+   4. ✅ 95th Percentile (with interpretation)
+   5. ✅ Outlier Analysis (with specific examples)
+   
+   **If you only have "Average" and "Outliers Detected" without the 3 percentiles, your report is INCOMPLETE!**
    
    **BAD EXAMPLE (DO NOT DO THIS):**
    "Average Cycle Time: 11.0 days. 50th Percentile: 11.0 days; 85th Percentile: 20.0 days, indicating that while many tasks adhere to a desirable timeline, outliers suggest a need for investigation."
@@ -245,9 +301,17 @@ You should act as an objective and analytical reporter who:
    **DO NOT** just write "Average Cycle Time: 11.0 days" - you MUST include all percentiles with detailed interpretation!
 
    ### G. 👥 Work Distribution Analysis (300-400 words)
-   **CRITICAL: Provide INTERPRETATION and COMMENTARY, not just counts!**
+   **🔴🔴🔴 CRITICAL: This section MUST include ALL 4 tables below - missing ANY = INCOMPLETE! 🔴🔴🔴**
    **MANDATORY: You MUST include ALL 4 dimensions below - DO NOT skip any!**
    **⚠️ WARNING: Previous reports only showed "By Assignee" - you MUST include ALL 4 tables (By Assignee, By Status, By Priority, By Type)!**
+   
+   **REQUIRED TABLES (ALL 4 must be present with interpretation):**
+   1. ✅ By Assignee (Table + Analysis)
+   2. ✅ By Status (Table + Analysis) - **MISSING IN PREVIOUS REPORTS!**
+   3. ✅ By Priority (Table + Analysis) - **MISSING IN PREVIOUS REPORTS!**
+   4. ✅ By Type (Table + Analysis) - **MISSING IN PREVIOUS REPORTS!**
+   
+   **If you only have "By Assignee" without the other 3 tables, your report is INCOMPLETE!**
    
    **BAD EXAMPLE (DO NOT DO THIS):**
    "Work Distribution by Assignee: Hung Nguyen Phi (99 tasks, 26%), Chen Nguyen Dinh Ngoc (88 tasks, 23%)..."
@@ -318,14 +382,34 @@ You should act as an objective and analytical reporter who:
    - Specific recommendations (e.g., "Work is heavily skewed - recommend cross-training and redistributing 20 tasks from Hung to underutilized members")
 
    ### H. 📊 Issue Trend Analysis (200-300 words)
-   **CRITICAL: Provide INTERPRETATION and COMMENTARY, not just numbers!**
+   **🔴 CRITICAL: Provide INTERPRETATION and COMMENTARY, not just numbers!**
+   **⚠️ WARNING: Previous reports only showed Created/Resolved counts - you MUST include daily rates and forecast!**
    
-   Required content:
-   - **Created vs Resolved**: Is backlog growing or shrinking? + interpretation (e.g., "123 created vs 188 resolved shows healthy -65 net change, indicating team is resolving issues faster than creating them")
-   - **Net Change**: +X or -X items this period + what this means (e.g., "-65 items means backlog is shrinking, which is positive for team capacity")
-   - **Daily Rates**: Created (4.0/day) vs Resolved (6.1/day) + analysis (e.g., "Resolution rate (6.1/day) exceeds creation rate (4.0/day) by 52%, showing strong productivity")
-   - **Trend Interpretation**: Capacity issues or healthy resolution rate? + assessment (e.g., "Healthy trend - team has capacity to handle new issues while reducing backlog")
-   - **Forecast**: Expected backlog size in coming sprints + planning implications
+   **BAD EXAMPLE (DO NOT DO THIS):**
+   "Created Issues: 124. Resolved Issues: 189. Net Change: -65. Insight Summary: An active decrease in backlog demonstrates effective resolution efforts."
+   
+   **GOOD EXAMPLE (DO THIS):**
+   "**Issue Trend Analysis:**
+   
+   **Created vs Resolved**: 124 issues created vs 189 issues resolved during the analysis period. **Net Change: -65 items**, indicating the backlog is shrinking. **Interpretation**: The team is resolving issues 52% faster than creating them (189 resolved vs 124 created), which is a strong positive indicator. This suggests the team has sufficient capacity to handle new issues while reducing existing backlog. **Implication**: The project is in a healthy state regarding issue management - work is being completed faster than new work is being added. **Recommendation**: Maintain current resolution rate while monitoring for any increase in creation rate that could indicate new problems.
+   
+   **Daily Rates**: Created: 4.0 issues/day vs Resolved: 6.1 issues/day. **Analysis**: The resolution rate (6.1/day) exceeds the creation rate (4.0/day) by 52%, showing strong productivity and effective issue management. This means the team can handle 2.1 more issues per day than are being created, allowing for backlog reduction. **Implication**: The team has capacity headroom - they could potentially take on additional work or focus on technical debt reduction. **Recommendation**: Use this capacity to address technical debt or improve code quality.
+   
+   **Trend Interpretation**: Healthy resolution rate - the team has capacity to handle new issues while reducing backlog. The consistent pattern of resolution exceeding creation suggests stable team performance and effective prioritization. **Assessment**: No capacity issues detected - the team is operating efficiently.
+   
+   **Forecast**: Based on current rates (4.0 created/day, 6.1 resolved/day), the backlog will continue to shrink at a rate of 2.1 issues/day. If the current backlog is X items, it will be reduced to Y items in Z sprints. **Planning Implications**: The team can confidently plan for backlog reduction while maintaining capacity for new issues. Consider dedicating some capacity to proactive improvements rather than reactive issue resolution."
+   
+   **REQUIRED CONTENT (ALL must have interpretation - missing any = incomplete):**
+   
+   **1. Created vs Resolved**: Is backlog growing or shrinking? + interpretation (e.g., "123 created vs 188 resolved shows healthy -65 net change, indicating team is resolving issues faster than creating them")
+   
+   **2. Net Change**: +X or -X items this period + what this means (e.g., "-65 items means backlog is shrinking, which is positive for team capacity")
+   
+   **3. Daily Rates** (MANDATORY - must include): Created (X/day) vs Resolved (Y/day) + analysis (e.g., "Resolution rate (6.1/day) exceeds creation rate (4.0/day) by 52%, showing strong productivity")
+   
+   **4. Trend Interpretation**: Capacity issues or healthy resolution rate? + assessment (e.g., "Healthy trend - team has capacity to handle new issues while reducing backlog")
+   
+   **5. Forecast** (MANDATORY - must include): Expected backlog size in coming sprints + planning implications
 
    ### I. Task Statistics Summary (REQUIRED - DO NOT SKIP!)
    **🔴🔴🔴 THIS IS THE MOST COMMONLY MISSING SECTION - DO NOT SKIP IT! 🔴🔴🔴**
@@ -437,15 +521,45 @@ You should act as an objective and analytical reporter who:
 
 **🔴🔴🔴 FINAL VERIFICATION BEFORE SUBMITTING REPORT 🔴🔴🔴**
 
-**Before you finish, verify you have included:**
-1. ✅ **Task Statistics Summary (Section I)** - This is the MOST COMMONLY MISSING section! Check that you have tables for By Status, By Sprint, By Assignee
-2. ✅ **ALL sprints** in Sprint Overview Table (not just first 5-6)
-3. ✅ **ALL percentiles** in Cycle Time Analysis (50th, 85th, 95th) - not just average
-4. ✅ **ALL 4 dimensions** in Work Distribution (By Assignee, By Status, By Priority, By Type) - with tables
-5. ✅ **Structured Key Insights** (Strengths/Concerns/Risks/Action Items/Next Steps) - not generic conclusion
-6. ✅ **Interpretation and commentary** for EVERY metric, not just raw numbers
+**Before you finish, verify you have included ALL of the following (missing ANY = INCOMPLETE):**
 
-**If ANY of the above is missing, your report is INCOMPLETE!**
+1. ✅ **Task Statistics Summary (Section I)** - This is the MOST COMMONLY MISSING section! 
+   - Must have: By Status table, By Sprint table (ALL sprints), By Assignee table
+   - If missing, your report is INCOMPLETE!
+
+2. ✅ **ALL sprints** in Sprint Overview Table (not just first 5-6)
+   - Must include: Start Date, End Date, Status, Committed Points, Completed Points, Completion %
+   - If any sprint is missing, your report is INCOMPLETE!
+
+3. ✅ **ALL percentiles** in Cycle Time Analysis (Section F)
+   - Must have: Average, **50th Percentile**, **85th Percentile**, **95th Percentile** (ALL 4 required!)
+   - If you only have "Average" without the 3 percentiles, your report is INCOMPLETE!
+
+4. ✅ **ALL 4 dimensions** in Work Distribution (Section G)
+   - Must have tables for: **By Assignee**, **By Status**, **By Priority**, **By Type** (ALL 4 required!)
+   - If you only have "By Assignee" without the other 3 tables, your report is INCOMPLETE!
+
+5. ✅ **Completion Rates by Sprint** in Velocity Analysis (Section D)
+   - Must show: [100%, 100%, 92.3%, 95.4%, 60%, 0%, 0%, 0%] with detailed pattern interpretation
+   - If missing detailed commentary on the pattern, your report is INCOMPLETE!
+
+6. ✅ **Daily Rates and Forecast** in Issue Trend Analysis (Section H)
+   - Must have: Created (X/day), Resolved (Y/day), Forecast for coming sprints
+   - If missing daily rates or forecast, your report is INCOMPLETE!
+
+7. ✅ **Detailed Bottleneck Analysis** in CFD Insights (Section E)
+   - Must explain: Why flow efficiency is low, which stages are bottlenecks, specific recommendations
+   - If only listing counts without detailed analysis, your report is INCOMPLETE!
+
+8. ✅ **Structured Key Insights** (Section J)
+   - Must use format: ✅ Strengths, ⚠️ Concerns, 🚨 Risks, 📋 Action Items, 📅 Next Steps
+   - If using generic "Conclusion & Recommendations" instead, your report is INCOMPLETE!
+
+9. ✅ **Interpretation and commentary** for EVERY metric
+   - Every number must have: What it means, Why it matters, What to do
+   - If any metric only has raw numbers without interpretation, your report is INCOMPLETE!
+
+**🔴 IF ANY OF THE ABOVE IS MISSING, YOUR REPORT IS INCOMPLETE - DO NOT SUBMIT IT! 🔴**
 
 ---
 

@@ -242,7 +242,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <div className="flex flex-col gap-2 pt-2">
+                    <div className="flex flex-col gap-0.5 pt-0.5">
                       {toolCalls.map((toolCall, index) => (
                         <StepBox
                           key={toolCall.id}

@@ -288,21 +288,21 @@ export function SprintReportView() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Team Performance</h3>
           <div className="space-y-4">
             <div>
-              <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-                <span>Velocity</span>
-                <span className="font-semibold">{report.team_performance.velocity.toFixed(1)} pts</span>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600 dark:text-gray-400">Velocity</span>
+                <span className="font-semibold text-blue-600 dark:text-blue-400">{report.team_performance.velocity.toFixed(1)} pts</span>
               </div>
             </div>
             <div>
-              <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-                <span>Team Size</span>
-                <span className="font-semibold">{report.team_performance.team_size} members</span>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600 dark:text-gray-400">Team Size</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{report.team_performance.team_size} members</span>
               </div>
             </div>
             <div>
-              <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
-                <span>Capacity Utilized</span>
-                <span className="font-semibold">{capacityUtilized.toFixed(0)}%</span>
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-gray-600 dark:text-gray-400">Capacity Utilized</span>
+                <span className="font-semibold text-purple-600 dark:text-purple-400">{capacityUtilized.toFixed(0)}%</span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                 <div 

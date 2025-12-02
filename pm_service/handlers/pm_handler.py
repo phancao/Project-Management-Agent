@@ -129,9 +129,13 @@ class PMHandler:
     async def list_projects(
         self,
         provider_id: Optional[str] = None,
-        limit: int = 100
     ) -> list[dict[str, Any]]:
-        """List projects from all or specific provider."""
+        """
+        List projects from all or specific provider.
+        
+        Note: This method returns ALL projects from providers.
+        Pagination should be handled by the API router layer.
+        """
         projects = []
         
         if provider_id:
@@ -145,7 +149,7 @@ class PMHandler:
                 provider = self.create_provider_instance(provider_conn)
                 provider_projects = await provider.list_projects()
                 
-                for project in provider_projects[:limit]:
+                for project in provider_projects:
                     project_dict = self._to_dict(project)
                     # Format project ID as composite: provider_id:project_id
                     # Use backend_provider_id if available (for frontend compatibility),
@@ -173,7 +177,7 @@ class PMHandler:
                 self.record_error(str(provider_conn.id), e)
                 continue
         
-        return projects[:limit]
+        return projects
     
     async def get_project(self, project_id: str) -> Optional[dict[str, Any]]:
         """Get project by ID."""
@@ -370,10 +374,14 @@ class PMHandler:
     async def list_sprints(
         self,
         project_id: Optional[str] = None,
-        status: Optional[str] = None,
-        limit: int = 50
+        status: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        """List sprints."""
+        """
+        List ALL sprints.
+        
+        Note: This method returns ALL sprints from providers.
+        Pagination should be handled by the API router layer.
+        """
         sprints = []
         
         provider_id = None
@@ -402,7 +410,7 @@ class PMHandler:
                 self.record_error(str(provider_conn.id), e)
                 continue
         
-        return sprints[:limit]
+        return sprints
     
     async def get_sprint(self, sprint_id: str) -> Optional[dict[str, Any]]:
         """Get sprint by ID."""
@@ -428,10 +436,14 @@ class PMHandler:
     
     async def list_users(
         self,
-        project_id: Optional[str] = None,
-        limit: int = 100
+        project_id: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        """List users."""
+        """
+        List ALL users.
+        
+        Note: This method returns ALL users from providers.
+        Pagination should be handled by the API router layer.
+        """
         users = []
         
         provider_id = None
@@ -460,7 +472,7 @@ class PMHandler:
                 self.record_error(str(provider_conn.id), e)
                 continue
         
-        return users[:limit]
+        return users
     
     async def get_user(self, user_id: str) -> Optional[dict[str, Any]]:
         """Get user by ID."""
@@ -486,10 +498,14 @@ class PMHandler:
     
     async def list_epics(
         self,
-        project_id: Optional[str] = None,
-        limit: int = 100
+        project_id: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        """List epics."""
+        """
+        List ALL epics.
+        
+        Note: This method returns ALL epics from providers.
+        Pagination should be handled by the API router layer.
+        """
         epics = []
         
         provider_id = None
@@ -519,7 +535,7 @@ class PMHandler:
                 self.record_error(str(provider_conn.id), e)
                 continue
         
-        return epics[:limit]
+        return epics
     
     async def get_epic(self, epic_id: str) -> Optional[dict[str, Any]]:
         """Get epic by ID."""

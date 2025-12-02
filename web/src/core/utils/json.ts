@@ -10,6 +10,7 @@ function extractValidJSON(content: string): string {
   let inString = false;
   let escapeNext = false;
   let lastValidEnd = -1;
+  let startIndex = -1;
 
   for (let i = 0; i < content.length; i++) {
     const char = content[i];
@@ -34,37 +35,106 @@ function extractValidJSON(content: string): string {
     }
     
     if (char === "{") {
+      if (braceCount === 0 && bracketCount === 0) {
+        startIndex = i;
+      }
       braceCount++;
     } else if (char === "}") {
       if (braceCount > 0) {
         braceCount--;
-        if (braceCount === 0) {
+        if (braceCount === 0 && bracketCount === 0) {
           lastValidEnd = i;
         }
       }
     } else if (char === "[") {
+      if (braceCount === 0 && bracketCount === 0) {
+        startIndex = i;
+      }
       bracketCount++;
     } else if (char === "]") {
       if (bracketCount > 0) {
         bracketCount--;
-        if (bracketCount === 0) {
+        if (braceCount === 0 && bracketCount === 0) {
           lastValidEnd = i;
         }
       }
     }
   }
   
-  if (lastValidEnd > 0) {
-    return content.substring(0, lastValidEnd + 1);
+  // If we found a valid end and start, return the extracted portion
+  if (lastValidEnd > 0 && startIndex >= 0) {
+    return content.substring(startIndex, lastValidEnd + 1);
   }
   
   return content;
+}
+
+/**
+ * Try to parse JSON with multiple strategies
+ */
+function tryParseJSON<T>(raw: string): T | null {
+  // Strategy 1: Try native JSON.parse (fastest, strictest)
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    // Native parser failed, continue to next strategy
+  }
+
+  // Strategy 2: Extract valid JSON first, then try native parser
+  try {
+    const extracted = extractValidJSON(raw);
+    if (extracted !== raw) {
+      return JSON.parse(extracted) as T;
+    }
+  } catch {
+    // Still failed, continue
+  }
+
+  // Strategy 3: Use best-effort-json-parser (handles malformed JSON)
+  // This parser can throw errors even when it successfully parses JSON
+  // if there are extra tokens after the JSON. We need to handle this gracefully.
+  try {
+    // First, try to extract valid JSON to minimize extra tokens
+    const extracted = extractValidJSON(raw);
+    
+    // Try parsing with best-effort-json-parser
+    // Wrap in try-catch to handle "extra tokens" errors
+    try {
+      return parse(extracted) as T;
+    } catch (parseError: unknown) {
+      const parseErrorMessage = parseError instanceof Error 
+        ? parseError.message 
+        : String(parseError);
+      
+      // If the error is about "extra tokens", the parser might have
+      // successfully parsed the JSON but is complaining about trailing content.
+      // Try using native JSON.parse on the extracted portion.
+      if (parseErrorMessage.includes("parsed json with extra tokens") || 
+          parseErrorMessage.includes("extra tokens")) {
+        try {
+          // The JSON was likely parsed successfully, but there's extra content.
+          // Try native parser on the extracted JSON.
+          return JSON.parse(extracted) as T;
+        } catch {
+          // Native parser also failed, continue to next strategy
+        }
+      }
+      
+      // Re-throw to be caught by outer catch
+      throw parseError;
+    }
+  } catch (error: unknown) {
+    // If all parsing strategies failed, return null
+    // The error will be handled by the caller's fallback
+    return null;
+  }
 }
 
 export function parseJSON<T>(json: string | null | undefined, fallback: T) {
   if (!json) {
     return fallback;
   }
+  
   try {
     let raw = json
       .trim()
@@ -75,16 +145,16 @@ export function parseJSON<T>(json: string | null | undefined, fallback: T) {
       .replace(/^```\s*/, "")
       .replace(/\s*```$/, "");
     
-    // First attempt: try to extract valid JSON to remove extra tokens
-    if (raw.startsWith("{") || raw.startsWith("[")) {
-      raw = extractValidJSON(raw);
+    // Try parsing with multiple strategies
+    const result = tryParseJSON<T>(raw);
+    if (result !== null) {
+      return result;
     }
     
-    // Parse the cleaned content
-    return parse(raw) as T;
+    // All strategies failed, return fallback
+    return fallback;
   } catch {
-    // Fallback: try to extract meaningful content from malformed JSON
-    // This is a last-resort attempt to salvage partial data
+    // Unexpected error, return fallback
     return fallback;
   }
 }

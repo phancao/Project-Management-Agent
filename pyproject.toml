@@ -72,6 +72,8 @@ required-version = ">=0.6.15"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = ["."]
+# Coverage is configured per test suite - see coverage configuration below
+# Default: run with coverage for all modules
 addopts = "-v --cov=backend --cov=mcp_server --cov=pm_providers --cov=pm_service --cov-report=term-missing"
 filterwarnings = [
     "ignore::DeprecationWarning",
@@ -79,7 +81,29 @@ filterwarnings = [
 ]
 
 [tool.coverage.report]
+# Coverage threshold: Only enforce when running full test suite
+# For individual test suites, use --no-cov or adjust threshold
+# To run MCP server tests without coverage check: pytest tests/mcp_server_tests/ --no-cov
+# To run with coverage but no threshold: pytest tests/mcp_server_tests/ --cov-fail-under=0
 fail_under = 25
+
+[tool.coverage.run]
+# Include only relevant modules for coverage
+include = [
+    "backend/*",
+    "mcp_server/*",
+    "pm_providers/*",
+    "pm_service/*",
+    "shared/*",
+]
+# Exclude test files and legacy src/ directory from coverage
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "src/*",  # Legacy code - exclude from coverage
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend", "mcp_server", "pm_providers", "shared"]

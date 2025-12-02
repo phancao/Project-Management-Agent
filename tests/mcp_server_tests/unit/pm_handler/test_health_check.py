@@ -83,7 +83,13 @@ class TestProviderManagerHealthCheck:
     
     def test_get_active_providers_no_providers(self, mock_db_session):
         """Test getting active providers when none exist."""
-        mock_db_session.query.return_value.filter.return_value.all.return_value = []
+        # Setup query chain: query().filter().filter().all() returns []
+        query_mock = MagicMock()
+        filter_mock = MagicMock()
+        filter_mock.filter.return_value = filter_mock
+        filter_mock.all.return_value = []
+        query_mock.filter.return_value = filter_mock
+        mock_db_session.query.return_value = query_mock
         
         context = ToolContext(db_session=mock_db_session)
         providers = context.provider_manager.get_active_providers()

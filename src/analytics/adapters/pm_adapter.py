@@ -169,12 +169,14 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                     project_id=project_key, state="active"
                 )
                 if not sprints:
-                    # Fallback to any sprint
+                    # Try to get any sprint
                     sprints = await self.provider.list_sprints(project_id=project_key)
                 if not sprints:
-                    # No sprints found - return None to signal fallback to mock data
-                    logger.warning(f"[PMProviderAnalyticsAdapter] No sprints found for project {project_id}, will use mock data")
-                    return None
+                    # NO FALLBACK - raise error instead of returning None for mock data
+                    raise ValueError(
+                        f"No sprints found for project '{project_id}'. "
+                        "Please create a sprint or specify a sprint_id."
+                    )
                 sprint = sprints[0]
                 sprint_id = sprint.id
                 logger.info(f"[PMProviderAnalyticsAdapter] Using active sprint: {sprint.name} (id={sprint_id})")
@@ -360,8 +362,11 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             all_sprints = await self.provider.list_sprints(project_id=project_key)
             
             if not all_sprints:
-                logger.warning(f"[PMProviderAnalyticsAdapter] No sprints found for project {project_id}")
-                return None
+                # NO FALLBACK - raise error instead of returning None
+                raise ValueError(
+                    f"No sprints found for project '{project_id}'. "
+                    "Velocity chart requires at least one sprint with start_date."
+                )
             
             # Sort by start_date (most recent first) and take num_sprints
             sorted_sprints = sorted(

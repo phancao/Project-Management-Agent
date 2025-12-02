@@ -5,9 +5,19 @@ Generates CFD data showing cumulative work items in different states over time.
 Useful for identifying bottlenecks, WIP limits, and flow efficiency.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 from ..models import ChartResponse, ChartSeries, ChartDataPoint, ChartType
+
+
+def _normalize_datetime(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-naive for consistent comparison."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        # Convert to UTC then remove timezone info
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 def calculate_cfd(
@@ -32,6 +42,10 @@ def calculate_cfd(
     # Default statuses if not provided
     if statuses is None:
         statuses = ["To Do", "In Progress", "In Review", "Done"]
+    
+    # Normalize dates to timezone-naive
+    start_date = _normalize_datetime(start_date)
+    end_date = _normalize_datetime(end_date)
     
     # Generate date range
     date_range = []
@@ -161,6 +175,9 @@ def _get_status_on_date(item: Dict[str, Any], date: datetime) -> str:
     Returns:
         Status name on that date
     """
+    # Normalize the comparison date
+    date = _normalize_datetime(date)
+    
     # If item has status_history, use it
     status_history = item.get("status_history", [])
     if status_history:
@@ -170,10 +187,11 @@ def _get_status_on_date(item: Dict[str, Any], date: datetime) -> str:
             change_date = change.get("date")
             if isinstance(change_date, str):
                 change_date = datetime.fromisoformat(change_date.replace("Z", "+00:00"))
+            change_date = _normalize_datetime(change_date)
             
-            if change_date <= date:
+            if change_date and change_date <= date:
                 applicable_status = change.get("status")
-            else:
+            elif change_date:
                 break
         
         if applicable_status:
@@ -187,6 +205,10 @@ def _get_status_on_date(item: Dict[str, Any], date: datetime) -> str:
         created_date = datetime.fromisoformat(created_date.replace("Z", "+00:00"))
     if isinstance(completion_date, str):
         completion_date = datetime.fromisoformat(completion_date.replace("Z", "+00:00"))
+    
+    # Normalize dates
+    created_date = _normalize_datetime(created_date)
+    completion_date = _normalize_datetime(completion_date)
     
     # If not yet created, return None
     if created_date and date < created_date:

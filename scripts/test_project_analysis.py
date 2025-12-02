@@ -115,16 +115,49 @@ def count_words(text: str) -> int:
 
 def extract_section(text: str, section_title: str, alternatives: List[str]) -> Tuple[str, int]:
     """Extract a section from the report text."""
-    # Try exact title first
-    patterns = [re.escape(section_title)] + [re.escape(alt) for alt in alternatives]
+    # Try exact title first, then alternatives
+    patterns = [section_title] + alternatives
     
     for pattern in patterns:
-        # Match section title (with optional emoji and formatting)
-        regex = rf"(?:^|\n)#+\s*{pattern}.*?\n(.*?)(?=\n#+\s*(?:[A-J]\.|{'|'.join([re.escape(t) for t in REQUIRED_SECTIONS.keys()])})|$)"
-        match = re.search(regex, text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
-        if match:
-            section_content = match.group(1).strip()
-            word_count = count_words(section_content)
+        # Escape special regex characters
+        escaped_pattern = re.escape(pattern)
+        
+        # Match markdown header (### or ##) followed by section title
+        # Pattern: ### B. Sprint Overview Table or ### Sprint Overview Table
+        header_pattern = rf"#{{2,3}}\s*{escaped_pattern}"
+        
+        # Find the start of this section header
+        start_match = re.search(header_pattern, text, re.IGNORECASE | re.MULTILINE)
+        if not start_match:
+            continue
+        
+        # Find the end of the header line (after newline)
+        header_end = text.find('\n', start_match.end())
+        if header_end == -1:
+            continue
+        
+        # Start content after the header line
+        start_pos = header_end + 1
+        
+        # Find the next markdown header (### or ##) - this marks the next section
+        remaining_text = text[start_pos:]
+        next_header_match = re.search(r'^#{2,3}\s+', remaining_text, re.MULTILINE)
+        
+        if next_header_match:
+            # Extract content up to next section
+            section_content = remaining_text[:next_header_match.start()].strip()
+        else:
+            # No next section, extract to end of text
+            section_content = remaining_text.strip()
+        
+        if section_content:
+            # Count words - replace markdown table formatting with spaces
+            # Remove table separators (|, -, :) but keep the content
+            cleaned_content = re.sub(r'\|', ' ', section_content)
+            cleaned_content = re.sub(r'-{3,}', ' ', cleaned_content)
+            # Remove extra whitespace
+            cleaned_content = re.sub(r'\s+', ' ', cleaned_content)
+            word_count = count_words(cleaned_content)
             return section_content, word_count
     
     return "", 0

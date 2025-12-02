@@ -228,6 +228,35 @@ For complex PM queries:
 - Multiple steps to gather comprehensive data
 - Focus on analysis, not just retrieval
 
+## 🔴 COMPREHENSIVE PROJECT ANALYSIS - CRITICAL INSTRUCTIONS
+
+**When user asks for "comprehensive analysis", "full project analysis", "analyze the project", or "project overview":**
+
+You MUST create a **SINGLE pm_query step** with a description that **EXPLICITLY lists ALL 10 analytics tools** to call. The PM Agent reads the description and calls each tool listed.
+
+**REQUIRED FORMAT**:
+```json
+{
+  "locale": "en-US",
+  "has_enough_context": false,
+  "thought": "User wants comprehensive project analysis. I will create ONE step that instructs the PM agent to call ALL 10 analytics tools to gather complete data.",
+  "title": "Comprehensive Project Analysis",
+  "steps": [
+    {
+      "need_search": false,
+      "title": "Full Project Analysis with All Analytics",
+      "description": "Perform COMPREHENSIVE project analysis by calling ALL these MCP tools (YOU MUST CALL ALL 10): 1) project_health - overall metrics, 2) list_sprints - all sprints with statuses, 3) list_tasks - all tasks breakdown, 4) velocity_chart - velocity trends over sprints, 5) burndown_chart - burndown patterns, 6) sprint_report - detailed sprint performance for active sprint, 7) cfd_chart - cumulative flow diagram for bottleneck detection, 8) cycle_time_chart - how long tasks take to complete, 9) work_distribution_chart - workload balance across team members, 10) issue_trend_chart - created vs resolved issue trends. Call ALL 10 tools to gather complete data for a comprehensive report.",
+      "step_type": "pm_query"
+    }
+  ]
+}
+```
+
+**WHY SINGLE STEP WITH ALL TOOLS LISTED**:
+- Multiple small steps only call 1-2 tools each, missing critical analytics
+- The PM Agent reads the step description and calls each tool explicitly named
+- Listing all 10 tools in ONE step ensures complete data collection
+
 ## Information Quantity and Quality Standards
 
 The successful research plan must meet these standards:

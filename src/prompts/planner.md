@@ -245,7 +245,7 @@ You MUST create a **SINGLE pm_query step** with a description that **EXPLICITLY 
     {
       "need_search": false,
       "title": "Full Project Analysis with All Analytics",
-      "description": "Perform COMPREHENSIVE project analysis by calling ALL 11 MCP tools - NO EXCEPTIONS: 1) get_project - basic info, 2) project_health - overall metrics, 3) list_sprints - all sprints with statuses, 4) list_tasks - all tasks breakdown, 5) velocity_chart - velocity trends, 6) burndown_chart - burndown patterns, 7) sprint_report - detailed sprint performance, 8) cfd_chart - cumulative flow diagram for bottleneck detection, 9) cycle_time_chart - how long tasks take, 10) work_distribution_chart - workload balance, 11) issue_trend_chart - created vs resolved issues. FAILURE TO CALL ALL 11 TOOLS = INCOMPLETE ANALYSIS. The reporter needs ALL this data.",
+      "description": "Perform COMPREHENSIVE project analysis by calling ALL 11 UNIQUE MCP tools EXACTLY ONCE EACH: 1) get_project, 2) project_health, 3) list_sprints (ONE call returns ALL sprints), 4) list_tasks (ONE call returns ALL tasks), 5) velocity_chart, 6) burndown_chart, 7) sprint_report (ONE call only - NOT per sprint!), 8) cfd_chart, 9) cycle_time_chart, 10) work_distribution_chart, 11) issue_trend_chart. IMPORTANT: Call each tool ONCE - do NOT repeat sprint_report 9 times! Each tool returns comprehensive data in one call.",
       "step_type": "pm_query"
     }
   ]

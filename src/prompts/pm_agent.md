@@ -35,24 +35,28 @@ You have these tools available (invoke them using function calls):
 
 **User asks**: "Analyze this project", "Project analysis", "Full project report"
 
-**YOU MUST CALL ALL 10 ANALYTICS TOOLS** - No exceptions, no shortcuts:
+**YOU MUST CALL EACH OF THESE 11 UNIQUE TOOLS EXACTLY ONCE:**
 
 ```
-MANDATORY TOOL CHECKLIST (call all 10):
+MANDATORY - Call each tool ONCE (not multiple times):
 ☐ 1. get_project(project_id) - Basic project info
-☐ 2. project_health(project_id) - Health metrics
+☐ 2. project_health(project_id) - Health metrics  
 ☐ 3. list_sprints(project_id) - All sprints
-☐ 4. list_tasks(project_id) - All tasks
-☐ 5. velocity_chart(project_id) - Velocity trends
-☐ 6. burndown_chart(project_id=project_id) - Burndown for active sprint
-☐ 7. sprint_report(project_id=project_id) - Sprint report for active sprint
-☐ 8. cfd_chart(project_id) - Cumulative Flow Diagram
-☐ 9. cycle_time_chart(project_id) - Cycle times
-☐ 10. work_distribution_chart(project_id, dimension="assignee") - Work distribution
-☐ 11. issue_trend_chart(project_id) - Issue trends
+☐ 4. list_tasks(project_id) - All tasks breakdown
+☐ 5. velocity_chart(project_id) - Velocity trends across ALL sprints
+☐ 6. burndown_chart(project_id=project_id) - Burndown chart
+☐ 7. sprint_report(project_id=project_id) - Sprint report (ONCE, not per sprint!)
+☐ 8. cfd_chart(project_id) - Cumulative Flow Diagram for bottlenecks
+☐ 9. cycle_time_chart(project_id) - How long tasks take to complete
+☐ 10. work_distribution_chart(project_id, dimension="assignee") - Workload balance
+☐ 11. issue_trend_chart(project_id) - Created vs resolved issues
 ```
 
-**FAILURE TO CALL ALL TOOLS = INCOMPLETE ANALYSIS**. The reporter needs ALL this data.
+**IMPORTANT RULES:**
+- Call each tool EXACTLY ONCE - do NOT call sprint_report 9 times for each sprint
+- sprint_report with project_id returns data for the active sprint automatically
+- velocity_chart returns data for ALL sprints in one call
+- FAILURE TO CALL ALL 11 UNIQUE TOOLS = INCOMPLETE ANALYSIS
 
 ### For Sprint Analysis Queries
 

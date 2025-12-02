@@ -789,7 +789,7 @@ When user says "Analyze the project" or "Analyze [project name]" or "comprehensi
     {
       "step_type": "research",
       "title": "Comprehensive Project Analysis",
-      "description": "Perform FULL project analysis by calling ALL 11 MCP tools - NO EXCEPTIONS: 1) get_project - basic info, 2) project_health - overall metrics, 3) list_sprints - get all sprints, 4) list_tasks - get all tasks, 5) velocity_chart - velocity trends, 6) burndown_chart - burndown patterns, 7) sprint_report - sprint details, 8) cfd_chart - cumulative flow diagram for bottlenecks, 9) cycle_time_chart - cycle times, 10) work_distribution_chart - workload balance, 11) issue_trend_chart - created vs resolved trends. FAILURE TO CALL ALL 11 TOOLS = INCOMPLETE ANALYSIS. Each tool provides UNIQUE data the reporter needs.",
+      "description": "Perform FULL project analysis by calling ALL 11 UNIQUE MCP tools EXACTLY ONCE EACH: 1) get_project, 2) project_health, 3) list_sprints (ONE call gets ALL sprints), 4) list_tasks (ONE call gets ALL tasks), 5) velocity_chart, 6) burndown_chart, 7) sprint_report (ONE call only - NOT per sprint!), 8) cfd_chart, 9) cycle_time_chart, 10) work_distribution_chart, 11) issue_trend_chart. CRITICAL: Call each tool ONCE - do NOT repeat sprint_report for each sprint! Each tool already returns comprehensive data.",
       "requires_context": false
     }
   ]

@@ -375,10 +375,28 @@ def planner_node(
         if content:
             content_lower = content.lower()
             pm_keywords = [
-                "project analysis", "comprehensive project", "velocity chart",
-                "burndown chart", "sprint report", "list tasks", "list sprints",
-                "project health", "cfd chart", "cycle time", "work distribution",
-                "issue trend", "task statistics", "sprint analysis"
+                # Project analysis
+                "project analysis", "comprehensive project", "project status", "project performance", 
+                "project health", "project overview", "how is the project",
+                # Sprint analysis
+                "sprint analysis", "analyze sprint", "analyse sprint", "sprint performance",
+                "sprint metrics", "sprint velocity", "sprint report", "sprint [0-9]",
+                # Epic analysis
+                "epic analysis", "epic progress", "epic status", "analyze epic",
+                # Task analysis
+                "task analysis", "task completion", "task progress", "task metrics",
+                "task statistics", "task distribution",
+                # Team metrics
+                "team performance", "team velocity", "team metrics", "how is the team",
+                # Analytics charts
+                "velocity chart", "burndown chart", "burndown analysis", "cfd chart",
+                "cycle time", "work distribution", "issue trend", "issue trend analysis",
+                # Data queries
+                "list tasks", "list sprints", "list projects", "list epics",
+                "show tasks", "show sprints", "show projects", "show epics",
+                "my tasks", "my projects",
+                # Other PM queries
+                "comprehensive analysis", "full analysis"
             ]
             found_keywords = [kw for kw in pm_keywords if kw in content_lower]
             if found_keywords:

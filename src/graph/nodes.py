@@ -501,12 +501,43 @@ def planner_node(
             logger.info(f"[PLANNER] ⚙️  PROCESSING PLAN DETECTED - Contains processing steps")
 
     # Validate and fix plan to ensure web search requirements are met
+    new_plan = None
     if isinstance(curr_plan, dict):
         curr_plan = validate_and_fix_plan(curr_plan, configurable.enforce_web_search)
+        
+        # Ensure required fields are present before validation
+        if "locale" not in curr_plan:
+            curr_plan["locale"] = state.get("locale", "en-US")
+            logger.info(f"[PLANNER] Added missing locale field: {curr_plan['locale']}")
+        
+        if "title" not in curr_plan:
+            # Generate a default title from steps if available
+            if curr_plan.get("steps"):
+                curr_plan["title"] = curr_plan["steps"][0].get("title", "Execution Plan")
+            else:
+                curr_plan["title"] = "Execution Plan"
+            logger.info(f"[PLANNER] Added missing title field: {curr_plan['title']}")
+        
+        # Validate plan structure (even if has_enough_context is False, we still need valid structure)
+        try:
+            new_plan = Plan.model_validate(curr_plan)
+        except Exception as e:
+            logger.error(f"[PLANNER] Plan validation failed: {e}")
+            logger.error(f"[PLANNER] Plan content: {json.dumps(curr_plan, indent=2)}")
+            # Try to fix common issues
+            if "has_enough_context" not in curr_plan:
+                curr_plan["has_enough_context"] = False
+            if "thought" not in curr_plan:
+                curr_plan["thought"] = curr_plan.get("overall_thought", "")
+            try:
+                new_plan = Plan.model_validate(curr_plan)
+            except Exception as e2:
+                logger.error(f"[PLANNER] Plan validation failed again: {e2}")
+                # Return to reporter with error
+                return Command(goto="reporter")
 
-    if isinstance(curr_plan, dict) and curr_plan.get("has_enough_context"):
+    if isinstance(curr_plan, dict) and curr_plan.get("has_enough_context") and new_plan:
         logger.info("Planner response has enough context.")
-        new_plan = Plan.model_validate(curr_plan)
         
         # Check if plan has steps that need execution (e.g., PM tool calls)
         # Even if has_enough_context is true, we need to execute steps first

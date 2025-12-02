@@ -362,6 +362,31 @@ def planner_node(
             sys.stderr.write(f"\n📌 EXTRACTED PROJECT_ID: {project_id}\n")
             sys.stderr.flush()
 
+    # Detect if this is a PM query (has project_id or PM-related keywords)
+    is_pm_query = False
+    if project_id:
+        is_pm_query = True
+        logger.info(f"[PLANNER] Detected PM query - project_id: {project_id}")
+    else:
+        # Check messages for PM-related keywords
+        for msg in state.get("messages", []):
+            content = get_message_content(msg)
+            if content:
+                content_lower = content.lower()
+                pm_keywords = [
+                    "project analysis", "comprehensive project", "velocity chart",
+                    "burndown chart", "sprint report", "list tasks", "list sprints",
+                    "project health", "cfd chart", "cycle time", "work distribution"
+                ]
+                if any(keyword in content_lower for keyword in pm_keywords):
+                    is_pm_query = True
+                    logger.info(f"[PLANNER] Detected PM query from keywords in message")
+                    break
+    
+    # Select prompt template based on query type
+    prompt_template = "pm_planner" if is_pm_query else "planner"
+    logger.info(f"[PLANNER] Using prompt template: {prompt_template} (is_pm_query={is_pm_query})")
+    
     # For clarification feature: use the clarified research topic (complete history)
     if state.get("enable_clarification", False) and state.get(
         "clarified_research_topic"
@@ -372,14 +397,14 @@ def planner_node(
             {"role": "user", "content": state["clarified_research_topic"]}
         ]
         modified_state["research_topic"] = state["clarified_research_topic"]
-        messages = apply_prompt_template("planner", modified_state, configurable, state.get("locale", "en-US"))
+        messages = apply_prompt_template(prompt_template, modified_state, configurable, state.get("locale", "en-US"))
 
         logger.info(
-            f"Clarification mode: Using clarified research topic: {state['clarified_research_topic']}"
+            f"Clarification mode: Using clarified research topic: {state['clarified_research_topic']} with template: {prompt_template}"
         )
     else:
         # Normal mode: use full conversation history
-        messages = apply_prompt_template("planner", state, configurable, state.get("locale", "en-US"))
+        messages = apply_prompt_template(prompt_template, state, configurable, state.get("locale", "en-US"))
 
     if state.get("enable_background_investigation") and state.get(
         "background_investigation_results"

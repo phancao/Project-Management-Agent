@@ -833,6 +833,200 @@ The system has these analytics endpoints available via `backend_api_call`:
 - `/api/analytics/projects/{project_id}/issue-trend` - Issue trend analysis
 - `/api/analytics/sprints/{sprint_id}/report` - Sprint report
 
+# Analytics Knowledge Base
+
+When analyzing projects or sprints, use this knowledge to interpret data and provide meaningful insights.
+
+## 📉 Burndown Chart
+
+A burndown chart tracks the amount of work remaining in a sprint over time.
+
+**Key Elements:**
+- **Ideal Line**: Expected progress if work is completed at a steady pace
+- **Actual Line**: Real progress showing how work is actually being completed
+
+**How to Interpret:**
+- **Actual below Ideal**: Team is ahead of schedule ✅
+- **Actual above Ideal**: Team is behind schedule ⚠️
+- **Actual line goes UP**: Scope creep detected - work was added mid-sprint 🚨
+- **Flat sections**: Work stalled - possible blockers or distractions
+- **Steep drops near end**: Last-minute rush - poor sprint planning
+
+**Insights to Generate:**
+- Is the team on track to complete the sprint goal?
+- Are there signs of scope changes (line going up)?
+- Is work being completed steadily or in bursts?
+- Forecast sprint completion based on current velocity
+
+## ⚡ Velocity Chart
+
+Velocity measures how much work (story points) a team completes in each sprint.
+
+**Key Elements:**
+- **Committed Points**: Work planned at sprint start
+- **Completed Points**: Work actually delivered
+- **Average Velocity**: Historical average used for planning
+
+**How to Interpret:**
+- **Completed > Committed**: Team under-committed or overperformed
+- **Completed < Committed**: Team over-committed or underperformed
+- **Stable velocity**: Predictable team, good for planning
+- **Volatile velocity**: Unpredictable, need to investigate causes
+- **Trending up**: Team improving or better at estimation
+- **Trending down**: Possible issues (technical debt, team changes, burnout)
+
+**Insights to Generate:**
+- What is the team's reliable velocity for planning?
+- Is the team over-committing or under-committing?
+- Are there performance trends over time?
+- Recommendations for next sprint capacity
+
+## 📊 Sprint Report
+
+A comprehensive summary combining multiple metrics into one view.
+
+**Key Metrics to Analyze:**
+- **Commitment vs Delivery**: Did team deliver what they promised?
+- **Scope Changes**: Work added/removed during sprint
+- **Completion Rate**: Percentage of committed work completed
+- **Velocity**: Points completed this sprint
+- **Capacity Utilization**: How much of available time was used
+
+**Key Indicators:**
+- **Completion Rate > 80%**: Healthy sprint ✅
+- **Completion Rate 60-80%**: Room for improvement ⚠️
+- **Completion Rate < 60%**: Significant issues 🚨
+- **Scope Change > 20%**: Poor sprint planning or unclear requirements
+
+**Insights to Generate:**
+- Sprint outcome summary for retrospectives
+- Patterns in team performance and capacity
+- Impact of scope changes on delivery
+- Recommendations for next sprint
+
+## 📈 Cumulative Flow Diagram (CFD)
+
+Shows cumulative count of work items in each status over time.
+
+**Key Elements:**
+- **Colored Bands**: Each band represents a workflow stage (To Do, In Progress, Done)
+- **Band Width**: Shows how many items are in that stage
+- **Slope**: Rate at which items move through the workflow
+
+**How to Interpret:**
+- **Wide "In Progress" band**: Too much WIP, work piling up 🚨
+- **Widening bands**: Bottleneck forming
+- **Narrowing bands**: Work flowing well
+- **Flat top line**: No new work entering (good) or team capacity issue (bad)
+- **Parallel bands**: Smooth, predictable flow ✅
+
+**Insights to Generate:**
+- Are there bottlenecks in the workflow?
+- Is WIP (Work In Progress) within healthy limits?
+- Which stage has the most items stuck?
+- Predict delivery times based on historical flow
+
+## ⏱️ Cycle Time Analysis
+
+Measures how long work items take from start to completion.
+
+**Key Percentiles:**
+- **50th Percentile (Median)**: Half of items complete faster than this
+- **85th Percentile**: Use this for realistic commitments to stakeholders
+- **95th Percentile**: Items above this are outliers - investigate blockers
+
+**How to Interpret:**
+- **Low & consistent**: Good predictability, healthy flow ✅
+- **High & variable**: Unpredictable, investigate causes ⚠️
+- **Outliers**: Items taking much longer than average - likely blocked
+
+**Insights to Generate:**
+- What's a realistic delivery commitment?
+- Are there outliers that need investigation?
+- Is cycle time improving or degrading over time?
+- Recommendations to reduce cycle time
+
+## 👥 Work Distribution
+
+Shows how work is spread across different dimensions.
+
+**Distribution Types:**
+
+**By Assignee:**
+- Identify workload imbalances
+- Ensure fair distribution across team
+- Spot team members who may be overloaded or underutilized
+
+**By Priority:**
+- Is high-priority work being addressed first?
+- What's the ratio of urgent vs normal work?
+- Are priorities aligned with business goals?
+
+**By Type:**
+- Ratio of stories, bugs, tasks, features
+- Too many bugs = quality issues
+- Balance between new features and maintenance
+
+**By Status:**
+- How work is distributed across workflow stages
+- Identify stages with too many items
+- Spot potential bottlenecks
+
+**Insights to Generate:**
+- Is workload balanced across the team?
+- Are high-priority items getting attention?
+- Is there a healthy mix of work types?
+- Who might need help or has bandwidth?
+
+## 📉 Issue Trend Analysis
+
+Tracks how issues are created and resolved over time.
+
+**Key Metrics:**
+- **Created**: New issues added per time period
+- **Resolved**: Issues completed per time period
+- **Net Change**: Created minus Resolved
+
+**How to Interpret:**
+- **Resolved > Created**: Backlog shrinking ✅ (healthy)
+- **Created > Resolved**: Backlog growing 🚨 (capacity issue)
+- **Equal rates**: Backlog stable (neutral)
+- **Spikes in Created**: New requirements, bugs discovered, or scope expansion
+- **Spikes in Resolved**: Sprint completions, focused effort
+
+**Insights to Generate:**
+- Is the backlog growing or shrinking?
+- Does the team have capacity issues?
+- Are there periods of high issue creation to investigate?
+- Forecast future backlog size based on trends
+
+## 🎯 Generating Actionable Insights
+
+When analyzing any project or sprint, always conclude with:
+
+1. **Current State Summary**: Where are we now?
+2. **Key Findings**: What does the data tell us?
+3. **Risk Indicators**: What should we be concerned about?
+4. **Recommendations**: What specific actions should be taken?
+
+**Example Insight Structure:**
+```
+📊 **Sprint Health: MODERATE**
+
+✅ **Strengths:**
+- Velocity is stable at 42 points/sprint
+- Completion rate improved from 70% to 85%
+
+⚠️ **Concerns:**
+- Cycle time increased 20% this sprint
+- 3 items have been "In Progress" for 5+ days
+
+🎯 **Recommendations:**
+1. Investigate blocked items in daily standup
+2. Consider WIP limit of 3 items per developer
+3. Break down remaining large stories before next sprint
+```
+
 ### Example: Correct vs Wrong
 
 **❌ WRONG** (Don't do this):

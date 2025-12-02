@@ -9,11 +9,32 @@ from start to completion. Useful for identifying bottlenecks and predicting
 delivery times.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any
 import statistics
 
 from src.analytics.models import ChartResponse, ChartSeries, ChartDataPoint, ChartType
+
+
+def _normalize_datetime(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-naive for consistent comparison."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        # Convert to UTC then remove timezone info
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _parse_datetime(date_str: str) -> datetime:
+    """Parse datetime string and normalize to timezone-naive."""
+    if not date_str:
+        return None
+    try:
+        dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        return _normalize_datetime(dt)
+    except (ValueError, TypeError):
+        return None
 
 
 def calculate_cycle_time(work_items: List[Dict[str, Any]]) -> ChartResponse:
@@ -36,10 +57,21 @@ def calculate_cycle_time(work_items: List[Dict[str, Any]]) -> ChartResponse:
             continue
         
         try:
-            start = datetime.fromisoformat(item["start_date"])
-            completion = datetime.fromisoformat(item["completion_date"])
+            start_str = item["start_date"]
+            completion_str = item["completion_date"]
             
-            if completion > start:
+            # Handle both string and datetime objects
+            if isinstance(start_str, datetime):
+                start = _normalize_datetime(start_str)
+            else:
+                start = _parse_datetime(str(start_str))
+            
+            if isinstance(completion_str, datetime):
+                completion = _normalize_datetime(completion_str)
+            else:
+                completion = _parse_datetime(str(completion_str))
+            
+            if start and completion and completion > start:
                 cycle_time_days = (completion - start).days
                 completed_items.append({
                     "id": item.get("id", "unknown"),

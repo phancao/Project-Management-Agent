@@ -148,7 +148,6 @@ export async function* chatStream(
       try {
         // Skip events with null or empty data
         if (!event.data || event.data === 'null') {
-          console.warn(`[DEBUG] Skipping event with null/empty data: event=${event.event}`);
           continue;
         }
 
@@ -157,13 +156,8 @@ export async function* chatStream(
           type: event.event,
           data: parsedData,
         } as ChatEvent;
-      } catch (parseError) {
-        // Log serialization errors but don't crash the stream
-        console.error(`[DEBUG] Stream error event: Serialization failed`);
-        console.error(`[DEBUG] Event type: ${event.event}`);
-        console.error(`[DEBUG] Event data (raw): ${event.data?.substring(0, 200)}`);
-        console.error(`[DEBUG] Parse error:`, parseError);
-        // Continue processing other events
+      } catch {
+        // Skip events that fail to parse - continue processing other events
       }
     }
   } catch (e) {

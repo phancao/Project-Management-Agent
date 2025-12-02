@@ -40,14 +40,8 @@ export function ResearchBlock({
   );
   const { isReplay } = useReplay();
   
-  // Debug logging
-  useEffect(() => {
-    console.log(`[DEBUG] ResearchBlock render: researchId=${researchId}, reportId=${reportId}, hasReport=${hasReport}, activeTab=${activeTab}, reportContent_length=${reportContent?.length ?? 0}`);
-  }, [researchId, reportId, hasReport, activeTab, reportContent]);
-  
   useEffect(() => {
     if (hasReport) {
-      console.log(`[DEBUG] ResearchBlock: hasReport=true, switching to report tab`);
       setActiveTab("report");
     }
   }, [hasReport]);
@@ -197,7 +191,7 @@ export function ResearchBlock({
             </TabsList>
           </div>
           <TabsContent
-            className="h-full min-h-0 flex-grow px-8"
+            className="h-full min-h-0 grow px-8"
             value="report"
             forceMount
             hidden={activeTab !== "report"}
@@ -218,7 +212,7 @@ export function ResearchBlock({
             </ScrollContainer>
           </TabsContent>
           <TabsContent
-            className="h-full min-h-0 flex-grow px-8"
+            className="h-full min-h-0 grow px-8"
             value="activities"
             forceMount
             hidden={activeTab !== "activities"}

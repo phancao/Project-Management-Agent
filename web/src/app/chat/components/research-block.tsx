@@ -36,22 +36,6 @@ export function ResearchBlock({
   const openResearchId = useStore((state) => state.openResearchId);
   const { isReplay } = useReplay();
   
-  // Debug logging - use useEffect to ensure it runs on every render
-  useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        `[DEBUG] ResearchBlock render: ` +
-        `researchId=${researchId}, ` +
-        `reportId=${reportId}, ` +
-        `hasReport=${hasReport}, ` +
-        `openResearchId=${openResearchId}, ` +
-        `reportStreaming=${reportStreaming}, ` +
-        `activeTab=${activeTab}, ` +
-        `reportMessage exists=${!!reportMessage}, ` +
-        `reportContent length=${reportMessage?.content?.length ?? 0}`
-      );
-    }
-  });
   useEffect(() => {
     // Auto-switch to report tab when report is generated and not streaming
     // Also switch if we have a reportId even if hasReport check fails (defensive)
@@ -205,7 +189,7 @@ export function ResearchBlock({
             </TabsList>
           </div>
           <TabsContent
-            className="h-full min-h-0 flex-grow px-8"
+            className="h-full min-h-0 grow px-8"
             value="report"
             forceMount
             hidden={activeTab !== "report"}
@@ -226,7 +210,7 @@ export function ResearchBlock({
             </ScrollContainer>
           </TabsContent>
           <TabsContent
-            className="h-full min-h-0 flex-grow px-8"
+            className="h-full min-h-0 grow px-8"
             value="activities"
             forceMount
             hidden={activeTab !== "activities"}

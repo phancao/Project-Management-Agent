@@ -9,10 +9,9 @@ const BACKEND_URL = getBackendUrl();
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { project_id: string; epic_id: string } }
+  { params }: { params: Promise<{ project_id: string; epic_id: string }> }
 ) {
-  const projectId = params.project_id;
-  const epicId = params.epic_id;
+  const { project_id: projectId, epic_id: epicId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const decodedEpicId = decodeURIComponent(epicId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/epics/${encodeURIComponent(decodedEpicId)}`;
@@ -56,10 +55,9 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { project_id: string; epic_id: string } }
+  { params }: { params: Promise<{ project_id: string; epic_id: string }> }
 ) {
-  const projectId = params.project_id;
-  const epicId = params.epic_id;
+  const { project_id: projectId, epic_id: epicId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const decodedEpicId = decodeURIComponent(epicId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/epics/${encodeURIComponent(decodedEpicId)}`;

@@ -74,7 +74,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
   
   // Collect all tool calls from activities - now reactive to messages changes
   const toolCalls = useMemo(() => {
-    const calls: Array<{ id: string; name: string; args: unknown; result?: string }> = [];
+    const calls: Array<{ id: string; name: string; args: Record<string, unknown>; result?: string }> = [];
     
     for (const activityId of activityIds) {
       const message = messages.get(activityId);
@@ -157,7 +157,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20">
+              <div className="p-2 rounded-lg bg-linear-to-br from-purple-500/20 to-blue-500/20">
                 <Brain size={20} className="text-purple-600 dark:text-purple-400" />
               </div>
               <div>
@@ -279,7 +279,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                   onMarkdownChange={handleMarkdownChange}
                 />
               ) : (
-                <div className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word]">
+                <div className="prose prose-sm dark:prose-invert max-w-none wrap-break-word [word-break:break-word]">
                   <Markdown animated={isGeneratingReport} checkLinkCredibility>
                     {reportMessage?.content ?? ""}
                   </Markdown>
@@ -295,4 +295,3 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
     </motion.div>
   );
 }
-

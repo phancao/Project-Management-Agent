@@ -191,7 +191,7 @@ export function StepBox({
     >
       <Card 
         className={cn(
-          "overflow-hidden transition-all duration-200",
+          "overflow-hidden transition-all duration-200 py-0 gap-0",
           isRunning && "border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20",
           hasError && "border-red-500/50 bg-red-50/50 dark:bg-red-950/20",
           !isRunning && !hasError && "border-green-500/30 bg-green-50/30 dark:bg-green-950/10"

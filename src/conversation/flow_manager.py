@@ -2180,47 +2180,386 @@ class ConversationFlowManager:
     async def _handle_analyze_velocity(self, context: ConversationContext) -> Dict[str, Any]:
         """Analyze team velocity over recent sprints"""
         project_id = context.gathered_data.get('project_id') or context.gathered_data.get('active_project_id')
-        sprint_count = context.gathered_data.get('sprint_count', 5)
+        sprint_count = context.gathered_data.get('sprint_count', 6)
         logger.info(f"Analyzing velocity for project {project_id}, last {sprint_count} sprints")
-        # TODO: Call MCP server velocity_chart tool
-        return {
-            "type": "execution_completed",
-            "message": f"📊 **Velocity Analysis**\n\nAnalyzed last {sprint_count} sprints.\n\n_MCP integration pending_",
-            "state": "complete"
-        }
+        
+        try:
+            # Get all sprints for the project
+            sprints = await self.pm_provider.list_sprints(project_id=project_id)
+            
+            # Filter to closed sprints and sort by end date
+            closed_sprints = [s for s in sprints if s.status == 'closed' and s.end_date]
+            closed_sprints.sort(key=lambda s: s.end_date, reverse=True)
+            recent_sprints = closed_sprints[:sprint_count]
+            
+            if not recent_sprints:
+                return {
+                    "type": "execution_completed",
+                    "message": "📊 **Velocity Analysis**\n\nNo completed sprints found for velocity analysis.",
+                    "state": "complete"
+                }
+            
+            # Get tasks for each sprint and calculate velocity
+            velocity_data = []
+            total_velocity = 0
+            
+            for sprint in reversed(recent_sprints):  # Oldest first for trend
+                tasks = await self.pm_provider.list_tasks(project_id=project_id)
+                sprint_tasks = [t for t in tasks if str(t.sprint_id) == str(sprint.id)]
+                
+                completed_tasks = [t for t in sprint_tasks if t.status and t.status.lower() in ['done', 'closed', 'completed']]
+                
+                # Calculate story points (use estimated_hours as proxy if no story points)
+                completed_points = sum(t.estimated_hours or 1 for t in completed_tasks)
+                committed_points = sum(t.estimated_hours or 1 for t in sprint_tasks)
+                
+                velocity_data.append({
+                    'name': sprint.name,
+                    'committed': committed_points,
+                    'completed': completed_points,
+                    'completion_rate': (completed_points / committed_points * 100) if committed_points > 0 else 0
+                })
+                total_velocity += completed_points
+            
+            avg_velocity = total_velocity / len(velocity_data) if velocity_data else 0
+            
+            # Calculate trend
+            if len(velocity_data) >= 2:
+                first_half = sum(v['completed'] for v in velocity_data[:len(velocity_data)//2]) / (len(velocity_data)//2)
+                second_half = sum(v['completed'] for v in velocity_data[len(velocity_data)//2:]) / (len(velocity_data) - len(velocity_data)//2)
+                trend_pct = ((second_half - first_half) / first_half * 100) if first_half > 0 else 0
+                trend = "📈 Improving" if trend_pct > 5 else "📉 Declining" if trend_pct < -5 else "➡️ Stable"
+            else:
+                trend = "➡️ Insufficient data"
+                trend_pct = 0
+            
+            # Build report
+            content = f"""# ⚡ Velocity Analysis
+
+## Summary
+- **Average Velocity**: {avg_velocity:.1f} points/sprint
+- **Trend**: {trend} ({trend_pct:+.1f}%)
+- **Sprints Analyzed**: {len(velocity_data)}
+
+## Sprint-by-Sprint Velocity
+
+| Sprint | Committed | Completed | Completion % |
+|--------|-----------|-----------|--------------|
+"""
+            for v in reversed(velocity_data):
+                content += f"| {v['name']} | {v['committed']:.0f} | {v['completed']:.0f} | {v['completion_rate']:.0f}% |\n"
+            
+            content += f"""
+## Insights
+- **Recommended commitment for next sprint**: {avg_velocity:.0f} points (based on average)
+- **Commitment reliability**: {'Good' if all(v['completion_rate'] >= 80 for v in velocity_data) else 'Needs improvement'}
+"""
+            
+            return {
+                "type": "execution_completed",
+                "message": content,
+                "state": "complete",
+                "data": {"velocity_data": velocity_data, "avg_velocity": avg_velocity}
+            }
+            
+        except Exception as e:
+            logger.error(f"Velocity analysis failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to analyze velocity: {str(e)}",
+                "state": "error"
+            }
     
     async def _handle_analyze_burndown(self, context: ConversationContext) -> Dict[str, Any]:
         """Analyze sprint burndown pattern"""
         sprint_id = context.gathered_data.get('sprint_id') or context.gathered_data.get('active_sprint_id')
+        project_id = context.gathered_data.get('project_id') or context.gathered_data.get('active_project_id')
         logger.info(f"Analyzing burndown for sprint {sprint_id}")
-        # TODO: Call MCP server burndown_chart tool and analyze pattern
-        return {
-            "type": "execution_completed",
-            "message": f"📉 **Burndown Analysis**\n\nAnalyzed burndown pattern.\n\n_MCP integration pending_",
-            "state": "complete"
-        }
+        
+        try:
+            from datetime import datetime
+            
+            # Get sprint details
+            sprint = await self.pm_provider.get_sprint(sprint_id) if sprint_id else None
+            
+            if not sprint:
+                # Try to get active sprint
+                sprints = await self.pm_provider.list_sprints(project_id=project_id)
+                active_sprints = [s for s in sprints if s.status == 'active']
+                if active_sprints:
+                    sprint = active_sprints[0]
+                    sprint_id = sprint.id
+                else:
+                    return {
+                        "type": "execution_completed",
+                        "message": "📉 **Burndown Analysis**\n\nNo active sprint found for burndown analysis.",
+                        "state": "complete"
+                    }
+            
+            # Get tasks for the sprint
+            tasks = await self.pm_provider.list_tasks(project_id=project_id or sprint.project_id)
+            sprint_tasks = [t for t in tasks if str(t.sprint_id) == str(sprint_id)]
+            
+            total_tasks = len(sprint_tasks)
+            completed = len([t for t in sprint_tasks if t.status and t.status.lower() in ['done', 'closed', 'completed']])
+            in_progress = len([t for t in sprint_tasks if t.status and t.status.lower() in ['in progress', 'in_progress', 'doing']])
+            todo = total_tasks - completed - in_progress
+            
+            total_points = sum(t.estimated_hours or 1 for t in sprint_tasks)
+            completed_points = sum(t.estimated_hours or 1 for t in sprint_tasks if t.status and t.status.lower() in ['done', 'closed', 'completed'])
+            remaining_points = total_points - completed_points
+            
+            # Calculate progress
+            progress_pct = (completed_points / total_points * 100) if total_points > 0 else 0
+            
+            # Calculate days remaining
+            today = datetime.now().date()
+            if sprint.start_date and sprint.end_date:
+                total_days = (sprint.end_date - sprint.start_date).days + 1
+                elapsed_days = max(0, (today - sprint.start_date).days + 1)
+                days_remaining = max(0, (sprint.end_date - today).days)
+                time_progress = (elapsed_days / total_days * 100) if total_days > 0 else 0
+            else:
+                total_days = elapsed_days = days_remaining = 0
+                time_progress = 0
+            
+            # Determine status
+            if progress_pct >= time_progress:
+                status = "✅ On Track"
+                status_detail = "Work progress is ahead of time progress"
+            elif progress_pct >= time_progress - 10:
+                status = "⚠️ Slightly Behind"
+                status_detail = "Work progress is slightly behind time progress"
+            else:
+                status = "🚨 Behind Schedule"
+                status_detail = f"Work is {time_progress - progress_pct:.0f}% behind where it should be"
+            
+            content = f"""# 📉 Burndown Analysis: {sprint.name}
+
+## Sprint Status: {status}
+{status_detail}
+
+## Progress Metrics
+| Metric | Value |
+|--------|-------|
+| Total Tasks | {total_tasks} |
+| Completed | {completed} ({progress_pct:.0f}%) |
+| In Progress | {in_progress} |
+| To Do | {todo} |
+| Days Elapsed | {elapsed_days}/{total_days} ({time_progress:.0f}%) |
+| Days Remaining | {days_remaining} |
+
+## Story Points
+- **Total Committed**: {total_points:.0f} points
+- **Completed**: {completed_points:.0f} points
+- **Remaining**: {remaining_points:.0f} points
+
+## Burndown Assessment
+- **Work Progress**: {progress_pct:.0f}%
+- **Time Progress**: {time_progress:.0f}%
+- **Gap**: {progress_pct - time_progress:+.0f}%
+
+## Recommendations
+"""
+            if days_remaining > 0 and remaining_points > 0:
+                daily_rate_needed = remaining_points / days_remaining
+                content += f"- Need to complete **{daily_rate_needed:.1f} points/day** to finish on time\n"
+            
+            if progress_pct < time_progress - 15:
+                content += "- Consider reducing scope or extending sprint\n"
+                content += "- Identify and remove blockers immediately\n"
+            elif in_progress > completed:
+                content += "- Too many items in progress - focus on completing before starting new work\n"
+            
+            return {
+                "type": "execution_completed",
+                "message": content,
+                "state": "complete",
+                "data": {"progress_pct": progress_pct, "time_progress": time_progress, "status": status}
+            }
+            
+        except Exception as e:
+            logger.error(f"Burndown analysis failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to analyze burndown: {str(e)}",
+                "state": "error"
+            }
     
     async def _handle_analyze_sprint_health(self, context: ConversationContext) -> Dict[str, Any]:
         """Analyze sprint health indicators"""
         sprint_id = context.gathered_data.get('sprint_id') or context.gathered_data.get('active_sprint_id')
+        project_id = context.gathered_data.get('project_id') or context.gathered_data.get('active_project_id')
         logger.info(f"Analyzing sprint health for {sprint_id}")
-        # TODO: Call MCP server sprint_report tool
-        return {
-            "type": "execution_completed",
-            "message": f"🏥 **Sprint Health Analysis**\n\nAnalyzed health indicators.\n\n_MCP integration pending_",
-            "state": "complete"
-        }
+        
+        try:
+            # Get sprint
+            sprint = await self.pm_provider.get_sprint(sprint_id) if sprint_id else None
+            if not sprint:
+                sprints = await self.pm_provider.list_sprints(project_id=project_id)
+                active_sprints = [s for s in sprints if s.status == 'active']
+                if active_sprints:
+                    sprint = active_sprints[0]
+                else:
+                    return {
+                        "type": "execution_completed",
+                        "message": "🏥 **Sprint Health**\n\nNo active sprint found.",
+                        "state": "complete"
+                    }
+            
+            # Get tasks
+            tasks = await self.pm_provider.list_tasks(project_id=project_id or sprint.project_id)
+            sprint_tasks = [t for t in tasks if str(t.sprint_id) == str(sprint.id)]
+            
+            total = len(sprint_tasks)
+            done = len([t for t in sprint_tasks if t.status and t.status.lower() in ['done', 'closed', 'completed']])
+            blocked = len([t for t in sprint_tasks if t.status and 'block' in t.status.lower()])
+            
+            completion_rate = (done / total * 100) if total > 0 else 0
+            
+            # Determine health
+            if completion_rate >= 80 and blocked == 0:
+                health = "🟢 Healthy"
+            elif completion_rate >= 60 or blocked <= 2:
+                health = "🟡 At Risk"
+            else:
+                health = "🔴 Critical"
+            
+            content = f"""# 🏥 Sprint Health: {sprint.name}
+
+## Overall Health: {health}
+
+## Key Indicators
+| Indicator | Value | Status |
+|-----------|-------|--------|
+| Completion Rate | {completion_rate:.0f}% | {'✅' if completion_rate >= 80 else '⚠️' if completion_rate >= 60 else '🚨'} |
+| Blocked Items | {blocked} | {'✅' if blocked == 0 else '⚠️' if blocked <= 2 else '🚨'} |
+| Total Tasks | {total} | - |
+| Completed | {done} | - |
+
+## Health Assessment
+"""
+            if completion_rate >= 80:
+                content += "- ✅ Sprint is progressing well\n"
+            elif completion_rate >= 60:
+                content += "- ⚠️ Sprint needs attention to meet goals\n"
+            else:
+                content += "- 🚨 Sprint is significantly behind target\n"
+            
+            if blocked > 0:
+                content += f"- 🚫 {blocked} blocked item(s) need immediate attention\n"
+            
+            return {
+                "type": "execution_completed",
+                "message": content,
+                "state": "complete"
+            }
+            
+        except Exception as e:
+            logger.error(f"Sprint health analysis failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to analyze sprint health: {str(e)}",
+                "state": "error"
+            }
     
     async def _handle_analyze_task_distribution(self, context: ConversationContext) -> Dict[str, Any]:
         """Analyze task distribution across team"""
         project_id = context.gathered_data.get('project_id') or context.gathered_data.get('active_project_id')
         logger.info(f"Analyzing task distribution for project {project_id}")
-        # TODO: Call MCP server task_distribution tool
-        return {
-            "type": "execution_completed",
-            "message": f"📊 **Task Distribution Analysis**\n\nAnalyzed task distribution.\n\n_MCP integration pending_",
-            "state": "complete"
-        }
+        
+        try:
+            from collections import defaultdict
+            
+            # Get all tasks
+            tasks = await self.pm_provider.list_tasks(project_id=project_id)
+            
+            if not tasks:
+                return {
+                    "type": "execution_completed",
+                    "message": "👥 **Work Distribution**\n\nNo tasks found for distribution analysis.",
+                    "state": "complete"
+                }
+            
+            # Distribution by assignee
+            by_assignee = defaultdict(lambda: {"total": 0, "done": 0, "in_progress": 0})
+            for t in tasks:
+                assignee = t.assignee_id or "Unassigned"
+                by_assignee[assignee]["total"] += 1
+                if t.status and t.status.lower() in ['done', 'closed', 'completed']:
+                    by_assignee[assignee]["done"] += 1
+                elif t.status and t.status.lower() in ['in progress', 'in_progress', 'doing']:
+                    by_assignee[assignee]["in_progress"] += 1
+            
+            # Distribution by status
+            by_status = defaultdict(int)
+            for t in tasks:
+                status = t.status or "Unknown"
+                by_status[status] += 1
+            
+            # Distribution by priority
+            by_priority = defaultdict(int)
+            for t in tasks:
+                priority = t.priority or "Normal"
+                by_priority[priority] += 1
+            
+            content = f"""# 👥 Work Distribution Analysis
+
+## Total Tasks: {len(tasks)}
+
+## By Assignee
+| Assignee | Total | Done | In Progress | Pending |
+|----------|-------|------|-------------|---------|
+"""
+            for assignee, data in sorted(by_assignee.items(), key=lambda x: x[1]["total"], reverse=True)[:10]:
+                pending = data["total"] - data["done"] - data["in_progress"]
+                content += f"| {assignee} | {data['total']} | {data['done']} | {data['in_progress']} | {pending} |\n"
+            
+            content += """
+## By Status
+| Status | Count | Percentage |
+|--------|-------|------------|
+"""
+            for status, count in sorted(by_status.items(), key=lambda x: x[1], reverse=True):
+                pct = count / len(tasks) * 100
+                content += f"| {status} | {count} | {pct:.0f}% |\n"
+            
+            content += """
+## By Priority
+| Priority | Count | Percentage |
+|----------|-------|------------|
+"""
+            for priority, count in sorted(by_priority.items(), key=lambda x: x[1], reverse=True):
+                pct = count / len(tasks) * 100
+                content += f"| {priority} | {count} | {pct:.0f}% |\n"
+            
+            # Workload assessment
+            content += "\n## Workload Assessment\n"
+            avg_per_person = len(tasks) / max(len(by_assignee) - 1, 1)  # Exclude unassigned
+            overloaded = [a for a, d in by_assignee.items() if a != "Unassigned" and d["total"] > avg_per_person * 1.5]
+            underloaded = [a for a, d in by_assignee.items() if a != "Unassigned" and d["total"] < avg_per_person * 0.5]
+            
+            if overloaded:
+                content += f"- ⚠️ **Potentially overloaded**: {', '.join(overloaded[:3])}\n"
+            if underloaded:
+                content += f"- 💡 **Has capacity**: {', '.join(underloaded[:3])}\n"
+            if by_assignee.get("Unassigned", {}).get("total", 0) > 0:
+                content += f"- 📋 **Unassigned tasks**: {by_assignee['Unassigned']['total']}\n"
+            
+            return {
+                "type": "execution_completed",
+                "message": content,
+                "state": "complete",
+                "data": {"by_assignee": dict(by_assignee), "by_status": dict(by_status)}
+            }
+            
+        except Exception as e:
+            logger.error(f"Task distribution analysis failed: {e}")
+            return {
+                "type": "error",
+                "message": f"Failed to analyze task distribution: {str(e)}",
+                "state": "error"
+            }
     
     async def _handle_generate_insights(self, context: ConversationContext) -> Dict[str, Any]:
         """Generate insights from collected analytics data"""

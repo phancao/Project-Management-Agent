@@ -140,21 +140,31 @@ class AnalyticsManager:
         Convenience method that combines get_service() and service call.
         
         Args:
-            project_id: Project ID (may be composite "provider_id:project_key")
-            sprint_id: Sprint ID (optional, may be composite "provider_id:sprint_key")
+            project_id: Project ID (composite "provider_id:project_key")
+            sprint_id: Sprint ID (optional, composite or just sprint_key if project_id has provider)
             scope_type: Scope type (story_points, tasks, hours)
         
         Returns:
             Burndown chart data
         """
-        # If sprint_id has provider info and project_id doesn't, use sprint's provider
-        if sprint_id and ":" in sprint_id and ":" not in project_id:
-            provider_id = sprint_id.split(":", 1)[0]
-            project_id = f"{provider_id}:{project_id}"
-            logger.info(
-                "[AnalyticsManager] Constructed project_id from sprint provider: %s",
-                project_id
-            )
+        # Handle sprint_id format
+        if sprint_id:
+            if ":" not in sprint_id and ":" in project_id:
+                # sprint_id is not composite, construct from project_id's provider
+                provider_id = project_id.split(":", 1)[0]
+                sprint_id = f"{provider_id}:{sprint_id}"
+                logger.info(
+                    "[AnalyticsManager] Constructed composite sprint_id from project_id provider: %s",
+                    sprint_id
+                )
+            elif ":" in sprint_id and ":" not in project_id:
+                # sprint_id has provider, project_id doesn't - construct project_id
+                provider_id = sprint_id.split(":", 1)[0]
+                project_id = f"{provider_id}:{project_id}"
+                logger.info(
+                    "[AnalyticsManager] Constructed project_id from sprint provider: %s",
+                    project_id
+                )
         
         service, actual_project_id = await self.get_service(project_id)
         return await service.get_burndown_chart(
@@ -193,38 +203,50 @@ class AnalyticsManager:
         Get sprint report data.
         
         Args:
-            sprint_id: Sprint ID (MUST be composite "provider_id:sprint_key")
-            project_id: Project ID (optional, extracted from sprint_id if not provided)
+            sprint_id: Sprint ID (composite "provider_id:sprint_key" or just "sprint_key" if project_id has provider)
+            project_id: Project ID (composite "provider_id:project_key")
         
         Returns:
             Sprint report data
         
         Raises:
-            ValueError: If sprint_id is not in composite format and project_id is not provided
+            ValueError: If cannot determine provider from either sprint_id or project_id
         """
-        # Ensure we have provider info
+        # If sprint_id is NOT composite but project_id IS, construct composite sprint_id
         if ":" not in sprint_id:
-            raise ValueError(
-                f"sprint_id must be in composite format 'provider_id:sprint_key', got: '{sprint_id}'. "
-                "Please use composite sprint_id format."
-            )
+            if project_id and ":" in project_id:
+                # Extract provider from project_id and construct composite sprint_id
+                provider_id = project_id.split(":", 1)[0]
+                sprint_id = f"{provider_id}:{sprint_id}"
+                logger.info(
+                    "[AnalyticsManager] Constructed composite sprint_id from project_id provider: %s",
+                    sprint_id
+                )
+            else:
+                raise ValueError(
+                    f"sprint_id must be in composite format 'provider_id:sprint_key', got: '{sprint_id}'. "
+                    "Either use composite sprint_id or provide project_id with provider."
+                )
         
         # Extract provider_id from sprint_id
         provider_id = sprint_id.split(":", 1)[0]
         
-        # If project_id is provided but doesn't have ":", treat it as provider_id only
-        # and use provider from sprint_id
-        if project_id and ":" not in project_id:
+        # Determine final project_id for service lookup
+        if project_id and ":" in project_id:
+            # Use provided composite project_id
+            pass
+        elif project_id and ":" not in project_id:
             # project_id is just provider_id, use sprint's provider
             logger.info(
                 "[AnalyticsManager] project_id '%s' is provider-only, using provider from sprint_id: %s",
                 project_id, provider_id
             )
             project_id = provider_id
-        elif not project_id:
+        else:
+            # No project_id, use provider from sprint_id
             project_id = provider_id
             logger.info(
-                "[AnalyticsManager] Extracted provider_id from sprint_id: %s",
+                "[AnalyticsManager] Using provider_id from sprint_id: %s",
                 provider_id
             )
         

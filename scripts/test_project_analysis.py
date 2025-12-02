@@ -164,20 +164,23 @@ def check_required_components(section_content: str, components: List[str]) -> Li
 
 async def call_chat_api(query: str) -> str:
     """Call the chat API and collect the full response."""
-    url = urljoin(BACKEND_URL, "/api/chat/stream")
+    # Use PM chat endpoint for project analysis
+    url = urljoin(BACKEND_URL, "/api/pm/chat/stream")
     
+    # PM chat endpoint uses messages array format
     payload = {
-        "userMessage": query,
-        "params": {
-            "thread_id": "test_project_analysis",
-            "auto_accepted_plan": True,
-            "enable_background_investigation": True,
-            "enable_deep_thinking": False,
-            "enable_clarification": False,
-            "max_plan_iterations": 1,
-            "max_step_num": 10,
-            "max_search_results": 3,
-        },
+        "messages": [
+            {"role": "user", "content": query}
+        ],
+        "locale": "en-US",
+        "thread_id": "test_project_analysis",
+        "auto_accepted_plan": True,
+        "enable_background_investigation": True,
+        "enable_deep_thinking": False,
+        "enable_clarification": False,
+        "max_plan_iterations": 1,
+        "max_step_num": 10,
+        "max_search_results": 3,
     }
     
     print(f"Calling API: {url}")
@@ -188,8 +191,12 @@ async def call_chat_api(query: str) -> str:
     report_content = ""
     current_event_type = None
     buffer = ""
+    reporter_messages = []
+    all_messages = []
     
-    async with httpx.AsyncClient(timeout=300.0) as client:
+    print("Collecting stream...")
+    
+    async with httpx.AsyncClient(timeout=600.0) as client:  # Increased timeout to 10 minutes
         async with client.stream("POST", url, json=payload) as response:
             response.raise_for_status()
             
@@ -216,13 +223,21 @@ async def call_chat_api(query: str) -> str:
                                 
                                 if current_event_type == "message_chunk":
                                     content = data.get("content", "")
+                                    agent = data.get("agent") or data.get("name") or ""
+                                    
+                                    # Store all messages for debugging
+                                    all_messages.append({
+                                        "agent": agent,
+                                        "content_preview": content[:100] if content else "",
+                                    })
+                                    
                                     full_content += content
                                     
                                     # Look for reporter message (final report)
-                                    # Check both agent and name fields
-                                    agent = data.get("agent") or data.get("name") or ""
                                     if "reporter" in agent.lower():
+                                        reporter_messages.append(content)
                                         report_content += content
+                                        print(f"  ✓ Received reporter content ({len(content)} chars)")
                                 
                                 elif current_event_type == "tool_call_result":
                                     # Tool results might contain report data
@@ -230,30 +245,57 @@ async def call_chat_api(query: str) -> str:
                                     if isinstance(tool_result, str):
                                         full_content += f"\n{tool_result}\n"
                             
-                            except json.JSONDecodeError as e:
+                            except json.JSONDecodeError:
                                 # Skip malformed JSON
                                 pass
     
-    # If we didn't get reporter content, try to find the report in full content
-    # Look for common report markers
-    if not report_content:
-        # Try to find report between markers
-        markers = [
-            "Comprehensive Project Analysis",
-            "Executive Summary",
-            "A. Executive Summary",
-        ]
+    print(f"\nStream complete. Collected {len(full_content)} chars total.")
+    print(f"Reporter messages: {len(reporter_messages)}")
+    
+    # If we got reporter messages, use the last one (most complete)
+    if reporter_messages:
+        report_content = "".join(reporter_messages)
+        print(f"Using reporter content: {len(report_content)} chars")
         
-        for marker in markers:
-            idx = full_content.find(marker)
-            if idx >= 0:
-                # Extract from marker to end (or next marker)
-                report_content = full_content[idx:]
-                break
+        # Filter out JSON plan content if present
+        # Look for markdown headers to find actual report
+        if report_content.strip().startswith("{"):
+            # This is likely a plan JSON, not the report
+            print("Warning: Reporter content looks like JSON plan, searching for markdown report...")
+            # Try to find markdown content in full_content
+            markdown_match = re.search(r'#+\s+(?:Comprehensive|Executive|A\.)', full_content, re.IGNORECASE)
+            if markdown_match:
+                report_content = full_content[markdown_match.start():]
+                print(f"Found markdown report starting at position {markdown_match.start()}")
+            else:
+                # Use full content and hope the report is there
+                report_content = full_content
+                print("Using full content as report")
+    elif not report_content:
+        # Try to find report in full content by looking for markdown headers
+        print("No reporter messages found, searching full content for report...")
+        
+        # Look for markdown headers that indicate a report
+        markdown_headers = re.findall(r'^#+\s+.+', full_content, re.MULTILINE)
+        if markdown_headers:
+            print(f"Found {len(markdown_headers)} markdown headers")
+            # Try to find the start of the report
+            for marker in ["Comprehensive Project Analysis", "Executive Summary", "A. Executive Summary", "# Comprehensive"]:
+                idx = full_content.find(marker)
+                if idx >= 0:
+                    report_content = full_content[idx:]
+                    print(f"Found report starting with '{marker}'")
+                    break
         
         # If still no report, use full content
         if not report_content:
             report_content = full_content
+            print("Using full content as report")
+    
+    # Debug: show what agents we saw
+    if all_messages:
+        agents_seen = set(msg["agent"] for msg in all_messages if msg["agent"])
+        print(f"\nAgents seen in stream: {', '.join(agents_seen) if agents_seen else 'none'}")
     
     return report_content
 

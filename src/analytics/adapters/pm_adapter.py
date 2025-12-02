@@ -12,7 +12,7 @@ Uses TaskStatusResolver to handle provider-specific status logic.
 
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from collections import defaultdict
 
 from pm_providers.base import BasePMProvider
@@ -21,6 +21,19 @@ from .base import BaseAnalyticsAdapter
 from .task_status_resolver import TaskStatusResolver, create_task_status_resolver
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_datetime(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-naive for consistent comparison."""
+    if dt is None:
+        return None
+    if isinstance(dt, date) and not isinstance(dt, datetime):
+        # Convert date to datetime at midnight
+        return datetime.combine(dt, datetime.min.time())
+    if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+        # Convert to UTC then remove timezone info
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
@@ -634,7 +647,7 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
             
             # Filter completed tasks in the date range
-            end_date = datetime.now()
+            end_date = _normalize_datetime(datetime.now())
             start_date = end_date - timedelta(days=days_back)
             
             cycle_time_data = []
@@ -646,19 +659,21 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 if not is_completed:
                     continue
                 
-                # Get completion date from resolver
+                # Get completion date from resolver and normalize
                 completion_date = self.status_resolver.get_completion_date(task)
                 if not completion_date:
                     continue
+                completion_date = _normalize_datetime(completion_date)
                 
                 # Check if completed in date range
                 if completion_date < start_date or completion_date > end_date:
                     continue
                 
-                # Get start date from resolver
+                # Get start date from resolver and normalize
                 start_date_task = self.status_resolver.get_start_date(task)
                 if not start_date_task:
                     continue
+                start_date_task = _normalize_datetime(start_date_task)
                 
                 # Calculate cycle time
                 cycle_time_days = (completion_date - start_date_task).days

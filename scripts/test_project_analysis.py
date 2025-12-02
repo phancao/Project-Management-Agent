@@ -23,7 +23,8 @@ import httpx
 # Configuration
 BACKEND_URL = "http://localhost:8000"
 TEST_PROJECT_ID = "e6890ea6-0c3c-4a83-aa05-41b223df3284:478"  # AutoFlow QA project
-TEST_QUERY = f"Generate a comprehensive project analysis for project {TEST_PROJECT_ID}"
+# Use explicit PM analysis query that will route to PM agent
+TEST_QUERY = f"Comprehensive project analysis for project {TEST_PROJECT_ID}. Include all analytics: velocity, burndown, CFD, cycle time, work distribution, issue trends, and task statistics."
 
 # Required sections with their exact titles and word count requirements
 REQUIRED_SECTIONS = {
@@ -168,9 +169,12 @@ async def call_chat_api(query: str) -> str:
     url = urljoin(BACKEND_URL, "/api/pm/chat/stream")
     
     # PM chat endpoint uses messages array format
+    # Add project_id to message content like the frontend does
+    enhanced_query = f"{query}\n\nproject_id: {TEST_PROJECT_ID}"
+    
     payload = {
         "messages": [
-            {"role": "user", "content": query}
+            {"role": "user", "content": enhanced_query}
         ],
         "locale": "en-US",
         "thread_id": "test_project_analysis",

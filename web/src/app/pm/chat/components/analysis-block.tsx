@@ -279,7 +279,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                   onMarkdownChange={handleMarkdownChange}
                 />
               ) : (
-                <div className="prose prose-sm dark:prose-invert max-w-none">
+                <div className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word]">
                   <Markdown animated={isGeneratingReport} checkLinkCredibility>
                     {reportMessage?.content ?? ""}
                   </Markdown>

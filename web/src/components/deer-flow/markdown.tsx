@@ -67,7 +67,7 @@ export function Markdown({
     return plugins;
   }, [animated]);
   return (
-    <div className={cn(className, "prose dark:prose-invert max-w-full overflow-x-auto")} style={style}>
+    <div className={cn(className, "prose dark:prose-invert max-w-full overflow-x-auto break-words [word-break:break-word] [overflow-wrap:anywhere]")} style={style}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={rehypePlugins}

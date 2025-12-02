@@ -466,33 +466,27 @@ def planner_node(
             response = llm.invoke(messages)
             full_response = response.model_dump_json(indent=4, exclude_none=True)
         except Exception as e:
-            # If structured output validation fails, try to extract JSON from error message
-            logger.warning(f"[PLANNER] Structured output validation failed: {e}")
+            # If structured output validation fails, extract JSON from error message and fix it
+            logger.error(f"[PLANNER] Structured output validation failed: {e}")
             error_str = str(e)
             # Try to extract JSON from error message (format: "Failed to parse Plan from completion {json}...")
-            import re
             json_match = re.search(r'from completion\s+(\{.*?\})\s*\.', error_str, re.DOTALL)
             if json_match:
                 try:
                     full_response = json_match.group(1)
                     logger.info(f"[PLANNER] Extracted JSON from error, will fix missing fields")
                 except Exception:
-                    pass
-            
-            # If extraction failed, try to get raw response
-            if not full_response:
-                try:
-                    # Use non-structured LLM to get raw response
-                    raw_llm = get_llm_by_type("basic")
-                    raw_response = raw_llm.invoke(messages)
-                    full_response = raw_response.content
-                    logger.info(f"[PLANNER] Got raw response, will fix missing fields")
-                except Exception as e2:
-                    logger.error(f"[PLANNER] Failed to get raw response: {e2}")
+                    logger.error(f"[PLANNER] Failed to extract JSON from error")
                     if plan_iterations > 0:
                         return Command(goto="reporter")
                     else:
                         return Command(goto="__end__")
+            else:
+                logger.error(f"[PLANNER] Could not extract JSON from error message")
+                if plan_iterations > 0:
+                    return Command(goto="reporter")
+                else:
+                    return Command(goto="__end__")
     else:
         response = llm.stream(messages)
         for chunk in response:

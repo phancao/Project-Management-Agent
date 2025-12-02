@@ -24,7 +24,8 @@ import httpx
 BACKEND_URL = "http://localhost:8000"
 TEST_PROJECT_ID = "e6890ea6-0c3c-4a83-aa05-41b223df3284:478"  # AutoFlow QA project
 # Use explicit PM analysis query that will route to PM agent
-TEST_QUERY = f"Comprehensive project analysis for project {TEST_PROJECT_ID}. Include all analytics: velocity, burndown, CFD, cycle time, work distribution, issue trends, and task statistics."
+# Must explicitly request PM analysis to avoid routing to researcher
+TEST_QUERY = f"Generate a comprehensive project analysis report for project {TEST_PROJECT_ID} using PM tools. Use list_tasks, list_sprints, velocity_chart, burndown_chart, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart, and sprint_report tools. Include all analytics: velocity, burndown, CFD, cycle time, work distribution, issue trends, and task statistics."
 
 # Required sections with their exact titles and word count requirements
 REQUIRED_SECTIONS = {

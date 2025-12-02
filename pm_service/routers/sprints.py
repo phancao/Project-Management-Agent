@@ -19,22 +19,31 @@ router = APIRouter(prefix="/sprints", tags=["sprints"])
 async def list_sprints(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
     status: Optional[str] = Query(None, description="Filter by status (active, closed, future)"),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(500, ge=1, le=1000, description="Max items to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
-    """List sprints."""
+    """
+    List sprints.
+    
+    The handler fetches ALL sprints from providers.
+    This endpoint applies limit/offset for pagination.
+    """
     handler = PMHandler(db)
-    sprints = await handler.list_sprints(
+    all_sprints = await handler.list_sprints(
         project_id=project_id,
-        status=status,
-        limit=limit
+        status=status
     )
     
+    # Apply pagination
+    total = len(all_sprints)
+    paginated = all_sprints[offset:offset + limit]
+    
     return ListResponse(
-        items=sprints,
-        total=len(sprints),
-        returned=len(sprints),
-        offset=0,
+        items=paginated,
+        total=total,
+        returned=len(paginated),
+        offset=offset,
         limit=limit
     )
 
@@ -57,18 +66,28 @@ async def get_sprint(
 @router.get("/{sprint_id}/tasks", response_model=ListResponse)
 async def get_sprint_tasks(
     sprint_id: str,
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(500, ge=1, le=1000, description="Max items to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
-    """Get tasks in a sprint."""
+    """
+    Get tasks in a sprint.
+    
+    The handler fetches ALL tasks from providers.
+    This endpoint applies limit/offset for pagination.
+    """
     handler = PMHandler(db)
-    tasks = await handler.list_tasks(sprint_id=sprint_id, limit=limit)
+    all_tasks = await handler.list_tasks(sprint_id=sprint_id)
+    
+    # Apply pagination
+    total = len(all_tasks)
+    paginated = all_tasks[offset:offset + limit]
     
     return ListResponse(
-        items=tasks,
-        total=len(tasks),
-        returned=len(tasks),
-        offset=0,
+        items=paginated,
+        total=total,
+        returned=len(paginated),
+        offset=offset,
         limit=limit
     )
 

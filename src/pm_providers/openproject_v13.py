@@ -56,7 +56,7 @@ class OpenProjectV13Provider(BasePMProvider):
             auth_string.encode()
         ).decode()
         self.headers = {
-            # "Content-Type": "application/json",  # Removed to avoid issues with GET requests
+            "Content-Type": "application/json",
             "Authorization": f"Basic {credentials}"
         }
         
@@ -312,18 +312,9 @@ class OpenProjectV13Provider(BasePMProvider):
         # Build filters for project and/or assignee
         filters = []
         if project_id:
-            # Handle composite IDs (UUID:ID) - OpenProject expects the numeric ID
-            if ":" in project_id:
-                # Extract the numeric ID part (after the last colon)
-                op_project_id = project_id.split(":")[-1]
-                logger.info(f"OpenProject list_tasks: Parsed composite project_id '{project_id}' to '{op_project_id}'")
-            else:
-                op_project_id = project_id
-                
-            # Use nested endpoint for better reliability
-            url = f"{self.base_url}/api/v3/projects/{op_project_id}/work_packages"
-        else:
-            url = f"{self.base_url}/api/v3/work_packages"
+            filters.append({
+                "project": {"operator": "=", "values": [project_id]}
+            })
         if assignee_id:
             filters.append({
                 "assignee": {"operator": "=", "values": [assignee_id]}
@@ -334,37 +325,24 @@ class OpenProjectV13Provider(BasePMProvider):
             params = {
                 "filters": json_lib.dumps(filters),
                 "pageSize": 100,
-                # "include": "priority,status,assignee,project,version,parent"
+                "include": "priority,status,assignee,project,version,parent"
             }
             logger.info(f"OpenProject list_tasks with filters: {params}")
         else:
             params = {
                 "pageSize": 100,
-                # "include": "priority,status,assignee,project,version,parent"
+                "include": "priority,status,assignee,project,version,parent"
             }
         
         # Fetch all pages using pagination (exact pattern from test script)
         all_tasks_data = []
-        request_url = url
+        request_url = f"{self.base_url}/api/v3/work_packages"
         page_num = 1
-        total_count = 0  # Initialize to handle early breaks
         
         while request_url:
             logger.debug(f"Fetching page {page_num} from {request_url}")
-            try:
-                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
-                response.raise_for_status()
-            except requests.exceptions.HTTPError as e:
-                if e.response.status_code == 500:
-                    logger.error(
-                        f"OpenProject returned 500 Internal Server Error for project {project_id}. "
-                        f"This may indicate database issues (e.g., disk space full). "
-                        f"Returning partial results: {len(all_tasks_data)} tasks fetched so far."
-                    )
-                    # Return what we have so far instead of crashing
-                    break
-                else:
-                    raise
+            response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
             
             data = response.json()
             tasks_data = data.get("_embedded", {}).get("elements", [])
@@ -391,11 +369,9 @@ class OpenProjectV13Provider(BasePMProvider):
             else:
                 request_url = None
         
-        # Log summary (total_count may be 0 if we broke early due to error)
-        total_msg = f"{total_count}" if total_count > 0 else "unknown (error occurred)"
         logger.info(
             f"OpenProject list_tasks: Fetched {len(all_tasks_data)} tasks "
-            f"from {page_num} page(s) (total reported: {total_msg})"
+            f"from {page_num} page(s) (total reported: {total_count})"
         )
         
         # Log if filter returns no results
@@ -1061,22 +1037,13 @@ class OpenProjectV13Provider(BasePMProvider):
         
         # Filter by project_id if provided
         # (versions don't have project filter in API)
-        # Filter by project_id if provided
-        # (versions don't have project filter in API)
         if project_id:
-            # Handle composite IDs (UUID:ID) - OpenProject uses the numeric ID in hrefs
-            if ":" in project_id:
-                op_project_id = project_id.split(":")[-1]
-                logger.info(f"OpenProject list_sprints: Parsed composite project_id '{project_id}' to '{op_project_id}'")
-            else:
-                op_project_id = project_id
-                
             sprints_data = [
                 sprint for sprint in sprints_data
                 if sprint.get("_links", {})
                 .get("definingProject", {})
                 .get("href", "")
-                .endswith(f"/projects/{op_project_id}")
+                .endswith(f"/projects/{project_id}")
             ]
         
         # Filter by state if provided

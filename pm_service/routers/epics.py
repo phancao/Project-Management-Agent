@@ -37,20 +37,29 @@ class EpicUpdate(BaseModel):
 @router.get("", response_model=ListResponse)
 async def list_epics(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=1000, description="Max items to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
-    """List all epics."""
+    """
+    List all epics.
+    
+    The handler fetches ALL epics from providers.
+    This endpoint applies limit/offset for pagination.
+    """
     handler = PMHandler(db)
     
     try:
-        epics = await handler.list_epics(project_id=project_id, limit=limit)
+        all_epics = await handler.list_epics(project_id=project_id)
+        
+        # Apply pagination
+        total = len(all_epics)
+        paginated = all_epics[offset:offset + limit]
         
         return ListResponse(
-            items=epics[offset:offset + limit],
-            total=len(epics),
-            returned=min(len(epics) - offset, limit) if epics else 0,
+            items=paginated,
+            total=total,
+            returned=len(paginated),
             offset=offset,
             limit=limit
         )

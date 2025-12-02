@@ -22,18 +22,29 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 async def list_projects(
     provider_id: Optional[str] = Query(None, description="Filter by provider ID"),
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    limit: int = Query(1000, ge=1, le=5000, description="Max items to return (default: 1000, max: 5000)"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
-    """List all projects."""
+    """
+    List all projects from all providers.
+    
+    The handler fetches ALL projects from providers.
+    This endpoint applies limit/offset for pagination.
+    """
     handler = PMHandler(db, user_id=user_id)
-    projects = await handler.list_projects(provider_id=provider_id, limit=limit)
+    
+    # Handler returns ALL projects (no internal limit)
+    all_projects = await handler.list_projects(provider_id=provider_id)
+    
+    # Apply pagination at API level
+    total = len(all_projects)
+    paginated_projects = all_projects[offset:offset + limit]
     
     return ListResponse(
-        items=projects[offset:offset + limit],
-        total=len(projects),
-        returned=min(len(projects) - offset, limit),
+        items=paginated_projects,
+        total=total,
+        returned=len(paginated_projects),
         offset=offset,
         limit=limit
     )

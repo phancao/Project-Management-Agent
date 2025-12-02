@@ -18,18 +18,28 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("", response_model=ListResponse)
 async def list_users(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(500, ge=1, le=1000, description="Max items to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
-    """List users."""
+    """
+    List users.
+    
+    The handler fetches ALL users from providers.
+    This endpoint applies limit/offset for pagination.
+    """
     handler = PMHandler(db)
-    users = await handler.list_users(project_id=project_id, limit=limit)
+    all_users = await handler.list_users(project_id=project_id)
+    
+    # Apply pagination
+    total = len(all_users)
+    paginated = all_users[offset:offset + limit]
     
     return ListResponse(
-        items=users,
-        total=len(users),
-        returned=len(users),
-        offset=0,
+        items=paginated,
+        total=total,
+        returned=len(paginated),
+        offset=offset,
         limit=limit
     )
 

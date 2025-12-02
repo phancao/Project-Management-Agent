@@ -38,30 +38,30 @@ import { parseJSON } from "~/core/utils";
 // Tool category icons
 const TOOL_ICONS: Record<string, React.ReactNode> = {
   // Project tools
-  list_projects: <FolderKanban size={16} />,
-  get_project: <FolderKanban size={16} />,
-  create_project: <FolderKanban size={16} />,
-  project_health: <BarChart3 size={16} />,
+  list_projects: <FolderKanban size={12} />,
+  get_project: <FolderKanban size={12} />,
+  create_project: <FolderKanban size={12} />,
+  project_health: <BarChart3 size={12} />,
   
   // Task tools
-  list_tasks: <ListTodo size={16} />,
-  get_task: <ListTodo size={16} />,
-  create_task: <ListTodo size={16} />,
-  update_task: <ListTodo size={16} />,
+  list_tasks: <ListTodo size={12} />,
+  get_task: <ListTodo size={12} />,
+  create_task: <ListTodo size={12} />,
+  update_task: <ListTodo size={12} />,
   
   // Sprint tools
-  list_sprints: <GitBranch size={16} />,
-  get_sprint: <GitBranch size={16} />,
-  sprint_report: <BarChart3 size={16} />,
-  burndown_chart: <BarChart3 size={16} />,
-  velocity_chart: <BarChart3 size={16} />,
+  list_sprints: <GitBranch size={12} />,
+  get_sprint: <GitBranch size={12} />,
+  sprint_report: <BarChart3 size={12} />,
+  burndown_chart: <BarChart3 size={12} />,
+  velocity_chart: <BarChart3 size={12} />,
   
   // User tools
-  list_users: <Users size={16} />,
-  get_user: <Users size={16} />,
+  list_users: <Users size={12} />,
+  get_user: <Users size={12} />,
   
   // Default
-  default: <Wrench size={16} />,
+  default: <Wrench size={12} />,
 };
 
 // Get friendly name for tool
@@ -199,41 +199,41 @@ export function StepBox({
       >
         {/* Header - always visible */}
         <button
-          className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/50 transition-colors"
+          className="flex w-full items-center gap-1 px-2 py-0.5 text-left hover:bg-accent/50 transition-colors"
           onClick={() => setIsExpanded(!isExpanded)}
         >
           {/* Status icon */}
           <div className="flex-shrink-0">
             {isRunning ? (
-              <Loader2 size={18} className="animate-spin text-blue-500" />
+              <Loader2 size={12} className="animate-spin text-blue-500" />
             ) : hasError ? (
-              <AlertCircle size={18} className="text-red-500" />
+              <AlertCircle size={12} className="text-red-500" />
             ) : (
-              <CheckCircle2 size={18} className="text-green-500" />
+              <CheckCircle2 size={12} className="text-green-500" />
             )}
           </div>
           
           {/* Tool icon and name */}
-          <div className="flex items-center gap-2 flex-shrink-0 text-muted-foreground">
+          <div className="flex items-center gap-1 flex-shrink-0 text-muted-foreground">
             {icon}
-            <span className="font-medium text-sm">{displayName}</span>
+            <span className="font-medium text-xs">{displayName}</span>
           </div>
           
           {/* Step number */}
           {stepNumber !== undefined && totalSteps !== undefined && (
-            <span className="text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
+            <span className="text-[10px] text-muted-foreground bg-accent px-1.5 py-px rounded-full">
               {stepNumber}/{totalSteps}
             </span>
           )}
           
           {/* Summary */}
-          <span className="flex-grow text-sm text-muted-foreground truncate">
+          <span className="flex-grow text-xs text-muted-foreground truncate">
             {summary}
           </span>
           
           {/* Expand icon */}
           <div className="flex-shrink-0 text-muted-foreground">
-            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </div>
         </button>
         
@@ -312,7 +312,7 @@ export function StepBoxList({ toolCalls, className }: StepBoxListProps) {
   if (!toolCalls || toolCalls.length === 0) return null;
   
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div className={cn("flex flex-col gap-0.5", className)}>
       {toolCalls.map((toolCall, index) => (
         <StepBox
           key={toolCall.id}

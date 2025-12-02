@@ -48,6 +48,11 @@ export function Markdown({
           <Image className="rounded" src={src as string} alt={alt ?? ""} />
         </a>
       ),
+      table: ({ children }) => (
+        <div className="overflow-x-auto w-full">
+          <table className="min-w-full">{children}</table>
+        </div>
+      ),
     };
   }, [checkLinkCredibility]);
 
@@ -62,7 +67,7 @@ export function Markdown({
     return plugins;
   }, [animated]);
   return (
-    <div className={cn(className, "prose dark:prose-invert")} style={style}>
+    <div className={cn(className, "prose dark:prose-invert max-w-full overflow-x-auto")} style={style}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={rehypePlugins}

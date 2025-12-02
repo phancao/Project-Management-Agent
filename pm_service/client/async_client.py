@@ -129,6 +129,72 @@ class AsyncPMServiceClient:
         logger.error(f"Request failed after {self.max_retries} attempts: {last_error}")
         raise last_error
     
+    async def _paginate_all(
+        self,
+        path: str,
+        params: Optional[dict] = None,
+        page_size: int = 500
+    ) -> dict[str, Any]:
+        """
+        Fetch ALL items from a paginated endpoint by iterating through pages.
+        
+        Args:
+            path: API path
+            params: Additional query parameters
+            page_size: Number of items per page (default: 500)
+            
+        Returns:
+            Combined ListResponse with all items
+        """
+        all_items = []
+        offset = 0
+        total = None
+        
+        base_params = params.copy() if params else {}
+        
+        while True:
+            # Build params for this page
+            page_params = {**base_params, "limit": page_size, "offset": offset}
+            
+            # Fetch page
+            result = await self._request("GET", path, params=page_params)
+            
+            items = result.get("items", [])
+            returned = result.get("returned", len(items))
+            total = result.get("total", total)
+            
+            all_items.extend(items)
+            
+            logger.debug(
+                f"Pagination: fetched {returned} items (offset={offset}, "
+                f"total so far={len(all_items)}, reported total={total})"
+            )
+            
+            # Check if we have all items
+            if returned < page_size:
+                # Last page (fewer items than page size)
+                break
+            
+            if total is not None and len(all_items) >= total:
+                # We have all items based on reported total
+                break
+            
+            # Move to next page
+            offset += page_size
+            
+            # Safety limit to prevent infinite loops
+            if offset > 50000:
+                logger.warning(f"Pagination safety limit reached at offset {offset}")
+                break
+        
+        return {
+            "items": all_items,
+            "total": len(all_items),
+            "returned": len(all_items),
+            "offset": 0,
+            "limit": len(all_items)
+        }
+    
     # ==================== Health ====================
     
     async def health_check(self) -> dict[str, Any]:
@@ -140,29 +206,27 @@ class AsyncPMServiceClient:
     async def list_projects(
         self,
         provider_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0
+        user_id: Optional[str] = None
     ) -> dict[str, Any]:
         """
-        List projects.
+        List ALL projects from all providers.
+        
+        Automatically paginates to fetch all projects.
         
         Args:
             provider_id: Filter by provider ID
             user_id: Filter by user ID
-            limit: Maximum results
-            offset: Offset for pagination
             
         Returns:
-            ListResponse with projects
+            ListResponse with ALL projects
         """
-        params = {"limit": limit, "offset": offset}
+        params = {}
         if provider_id:
             params["provider_id"] = provider_id
         if user_id:
             params["user_id"] = user_id
         
-        return await self._request("GET", "/api/v1/projects", params=params)
+        return await self._paginate_all("/api/v1/projects", params=params)
     
     async def get_project(self, project_id: str) -> dict[str, Any]:
         """
@@ -183,28 +247,23 @@ class AsyncPMServiceClient:
         project_id: Optional[str] = None,
         sprint_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
-        status: Optional[str] = None,
-        limit: int = 5000,
-        offset: int = 0
+        status: Optional[str] = None
     ) -> dict[str, Any]:
         """
-        List tasks with filters.
+        List ALL tasks with filters.
+        
+        Automatically paginates to fetch all tasks.
         
         Args:
             project_id: Filter by project ID
             sprint_id: Filter by sprint ID
             assignee_id: Filter by assignee ID
             status: Filter by status
-            limit: Maximum results (default: 5000 to get all tasks)
-            offset: Offset for pagination
             
         Returns:
-            ListResponse with tasks
-            
-        Note: The PM Service handler fetches ALL tasks from providers.
-              Use limit/offset for pagination if needed.
+            ListResponse with ALL matching tasks
         """
-        params = {"limit": limit, "offset": offset}
+        params = {}
         if project_id:
             params["project_id"] = project_id
         if sprint_id:
@@ -214,7 +273,7 @@ class AsyncPMServiceClient:
         if status:
             params["status"] = status
         
-        return await self._request("GET", "/api/v1/tasks", params=params)
+        return await self._paginate_all("/api/v1/tasks", params=params)
     
     async def get_task(self, task_id: str) -> dict[str, Any]:
         """
@@ -332,27 +391,27 @@ class AsyncPMServiceClient:
     async def list_sprints(
         self,
         project_id: Optional[str] = None,
-        status: Optional[str] = None,
-        limit: int = 50
+        status: Optional[str] = None
     ) -> dict[str, Any]:
         """
-        List sprints.
+        List ALL sprints.
+        
+        Automatically paginates to fetch all sprints.
         
         Args:
             project_id: Filter by project ID
             status: Filter by status (active, closed, future)
-            limit: Maximum results
             
         Returns:
-            ListResponse with sprints
+            ListResponse with ALL sprints
         """
-        params = {"limit": limit}
+        params = {}
         if project_id:
             params["project_id"] = project_id
         if status:
             params["status"] = status
         
-        return await self._request("GET", "/api/v1/sprints", params=params)
+        return await self._paginate_all("/api/v1/sprints", params=params)
     
     async def get_sprint(self, sprint_id: str) -> dict[str, Any]:
         """
@@ -388,24 +447,24 @@ class AsyncPMServiceClient:
     
     async def list_users(
         self,
-        project_id: Optional[str] = None,
-        limit: int = 100
+        project_id: Optional[str] = None
     ) -> dict[str, Any]:
         """
-        List users.
+        List ALL users.
+        
+        Automatically paginates to fetch all users.
         
         Args:
             project_id: Filter by project ID
-            limit: Maximum results
             
         Returns:
-            ListResponse with users
+            ListResponse with ALL users
         """
-        params = {"limit": limit}
+        params = {}
         if project_id:
             params["project_id"] = project_id
         
-        return await self._request("GET", "/api/v1/users", params=params)
+        return await self._paginate_all("/api/v1/users", params=params)
     
     async def get_user(self, user_id: str) -> dict[str, Any]:
         """
@@ -423,12 +482,14 @@ class AsyncPMServiceClient:
     
     async def list_providers(self) -> dict[str, Any]:
         """
-        List configured providers.
+        List ALL configured providers.
+        
+        Automatically paginates to fetch all providers.
         
         Returns:
-            ListResponse with providers
+            ListResponse with ALL providers
         """
-        return await self._request("GET", "/api/v1/providers")
+        return await self._paginate_all("/api/v1/providers")
     
     async def get_provider(self, provider_id: str) -> dict[str, Any]:
         """
@@ -505,24 +566,24 @@ class AsyncPMServiceClient:
     
     async def list_epics(
         self,
-        project_id: Optional[str] = None,
-        limit: int = 100
+        project_id: Optional[str] = None
     ) -> dict[str, Any]:
         """
-        List epics.
+        List ALL epics.
+        
+        Automatically paginates to fetch all epics.
         
         Args:
             project_id: Filter by project ID
-            limit: Maximum results
             
         Returns:
-            ListResponse with epics
+            ListResponse with ALL epics
         """
-        params = {"limit": limit}
+        params = {}
         if project_id:
             params["project_id"] = project_id
         
-        return await self._request("GET", "/api/v1/epics", params=params)
+        return await self._paginate_all("/api/v1/epics", params=params)
     
     async def get_epic(self, epic_id: str) -> dict[str, Any]:
         """

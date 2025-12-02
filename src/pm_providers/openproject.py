@@ -191,7 +191,12 @@ class OpenProjectProvider(BasePMProvider):
         project_id: Optional[str] = None,
         assignee_id: Optional[str] = None
     ) -> List[PMTask]:
-        """List all work packages (tasks)"""
+        """
+        List all work packages (tasks) with automatic pagination.
+        
+        OpenProject defaults to 20 items per page. This method fetches
+        ALL pages to return the complete task list.
+        """
         url = f"{self.base_url}/api/v3/work_packages"
         
         # Build filters for project and/or assignee
@@ -209,46 +214,62 @@ class OpenProjectProvider(BasePMProvider):
                 "assignee": {"operator": "=", "values": [assignee_id]}
             })
         
+        # Build base params
+        base_params: Dict[str, Any] = {}
         if filters:
-            params = {"filters": json_lib.dumps(filters)}
-            logger.info(f"OpenProject list_tasks with filters: {params}")
-        else:
-            params = {}
+            base_params["filters"] = json_lib.dumps(filters)
+            logger.info(f"OpenProject list_tasks with filters: {base_params}")
         
         # Include priority in embedded data for better parsing
-        params["include"] = "priority,status,assignee,project,version,parent"
+        base_params["include"] = "priority,status,assignee,project,version,parent"
         
-        logger.info(f"OpenProject list_tasks: URL={url}, params={params}")
+        # Pagination settings
+        page_size = 500  # OpenProject max is typically 1000, use 500 for safety
+        offset = 0
+        all_tasks: List[PMTask] = []
+        total_count = None
         
-        try:
+        while True:
+            params = {**base_params, "pageSize": page_size, "offset": offset}
             response = requests.get(url, headers=self.headers, params=params)
-            logger.info(f"OpenProject list_tasks response: {response.status_code}")
-            if not response.ok:
-                logger.error(f"OpenProject list_tasks failed: {response.text}")
-        except Exception as e:
-            logger.error(f"OpenProject list_tasks request exception: {e}")
-            raise
+            response.raise_for_status()
+            
+            result = response.json()
+            tasks_data = result.get("_embedded", {}).get("elements", [])
+            
+            # Get total count on first request
+            if total_count is None:
+                total_count = result.get("total", 0)
+                logger.info(f"OpenProject list_tasks: Total {total_count} work packages to fetch")
+            
+            # Parse and add tasks
+            for task in tasks_data:
+                all_tasks.append(self._parse_task(task))
+            
+            # Check if we've fetched all
+            if len(tasks_data) < page_size:
+                break
+            
+            if len(all_tasks) >= total_count:
+                break
+            
+            offset += page_size
+            
+            # Safety limit to prevent infinite loops
+            if offset > 50000:
+                logger.warning(f"OpenProject list_tasks: Safety limit reached at offset {offset}")
+                break
+        
+        logger.info(f"OpenProject list_tasks: Fetched {len(all_tasks)} work packages total")
         
         # Log if filter returns no results
-        if assignee_id:
-            try:
-                result = response.json()
-                task_count = len(
-                    result.get("_embedded", {}).get("elements", [])
-                )
-                if task_count == 0:
-                    logger.warning(
-                        f"Assignee filter returned 0 tasks for "
-                        f"user_id={assignee_id}. Response: "
-                        f"{result.get('count', 'N/A')} total"
-                    )
-            except Exception:
-                pass
+        if assignee_id and len(all_tasks) == 0:
+            logger.warning(
+                f"Assignee filter returned 0 tasks for "
+                f"user_id={assignee_id}. Total available: {total_count}"
+            )
         
-        response.raise_for_status()
-        
-        tasks_data = response.json()["_embedded"]["elements"]
-        return [self._parse_task(task) for task in tasks_data]
+        return all_tasks
     
     async def get_task(self, task_id: str) -> Optional[PMTask]:
         """Get a single work package by ID"""
@@ -949,7 +970,7 @@ class OpenProjectProvider(BasePMProvider):
         self, project_id: Optional[str] = None, state: Optional[str] = None
     ) -> List[PMSprint]:
         """
-        List sprints (iterations) from OpenProject
+        List sprints (iterations) from OpenProject with automatic pagination.
         
         Note: OpenProject uses "versions" for sprints/iterations.
         Versions have status: "open" or "closed"
@@ -968,10 +989,37 @@ class OpenProjectProvider(BasePMProvider):
         
         url = f"{self.base_url}/api/v3/versions"
         
-        response = requests.get(url, headers=self.headers, timeout=10)
-        response.raise_for_status()
+        # Pagination settings
+        page_size = 500
+        offset = 0
+        sprints_data: List[Dict[str, Any]] = []
+        total_count = None
         
-        sprints_data = response.json()["_embedded"]["elements"]
+        while True:
+            params = {"pageSize": page_size, "offset": offset}
+            response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            response.raise_for_status()
+            
+            result = response.json()
+            page_data = result.get("_embedded", {}).get("elements", [])
+            
+            if total_count is None:
+                total_count = result.get("total", 0)
+                logger.info(f"OpenProject list_sprints: Total {total_count} versions to fetch")
+            
+            sprints_data.extend(page_data)
+            
+            if len(page_data) < page_size:
+                break
+            if len(sprints_data) >= total_count:
+                break
+            
+            offset += page_size
+            if offset > 10000:  # Safety limit
+                logger.warning(f"OpenProject list_sprints: Safety limit reached at offset {offset}")
+                break
+        
+        logger.info(f"OpenProject list_sprints: Fetched {len(sprints_data)} versions total")
         
         # Filter by project_id if provided
         # (versions don't have project filter in API)
@@ -1115,13 +1163,49 @@ class OpenProjectProvider(BasePMProvider):
     async def list_users(
         self, project_id: Optional[str] = None
     ) -> List[PMUser]:
-        """List all users"""
-        url = f"{self.base_url}/api/v3/users"
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
+        """
+        List all users with automatic pagination.
         
-        users_data = response.json()["_embedded"]["elements"]
-        return [self._parse_user(user) for user in users_data]
+        Note: OpenProject may require admin permissions for user listing.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        url = f"{self.base_url}/api/v3/users"
+        
+        # Pagination settings
+        page_size = 500
+        offset = 0
+        all_users: List[PMUser] = []
+        total_count = None
+        
+        while True:
+            params = {"pageSize": page_size, "offset": offset}
+            response = requests.get(url, headers=self.headers, params=params)
+            response.raise_for_status()
+            
+            result = response.json()
+            users_data = result.get("_embedded", {}).get("elements", [])
+            
+            if total_count is None:
+                total_count = result.get("total", 0)
+                logger.info(f"OpenProject list_users: Total {total_count} users to fetch")
+            
+            for user in users_data:
+                all_users.append(self._parse_user(user))
+            
+            if len(users_data) < page_size:
+                break
+            if len(all_users) >= total_count:
+                break
+            
+            offset += page_size
+            if offset > 10000:  # Safety limit
+                logger.warning(f"OpenProject list_users: Safety limit reached at offset {offset}")
+                break
+        
+        logger.info(f"OpenProject list_users: Fetched {len(all_users)} users total")
+        return all_users
     
     async def get_user(self, user_id: str) -> Optional[PMUser]:
         """Get a single user by ID"""
@@ -1493,7 +1577,7 @@ class OpenProjectProvider(BasePMProvider):
     
     async def list_epics(self, project_id: Optional[str] = None) -> List[PMEpic]:
         """
-        List all epics, optionally filtered by project.
+        List all epics with automatic pagination, optionally filtered by project.
         
         TESTED: ✅ Works - Uses type ID from /api/v3/types endpoint
         OpenProject requires numeric type ID, not string name
@@ -1534,19 +1618,38 @@ class OpenProjectProvider(BasePMProvider):
                 "project": {"operator": "=", "values": [project_id]}
             })
         
-        params = {
-            "filters": json_lib.dumps(filters),
-            "pageSize": 100
+        base_params = {
+            "filters": json_lib.dumps(filters)
         }
         
+        # Pagination settings
+        page_size = 500
+        offset = 0
+        all_epics: List[PMEpic] = []
+        total_count = None
+        
         try:
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            
-            if response.status_code == 200:
+            while True:
+                params = {**base_params, "pageSize": page_size, "offset": offset}
+                response = requests.get(url, headers=self.headers, params=params, timeout=30)
+                
+                if response.status_code != 200:
+                    logger.error(
+                        f"Failed to list epics: {response.status_code}, "
+                        f"{response.text[:200]}"
+                    )
+                    raise ValueError(
+                        f"Failed to list epics: ({response.status_code}) "
+                        f"{response.text[:200]}"
+                    )
+                
                 data = response.json()
                 work_packages = data.get('_embedded', {}).get('elements', [])
                 
-                epics = []
+                if total_count is None:
+                    total_count = data.get("total", 0)
+                    logger.info(f"OpenProject list_epics: Total {total_count} epics to fetch")
+                
                 for wp in work_packages:
                     epic = PMEpic(
                         id=str(wp.get('id')),
@@ -1561,19 +1664,21 @@ class OpenProjectProvider(BasePMProvider):
                         updated_at=self._parse_datetime(wp.get('updatedAt')),
                         raw_data=wp
                     )
-                    epics.append(epic)
+                    all_epics.append(epic)
                 
-                logger.info(f"Found {len(epics)} epics from OpenProject")
-                return epics
-            else:
-                logger.error(
-                    f"Failed to list epics: {response.status_code}, "
-                    f"{response.text[:200]}"
-                )
-                raise ValueError(
-                    f"Failed to list epics: ({response.status_code}) "
-                    f"{response.text[:200]}"
-                )
+                if len(work_packages) < page_size:
+                    break
+                if len(all_epics) >= total_count:
+                    break
+                
+                offset += page_size
+                if offset > 10000:  # Safety limit
+                    logger.warning(f"OpenProject list_epics: Safety limit reached at offset {offset}")
+                    break
+            
+            logger.info(f"OpenProject list_epics: Fetched {len(all_epics)} epics total")
+            return all_epics
+            
         except requests.exceptions.RequestException as e:
             logger.error(f"Error listing epics: {e}", exc_info=True)
             raise ValueError(f"Failed to list epics: {str(e)}")
@@ -1866,31 +1971,51 @@ class OpenProjectProvider(BasePMProvider):
     
     async def list_labels(self, project_id: Optional[str] = None) -> List[PMLabel]:
         """
-        List all labels, optionally filtered by project.
+        List all labels with automatic pagination, optionally filtered by project.
         
         TESTED: ✅ Works - Categories from work packages endpoint
         """
         import logging
+        import json as json_lib
         logger = logging.getLogger(__name__)
         
         url = f"{self.base_url}/api/v3/work_packages"
-        params = {"pageSize": 100}
         
+        base_params: Dict[str, Any] = {}
         if project_id:
-            import json as json_lib
-            params["filters"] = json_lib.dumps([{
+            base_params["filters"] = json_lib.dumps([{
                 "project": {"operator": "=", "values": [project_id]}
             }])
         
+        # Pagination settings
+        page_size = 500
+        offset = 0
+        categories_map: Dict[str, Dict[str, Any]] = {}
+        total_count = None
+        
         try:
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            
-            if response.status_code == 200:
+            while True:
+                params = {**base_params, "pageSize": page_size, "offset": offset}
+                response = requests.get(url, headers=self.headers, params=params, timeout=30)
+                
+                if response.status_code != 200:
+                    logger.error(
+                        f"Failed to list labels: {response.status_code}, "
+                        f"{response.text[:200]}"
+                    )
+                    raise ValueError(
+                        f"Failed to list labels: ({response.status_code}) "
+                        f"{response.text[:200]}"
+                    )
+                
                 data = response.json()
                 work_packages = data.get('_embedded', {}).get('elements', [])
                 
+                if total_count is None:
+                    total_count = data.get("total", 0)
+                    logger.info(f"OpenProject list_labels: Scanning {total_count} work packages for categories")
+                
                 # Extract unique categories
-                categories_map = {}
                 for wp in work_packages:
                     categories = wp.get('_links', {}).get('categories', [])
                     if isinstance(categories, list):
@@ -1906,29 +2031,31 @@ class OpenProjectProvider(BasePMProvider):
                                         'href': cat_href
                                     }
                 
-                # Convert to PMLabel objects
-                labels = []
-                for cat_id, cat_data in categories_map.items():
-                    label = PMLabel(
-                        id=cat_id,
-                        name=cat_data['name'],
-                        description=None,
-                        project_id=project_id,
-                        raw_data=cat_data
-                    )
-                    labels.append(label)
+                if len(work_packages) < page_size:
+                    break
+                if offset + len(work_packages) >= total_count:
+                    break
                 
-                logger.info(f"Found {len(labels)} labels/categories from OpenProject")
-                return labels
-            else:
-                logger.error(
-                    f"Failed to list labels: {response.status_code}, "
-                    f"{response.text[:200]}"
+                offset += page_size
+                if offset > 50000:  # Safety limit
+                    logger.warning(f"OpenProject list_labels: Safety limit reached at offset {offset}")
+                    break
+            
+            # Convert to PMLabel objects
+            labels = []
+            for cat_id, cat_data in categories_map.items():
+                label = PMLabel(
+                    id=cat_id,
+                    name=cat_data['name'],
+                    description=None,
+                    project_id=project_id,
+                    raw_data=cat_data
                 )
-                raise ValueError(
-                    f"Failed to list labels: ({response.status_code}) "
-                    f"{response.text[:200]}"
-                )
+                labels.append(label)
+            
+            logger.info(f"OpenProject list_labels: Found {len(labels)} unique labels/categories")
+            return labels
+            
         except requests.exceptions.RequestException as e:
             logger.error(f"Error listing labels: {e}", exc_info=True)
             raise ValueError(f"Failed to list labels: {str(e)}")
@@ -1953,7 +2080,7 @@ class OpenProjectProvider(BasePMProvider):
     
     async def list_statuses(self, entity_type: str, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Get list of available statuses for an entity type.
+        Get list of available statuses for an entity type with automatic pagination.
         
         TESTED: ✅ Works via /api/v3/statuses endpoint
         """
@@ -1962,14 +2089,34 @@ class OpenProjectProvider(BasePMProvider):
         
         url = f"{self.base_url}/api/v3/statuses"
         
+        # Pagination settings
+        page_size = 100
+        offset = 0
+        statuses: List[Dict[str, Any]] = []
+        total_count = None
+        
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
-            
-            if response.status_code == 200:
+            while True:
+                params = {"pageSize": page_size, "offset": offset}
+                response = requests.get(url, headers=self.headers, params=params, timeout=10)
+                
+                if response.status_code != 200:
+                    logger.error(
+                        f"Failed to list statuses: {response.status_code}, "
+                        f"{response.text[:200]}"
+                    )
+                    raise ValueError(
+                        f"Failed to list statuses: ({response.status_code}) "
+                        f"{response.text[:200]}"
+                    )
+                
                 data = response.json()
                 elements = data.get('_embedded', {}).get('elements', [])
                 
-                statuses = []
+                if total_count is None:
+                    total_count = data.get("total", 0)
+                    logger.info(f"OpenProject list_statuses: Total {total_count} statuses to fetch")
+                
                 for status in elements:
                     if isinstance(status, dict):
                         status_id = str(status.get('id', ''))
@@ -1985,24 +2132,26 @@ class OpenProjectProvider(BasePMProvider):
                                 "is_default": status.get('isDefault', False),
                             })
                 
-                logger.info(f"Found {len(statuses)} statuses from OpenProject")
-                return statuses
-            else:
-                logger.error(
-                    f"Failed to list statuses: {response.status_code}, "
-                    f"{response.text[:200]}"
-                )
-                raise ValueError(
-                    f"Failed to list statuses: ({response.status_code}) "
-                    f"{response.text[:200]}"
-                )
+                if len(elements) < page_size:
+                    break
+                if len(statuses) >= total_count:
+                    break
+                
+                offset += page_size
+                if offset > 1000:  # Safety limit for statuses
+                    logger.warning(f"OpenProject list_statuses: Safety limit reached at offset {offset}")
+                    break
+            
+            logger.info(f"OpenProject list_statuses: Fetched {len(statuses)} statuses total")
+            return statuses
+            
         except requests.exceptions.RequestException as e:
             logger.error(f"Error listing statuses: {e}", exc_info=True)
             raise ValueError(f"Failed to list statuses: {str(e)}")
     
     async def list_priorities(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Get list of available priorities.
+        Get list of available priorities with automatic pagination.
         
         TESTED: ✅ Works via /api/v3/priorities endpoint
         """
@@ -2011,14 +2160,34 @@ class OpenProjectProvider(BasePMProvider):
         
         url = f"{self.base_url}/api/v3/priorities"
         
+        # Pagination settings
+        page_size = 100
+        offset = 0
+        priorities: List[Dict[str, Any]] = []
+        total_count = None
+        
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
-            
-            if response.status_code == 200:
+            while True:
+                params = {"pageSize": page_size, "offset": offset}
+                response = requests.get(url, headers=self.headers, params=params, timeout=10)
+                
+                if response.status_code != 200:
+                    logger.error(
+                        f"Failed to list priorities: {response.status_code}, "
+                        f"{response.text[:200]}"
+                    )
+                    raise ValueError(
+                        f"Failed to list priorities: ({response.status_code}) "
+                        f"{response.text[:200]}"
+                    )
+                
                 data = response.json()
                 elements = data.get('_embedded', {}).get('elements', [])
                 
-                priorities = []
+                if total_count is None:
+                    total_count = data.get("total", 0)
+                    logger.info(f"OpenProject list_priorities: Total {total_count} priorities to fetch")
+                
                 for priority in elements:
                     if isinstance(priority, dict):
                         priority_id = str(priority.get('id', ''))
@@ -2034,17 +2203,19 @@ class OpenProjectProvider(BasePMProvider):
                                 "position": priority.get('position', 0),
                             })
                 
-                logger.info(f"Found {len(priorities)} priorities from OpenProject")
-                return priorities
-            else:
-                logger.error(
-                    f"Failed to list priorities: {response.status_code}, "
-                    f"{response.text[:200]}"
-                )
-                raise ValueError(
-                    f"Failed to list priorities: ({response.status_code}) "
-                    f"{response.text[:200]}"
-                )
+                if len(elements) < page_size:
+                    break
+                if len(priorities) >= total_count:
+                    break
+                
+                offset += page_size
+                if offset > 500:  # Safety limit for priorities
+                    logger.warning(f"OpenProject list_priorities: Safety limit reached at offset {offset}")
+                    break
+            
+            logger.info(f"OpenProject list_priorities: Fetched {len(priorities)} priorities total")
+            return priorities
+            
         except requests.exceptions.RequestException as e:
             logger.error(f"Error listing priorities: {e}", exc_info=True)
             raise ValueError(f"Failed to list priorities: {str(e)}")

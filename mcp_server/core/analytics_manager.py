@@ -102,33 +102,26 @@ class AnalyticsManager:
         Parse composite project ID into provider_id and project_key.
         
         Args:
-            project_id: Project ID (may be composite "provider_id:project_key")
+            project_id: Project ID - either composite "provider_id:project_key" 
+                        or just "provider_id" (for sprint operations where project_key
+                        is extracted from sprint)
         
         Returns:
             Tuple of (provider_id, actual_project_id)
-        
-        Raises:
-            ValueError: If no active providers found
+            If project_id is provider-only, actual_project_id will be empty string
         """
         if ":" in project_id:
             # Composite ID: "provider_uuid:project_key"
             provider_id, actual_project_id = project_id.split(":", 1)
             return provider_id, actual_project_id
         else:
-            # Fallback: get first active provider
-            providers = self.provider_manager.get_active_providers()
-            if not providers:
-                raise ValueError("No active PM providers found")
-            
-            provider_id = str(providers[0].id)
-            actual_project_id = project_id
-            
+            # Provider-only ID (valid for sprint operations)
+            # The actual_project_id will be determined from sprint info
             logger.info(
-                "[AnalyticsManager] No provider specified, using first active: %s",
-                provider_id
+                "[AnalyticsManager] project_id '%s' is provider-only (no project_key)",
+                project_id
             )
-            
-            return provider_id, actual_project_id
+            return project_id, ""
     
     def clear_cache(self) -> None:
         """Clear analytics service cache."""
@@ -147,13 +140,22 @@ class AnalyticsManager:
         Convenience method that combines get_service() and service call.
         
         Args:
-            project_id: Project ID
-            sprint_id: Sprint ID (optional)
+            project_id: Project ID (may be composite "provider_id:project_key")
+            sprint_id: Sprint ID (optional, may be composite "provider_id:sprint_key")
             scope_type: Scope type (story_points, tasks, hours)
         
         Returns:
             Burndown chart data
         """
+        # If sprint_id has provider info and project_id doesn't, use sprint's provider
+        if sprint_id and ":" in sprint_id and ":" not in project_id:
+            provider_id = sprint_id.split(":", 1)[0]
+            project_id = f"{provider_id}:{project_id}"
+            logger.info(
+                "[AnalyticsManager] Constructed project_id from sprint provider: %s",
+                project_id
+            )
+        
         service, actual_project_id = await self.get_service(project_id)
         return await service.get_burndown_chart(
             project_id=actual_project_id,
@@ -191,18 +193,40 @@ class AnalyticsManager:
         Get sprint report data.
         
         Args:
-            sprint_id: Sprint ID
-            project_id: Project ID (optional)
+            sprint_id: Sprint ID (MUST be composite "provider_id:sprint_key")
+            project_id: Project ID (optional, extracted from sprint_id if not provided)
         
         Returns:
             Sprint report data
+        
+        Raises:
+            ValueError: If sprint_id is not in composite format and project_id is not provided
         """
-        # If project_id not provided, try to get from first active provider
-        if not project_id:
-            providers = self.provider_manager.get_active_providers()
-            if not providers:
-                raise ValueError("No active PM providers found")
-            project_id = str(providers[0].id)
+        # Ensure we have provider info
+        if ":" not in sprint_id:
+            raise ValueError(
+                f"sprint_id must be in composite format 'provider_id:sprint_key', got: '{sprint_id}'. "
+                "Please use composite sprint_id format."
+            )
+        
+        # Extract provider_id from sprint_id
+        provider_id = sprint_id.split(":", 1)[0]
+        
+        # If project_id is provided but doesn't have ":", treat it as provider_id only
+        # and use provider from sprint_id
+        if project_id and ":" not in project_id:
+            # project_id is just provider_id, use sprint's provider
+            logger.info(
+                "[AnalyticsManager] project_id '%s' is provider-only, using provider from sprint_id: %s",
+                project_id, provider_id
+            )
+            project_id = provider_id
+        elif not project_id:
+            project_id = provider_id
+            logger.info(
+                "[AnalyticsManager] Extracted provider_id from sprint_id: %s",
+                provider_id
+            )
         
         service, actual_project_id = await self.get_service(project_id)
         return await service.get_sprint_report(

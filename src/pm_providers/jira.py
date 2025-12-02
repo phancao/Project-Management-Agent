@@ -66,8 +66,6 @@ class JIRAProvider(BasePMProvider):
         start_at = 0
         max_results = 50  # JIRA API default page size
         
-        logger.info(f"JIRA: Fetching projects from {url}")
-        
         while True:
             # JIRA API v3: Remove 'recent' parameter to get ALL projects
             # Use pagination to fetch all pages
@@ -78,12 +76,9 @@ class JIRAProvider(BasePMProvider):
                 "expand": "description,lead,url,projectKeys"
             }
             
-            logger.info(f"JIRA: Requesting projects with params: startAt={start_at}, maxResults={max_results}")
             response = requests.get(
                 url, headers=self.headers, params=params, timeout=30
             )
-            
-            logger.info(f"JIRA: Response status: {response.status_code}")
             
             # Provide better error messages for common issues
             if response.status_code == 401:
@@ -102,19 +97,9 @@ class JIRAProvider(BasePMProvider):
             response.raise_for_status()
             
             projects_data = response.json()
-            logger.info(f"JIRA: Received response type: {type(projects_data)}, length: {len(projects_data) if isinstance(projects_data, list) else 'N/A'}")
-            
-            # Log first few characters of response for debugging (but not full response for security)
-            if isinstance(projects_data, list):
-                logger.info(f"JIRA: Response is a list with {len(projects_data)} items")
-                if len(projects_data) > 0:
-                    logger.info(f"JIRA: First project keys: {[p.get('key', 'N/A') for p in projects_data[:3]]}")
-            elif isinstance(projects_data, dict):
-                logger.info(f"JIRA: Response is a dict with keys: {list(projects_data.keys())[:10]}")
             
             # Handle empty response
             if not projects_data:
-                logger.warning("JIRA: Empty response from API - this might indicate no projects exist or permission issues")
                 break
             
             # Response is typically a list of projects
@@ -300,10 +285,12 @@ class JIRAProvider(BasePMProvider):
         else:
             jql = " AND ".join(jql_parts) + " ORDER BY created DESC"
         
-        # JIRA default is 50, max is 1000
-        params: Dict[str, Any] = {
+        # JIRA API supports pagination with startAt and maxResults
+        # Max per request is 1000, we paginate to get all results
+        max_results = 500  # Use 500 for safety
+        base_params: Dict[str, Any] = {
             "jql": jql,
-            "maxResults": 1000,
+            "maxResults": max_results,
             "fields": [
                 "summary",           # title
                 "description",       # description
@@ -324,6 +311,9 @@ class JIRAProvider(BasePMProvider):
             ],
             "expand": "names,schema"
         }
+        
+        # Pagination will be applied in the request loop
+        params = base_params.copy()
         
         # Comprehensive logging for debugging
         import logging
@@ -521,16 +511,54 @@ class JIRAProvider(BasePMProvider):
         
         response.raise_for_status()
         
+        # Pagination: fetch all pages
+        all_issues: List[Dict[str, Any]] = []
+        start_at = 0
+        total_count = None
+        
         try:
-            data = response.json()
-            logger.info("Parsed response JSON successfully")
-            logger.info("Number of issues in response: %d", len(data.get("issues", [])))
+            while True:
+                # For subsequent requests, add startAt parameter
+                if start_at > 0:
+                    page_params = base_params.copy()
+                    page_params["startAt"] = start_at
+                    page_response = requests.post(
+                        url, headers=self.headers, json=page_params, timeout=30
+                    )
+                    page_response.raise_for_status()
+                    data = page_response.json()
+                else:
+                    # First request already made
+                    data = response.json()
+                
+                if total_count is None:
+                    total_count = data.get("total", 0)
+                    logger.info("JIRA list_tasks: Total %d issues to fetch", total_count)
+                
+                issues = data.get("issues", [])
+                all_issues.extend(issues)
+                
+                logger.info("JIRA list_tasks: Fetched page at offset %d, got %d issues (total so far: %d/%d)", 
+                           start_at, len(issues), len(all_issues), total_count)
+                
+                # Check if we've fetched all
+                if len(issues) < max_results:
+                    break
+                if len(all_issues) >= total_count:
+                    break
+                
+                start_at += len(issues)
+                
+                # Safety limit
+                if start_at > 50000:
+                    logger.warning("JIRA list_tasks: Safety limit reached at offset %d", start_at)
+                    break
             
-            issues = data.get("issues", [])
+            logger.info("JIRA list_tasks: Fetched %d issues total", len(all_issues))
             
-            logger.info("Parsing %d issues...", len(issues))
+            # Parse all issues
             parsed_tasks = []
-            for idx, issue in enumerate(issues):
+            for idx, issue in enumerate(all_issues):
                 try:
                     task = self._parse_task(issue)
                     parsed_tasks.append(task)
@@ -1180,7 +1208,7 @@ class JIRAProvider(BasePMProvider):
                     logger.warning(f"No boards found for project: {project_id}")
                     return []
                 
-                # Get sprints from the first board (or all boards if project_id not specified)
+                # Get sprints from all boards with pagination
                 all_sprints = []
                 
                 for board in boards:
@@ -1190,31 +1218,54 @@ class JIRAProvider(BasePMProvider):
                     
                     sprints_url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/sprint"
                     
-                    # Add state filter if specified
-                    sprint_params = {}
-                    if state:
-                        sprint_params['state'] = state
+                    # Pagination for sprints
+                    start_at = 0
+                    max_results = 50  # JIRA Agile API default
                     
-                    sprint_response = requests.get(
-                        sprints_url, 
-                        headers=self.headers, 
-                        params=sprint_params if sprint_params else None,
-                        timeout=10
-                    )
-                    
-                    if sprint_response.status_code == 200:
-                        sprint_data = sprint_response.json()
-                        board_sprints = sprint_data.get('values', [])
-                        all_sprints.extend(board_sprints)
-                        logger.info(
-                            f"Found {len(board_sprints)} sprints from board {board_id} "
-                            f"(state={state or 'all'})"
+                    while True:
+                        # Add state filter if specified
+                        sprint_params: Dict[str, Any] = {
+                            "startAt": start_at,
+                            "maxResults": max_results
+                        }
+                        if state:
+                            sprint_params['state'] = state
+                        
+                        sprint_response = requests.get(
+                            sprints_url, 
+                            headers=self.headers, 
+                            params=sprint_params,
+                            timeout=10
                         )
-                    else:
-                        logger.warning(
-                            f"Failed to get sprints from board {board_id}: "
-                            f"{sprint_response.status_code}"
-                        )
+                        
+                        if sprint_response.status_code == 200:
+                            sprint_data = sprint_response.json()
+                            board_sprints = sprint_data.get('values', [])
+                            all_sprints.extend(board_sprints)
+                            
+                            # Check if there are more pages
+                            is_last = sprint_data.get('isLast', True)
+                            total = sprint_data.get('total', 0)
+                            
+                            if is_last or len(board_sprints) < max_results:
+                                logger.info(
+                                    f"Fetched {len(board_sprints)} sprints from board {board_id} "
+                                    f"(state={state or 'all'})"
+                                )
+                                break
+                            
+                            start_at += len(board_sprints)
+                            
+                            # Safety limit
+                            if start_at > 1000:
+                                logger.warning(f"Sprint pagination safety limit reached for board {board_id}")
+                                break
+                        else:
+                            logger.warning(
+                                f"Failed to get sprints from board {board_id}: "
+                                f"{sprint_response.status_code}"
+                            )
+                            break
                 
                 # Convert to PMSprint objects
                 sprints = []
@@ -1345,27 +1396,57 @@ class JIRAProvider(BasePMProvider):
                 # List assignable users for a project
                 # JIRA API: GET /rest/api/3/user/assignable/search?project={projectKey}
                 url = f"{self.base_url}/rest/api/3/user/assignable/search"
-                params = {"project": project_id}
+                base_params: Dict[str, Any] = {"project": project_id}
             else:
                 # List all users (requires admin permissions)
                 # JIRA API: GET /rest/api/3/users/search
                 url = f"{self.base_url}/rest/api/3/users/search"
-                params = {}
+                base_params = {}
             
             _logger.info("Fetching users from JIRA: %s (project_id=%s)", url, project_id)
             
-            response = requests.get(
-                url, headers=self.headers, params=params, timeout=10
-            )
+            # Pagination: fetch all pages
+            all_users_data: List[Dict[str, Any]] = []
+            start_at = 0
+            max_results = 50
+            
+            while True:
+                params = {**base_params, "startAt": start_at, "maxResults": max_results}
+                response = requests.get(
+                    url, headers=self.headers, params=params, timeout=10
+                )
+                
+                if response.status_code != 200:
+                    break
+                
+                users_data = response.json()
+                
+                # JIRA user search returns a list directly
+                if isinstance(users_data, list):
+                    all_users_data.extend(users_data)
+                    if len(users_data) < max_results:
+                        break
+                    start_at += len(users_data)
+                else:
+                    # Some endpoints might return paginated object
+                    page_users = users_data.get("values", [])
+                    all_users_data.extend(page_users)
+                    if users_data.get("isLast", True) or len(page_users) < max_results:
+                        break
+                    start_at += len(page_users)
+                
+                # Safety limit
+                if start_at > 10000:
+                    _logger.warning("JIRA list_users: Safety limit reached at offset %d", start_at)
+                    break
             
             _logger.info("JIRA list_users response: status=%d", response.status_code)
             
             if response.status_code == 200:
-                users_data = response.json()
-                _logger.info("JIRA users data: %d users found", len(users_data))
+                _logger.info("JIRA users data: %d users found", len(all_users_data))
                 
                 users = []
-                for user_data in users_data:
+                for user_data in all_users_data:
                     # JIRA returns user info with accountId as the unique identifier
                     account_id = user_data.get("accountId") or user_data.get("key")
                     email = user_data.get("emailAddress")
@@ -1504,9 +1585,10 @@ class JIRAProvider(BasePMProvider):
         
         jql = " AND ".join(jql_parts)
         
-        params = {
+        max_results = 500
+        base_params = {
             "jql": jql,
-            "maxResults": 1000,
+            "maxResults": max_results,
             "fields": [
                 "summary", "description", "status", "priority",
                 "project", "created", "updated", "duedate", "startdate"
@@ -1515,13 +1597,45 @@ class JIRAProvider(BasePMProvider):
         }
         
         try:
-            response = requests.post(
-                url, headers=self.headers, json=params, timeout=30
-            )
+            # Pagination: fetch all pages
+            all_issues: List[Dict[str, Any]] = []
+            start_at = 0
+            total_count = None
             
-            if response.status_code == 200:
+            while True:
+                params = {**base_params, "startAt": start_at}
+                response = requests.post(
+                    url, headers=self.headers, json=params, timeout=30
+                )
+                
+                if response.status_code != 200:
+                    break
+                
                 data = response.json()
                 issues = data.get('issues', [])
+                
+                if total_count is None:
+                    total_count = data.get("total", 0)
+                    logger.info(f"JIRA list_epics: Total {total_count} epics to fetch")
+                
+                all_issues.extend(issues)
+                
+                if len(issues) < max_results:
+                    break
+                if len(all_issues) >= total_count:
+                    break
+                
+                start_at += len(issues)
+                
+                # Safety limit
+                if start_at > 10000:
+                    logger.warning(f"JIRA list_epics: Safety limit reached at offset {start_at}")
+                    break
+            
+            logger.info(f"JIRA list_epics: Fetched {len(all_issues)} epics total")
+            
+            if response.status_code == 200:
+                issues = all_issues
                 
                 epics = []
                 for issue in issues:
@@ -1883,25 +1997,56 @@ class JIRAProvider(BasePMProvider):
         
         jql = " AND ".join(jql_parts)
         
-        params = {
+        max_results = 500
+        base_params = {
             "jql": jql,
-            "maxResults": 1000,
+            "maxResults": max_results,
             "fields": ["labels"],
             "expand": "names"
         }
         
         try:
-            response = requests.post(
-                url, headers=self.headers, json=params, timeout=30
-            )
+            # Pagination: fetch all pages
+            all_issues: List[Dict[str, Any]] = []
+            start_at = 0
+            total_count = None
             
-            if response.status_code == 200:
+            while True:
+                params = {**base_params, "startAt": start_at}
+                response = requests.post(
+                    url, headers=self.headers, json=params, timeout=30
+                )
+                
+                if response.status_code != 200:
+                    break
+                
                 data = response.json()
                 issues = data.get('issues', [])
                 
-                # Extract unique labels
-                labels_set = set()
-                for issue in issues:
+                if total_count is None:
+                    total_count = data.get("total", 0)
+                    logger.info(f"JIRA list_labels: Scanning {total_count} issues for labels")
+                
+                all_issues.extend(issues)
+                
+                if len(issues) < max_results:
+                    break
+                if len(all_issues) >= total_count:
+                    break
+                
+                start_at += len(issues)
+                
+                # Safety limit
+                if start_at > 50000:
+                    logger.warning(f"JIRA list_labels: Safety limit reached at offset {start_at}")
+                    break
+            
+            logger.info(f"JIRA list_labels: Scanned {len(all_issues)} issues total")
+            
+            if response.status_code == 200:
+                # Extract unique labels from all issues
+                labels_set: set[str] = set()
+                for issue in all_issues:
                     fields = issue.get('fields', {})
                     labels = fields.get('labels', [])
                     if isinstance(labels, list):

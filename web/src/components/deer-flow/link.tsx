@@ -24,6 +24,7 @@ export const Link = ({
     (toolCalls || []).forEach((call) => {
       if (call && call.name === "web_search" && call.result) {
         try {
+          // parseJSON handles errors internally and returns fallback value
           const result = parseJSON(call.result, []) as Array<{ url: string }>;
           if (Array.isArray(result)) {
             result.forEach((r) => {
@@ -35,12 +36,15 @@ export const Link = ({
             });
           }
         } catch (error) {
+          // Extra safety: catch any unexpected errors that might slip through
+          // parseJSON should handle all errors, but this is a safety net
           console.warn('Failed to parse web_search result:', error);
+          // Continue processing other tool calls even if one fails
         }
       }
     });
     return links;
-  }, [toolCalls]);
+  }, [toolCalls, checkLinkCredibility]);
 
   const isCredible = useMemo(() => {
     return checkLinkCredibility && href && !responding

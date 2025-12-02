@@ -116,8 +116,13 @@ def require_sprint(func: Callable) -> Callable:
     """
     @wraps(func)
     async def wrapper(self, **kwargs):
-        if "sprint_id" not in kwargs or not kwargs["sprint_id"]:
+        # Only check if sprint_id is missing, not if it's falsy
+        # Allow empty strings and let the analytics manager handle validation
+        if "sprint_id" not in kwargs:
             raise ValueError("sprint_id is required")
+        # If sprint_id is None, convert to empty string to let analytics manager handle it
+        if kwargs.get("sprint_id") is None:
+            kwargs["sprint_id"] = ""
         return await func(self, **kwargs)
     return wrapper
 

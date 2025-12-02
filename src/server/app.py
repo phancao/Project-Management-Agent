@@ -405,13 +405,32 @@ def _get_agent_name(agent, message_metadata):
     return agent_name
 
 
+def _safe_serialize(obj):
+    """Safely serialize an object to JSON-compatible format."""
+    if isinstance(obj, str):
+        return obj
+    try:
+        # Try direct serialization first
+        json.dumps(obj)
+        return obj
+    except (TypeError, ValueError):
+        # If it fails, convert to string representation
+        if isinstance(obj, dict):
+            return {k: _safe_serialize(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [_safe_serialize(item) for item in obj]
+        else:
+            return str(obj)
+
+
 def _create_event_stream_message(
     message_chunk, message_metadata, thread_id, agent_name
 ):
     """Create base event stream message."""
     content = message_chunk.content
     if not isinstance(content, str):
-        content = json.dumps(content, ensure_ascii=False)
+        # Safely serialize content, handling non-JSON-serializable objects
+        content = json.dumps(_safe_serialize(content), ensure_ascii=False)
 
     event_stream_message = {
         "thread_id": thread_id,
@@ -499,23 +518,23 @@ async def _process_message_chunk(
 
     if isinstance(message_chunk, ToolMessage):
         # Tool Message - Return the result of the tool call
-        logger.debug(f"[{safe_thread_id}] Processing ToolMessage")
+        logger.info(f"[{safe_thread_id}] 🔧 Processing ToolMessage")
         tool_call_id = message_chunk.tool_call_id
         event_stream_message["tool_call_id"] = tool_call_id
         
         # Validate tool_call_id for debugging
         if tool_call_id:
             safe_tool_id = sanitize_log_input(tool_call_id, max_length=100)
-            logger.debug(
-                f"[{safe_thread_id}] ToolMessage with tool_call_id: "
-                f"{safe_tool_id}"
+            logger.info(
+                f"[{safe_thread_id}] 🔧 ToolMessage with tool_call_id: "
+                f"{safe_tool_id}, content_len={len(str(event_stream_message.get('content', '')))}"
             )
         else:
             logger.warning(
                 f"[{safe_thread_id}] ToolMessage received without tool_call_id"
             )
         
-        logger.debug(f"[{safe_thread_id}] Yielding tool_call_result event")
+        logger.info(f"[{safe_thread_id}] 🔧 Yielding tool_call_result event")
         yield _make_event("tool_call_result", event_stream_message)
     elif isinstance(message_chunk, AIMessageChunk):
         # AI Message - Raw message tokens
@@ -714,6 +733,9 @@ async def _stream_graph_events(
                         event_data[0], 
                         event_data[1] if len(event_data) > 1 else {}
                     )
+                    # Log message type for debugging
+                    msg_type = type(message_chunk).__name__
+                    logger.info(f"[{safe_thread_id}] 📨 messages stream: type={msg_type}")
                     async for event in _process_message_chunk(
                         message_chunk, message_metadata, thread_id, agent
                     ):
@@ -951,7 +973,24 @@ async def _stream_graph_events(
                                 sys.stderr.flush()
                                 
                                 for msg in messages:
-                                    if (
+                                    # Process ToolMessages - yield tool_call_result events
+                                    if isinstance(msg, ToolMessage):
+                                        logger.info(
+                                            f"[{safe_thread_id}] 🔧 Processing ToolMessage from updates stream: "
+                                            f"tool_call_id={msg.tool_call_id}"
+                                        )
+                                        msg_metadata = {
+                                            "langgraph_node": node_name,
+                                        }
+                                        async for event in _process_message_chunk(
+                                            msg,
+                                            msg_metadata,
+                                            thread_id,
+                                            (node_name,),
+                                        ):
+                                            yield event
+                                    # Process AIMessages
+                                    elif (
                                         isinstance(msg, AIMessage)
                                         and msg.name == node_name
                                     ):
@@ -1235,23 +1274,30 @@ def _make_event(event_type: str, data: dict[str, Any]):
         data.pop("content")
     # Ensure JSON serialization with proper encoding
     try:
+        # First try direct serialization
         json_data = json.dumps(data, ensure_ascii=False)
-
-        finish_reason = data.get("finish_reason", "")
-        chat_stream_message(
-            data.get("thread_id", ""),
-            f"event: {event_type}\ndata: {json_data}\n\n",
-            finish_reason,
-        )
-
-        return f"event: {event_type}\ndata: {json_data}\n\n"
     except (TypeError, ValueError) as e:
-        logger.error(f"Error serializing event data: {e}")
-        # Return a safe error event
-        error_data = json.dumps(
-            {"error": "Serialization failed"}, ensure_ascii=False
-        )
-        return f"event: error\ndata: {error_data}\n\n"
+        # If direct serialization fails, use safe serialization
+        logger.warning(f"Direct serialization failed for {event_type}, using safe serialize: {e}")
+        safe_data = _safe_serialize(data)
+        try:
+            json_data = json.dumps(safe_data, ensure_ascii=False)
+        except (TypeError, ValueError) as e2:
+            logger.error(f"Error serializing event data even with safe_serialize: {e2}")
+            # Return a safe error event
+            error_data = json.dumps(
+                {"error": "Serialization failed", "event_type": event_type}, ensure_ascii=False
+            )
+            return f"event: error\ndata: {error_data}\n\n"
+
+    finish_reason = data.get("finish_reason", "")
+    chat_stream_message(
+        data.get("thread_id", ""),
+        f"event: {event_type}\ndata: {json_data}\n\n",
+        finish_reason,
+    )
+
+    return f"event: {event_type}\ndata: {json_data}\n\n"
 
 
 @app.post("/api/tts")

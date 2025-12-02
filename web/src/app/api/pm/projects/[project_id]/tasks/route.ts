@@ -9,9 +9,9 @@ const BACKEND_URL = getBackendUrl();
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { project_id: string } }
+  { params }: { params: Promise<{ project_id: string }> }
 ) {
-  const projectId = params.project_id;
+  const { project_id: projectId } = await params;
   // URL decode the project_id in case it's encoded
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/tasks`;
@@ -64,9 +64,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { project_id: string } }
+  { params }: { params: Promise<{ project_id: string }> }
 ) {
-  const projectId = params.project_id;
+  const { project_id: projectId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/tasks`;
   console.log('[API Proxy] Creating task at:', url);

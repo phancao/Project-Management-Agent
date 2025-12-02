@@ -9,9 +9,9 @@ const BACKEND_URL = getBackendUrl();
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { project_id: string } }
+  { params }: { params: Promise<{ project_id: string }> }
 ) {
-  const projectId = params.project_id;
+  const { project_id: projectId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/labels`;
   console.log('[API Proxy] Fetching labels from:', url);

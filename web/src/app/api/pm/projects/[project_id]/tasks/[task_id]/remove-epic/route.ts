@@ -9,10 +9,9 @@ const BACKEND_URL = getBackendUrl();
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { project_id: string; task_id: string } }
+  { params }: { params: Promise<{ project_id: string; task_id: string }> }
 ) {
-  const projectId = params.project_id;
-  const taskId = params.task_id;
+  const { project_id: projectId, task_id: taskId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const decodedTaskId = decodeURIComponent(taskId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/tasks/${encodeURIComponent(decodedTaskId)}/remove-epic`;

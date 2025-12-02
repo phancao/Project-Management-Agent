@@ -31,7 +31,80 @@ export function mergeMessage(message: Message, event: ChatEvent) {
     if (message.toolCalls) {
       message.toolCalls.forEach((toolCall) => {
         if (toolCall.argsChunks?.length) {
-          toolCall.args = JSON.parse(toolCall.argsChunks.join(""));
+          const argsString = toolCall.argsChunks.join("");
+          try {
+            toolCall.args = JSON.parse(argsString);
+          } catch (e) {
+            // Try to extract valid JSON if there are extra characters
+            try {
+              // Find the first { or [ and the matching closing bracket
+              const startBrace = argsString.indexOf("{");
+              const startBracket = argsString.indexOf("[");
+              let start = -1;
+              let endChar = "";
+              
+              if (startBrace >= 0 && (startBracket < 0 || startBrace < startBracket)) {
+                start = startBrace;
+                endChar = "}";
+              } else if (startBracket >= 0) {
+                start = startBracket;
+                endChar = "]";
+              }
+              
+              if (start >= 0) {
+                // Find matching end by counting braces/brackets
+                let depth = 0;
+                let inString = false;
+                let escapeNext = false;
+                let end = -1;
+                
+                for (let i = start; i < argsString.length; i++) {
+                  const char = argsString[i];
+                  
+                  if (escapeNext) {
+                    escapeNext = false;
+                    continue;
+                  }
+                  
+                  if (char === "\\") {
+                    escapeNext = true;
+                    continue;
+                  }
+                  
+                  if (char === '"') {
+                    inString = !inString;
+                    continue;
+                  }
+                  
+                  if (inString) continue;
+                  
+                  if (char === "{" || char === "[") {
+                    depth++;
+                  } else if (char === "}" || char === "]") {
+                    depth--;
+                    if (depth === 0) {
+                      end = i;
+                      break;
+                    }
+                  }
+                }
+                
+                if (end > start) {
+                  const extracted = argsString.substring(start, end + 1);
+                  toolCall.args = JSON.parse(extracted);
+                } else {
+                  console.warn(`[mergeMessage] Failed to extract valid JSON from argsChunks: ${argsString.substring(0, 100)}...`);
+                  toolCall.args = {};
+                }
+              } else {
+                console.warn(`[mergeMessage] No JSON structure found in argsChunks: ${argsString.substring(0, 100)}...`);
+                toolCall.args = {};
+              }
+            } catch (extractError) {
+              console.warn(`[mergeMessage] Failed to parse tool call args: ${argsString.substring(0, 100)}...`, extractError);
+              toolCall.args = {};
+            }
+          }
           delete toolCall.argsChunks;
         }
       });
@@ -63,16 +136,39 @@ function mergeToolCallMessage(
   message: Message,
   event: ToolCallsEvent | ToolCallChunksEvent,
 ) {
-  if (event.type === "tool_calls" && event.data.tool_calls[0]?.name) {
-    message.toolCalls = event.data.tool_calls.map((raw) => ({
-      id: raw.id,
-      name: raw.name,
-      args: raw.args,
-      result: undefined,
-    }));
+  // Initialize toolCalls array if not present
+  message.toolCalls ??= [];
+  
+  if (event.type === "tool_calls" && event.data.tool_calls?.length) {
+    // MERGE tool calls instead of replacing - backend may send multiple tool_calls events
+    // for parallel tool calls
+    for (const raw of event.data.tool_calls) {
+      if (!raw.name || !raw.id) continue; // Skip tool calls without names or IDs
+      
+      // Check if this tool call already exists (by ID)
+      const existingIndex = message.toolCalls.findIndex(tc => tc.id === raw.id);
+      if (existingIndex >= 0) {
+        // Update existing tool call
+        const existing = message.toolCalls[existingIndex]!;
+        message.toolCalls[existingIndex] = {
+          id: existing.id,
+          name: raw.name,
+          args: raw.args,
+          argsChunks: existing.argsChunks,
+          result: existing.result,
+        };
+      } else {
+        // Add new tool call
+        message.toolCalls.push({
+          id: raw.id,
+          name: raw.name,
+          args: raw.args,
+          result: undefined,
+        });
+      }
+    }
   }
 
-  message.toolCalls ??= [];
   for (const chunk of event.data.tool_call_chunks) {
     if (chunk.id) {
       const toolCall = message.toolCalls.find(
@@ -100,7 +196,11 @@ function mergeToolCallResultMessage(
     (toolCall) => toolCall.id === event.data.tool_call_id,
   );
   if (toolCall) {
-    toolCall.result = event.data.content;
+    // Ensure result is always a string (not undefined/null)
+    toolCall.result = event.data.content ?? "";
+    console.log(`[ToolCallResult] Set result for ${toolCall.name}: ${toolCall.result?.substring(0, 50)}...`);
+  } else {
+    console.warn(`[ToolCallResult] Could not find tool call with id=${event.data.tool_call_id}`);
   }
 }
 

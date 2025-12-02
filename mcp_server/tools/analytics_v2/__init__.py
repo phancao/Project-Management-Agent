@@ -14,12 +14,20 @@ from .burndown import BurndownChartTool
 from .velocity import VelocityChartTool
 from .sprint_report import SprintReportTool
 from .project_health import ProjectHealthTool
+from .cfd import CFDChartTool
+from .cycle_time import CycleTimeChartTool
+from .work_distribution import WorkDistributionChartTool
+from .issue_trend import IssueTrendChartTool
 
 __all__ = [
     "BurndownChartTool",
     "VelocityChartTool",
     "SprintReportTool",
     "ProjectHealthTool",
+    "CFDChartTool",
+    "CycleTimeChartTool",
+    "WorkDistributionChartTool",
+    "IssueTrendChartTool",
 ]
 
 

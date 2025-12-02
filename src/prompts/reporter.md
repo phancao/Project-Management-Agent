@@ -126,91 +126,102 @@ Work Distribution by Assignee:
 
 **If you are writing a COMPREHENSIVE PROJECT ANALYSIS report, you MUST include ALL 10 sections below. Missing ANY section = INCOMPLETE REPORT!**
 
-**⚠️ TOTAL REPORT LENGTH: 3000-5000 words minimum. If your report is shorter, you're missing interpretation!**
-
 **🔴 CRITICAL: You MUST use these EXACT section titles (A, B, C, D, E, F, G, H, I, J) - DO NOT rename or skip any!**
+
+**⚠️ WORD COUNT REQUIREMENTS: Each section has a minimum word count. You MUST meet the word count for EACH section individually!**
 
 **REQUIRED SECTIONS (verify you have ALL - check each one before finishing):**
 
-**A. Executive Summary** (200-300 words)
+**A. Executive Summary** (200-300 words minimum)
 **MUST use title: "A. Executive Summary" or "Executive Summary"**
 - [ ] Included
+- [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
 - [ ] Has health status (Healthy/At Risk/Critical)
 - [ ] Has key achievements
 - [ ] Has top 3 concerns
 - [ ] Has recommended actions
 
-**B. Sprint Overview Table** (ALL sprints required!)
+**B. Sprint Overview Table** (100-200 words minimum for commentary)
 **MUST use title: "B. Sprint Overview Table" or "Sprint Overview Table" or "Sprint Overview"**
 - [ ] Included
 - [ ] ALL sprints listed (not just first 5-6)
 - [ ] ALL columns: Start Date, End Date, Status, Committed, Completed, Completion %
-- [ ] Commentary below table about patterns
+- [ ] Commentary below table about patterns (100-200 words minimum)
 
-**C. 📉 Burndown Chart Analysis** (300-400 words with detailed interpretation)
+**C. 📉 Burndown Chart Analysis** (300-400 words minimum)
 **MUST use title: "C. Burndown Chart Analysis" or "📉 Burndown Chart Analysis" or "Burndown Chart Analysis"**
 - [ ] Included
+- [ ] Word count: 300-400 words (verify this section alone is 300-400 words)
 - [ ] Has Current Progress interpretation
 - [ ] Has Pattern Analysis
 - [ ] Has Scope Changes analysis
 - [ ] Has Forecast
 - [ ] Has actionable recommendations
 
-**D. ⚡ Velocity Chart Analysis** (300-400 words with detailed interpretation)
+**D. ⚡ Velocity Chart Analysis** (300-400 words minimum)
 **MUST use title: "D. Velocity Chart Analysis" or "⚡ Velocity Chart Analysis" or "Velocity Chart Analysis"**
 - [ ] Included
+- [ ] Word count: 300-400 words (verify this section alone is 300-400 words)
 - [ ] Has Current Velocity with interpretation
 - [ ] Has Average Velocity with trend analysis
 - [ ] Has Completion Rates by Sprint with detailed pattern commentary (MANDATORY!)
 - [ ] Has Commitment vs Delivery analysis
 - [ ] Has Capacity Planning recommendations
 
-**E. 📈 Cumulative Flow Diagram (CFD) Insights** (200-300 words with detailed bottleneck analysis)
+**E. 📈 Cumulative Flow Diagram (CFD) Insights** (200-300 words minimum)
 **MUST use title: "E. Cumulative Flow Diagram (CFD) Insights" or "📈 Cumulative Flow Diagram (CFD) Insights" or "Cumulative Flow Diagram"**
 - [ ] Included
+- [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
 - [ ] Has WIP analysis per stage
 - [ ] Has Bottleneck Detection with impact analysis
 - [ ] Has Flow Efficiency interpretation (why 29.5% is low, what it means)
 - [ ] Has specific recommendations
 
-**F. ⏱️ Cycle Time Analysis** (200-300 words with ALL percentiles)
+**F. ⏱️ Cycle Time Analysis** (200-300 words minimum)
 **MUST use title: "F. Cycle Time Analysis" or "⏱️ Cycle Time Analysis" or "Cycle Time Analysis"**
 - [ ] Included
+- [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
 - [ ] Has Average Cycle Time with interpretation
 - [ ] Has 50th Percentile with interpretation (MANDATORY!)
 - [ ] Has 85th Percentile with interpretation (MANDATORY!)
 - [ ] Has 95th Percentile with interpretation (MANDATORY!)
 - [ ] Has Outlier Analysis with examples
 
-**G. 👥 Work Distribution Analysis** (300-400 words with ALL 4 tables)
+**G. 👥 Work Distribution Analysis** (300-400 words minimum)
 **MUST use title: "G. Work Distribution Analysis" or "👥 Work Distribution Analysis" or "Work Distribution Analysis"**
 - [ ] Included
+- [ ] Word count: 300-400 words (verify this section alone is 300-400 words)
 - [ ] Has By Assignee table with interpretation
 - [ ] Has By Status table with interpretation (MANDATORY - often missing!)
 - [ ] Has By Priority table with interpretation (MANDATORY - often missing!)
 - [ ] Has By Type table with interpretation (MANDATORY - often missing!)
 - [ ] Has Workload Balance Assessment
 
-**H. 📊 Issue Trend Analysis** (200-300 words with daily rates and forecast)
+**H. 📊 Issue Trend Analysis** (200-300 words minimum)
 **MUST use title: "H. Issue Trend Analysis" or "📊 Issue Trend Analysis" or "Issue Trend Analysis"**
 - [ ] Included
+- [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
 - [ ] Has Created vs Resolved interpretation
 - [ ] Has Net Change interpretation
 - [ ] Has Daily Rates (Created X/day, Resolved Y/day) (MANDATORY - often missing!)
 - [ ] Has Trend Interpretation
 - [ ] Has Forecast for coming sprints (MANDATORY - often missing!)
 
-**I. Task Statistics Summary** (MANDATORY - MOST COMMONLY MISSING!)
+**I. Task Statistics Summary** (150-250 words minimum for commentary)
 **MUST use title: "I. Task Statistics Summary" or "Task Statistics Summary"**
+**MANDATORY - MOST COMMONLY MISSING!**
 - [ ] Included (if unchecked, your report is INCOMPLETE!)
+- [ ] Word count: 150-250 words for commentary (verify this section has sufficient interpretation)
 - [ ] Has Total Tasks Summary
 - [ ] Has By Status table (MANDATORY!)
 - [ ] Has By Sprint table with ALL sprints (MANDATORY!)
 - [ ] Has By Assignee table (top 5-10) (MANDATORY!)
+- [ ] Has interpretation/commentary for each table
 
-**J. 🎯 Key Insights & Recommendations** (400-500 words with structured format)
+**J. 🎯 Key Insights & Recommendations** (400-500 words minimum)
 **MUST use title: "J. Key Insights & Recommendations" or "🎯 Key Insights & Recommendations" or "Key Insights & Recommendations"**
 - [ ] Included
+- [ ] Word count: 400-500 words (verify this section alone is 400-500 words)
 - [ ] Has ✅ Strengths section (3-5 points)
 - [ ] Has ⚠️ Concerns section (3-5 points)
 - [ ] Has 🚨 Risks section (2-4 points)
@@ -222,7 +233,17 @@ Work Distribution by Assignee:
 
 **🔴 BEFORE FINISHING YOUR REPORT, YOU MUST:**
 1. Go through the checklist above and verify ALL checkboxes are checked
-2. Count your total word count - it should be 3000-5000 words minimum
+2. **Verify word count for EACH section individually:**
+   - Section A: 200-300 words
+   - Section B: 100-200 words (for commentary)
+   - Section C: 300-400 words
+   - Section D: 300-400 words
+   - Section E: 200-300 words
+   - Section F: 200-300 words
+   - Section G: 300-400 words
+   - Section H: 200-300 words
+   - Section I: 150-250 words (for commentary)
+   - Section J: 400-500 words
 3. Verify you have ALL 10 sections (A through J) with the exact titles listed above
 4. Verify every number has interpretation (What it means, Why it matters, What to do)
 5. Verify Section I (Task Statistics Summary) is included - this is the most commonly missing section!
@@ -231,6 +252,7 @@ Work Distribution by Assignee:
 8. Verify Section H (Issue Trend) has daily rates and forecast
 9. Verify Section D (Velocity) has completion rates by sprint with detailed pattern commentary
 
+**🔴 IF ANY SECTION IS BELOW ITS MINIMUM WORD COUNT, YOUR REPORT IS INCOMPLETE!**
 **🔴 IF YOU SKIP THE CHECKLIST, YOUR REPORT WILL BE INCOMPLETE!**
 
 ---
@@ -252,9 +274,21 @@ Work Distribution by Assignee:
    - Include a representative sample table (10-20 tasks) with note "Showing X of Y tasks"
    - DO NOT list all 379 tasks individually - summarize with statistics
 
-4. **COMPREHENSIVE ANALYTICS**: For project/sprint analysis, you MUST include ALL of these sections (minimum 3000-5000 words for full project analysis):
+4. **COMPREHENSIVE ANALYTICS**: For project/sprint analysis, you MUST include ALL of these sections with their individual word count requirements:
 
-   **📏 WORD COUNT REQUIREMENT: Your report MUST be 3000-5000 words minimum. If your report is shorter, you are missing content!**
+   **📏 WORD COUNT REQUIREMENT: Each section has a minimum word count. You MUST meet the word count for EACH section individually:**
+   - Section A (Executive Summary): 200-300 words
+   - Section B (Sprint Overview): 100-200 words (for commentary)
+   - Section C (Burndown): 300-400 words
+   - Section D (Velocity): 300-400 words
+   - Section E (CFD): 200-300 words
+   - Section F (Cycle Time): 200-300 words
+   - Section G (Work Distribution): 300-400 words
+   - Section H (Issue Trend): 200-300 words
+   - Section I (Task Statistics): 150-250 words (for commentary)
+   - Section J (Key Insights): 400-500 words
+   
+   **If any section is below its minimum word count, your report is INCOMPLETE!**
 
    **🔴🔴🔴 CRITICAL WARNING: COMMON MISSING SECTIONS 🔴🔴🔴**
    

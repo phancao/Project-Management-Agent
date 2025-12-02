@@ -220,9 +220,9 @@ export function StepBox({
           </div>
           
           {/* Step number */}
-          {stepNumber !== undefined && totalSteps !== undefined && (
+          {stepNumber !== undefined && (
             <span className="text-[10px] text-muted-foreground bg-accent px-1.5 py-px rounded-full">
-              {stepNumber}/{totalSteps}
+              {totalSteps !== undefined ? `${stepNumber}/${totalSteps}` : `#${stepNumber}`}
             </span>
           )}
           

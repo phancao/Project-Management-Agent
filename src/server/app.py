@@ -1580,23 +1580,6 @@ async def pm_list_projects(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/pm/mock/regenerate")
-async def pm_regenerate_mock_dataset():
-    """Regenerate the mock dataset served by MockPMProvider."""
-    from src.pm_providers.models import PMProviderConfig
-    from src.pm_providers.mock_provider import MockPMProvider
-
-    provider = MockPMProvider(
-        PMProviderConfig(
-            provider_type="mock",
-            base_url="mock://demo",
-            api_key="mock-key",
-        )
-    )
-    metadata = await provider.regenerate_mock_data()
-    return {"status": "ok", "metadata": metadata}
-
-
 @app.post("/api/pm/projects/{project_id}/tasks")
 async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
     """Create a new task within the specified project"""
@@ -3393,21 +3376,6 @@ def get_analytics_service(project_id: str, db) -> AnalyticsService:
         AnalyticsService configured with real data adapter
     """
     try:
-        # Check if this is the Mock Project - use MockPMProvider
-        if project_id.startswith("mock:"):
-            logger.info(f"[Analytics] Using MockPMProvider for project: {project_id}")
-            from src.pm_providers.mock_provider import MockPMProvider
-            from src.pm_providers.models import PMProviderConfig
-            
-            config = PMProviderConfig(
-                provider_type="mock",
-                base_url="mock://demo",
-                api_key="mock-key"
-            )
-            mock_provider = MockPMProvider(config)
-            adapter = PMProviderAnalyticsAdapter(mock_provider)
-            return AnalyticsService(adapter=adapter)
-        
         # Parse project ID to get provider UUID
         if ":" not in project_id:
             # Invalid format - return empty data, not mock

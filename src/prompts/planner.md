@@ -193,29 +193,47 @@ For complex PM queries:
 3. **Set `need_search: false`** - No web search needed, only PM tools
 4. **Be specific about what data to retrieve and analyze**
 
-**Example Plan for "Analyze Sprint 4"**:
+## 🔴🔴🔴 PROJECT ANALYSIS = SINGLE COMPREHENSIVE STEP (READ THIS FIRST!) 🔴🔴🔴
+
+**TRIGGER PHRASES** - If user says ANY of these, use the SINGLE STEP FORMAT below:
+- "analyse this project" / "analyze this project" / "analyze the project"
+- "project analysis" / "full analysis" / "comprehensive analysis"
+- "project overview" / "project status" / "how is the project"
+- "analyze project [ID]" / "what's happening in the project"
+
+**YOU MUST USE THIS SINGLE-STEP FORMAT:**
+```json
+{
+  "locale": "en-US",
+  "has_enough_context": false,
+  "thought": "User wants project analysis. Creating ONE step with ALL 11 analytics tools listed.",
+  "title": "Comprehensive Project Analysis",
+  "steps": [
+    {
+      "need_search": false,
+      "title": "Full Project Analysis with All Analytics",
+      "description": "Call ALL 11 tools EXACTLY ONCE: get_project, project_health, list_sprints, list_tasks, velocity_chart, burndown_chart, sprint_report, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart. Each tool once only.",
+      "step_type": "pm_query"
+    }
+  ]
+}
+```
+
+**⚠️ DO NOT create multiple steps for project analysis! ONE step with ALL tools listed!**
+
+---
+
+**Example Plan for "Analyze Sprint 4"** (SPECIFIC sprint, not whole project):
 ```json
 {
   "has_enough_context": false,
-  "thought": "User wants to analyze Sprint 4 performance. Need to retrieve sprint data, tasks, and metrics from PM system.",
+  "thought": "User wants to analyze a SPECIFIC sprint (Sprint 4), not the whole project.",
   "title": "Sprint 4 Performance Analysis",
   "steps": [
     {
       "need_search": false,
-      "title": "Retrieve Sprint 4 Details",
-      "description": "Use PM tools to get Sprint 4 information including dates, status, and goals. Call list_sprints to find Sprint 4, then get_sprint for detailed information.",
-      "step_type": "pm_query"
-    },
-    {
-      "need_search": false,
-      "title": "Get Sprint 4 Tasks",
-      "description": "Use list_tasks with sprint_id filter to get all tasks in Sprint 4. Include task status, assignees, story points, and completion dates.",
-      "step_type": "pm_query"
-    },
-    {
-      "need_search": false,
-      "title": "Analyze Sprint Metrics",
-      "description": "Use sprint_report and burndown_chart tools to get velocity, completion rate, and burndown data for Sprint 4.",
+      "title": "Analyze Sprint 4",
+      "description": "Use sprint_report, burndown_chart, list_tasks with sprint_id for Sprint 4 specifically.",
       "step_type": "pm_query"
     }
   ]
@@ -228,34 +246,14 @@ For complex PM queries:
 - Multiple steps to gather comprehensive data
 - Focus on analysis, not just retrieval
 
-## 🔴 COMPREHENSIVE PROJECT ANALYSIS - CRITICAL INSTRUCTIONS
+## REMINDER: Project Analysis = ONE Step
 
-**When user asks for "comprehensive analysis", "full project analysis", "analyze the project", or "project overview":**
+See the 🔴🔴🔴 section above for the required single-step format for project analysis.
 
-You MUST create a **SINGLE pm_query step** with a description that **EXPLICITLY lists ALL 10 analytics tools** to call. The PM Agent reads the description and calls each tool listed.
-
-**REQUIRED FORMAT**:
-```json
-{
-  "locale": "en-US",
-  "has_enough_context": false,
-  "thought": "User wants comprehensive project analysis. I will create ONE step that instructs the PM agent to call ALL 10 analytics tools to gather complete data.",
-  "title": "Comprehensive Project Analysis",
-  "steps": [
-    {
-      "need_search": false,
-      "title": "Full Project Analysis with All Analytics",
-      "description": "Perform COMPREHENSIVE project analysis by calling ALL 11 UNIQUE MCP tools EXACTLY ONCE EACH: 1) get_project, 2) project_health, 3) list_sprints (ONE call returns ALL sprints), 4) list_tasks (ONE call returns ALL tasks), 5) velocity_chart, 6) burndown_chart, 7) sprint_report (ONE call only - NOT per sprint!), 8) cfd_chart, 9) cycle_time_chart, 10) work_distribution_chart, 11) issue_trend_chart. IMPORTANT: Call each tool ONCE - do NOT repeat sprint_report 9 times! Each tool returns comprehensive data in one call.",
-      "step_type": "pm_query"
-    }
-  ]
-}
-```
-
-**WHY SINGLE STEP WITH ALL TOOLS LISTED**:
-- Multiple small steps only call 1-2 tools each, missing critical analytics
-- The PM Agent reads the step description and calls each tool explicitly named
-- Listing all 10 tools in ONE step ensures complete data collection
+**WHY SINGLE STEP?**
+- Multiple steps = PM Agent only calls tools mentioned in each step
+- ONE step with ALL 11 tools = complete data collection
+- DO NOT split into "Get Project", "Check Health", "List Tasks" steps!
 
 ## Information Quantity and Quality Standards
 

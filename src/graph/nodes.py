@@ -362,30 +362,38 @@ def planner_node(
             sys.stderr.write(f"\n📌 EXTRACTED PROJECT_ID: {project_id}\n")
             sys.stderr.flush()
 
-    # Detect if this is a PM query (has project_id or PM-related keywords)
+    # Detect if this is a PM query (has project_id or PM-related keywords) for logging
     is_pm_query = False
+    pm_query_indicators = []
     if project_id:
         is_pm_query = True
-        logger.info(f"[PLANNER] Detected PM query - project_id: {project_id}")
-    else:
-        # Check messages for PM-related keywords
-        for msg in state.get("messages", []):
-            content = get_message_content(msg)
-            if content:
-                content_lower = content.lower()
-                pm_keywords = [
-                    "project analysis", "comprehensive project", "velocity chart",
-                    "burndown chart", "sprint report", "list tasks", "list sprints",
-                    "project health", "cfd chart", "cycle time", "work distribution"
-                ]
-                if any(keyword in content_lower for keyword in pm_keywords):
-                    is_pm_query = True
-                    logger.info(f"[PLANNER] Detected PM query from keywords in message")
-                    break
+        pm_query_indicators.append(f"project_id: {project_id}")
     
-    # Select prompt template based on query type
-    prompt_template = "pm_planner" if is_pm_query else "planner"
-    logger.info(f"[PLANNER] Using prompt template: {prompt_template} (is_pm_query={is_pm_query})")
+    # Check messages for PM-related keywords
+    for msg in state.get("messages", []):
+        content = get_message_content(msg)
+        if content:
+            content_lower = content.lower()
+            pm_keywords = [
+                "project analysis", "comprehensive project", "velocity chart",
+                "burndown chart", "sprint report", "list tasks", "list sprints",
+                "project health", "cfd chart", "cycle time", "work distribution",
+                "issue trend", "task statistics", "sprint analysis"
+            ]
+            found_keywords = [kw for kw in pm_keywords if kw in content_lower]
+            if found_keywords:
+                is_pm_query = True
+                pm_query_indicators.append(f"keywords: {', '.join(found_keywords[:3])}")
+                break
+    
+    # Always use regular planner (it has PM query detection built-in)
+    # Log PM query detection for identification
+    prompt_template = "planner"
+    if is_pm_query:
+        logger.info(f"[PLANNER] 🔵 PM QUERY DETECTED - Indicators: {', '.join(pm_query_indicators)}")
+        logger.info(f"[PLANNER] Using 'planner' template (has built-in PM query handling)")
+    else:
+        logger.info(f"[PLANNER] 🔍 Research query detected - Using 'planner' template")
     
     # For clarification feature: use the clarified research topic (complete history)
     if state.get("enable_clarification", False) and state.get(
@@ -400,7 +408,7 @@ def planner_node(
         messages = apply_prompt_template(prompt_template, modified_state, configurable, state.get("locale", "en-US"))
 
         logger.info(
-            f"Clarification mode: Using clarified research topic: {state['clarified_research_topic']} with template: {prompt_template}"
+            f"Clarification mode: Using clarified research topic: {state['clarified_research_topic']}"
         )
     else:
         # Normal mode: use full conversation history
@@ -453,6 +461,26 @@ def planner_node(
             return Command(goto="reporter")
         else:
             return Command(goto="__end__")
+
+    # Log plan step types for identification
+    if isinstance(curr_plan, dict) and "steps" in curr_plan:
+        step_types = [step.get("step_type", "unknown") for step in curr_plan.get("steps", [])]
+        need_search_flags = [step.get("need_search", False) for step in curr_plan.get("steps", [])]
+        logger.info(f"[PLANNER] 📋 Generated plan with {len(step_types)} steps")
+        logger.info(f"[PLANNER] Step types: {', '.join(step_types)}")
+        logger.info(f"[PLANNER] Need search flags: {need_search_flags}")
+        
+        # Identify if this is a PM plan or research plan
+        has_pm_query = any(st == "pm_query" for st in step_types)
+        has_research = any(st == "research" for st in step_types)
+        has_web_search = any(need_search_flags)
+        
+        if has_pm_query:
+            logger.info(f"[PLANNER] ✅ PM PLAN DETECTED - Contains pm_query steps")
+        elif has_research or has_web_search:
+            logger.info(f"[PLANNER] 🔍 RESEARCH PLAN DETECTED - Contains research steps or web_search")
+        else:
+            logger.info(f"[PLANNER] ⚙️  PROCESSING PLAN DETECTED - Contains processing steps")
 
     # Validate and fix plan to ensure web search requirements are met
     if isinstance(curr_plan, dict):

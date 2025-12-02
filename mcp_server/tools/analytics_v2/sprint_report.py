@@ -55,7 +55,7 @@ class SprintReportTool(AnalyticsTool):
         Generate sprint report.
         
         Args:
-            sprint_id: Sprint ID
+            sprint_id: Sprint ID (can include "#" prefix, e.g., "#7" or "7")
             project_id: Project ID (optional, uses first active provider if not provided)
         
         Returns:
@@ -68,6 +68,10 @@ class SprintReportTool(AnalyticsTool):
             - team_contributions: Breakdown by team member
             - sprint_goals: Sprint goals and their status
         """
+        # Normalize sprint_id: strip "#" prefix if present
+        if sprint_id and sprint_id.startswith("#"):
+            sprint_id = sprint_id[1:]
+        
         # Get sprint report from analytics manager
         result = await self.context.analytics_manager.get_sprint_report(
             sprint_id=sprint_id,

@@ -822,16 +822,53 @@ def reporter_node(state: State, config: RunnableConfig):
     logger.info("Reporter write final report")
     configurable = Configuration.from_runnable_config(config)
     current_plan = state.get("current_plan")
+    
+    # Handle case where current_plan might be a string (legacy) or None
+    if isinstance(current_plan, str):
+        plan_title = current_plan
+        plan_thought = ""
+    elif current_plan and hasattr(current_plan, 'title'):
+        plan_title = getattr(current_plan, 'title', 'Research Task')
+        plan_thought = getattr(current_plan, 'thought', '')
+    else:
+        plan_title = "Research Task"
+        plan_thought = ""
+    
     input_ = {
         "messages": [
             HumanMessage(
-                f"# Research Requirements\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+                f"# Research Requirements\n\n## Task\n\n{plan_title}\n\n## Description\n\n{plan_thought}"
             )
         ],
         "locale": state.get("locale", "en-US"),
     }
     invoke_messages = apply_prompt_template("reporter", input_, configurable, input_.get("locale", "en-US"))
     observations = state.get("observations", [])
+    
+    # CRITICAL: Also collect observations from all completed steps
+    # This ensures we get data even if observations state is incomplete
+    if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps') and current_plan.steps:
+        step_observations = []
+        for idx, step in enumerate(current_plan.steps):
+            if step.execution_res:
+                # Include step title for context
+                step_obs = f"## Step {idx + 1}: {step.title}\n\n{step.execution_res}"
+                step_observations.append(step_obs)
+                logger.debug(f"Reporter: Collected observation from step {idx + 1}: {step.title}")
+        
+        # Combine state observations with step observations
+        # Use step observations if they exist and are more complete
+        if step_observations:
+            if len(step_observations) > len(observations):
+                logger.info(f"Reporter: Using step observations ({len(step_observations)}) instead of state observations ({len(observations)})")
+                observations = step_observations
+            else:
+                # Merge both sources, avoiding duplicates
+                all_observations = list(observations)
+                for step_obs in step_observations:
+                    if step_obs not in all_observations:
+                        all_observations.append(step_obs)
+                observations = all_observations
 
     # Add a reminder about the new report format, citation style, and table usage
     invoke_messages.append(
@@ -851,7 +888,7 @@ def reporter_node(state: State, config: RunnableConfig):
         )
 
     # Log observations for debugging (especially for PM data queries)
-    logger.info(f"Reporter: Received {len(observations)} observations")
+    logger.info(f"Reporter: Received {len(observations)} observations (from state and/or completed steps)")
     for idx, obs in enumerate(observations):
         obs_preview = str(obs)[:200] if len(str(obs)) > 200 else str(obs)
         logger.debug(f"Observation {idx + 1}: {obs_preview}")

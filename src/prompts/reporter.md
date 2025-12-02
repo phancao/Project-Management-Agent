@@ -67,6 +67,68 @@ You should act as an objective and analytical reporter who:
 
 ---
 
+# 🔴🔴🔴 CRITICAL: WORD COUNT REQUIREMENTS - THIS IS MANDATORY! 🔴🔴🔴
+
+**⚠️⚠️⚠️ ROOT CAUSE OF SHORT REPORTS: Previous reports had sections with only 50-100 words when 300-400 words were required. THIS IS UNACCEPTABLE! ⚠️⚠️⚠️**
+
+**WHY THIS HAPPENS:**
+- AI generates brief summaries instead of detailed analysis
+- AI lists numbers without expanding on what they mean
+- AI skips interpretation and jumps to conclusions
+- AI doesn't count words as it writes
+
+**HOW TO FIX:**
+- **Expand every metric** with "What it means", "Why it matters", "What to do"
+- **Write multiple paragraphs** for each section (not just bullet points)
+- **Explain patterns in detail** - don't just state them, analyze them
+- **Count words as you write** - if a section needs 300 words, write 300 words!
+- **Use the word count breakdowns** provided for each section below
+
+**EACH section has a MINIMUM word count requirement. You MUST meet or EXCEED the minimum for EVERY section!**
+
+**What word counts mean:**
+- **200-300 words** = 2-3 substantial paragraphs with detailed analysis
+- **300-400 words** = 3-4 substantial paragraphs with comprehensive interpretation
+- **400-500 words** = 4-5 substantial paragraphs with extensive analysis
+
+**❌ BAD EXAMPLE (DO NOT DO THIS - TOO SHORT!):**
+```
+### D. ⚡ Velocity Chart Analysis
+- **Average Velocity**: 22.8 Story Points
+- **Current Trend**: Decreasing
+- **Latest Velocity**: 0.0 Story Points
+
+**Completion Rates by Sprint**: High rates were observed in sprints 0-2, with a drop during Sprint 5.
+```
+*(This is only ~50 words - WAY BELOW the 300-400 word requirement!)*
+
+**✅ GOOD EXAMPLE (DO THIS - MEETS WORD COUNT!):**
+```
+### D. ⚡ Velocity Chart Analysis
+
+**Average Velocity: 22.8 story points per sprint.** This represents a 20% decline from the team's historical average of 28 points observed in earlier sprints (Sprints 0-4). The downward trend from Sprint 0-4 (averaging 28+ points) to the current 22.8 points indicates reduced team capacity, potentially due to resource constraints, blockers, or team availability issues. **Implication**: The team's ability to deliver work has decreased, which will impact future sprint planning and project timelines. **Recommendation**: Investigate team capacity, identify and address blockers, and adjust sprint commitments to match current velocity (suggest 20-22 points for next sprint instead of 28+ points).
+
+**Current Velocity: 0.0 story points.** This is a critical red flag - the team completed zero work in the most recent sprint. This could indicate: (1) severe blockers preventing all work, (2) team unavailability (holidays, time off), (3) sprint planning issues (work not properly assigned), or (4) tracking/data issues. **Implication**: Zero velocity means no progress toward sprint goals, potentially delaying project milestones. **Recommendation**: Immediate investigation required - check team availability, identify blockers, review sprint planning process, and verify data accuracy.
+
+**Completion Rates by Sprint**: [100%, 100%, 100%, 92.3%, 95.4%, 77.8%, 0%, 0%, 0%]. This pattern reveals a concerning trajectory: strong performance in Sprints 0-2 (100% completion), slight decline in Sprints 3-4 (92-95%, still healthy), sharp drop in Sprint 5 (77.8% - below acceptable threshold of 80-85%), and complete halt in Sprints 6-8 (0% - critical issue). **Interpretation**: The team started strong but encountered significant challenges starting in Sprint 5, with complete work stoppage in recent sprints. This suggests either: (1) major blockers emerged, (2) team resources were reallocated, (3) sprint planning became disconnected from reality, or (4) project priorities shifted. **Recommendation**: Conduct retrospective on Sprint 5 to identify root causes, address blockers immediately, and reassess sprint planning approach.
+
+**Commitment vs Delivery Analysis**: The team has been consistently over-committing in recent sprints. Sprint 5 committed 4.5 points but only delivered 3.5 points (77.8% delivery rate), and Sprints 6-8 committed 0 points with 0 delivery (indicating no work was planned or assigned). This pattern suggests either: (1) sprint planning is not aligned with team capacity, (2) work is being deprioritized mid-sprint, or (3) team availability has decreased. **Implication**: Over-commitment leads to incomplete sprints and reduced team morale. **Recommendation**: Adjust sprint planning to match current team capacity (suggest 20-22 points based on average velocity), ensure work is properly assigned before sprint start, and review team availability.
+
+**Capacity Planning Recommendations**: Based on the current average velocity of 22.8 points and the declining trend, the team should plan for 20-22 story points in the next sprint. This conservative estimate accounts for the recent velocity decline and provides a buffer for unexpected blockers. **Rationale**: Planning at 20-22 points (10-15% below average) reduces risk of incomplete sprints while still maintaining productivity. **Action Items**: (1) Review and adjust sprint planning process, (2) Ensure all work is assigned before sprint start, (3) Implement daily standups to identify blockers early, (4) Monitor velocity closely in next sprint and adjust if needed.
+```
+*(This is ~400+ words - MEETS the 300-400 word requirement!)*
+
+**🔴 CRITICAL RULES:**
+1. **Count words as you write** - If a section needs 300-400 words, write 300-400 words, NOT 50-100 words!
+2. **Every metric needs interpretation** - Don't just list numbers, explain what they mean, why they matter, and what to do
+3. **Expand on patterns** - If you see a pattern (e.g., "decreasing velocity"), explain the pattern in detail with multiple paragraphs
+4. **Provide recommendations** - Every section should end with specific, actionable recommendations
+5. **Use examples** - Reference specific sprints, tasks, or team members when explaining patterns
+
+**🔴 IF ANY SECTION IS BELOW ITS MINIMUM WORD COUNT, YOUR REPORT IS INCOMPLETE AND WILL BE REJECTED!**
+
+---
+
 # 🔴🔴🔴 CRITICAL: WHAT "INTERPRETATION" MEANS - READ THIS! 🔴🔴🔴
 
 **⚠️ WARNING: Previous reports only listed numbers without interpretation. This is NOT acceptable!**
@@ -151,12 +213,20 @@ Work Distribution by Assignee:
 
 **A. Executive Summary** (200-300 words minimum)
 **MUST use title: "A. Executive Summary" or "Executive Summary"**
+**🔴 CRITICAL: This section MUST be 200-300 words. Previous reports had only 50-60 words - THIS IS INCOMPLETE!**
+
+**To meet the 200-300 word requirement, you MUST write:**
+- **Project Health Status** (30-40 words): State status (Healthy/At Risk/Critical), provide brief rationale
+- **Key Achievements** (60-80 words): 3-5 detailed achievements with specific metrics and impact
+- **Top 3 Concerns** (60-80 words): 3 detailed concerns with specific metrics, impact, and urgency
+- **Recommended Actions** (50-80 words): 3-5 specific actions with priorities and expected outcomes
+
 - [ ] Included
-- [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
-- [ ] Has health status (Healthy/At Risk/Critical)
-- [ ] Has key achievements
-- [ ] Has top 3 concerns
-- [ ] Has recommended actions
+- [ ] Word count: 200-300 words (verify this section alone is 200-300 words - if less, ADD MORE content!)
+- [ ] Has health status (Healthy/At Risk/Critical) (30-40 words)
+- [ ] Has key achievements (60-80 words)
+- [ ] Has top 3 concerns (60-80 words)
+- [ ] Has recommended actions (50-80 words)
 
 **B. Sprint Overview Table** (100-200 words minimum for commentary)
 **MUST use title: "B. Sprint Overview Table" or "Sprint Overview Table" or "Sprint Overview"**
@@ -167,94 +237,166 @@ Work Distribution by Assignee:
 
 **C. 📉 Burndown Chart Analysis** (300-400 words minimum)
 **MUST use title: "C. Burndown Chart Analysis" or "📉 Burndown Chart Analysis" or "Burndown Chart Analysis"**
+**🔴 CRITICAL: This section MUST be 300-400 words. Previous reports had only 50-100 words - THIS IS INCOMPLETE!**
+
+**To meet the 300-400 word requirement, you MUST write:**
+- **Current Progress** (50-80 words): Compare actual vs ideal line, calculate days behind/ahead, explain what this means
+- **Pattern Analysis** (80-120 words): Describe the burndown pattern (steady, last-minute rush, etc.), explain why this pattern occurred, discuss implications
+- **Scope Changes** (50-80 words): Identify if scope increased/decreased, quantify the change, explain impact on sprint completion
+- **Forecast** (50-80 words): Predict if sprint will complete on time based on current velocity, assess risks
+- **Detailed Interpretation** (50-80 words): Explain what the burndown pattern tells us about team performance, planning accuracy, and execution
+- **Actionable Recommendations** (50-80 words): Provide specific actions to improve burndown (e.g., "Remove non-critical items", "Extend sprint deadline", "Address blockers")
+
 - [ ] Included
-- [ ] Word count: 300-400 words (verify this section alone is 300-400 words)
-- [ ] Has Current Progress interpretation
-- [ ] Has Pattern Analysis
-- [ ] Has Scope Changes analysis
-- [ ] Has Forecast
-- [ ] Has actionable recommendations
+- [ ] Word count: 300-400 words (verify this section alone is 300-400 words - if less, ADD MORE content!)
+- [ ] Has Current Progress interpretation (50-80 words)
+- [ ] Has Pattern Analysis (80-120 words)
+- [ ] Has Scope Changes analysis (50-80 words)
+- [ ] Has Forecast (50-80 words)
+- [ ] Has actionable recommendations (50-80 words)
 
 **D. ⚡ Velocity Chart Analysis** (300-400 words minimum)
 **MUST use title: "D. Velocity Chart Analysis" or "⚡ Velocity Chart Analysis" or "Velocity Chart Analysis"**
+**🔴 CRITICAL: This section MUST be 300-400 words. Previous reports had only 50-100 words - THIS IS INCOMPLETE!**
+
+**To meet the 300-400 word requirement, you MUST write:**
+- **Current Velocity** (60-80 words): State current velocity, explain what it means, why it matters, what to do
+- **Average Velocity** (60-80 words): State average, compare to historical, explain trend, discuss implications
+- **Completion Rates by Sprint** (100-150 words): List completion rates for ALL sprints [100%, 100%, 92.3%, 95.4%, 77.8%, 0%, 0%, 0%], provide detailed pattern analysis explaining what the pattern reveals, why it happened, implications, and recommendations
+- **Commitment vs Delivery** (50-80 words): Analyze if team is over/under-committing, provide specific examples with numbers, recommendations
+- **Capacity Planning** (50-80 words): Recommend points for next sprint, provide reasoning based on current velocity trend
+
 - [ ] Included
-- [ ] Word count: 300-400 words (verify this section alone is 300-400 words)
-- [ ] Has Current Velocity with interpretation
-- [ ] Has Average Velocity with trend analysis
-- [ ] Has Completion Rates by Sprint with detailed pattern commentary (MANDATORY!)
-- [ ] Has Commitment vs Delivery analysis
-- [ ] Has Capacity Planning recommendations
+- [ ] Word count: 300-400 words (verify this section alone is 300-400 words - if less, ADD MORE content!)
+- [ ] Has Current Velocity with interpretation (60-80 words)
+- [ ] Has Average Velocity with trend analysis (60-80 words)
+- [ ] Has Completion Rates by Sprint with detailed pattern commentary (100-150 words) (MANDATORY!)
+- [ ] Has Commitment vs Delivery analysis (50-80 words)
+- [ ] Has Capacity Planning recommendations (50-80 words)
 
 **E. 📈 Cumulative Flow Diagram (CFD) Insights** (200-300 words minimum)
 **MUST use title: "E. Cumulative Flow Diagram (CFD) Insights" or "📈 Cumulative Flow Diagram (CFD) Insights" or "Cumulative Flow Diagram"**
+**🔴 CRITICAL: This section MUST be 200-300 words. Previous reports had only 20-30 words - THIS IS INCOMPLETE!**
+
+**To meet the 200-300 word requirement, you MUST write:**
+- **WIP Analysis per Stage** (60-80 words): Count items in each stage (New: 380, In Progress: 313, Done: 303, Closed: 16), explain what these numbers mean, identify which stages have too much WIP
+- **Bottleneck Detection** (60-80 words): Identify which stage is the bottleneck (e.g., "In Progress has 313 items, 10x recommended WIP limit"), explain impact (e.g., "causing 2-day delays"), quantify the problem
+- **Flow Efficiency Interpretation** (50-70 words): Explain why 29.5% is low (should be 40-60%), what this means for the team, why it's happening
+- **Specific Recommendations** (50-70 words): Provide actionable steps (e.g., "Implement WIP limit of 5 for In Progress", "Stop starting new work until In Progress is reduced", "Establish clear Done criteria")
+
 - [ ] Included
-- [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
-- [ ] Has WIP analysis per stage
-- [ ] Has Bottleneck Detection with impact analysis
-- [ ] Has Flow Efficiency interpretation (why 29.5% is low, what it means)
-- [ ] Has specific recommendations
+- [ ] Word count: 200-300 words (verify this section alone is 200-300 words - if less, ADD MORE content!)
+- [ ] Has WIP analysis per stage (60-80 words)
+- [ ] Has Bottleneck Detection with impact analysis (60-80 words)
+- [ ] Has Flow Efficiency interpretation (50-70 words)
+- [ ] Has specific recommendations (50-70 words)
 
 **F. ⏱️ Cycle Time Analysis** (200-300 words minimum)
 **MUST use title: "F. Cycle Time Analysis" or "⏱️ Cycle Time Analysis" or "Cycle Time Analysis"**
+**🔴 CRITICAL: This section MUST be 200-300 words. Previous reports had only 50-60 words - THIS IS INCOMPLETE!**
 **⚠️ WARNING: Previous reports only showed "Average: 11 days" and "50th Percentile: 11 days" - THIS IS INCOMPLETE!**
 **⚠️ WARNING: You MUST include ALL 4 metrics: Average, 50th, 85th, 95th percentiles - missing any = incomplete!**
+
+**To meet the 200-300 word requirement, you MUST write:**
+- **Average Cycle Time** (40-50 words): State average (e.g., "10.8 days"), explain what it means, compare to standards, implications, recommendations
+- **50th Percentile** (40-50 words): State 50th percentile (e.g., "11 days"), explain what it means (predictability), compare to average, recommendations
+- **85th Percentile** (40-50 words): State 85th percentile (e.g., "20.0 days"), explain how to use for planning, implications for sprint planning, recommendations
+- **95th Percentile** (40-50 words): State 95th percentile (e.g., "29.3 days"), explain what outliers indicate, implications, recommendations
+- **Outlier Analysis** (40-50 words): Identify number of outliers, explain what they indicate (blocked tasks, too large, unclear requirements), provide specific examples if available, recommendations
+
 - [ ] Included
-- [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
-- [ ] Has Average Cycle Time with interpretation
-- [ ] Has 50th Percentile with interpretation (MANDATORY!)
-- [ ] Has 85th Percentile with interpretation (MANDATORY - often missing!)
-- [ ] Has 95th Percentile with interpretation (MANDATORY - often missing!)
-- [ ] Has Outlier Analysis with examples
+- [ ] Word count: 200-300 words (verify this section alone is 200-300 words - if less, ADD MORE content!)
+- [ ] Has Average Cycle Time with interpretation (40-50 words)
+- [ ] Has 50th Percentile with interpretation (40-50 words) (MANDATORY!)
+- [ ] Has 85th Percentile with interpretation (40-50 words) (MANDATORY - often missing!)
+- [ ] Has 95th Percentile with interpretation (40-50 words) (MANDATORY - often missing!)
+- [ ] Has Outlier Analysis with examples (40-50 words)
 
 **G. 👥 Work Distribution Analysis** (300-400 words minimum)
 **MUST use title: "G. Work Distribution Analysis" or "👥 Work Distribution Analysis" or "Work Distribution Analysis"**
+**🔴 CRITICAL: This section MUST be 300-400 words. Previous reports had only 80-100 words - THIS IS INCOMPLETE!**
 **⚠️ WARNING: Previous reports only showed "By Assignee" - THIS IS INCOMPLETE!**
 **⚠️ WARNING: You MUST include ALL 4 tables: By Assignee, By Status, By Priority, By Type - missing any = incomplete!**
+
+**To meet the 300-400 word requirement, you MUST write:**
+- **By Assignee Table** (60-80 words): Show table with ALL team members, interpret workload distribution, identify imbalances, provide recommendations
+- **By Status Table** (60-80 words): Show table with status breakdown (Done, In Progress, To Do, Blocked), interpret distribution, identify bottlenecks, provide recommendations
+- **By Priority Table** (60-80 words): Show table with priority breakdown (High, Medium, Low), interpret distribution, assess if high-priority work is being addressed, provide recommendations
+- **By Type Table** (60-80 words): Show table with type breakdown (Story, Bug, Task, Feature), interpret distribution, assess work mix, provide recommendations
+- **Workload Balance Assessment** (60-80 words): Overall assessment of work distribution, identify specific imbalances, provide actionable recommendations for balancing
+
 - [ ] Included
-- [ ] Word count: 300-400 words (verify this section alone is 300-400 words)
-- [ ] Has By Assignee table with interpretation
-- [ ] Has By Status table with interpretation (MANDATORY - often missing!)
-- [ ] Has By Priority table with interpretation (MANDATORY - often missing!)
-- [ ] Has By Type table with interpretation (MANDATORY - often missing!)
-- [ ] Has Workload Balance Assessment
+- [ ] Word count: 300-400 words (verify this section alone is 300-400 words - if less, ADD MORE content!)
+- [ ] Has By Assignee table with interpretation (60-80 words)
+- [ ] Has By Status table with interpretation (60-80 words) (MANDATORY - often missing!)
+- [ ] Has By Priority table with interpretation (60-80 words) (MANDATORY - often missing!)
+- [ ] Has By Type table with interpretation (60-80 words) (MANDATORY - often missing!)
+- [ ] Has Workload Balance Assessment (60-80 words)
 
 **H. 📊 Issue Trend Analysis** (200-300 words minimum)
 **MUST use title: "H. Issue Trend Analysis" or "📊 Issue Trend Analysis" or "Issue Trend Analysis"**
+**🔴 CRITICAL: This section MUST be 200-300 words. Previous reports had only 40-50 words - THIS IS INCOMPLETE!**
 **⚠️ WARNING: Previous reports only showed Created/Resolved counts - THIS IS INCOMPLETE!**
 **⚠️ WARNING: You MUST include Daily Rates (X/day, Y/day) and Forecast - missing these = incomplete!**
+
+**To meet the 200-300 word requirement, you MUST write:**
+- **Created vs Resolved** (40-50 words): State counts (e.g., "128 created, 193 resolved"), explain what this means, why it matters, what to do
+- **Net Change** (40-50 words): State net change (e.g., "-65 issues"), explain what this means (backlog shrinking), implications, recommendations
+- **Daily Rates** (50-70 words): Calculate and state daily rates (e.g., "Created: 4.3/day, Resolved: 6.4/day"), analyze the difference, explain implications, recommendations (MANDATORY - often missing!)
+- **Trend Interpretation** (40-50 words): Assess if trend is healthy or concerning, explain capacity implications, provide assessment
+- **Forecast** (50-70 words): Predict backlog size in coming sprints based on current rates, provide planning implications, recommendations (MANDATORY - often missing!)
+
 - [ ] Included
-- [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
-- [ ] Has Created vs Resolved interpretation
-- [ ] Has Net Change interpretation
-- [ ] Has Daily Rates (Created X/day, Resolved Y/day) (MANDATORY - often missing!)
-- [ ] Has Trend Interpretation
-- [ ] Has Forecast for coming sprints (MANDATORY - often missing!)
+- [ ] Word count: 200-300 words (verify this section alone is 200-300 words - if less, ADD MORE content!)
+- [ ] Has Created vs Resolved interpretation (40-50 words)
+- [ ] Has Net Change interpretation (40-50 words)
+- [ ] Has Daily Rates (Created X/day, Resolved Y/day) (50-70 words) (MANDATORY - often missing!)
+- [ ] Has Trend Interpretation (40-50 words)
+- [ ] Has Forecast for coming sprints (50-70 words) (MANDATORY - often missing!)
 
 **I. Task Statistics Summary** (150-250 words minimum for commentary)
 **🔴🔴🔴 MANDATORY - MOST COMMONLY MISSING SECTION! 🔴🔴🔴**
 **MUST use title: "I. Task Statistics Summary" or "Task Statistics Summary"**
+**🔴 CRITICAL: This section MUST be 150-250 words. Previous reports had only 30-40 words - THIS IS INCOMPLETE!**
 **⚠️ WARNING: Previous reports called this "Task Breakdown" or "4. Task Breakdown" - THIS IS WRONG!**
 **⚠️ WARNING: This section is COMPLETELY MISSING in many reports - you MUST include it!**
+
+**To meet the 150-250 word requirement, you MUST write:**
+- **Total Tasks Summary** (20-30 words): State total tasks, provide brief breakdown
+- **By Status Table** (30-40 words): Show table, interpret distribution, identify patterns
+- **By Sprint Table** (40-60 words): Show table with ALL sprints, interpret distribution per sprint, identify patterns
+- **By Assignee Table** (40-60 words): Show table with top 5-10 assignees, interpret workload distribution, identify imbalances
+- **Overall Commentary** (20-50 words): Summarize key findings from all tables, provide insights
+
 - [ ] Included (if unchecked, your report is INCOMPLETE!)
-- [ ] Word count: 150-250 words for commentary (verify this section has sufficient interpretation)
-- [ ] Has Total Tasks Summary
-- [ ] Has By Status table (MANDATORY!)
-- [ ] Has By Sprint table with ALL sprints (MANDATORY!)
-- [ ] Has By Assignee table (top 5-10) (MANDATORY!)
+- [ ] Word count: 150-250 words for commentary (verify this section has sufficient interpretation - if less, ADD MORE!)
+- [ ] Has Total Tasks Summary (20-30 words)
+- [ ] Has By Status table (30-40 words) (MANDATORY!)
+- [ ] Has By Sprint table with ALL sprints (40-60 words) (MANDATORY!)
+- [ ] Has By Assignee table (top 5-10) (40-60 words) (MANDATORY!)
 - [ ] Has interpretation/commentary for each table
 
 **J. 🎯 Key Insights & Recommendations** (400-500 words minimum)
 **🔴 MANDATORY - MUST USE STRUCTURED FORMAT! 🔴**
 **MUST use title: "J. Key Insights & Recommendations" or "🎯 Key Insights & Recommendations" or "Key Insights & Recommendations"**
+**🔴 CRITICAL: This section MUST be 400-500 words. Previous reports had only 200-250 words - THIS IS INCOMPLETE!**
 **⚠️ WARNING: Previous reports called this "Closing Notes" or "Conclusion" - THIS IS WRONG!**
 **⚠️ WARNING: You MUST use the structured format below (Strengths/Concerns/Risks/Action Items/Next Steps) - NOT a generic conclusion!**
+
+**To meet the 400-500 word requirement, you MUST write:**
+- **✅ Strengths** (80-100 words): 3-5 detailed points about what's working well, with explanations and examples
+- **⚠️ Concerns** (80-100 words): 3-5 detailed points about issues requiring attention, with explanations and impact analysis
+- **🚨 Risks** (60-80 words): 2-4 detailed points about potential problems, with impact assessment and escalation needs
+- **📋 Action Items** (100-150 words): 5-8 specific recommendations with What + Who (owner) + When (timeline), each with 15-20 words of detail
+- **📅 Next Steps** (80-100 words): Immediate priorities, follow-up actions, and ongoing monitoring requirements
+
 - [ ] Included
-- [ ] Word count: 400-500 words (verify this section alone is 400-500 words)
-- [ ] Has ✅ Strengths section (3-5 points) - MUST be labeled "✅ Strengths" or "Strengths"
-- [ ] Has ⚠️ Concerns section (3-5 points) - MUST be labeled "⚠️ Concerns" or "Concerns"
-- [ ] Has 🚨 Risks section (2-4 points) - MUST be labeled "🚨 Risks" or "Risks"
-- [ ] Has 📋 Action Items section (5-8 items with owners and timelines) - MUST be labeled "📋 Action Items" or "Action Items"
-- [ ] Has 📅 Next Steps section - MUST be labeled "📅 Next Steps" or "Next Steps"
+- [ ] Word count: 400-500 words (verify this section alone is 400-500 words - if less, ADD MORE content!)
+- [ ] Has ✅ Strengths section (80-100 words, 3-5 points) - MUST be labeled "✅ Strengths" or "Strengths"
+- [ ] Has ⚠️ Concerns section (80-100 words, 3-5 points) - MUST be labeled "⚠️ Concerns" or "Concerns"
+- [ ] Has 🚨 Risks section (60-80 words, 2-4 points) - MUST be labeled "🚨 Risks" or "Risks"
+- [ ] Has 📋 Action Items section (100-150 words, 5-8 items with owners and timelines) - MUST be labeled "📋 Action Items" or "Action Items"
+- [ ] Has 📅 Next Steps section (80-100 words) - MUST be labeled "📅 Next Steps" or "Next Steps"
 - [ ] NOT using generic "Conclusion & Recommendations" or "Closing Notes" format
 
 **🔴 IF ANY CHECKBOX ABOVE IS UNCHECKED, YOUR REPORT IS INCOMPLETE - DO NOT SUBMIT IT! 🔴**
@@ -272,17 +414,19 @@ Work Distribution by Assignee:
    - ✅ Section title is "H. 📊 Issue Trend Analysis" (NOT "10. Issue Trend")
    - ✅ Section title is "I. Task Statistics Summary" (NOT "Task Breakdown" or "4. Task Breakdown")
    - ✅ Section title is "J. 🎯 Key Insights & Recommendations" (NOT "Closing Notes" or "Conclusion")
-3. **Verify word count for EACH section individually:**
-   - Section A: 200-300 words
-   - Section B: 100-200 words (for commentary)
-   - Section C: 300-400 words
-   - Section D: 300-400 words
-   - Section E: 200-300 words
-   - Section F: 200-300 words
-   - Section G: 300-400 words
-   - Section H: 200-300 words
-   - Section I: 150-250 words (for commentary)
-   - Section J: 400-500 words
+3. **🔴 CRITICAL: Count words for EACH section and verify minimums are met:**
+   - **Section A**: Count words in Executive Summary section. Must be 200-300 words. If less, ADD MORE interpretation!
+   - **Section B**: Count words in commentary below Sprint Overview Table. Must be 100-200 words. If less, ADD MORE analysis!
+   - **Section C**: Count words in Burndown Chart Analysis section. Must be 300-400 words. If less, ADD MORE detailed interpretation!
+   - **Section D**: Count words in Velocity Chart Analysis section. Must be 300-400 words. If less, ADD MORE pattern analysis and recommendations!
+   - **Section E**: Count words in CFD Insights section. Must be 200-300 words. If less, ADD MORE bottleneck analysis!
+   - **Section F**: Count words in Cycle Time Analysis section. Must be 200-300 words. If less, ADD MORE percentile interpretation!
+   - **Section G**: Count words in Work Distribution Analysis section. Must be 300-400 words. If less, ADD MORE tables and analysis!
+   - **Section H**: Count words in Issue Trend Analysis section. Must be 200-300 words. If less, ADD MORE daily rates and forecast!
+   - **Section I**: Count words in Task Statistics Summary section. Must be 150-250 words. If less, ADD MORE tables and commentary!
+   - **Section J**: Count words in Key Insights & Recommendations section. Must be 400-500 words. If less, ADD MORE detailed insights!
+   
+   **🔴 IF ANY SECTION IS BELOW ITS MINIMUM, YOU MUST EXPAND IT BEFORE FINISHING!**
 4. Verify you have ALL 10 sections (A through J) with the exact titles listed above
 5. Verify every number has interpretation (What it means, Why it matters, What to do)
 6. Verify Section I (Task Statistics Summary) is included - this is the most commonly missing section!

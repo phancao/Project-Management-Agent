@@ -574,8 +574,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
             
-            # Calculate date range
-            end_date = datetime.now()
+            # Calculate date range (normalize to timezone-naive)
+            end_date = _normalize_datetime(datetime.now())
             start_date = end_date - timedelta(days=days_back)
             
             # Get available statuses from tasks
@@ -598,11 +598,14 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 # Use resolver to get status history
                 status_history = self.status_resolver.get_status_history(task)
                 
+                # Normalize created_at
+                task_created_at = _normalize_datetime(task.created_at) if task.created_at else None
+                
                 # If no history, create basic one
                 if not status_history:
-                    if task.created_at:
+                    if task_created_at:
                         status_history.append({
-                            "date": task.created_at.isoformat(),
+                            "date": task_created_at.isoformat(),
                             "status": task.status or "To Do"
                         })
                     else:
@@ -614,7 +617,7 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 work_items.append({
                     "id": task.id,
                     "title": task.title,
-                    "created_date": task.created_at.isoformat() if task.created_at else start_date.isoformat(),
+                    "created_date": task_created_at.isoformat() if task_created_at else start_date.isoformat(),
                     "status_history": status_history,
                 })
             

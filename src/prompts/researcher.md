@@ -110,6 +110,21 @@ You have access to two types of tools:
    - Forget your previous knowledge, so you **should leverage the tools** to retrieve the information.
    - Use the {% if resources %}**local_search_tool** or{% endif %}**web_search** or other suitable search tool to perform a search with the provided keywords.
    - **For project management related queries**: If the research involves analyzing current projects, tasks, sprints, or team data, use the available MCP PM tools (list_projects, list_tasks, list_sprints, etc.) to query real project data. This allows you to compare research findings with actual project status, analyze project health, or provide context-aware recommendations.
+   
+   - **COMPREHENSIVE PROJECT ANALYSIS**: When asked to analyze a project comprehensively (e.g., "analyze this project", "give me project overview", "project status report", "full project analysis"), you MUST call ALL of these analytics tools to gather complete data:
+     1. `project_health` - Get overall project health metrics
+     2. `list_sprints` - Get all sprints with their statuses
+     3. `list_tasks` - Get task breakdown
+     4. `velocity_chart` - Analyze team velocity trends over sprints
+     5. `burndown_chart` - Check sprint/project burndown progress
+     6. `sprint_report` - Get detailed sprint performance (for active sprints)
+     7. `cfd_chart` - Cumulative Flow Diagram for bottleneck detection
+     8. `cycle_time_chart` - Analyze how long tasks take to complete
+     9. `work_distribution_chart` - Check workload balance across team members
+     10. `issue_trend_chart` - Track created vs resolved issues over time
+     
+     **IMPORTANT**: Don't stop after calling just 2-3 tools. For a COMPREHENSIVE analysis, call ALL available analytics tools to provide deep insights. Each tool provides unique data that cannot be obtained from other tools.
+   
    - **CRITICAL**: After checking providers with `list_providers` or syncing providers with `configure_pm_provider`, you MUST call the appropriate PM MCP tool (e.g., `list_projects`) to retrieve the actual data. **DO NOT** stop after getting providers - the user wants to see the projects/tasks, not just the provider list. **DO NOT** use `backend_api_call` to get projects - use the `list_projects` MCP tool instead.
    - When the task includes time range requirements:
      - Incorporate appropriate time-based search parameters in your queries (e.g., "after:2020", "before:2023", or specific date ranges)

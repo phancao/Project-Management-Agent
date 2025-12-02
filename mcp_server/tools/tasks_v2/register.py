@@ -5,6 +5,7 @@ from mcp.server import Server
 from mcp.types import Tool
 from ...core.tool_context import ToolContext
 from .list_tasks import ListTasksTool
+from .list_my_tasks import ListMyTasksTool
 from .get_task import GetTaskTool
 from .create_task import CreateTaskTool
 from .update_task import UpdateTaskTool
@@ -26,6 +27,7 @@ def register_task_tools_v2(
     
     tool_classes = [
         ListTasksTool,
+        ListMyTasksTool,
         GetTaskTool,
         CreateTaskTool,
         UpdateTaskTool,

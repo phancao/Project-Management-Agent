@@ -16,6 +16,10 @@ from . import (
     VelocityChartTool,
     SprintReportTool,
     ProjectHealthTool,
+    CFDChartTool,
+    CycleTimeChartTool,
+    WorkDistributionChartTool,
+    IssueTrendChartTool,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +51,10 @@ def register_analytics_tools_v2(
         VelocityChartTool,
         SprintReportTool,
         ProjectHealthTool,
+        CFDChartTool,
+        CycleTimeChartTool,
+        WorkDistributionChartTool,
+        IssueTrendChartTool,
     ]
     
     for tool_class in tool_classes:

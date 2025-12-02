@@ -273,5 +273,127 @@ class AnalyticsManager:
         return await service.get_project_summary(
             project_id=actual_project_id
         )
+    
+    async def get_cfd_chart(
+        self,
+        project_id: str,
+        sprint_id: Optional[str] = None,
+        days: int = 30
+    ) -> dict:
+        """
+        Get Cumulative Flow Diagram (CFD) data.
+        
+        Args:
+            project_id: Project ID
+            sprint_id: Optional sprint ID to filter by
+            days: Number of days to include (default: 30)
+        
+        Returns:
+            CFD chart data with:
+            - dates: List of dates
+            - statuses: Dict of status -> count per date
+            - wip_analysis: Work in progress analysis
+        """
+        # Handle sprint_id format
+        if sprint_id and ":" not in sprint_id and ":" in project_id:
+            provider_id = project_id.split(":", 1)[0]
+            sprint_id = f"{provider_id}:{sprint_id}"
+        
+        service, actual_project_id = await self.get_service(project_id)
+        return await service.get_cfd_chart(
+            project_id=actual_project_id,
+            sprint_id=sprint_id,
+            days_back=days  # Service uses days_back parameter
+        )
+    
+    async def get_cycle_time_chart(
+        self,
+        project_id: str,
+        sprint_id: Optional[str] = None,
+        days: int = 30
+    ) -> dict:
+        """
+        Get cycle time analysis data.
+        
+        Args:
+            project_id: Project ID
+            sprint_id: Optional sprint ID to filter by
+            days: Number of days to include (default: 30)
+        
+        Returns:
+            Cycle time data with:
+            - average: Average cycle time in days
+            - median: Median cycle time (50th percentile)
+            - p85: 85th percentile (use for commitments)
+            - p95: 95th percentile (outliers above this)
+            - items: List of completed items with cycle times
+        """
+        if sprint_id and ":" not in sprint_id and ":" in project_id:
+            provider_id = project_id.split(":", 1)[0]
+            sprint_id = f"{provider_id}:{sprint_id}"
+        
+        service, actual_project_id = await self.get_service(project_id)
+        return await service.get_cycle_time_chart(
+            project_id=actual_project_id,
+            sprint_id=sprint_id,
+            days_back=days  # Service uses days_back parameter
+        )
+    
+    async def get_work_distribution_chart(
+        self,
+        project_id: str,
+        sprint_id: Optional[str] = None,
+        group_by: str = "assignee"
+    ) -> dict:
+        """
+        Get work distribution analysis.
+        
+        Args:
+            project_id: Project ID
+            sprint_id: Optional sprint ID to filter by
+            group_by: Grouping dimension (assignee, status, priority, type)
+        
+        Returns:
+            Work distribution data with:
+            - groups: Dict of group_name -> task count
+            - total: Total task count
+            - distribution: Percentage distribution
+        """
+        if sprint_id and ":" not in sprint_id and ":" in project_id:
+            provider_id = project_id.split(":", 1)[0]
+            sprint_id = f"{provider_id}:{sprint_id}"
+        
+        service, actual_project_id = await self.get_service(project_id)
+        return await service.get_work_distribution_chart(
+            project_id=actual_project_id,
+            sprint_id=sprint_id,
+            dimension=group_by  # Service uses dimension parameter
+        )
+    
+    async def get_issue_trend_chart(
+        self,
+        project_id: str,
+        days: int = 30
+    ) -> dict:
+        """
+        Get issue trend analysis (created vs resolved).
+        
+        Args:
+            project_id: Project ID
+            days: Number of days to analyze (default: 30)
+        
+        Returns:
+            Issue trend data with:
+            - dates: List of dates
+            - created: Issues created per day
+            - resolved: Issues resolved per day
+            - net_change: Net change per day
+            - cumulative: Cumulative backlog size
+        """
+        service, actual_project_id = await self.get_service(project_id)
+        return await service.get_issue_trend_chart(
+            project_id=actual_project_id,
+            days_back=days  # Service uses days_back parameter
+        )
 
 

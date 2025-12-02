@@ -248,7 +248,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                           key={toolCall.id}
                           toolCall={toolCall}
                           stepNumber={index + 1}
-                          totalSteps={toolCalls.length}
+                          totalSteps={ongoing ? undefined : toolCalls.length}
                         />
                       ))}
                     </div>

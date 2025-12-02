@@ -766,59 +766,37 @@ Use analytics steps when user asks about:
 
 ## Project Analysis Workflow
 
-**CRITICAL**: When user asks to "analyze project" or "analyze [project name]", you MUST use analytics steps, NOT research steps.
+**CRITICAL**: When user asks to "analyze project", "comprehensive analysis", "full project analysis", or "analyze [project name]", you MUST use a SINGLE research step that calls ALL analytics MCP tools.
 
 ### Correct Approach for Project Analysis
 
-When user says "Analyze the project" or "Analyze [project name]":
+When user says "Analyze the project" or "Analyze [project name]" or "comprehensive analysis":
 
-1. **DO NOT use research step** - Project data is already in the system
-2. **DO use analytics steps** - Read charts and generate insights from actual project data
+1. **USE a single research step** - This allows the researcher agent to call ALL MCP analytics tools
+2. **List ALL 10 analytics tools in the description** - The researcher reads the description and calls each tool listed
 3. **DO NOT list all projects** - Focus ONLY on the specific project being analyzed
 4. **Use context** - If a project was recently discussed, that's the project to analyze
 
-**CRITICAL**: The goal is to analyze ONE specific project, not to list all projects in the system. If you're unsure which project, ask the user or use the most recently mentioned project from conversation history.
+**CRITICAL**: The goal is to analyze ONE specific project with COMPLETE data from ALL analytics tools.
 
-### Required Analytics Steps for Full Project Analysis
+### Required Plan for Full Project Analysis
 
-Create a plan with these steps in order:
+**IMPORTANT**: Use a SINGLE research step that explicitly lists ALL 10 analytics tools.
 
 ```json
 {
   "steps": [
     {
-      "step_type": "get_project_status",
-      "title": "Get Project Overview",
-      "description": "Retrieve project status, task counts, and basic metrics"
-    },
-    {
-      "step_type": "analyze_velocity",
-      "title": "Analyze Team Velocity",
-      "description": "Check velocity trends over recent sprints"
-    },
-    {
-      "step_type": "analyze_burndown",
-      "title": "Analyze Sprint Burndown",
-      "description": "Review burndown patterns and completion rates"
-    },
-    {
-      "step_type": "analyze_task_distribution",
-      "title": "Analyze Task Distribution",
-      "description": "Check workload balance across team members"
-    },
-    {
-      "step_type": "identify_bottlenecks",
-      "title": "Identify Bottlenecks",
-      "description": "Find blockers and issues slowing progress"
-    },
-    {
-      "step_type": "generate_insights",
-      "title": "Generate Project Insights",
-      "description": "Synthesize all analytics data into actionable insights and recommendations"
+      "step_type": "research",
+      "title": "Comprehensive Project Analysis",
+      "description": "Perform FULL project analysis by calling ALL these MCP tools: 1) project_health - get overall metrics, 2) list_sprints - get all sprints, 3) list_tasks - get all tasks, 4) velocity_chart - velocity trends, 5) burndown_chart - burndown patterns, 6) sprint_report - sprint details for active sprint, 7) cfd_chart - cumulative flow diagram for bottlenecks, 8) cycle_time_chart - cycle times and lead times, 9) work_distribution_chart - workload balance across team, 10) issue_trend_chart - created vs resolved trends. YOU MUST CALL ALL 10 TOOLS to gather complete data for a comprehensive report.",
+      "requires_context": false
     }
   ]
 }
 ```
+
+**WHY SINGLE RESEARCH STEP**: Multiple small steps only call 1-2 tools each. A single research step with ALL tools listed in the description ensures the researcher agent calls ALL 10 tools for complete data.
 
 ### Available Analytics Endpoints
 

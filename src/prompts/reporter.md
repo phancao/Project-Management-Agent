@@ -126,7 +126,24 @@ Work Distribution by Assignee:
 
 **If you are writing a COMPREHENSIVE PROJECT ANALYSIS report, you MUST include ALL 10 sections below. Missing ANY section = INCOMPLETE REPORT!**
 
-**🔴 CRITICAL: You MUST use these EXACT section titles (A, B, C, D, E, F, G, H, I, J) - DO NOT rename or skip any!**
+**🔴🔴🔴 CRITICAL: EXACT SECTION TITLES REQUIRED - READ THIS FIRST! 🔴🔴🔴**
+
+**⚠️ WARNING: Previous reports used wrong section titles like "1. Project Overview", "5. Velocity Chart", "Closing Notes" - THIS IS WRONG!**
+
+**You MUST use these EXACT section titles in this EXACT order:**
+
+1. **"A. Executive Summary"** (NOT "Overview" or "1. Project Overview")
+2. **"B. Sprint Overview Table"** (NOT "3. Sprints" or "Sprint Summary")
+3. **"C. 📉 Burndown Chart Analysis"** (NOT "6. Burndown Chart Insights" or "Burndown Chart")
+4. **"D. ⚡ Velocity Chart Analysis"** (NOT "5. Velocity Chart" or "Velocity Trends")
+5. **"E. 📈 Cumulative Flow Diagram (CFD) Insights"** (NOT "7. Cumulative Flow Diagram" or "CFD")
+6. **"F. ⏱️ Cycle Time Analysis"** (NOT "8. Cycle Time Chart" or "Cycle Time")
+7. **"G. 👥 Work Distribution Analysis"** (NOT "9. Work Distribution" or "Work Distribution by Assignee")
+8. **"H. 📊 Issue Trend Analysis"** (NOT "10. Issue Trend" or "Issue Analysis")
+9. **"I. Task Statistics Summary"** (NOT "Task Breakdown" or "4. Task Breakdown" - THIS IS MANDATORY AND OFTEN MISSING!)
+10. **"J. 🎯 Key Insights & Recommendations"** (NOT "Closing Notes" or "Conclusion" or "Recommendations")
+
+**🔴 IF YOU USE DIFFERENT TITLES OR NUMBERED SECTIONS (1, 2, 3...), YOUR REPORT IS INCOMPLETE!**
 
 **⚠️ WORD COUNT REQUIREMENTS: Each section has a minimum word count. You MUST meet the word count for EACH section individually!**
 
@@ -179,16 +196,20 @@ Work Distribution by Assignee:
 
 **F. ⏱️ Cycle Time Analysis** (200-300 words minimum)
 **MUST use title: "F. Cycle Time Analysis" or "⏱️ Cycle Time Analysis" or "Cycle Time Analysis"**
+**⚠️ WARNING: Previous reports only showed "Average: 11 days" and "50th Percentile: 11 days" - THIS IS INCOMPLETE!**
+**⚠️ WARNING: You MUST include ALL 4 metrics: Average, 50th, 85th, 95th percentiles - missing any = incomplete!**
 - [ ] Included
 - [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
 - [ ] Has Average Cycle Time with interpretation
 - [ ] Has 50th Percentile with interpretation (MANDATORY!)
-- [ ] Has 85th Percentile with interpretation (MANDATORY!)
-- [ ] Has 95th Percentile with interpretation (MANDATORY!)
+- [ ] Has 85th Percentile with interpretation (MANDATORY - often missing!)
+- [ ] Has 95th Percentile with interpretation (MANDATORY - often missing!)
 - [ ] Has Outlier Analysis with examples
 
 **G. 👥 Work Distribution Analysis** (300-400 words minimum)
 **MUST use title: "G. Work Distribution Analysis" or "👥 Work Distribution Analysis" or "Work Distribution Analysis"**
+**⚠️ WARNING: Previous reports only showed "By Assignee" - THIS IS INCOMPLETE!**
+**⚠️ WARNING: You MUST include ALL 4 tables: By Assignee, By Status, By Priority, By Type - missing any = incomplete!**
 - [ ] Included
 - [ ] Word count: 300-400 words (verify this section alone is 300-400 words)
 - [ ] Has By Assignee table with interpretation
@@ -199,6 +220,8 @@ Work Distribution by Assignee:
 
 **H. 📊 Issue Trend Analysis** (200-300 words minimum)
 **MUST use title: "H. Issue Trend Analysis" or "📊 Issue Trend Analysis" or "Issue Trend Analysis"**
+**⚠️ WARNING: Previous reports only showed Created/Resolved counts - THIS IS INCOMPLETE!**
+**⚠️ WARNING: You MUST include Daily Rates (X/day, Y/day) and Forecast - missing these = incomplete!**
 - [ ] Included
 - [ ] Word count: 200-300 words (verify this section alone is 200-300 words)
 - [ ] Has Created vs Resolved interpretation
@@ -208,8 +231,10 @@ Work Distribution by Assignee:
 - [ ] Has Forecast for coming sprints (MANDATORY - often missing!)
 
 **I. Task Statistics Summary** (150-250 words minimum for commentary)
+**🔴🔴🔴 MANDATORY - MOST COMMONLY MISSING SECTION! 🔴🔴🔴**
 **MUST use title: "I. Task Statistics Summary" or "Task Statistics Summary"**
-**MANDATORY - MOST COMMONLY MISSING!**
+**⚠️ WARNING: Previous reports called this "Task Breakdown" or "4. Task Breakdown" - THIS IS WRONG!**
+**⚠️ WARNING: This section is COMPLETELY MISSING in many reports - you MUST include it!**
 - [ ] Included (if unchecked, your report is INCOMPLETE!)
 - [ ] Word count: 150-250 words for commentary (verify this section has sufficient interpretation)
 - [ ] Has Total Tasks Summary
@@ -219,21 +244,35 @@ Work Distribution by Assignee:
 - [ ] Has interpretation/commentary for each table
 
 **J. 🎯 Key Insights & Recommendations** (400-500 words minimum)
+**🔴 MANDATORY - MUST USE STRUCTURED FORMAT! 🔴**
 **MUST use title: "J. Key Insights & Recommendations" or "🎯 Key Insights & Recommendations" or "Key Insights & Recommendations"**
+**⚠️ WARNING: Previous reports called this "Closing Notes" or "Conclusion" - THIS IS WRONG!**
+**⚠️ WARNING: You MUST use the structured format below (Strengths/Concerns/Risks/Action Items/Next Steps) - NOT a generic conclusion!**
 - [ ] Included
 - [ ] Word count: 400-500 words (verify this section alone is 400-500 words)
-- [ ] Has ✅ Strengths section (3-5 points)
-- [ ] Has ⚠️ Concerns section (3-5 points)
-- [ ] Has 🚨 Risks section (2-4 points)
-- [ ] Has 📋 Action Items section (5-8 items with owners and timelines)
-- [ ] Has 📅 Next Steps section
-- [ ] NOT using generic "Conclusion & Recommendations" format
+- [ ] Has ✅ Strengths section (3-5 points) - MUST be labeled "✅ Strengths" or "Strengths"
+- [ ] Has ⚠️ Concerns section (3-5 points) - MUST be labeled "⚠️ Concerns" or "Concerns"
+- [ ] Has 🚨 Risks section (2-4 points) - MUST be labeled "🚨 Risks" or "Risks"
+- [ ] Has 📋 Action Items section (5-8 items with owners and timelines) - MUST be labeled "📋 Action Items" or "Action Items"
+- [ ] Has 📅 Next Steps section - MUST be labeled "📅 Next Steps" or "Next Steps"
+- [ ] NOT using generic "Conclusion & Recommendations" or "Closing Notes" format
 
 **🔴 IF ANY CHECKBOX ABOVE IS UNCHECKED, YOUR REPORT IS INCOMPLETE - DO NOT SUBMIT IT! 🔴**
 
 **🔴 BEFORE FINISHING YOUR REPORT, YOU MUST:**
 1. Go through the checklist above and verify ALL checkboxes are checked
-2. **Verify word count for EACH section individually:**
+2. **Verify section titles are EXACTLY as required (NOT numbered sections 1, 2, 3...):**
+   - ✅ Section title is "A. Executive Summary" (NOT "Overview" or "1. Project Overview")
+   - ✅ Section title is "B. Sprint Overview Table" (NOT "3. Sprints" or "Sprint Summary")
+   - ✅ Section title is "C. 📉 Burndown Chart Analysis" (NOT "6. Burndown Chart Insights")
+   - ✅ Section title is "D. ⚡ Velocity Chart Analysis" (NOT "5. Velocity Chart")
+   - ✅ Section title is "E. 📈 Cumulative Flow Diagram (CFD) Insights" (NOT "7. Cumulative Flow Diagram")
+   - ✅ Section title is "F. ⏱️ Cycle Time Analysis" (NOT "8. Cycle Time Chart")
+   - ✅ Section title is "G. 👥 Work Distribution Analysis" (NOT "9. Work Distribution")
+   - ✅ Section title is "H. 📊 Issue Trend Analysis" (NOT "10. Issue Trend")
+   - ✅ Section title is "I. Task Statistics Summary" (NOT "Task Breakdown" or "4. Task Breakdown")
+   - ✅ Section title is "J. 🎯 Key Insights & Recommendations" (NOT "Closing Notes" or "Conclusion")
+3. **Verify word count for EACH section individually:**
    - Section A: 200-300 words
    - Section B: 100-200 words (for commentary)
    - Section C: 300-400 words
@@ -244,14 +283,16 @@ Work Distribution by Assignee:
    - Section H: 200-300 words
    - Section I: 150-250 words (for commentary)
    - Section J: 400-500 words
-3. Verify you have ALL 10 sections (A through J) with the exact titles listed above
-4. Verify every number has interpretation (What it means, Why it matters, What to do)
-5. Verify Section I (Task Statistics Summary) is included - this is the most commonly missing section!
-6. Verify Section G (Work Distribution) has ALL 4 tables (By Assignee, By Status, By Priority, By Type)
-7. Verify Section F (Cycle Time) has ALL 4 metrics (Average, 50th, 85th, 95th percentiles)
-8. Verify Section H (Issue Trend) has daily rates and forecast
-9. Verify Section D (Velocity) has completion rates by sprint with detailed pattern commentary
+4. Verify you have ALL 10 sections (A through J) with the exact titles listed above
+5. Verify every number has interpretation (What it means, Why it matters, What to do)
+6. Verify Section I (Task Statistics Summary) is included - this is the most commonly missing section!
+7. Verify Section G (Work Distribution) has ALL 4 tables (By Assignee, By Status, By Priority, By Type)
+8. Verify Section F (Cycle Time) has ALL 4 metrics (Average, 50th, 85th, 95th percentiles)
+9. Verify Section H (Issue Trend) has daily rates and forecast
+10. Verify Section D (Velocity) has completion rates by sprint with detailed pattern commentary
+11. Verify Section J uses structured format (Strengths/Concerns/Risks/Action Items/Next Steps) - NOT "Closing Notes"
 
+**🔴 IF ANY SECTION TITLE IS WRONG (e.g., "1. Project Overview" instead of "A. Executive Summary"), YOUR REPORT IS INCOMPLETE!**
 **🔴 IF ANY SECTION IS BELOW ITS MINIMUM WORD COUNT, YOUR REPORT IS INCOMPLETE!**
 **🔴 IF YOU SKIP THE CHECKLIST, YOUR REPORT WILL BE INCOMPLETE!**
 

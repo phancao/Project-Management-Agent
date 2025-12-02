@@ -126,19 +126,112 @@ Work Distribution by Assignee:
 
 **If you are writing a COMPREHENSIVE PROJECT ANALYSIS report, you MUST include ALL 10 sections below. Missing ANY section = INCOMPLETE REPORT!**
 
-**REQUIRED SECTIONS (verify you have ALL):**
-1. ✅ Executive Summary (200-300 words)
-2. ✅ Sprint Overview Table (ALL sprints, ALL columns: Start Date, End Date, Status, Committed, Completed, Completion %)
-3. ✅ Burndown Chart Analysis (300-400 words with interpretation)
-4. ✅ Velocity Chart Analysis (300-400 words with completion rates commentary)
-5. ✅ Cumulative Flow Diagram (CFD) Insights (200-300 words with bottleneck analysis)
-6. ✅ Cycle Time Analysis (200-300 words with 50th/85th/95th percentiles + outlier analysis)
-7. ✅ Work Distribution Analysis (300-400 words with By Assignee, By Status, By Priority, By Type TABLES)
-8. ✅ Issue Trend Analysis (200-300 words with interpretation)
-9. ✅ **Task Statistics Summary** - **THIS IS THE MOST COMMONLY MISSING SECTION!** Must have: By Status table, By Sprint table, By Assignee table
-10. ✅ Key Insights & Recommendations (400-500 words with structured: Strengths, Concerns, Risks, Action Items, Next Steps)
+**⚠️ TOTAL REPORT LENGTH: 3000-5000 words minimum. If your report is shorter, you're missing interpretation!**
 
-**DO NOT finish your report until ALL 10 sections above are complete!**
+**🔴 CRITICAL: You MUST use these EXACT section titles (A, B, C, D, E, F, G, H, I, J) - DO NOT rename or skip any!**
+
+**REQUIRED SECTIONS (verify you have ALL - check each one before finishing):**
+
+**A. Executive Summary** (200-300 words)
+**MUST use title: "A. Executive Summary" or "Executive Summary"**
+- [ ] Included
+- [ ] Has health status (Healthy/At Risk/Critical)
+- [ ] Has key achievements
+- [ ] Has top 3 concerns
+- [ ] Has recommended actions
+
+**B. Sprint Overview Table** (ALL sprints required!)
+**MUST use title: "B. Sprint Overview Table" or "Sprint Overview Table" or "Sprint Overview"**
+- [ ] Included
+- [ ] ALL sprints listed (not just first 5-6)
+- [ ] ALL columns: Start Date, End Date, Status, Committed, Completed, Completion %
+- [ ] Commentary below table about patterns
+
+**C. 📉 Burndown Chart Analysis** (300-400 words with detailed interpretation)
+**MUST use title: "C. Burndown Chart Analysis" or "📉 Burndown Chart Analysis" or "Burndown Chart Analysis"**
+- [ ] Included
+- [ ] Has Current Progress interpretation
+- [ ] Has Pattern Analysis
+- [ ] Has Scope Changes analysis
+- [ ] Has Forecast
+- [ ] Has actionable recommendations
+
+**D. ⚡ Velocity Chart Analysis** (300-400 words with detailed interpretation)
+**MUST use title: "D. Velocity Chart Analysis" or "⚡ Velocity Chart Analysis" or "Velocity Chart Analysis"**
+- [ ] Included
+- [ ] Has Current Velocity with interpretation
+- [ ] Has Average Velocity with trend analysis
+- [ ] Has Completion Rates by Sprint with detailed pattern commentary (MANDATORY!)
+- [ ] Has Commitment vs Delivery analysis
+- [ ] Has Capacity Planning recommendations
+
+**E. 📈 Cumulative Flow Diagram (CFD) Insights** (200-300 words with detailed bottleneck analysis)
+**MUST use title: "E. Cumulative Flow Diagram (CFD) Insights" or "📈 Cumulative Flow Diagram (CFD) Insights" or "Cumulative Flow Diagram"**
+- [ ] Included
+- [ ] Has WIP analysis per stage
+- [ ] Has Bottleneck Detection with impact analysis
+- [ ] Has Flow Efficiency interpretation (why 29.5% is low, what it means)
+- [ ] Has specific recommendations
+
+**F. ⏱️ Cycle Time Analysis** (200-300 words with ALL percentiles)
+**MUST use title: "F. Cycle Time Analysis" or "⏱️ Cycle Time Analysis" or "Cycle Time Analysis"**
+- [ ] Included
+- [ ] Has Average Cycle Time with interpretation
+- [ ] Has 50th Percentile with interpretation (MANDATORY!)
+- [ ] Has 85th Percentile with interpretation (MANDATORY!)
+- [ ] Has 95th Percentile with interpretation (MANDATORY!)
+- [ ] Has Outlier Analysis with examples
+
+**G. 👥 Work Distribution Analysis** (300-400 words with ALL 4 tables)
+**MUST use title: "G. Work Distribution Analysis" or "👥 Work Distribution Analysis" or "Work Distribution Analysis"**
+- [ ] Included
+- [ ] Has By Assignee table with interpretation
+- [ ] Has By Status table with interpretation (MANDATORY - often missing!)
+- [ ] Has By Priority table with interpretation (MANDATORY - often missing!)
+- [ ] Has By Type table with interpretation (MANDATORY - often missing!)
+- [ ] Has Workload Balance Assessment
+
+**H. 📊 Issue Trend Analysis** (200-300 words with daily rates and forecast)
+**MUST use title: "H. Issue Trend Analysis" or "📊 Issue Trend Analysis" or "Issue Trend Analysis"**
+- [ ] Included
+- [ ] Has Created vs Resolved interpretation
+- [ ] Has Net Change interpretation
+- [ ] Has Daily Rates (Created X/day, Resolved Y/day) (MANDATORY - often missing!)
+- [ ] Has Trend Interpretation
+- [ ] Has Forecast for coming sprints (MANDATORY - often missing!)
+
+**I. Task Statistics Summary** (MANDATORY - MOST COMMONLY MISSING!)
+**MUST use title: "I. Task Statistics Summary" or "Task Statistics Summary"**
+- [ ] Included (if unchecked, your report is INCOMPLETE!)
+- [ ] Has Total Tasks Summary
+- [ ] Has By Status table (MANDATORY!)
+- [ ] Has By Sprint table with ALL sprints (MANDATORY!)
+- [ ] Has By Assignee table (top 5-10) (MANDATORY!)
+
+**J. 🎯 Key Insights & Recommendations** (400-500 words with structured format)
+**MUST use title: "J. Key Insights & Recommendations" or "🎯 Key Insights & Recommendations" or "Key Insights & Recommendations"**
+- [ ] Included
+- [ ] Has ✅ Strengths section (3-5 points)
+- [ ] Has ⚠️ Concerns section (3-5 points)
+- [ ] Has 🚨 Risks section (2-4 points)
+- [ ] Has 📋 Action Items section (5-8 items with owners and timelines)
+- [ ] Has 📅 Next Steps section
+- [ ] NOT using generic "Conclusion & Recommendations" format
+
+**🔴 IF ANY CHECKBOX ABOVE IS UNCHECKED, YOUR REPORT IS INCOMPLETE - DO NOT SUBMIT IT! 🔴**
+
+**🔴 BEFORE FINISHING YOUR REPORT, YOU MUST:**
+1. Go through the checklist above and verify ALL checkboxes are checked
+2. Count your total word count - it should be 3000-5000 words minimum
+3. Verify you have ALL 10 sections (A through J) with the exact titles listed above
+4. Verify every number has interpretation (What it means, Why it matters, What to do)
+5. Verify Section I (Task Statistics Summary) is included - this is the most commonly missing section!
+6. Verify Section G (Work Distribution) has ALL 4 tables (By Assignee, By Status, By Priority, By Type)
+7. Verify Section F (Cycle Time) has ALL 4 metrics (Average, 50th, 85th, 95th percentiles)
+8. Verify Section H (Issue Trend) has daily rates and forecast
+9. Verify Section D (Velocity) has completion rates by sprint with detailed pattern commentary
+
+**🔴 IF YOU SKIP THE CHECKLIST, YOUR REPORT WILL BE INCOMPLETE!**
 
 ---
 

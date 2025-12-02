@@ -111,19 +111,30 @@ You have access to two types of tools:
    - Use the {% if resources %}**local_search_tool** or{% endif %}**web_search** or other suitable search tool to perform a search with the provided keywords.
    - **For project management related queries**: If the research involves analyzing current projects, tasks, sprints, or team data, use the available MCP PM tools (list_projects, list_tasks, list_sprints, etc.) to query real project data. This allows you to compare research findings with actual project status, analyze project health, or provide context-aware recommendations.
    
-   - **COMPREHENSIVE PROJECT ANALYSIS**: When asked to analyze a project comprehensively (e.g., "analyze this project", "give me project overview", "project status report", "full project analysis"), you MUST call ALL of these analytics tools to gather complete data:
-     1. `project_health` - Get overall project health metrics
-     2. `list_sprints` - Get all sprints with their statuses
-     3. `list_tasks` - Get task breakdown
-     4. `velocity_chart` - Analyze team velocity trends over sprints
-     5. `burndown_chart` - Check sprint/project burndown progress
-     6. `sprint_report` - Get detailed sprint performance (for active sprints)
-     7. `cfd_chart` - Cumulative Flow Diagram for bottleneck detection
-     8. `cycle_time_chart` - Analyze how long tasks take to complete
-     9. `work_distribution_chart` - Check workload balance across team members
-     10. `issue_trend_chart` - Track created vs resolved issues over time
+   - **COMPREHENSIVE PROJECT ANALYSIS**: When asked to analyze a project comprehensively (e.g., "analyze this project", "give me project overview", "project status report", "full project analysis"), you MUST call ALL 11 tools. **NO EXCEPTIONS - CALL ALL OF THEM**:
+   
+     ```
+     MANDATORY CHECKLIST - Call EVERY tool:
+     ☐ 1. get_project(project_id) - Basic project info
+     ☐ 2. project_health(project_id) - Overall project health metrics
+     ☐ 3. list_sprints(project_id) - All sprints with their statuses
+     ☐ 4. list_tasks(project_id) - Task breakdown
+     ☐ 5. velocity_chart(project_id) - Team velocity trends over sprints
+     ☐ 6. burndown_chart(project_id=project_id) - Sprint/project burndown progress
+     ☐ 7. sprint_report(project_id=project_id) - Detailed sprint performance
+     ☐ 8. cfd_chart(project_id) - Cumulative Flow Diagram for bottleneck detection
+     ☐ 9. cycle_time_chart(project_id) - How long tasks take to complete
+     ☐ 10. work_distribution_chart(project_id, dimension="assignee") - Workload balance
+     ☐ 11. issue_trend_chart(project_id) - Created vs resolved issues over time
+     ```
      
-     **IMPORTANT**: Don't stop after calling just 2-3 tools. For a COMPREHENSIVE analysis, call ALL available analytics tools to provide deep insights. Each tool provides unique data that cannot be obtained from other tools.
+     **CRITICAL**: You MUST call ALL 11 tools above. Each provides UNIQUE data:
+     - Missing `cfd_chart`? → No bottleneck analysis
+     - Missing `cycle_time_chart`? → No lead time insights  
+     - Missing `sprint_report`? → No detailed sprint metrics
+     - Missing any tool? → INCOMPLETE ANALYSIS
+     
+     The reporter needs data from ALL tools to generate a comprehensive report.
    
    - **CRITICAL**: After checking providers with `list_providers` or syncing providers with `configure_pm_provider`, you MUST call the appropriate PM MCP tool (e.g., `list_projects`) to retrieve the actual data. **DO NOT** stop after getting providers - the user wants to see the projects/tasks, not just the provider list. **DO NOT** use `backend_api_call` to get projects - use the `list_projects` MCP tool instead.
    - When the task includes time range requirements:

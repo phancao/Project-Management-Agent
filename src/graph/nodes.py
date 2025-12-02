@@ -154,7 +154,86 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
             )
 
     # ============================================================
-    # SECTION 2: Enforce web search requirements
+    # SECTION 2: Validate project analysis completeness
+    # ============================================================
+    # Check if this is a project analysis request
+    plan_title = plan.get("title", "").lower()
+    plan_thought = plan.get("thought", "").lower()
+    is_project_analysis = (
+        "project" in plan_title and "analysis" in plan_title
+    ) or (
+        "project" in plan_thought and "analysis" in plan_thought
+    ) or any(
+        "project" in step.get("title", "").lower() and "analysis" in step.get("title", "").lower()
+        for step in steps
+    )
+    
+    if is_project_analysis:
+        # Required analytics tools for comprehensive project analysis
+        required_tools = [
+            "get_project",
+            "project_health",
+            "list_sprints",
+            "list_tasks",
+            "velocity_chart",
+            "burndown_chart",
+            "sprint_report",
+            "cfd_chart",
+            "cycle_time_chart",
+            "work_distribution_chart",
+            "issue_trend_chart"
+        ]
+        
+        # Check all step descriptions for tool mentions
+        all_descriptions = " ".join([
+            step.get("description", "").lower() + " " + step.get("title", "").lower()
+            for step in steps
+        ])
+        
+        missing_tools = []
+        for tool in required_tools:
+            # Check if tool is mentioned (with variations)
+            tool_variations = [
+                tool,
+                tool.replace("_", " "),
+                tool.replace("_chart", ""),
+                tool.replace("_", "-")
+            ]
+            if not any(variant in all_descriptions for variant in tool_variations):
+                missing_tools.append(tool)
+        
+        if missing_tools:
+            logger.warning(
+                f"[VALIDATION] Project analysis plan missing {len(missing_tools)} required tools: {', '.join(missing_tools)}"
+            )
+            logger.warning(
+                f"[VALIDATION] Plan title: {plan.get('title', 'N/A')}, "
+                f"Steps: {len(steps)}, "
+                f"Step types: {[s.get('step_type', 'N/A') for s in steps]}"
+            )
+            
+            # Try to enhance the first pm_query step with missing tools
+            for step in steps:
+                if step.get("step_type") == "pm_query":
+                    current_desc = step.get("description", "")
+                    if missing_tools:
+                        missing_list = ", ".join(missing_tools)
+                        enhanced_desc = (
+                            f"{current_desc}\n\n"
+                            f"⚠️ MISSING TOOLS DETECTED: You must also call these tools: {missing_list}. "
+                            f"Call ALL 11 tools: get_project, project_health, list_sprints, list_tasks, "
+                            f"velocity_chart, burndown_chart, sprint_report, cfd_chart, cycle_time_chart, "
+                            f"work_distribution_chart, issue_trend_chart."
+                        )
+                        step["description"] = enhanced_desc
+                        logger.info(
+                            f"[VALIDATION] Enhanced step '{step.get('title', 'N/A')}' description "
+                            f"with missing tools reminder"
+                        )
+                    break
+
+    # ============================================================
+    # SECTION 3: Enforce web search requirements
     # ============================================================
     if enforce_web_search:
         # Check if any step has need_search=true

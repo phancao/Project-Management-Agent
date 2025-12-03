@@ -139,13 +139,13 @@ def repair_json_output(content: str) -> str:
     return content
 
 
-def _compress_large_array(data: Any, max_items: int = 50) -> Any:
+def _compress_large_array(data: Any, max_items: int = 20) -> Any:
     """
     Compress large arrays by keeping only a summary and sample items.
     
     Args:
         data: Data structure (dict, list, etc.)
-        max_items: Maximum items to keep in arrays
+        max_items: Maximum items to keep in arrays (default 20 for token efficiency)
         
     Returns:
         Compressed data structure
@@ -156,7 +156,7 @@ def _compress_large_array(data: Any, max_items: int = 50) -> Any:
             keep_count = max_items // 2
             compressed = (
                 data[:keep_count] + 
-                [{"_summary": f"... {len(data) - max_items} more items ..."}] +
+                [{"_summary": f"... {len(data) - max_items} more items (total: {len(data)}) ..."}] +
                 data[-keep_count:]
             )
             logger.info(f"Compressed array from {len(data)} to {len(compressed)} items")
@@ -164,37 +164,60 @@ def _compress_large_array(data: Any, max_items: int = 50) -> Any:
         else:
             return [_compress_large_array(item, max_items) for item in data]
     elif isinstance(data, dict):
-        # Check if this is a task list response
+        # Check if this is a task list response - compress more aggressively
         if "tasks" in data and isinstance(data["tasks"], list) and len(data["tasks"]) > max_items:
             tasks = data["tasks"]
             keep_count = max_items // 2
-            compressed_tasks = (
-                tasks[:keep_count] +
-                [{"_summary": f"... {len(tasks) - max_items} more tasks (total: {len(tasks)}) ..."}] +
-                tasks[-keep_count:]
-            )
-            logger.info(f"Compressed task list from {len(tasks)} to {len(compressed_tasks)} tasks")
-            return {**data, "tasks": compressed_tasks, "_total_tasks": len(tasks)}
+            # For very large task lists, create a summary instead of keeping samples
+            if len(tasks) > 100:
+                # For 100+ tasks, just return summary statistics
+                status_counts = {}
+                priority_counts = {}
+                total_hours = 0
+                for task in tasks[:100]:  # Sample first 100 for stats
+                    if isinstance(task, dict):
+                        status = task.get("status", "unknown")
+                        priority = task.get("priority", "unknown")
+                        status_counts[status] = status_counts.get(status, 0) + 1
+                        priority_counts[priority] = priority_counts.get(priority, 0) + 1
+                        total_hours += task.get("estimated_hours", 0) or 0
+                
+                compressed_tasks = [
+                    {"_summary": f"Total tasks: {len(tasks)}", "_compressed": True},
+                    {"_summary": f"Status breakdown: {status_counts}", "_compressed": True},
+                    {"_summary": f"Priority breakdown: {priority_counts}", "_compressed": True},
+                    {"_summary": f"Total estimated hours: {total_hours:.1f}", "_compressed": True},
+                    {"_summary": f"Showing first {keep_count} tasks as samples", "_compressed": True},
+                ] + tasks[:keep_count]
+                logger.info(f"Compressed large task list from {len(tasks)} to {len(compressed_tasks)} items (summary mode)")
+            else:
+                compressed_tasks = (
+                    tasks[:keep_count] +
+                    [{"_summary": f"... {len(tasks) - max_items} more tasks (total: {len(tasks)}) ..."}] +
+                    tasks[-keep_count:]
+                )
+                logger.info(f"Compressed task list from {len(tasks)} to {len(compressed_tasks)} tasks")
+            return {**data, "tasks": compressed_tasks, "_total_tasks": len(tasks), "_compressed": True}
         else:
             return {k: _compress_large_array(v, max_items) for k, v in data.items()}
     else:
         return data
 
 
-def sanitize_tool_response(content: str, max_length: int = 50000, compress_arrays: bool = True) -> str:
+def sanitize_tool_response(content: str, max_length: int = 40000, compress_arrays: bool = True) -> str:
     """
     Sanitize tool response to remove extra tokens and invalid content.
     
     This function:
     - Strips whitespace and trailing tokens
     - Compresses large arrays (like task lists) to prevent token overflow
-    - Truncates excessively long responses
+    - Truncates excessively long responses (default 40k chars ≈ 10k tokens)
     - Cleans up common garbage patterns
     - Attempts JSON repair for JSON-like responses
     
     Args:
         content: Tool response content
-        max_length: Maximum allowed length (default 50000 chars)
+        max_length: Maximum allowed length (default 40000 chars ≈ 10k tokens for English)
         compress_arrays: Whether to compress large arrays (default True)
         
     Returns:
@@ -213,7 +236,8 @@ def sanitize_tool_response(content: str, max_length: int = 50000, compress_array
     if compress_arrays and (content.startswith('{') or content.startswith('[')):
         try:
             parsed = json.loads(content)
-            compressed = _compress_large_array(parsed, max_items=50)
+            # Use more aggressive compression (20 items instead of 50)
+            compressed = _compress_large_array(parsed, max_items=20)
             content = json.dumps(compressed, ensure_ascii=False)
             logger.info(f"Compressed tool response JSON structure")
         except (json.JSONDecodeError, TypeError):
@@ -221,9 +245,11 @@ def sanitize_tool_response(content: str, max_length: int = 50000, compress_array
             pass
     
     # Truncate if too long to prevent token overflow
+    # 40k chars ≈ 10k tokens (assuming 4 chars/token for English)
+    # This leaves room for other content in the full message context
     if len(content) > max_length:
-        logger.warning(f"Tool response truncated from {len(content)} to {max_length} chars")
-        content = content[:max_length].rstrip() + "..."
+        logger.warning(f"Tool response truncated from {len(content)} to {max_length} chars (≈{max_length//4} tokens)")
+        content = content[:max_length].rstrip() + f"... [truncated from {len(content)} chars]"
     
     # Remove common garbage patterns that appear from some models
     # These are often seen from quantized models with output corruption

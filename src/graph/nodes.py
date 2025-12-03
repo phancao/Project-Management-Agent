@@ -1108,6 +1108,7 @@ async def _execute_agent_step(
 
     # Find the first unexecuted step
     current_step = None
+    current_step_idx = None
     completed_steps = []
     if not hasattr(current_plan, 'steps') or not current_plan.steps:
         logger.error("[_execute_agent_step] Plan has no steps")
@@ -1116,6 +1117,7 @@ async def _execute_agent_step(
     for idx, step in enumerate(current_plan.steps):
         if not step.execution_res:
             current_step = step
+            current_step_idx = idx  # Store the index for later use
             logger.debug(f"[_execute_agent_step] Found unexecuted step at index {idx}: {step.title}")
             break
         else:
@@ -1279,16 +1281,51 @@ async def _execute_agent_step(
                             f"content_len={len(str(msg.content)) if hasattr(msg, 'content') and msg.content else 0}")
 
         detailed_error = f"[ERROR] {agent_name.capitalize()} Agent Error\n\nStep: {current_step.title}\n\nError Details:\n{str(e)}\n\nPlease check the logs for more information."
-        current_step.execution_res = detailed_error
-
-        # Calculate the current step index even on error
-        if hasattr(current_plan, 'steps') and current_plan.steps:
-            completed_count = sum(1 for step in current_plan.steps if step.execution_res)
-            current_step_index = min(completed_count, len(current_plan.steps) - 1)
+        
+        # CRITICAL: Create new Step and Plan objects instead of mutating in place
+        from src.prompts.planner_model import Step, Plan
+        
+        # Use the stored index (set when finding the unexecuted step)
+        # If for some reason it's not set, try to find it by title as fallback
+        if current_step_idx is None:
+            logger.warning(f"current_step_idx not set, searching by step title: {current_step.title}")
+            for idx, step in enumerate(current_plan.steps):
+                if step.title == current_step.title and not step.execution_res:
+                    current_step_idx = idx
+                    break
+        
+        if current_step_idx is not None:
+            # Create a new Step with error in execution_res
+            updated_step = Step(
+                need_search=current_step.need_search,
+                title=current_step.title,
+                description=current_step.description,
+                step_type=current_step.step_type,
+                execution_res=detailed_error,  # Set the error as execution result
+            )
+            
+            # Create a new list of steps with the updated step
+            updated_steps = list(current_plan.steps)
+            updated_steps[current_step_idx] = updated_step
+            
+            # Create a new Plan with updated steps
+            updated_plan = Plan(
+                locale=current_plan.locale,
+                has_enough_context=current_plan.has_enough_context,
+                thought=current_plan.thought,
+                title=current_plan.title,
+                steps=updated_steps,
+            )
+            
+            # Calculate the current step index even on error
+            completed_count = sum(1 for step in updated_plan.steps if step.execution_res)
+            current_step_index = min(completed_count, len(updated_plan.steps) - 1)
         else:
-            completed_count = 0
+            logger.error(f"Could not find current step '{current_step.title}' in plan steps")
+            updated_plan = current_plan
             current_step_index = 0
 
+        # CRITICAL: Include updated_plan in the update to ensure LangGraph persists the state change
         return Command(
             update={
                 "messages": [
@@ -1299,6 +1336,7 @@ async def _execute_agent_step(
                 ],
                 "observations": observations + [detailed_error],
                 "current_step_index": current_step_index,  # Update step progress even on error
+                "current_plan": updated_plan,  # Include new plan object with updated step execution_res
             },
             goto="research_team",
         )
@@ -1358,22 +1396,51 @@ async def _execute_agent_step(
     
     logger.debug(f"{agent_name.capitalize()} full response: {combined_result[:500]}...")
 
-    # Update the step with the execution result (including tool results)
-    current_step.execution_res = combined_result
+    # CRITICAL: Create new Step and Plan objects instead of mutating in place
+    # Pydantic models and LangGraph state updates require creating new objects
+    # to properly detect state changes
+    from src.prompts.planner_model import Step, Plan
+    
+    # Use the stored index (set when finding the unexecuted step)
+    if current_step_idx is None:
+        logger.error(f"Could not find current step '{current_step.title}' in plan steps (index not set)")
+        return Command(goto="research_team")
+    
+    # Create a new Step with updated execution_res
+    updated_step = Step(
+        need_search=current_step.need_search,
+        title=current_step.title,
+        description=current_step.description,
+        step_type=current_step.step_type,
+        execution_res=combined_result,  # Set the execution result
+    )
+    
+    # Create a new list of steps with the updated step
+    updated_steps = list(current_plan.steps)
+    updated_steps[current_step_idx] = updated_step
+    
+    # Create a new Plan with updated steps
+    updated_plan = Plan(
+        locale=current_plan.locale,
+        has_enough_context=current_plan.has_enough_context,
+        thought=current_plan.thought,
+        title=current_plan.title,
+        steps=updated_steps,
+    )
+    
     logger.info(f"Step '{current_step.title}' execution completed by {agent_name}")
-
+    
     # Calculate the current step index (number of completed steps)
-    if hasattr(current_plan, 'steps') and current_plan.steps:
-        completed_count = sum(1 for step in current_plan.steps if step.execution_res)
-        current_step_index = min(completed_count, len(current_plan.steps) - 1)
-    else:
-        completed_count = 0
-        current_step_index = 0
-    logger.info(f"Step progress: {completed_count}/{len(current_plan.steps)} steps completed (current_step_index={current_step_index})")
+    completed_count = sum(1 for step in updated_plan.steps if step.execution_res)
+    current_step_index = min(completed_count, len(updated_plan.steps) - 1)
+    logger.info(f"Step progress: {completed_count}/{len(updated_plan.steps)} steps completed (current_step_index={current_step_index})")
 
     sys.stderr.write(f"\n🔄 RETURNING RESULT: agent_name='{agent_name}', message_type='AIMessage', content_len={len(combined_result)}\n")
+    sys.stderr.write(f"🔄 Step '{current_step.title}' execution_res set: {bool(updated_step.execution_res)}\n")
+    sys.stderr.write(f"🔄 Updated plan has {completed_count} completed steps out of {len(updated_plan.steps)}\n")
     sys.stderr.flush()
     
+    # CRITICAL: Include updated_plan in the update to ensure LangGraph persists the state change
     return Command(
         update={
             "messages": [
@@ -1384,6 +1451,7 @@ async def _execute_agent_step(
             ],
             "observations": observations + [response_content],
             "current_step_index": current_step_index,  # Update step progress
+            "current_plan": updated_plan,  # Include new plan object with updated step execution_res
         },
         goto="research_team",
     )

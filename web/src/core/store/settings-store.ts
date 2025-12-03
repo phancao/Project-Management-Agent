@@ -18,6 +18,8 @@ const DEFAULT_SETTINGS: SettingsState = {
     maxStepNum: 3,
     maxSearchResults: 3,
     reportStyle: "academic",
+    modelProvider: undefined,
+    modelName: undefined,
   },
   mcp: {
     servers: [],
@@ -35,6 +37,8 @@ export type SettingsState = {
     maxStepNum: number;
     maxSearchResults: number;
     reportStyle: "academic" | "popular_science" | "news" | "social_media" | "strategic_investment";
+    modelProvider?: string; // Provider ID (e.g., "openai", "anthropic")
+    modelName?: string; // Model name (e.g., "gpt-4o", "claude-3-5-sonnet-20241022")
   };
   mcp: {
     servers: MCPServerMetadata[];
@@ -165,6 +169,17 @@ export function setEnableBackgroundInvestigation(value: boolean) {
     general: {
       ...state.general,
       enableBackgroundInvestigation: value,
+    },
+  }));
+  saveSettings();
+}
+
+export function setModelProvider(providerId: string | undefined, modelName?: string) {
+  useSettingsStore.setState((state) => ({
+    general: {
+      ...state.general,
+      modelProvider: providerId,
+      modelName: modelName,
     },
   }));
   saveSettings();

@@ -73,7 +73,7 @@ def init_db():
         ResearchSession, KnowledgeBaseItem, ConversationSession, ConversationMessage,
         ProjectTemplate, ProjectMetric, IntentClassification, IntentFeedback,
         IntentMetric, LearnedIntentPattern, Sprint, SprintTask,
-        PMProviderConnection, ProjectSyncMapping,
+        PMProviderConnection, ProjectSyncMapping, AIProviderAPIKey,
         MockProject, MockUser, MockSprint, MockEpic, MockTask
     )
     try:

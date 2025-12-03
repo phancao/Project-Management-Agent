@@ -3,7 +3,6 @@
 Configuration management for PM Service.
 """
 
-import os
 from functools import lru_cache
 from pydantic_settings import BaseSettings
 

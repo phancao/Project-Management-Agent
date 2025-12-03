@@ -403,5 +403,22 @@ class UserMCPAPIKey(Base):  # type: ignore
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
+class AIProviderAPIKey(Base):  # type: ignore
+    """AI Provider API Key model for storing LLM provider credentials"""
+    __tablename__ = "ai_provider_api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider_id = Column(String(50), nullable=False, unique=True)  # 'openai', 'anthropic', etc.
+    provider_name = Column(String(255), nullable=False)
+    api_key = Column(String(1000), nullable=True)
+    base_url = Column(String(500), nullable=True)  # Optional custom base URL
+    model_name = Column(String(255), nullable=True)  # Optional default model
+    additional_config = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
     # Relationships
     user = relationship("User", backref="mcp_api_keys")

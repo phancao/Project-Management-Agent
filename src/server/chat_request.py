@@ -80,6 +80,14 @@ class ChatRequest(BaseModel):
         default_factory=list,
         description="List of tool names to interrupt before execution (e.g., ['db_tool', 'api_tool'])",
     )
+    model_provider: Optional[str] = Field(
+        None,
+        description="AI provider ID to use (e.g., 'openai', 'anthropic'). Overrides default provider selection.",
+    )
+    model_name: Optional[str] = Field(
+        None,
+        description="Model name to use (e.g., 'gpt-4o', 'claude-3-5-sonnet-20241022'). Overrides default model selection.",
+    )
 
 
 class TTSRequest(BaseModel):

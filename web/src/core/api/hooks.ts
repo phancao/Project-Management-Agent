@@ -47,6 +47,7 @@ export function useReplayMetadata() {
 const DEFAULT_CONFIG: DeerFlowConfig = {
   rag: { provider: "" },
   models: { basic: [], reasoning: [] },
+  providers: [],
 };
 
 export function useConfig(): {

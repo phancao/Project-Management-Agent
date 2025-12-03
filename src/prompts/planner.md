@@ -241,7 +241,7 @@ For complex PM queries:
     {
       "need_search": false,
       "title": "Analyze Sprint 4",
-      "description": "First call list_sprints(project_id) to find Sprint 4 and get its sprint_id. Then use ONLY these 3 sprint-specific tools with the sprint_id: sprint_report(sprint_id), burndown_chart(sprint_id), list_tasks_in_sprint(sprint_id). DO NOT call project-wide tools like velocity_chart, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart, project_health, or get_project.",
+      "description": "🔴 CRITICAL: Use AGGREGATED analytics tools to avoid token limit errors!\n\n1. First call list_sprints(project_id) to find Sprint 4 and get its sprint_id\n2. PRIMARY: Call sprint_report(sprint_id, project_id) - Returns aggregated metrics WITHOUT raw task data (prevents token limits)\n3. SECONDARY: Call burndown_chart(sprint_id, project_id) - Returns aggregated burndown data\n4. OPTIONAL (only if needed): Call list_tasks_in_sprint(sprint_id, project_id) - ⚠️ WARNING: Returns ALL tasks (50+ tasks = 50k+ tokens). Only use if sprint_report doesn't provide enough detail. If you must use it, add filters like status='done' to reduce data size.\n\n❌ DO NOT call project-wide tools: velocity_chart, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart, project_health, get_project\n\nWhy? Aggregated tools (sprint_report, burndown_chart) return summarized data without raw task lists, preventing token limit errors.",
       "step_type": "pm_query"
     }
   ]

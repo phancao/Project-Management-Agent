@@ -23,23 +23,34 @@ Your JSON output MUST include:
 
 **🔴 IF YOU OMIT ANY FIELD, YOUR OUTPUT WILL BE REJECTED AND THE PLAN WILL FAIL! 🔴**
 
-## 🔴 CRITICAL RULE - PM QUERY DETECTION
+## 🔴🔴🔴 CRITICAL RULE - PM QUERY DETECTION 🔴🔴🔴
 
 **BEFORE CREATING ANY PLAN**: Check if the user query is about Project Management data analysis.
+
+**⚠️ WARNING: If you use the wrong step_type, the agent will generate FAKE DATA instead of calling PM tools!**
 
 If the user query contains **ANY** of these patterns:
 - "analyze sprint" / "analyse sprint" / "sprint analysis" / "sprint performance"
 - "sprint [number]" (e.g., "sprint 4", "sprint 5")
 - "project status" / "project performance" / "project health"
+- **"analyse this project" / "analyze this project" / "comprehensive project analysis" / "project analysis"**
 - "team performance" / "team velocity" / "team metrics"
 - "task completion" / "task progress" / "task metrics"
 - "epic progress" / "epic status"
 - "burndown" / "velocity chart"
+- "resource assignation" / "resource allocation" / "resource analysis" / "workload analysis" / "team workload"
 
 **You MUST**:
 1. Set `has_enough_context: false` (needs data retrieval + analysis)
-2. Create steps with `step_type: "pm_query"` (NOT "processing" or "research")
+2. **MANDATORY**: Create steps with `step_type: "pm_query"` (NOT "processing" or "research")
 3. Set `need_search: false` (no web search needed)
+
+**🔴 CRITICAL**: 
+- `step_type: "pm_query"` → Routes to PM Agent (has PM tools like list_tasks, velocity_chart, etc.)
+- `step_type: "research"` → Routes to Researcher Agent (NO PM tools, will generate FAKE DATA!)
+- `step_type: "processing"` → Routes to Coder Agent (NO PM tools, will generate FAKE DATA!)
+
+**If you use `step_type: "research"` for PM queries, the researcher will try to do web research and generate fake project data instead of calling real PM tools!**
 
 **Example - CORRECT**:
 ```json
@@ -166,6 +177,7 @@ For simple PM queries:
          - If user says 'list my tasks' (without 'all'):
            → If message contains 'project_id: xxx' (UI context): Extract project_id, call `list_my_tasks(project_id='xxx')`.
            → If message does NOT contain 'project_id: xxx': Call `list_my_tasks()`."
+       - For listing users/assignees: "Use the `list_users(project_id)` MCP PM tool to retrieve all users/team members in the project. **CRITICAL**: Call ONLY `list_users(project_id)` - do NOT call `list_projects`, `list_tasks_by_assignee`, or any other tools. The `list_users` tool returns the list of all assignees/team members directly."
 
    **Example Plan Structure** (assuming 3 providers from Step 1, and 2 need reconfiguration):
    
@@ -206,20 +218,96 @@ For complex PM queries:
 3. **Set `need_search: false`** - No web search needed, only PM tools
 4. **Be specific about what data to retrieve and analyze**
 
-## 🔴🔴🔴 PROJECT ANALYSIS = SINGLE COMPREHENSIVE STEP (READ THIS FIRST!) 🔴🔴🔴
+## 🔴🔴🔴 SPRINT-SPECIFIC ANALYSIS vs PROJECT ANALYSIS (CRITICAL DISTINCTION!) 🔴🔴🔴
 
-**TRIGGER PHRASES** - If user says ANY of these, use the SINGLE STEP FORMAT below:
+**FIRST, determine if the query is about a SPECIFIC SPRINT or the ENTIRE PROJECT:**
+
+### 🎯 SPRINT-SPECIFIC ANALYSIS (e.g., "analyse sprint 4", "sprint 5 performance")
+
+**TRIGGER PHRASES** - If user says ANY of these, use SPRINT-SPECIFIC format:
+- "analyse sprint [N]" / "analyze sprint [N]" / "sprint [N] analysis"
+- "sprint [N] performance" / "how did sprint [N] perform"
+- "sprint [N] report" / "sprint [N] metrics"
+- "sprint [N] burndown" / "sprint [N] velocity"
+
+**YOU MUST USE THIS FOCUSED FORMAT (ONLY 4 TOOLS):**
+```json
+{
+  "locale": "en-US",
+  "has_enough_context": false,
+  "thought": "User wants to analyze a SPECIFIC sprint (Sprint 4), not the whole project. Only need sprint-specific tools.",
+  "title": "Sprint 4 Performance Analysis",
+  "steps": [
+    {
+      "need_search": false,
+      "title": "Analyze Sprint 4",
+      "description": "First call list_sprints(project_id) to find Sprint 4 and get its sprint_id. Then use ONLY these 3 sprint-specific tools with the sprint_id: sprint_report(sprint_id), burndown_chart(sprint_id), list_tasks_in_sprint(sprint_id). DO NOT call project-wide tools like velocity_chart, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart, project_health, or get_project.",
+      "step_type": "pm_query"
+    }
+  ]
+}
+```
+
+---
+
+### 👥 RESOURCE/WORKLOAD ANALYSIS (e.g., "resource assignation", "team workload")
+
+**TRIGGER PHRASES** - If user says ANY of these, use RESOURCE ANALYSIS format:
+- "resource assignation" / "resource allocation" / "resource analysis"
+- "team workload" / "workload analysis" / "work distribution"
+- "resource utilization" / "analyze resources"
+
+**YOU MUST USE THIS FORMAT (USE AGGREGATED TOOLS, NOT RAW list_tasks!):**
+```json
+{
+  "locale": "en-US",
+  "has_enough_context": false,
+  "thought": "User wants to analyze resource assignation. Use aggregated tools to avoid token limit errors.",
+  "title": "Resource Assignation Analysis",
+  "steps": [
+    {
+      "need_search": false,
+      "title": "Analyze Resource Assignation",
+      "description": "🔴 MANDATORY TOOLS TO CALL (call these EXACTLY):\n1. list_users(project_id) - Get all team members in the project\n2. For EACH user from list_users, call: list_tasks_by_assignee(project_id, assignee_id=user_id) - Get tasks for that specific user (much smaller dataset than all tasks)\n3. list_unassigned_tasks(project_id) - Get tasks that are not assigned to anyone\n4. Optionally: work_distribution_chart(project_id, dimension='assignee') - Get aggregated workload summary (counts, percentages)\n\n🔴 FORBIDDEN TOOLS (DO NOT CALL THESE):\n- list_tasks(project_id) WITHOUT assignee_id - FORBIDDEN! Returns ALL tasks (100+ tasks), causes token limit errors\n- list_sprints - NOT NEEDED for resource analysis\n\nWhy? Resource analysis needs to check workload per user. Using list_tasks_by_assignee for each user returns only that user's tasks (e.g., 20-30 tasks per user), which is much more efficient than listing all 384 tasks at once.",
+      "step_type": "pm_query"
+    }
+  ]
+}
+```
+
+**🔴 CRITICAL RULES FOR RESOURCE ANALYSIS:**
+- ✅ DO call: `list_users(project_id)` - Get all team members
+- ✅ DO call: `list_tasks_by_assignee(project_id, assignee_id)` - For EACH user, get their tasks (returns only that user's tasks, much smaller dataset)
+- ✅ DO call: `list_unassigned_tasks(project_id)` - Get tasks that need to be assigned
+- ✅ Optionally call: `work_distribution_chart(project_id, dimension="assignee")` - Get aggregated summary (counts, percentages)
+- ❌ DO NOT call: `list_tasks(project_id)` WITHOUT assignee_id - Returns ALL tasks (384 tasks), causes token limit errors
+- **Why per-user approach?** `list_tasks_by_assignee` returns only tasks for one user (e.g., 20-30 tasks), which is much more efficient than listing all 384 tasks at once
+
+**🔴 CRITICAL RULES FOR SPRINT-SPECIFIC ANALYSIS:**
+- ✅ DO call: `list_sprints(project_id)` first to find the sprint_id, then `sprint_report(sprint_id)`, `burndown_chart(sprint_id)`, `list_tasks_in_sprint(sprint_id)`
+- ❌ DO NOT call: `velocity_chart`, `cfd_chart`, `cycle_time_chart`, `work_distribution_chart`, `issue_trend_chart`, `project_health`, `get_project` (these are project-wide, not sprint-specific)
+- **ONE step only** with the 4 tools listed (list_sprints + 3 sprint-specific tools)
+
+---
+
+### 📊 PROJECT-WIDE ANALYSIS (e.g., "analyse this project", "project analysis")
+
+**🔴 CRITICAL: If user says "analyse this project" or "comprehensive project analysis", you MUST create a PM query plan, NOT a research plan!**
+
+**TRIGGER PHRASES** - If user says ANY of these, use PROJECT-WIDE format:
 - "analyse this project" / "analyze this project" / "analyze the project"
 - "project analysis" / "full analysis" / "comprehensive analysis"
 - "project overview" / "project status" / "how is the project"
 - "analyze project [ID]" / "what's happening in the project"
 
-**YOU MUST USE THIS SINGLE-STEP FORMAT:**
+**🔴 MANDATORY: You MUST use `step_type: "pm_query"` (NOT "research" or "processing")!**
+
+**YOU MUST USE THIS SINGLE-STEP FORMAT (ALL 11 TOOLS):**
 ```json
 {
   "locale": "en-US",
   "has_enough_context": false,
-  "thought": "User wants project analysis. Creating ONE step with ALL 11 analytics tools listed.",
+  "thought": "User wants project-wide analysis. Creating ONE step with ALL 11 analytics tools listed. This is a PM query, NOT a research query.",
   "title": "Comprehensive Project Analysis",
   "steps": [
     {
@@ -232,26 +320,14 @@ For complex PM queries:
 }
 ```
 
+**🔴 CRITICAL RULES:**
+- ✅ MUST use `step_type: "pm_query"` - This routes to PM Agent with PM tools
+- ✅ MUST set `need_search: false` - No web search needed
+- ❌ DO NOT use `step_type: "research"` - This routes to Researcher Agent (wrong!)
+- ❌ DO NOT use `step_type: "processing"` - This routes to Coder Agent (wrong!)
+- **If you use the wrong step_type, the PM tools will NOT be called and the agent will generate fake data!**
+
 **⚠️ DO NOT create multiple steps for project analysis! ONE step with ALL tools listed!**
-
----
-
-**Example Plan for "Analyze Sprint 4"** (SPECIFIC sprint, not whole project):
-```json
-{
-  "has_enough_context": false,
-  "thought": "User wants to analyze a SPECIFIC sprint (Sprint 4), not the whole project.",
-  "title": "Sprint 4 Performance Analysis",
-  "steps": [
-    {
-      "need_search": false,
-      "title": "Analyze Sprint 4",
-      "description": "Use sprint_report, burndown_chart, list_tasks with sprint_id for Sprint 4 specifically.",
-      "step_type": "pm_query"
-    }
-  ]
-}
-```
 
 **Key Differences from Simple PM Queries**:
 - `has_enough_context: false` (needs execution + analysis)

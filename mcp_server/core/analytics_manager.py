@@ -273,7 +273,7 @@ class AnalyticsManager:
         return await service.get_project_summary(
             project_id=actual_project_id
         )
-    
+
     async def get_cfd_chart(
         self,
         project_id: str,

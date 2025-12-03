@@ -139,12 +139,55 @@ def repair_json_output(content: str) -> str:
     return content
 
 
-def sanitize_tool_response(content: str, max_length: int = 50000) -> str:
+def _compress_large_array(data: Any, max_items: int = 50) -> Any:
+    """
+    Compress large arrays by keeping only a summary and sample items.
+    
+    Args:
+        data: Data structure (dict, list, etc.)
+        max_items: Maximum items to keep in arrays
+        
+    Returns:
+        Compressed data structure
+    """
+    if isinstance(data, list):
+        if len(data) > max_items:
+            # Keep first few and last few items, add summary
+            keep_count = max_items // 2
+            compressed = (
+                data[:keep_count] + 
+                [{"_summary": f"... {len(data) - max_items} more items ..."}] +
+                data[-keep_count:]
+            )
+            logger.info(f"Compressed array from {len(data)} to {len(compressed)} items")
+            return compressed
+        else:
+            return [_compress_large_array(item, max_items) for item in data]
+    elif isinstance(data, dict):
+        # Check if this is a task list response
+        if "tasks" in data and isinstance(data["tasks"], list) and len(data["tasks"]) > max_items:
+            tasks = data["tasks"]
+            keep_count = max_items // 2
+            compressed_tasks = (
+                tasks[:keep_count] +
+                [{"_summary": f"... {len(tasks) - max_items} more tasks (total: {len(tasks)}) ..."}] +
+                tasks[-keep_count:]
+            )
+            logger.info(f"Compressed task list from {len(tasks)} to {len(compressed_tasks)} tasks")
+            return {**data, "tasks": compressed_tasks, "_total_tasks": len(tasks)}
+        else:
+            return {k: _compress_large_array(v, max_items) for k, v in data.items()}
+    else:
+        return data
+
+
+def sanitize_tool_response(content: str, max_length: int = 50000, compress_arrays: bool = True) -> str:
     """
     Sanitize tool response to remove extra tokens and invalid content.
     
     This function:
     - Strips whitespace and trailing tokens
+    - Compresses large arrays (like task lists) to prevent token overflow
     - Truncates excessively long responses
     - Cleans up common garbage patterns
     - Attempts JSON repair for JSON-like responses
@@ -152,6 +195,7 @@ def sanitize_tool_response(content: str, max_length: int = 50000) -> str:
     Args:
         content: Tool response content
         max_length: Maximum allowed length (default 50000 chars)
+        compress_arrays: Whether to compress large arrays (default True)
         
     Returns:
         Sanitized content string
@@ -164,6 +208,17 @@ def sanitize_tool_response(content: str, max_length: int = 50000) -> str:
     # First, try to extract valid JSON to remove trailing tokens
     if content.startswith('{') or content.startswith('['):
         content = _extract_json_from_content(content)
+    
+    # Try to compress large arrays if it's JSON
+    if compress_arrays and (content.startswith('{') or content.startswith('[')):
+        try:
+            parsed = json.loads(content)
+            compressed = _compress_large_array(parsed, max_items=50)
+            content = json.dumps(compressed, ensure_ascii=False)
+            logger.info(f"Compressed tool response JSON structure")
+        except (json.JSONDecodeError, TypeError):
+            # Not valid JSON, skip compression
+            pass
     
     # Truncate if too long to prevent token overflow
     if len(content) > max_length:

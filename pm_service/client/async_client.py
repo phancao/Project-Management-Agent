@@ -114,6 +114,14 @@ class AsyncPMServiceClient:
                 # Don't retry 4xx errors (client errors)
                 if 400 <= e.response.status_code < 500:
                     logger.error(f"Client error: {e.response.status_code} - {e.response.text}")
+                    # Convert 403 errors to PermissionError for better error handling
+                    if e.response.status_code == 403:
+                        error_text = e.response.text or "Permission denied"
+                        raise PermissionError(
+                            f"PM Service API returned 403 Forbidden: {error_text}. "
+                            "This indicates insufficient permissions. "
+                            "Please check your API token permissions or contact your administrator."
+                        ) from e
                     raise
                 last_error = e
                 

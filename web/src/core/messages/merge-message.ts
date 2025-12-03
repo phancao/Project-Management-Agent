@@ -160,10 +160,10 @@ function mergeToolCallMessage(
       } else {
         // Add new tool call
         message.toolCalls.push({
-          id: raw.id,
-          name: raw.name,
-          args: raw.args,
-          result: undefined,
+      id: raw.id,
+      name: raw.name,
+      args: raw.args,
+      result: undefined,
         });
       }
     }

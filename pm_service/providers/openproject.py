@@ -48,6 +48,22 @@ class OpenProjectProvider(BasePMProvider):
             "Authorization": f"Basic {credentials}"
         }
     
+    def _extract_project_key(self, project_id: Optional[str]) -> Optional[str]:
+        """
+        Extract the project key from a composite project ID.
+        
+        Args:
+            project_id: Either "provider_uuid:project_key" or just "project_key" or None
+        
+        Returns:
+            The project key portion, or None if project_id is None
+        """
+        if not project_id:
+            return None
+        if ":" in project_id:
+            return project_id.split(":", 1)[1]
+        return project_id
+    
     # ==================== Project Operations ====================
     
     async def list_projects(self) -> List[PMProject]:
@@ -131,7 +147,9 @@ class OpenProjectProvider(BasePMProvider):
     
     async def get_project(self, project_id: str) -> Optional[PMProject]:
         """Get a single project by ID"""
-        url = f"{self.base_url}/api/v3/projects/{project_id}"
+        # Extract project key from composite format (provider_id:project_key)
+        actual_project_id = self._extract_project_key(project_id)
+        url = f"{self.base_url}/api/v3/projects/{actual_project_id}"
         response = requests.get(url, headers=self.headers)
         
         if response.status_code == 404:
@@ -204,10 +222,18 @@ class OpenProjectProvider(BasePMProvider):
         import logging
         logger = logging.getLogger(__name__)
         
+        # Extract project key from composite format (provider_id:project_key)
+        actual_project_id = self._extract_project_key(project_id)
+        if project_id and actual_project_id != project_id:
+            logger.info(
+                f"OpenProject list_tasks: Extracted project key '{actual_project_id}' "
+                f"from composite project_id '{project_id}'"
+            )
+        
         filters = []
-        if project_id:
+        if actual_project_id:
             filters.append({
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {"operator": "=", "values": [actual_project_id]}
             })
         if assignee_id:
             filters.append({
@@ -1023,13 +1049,15 @@ class OpenProjectProvider(BasePMProvider):
         
         # Filter by project_id if provided
         # (versions don't have project filter in API)
-        if project_id:
+        # Extract project key from composite format
+        actual_project_id = self._extract_project_key(project_id)
+        if actual_project_id:
             sprints_data = [
                 sprint for sprint in sprints_data
                 if sprint.get("_links", {})
                 .get("definingProject", {})
                 .get("href", "")
-                .endswith(f"/projects/{project_id}")
+                .endswith(f"/projects/{actual_project_id}")
             ]
         
         # Filter by state if provided
@@ -1164,47 +1192,136 @@ class OpenProjectProvider(BasePMProvider):
         self, project_id: Optional[str] = None
     ) -> List[PMUser]:
         """
-        List all users with automatic pagination.
+        List users with automatic pagination.
         
-        Note: OpenProject may require admin permissions for user listing.
+        If project_id is provided, uses /api/v3/memberships to get project members.
+        Otherwise, uses /api/v3/users to get all users (requires admin permissions).
         """
         import logging
+        import json as json_lib
         logger = logging.getLogger(__name__)
         
-        url = f"{self.base_url}/api/v3/users"
-        
-        # Pagination settings
-        page_size = 500
-        offset = 0
         all_users: List[PMUser] = []
-        total_count = None
         
-        while True:
-            params = {"pageSize": page_size, "offset": offset}
-            response = requests.get(url, headers=self.headers, params=params)
-            response.raise_for_status()
+        if project_id:
+            # Use memberships endpoint to get users in a specific project
+            url = f"{self.base_url}/api/v3/memberships"
             
-            result = response.json()
-            users_data = result.get("_embedded", {}).get("elements", [])
+            # Filter by project ID and include principal (user) data
+            filters = [{"project": {"operator": "=", "values": [project_id]}}]
+            params = {
+                "filters": json_lib.dumps(filters),
+                "include": "principal",  # Include embedded user data
+                "pageSize": 500,
+                "offset": 0
+            }
             
-            if total_count is None:
-                total_count = result.get("total", 0)
-                logger.info(f"OpenProject list_users: Total {total_count} users to fetch")
+            offset = 0
+            total_count = None
             
-            for user in users_data:
-                all_users.append(self._parse_user(user))
+            while True:
+                params["offset"] = offset
+                response = requests.get(url, headers=self.headers, params=params)
+                
+                # Check for permission errors and raise clear error message
+                if response.status_code == 403:
+                    raise PermissionError(
+                        f"OpenProject API returned 403 Forbidden when trying to list memberships for project {project_id}. "
+                        "This may indicate that: "
+                        "1) The API token doesn't have permission to view project memberships, "
+                        "2) The project doesn't exist or you don't have access to it, "
+                        "3) Contact your OpenProject administrator to grant project membership viewing permissions."
+                    )
+                
+                response.raise_for_status()
+                
+                result = response.json()
+                memberships = result.get("_embedded", {}).get("elements", [])
+                
+                if total_count is None:
+                    total_count = result.get("total", 0)
+                    logger.info(f"OpenProject list_users (project {project_id}): Total {total_count} memberships to fetch")
+                
+                # Extract user information from each membership
+                for membership in memberships:
+                    # First try to get embedded user data (more efficient)
+                    principal_data = membership.get("_embedded", {}).get("principal", {})
+                    if principal_data:
+                        # Use embedded user data if available
+                        all_users.append(self._parse_user(principal_data))
+                    else:
+                        # Fallback: fetch user from link
+                        user_link = membership.get("_links", {}).get("principal", {})
+                        if user_link and isinstance(user_link, dict):
+                            user_href = user_link.get("href", "")
+                            if user_href:
+                                try:
+                                    user_url = f"{self.base_url}{user_href}" if user_href.startswith("/") else user_href
+                                    user_response = requests.get(user_url, headers=self.headers)
+                                    user_response.raise_for_status()
+                                    user_data = user_response.json()
+                                    all_users.append(self._parse_user(user_data))
+                                except Exception as e:
+                                    logger.warning(f"Failed to fetch user from {user_href}: {e}")
+                
+                if len(memberships) < 500:
+                    break
+                if total_count and len(all_users) >= total_count:
+                    break
+                
+                offset += 500
+                if offset > 10000:  # Safety limit
+                    logger.warning(f"OpenProject list_users: Safety limit reached at offset {offset}")
+                    break
             
-            if len(users_data) < page_size:
-                break
-            if len(all_users) >= total_count:
-                break
+            logger.info(f"OpenProject list_users (project {project_id}): Fetched {len(all_users)} users total")
+        else:
+            # List all users (requires admin permissions)
+            url = f"{self.base_url}/api/v3/users"
             
-            offset += page_size
-            if offset > 10000:  # Safety limit
-                logger.warning(f"OpenProject list_users: Safety limit reached at offset {offset}")
-                break
+            # Pagination settings
+            page_size = 500
+            offset = 0
+            total_count = None
+            
+            while True:
+                params = {"pageSize": page_size, "offset": offset}
+                response = requests.get(url, headers=self.headers, params=params)
+                
+                # Check for permission errors and raise clear error message
+                if response.status_code == 403:
+                    raise PermissionError(
+                        "OpenProject API returned 403 Forbidden. "
+                        "Listing all users requires administrator permissions. "
+                        "Please either: "
+                        "1) Provide a project_id to list users in that specific project (uses memberships endpoint, no admin needed), "
+                        "2) Contact your OpenProject administrator to grant user listing permissions to your API token."
+                    )
+                
+                response.raise_for_status()
+                
+                result = response.json()
+                users_data = result.get("_embedded", {}).get("elements", [])
+                
+                if total_count is None:
+                    total_count = result.get("total", 0)
+                    logger.info(f"OpenProject list_users: Total {total_count} users to fetch")
+                
+                for user in users_data:
+                    all_users.append(self._parse_user(user))
+                
+                if len(users_data) < page_size:
+                    break
+                if len(all_users) >= total_count:
+                    break
+                
+                offset += page_size
+                if offset > 10000:  # Safety limit
+                    logger.warning(f"OpenProject list_users: Safety limit reached at offset {offset}")
+                    break
+            
+            logger.info(f"OpenProject list_users: Fetched {len(all_users)} users total")
         
-        logger.info(f"OpenProject list_users: Fetched {len(all_users)} users total")
         return all_users
     
     async def get_user(self, user_id: str) -> Optional[PMUser]:
@@ -1504,9 +1621,11 @@ class OpenProjectProvider(BasePMProvider):
             filters.append({
                 "user": {"operator": "=", "values": [user_id]}
             })
-        if project_id:
+        # Extract project key from composite format
+        actual_project_id = self._extract_project_key(project_id)
+        if actual_project_id:
             filters.append({
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {"operator": "=", "values": [actual_project_id]}
             })
         
         if filters:
@@ -1613,9 +1732,11 @@ class OpenProjectProvider(BasePMProvider):
             "type": {"operator": "=", "values": [epic_type_id]}
         }]
         
-        if project_id:
+        # Extract project key from composite format
+        actual_project_id = self._extract_project_key(project_id)
+        if actual_project_id:
             filters.append({
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {"operator": "=", "values": [actual_project_id]}
             })
         
         base_params = {
@@ -1982,9 +2103,11 @@ class OpenProjectProvider(BasePMProvider):
         url = f"{self.base_url}/api/v3/work_packages"
         
         base_params: Dict[str, Any] = {}
-        if project_id:
+        # Extract project key from composite format
+        actual_project_id = self._extract_project_key(project_id)
+        if actual_project_id:
             base_params["filters"] = json_lib.dumps([{
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {"operator": "=", "values": [actual_project_id]}
             }])
         
         # Pagination settings

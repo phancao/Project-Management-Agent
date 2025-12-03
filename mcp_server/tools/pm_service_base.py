@@ -43,9 +43,36 @@ class PMServiceTool:
         """Execute the tool. Override in subclass."""
         raise NotImplementedError("Subclass must implement execute()")
     
-    async def __call__(self, **kwargs) -> dict[str, Any]:
-        """Make tool callable."""
-        return await self.execute(**kwargs)
+    async def __call__(self, arguments: dict[str, Any] = None) -> dict[str, Any]:
+        """
+        MCP tool entry point.
+        
+        Args:
+            arguments: Tool arguments from MCP request (dict)
+        
+        Returns:
+            Tool result (dict)
+        
+        Raises:
+            PermissionError: If permission is denied (will be passed to agent)
+        """
+        try:
+            if arguments:
+                return await self.execute(**arguments)
+            else:
+                return await self.execute()
+        except PermissionError:
+            # Re-raise permission errors so agent can inform the user
+            raise
+        except Exception as e:
+            # Check if error message contains permission-related keywords
+            error_msg = str(e)
+            if "403" in error_msg or "Forbidden" in error_msg or "permission" in error_msg.lower():
+                raise PermissionError(
+                    f"Permission denied: {error_msg}. "
+                    "Please check your API token permissions or contact your administrator."
+                ) from e
+            raise
 
 
 class PMServiceReadTool(PMServiceTool):

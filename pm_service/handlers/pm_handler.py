@@ -468,8 +468,16 @@ class PMHandler:
                     user_dict["provider_name"] = provider_conn.name
                     users.append(user_dict)
                     
+            except PermissionError as e:
+                # Re-raise permission errors so they're visible to the user
+                error_msg = f"[{provider_conn.name}] Permission Error: {str(e)}"
+                logger.error(error_msg)
+                self.record_error(str(provider_conn.id), e)
+                raise PermissionError(error_msg) from e
             except Exception as e:
                 self.record_error(str(provider_conn.id), e)
+                # For other errors, continue but log them
+                logger.warning(f"Error listing users from {provider_conn.name}: {e}")
                 continue
         
         return users

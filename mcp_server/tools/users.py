@@ -4,6 +4,7 @@ User Management Tools
 MCP tools for user operations across all PM providers.
 """
 
+import json
 import logging
 from typing import Any
 
@@ -42,6 +43,7 @@ def register_user_tools(
         Args:
             project_id (optional): Filter by project
             provider_id (optional): Filter by provider
+            limit (optional): Maximum number of users to return
         
         Returns:
             List of users
@@ -49,24 +51,54 @@ def register_user_tools(
         try:
             project_id = arguments.get("project_id")
             provider_id = arguments.get("provider_id")
+            limit = arguments.get("limit", 100)
             
             logger.info(
-                f"list_users called: project_id={project_id}, provider_id={provider_id}"
+                f"list_users called: project_id={project_id}, provider_id={provider_id}, limit={limit}"
             )
             
-            # User listing is not yet implemented in PMHandler
-            # Return helpful message
-            return [TextContent(
-                type="text",
-                text=f"User listing is not yet implemented in PMHandler. "
-                     f"Please use the PM provider API endpoints directly to list users."
-            )]
+            # Use PM Service to list users
+            if context and hasattr(context, 'pm_service'):
+                result = await context.pm_service.list_users(
+                    project_id=project_id,
+                    limit=limit
+                )
+                
+                users = result.get("items", [])
+                total = result.get("total", 0)
+                
+                logger.info(f"list_users returned {len(users)} users (total: {total})")
+                
+                # Format as JSON for the agent
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "users": users,
+                        "total": total,
+                        "returned": len(users)
+                    }, ensure_ascii=False, indent=2)
+                )]
+            else:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "error": "PM Service not available in context",
+                        "users": [],
+                        "total": 0,
+                        "returned": 0
+                    }, ensure_ascii=False)
+                )]
             
         except Exception as e:
             logger.error(f"Error in list_users: {e}", exc_info=True)
             return [TextContent(
                 type="text",
-                text=f"Error listing users: {str(e)}"
+                text=json.dumps({
+                    "error": f"Error listing users: {str(e)}",
+                    "users": [],
+                    "total": 0,
+                    "returned": 0
+                }, ensure_ascii=False)
             )]
     
     tool_count += 1

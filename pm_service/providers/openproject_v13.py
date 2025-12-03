@@ -1177,41 +1177,140 @@ class OpenProjectV13Provider(BasePMProvider):
     async def list_users(
         self, project_id: Optional[str] = None
     ) -> List[PMUser]:
-        """List all users (handles pagination)"""
-        url = f"{self.base_url}/api/v3/users"
-        all_users = []
+        """
+        List users with automatic pagination.
         
-        # Use larger page size and handle pagination
-        params = {"pageSize": 100}
+        If project_id is provided, uses /api/v3/memberships to get project members.
+        Otherwise, uses /api/v3/users to get all users (requires admin permissions).
+        """
+        import logging
+        import json as json_lib
+        logger = logging.getLogger(__name__)
         
-        while url:
-            response = requests.get(url, headers=self.headers, params=params)
-            response.raise_for_status()
+        all_users: List[PMUser] = []
+        
+        if project_id:
+            # Use memberships endpoint to get users in a specific project
+            url = f"{self.base_url}/api/v3/memberships"
             
-            data = response.json()
-            users_data = data.get("_embedded", {}).get("elements", [])
-            all_users.extend(users_data)
+            # Filter by project ID and include principal (user) data
+            filters = [{"project": {"operator": "=", "values": [project_id]}}]
+            params = {
+                "filters": json_lib.dumps(filters),
+                "include": "principal",  # Include embedded user data
+                "pageSize": 500,
+                "offset": 0
+            }
             
-            # Check for next page
-            links = data.get("_links", {})
-            next_link = links.get("nextByOffset") or links.get("next")
+            offset = 0
+            total_count = None
             
-            if next_link and isinstance(next_link, dict):
-                next_href = next_link.get("href")
-                if next_href:
-                    # If it's a relative URL, make it absolute
-                    if not next_href.startswith("http"):
-                        url = f"{self.base_url}{next_href}"
+            while True:
+                params["offset"] = offset
+                response = requests.get(url, headers=self.headers, params=params)
+                
+                # Check for permission errors and raise clear error message
+                if response.status_code == 403:
+                    raise PermissionError(
+                        f"OpenProject API returned 403 Forbidden when trying to list memberships for project {project_id}. "
+                        "This may indicate that: "
+                        "1) The API token doesn't have permission to view project memberships, "
+                        "2) The project doesn't exist or you don't have access to it, "
+                        "3) Contact your OpenProject administrator to grant project membership viewing permissions."
+                    )
+                
+                response.raise_for_status()
+                
+                result = response.json()
+                memberships = result.get("_embedded", {}).get("elements", [])
+                
+                if total_count is None:
+                    total_count = result.get("total", 0)
+                    logger.info(f"OpenProject list_users (project {project_id}): Total {total_count} memberships to fetch")
+                
+                # Extract user information from each membership
+                for membership in memberships:
+                    # First try to get embedded user data (more efficient)
+                    principal_data = membership.get("_embedded", {}).get("principal", {})
+                    if principal_data:
+                        # Use embedded user data if available
+                        all_users.append(self._parse_user(principal_data))
                     else:
-                        url = next_href
-                    # Clear params for subsequent requests (they're in the URL)
-                    params = {}
+                        # Fallback: fetch user from link
+                        user_link = membership.get("_links", {}).get("principal", {})
+                        if user_link and isinstance(user_link, dict):
+                            user_href = user_link.get("href", "")
+                            if user_href:
+                                try:
+                                    user_url = f"{self.base_url}{user_href}" if user_href.startswith("/") else user_href
+                                    user_response = requests.get(user_url, headers=self.headers)
+                                    user_response.raise_for_status()
+                                    user_data = user_response.json()
+                                    all_users.append(self._parse_user(user_data))
+                                except Exception as e:
+                                    logger.warning(f"Failed to fetch user from {user_href}: {e}")
+                
+                if len(memberships) < 500:
+                    break
+                if total_count and len(all_users) >= total_count:
+                    break
+                
+                offset += 500
+                if offset > 10000:  # Safety limit
+                    logger.warning(f"OpenProject list_users: Safety limit reached at offset {offset}")
+                    break
+            
+            logger.info(f"OpenProject list_users (project {project_id}): Fetched {len(all_users)} users total")
+        else:
+            # List all users (requires admin permissions)
+            url = f"{self.base_url}/api/v3/users"
+            all_users_data = []
+            
+            # Use larger page size and handle pagination
+            params = {"pageSize": 100}
+            
+            while url:
+                response = requests.get(url, headers=self.headers, params=params)
+                
+                # Check for permission errors and raise clear error message
+                if response.status_code == 403:
+                    raise PermissionError(
+                        "OpenProject API returned 403 Forbidden. "
+                        "Listing all users requires administrator permissions. "
+                        "Please either: "
+                        "1) Provide a project_id to list users in that specific project (uses memberships endpoint, no admin needed), "
+                        "2) Contact your OpenProject administrator to grant user listing permissions to your API token."
+                    )
+                
+                response.raise_for_status()
+                
+                data = response.json()
+                users_data = data.get("_embedded", {}).get("elements", [])
+                all_users_data.extend(users_data)
+                
+                # Check for next page
+                links = data.get("_links", {})
+                next_link = links.get("nextByOffset") or links.get("next")
+                
+                if next_link and isinstance(next_link, dict):
+                    next_href = next_link.get("href")
+                    if next_href:
+                        # If it's a relative URL, make it absolute
+                        if not next_href.startswith("http"):
+                            url = f"{self.base_url}{next_href}"
+                        else:
+                            url = next_href
+                        # Clear params for subsequent requests (they're in the URL)
+                        params = {}
+                    else:
+                        url = None
                 else:
                     url = None
-            else:
-                url = None
+            
+            all_users = [self._parse_user(user) for user in all_users_data]
+            logger.info(f"OpenProject list_users: Fetched {len(all_users)} users total")
         
-        return [self._parse_user(user) for user in all_users]
+        return all_users
     
     async def get_user(self, user_id: str) -> Optional[PMUser]:
         """Get a single user by ID"""

@@ -48,6 +48,22 @@ class OpenProjectProvider(BasePMProvider):
             "Authorization": f"Basic {credentials}"
         }
     
+    def _extract_project_key(self, project_id: Optional[str]) -> Optional[str]:
+        """
+        Extract the project key from a composite project ID.
+        
+        Args:
+            project_id: Either "provider_uuid:project_key" or just "project_key" or None
+        
+        Returns:
+            The project key portion, or None if project_id is None
+        """
+        if not project_id:
+            return None
+        if ":" in project_id:
+            return project_id.split(":", 1)[1]
+        return project_id
+    
     # ==================== Project Operations ====================
     
     async def list_projects(self) -> List[PMProject]:
@@ -131,7 +147,9 @@ class OpenProjectProvider(BasePMProvider):
     
     async def get_project(self, project_id: str) -> Optional[PMProject]:
         """Get a single project by ID"""
-        url = f"{self.base_url}/api/v3/projects/{project_id}"
+        # Extract project key from composite format (provider_id:project_key)
+        actual_project_id = self._extract_project_key(project_id)
+        url = f"{self.base_url}/api/v3/projects/{actual_project_id}"
         response = requests.get(url, headers=self.headers)
         
         if response.status_code == 404:
@@ -204,10 +222,18 @@ class OpenProjectProvider(BasePMProvider):
         import logging
         logger = logging.getLogger(__name__)
         
+        # Extract project key from composite format (provider_id:project_key)
+        actual_project_id = self._extract_project_key(project_id)
+        if actual_project_id and actual_project_id != project_id:
+            logger.info(
+                f"OpenProject list_tasks: Extracted project key '{actual_project_id}' "
+                f"from composite project_id '{project_id}'"
+            )
+        
         filters = []
-        if project_id:
+        if actual_project_id:
             filters.append({
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {"operator": "=", "values": [actual_project_id]}
             })
         if assignee_id:
             filters.append({
@@ -1023,13 +1049,15 @@ class OpenProjectProvider(BasePMProvider):
         
         # Filter by project_id if provided
         # (versions don't have project filter in API)
-        if project_id:
+        # Extract project key from composite format
+        actual_project_id = self._extract_project_key(project_id)
+        if actual_project_id:
             sprints_data = [
                 sprint for sprint in sprints_data
                 if sprint.get("_links", {})
                 .get("definingProject", {})
                 .get("href", "")
-                .endswith(f"/projects/{project_id}")
+                .endswith(f"/projects/{actual_project_id}")
             ]
         
         # Filter by state if provided
@@ -1504,9 +1532,11 @@ class OpenProjectProvider(BasePMProvider):
             filters.append({
                 "user": {"operator": "=", "values": [user_id]}
             })
-        if project_id:
+        # Extract project key from composite format
+        actual_project_id = self._extract_project_key(project_id)
+        if actual_project_id:
             filters.append({
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {"operator": "=", "values": [actual_project_id]}
             })
         
         if filters:
@@ -1613,9 +1643,11 @@ class OpenProjectProvider(BasePMProvider):
             "type": {"operator": "=", "values": [epic_type_id]}
         }]
         
-        if project_id:
+        # Extract project key from composite format
+        actual_project_id = self._extract_project_key(project_id)
+        if actual_project_id:
             filters.append({
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {"operator": "=", "values": [actual_project_id]}
             })
         
         base_params = {
@@ -1982,9 +2014,11 @@ class OpenProjectProvider(BasePMProvider):
         url = f"{self.base_url}/api/v3/work_packages"
         
         base_params: Dict[str, Any] = {}
-        if project_id:
+        # Extract project key from composite format
+        actual_project_id = self._extract_project_key(project_id)
+        if actual_project_id:
             base_params["filters"] = json_lib.dumps([{
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {"operator": "=", "values": [actual_project_id]}
             }])
         
         # Pagination settings

@@ -534,7 +534,7 @@ class JIRAProvider(BasePMProvider):
                 if total_count is None:
                     total_count = data.get("total", 0)
                     logger.info("JIRA list_tasks: Total %d issues to fetch", total_count)
-                
+            
                 issues = data.get("issues", [])
                 all_issues.extend(issues)
                 

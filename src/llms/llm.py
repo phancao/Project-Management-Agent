@@ -64,8 +64,8 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
     # Get configuration from environment variables
     env_conf = _get_env_llm_conf(llm_type)
 
-    # Merge configurations, with environment variables taking precedence
-    merged_conf = {**llm_conf, **env_conf}
+    # Merge configurations, with conf.yaml taking precedence over environment variables
+    merged_conf = {**env_conf, **llm_conf}
 
     # Remove unnecessary parameters when initializing the client
     if "token_limit" in merged_conf:
@@ -162,8 +162,8 @@ def get_configured_llm_models() -> dict[str, list[str]]:
             # Get configuration from environment variables
             env_conf = _get_env_llm_conf(llm_type)
 
-            # Merge configurations, with environment variables taking precedence
-            merged_conf = {**yaml_conf, **env_conf}
+            # Merge configurations, with conf.yaml taking precedence over environment variables
+            merged_conf = {**env_conf, **yaml_conf}
 
             # Check if model is configured
             model_name = merged_conf.get("model")

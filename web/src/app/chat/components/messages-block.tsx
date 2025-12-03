@@ -61,8 +61,24 @@ export function MessagesBlock({ className }: { className?: string }) {
         );
       } catch (error) {
         // Only log non-abort errors (abort is expected when user cancels)
-        if (error instanceof Error && error.name !== 'AbortError') {
+        // Check for various abort error types and patterns
+        const isAbortError = 
+          (error instanceof Error && error.name === 'AbortError') ||
+          (error instanceof DOMException && error.name === 'AbortError') ||
+          (error instanceof Error && (
+            error.message?.toLowerCase().includes('abort') ||
+            error.message?.toLowerCase().includes('aborted') ||
+            error.message?.toLowerCase().includes('bodystreambuffer')
+          )) ||
+          (abortControllerRef.current?.signal.aborted === true);
+        
+        if (!isAbortError) {
           console.error('Failed to send message:', error);
+        }
+      } finally {
+        // Clear the ref if it's still pointing to this controller
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
         }
       }
     },

@@ -80,15 +80,20 @@ MANDATORY - Call each tool ONCE (not multiple times):
 
 **User asks**: "Analyze Sprint 4", "Sprint 5 performance", "How did Sprint 3 do?"
 
-**🔴 CRITICAL: For SPRINT-SPECIFIC queries, ONLY call these 3 tools (NOT all 11 tools!):**
+**🔴 CRITICAL: For SPRINT-SPECIFIC queries, use AGGREGATED analytics tools to avoid token limit errors!**
 
 **You MUST invoke these tools in sequence**:
 1. First, invoke `list_sprints(project_id)` to get all sprints and find the specific sprint
 2. Extract the sprint_id for the requested sprint (e.g., Sprint 4)
-3. Invoke `sprint_report(sprint_id)` with the specific sprint_id to get sprint metrics
-4. Invoke `burndown_chart(sprint_id)` with the specific sprint_id to get burndown data
-5. Invoke `list_tasks_in_sprint(sprint_id)` to get all tasks in that sprint (more efficient than list_tasks without sprint filter)
-6. Summarize the findings using the actual data returned
+3. **PRIMARY TOOL**: Invoke `sprint_report(sprint_id, project_id)` - This returns aggregated metrics (completion rate, velocity, task breakdown) WITHOUT raw task data. Use this as your PRIMARY data source.
+4. **SECONDARY TOOL**: Invoke `burndown_chart(sprint_id, project_id)` - This returns burndown chart data (aggregated, not raw tasks)
+5. **OPTIONAL (use only if sprint_report doesn't provide enough detail)**: Invoke `list_tasks_in_sprint(sprint_id, project_id)` - ⚠️ WARNING: This returns ALL tasks in the sprint. If the sprint has 50+ tasks, this may cause token limit errors. Only use if absolutely necessary.
+6. Summarize the findings using the aggregated data from sprint_report and burndown_chart
+
+**🔴 TOKEN LIMIT PROTECTION:**
+- **PREFERRED**: Use `sprint_report()` and `burndown_chart()` - These return aggregated data (metrics, summaries) without raw task lists
+- **AVOID**: `list_tasks_in_sprint()` returns raw task data which can be 100+ tasks = 50k+ tokens
+- **IF YOU MUST** use `list_tasks_in_sprint()`, add filters: `list_tasks_in_sprint(sprint_id, project_id, status="done")` to get only completed tasks (smaller dataset)
 
 **❌ DO NOT call these tools for sprint-specific queries:**
 - `velocity_chart` (project-wide, not sprint-specific)
@@ -98,8 +103,12 @@ MANDATORY - Call each tool ONCE (not multiple times):
 - `issue_trend_chart` (project-wide, not sprint-specific)
 - `project_health` (project-wide, not sprint-specific)
 - `get_project` (not needed for sprint analysis)
+- `list_tasks(project_id)` WITHOUT sprint_id filter - FORBIDDEN! Returns ALL project tasks, causes token limit errors
 
-**Why?** Sprint-specific queries focus on ONE sprint, not the entire project. Calling project-wide analytics tools is unnecessary and wastes time.
+**Why?** 
+- Sprint-specific queries focus on ONE sprint, not the entire project
+- Aggregated analytics tools (`sprint_report`, `burndown_chart`) return summarized data without raw task lists, preventing token limit errors
+- Raw task lists (`list_tasks_in_sprint`) should only be used when aggregated data is insufficient
 
 ### For Resource/Workload Analysis Queries (e.g., "Analyze resource assignation", "Team workload")
 

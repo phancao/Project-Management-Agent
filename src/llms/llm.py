@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 import os
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Dict, get_args
+from typing import Any, Dict, get_args, Optional
 
 import httpx
 from langchain_core.language_models import BaseChatModel
@@ -17,6 +18,16 @@ from src.llms.providers.dashscope import ChatDashscope
 
 # Cache for LLM instances
 _llm_cache: dict[LLMType, BaseChatModel] = {}
+
+# Context variables for model selection (set per request)
+_model_provider_ctx: ContextVar[Optional[str]] = ContextVar("model_provider", default=None)
+_model_name_ctx: ContextVar[Optional[str]] = ContextVar("model_name", default=None)
+
+
+def set_model_selection(provider_id: Optional[str] = None, model_name: Optional[str] = None):
+    """Set the model provider and model name for the current async context."""
+    _model_provider_ctx.set(provider_id)
+    _model_name_ctx.set(model_name)
 
 
 def _get_config_file_path() -> str:
@@ -49,6 +60,93 @@ def _get_env_llm_conf(llm_type: str) -> Dict[str, Any]:
     return conf
 
 
+def _get_db_llm_conf(llm_type: str) -> Dict[str, Any]:
+    """
+    Get LLM configuration from AI Provider database table.
+    Returns empty dict if no provider is configured or if database is not available.
+    """
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import AIProviderAPIKey
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Check if model selection is provided via context (from request)
+            context_provider_id = _model_provider_ctx.get()
+            context_model_name = _model_name_ctx.get()
+            
+            # Use context provider_id if provided, otherwise detect from config
+            provider_id: Optional[str]
+            if context_provider_id:
+                provider_id = context_provider_id
+            else:
+                # Try to get provider from conf.yaml or env to determine which provider_id to look for
+                conf = load_yaml_config(_get_config_file_path())
+                llm_type_config_keys = _get_llm_type_config_keys()
+                config_key = llm_type_config_keys.get(llm_type, "")
+                yaml_conf = conf.get(config_key, {}) if config_key else {}
+                env_conf = _get_env_llm_conf(llm_type)
+                merged_conf = {**env_conf, **yaml_conf}
+                
+                # Get provider_id from config (could be in model name, base_url, or explicit provider_id)
+                provider_id = merged_conf.get("provider_id")
+                if not provider_id:
+                    # Try to detect from base_url or model
+                    base_url = merged_conf.get("base_url", "").lower()
+                    if "openai" in base_url or not base_url:
+                        provider_id = "openai"
+                    elif "anthropic" in base_url:
+                        provider_id = "anthropic"
+                    elif "google" in base_url or "generativelanguage" in base_url:
+                        provider_id = "google_aistudio"
+                    elif "deepseek" in base_url:
+                        provider_id = "deepseek"
+                    elif "dashscope" in base_url or "aliyuncs" in base_url:
+                        provider_id = "dashscope"
+                    elif "localhost:11434" in base_url or "ollama" in base_url:
+                        provider_id = "ollama"
+                    else:
+                        # Default to openai if can't detect
+                        provider_id = "openai"
+            
+            # Query database for AI provider API key
+            if not provider_id:
+                return {}
+                
+            ai_provider = db.query(AIProviderAPIKey).filter(
+                AIProviderAPIKey.provider_id == provider_id,
+                AIProviderAPIKey.is_active.is_(True)
+            ).first()
+            
+            if ai_provider and ai_provider.api_key:
+                db_conf: Dict[str, Any] = {
+                    "api_key": str(ai_provider.api_key),
+                }
+                if ai_provider.base_url:
+                    db_conf["base_url"] = str(ai_provider.base_url)
+                # Use context model_name if provided, otherwise use provider's default
+                if context_model_name:
+                    db_conf["model"] = context_model_name
+                elif ai_provider.model_name:
+                    # Access the actual value from the SQLAlchemy model instance
+                    model_name_value = getattr(ai_provider, 'model_name', None)
+                    if model_name_value:
+                        db_conf["model"] = str(model_name_value)
+                if ai_provider.additional_config:
+                    db_conf.update(ai_provider.additional_config)
+                return db_conf
+            
+            return {}
+        finally:
+            db.close()
+    except Exception:
+        # If database is not available or query fails, return empty dict
+        # This allows fallback to conf.yaml or environment variables
+        return {}
+
+
 def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatModel:
     """Create LLM instance using configuration."""
     llm_type_config_keys = _get_llm_type_config_keys()
@@ -61,11 +159,15 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
     if not isinstance(llm_conf, dict):
         raise ValueError(f"Invalid LLM configuration for {llm_type}: {llm_conf}")
 
+    # Get configuration from database (AI Provider API keys)
+    db_conf = _get_db_llm_conf(llm_type)
+    
     # Get configuration from environment variables
     env_conf = _get_env_llm_conf(llm_type)
 
-    # Merge configurations, with conf.yaml taking precedence over environment variables
-    merged_conf = {**env_conf, **llm_conf}
+    # Merge configurations with priority: database > conf.yaml > environment variables
+    # Database API keys take highest priority, but other settings from conf.yaml/env can still be used
+    merged_conf = {**env_conf, **llm_conf, **db_conf}
 
     # Remove unnecessary parameters when initializing the client
     if "token_limit" in merged_conf:
@@ -128,6 +230,57 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
         return ChatOpenAI(**merged_conf)
 
 
+def has_configured_ai_providers() -> bool:
+    """
+    Check if any AI providers are configured in the database.
+    Returns True if at least one active AI provider with API key exists.
+    """
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import AIProviderAPIKey
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            count = db.query(AIProviderAPIKey).filter(
+                AIProviderAPIKey.is_active.is_(True),
+                AIProviderAPIKey.api_key.isnot(None)
+            ).count()
+            return count > 0
+        finally:
+            db.close()
+    except Exception:
+        # If database check fails, assume providers might be configured via conf.yaml/env
+        # Return True to allow fallback behavior
+        return True
+
+
+def has_configured_pm_providers() -> bool:
+    """
+    Check if any PM providers are configured in the database.
+    Returns True if at least one active PM provider exists.
+    """
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import PMProviderConnection
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            count = db.query(PMProviderConnection).filter(
+                PMProviderConnection.is_active.is_(True)
+            ).count()
+            return count > 0
+        finally:
+            db.close()
+    except Exception:
+        # If database check fails, assume providers might be configured
+        # Return True to allow fallback behavior
+        return True
+
+
 def get_llm_by_type(llm_type: LLMType) -> BaseChatModel:
     """
     Get LLM instance by type. Returns cached instance if available.
@@ -178,7 +331,7 @@ def get_configured_llm_models() -> dict[str, list[str]]:
         return {}
 
 
-def get_llm_token_limit_by_type(llm_type: str) -> int:
+def get_llm_token_limit_by_type(llm_type: str) -> Optional[int]:
     """
     Get the maximum token limit for a given LLM type.
 
@@ -191,6 +344,8 @@ def get_llm_token_limit_by_type(llm_type: str) -> int:
 
     llm_type_config_keys = _get_llm_type_config_keys()
     config_key = llm_type_config_keys.get(llm_type)
+    if not config_key:
+        return None
 
     conf = load_yaml_config(_get_config_file_path())
     llm_max_token = conf.get(config_key, {}).get("token_limit")

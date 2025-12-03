@@ -118,6 +118,20 @@
         "title": "Investigation Mode: {status}",
         "description": "When enabled, DeerFlow will perform a quick search before planning. This is useful for researches related to ongoing events and news."
       },
+      "agentSelector": {
+        "academicResearcher": "Academic Researcher",
+        "academicResearcherDesc": "Formal research with investigation",
+        "academicAnalyst": "Academic Analyst",
+        "academicAnalystDesc": "Formal analysis without investigation",
+        "newsInvestigator": "News Investigator",
+        "newsInvestigatorDesc": "Journalistic research with investigation",
+        "popularScienceWriter": "Popular Science Writer",
+        "popularScienceWriterDesc": "Engaging research with investigation",
+        "strategicAnalyst": "Strategic Analyst",
+        "strategicAnalystDesc": "Deep investment analysis with investigation",
+        "socialMediaCreator": "Social Media Creator",
+        "socialMediaCreatorDesc": "Concise content with investigation"
+      },
       "enhancePrompt": "Enhance prompt with AI",
       "on": "On",
       "off": "Off"

@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import requests
+from datetime import datetime
 from typing import Annotated, Any, AsyncIterator, List, Optional
 from uuid import uuid4
 
@@ -31,6 +32,7 @@ from src.graph.utils import (
     reconstruct_clarification_history,
 )
 from src.llms.llm import get_configured_llm_models
+from src.llms.model_providers import get_available_providers, detect_provider_from_config
 from src.podcast.graph.builder import build_graph as build_podcast_graph
 from src.ppt.graph.builder import build_graph as build_ppt_graph
 from src.prompt_enhancer.graph.builder import (
@@ -49,6 +51,10 @@ from src.server.chat_request import (
     TTSRequest,
 )
 from src.server.config_request import ConfigResponse
+from src.server.ai_provider_request import (
+    AIProviderAPIKeyRequest,
+    AIProviderAPIKeyResponse,
+)
 from src.server.mcp_request import (
     MCPServerMetadataRequest,
     MCPServerMetadataResponse,
@@ -109,7 +115,7 @@ INTERNAL_SERVER_ERROR_DETAIL = "Internal Server Error"
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):  # FastAPI requires this parameter
     """
     Lifespan context manager for FastAPI app.
     
@@ -119,7 +125,6 @@ async def lifespan(app: FastAPI):
     logger.info("[Startup] Starting provider sync to MCP Server...")
     try:
         from src.server.mcp_sync import check_and_sync_providers
-        import asyncio
         
         # Run sync in background to not block startup
         async def startup_sync():
@@ -189,7 +194,6 @@ def get_default_mcp_settings() -> dict:
     Returns:
         dict: MCP server configuration with PM server and GitHub trending
     """
-    import os
     return {
         "servers": {
             "pm-server": {
@@ -217,6 +221,16 @@ def get_default_mcp_settings() -> dict:
 
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
+    """Stream chat responses for research tasks"""
+    # Check if AI providers are configured
+    from src.llms.llm import has_configured_ai_providers
+    if not has_configured_ai_providers():
+        error_message = (
+            "No AI providers configured. Please configure an AI provider (OpenAI, Anthropic, etc.) "
+            "in the Provider Management dialog before using the chat feature."
+        )
+        logger.warning("[chat_stream] No AI providers configured")
+        raise HTTPException(status_code=400, detail=error_message)
     # Check if MCP server configuration is enabled
     mcp_enabled = get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False)
     
@@ -269,6 +283,8 @@ async def chat_stream(request: ChatRequest):
             request.max_clarification_rounds or 3,
             request.locale or "en-US",
             request.interrupt_before_tools or [],
+            request.model_provider,
+            request.model_name,
         ),
         media_type="text/event-stream",
     )
@@ -1075,7 +1091,17 @@ async def _astream_workflow_generator(
     max_clarification_rounds: int,
     locale: str = "en-US",
     interrupt_before_tools: Optional[List[str]] = None,
+    model_provider: Optional[str] = None,
+    model_name: Optional[str] = None,
 ):
+    # Set model selection in context for LLM initialization
+    if model_provider or model_name:
+        from src.llms.llm import set_model_selection
+        set_model_selection(model_provider, model_name)
+        logger.info(
+            f"[{sanitize_thread_id(thread_id)}] Model selection set: provider={model_provider}, model={model_name}"
+        )
+    
     safe_thread_id = sanitize_thread_id(thread_id)
     safe_feedback = (
         sanitize_log_input(interrupt_feedback) if interrupt_feedback else ""
@@ -1085,7 +1111,8 @@ async def _astream_workflow_generator(
         f"messages_count={len(messages)}, "
         f"auto_accepted_plan={auto_accepted_plan}, "
         f"interrupt_feedback={safe_feedback}, "
-        f"interrupt_before_tools={interrupt_before_tools}"
+        f"interrupt_before_tools={interrupt_before_tools}, "
+        f"model_provider={model_provider}, model_name={model_name}"
     )
 
     # Process initial messages
@@ -1555,6 +1582,7 @@ async def config():
     return ConfigResponse(
         rag=RAGConfigResponse(provider=SELECTED_RAG_PROVIDER),
         models=get_configured_llm_models(),
+        providers=get_available_providers(),
     )
 
 # Project Management Agent API endpoints
@@ -1566,7 +1594,7 @@ async def config():
 
 # PM REST endpoints for UI data fetching
 @app.get("/api/pm/projects")
-async def pm_list_projects(request: Request):
+async def pm_list_projects(_request: Request):  # FastAPI route parameter, unused
     """List all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
@@ -1633,7 +1661,7 @@ async def pm_create_project_task(project_id: str, payload: PMTaskCreateRequest):
 
 
 @app.get("/api/pm/projects/{project_id}/tasks")
-async def pm_list_tasks(request: Request, project_id: str):
+async def pm_list_tasks(_request: Request, project_id: str):  # FastAPI route parameter, unused
     """List all tasks for a project"""
     try:
         from src.server.pm_service_client import PMServiceHandler
@@ -1712,7 +1740,7 @@ async def pm_project_timeline(project_id: str):
 
 
 @app.get("/api/pm/tasks/my")
-async def pm_list_my_tasks(request: Request):
+async def pm_list_my_tasks(_request: Request):  # FastAPI route parameter, unused
     """List tasks assigned to current user across all active PM providers"""
     try:
         from database.connection import get_db_session
@@ -1737,7 +1765,7 @@ async def pm_list_my_tasks(request: Request):
 
 
 @app.get("/api/pm/tasks/all")
-async def pm_list_all_tasks(request: Request):
+async def pm_list_all_tasks(_request: Request):  # FastAPI route parameter, unused
     """List all tasks across all projects from all active PM providers"""
     try:
         from database.connection import get_db_session
@@ -1816,7 +1844,7 @@ async def pm_update_task(request: Request, task_id: str, project_id: str = Query
 
 
 @app.get("/api/pm/projects/{project_id}/users")
-async def pm_list_users(request: Request, project_id: str):
+async def pm_list_users(_request: Request, project_id: str):  # FastAPI route parameter, unused
     """List all users for a project"""
     try:
         from src.server.pm_service_client import PMServiceHandler
@@ -1890,7 +1918,7 @@ async def pm_list_sprints(
 
 
 @app.get("/api/pm/projects/{project_id}/epics")
-async def pm_list_epics(request: Request, project_id: str):
+async def pm_list_epics(_request: Request, project_id: str):  # FastAPI route parameter, unused
     """List all epics for a project"""
     try:
         from database.connection import get_db_session
@@ -2032,7 +2060,7 @@ async def pm_assign_task_to_epic(request: Request, project_id: str, task_id: str
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/pm/projects/{project_id}/tasks/{task_id}/remove-epic")
-async def pm_remove_task_from_epic(request: Request, project_id: str, task_id: str):
+async def pm_remove_task_from_epic(_request: Request, project_id: str, task_id: str):  # FastAPI route parameter, unused
     """Remove a task from its epic"""
     try:
         from database.connection import get_db_session
@@ -2140,7 +2168,7 @@ async def pm_assign_task_to_user(project_id: str, task_id: str, payload: TaskAss
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/pm/projects/{project_id}/tasks/{task_id}/move-to-backlog")
-async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: str):
+async def pm_move_task_to_backlog(_request: Request, project_id: str, task_id: str):  # FastAPI route parameter, unused
     """Move a task to the backlog"""
     try:
         from database.connection import get_db_session
@@ -2171,7 +2199,7 @@ async def pm_move_task_to_backlog(request: Request, project_id: str, task_id: st
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/pm/projects/{project_id}/epics/{epic_id}")
-async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
+async def pm_delete_epic(_request: Request, project_id: str, epic_id: str):  # FastAPI route parameter, unused
     """Delete an epic for a project"""
     try:
         from database.connection import get_db_session
@@ -2209,7 +2237,7 @@ async def pm_delete_epic(request: Request, project_id: str, epic_id: str):
 
 
 @app.get("/api/pm/projects/{project_id}/labels")
-async def pm_list_labels(request: Request, project_id: str):
+async def pm_list_labels(_request: Request, project_id: str):  # FastAPI route parameter, unused
     """List all labels for a project"""
     try:
         from database.connection import get_db_session
@@ -2339,13 +2367,42 @@ async def pm_list_priorities(
 @app.post("/api/pm/chat/stream")
 async def pm_chat_stream(request: Request):
     """Stream chat responses for Project Management tasks"""
+    # Check if AI providers are configured
+    try:
+        from src.llms.llm import has_configured_ai_providers
+        if not has_configured_ai_providers():
+            error_message = (
+                "No AI providers configured. Please configure an AI provider (OpenAI, Anthropic, etc.) "
+                "in the Provider Management dialog (AI Providers tab) before using the chat feature."
+            )
+            logger.warning("[pm_chat_stream] No AI providers configured")
+            raise HTTPException(status_code=400, detail=error_message)
+    except HTTPException:
+        raise
+    except Exception as e:
+        # If check fails, log but continue (might be using conf.yaml/env vars)
+        logger.debug(f"[pm_chat_stream] AI provider check failed (non-fatal): {e}")
+    
+    # Check if PM providers are configured
+    try:
+        from src.llms.llm import has_configured_pm_providers
+        if not has_configured_pm_providers():
+            error_message = (
+                "No PM providers configured. Please configure a project management provider (OpenProject, JIRA, etc.) "
+                "in the Provider Management dialog (PM Providers tab) before using the chat feature."
+            )
+            logger.warning("[pm_chat_stream] No PM providers configured")
+            raise HTTPException(status_code=400, detail=error_message)
+    except HTTPException:
+        raise
+    except Exception as e:
+        # If check fails, log but continue (might have providers configured elsewhere)
+        logger.debug(f"[pm_chat_stream] PM provider check failed (non-fatal): {e}")
+    
     try:
         from src.conversation.flow_manager import ConversationFlowManager
         from src.memory import get_conversation_memory
         from database.connection import get_db_session
-        from fastapi.responses import StreamingResponse
-        import asyncio
-        import json
         import uuid
         import time
             
@@ -2444,7 +2501,7 @@ async def pm_chat_stream(request: Request):
                                 
                             # Use _astream_workflow_generator to get properly
                             # formatted research events
-                            from src.config.report_style import ReportStyle
+                            # ReportStyle already imported at top of file
                                 
                             # Use default MCP settings to ensure PM tools are available
                             pm_mcp_settings = get_default_mcp_settings()
@@ -2498,7 +2555,7 @@ async def pm_chat_stream(request: Request):
                                     FlowState,
                                     IntentType,
                                 )
-                                from datetime import datetime
+                                # datetime already imported at top of file
                                     
                                 if thread_id not in fm.contexts:
                                     fm.contexts[thread_id] = (
@@ -2676,9 +2733,9 @@ async def pm_import_projects(request: ProjectImportRequest):
             try:
                 mcp_sync_result = await sync_provider_to_mcp(
                     backend_provider_id=str(provider.id),
-                    name=provider.name,
-                    provider_type=provider.provider_type,
-                    base_url=provider.base_url,
+                    name=str(provider.name),
+                    provider_type=str(provider.provider_type),
+                    base_url=str(provider.base_url),
                     api_key=request.api_key,
                     api_token=request.api_token,
                     username=request.username,
@@ -2982,15 +3039,15 @@ async def pm_update_provider(provider_id: str, request: ProviderUpdateRequest):
             try:
                 mcp_sync_result = await sync_provider_to_mcp(
                     backend_provider_id=str(provider.id),
-                    name=provider.name,
-                    provider_type=provider.provider_type,
-                    base_url=provider.base_url,
-                    api_key=provider.api_key,
-                    api_token=provider.api_token,
-                    username=provider.username,
-                    organization_id=provider.organization_id,
-                    workspace_id=provider.workspace_id,
-                    is_active=provider.is_active,
+                    name=str(provider.name),
+                    provider_type=str(provider.provider_type),
+                    base_url=str(provider.base_url),
+                    api_key=str(provider.api_key) if provider.api_key else None,
+                    api_token=str(provider.api_token) if provider.api_token else None,
+                    username=str(provider.username) if provider.username else None,
+                    organization_id=str(provider.organization_id) if provider.organization_id else None,
+                    workspace_id=str(provider.workspace_id) if provider.workspace_id else None,
+                    is_active=bool(provider.is_active),
                     test_connection=False,
                 )
                 # Update MCP provider ID if sync succeeded
@@ -3101,15 +3158,15 @@ async def pm_sync_provider_to_mcp(provider_id: str):
             # Sync to MCP Server
             mcp_sync_result = await sync_provider_to_mcp(
                 backend_provider_id=str(provider.id),
-                name=provider.name,
-                provider_type=provider.provider_type,
-                base_url=provider.base_url,
-                api_key=provider.api_key,
-                api_token=provider.api_token,
-                username=provider.username,
-                organization_id=provider.organization_id,
-                workspace_id=provider.workspace_id,
-                is_active=provider.is_active,
+                name=str(provider.name),
+                provider_type=str(provider.provider_type),
+                base_url=str(provider.base_url),
+                api_key=str(provider.api_key) if provider.api_key else None,
+                api_token=str(provider.api_token) if provider.api_token else None,
+                username=str(provider.username) if provider.username else None,
+                organization_id=str(provider.organization_id) if provider.organization_id else None,
+                workspace_id=str(provider.workspace_id) if provider.workspace_id else None,
+                is_active=bool(provider.is_active),
                 test_connection=True,  # Test connection on manual sync
             )
             
@@ -3172,15 +3229,15 @@ async def pm_sync_all_providers_to_mcp():
             for provider in providers:
                 sync_requests.append({
                     "backend_provider_id": str(provider.id),
-                    "name": provider.name,
-                    "provider_type": provider.provider_type,
-                    "base_url": provider.base_url,
+                    "name": str(provider.name),
+                    "provider_type": str(provider.provider_type),
+                    "base_url": str(provider.base_url),
                     "api_key": provider.api_key,
                     "api_token": provider.api_token,
-                    "username": provider.username,
-                    "organization_id": provider.organization_id,
-                    "workspace_id": provider.workspace_id,
-                    "is_active": provider.is_active,
+                    "username": str(provider.username) if provider.username else None,
+                    "organization_id": str(provider.organization_id) if provider.organization_id else None,
+                    "workspace_id": str(provider.workspace_id) if provider.workspace_id else None,
+                    "is_active": bool(provider.is_active),
                     "test_connection": False,  # Skip connection test for bulk sync
                 })
             
@@ -3358,6 +3415,165 @@ async def pm_delete_provider(provider_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to delete provider: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# AI Provider API Key Management Endpoints
+# ============================================================================
+
+@app.get("/api/ai/providers", response_model=List[AIProviderAPIKeyResponse])
+async def list_ai_providers():
+    """List all configured AI provider API keys"""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import AIProviderAPIKey
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            providers = db.query(AIProviderAPIKey).filter(
+                AIProviderAPIKey.is_active.is_(True)
+            ).all()
+            
+            result = []
+            for p in providers:
+                # Mask API key - show only last 4 characters
+                masked_key = None
+                api_key_str = str(p.api_key) if p.api_key else None
+                has_key = bool(api_key_str)
+                if api_key_str and len(api_key_str) > 4:
+                    masked_key = f"****{api_key_str[-4:]}"
+                elif api_key_str:
+                    masked_key = "****"
+                
+                result.append(AIProviderAPIKeyResponse(
+                    id=str(p.id),
+                    provider_id=str(p.provider_id),
+                    provider_name=str(p.provider_name),
+                    api_key=masked_key,
+                    base_url=str(p.base_url) if p.base_url else None,
+                    model_name=str(p.model_name) if p.model_name else None,
+                    additional_config=p.additional_config if p.additional_config else None,
+                    is_active=bool(p.is_active),
+                    has_api_key=has_key,
+                    created_at=p.created_at.isoformat() if p.created_at else "",
+                    updated_at=p.updated_at.isoformat() if p.updated_at else "",
+                ))
+            
+            return result
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to list AI providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ai/providers", response_model=AIProviderAPIKeyResponse)
+async def save_ai_provider(request: AIProviderAPIKeyRequest):
+    """Save or update an AI provider API key"""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import AIProviderAPIKey
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Check if provider already exists
+            existing = db.query(AIProviderAPIKey).filter(
+                AIProviderAPIKey.provider_id == request.provider_id
+            ).first()
+            
+            if existing:
+                # Update existing
+                existing.provider_name = request.provider_name  # type: ignore[assignment]
+                if request.api_key:
+                    existing.api_key = request.api_key  # type: ignore[assignment]
+                existing.base_url = request.base_url  # type: ignore[assignment]
+                existing.model_name = request.model_name  # type: ignore[assignment]
+                existing.additional_config = request.additional_config  # type: ignore[assignment]
+                existing.is_active = request.is_active  # type: ignore[assignment]
+                existing.updated_at = datetime.utcnow()  # type: ignore[assignment]
+                db.commit()
+                db.refresh(existing)
+                provider = existing
+            else:
+                # Create new
+                provider = AIProviderAPIKey(
+                    provider_id=request.provider_id,
+                    provider_name=request.provider_name,
+                    api_key=request.api_key,
+                    base_url=request.base_url,
+                    model_name=request.model_name,
+                    additional_config=request.additional_config,
+                    is_active=request.is_active,
+                )
+                db.add(provider)
+                db.commit()
+                db.refresh(provider)
+            
+            # Mask API key for response
+            masked_key = None
+            api_key_str = str(provider.api_key) if provider.api_key else None
+            has_key = bool(api_key_str)
+            if api_key_str and len(api_key_str) > 4:
+                masked_key = f"****{api_key_str[-4:]}"
+            elif api_key_str:
+                masked_key = "****"
+            
+            return AIProviderAPIKeyResponse(
+                id=str(provider.id),
+                provider_id=str(provider.provider_id),
+                provider_name=str(provider.provider_name),
+                api_key=masked_key,
+                base_url=str(provider.base_url) if provider.base_url else None,
+                model_name=str(provider.model_name) if provider.model_name else None,
+                additional_config=provider.additional_config if provider.additional_config else None,
+                is_active=bool(provider.is_active),
+                has_api_key=has_key,
+                created_at=provider.created_at.isoformat() if provider.created_at else "",
+                updated_at=provider.updated_at.isoformat() if provider.updated_at else "",
+            )
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to save AI provider: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/ai/providers/{provider_id}")
+async def delete_ai_provider(provider_id: str):
+    """Delete (deactivate) an AI provider API key"""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import AIProviderAPIKey
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            provider = db.query(AIProviderAPIKey).filter(
+                AIProviderAPIKey.provider_id == provider_id
+            ).first()
+            
+            if not provider:
+                raise HTTPException(
+                    status_code=404, detail="AI provider not found"
+                )
+            
+            # Soft delete by deactivating
+            provider.is_active = False  # type: ignore
+            db.commit()
+            
+            return {"success": True, "message": "AI provider deactivated"}
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete AI provider: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

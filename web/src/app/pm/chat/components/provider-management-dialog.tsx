@@ -17,15 +17,22 @@ import { ProviderManagementView } from "./views/provider-management-view";
 
 export function ProviderManagementDialog() {
   const [open, setOpen] = useState(false);
+  const [defaultTab, setDefaultTab] = useState<"pm" | "ai">("pm");
 
   useEffect(() => {
-    const handleShowProviders = () => {
+    const handleShowProviders = (event?: CustomEvent) => {
       setOpen(true);
+      // Check if we should open AI Providers tab
+      if (event?.detail?.tab === "ai") {
+        setDefaultTab("ai");
+      } else {
+        setDefaultTab("pm");
+      }
     };
 
-    window.addEventListener("pm_show_providers", handleShowProviders);
+    window.addEventListener("pm_show_providers", handleShowProviders as EventListener);
     return () => {
-      window.removeEventListener("pm_show_providers", handleShowProviders);
+      window.removeEventListener("pm_show_providers", handleShowProviders as EventListener);
     };
   }, []);
 
@@ -38,7 +45,7 @@ export function ProviderManagementDialog() {
             Manage your project management provider connections and view available projects.
           </DialogDescription>
         </DialogHeader>
-        <ProviderManagementView />
+        <ProviderManagementView defaultTab={defaultTab} />
       </DialogContent>
     </Dialog>
   );

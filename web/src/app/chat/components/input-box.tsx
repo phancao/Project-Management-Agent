@@ -7,11 +7,10 @@ import { ArrowUp, Lightbulb, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useRef, useState } from "react";
 
-import { Detective } from "~/components/deer-flow/icons/detective";
+import { AgentSelector } from "~/components/deer-flow/agent-selector";
 import MessageInput, {
   type MessageInputRef,
 } from "~/components/deer-flow/message-input";
-import { ReportStyleDialog } from "~/components/deer-flow/report-style-dialog";
 import { Tooltip } from "~/components/deer-flow/tooltip";
 import { BorderBeam } from "~/components/magicui/border-beam";
 import { Button } from "~/components/ui/button";
@@ -20,7 +19,6 @@ import { useConfig } from "~/core/api/hooks";
 import type { Option, Resource } from "~/core/messages";
 import {
   setEnableDeepThinking,
-  setEnableBackgroundInvestigation,
   useSettingsStore,
 } from "~/core/store";
 import { cn } from "~/lib/utils";
@@ -51,9 +49,6 @@ export function InputBox({
   const tCommon = useTranslations("common");
   const enableDeepThinking = useSettingsStore(
     (state) => state.general.enableDeepThinking,
-  );
-  const backgroundInvestigation = useSettingsStore(
-    (state) => state.general.enableBackgroundInvestigation,
   );
   const { config, loading } = useConfig();
   const reportStyle = useSettingsStore((state) => state.general.reportStyle);
@@ -247,33 +242,7 @@ export function InputBox({
             </Tooltip>
           )}
 
-          <Tooltip
-            className="max-w-60"
-            title={
-              <div>
-                <h3 className="mb-2 font-bold">
-                  {t("investigationTooltip.title", {
-                    status: backgroundInvestigation ? t("on") : t("off"),
-                  })}
-                </h3>
-                <p>{t("investigationTooltip.description")}</p>
-              </div>
-            }
-          >
-            <Button
-              className={cn(
-                "rounded-2xl",
-                backgroundInvestigation && "!border-brand !text-brand",
-              )}
-              variant="outline"
-              onClick={() =>
-                setEnableBackgroundInvestigation(!backgroundInvestigation)
-              }
-            >
-              <Detective /> {t("investigation")}
-            </Button>
-          </Tooltip>
-          <ReportStyleDialog />
+          <AgentSelector />
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip title={t("enhancePrompt")}>

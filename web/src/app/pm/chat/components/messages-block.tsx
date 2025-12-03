@@ -62,16 +62,50 @@ export function MessagesBlock({ className }: { className?: string }) {
         );
       } catch (error) {
         // Only log non-abort errors (abort is expected when user cancels)
-        if (error instanceof Error && error.name !== 'AbortError') {
+        // Check for various abort error types and patterns
+        const isAbortError = 
+          (error instanceof Error && error.name === 'AbortError') ||
+          (error instanceof DOMException && error.name === 'AbortError') ||
+          (error instanceof Error && (
+            error.message?.toLowerCase().includes('abort') ||
+            error.message?.toLowerCase().includes('aborted') ||
+            error.message?.toLowerCase().includes('bodystreambuffer')
+          )) ||
+          (abortControllerRef.current?.signal.aborted === true);
+        
+        if (!isAbortError) {
           console.error('Failed to send message:', error);
+        }
+      } finally {
+        // Clear the ref if it's still pointing to this controller
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
         }
       }
     },
     [feedback],
   );
   const handleCancel = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
+    try {
+      abortControllerRef.current?.abort();
+    } catch (error) {
+      // Suppress abort errors - they're expected when user cancels
+      const isAbortError = 
+        (error instanceof Error && error.name === 'AbortError') ||
+        (error instanceof DOMException && error.name === 'AbortError') ||
+        (error instanceof Error && (
+          error.message?.toLowerCase().includes('abort') ||
+          error.message?.toLowerCase().includes('aborted') ||
+          error.message?.toLowerCase().includes('bodystreambuffer')
+        ));
+      
+      if (!isAbortError) {
+        // Only log non-abort errors
+        console.error('Error during cancel:', error);
+      }
+    } finally {
+      abortControllerRef.current = null;
+    }
   }, []);
   const handleFeedback = useCallback(
     (feedback: { option: Option }) => {
@@ -95,7 +129,7 @@ export function MessagesBlock({ className }: { className?: string }) {
     <div className={cn("flex h-full flex-col", className)}>
       {/* Always show MessageListView - AnalysisBlock displays inline */}
       <MessageListView
-        className="flex flex-grow"
+        className="flex grow"
         onFeedback={handleFeedback}
         onSendMessage={handleSend}
       />
@@ -139,7 +173,7 @@ export function MessagesBlock({ className }: { className?: string }) {
               )}
             >
               <div className="flex items-center justify-between">
-                <div className="flex flex-grow items-center">
+                <div className="flex grow items-center">
                   {responding && (
                     <motion.div
                       className="ml-3"
@@ -158,7 +192,7 @@ export function MessagesBlock({ className }: { className?: string }) {
                       />
                     </motion.div>
                   )}
-                  <CardHeader className={cn("flex-grow", responding && "pl-3")}>
+                  <CardHeader className={cn("grow", responding && "pl-3")}>
                     <CardTitle>
                       <RainbowText animated={responding}>
                         {responding ? t("replaying") : `${replayTitle}`}

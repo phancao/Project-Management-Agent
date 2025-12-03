@@ -164,6 +164,8 @@ export async function sendMessage(
       report_style: settings.reportStyle,
       mcp_settings: settings.mcpSettings,
       conversation_history: conversationHistory,
+      model_provider: settings.modelProvider,
+      model_name: settings.modelName,
     },
     options,
   );
@@ -255,8 +257,59 @@ export async function sendMessage(
       }
     }
   } catch (error) {
-    console.error("[Store] Error in sendMessage:", error);
-    toast("An error occurred while generating the response. Please try again.");
+    // Extract error message
+    const errorMessage = error instanceof Error ? error.message : "An error occurred while generating the response. Please try again.";
+    
+    // Check if it's a provider configuration error
+    const isAIProviderError = errorMessage.toLowerCase().includes("no ai providers configured") || 
+                              errorMessage.toLowerCase().includes("ai provider");
+    const isPMProviderError = errorMessage.toLowerCase().includes("no pm providers configured") || 
+                              (errorMessage.toLowerCase().includes("pm provider") && 
+                               !errorMessage.toLowerCase().includes("ai provider"));
+    
+    if (isAIProviderError) {
+      // Don't log AI provider errors to console - we show a user-friendly toast instead
+      // Show error toast with action button to open Provider Management
+      toast.error("AI Provider Required", {
+        description: errorMessage,
+        duration: 10000,
+        action: {
+          label: "Configure",
+          onClick: () => {
+            // Trigger the Provider Management dialog and open AI Providers tab
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("pm_show_providers", { 
+                detail: { tab: "ai" } 
+              }));
+            }
+          },
+        },
+      });
+    } else if (isPMProviderError) {
+      // Don't log PM provider errors to console - we show a user-friendly toast instead
+      // Show error toast with action button to open Provider Management
+      toast.error("PM Provider Required", {
+        description: errorMessage,
+        duration: 10000,
+        action: {
+          label: "Configure",
+          onClick: () => {
+            // Trigger the Provider Management dialog and open PM Providers tab
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("pm_show_providers", { 
+                detail: { tab: "pm" } 
+              }));
+            }
+          },
+        },
+      });
+    } else {
+      // Log other errors to console for debugging
+      console.error("[Store] Error in sendMessage:", error);
+      // Show regular error toast
+      toast.error(errorMessage);
+    }
+    
     // Update message status.
     // TODO: const isAborted = (error as Error).name === "AbortError";
     if (messageId != null) {

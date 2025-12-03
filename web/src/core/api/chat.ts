@@ -94,6 +94,9 @@ export async function* chatStream(
     };
     // Conversation history for context
     conversation_history?: Array<{ role: string; content: string }>;
+    // Model selection
+    model_provider?: string;
+    model_name?: string;
   },
   options: { abortSignal?: AbortSignal } = {},
 ) {
@@ -161,7 +164,12 @@ export async function* chatStream(
       }
     }
   } catch (e) {
-    console.error(e);
+    // Re-raise the error so it can be handled by the caller
+    // fetchStream already extracts error messages from HTTP responses
+    if (e instanceof Error) {
+      throw e;
+    }
+    throw new Error(String(e) || "Unknown error occurred");
   }
 }
 

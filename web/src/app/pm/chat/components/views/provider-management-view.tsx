@@ -13,10 +13,13 @@ import {
   Trash2,
   Edit,
   AlertCircle,
+  Brain,
+  Key,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
 import { Button } from "~/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -45,9 +48,10 @@ import {
   type ProjectInfo,
 } from "~/core/api/pm/providers";
 import { PROVIDER_TYPES, getProviderIcon } from "~/app/pm/utils/provider-utils";
+import { AIProviderManagementView } from "./ai-provider-management-view";
 import { cn } from "~/lib/utils";
 
-export function ProviderManagementView() {
+export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm" | "ai" } = {}) {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -409,43 +413,55 @@ export function ProviderManagementView() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Provider Management
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Connect to external project management systems
-          </p>
-        </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Provider
-        </Button>
-      </div>
+      <Tabs defaultValue={defaultTab} className="h-full flex flex-col">
+        <TabsList className="mx-4 mt-4">
+          <TabsTrigger value="pm" className="flex items-center gap-2">
+            <Server className="w-4 h-4" />
+            PM Providers
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="flex items-center gap-2">
+            <Brain className="w-4 h-4" />
+            AI Providers
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Messages */}
-      {error && (
-        <div className="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
-          <span className="text-sm text-red-800 dark:text-red-200">
-            {error}
-          </span>
-        </div>
-      )}
+        {/* Messages */}
+        {error && (
+          <div className="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+            <span className="text-sm text-red-800 dark:text-red-200">
+              {error}
+            </span>
+          </div>
+        )}
 
-      {successMessage && (
-        <div className="mx-4 mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
-          <span className="text-sm text-green-800 dark:text-green-200">
-            {successMessage}
-          </span>
-        </div>
-      )}
+        {successMessage && (
+          <div className="mx-4 mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <span className="text-sm text-green-800 dark:text-green-200">
+              {successMessage}
+            </span>
+          </div>
+        )}
 
-      {/* Provider List */}
-      <div className="flex-1 overflow-auto p-4">
+        <TabsContent value="pm" className="flex-1 flex flex-col mt-0">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Project Management Providers
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Connect to external project management systems
+              </p>
+            </div>
+            <Button onClick={() => setIsDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add PM Provider
+            </Button>
+          </div>
+
+          {/* PM Provider List */}
+          <div className="flex-1 overflow-auto p-4">
         {isLoadingProviders ? (
           <div className="flex flex-col items-center justify-center h-full">
             <RefreshCw className="w-8 h-8 text-gray-400 mb-4 animate-spin" />
@@ -454,18 +470,63 @@ export function ProviderManagementView() {
             </p>
           </div>
         ) : providers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Server className="w-16 h-16 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              No Providers Configured
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Add a provider to connect to external project management systems
-            </p>
-            <Button onClick={() => setIsDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Your First Provider
-            </Button>
+          <div className="flex flex-col items-center justify-center h-full text-center p-8">
+            <div className="max-w-md">
+              <Server className="w-20 h-20 text-gray-400 dark:text-gray-500 mx-auto mb-6" />
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                No Project Management Providers Configured
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                Connect to your project management system to start managing projects, tasks, and sprints.
+              </p>
+              
+              {/* Supported Providers */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
+                <p className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                  Supported Providers:
+                </p>
+                <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <li className="flex items-center gap-2">
+                    <span className="text-lg">{getProviderIcon("openproject")}</span>
+                    <span><strong>OpenProject</strong> - Open-source project management</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-lg">{getProviderIcon("openproject_v13")}</span>
+                    <span><strong>OpenProject v13</strong> - Legacy OpenProject instances</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-lg">{getProviderIcon("jira")}</span>
+                    <span><strong>JIRA</strong> - Atlassian JIRA Cloud or Server</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-lg">{getProviderIcon("clickup")}</span>
+                    <span><strong>ClickUp</strong> - All-in-one productivity platform</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Quick Start Guide */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6 text-left">
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
+                  Quick Start:
+                </p>
+                <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1.5 list-decimal list-inside">
+                  <li>Click the button below to add your first provider</li>
+                  <li>Select your project management system type</li>
+                  <li>Enter your server URL and API credentials</li>
+                  <li>Import your projects and start managing them</li>
+                </ol>
+              </div>
+
+              <Button 
+                onClick={() => setIsDialogOpen(true)}
+                size="lg"
+                className="w-full sm:w-auto"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Your First Provider
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -623,9 +684,15 @@ export function ProviderManagementView() {
             })}
           </div>
         )}
-      </div>
+          </div>
+        </TabsContent>
 
-      {/* Add/Edit Provider Dialog */}
+        <TabsContent value="ai" className="flex-1 flex flex-col mt-0">
+          <AIProviderManagementView />
+        </TabsContent>
+      </Tabs>
+
+      {/* Add/Edit PM Provider Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>

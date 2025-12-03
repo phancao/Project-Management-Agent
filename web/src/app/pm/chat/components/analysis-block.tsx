@@ -29,14 +29,14 @@ import React, { useCallback, useMemo, useState } from "react";
 import { LoadingAnimation } from "~/components/deer-flow/loading-animation";
 import { Markdown } from "~/components/deer-flow/markdown";
 import { RainbowText } from "~/components/deer-flow/rainbow-text";
+import { Tooltip } from "~/components/deer-flow/tooltip";
 import ReportEditor from "~/components/editor";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
-import { Tooltip } from "~/components/deer-flow/tooltip";
 import { useReplay } from "~/core/replay";
 import { useMessage, useStore } from "~/core/store";
-import { cn } from "~/lib/utils";
 import { parseJSON } from "~/core/utils";
+import { cn } from "~/lib/utils";
 
 import { StepBox } from "./step-box";
 
@@ -46,7 +46,6 @@ interface AnalysisBlockProps {
 }
 
 export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
-  const t = useTranslations("chat.research");
   const { isReplay } = useReplay();
   
   // Get research data from store - subscribe to messages map for real-time updates
@@ -67,7 +66,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
   // Get title from plan
   const title = useMemo(() => {
     if (planMessage?.content) {
-      return parseJSON(planMessage.content, { title: "" }).title || "AI Analysis";
+      return parseJSON(planMessage.content, { title: "" }).title ?? "AI Analysis";
     }
     return "AI Analysis";
   }, [planMessage?.content]);

@@ -21,12 +21,12 @@ export function CFDView() {
     };
     
     // Add each series data
-    chartData.series.forEach((series) => {
-      if (series.data[index]) {
-        dataPoint[series.name] = series.data[index].value;
+    chartData?.series.forEach((series) => {
+      if (series.data && series.data[index]) {
+        dataPoint[series.name] = series.data[index]?.value;
       }
     });
-    
+
     return dataPoint;
   }) || [];
 

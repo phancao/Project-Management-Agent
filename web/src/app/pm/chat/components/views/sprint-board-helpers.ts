@@ -67,12 +67,12 @@ export function detectDragType(
   // Priority 1: Check data.type (most reliable)
   if (activeData?.type === 'column') {
     const orderId = activeData.orderId || activeId;
-    const statusId = activeData.statusId || null;
+    const statusId = activeData.statusId ?? null;
     return {
       type: 'column',
       id: activeId,
       orderId: columnOrderIds.includes(orderId) ? orderId : undefined,
-      statusId: statusId || undefined,
+      statusId: statusId ?? undefined,
     };
   }
   

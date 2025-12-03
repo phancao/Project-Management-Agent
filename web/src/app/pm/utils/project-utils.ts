@@ -14,7 +14,7 @@ import type { ProviderConfig } from "~/core/api/pm/providers";
  */
 export function extractProjectKey(projectId: string): string {
   const parts = projectId.split(':');
-  return parts.length > 1 ? parts[parts.length - 1] : projectId;
+  return parts.length > 1 ? (parts[parts.length - 1] ?? projectId) : projectId;
 }
 
 /**
@@ -23,7 +23,7 @@ export function extractProjectKey(projectId: string): string {
  */
 export function extractProviderId(projectId: string): string | null {
   const parts = projectId.split(':');
-  return parts.length > 1 ? parts[0] : null;
+  return parts.length > 1 ? (parts[0] ?? null) : null;
 }
 
 /**
@@ -72,7 +72,7 @@ export function hasProviderPrefix(projectId: string): boolean {
   
   // Check if the first part is a valid UUID
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(parts[0]);
+  return parts[0] ? uuidRegex.test(parts[0]) : false;
 }
 
 /**

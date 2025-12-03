@@ -98,7 +98,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
     let taskId = task.id;
     if (task.id.includes(":")) {
       const taskParts = task.id.split(":");
-      taskId = taskParts.length > 1 ? taskParts[1] : taskParts[0];
+      taskId = taskParts.length > 1 ? (taskParts[1] ?? taskParts[0] ?? task.id) : (taskParts[0] ?? task.id);
     }
 
     // Construct URL based on provider type
@@ -185,7 +185,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
     if (!editedTask || !onUpdate || !task) return;
     
     // Use the stored task ID instead of the current task.id to prevent updating wrong task
-    const taskIdToUpdate = editingTaskId || task.id;
+    const taskIdToUpdate = editingTaskId ?? task.id;
     
     // Verify we're still editing the same task
     if (taskIdToUpdate !== task.id) {
@@ -217,8 +217,8 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
         updates.priority = editedTask.priority;
       }
       if (editedTask.assignee_id !== undefined && editedTask.assignee_id !== task.assignee_id) {
-        // Convert empty string to null for unassignment
-        updates.assignee_id = editedTask.assignee_id || null;
+        // Convert empty string to undefined for unassignment
+        updates.assignee_id = editedTask.assignee_id ?? undefined;
       }
       
       // Only call update if there are actual changes
@@ -360,7 +360,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
               {isEditing ? (
                 <Select
-                  value={currentStatusValue === "__no_status__" && statuses.length > 0 ? statuses[0].name : currentStatusValue}
+                  value={currentStatusValue === "__no_status__" && statuses.length > 0 ? (statuses[0]?.name ?? currentStatusValue) : currentStatusValue}
                   onValueChange={(value) => setEditedTask({ ...editedTask, status: value === "__no_status__" ? undefined : value })}
                 >
                   <SelectTrigger className="mt-1">
@@ -415,7 +415,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Priority</label>
               {isEditing ? (
                 <Select
-                  value={currentPriorityValue === "__no_priority__" && priorities.length > 0 ? priorities[0].name : currentPriorityValue}
+                  value={currentPriorityValue === "__no_priority__" && priorities.length > 0 ? (priorities[0]?.name ?? currentPriorityValue) : currentPriorityValue}
                   onValueChange={(value) => {
                     setEditedTask({ ...editedTask, priority: value === "__no_priority__" ? undefined : value });
                   }}
@@ -476,7 +476,7 @@ export function TaskDetailsModal({ task, open, onClose, onUpdate, projectId }: T
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Assigned To</label>
             {isEditing ? (
               <Select
-                value={(editedTask?.assignee_id ?? task?.assignee_id) || "__unassigned__"}
+                value={(editedTask?.assignee_id ?? task?.assignee_id) ?? "__unassigned__"}
                 onValueChange={(value) => {
                   setEditedTask({ 
                     ...editedTask, 

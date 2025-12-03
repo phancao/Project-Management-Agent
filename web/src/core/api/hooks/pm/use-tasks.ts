@@ -20,8 +20,8 @@ export interface Task {
   assigned_to?: string;
   assignee_id?: string;
   project_name?: string;
-  sprint_id?: string | null;
-  epic_id?: string | null;
+  sprint_id?: string;
+  epic_id?: string;
 }
 
 const fetchTasksFn = async (projectId?: string) => {
@@ -32,8 +32,8 @@ const fetchTasksFn = async (projectId?: string) => {
   
   const url = `pm/projects/${projectId}/tasks`;
   const fullUrl = resolveServiceURL(url);
-  debug.api('Fetching tasks', { url: fullUrl, projectId });
-  let response: Response;
+  debug.api('Fetching tasks', { url: fullUrl, projectId: projectId ?? 'N/A' });
+  let response: Response | undefined;
   try {
     response = await fetch(fullUrl);
   } catch (error) {
@@ -46,17 +46,18 @@ const fetchTasksFn = async (projectId?: string) => {
     throw userFriendlyError;
   }
   
-    if (!response.ok) {
-    let errorDetail = `HTTP ${response.status}`;
+    if (!response?.ok) {
+    const status = response?.status ?? 0;
+    let errorDetail = `HTTP ${status}`;
     let userFriendlyMessage = "Failed to load tasks";
-    const isClientError = response.status >= 400 && response.status < 500;
+    const isClientError = status >= 400 && status < 500;
     
     try {
       const errorData = await response.json();
-      errorDetail = errorData.detail || errorData.message || errorDetail;
+      errorDetail = errorData.detail ?? errorData.message ?? errorDetail;
       
       // Provide user-friendly messages for specific status codes
-      if (response.status === 410) {
+      if (status === 410) {
         userFriendlyMessage = "Project no longer available";
         const description = errorDetail.includes("410") || errorDetail.includes("Gone")
           ? "This project may have been deleted, archived, or is no longer accessible. Please verify the project exists in your PM provider."
@@ -65,13 +66,13 @@ const fetchTasksFn = async (projectId?: string) => {
           description,
           duration: 8000,
         });
-      } else if (response.status === 404) {
+      } else if (status === 404) {
         userFriendlyMessage = "Project not found";
         toast.error(userFriendlyMessage, {
           description: "The requested project could not be found. Please check the project ID.",
           duration: 6000,
         });
-      } else if (response.status === 401 || response.status === 403) {
+      } else if (status === 401 || status === 403) {
         userFriendlyMessage = "Authentication failed";
         toast.error(userFriendlyMessage, {
           description: "Please check your PM provider credentials and try again.",
@@ -91,9 +92,10 @@ const fetchTasksFn = async (projectId?: string) => {
       }
     } catch {
       // If response is not JSON, use status text
-      errorDetail = response.statusText || errorDetail;
+      errorDetail = response?.statusText ?? errorDetail;
+      const status = response?.status ?? 0;
       
-      if (response.status === 410) {
+      if (status === 410) {
         userFriendlyMessage = "Project no longer available";
         toast.error(userFriendlyMessage, {
           description: "This project may have been deleted or archived.",
@@ -218,7 +220,7 @@ export function useTasks(projectId?: string) {
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
       // Always update from cache if it exists and is valid, even if tasks are already set
       // This ensures we use the latest cached data when switching views
-      if (tasks.length !== cached.data.length || JSON.stringify(tasks.map(t => t.id).sort()) !== JSON.stringify(cached.data.map(t => t.id).sort())) {
+      if (tasks.length !== cached.data.length || JSON.stringify(tasks.map((t: Task) => t.id).sort()) !== JSON.stringify(cached.data.map((t: Task) => t.id).sort())) {
         debug.api('Using cached tasks in effect', { projectId, count: cached.data.length, currentTasksCount: tasks.length });
         setTasks(cached.data);
         setLoading(false);
@@ -253,7 +255,7 @@ export function useTasks(projectId?: string) {
           count: data.length, 
           projectId, 
           isCurrent,
-          taskIds: data.length > 0 ? data.slice(0, 5).map(t => t.id) : []
+          taskIds: data.length > 0 ? data.slice(0, 5).map((t: Task) => t.id) : []
         });
         // Only update state if this effect is still relevant (projectId hasn't changed)
         if (isCurrent) {
@@ -312,21 +314,22 @@ const fetchAllTasksFn = async () => {
   }
   
   if (!response.ok) {
-    let errorDetail = `HTTP ${response.status}`;
+    let errorDetail = `HTTP ${response?.status ?? 'unknown'}`;
     let userFriendlyMessage = "Failed to load tasks";
-    const isClientError = response.status >= 400 && response.status < 500;
+    const isClientError = (response?.status ?? 0) >= 400 && (response?.status ?? 0) < 500;
     
     try {
       const errorData = await response.json();
-      errorDetail = errorData.detail || errorData.message || errorDetail;
+      errorDetail = errorData.detail ?? errorData.message ?? errorDetail;
       
-      if (response.status === 401 || response.status === 403) {
+      const status = response?.status ?? 0;
+      if (status === 401 || status === 403) {
         userFriendlyMessage = "Authentication failed";
         toast.error(userFriendlyMessage, {
           description: "Please check your PM provider credentials and try again.",
           duration: 6000,
         });
-      } else if (response.status >= 500) {
+      } else if (status >= 500) {
         userFriendlyMessage = "Server error";
         toast.error(userFriendlyMessage, {
           description: "The server encountered an error. Please try again later.",
@@ -339,7 +342,7 @@ const fetchAllTasksFn = async () => {
         });
       }
     } catch {
-      errorDetail = response.statusText || errorDetail;
+      errorDetail = response?.statusText ?? errorDetail;
       toast.error("Failed to load tasks", {
         description: errorDetail,
         duration: 5000,

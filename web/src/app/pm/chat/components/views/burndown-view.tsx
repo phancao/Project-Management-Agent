@@ -29,7 +29,7 @@ export function BurndownView() {
   const sortedSprints = useMemo(() => {
     if (!sprints) return [];
 
-    const normalizeStatus = (status?: string) => (status || "").toLowerCase();
+    const normalizeStatus = (status?: string) => (status ?? "").toLowerCase();
     const statusPriority = (status?: string) => {
       const value = normalizeStatus(status);
       if (["active", "in_progress", "ongoing"].includes(value)) return 0;
@@ -69,11 +69,11 @@ export function BurndownView() {
       if (sprintParam && sortedSprints.some((s) => s.id === sprintParam)) {
         return sprintParam;
       }
-      return sortedSprints[0].id;
+      return sortedSprints[0]?.id ?? "";
     });
   }, [sortedSprints, sprintParam]);
 
-  const { data: chartData, isLoading: loading, error } = useBurndownChart(projectId, selectedSprintId);
+  const { data: chartData, isLoading: loading, error } = useBurndownChart(projectId, selectedSprintId ?? undefined);
 
   const handleSprintChange = (value: string) => {
     setSelectedSprintId(value);
@@ -93,16 +93,16 @@ export function BurndownView() {
     return {
       day: point.label || new Date(point.date!).toLocaleDateString(),
       ideal: point.value,
-      actual: actualPoint?.value || 0,
+      actual: actualPoint?.value ?? 0,
     };
   }) || [];
 
   // Extract metadata
   const metadata = chartData?.metadata || {};
-  const totalScope = metadata.total_scope || 0;
-  const remaining = metadata.remaining || 0;
-  const completed = metadata.completed || 0;
-  const completionPercentage = metadata.completion_percentage || 0;
+  const totalScope = metadata.total_scope ?? 0;
+  const remaining = metadata.remaining ?? 0;
+  const completed = metadata.completed ?? 0;
+  const completionPercentage = metadata.completion_percentage ?? 0;
   const onTrack = metadata.on_track || false;
 
   if (sprintsError) {
@@ -207,7 +207,7 @@ export function BurndownView() {
             </SelectTrigger>
             <SelectContent className="min-w-[20rem] max-w-xl">
               {sortedSprints.map((sprint) => {
-                const normalizedStatus = (sprint.status || "").toLowerCase();
+                const normalizedStatus = (sprint.status ?? "").toLowerCase();
                 const statusLabel =
                   normalizedStatus === "active"
                     ? "Active"
@@ -318,19 +318,19 @@ export function BurndownView() {
             <div>
               <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Added</div>
               <div className="text-3xl font-bold text-blue-600">
-                +{metadata.scope_changes.added || 0}
+                +{metadata.scope_changes.added ?? 0}
               </div>
             </div>
             <div>
               <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Removed</div>
               <div className="text-3xl font-bold text-red-600">
-                -{metadata.scope_changes.removed || 0}
+                -{metadata.scope_changes.removed ?? 0}
               </div>
             </div>
             <div>
               <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Net Change</div>
-              <div className={`text-3xl font-bold ${(metadata.scope_changes.net || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {(metadata.scope_changes.net || 0) >= 0 ? '+' : ''}{metadata.scope_changes.net || 0}
+              <div className={`text-3xl font-bold ${(metadata.scope_changes.net ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {(metadata.scope_changes.net ?? 0) >= 0 ? '+' : ''}{metadata.scope_changes.net ?? 0}
               </div>
             </div>
           </div>

@@ -12,7 +12,7 @@ export const MathematicsWithMarkdown = Mathematics.extend({
     return {
       markdown: {
         serialize(state: any, node: any) {
-          const latex = node.attrs?.latex || "";
+          const latex = node.attrs?.latex ?? "";
           const isBlock = node.attrs?.display === true;
           
           if (isBlock) {

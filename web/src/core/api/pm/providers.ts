@@ -111,7 +111,7 @@ export async function listProviders(): Promise<ProviderConfig[]> {
       .map((p: any): ProviderConfig => ({
         id: p.id,
         provider_type: p.provider_type,
-        base_url: p.base_url || '',
+        base_url: p.base_url ?? '',
         username: p.username,
         organization_id: p.organization_id,
         workspace_id: p.workspace_id,
@@ -206,7 +206,7 @@ export async function getProviderProjects(
     // New format: object with success, total_projects, projects
     return {
       success: data.success !== false, // Default to true if not specified
-      total_projects: data.total_projects || data.projects?.length || 0,
+      total_projects: (data.total_projects || data.projects?.length) ?? 0,
       projects: data.projects || [],
     };
   }

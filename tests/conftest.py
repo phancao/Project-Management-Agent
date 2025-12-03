@@ -24,5 +24,3 @@ import pytest
 def project_root_path():
     """Return the project root path."""
     return project_root
-
-

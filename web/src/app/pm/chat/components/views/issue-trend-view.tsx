@@ -17,19 +17,19 @@ export function IssueTrendView() {
   // Transform chart data for Recharts
   const trendData = chartData?.series[0]?.data.map((point, index) => ({
     date: point.label || new Date(point.date!).toLocaleDateString(),
-    created: chartData.series[0]?.data[index]?.value || 0,
-    resolved: chartData.series[1]?.data[index]?.value || 0,
-    netChange: chartData.series[2]?.data[index]?.value || 0,
-    cumulativeNet: chartData.series[3]?.data[index]?.value || 0,
+    created: chartData.series[0]?.data[index]?.value ?? 0,
+    resolved: chartData.series[1]?.data[index]?.value ?? 0,
+    netChange: chartData.series[2]?.data[index]?.value ?? 0,
+    cumulativeNet: chartData.series[3]?.data[index]?.value ?? 0,
   })) || [];
 
   const metadata = chartData?.metadata || {};
-  const totalCreated = metadata.total_created || 0;
-  const totalResolved = metadata.total_resolved || 0;
-  const netChange = metadata.net_change || 0;
-  const avgCreatedPerDay = metadata.avg_created_per_day || 0;
-  const avgResolvedPerDay = metadata.avg_resolved_per_day || 0;
-  const cumulativeNet = metadata.cumulative_net || 0;
+  const totalCreated = metadata.total_created ?? 0;
+  const totalResolved = metadata.total_resolved ?? 0;
+  const netChange = metadata.net_change ?? 0;
+  const avgCreatedPerDay = metadata.avg_created_per_day ?? 0;
+  const avgResolvedPerDay = metadata.avg_resolved_per_day ?? 0;
+  const cumulativeNet = metadata.cumulative_net ?? 0;
   const insights = metadata.insights || [];
 
   if (loading) {

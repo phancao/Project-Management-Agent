@@ -61,10 +61,12 @@ export function PMLoadingManager() {
           clearTimeout(timeoutId);
           debug.state('Providers loaded', { count: providers.length });
           console.log('[PMLoadingManager] Providers loaded:', providers);
+          // Filter out providers without id and ensure id is always a string
+          const validProviders = providers.filter((p): p is typeof p & { id: string } => !!p.id);
           setProvidersState({
             loading: false,
             error: null,
-            data: providers,
+            data: validProviders,
           });
           console.log('[PMLoadingManager] State updated, providers count:', providers.length);
         })
@@ -107,7 +109,7 @@ export function PMLoadingManager() {
     activeProjectId ?? undefined
   );
   const { sprints, loading: sprintsLoading, error: sprintsError } = useSprints(
-    activeProjectId || "",
+    activeProjectId ?? "",
     undefined
   );
 

@@ -9,12 +9,12 @@ export function resolveServiceURL(path: string) {
   let baseUrl = env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/";
 
   // Remove trailing slash if present
-  if (baseUrl.endsWith('/')) {
+  if (baseUrl?.endsWith('/')) {
     baseUrl = baseUrl.slice(0, -1);
   }
 
   // Append /api if not present
-  if (!baseUrl.endsWith('/api')) {
+  if (!baseUrl?.endsWith('/api')) {
     baseUrl += '/api';
   }
 

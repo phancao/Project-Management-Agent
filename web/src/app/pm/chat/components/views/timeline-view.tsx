@@ -126,16 +126,22 @@ const TASK_PRIORITY_COLORS: Record<string, string> = {
   lowest: "#06b6d4",
 };
 
-function getSprintColor(sprint: TimelineSprint) {
+function getSprintColor(sprint: TimelineSprint): string {
   const status = sprint.status?.toLowerCase() ?? "";
-  return SPRINT_STATUS_COLORS[status] ?? SPRINT_STATUS_COLORS.default;
+  return SPRINT_STATUS_COLORS[status] ?? SPRINT_STATUS_COLORS.default ?? "#64748b";
 }
 
-function getTaskColor(task: TimelineTask) {
+function getTaskColor(task: TimelineTask): string {
   const status = task.status?.toLowerCase() ?? "";
   const priority = task.priority?.toLowerCase() ?? "";
-  if (status && TASK_STATUS_COLORS[status]) return TASK_STATUS_COLORS[status];
-  if (priority && TASK_PRIORITY_COLORS[priority]) return TASK_PRIORITY_COLORS[priority];
+  if (status) {
+    const color = TASK_STATUS_COLORS[status];
+    if (color) return color;
+  }
+  if (priority) {
+    const color = TASK_PRIORITY_COLORS[priority];
+    if (color) return color;
+  }
   return "#6366f1";
 }
 

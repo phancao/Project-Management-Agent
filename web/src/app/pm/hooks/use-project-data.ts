@@ -38,7 +38,7 @@ export function useProjectData() {
       previousActiveProjectIdRef.current = activeProjectId;
     }
     
-    debug.project('Computing projectIdForData', { activeProjectId, activeProjectId: activeProject?.id, projectsLength: projects.length });
+    debug.project('Computing projectIdForData', { activeProjectId, activeProjectIdFromProject: activeProject?.id, projectsLength: projects.length });
     
     // PRIORITY 1: Use activeProject.id if available (most reliable)
     if (activeProject) {

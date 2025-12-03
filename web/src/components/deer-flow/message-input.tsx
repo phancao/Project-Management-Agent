@@ -211,7 +211,7 @@ function transformPastedHTML(html: string) {
     const tempEl = document.createElement("div");
     tempEl.innerHTML = html;
 
-    return tempEl.textContent || tempEl.innerText || "";
+    return (tempEl.textContent || tempEl.innerText) ?? "";
   } catch (error) {
     console.error("Error transforming pasted HTML", error);
 

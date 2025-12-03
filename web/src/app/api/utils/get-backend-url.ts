@@ -18,7 +18,7 @@ export function getBackendUrl(): string {
   // For server-side API routes, prefer Docker service name
   // This works because Next.js API routes run on the server (Node.js), not in the browser
   // Client-side code (browser) will use NEXT_PUBLIC_API_URL which should be localhost:8000
-  const serverUrl = process.env.BACKEND_URL || process.env.API_URL;
+  const serverUrl = process.env.BACKEND_URL ?? process.env.API_URL;
   if (serverUrl) {
     return serverUrl.replace(/\/api\/?$/, '');
   }

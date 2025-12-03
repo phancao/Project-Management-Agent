@@ -32,11 +32,11 @@ export function CFDView() {
 
   // Extract metadata
   const metadata = chartData?.metadata || {};
-  const totalItems = metadata.total_items || 0;
-  const avgWIP = metadata.avg_wip || 0;
-  const avgCycleTime = metadata.avg_cycle_time_days || 0;
+  const totalItems = metadata.total_items ?? 0;
+  const avgWIP = metadata.avg_wip ?? 0;
+  const avgCycleTime = metadata.avg_cycle_time_days ?? 0;
   const bottlenecks = metadata.bottlenecks || [];
-  const flowEfficiency = metadata.flow_efficiency || 0;
+  const flowEfficiency = metadata.flow_efficiency ?? 0;
   const statusDistribution = metadata.status_distribution || {};
 
   if (loading) {
@@ -170,7 +170,8 @@ export function CFDView() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Current Distribution</h3>
           <div className="space-y-3">
             {Object.entries(statusDistribution).map(([status, count]) => {
-              const percentage = totalItems > 0 ? ((count as number) / totalItems * 100) : 0;
+              const countNum = count as number;
+              const percentage = totalItems > 0 ? (countNum / totalItems * 100) : 0;
               const colors: Record<string, string> = {
                 "Done": "bg-green-500",
                 "In Review": "bg-blue-500",
@@ -182,7 +183,7 @@ export function CFDView() {
                 <div key={status}>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-700 dark:text-gray-300">{status}</span>
-                    <span className="font-semibold text-gray-900 dark:text-white">{count} ({percentage.toFixed(0)}%)</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{countNum} ({percentage.toFixed(0)}%)</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div 

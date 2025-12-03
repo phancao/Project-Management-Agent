@@ -79,7 +79,7 @@ export const LinkSelector = ({ open, onOpenChange }: LinkSelectorProps) => {
             type="text"
             placeholder="Paste a link"
             className="bg-background flex-1 p-1 text-sm outline-none"
-            defaultValue={editor.getAttributes("link").href || ""}
+            defaultValue={editor.getAttributes("link").href ?? ""}
           />
           {editor.getAttributes("link").href ? (
             <Button

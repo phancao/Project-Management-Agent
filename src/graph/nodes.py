@@ -5,10 +5,10 @@ import json
 import logging
 import os
 from functools import partial
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 import re
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -27,8 +27,6 @@ from src.tools import (
     get_web_search_tool,
     python_repl_tool,
 )
-from src.tools.analytics_tools import get_analytics_tools
-from src.tools.pm_tools import get_pm_tools
 from src.tools.search import LoggedTavilySearch
 from src.utils.context_manager import ContextManager, validate_message_content
 from src.utils.json_utils import repair_json_output, sanitize_tool_response
@@ -38,7 +36,6 @@ from .types import State
 from .utils import (
     build_clarified_topic_from_history,
     get_message_content,
-    is_user_message,
     reconstruct_clarification_history,
 )
 
@@ -79,8 +76,8 @@ def extract_project_id(text: str) -> str:
 
 @tool
 def handoff_to_planner(
-    research_topic: Annotated[str, "The topic of the research task to be handed off."],
-    locale: Annotated[str, "The user's detected language locale (e.g., en-US, zh-CN)."],
+    research_topic: Annotated[str, "The topic of the research task to be handed off."],  # noqa: ARG001
+    locale: Annotated[str, "The user's detected language locale (e.g., en-US, zh-CN)."],  # noqa: ARG001
 ):
     """Handoff to planner agent to do plan."""
     # This tool is not returning anything: we're just using it
@@ -90,10 +87,10 @@ def handoff_to_planner(
 
 @tool
 def handoff_after_clarification(
-    locale: Annotated[str, "The user's detected language locale (e.g., en-US, zh-CN)."],
+    locale: Annotated[str, "The user's detected language locale (e.g., en-US, zh-CN)."],  # noqa: ARG001
     research_topic: Annotated[
         str, "The clarified research topic based on all clarification rounds."
-    ],
+    ],  # noqa: ARG001
 ):
     """Handoff to planner after clarification rounds are complete. Pass all clarification history to planner for analysis."""
     return
@@ -158,9 +155,9 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
     # ============================================================
     from src.graph.analysis_types import validate_analysis_plan, AnalysisType, get_required_tools
     
-    is_valid, analysis_type, missing_tools = validate_analysis_plan(plan, steps)
+    _is_valid, analysis_type, missing_tools = validate_analysis_plan(plan, steps)
     
-    if analysis_type != AnalysisType.UNKNOWN:
+    if analysis_type and analysis_type != AnalysisType.UNKNOWN:
         logger.info(
             f"[VALIDATION] Detected analysis type: {analysis_type.value} "
             f"(title: '{plan.get('title', 'N/A')}')"
@@ -241,12 +238,12 @@ def background_investigation_node(state: State, config: RunnableConfig):
     logger.info("background investigation node is running.")
     configurable = Configuration.from_runnable_config(config)
     query = state.get("clarified_research_topic") or state.get("research_topic")
-    background_investigation_results = []
+    background_investigation_results: list[str] = []
     
     if SELECTED_SEARCH_ENGINE == SearchEngine.TAVILY.value:
         searched_content = LoggedTavilySearch(
             max_results=configurable.max_search_results
-        ).invoke(query)
+        ).invoke(query or "")
         # check if the searched_content is a tuple, then we need to unpack it
         if isinstance(searched_content, tuple):
             searched_content = searched_content[0]
@@ -991,7 +988,6 @@ def reporter_node(state: State, config: RunnableConfig):
 
     # 🔴 VALIDATION: Check if observations contain real data (not just errors)
     has_real_data = False
-    error_only_observations = True
     
     for obs in observations:
         obs_str = str(obs)
@@ -1005,12 +1001,10 @@ def reporter_node(state: State, config: RunnableConfig):
                     "rate limit" in obs_str.lower() or
                     "token limit" in obs_str.lower()):
                 has_real_data = True
-                error_only_observations = False
                 break
             # If it's an error but also has some data, that's still useful
             if len(obs_str) > 200 and not obs_str.startswith("[ERROR]"):
                 has_real_data = True
-                error_only_observations = False
     
     # If no real data is available, add a warning to the reporter
     if not has_real_data and len(observations) > 0:
@@ -1050,7 +1044,10 @@ def reporter_node(state: State, config: RunnableConfig):
     compressed_state = ContextManager(llm_token_limit).compress_messages(
         {"messages": observation_messages}
     )
-    compressed_messages = compressed_state.get("messages", [])
+    if isinstance(compressed_state, dict):
+        compressed_messages = compressed_state.get("messages", [])
+    else:
+        compressed_messages = observation_messages
     
     # Log compression results for debugging
     if len(compressed_messages) != len(observation_messages):
@@ -1080,11 +1077,10 @@ def reporter_node(state: State, config: RunnableConfig):
     }
 
 
-def research_team_node(state: State):
+def research_team_node(state: State):  # noqa: ARG001
     """Research team node that collaborates on tasks."""
     logger.info("Research team is collaborating on tasks.")
     logger.debug("Entering research_team_node - coordinating research and coder agents")
-    pass
 
 
 async def _execute_agent_step(
@@ -1098,10 +1094,13 @@ async def _execute_agent_step(
     logger.debug(f"[_execute_agent_step] Starting execution for agent: {agent_name}")
     
     current_plan = state.get("current_plan")
+    if not current_plan or isinstance(current_plan, str):
+        logger.error("[_execute_agent_step] Invalid or missing current_plan")
+        return Command(goto="research_team")
+    
     plan_title = current_plan.title
     observations = state.get("observations", [])
     
-    import sys
     sys.stderr.write(f"\n📋 PLAN INFO: plan_title='{plan_title}'\n")
     sys.stderr.flush()
     
@@ -1110,6 +1109,10 @@ async def _execute_agent_step(
     # Find the first unexecuted step
     current_step = None
     completed_steps = []
+    if not hasattr(current_plan, 'steps') or not current_plan.steps:
+        logger.error("[_execute_agent_step] Plan has no steps")
+        return Command(goto="research_team")
+    
     for idx, step in enumerate(current_plan.steps):
         if not step.execution_res:
             current_step = step
@@ -1136,7 +1139,6 @@ async def _execute_agent_step(
             if execution_res and len(str(execution_res)) > 20000:
                 # Try to compress JSON arrays in the result
                 try:
-                    import json
                     parsed = json.loads(str(execution_res))
                     from src.utils.json_utils import _compress_large_array
                     compressed = _compress_large_array(parsed, max_items=20)
@@ -1165,9 +1167,10 @@ async def _execute_agent_step(
 
     # Add citation reminder for researcher agent
     if agent_name == "researcher":
-        if state.get("resources"):
+        resources = state.get("resources")
+        if resources:
             resources_info = "**The user mentioned the following resource files:**\n\n"
-            for resource in state.get("resources"):
+            for resource in resources:
                 resources_info += f"- {resource.title} ({resource.description})\n"
 
             agent_input["messages"].append(
@@ -1186,7 +1189,6 @@ async def _execute_agent_step(
         )
 
     # Invoke the agent
-    import sys
     sys.stderr.write(f"\n🎯 INVOKING AGENT: agent_name='{agent_name}', step='{current_step.title if current_step else 'N/A'}'\n")
     sys.stderr.flush()
     
@@ -1212,7 +1214,6 @@ async def _execute_agent_step(
         )
         recursion_limit = default_recursion_limit
 
-    import sys
     sys.stderr.write(f"\n📥 AGENT INPUT: messages_count={len(agent_input.get('messages', []))}\n")
     if agent_input.get('messages'):
         first_msg = agent_input['messages'][0]
@@ -1234,8 +1235,9 @@ async def _execute_agent_step(
     
     # Validate message content before invoking agent
     try:
+        from langchain_core.messages import BaseMessage
         validated_messages = validate_message_content(agent_input["messages"])
-        agent_input["messages"] = validated_messages
+        agent_input["messages"] = list(validated_messages)  # Convert to list
     except Exception as validation_error:
         logger.error(f"Error validating agent input messages: {validation_error}")
     
@@ -1244,7 +1246,6 @@ async def _execute_agent_step(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )
         
-        import sys
         # Check if agent made tool calls
         last_message = result.get("messages", [])[-1] if result.get("messages") else None
         tool_calls_made = []
@@ -1260,7 +1261,6 @@ async def _execute_agent_step(
         
     except Exception as e:
         import traceback
-        import sys
         sys.stderr.write(f"\n❌ AGENT ERROR: agent_name='{agent_name}', error={str(e)}\n")
         sys.stderr.flush()
 
@@ -1282,8 +1282,12 @@ async def _execute_agent_step(
         current_step.execution_res = detailed_error
 
         # Calculate the current step index even on error
-        completed_count = sum(1 for step in current_plan.steps if step.execution_res)
-        current_step_index = min(completed_count, len(current_plan.steps) - 1)
+        if hasattr(current_plan, 'steps') and current_plan.steps:
+            completed_count = sum(1 for step in current_plan.steps if step.execution_res)
+            current_step_index = min(completed_count, len(current_plan.steps) - 1)
+        else:
+            completed_count = 0
+            current_step_index = 0
 
         return Command(
             update={
@@ -1302,12 +1306,36 @@ async def _execute_agent_step(
     # Process the result
     response_content = result["messages"][-1].content
     
+    # Extract tool results from ToolMessage objects to include in execution result
+    # This ensures the reporter has access to actual tool data, not just the agent's summary
+    tool_results = []
+    tool_calls_info = []
+    
     # Log all messages to debug tool call results
     logger.debug(f"[{agent_name}] All messages in result: {len(result.get('messages', []))}")
     for i, msg in enumerate(result.get("messages", [])):
         msg_type = type(msg).__name__
         if msg_type == "ToolMessage":
-            logger.info(f"[{agent_name}] Message {i}: ToolMessage - tool_call_id={getattr(msg, 'tool_call_id', 'N/A')}, content={str(msg.content)[:200]}")
+            tool_call_id = getattr(msg, 'tool_call_id', 'N/A')
+            tool_content = str(msg.content)
+            logger.info(f"[{agent_name}] Message {i}: ToolMessage - tool_call_id={tool_call_id}, content_len={len(tool_content)}")
+            
+            # Extract tool name from tool_call_id if possible, or use a generic identifier
+            # Try to find the corresponding AIMessage with tool_calls to get the tool name
+            tool_name = "unknown_tool"
+            for prev_msg in result.get("messages", [])[:i]:
+                if hasattr(prev_msg, 'tool_calls') and prev_msg.tool_calls:
+                    for tc in prev_msg.tool_calls:
+                        if tc.get('id') == tool_call_id:
+                            tool_name = tc.get('name', 'unknown_tool')
+                            break
+                    if tool_name != "unknown_tool":
+                        break
+            
+            # Include tool result in execution result
+            tool_results.append(f"### Tool: {tool_name}\n\n{tool_content}")
+            tool_calls_info.append(f"{tool_name}: {len(tool_content)} chars")
+        
         elif msg_type == "AIMessage":
             if hasattr(msg, 'tool_calls') and msg.tool_calls:
                 logger.info(f"[{agent_name}] Message {i}: AIMessage with {len(msg.tool_calls)} tool calls: {[tc.get('name', 'N/A') for tc in msg.tool_calls]}")
@@ -1316,23 +1344,33 @@ async def _execute_agent_step(
         else:
             logger.debug(f"[{agent_name}] Message {i}: {msg_type} - content={str(msg.content)[:200] if hasattr(msg, 'content') else 'N/A'}")
     
-    # Sanitize response to remove extra tokens and truncate if needed
-    response_content = sanitize_tool_response(str(response_content))
+    # Combine agent response with tool results
+    if tool_results:
+        logger.info(f"[{agent_name}] Including {len(tool_results)} tool results in execution result: {', '.join(tool_calls_info)}")
+        # Format: Agent summary first, then tool results
+        combined_result = f"{response_content}\n\n## Tool Call Results\n\n" + "\n\n".join(tool_results)
+    else:
+        combined_result = response_content
     
-    logger.debug(f"{agent_name.capitalize()} full response: {response_content}")
+    # Sanitize response to remove extra tokens and truncate if needed
+    combined_result = sanitize_tool_response(str(combined_result))
+    
+    logger.debug(f"{agent_name.capitalize()} full response: {combined_result[:500]}...")
 
-    # Update the step with the execution result
-    current_step.execution_res = response_content
+    # Update the step with the execution result (including tool results)
+    current_step.execution_res = combined_result
     logger.info(f"Step '{current_step.title}' execution completed by {agent_name}")
 
     # Calculate the current step index (number of completed steps)
-    completed_count = sum(1 for step in current_plan.steps if step.execution_res)
-    current_step_index = min(completed_count, len(current_plan.steps) - 1)
+    if hasattr(current_plan, 'steps') and current_plan.steps:
+        completed_count = sum(1 for step in current_plan.steps if step.execution_res)
+        current_step_index = min(completed_count, len(current_plan.steps) - 1)
+    else:
+        completed_count = 0
+        current_step_index = 0
     logger.info(f"Step progress: {completed_count}/{len(current_plan.steps)} steps completed (current_step_index={current_step_index})")
 
-    import sys
-    from langchain_core.messages import AIMessage
-    sys.stderr.write(f"\n🔄 RETURNING RESULT: agent_name='{agent_name}', message_type='AIMessage', content_len={len(response_content)}\n")
+    sys.stderr.write(f"\n🔄 RETURNING RESULT: agent_name='{agent_name}', message_type='AIMessage', content_len={len(combined_result)}\n")
     sys.stderr.flush()
     
     return Command(
@@ -1354,7 +1392,7 @@ async def _setup_and_execute_agent_step(
     state: State,
     config: RunnableConfig,
     agent_type: str,
-    default_tools: list,
+    default_tools: list[Any],
 ) -> Command[Literal["research_team"]]:
     """Helper function to set up an agent with appropriate tools and execute a step.
 
@@ -1674,7 +1712,7 @@ async def pm_agent_node(
     # PM Agent has NO web search or code execution tools
     # It ONLY has access to PM tools which are loaded via MCP configuration
     # in _setup_and_execute_agent_step
-    tools = []  # No additional tools - PM tools only via MCP
+    tools: list[Any] = []  # No additional tools - PM tools only via MCP
     
     logger.info(f"[pm_agent_node] PM Agent will use PM tools exclusively (loaded via MCP)")
     

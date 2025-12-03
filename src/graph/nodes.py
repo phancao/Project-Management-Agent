@@ -154,57 +154,21 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
             )
 
     # ============================================================
-    # SECTION 2: Validate project analysis completeness
+    # SECTION 2: Validate analysis plan completeness (configuration-based)
     # ============================================================
-    # Check if this is a project analysis request
-    plan_title = plan.get("title", "").lower()
-    plan_thought = plan.get("thought", "").lower()
-    is_project_analysis = (
-        "project" in plan_title and "analysis" in plan_title
-    ) or (
-        "project" in plan_thought and "analysis" in plan_thought
-    ) or any(
-        "project" in step.get("title", "").lower() and "analysis" in step.get("title", "").lower()
-        for step in steps
-    )
+    from src.graph.analysis_types import validate_analysis_plan, AnalysisType, get_required_tools
     
-    if is_project_analysis:
-        # Required analytics tools for comprehensive project analysis
-        required_tools = [
-            "get_project",
-            "project_health",
-            "list_sprints",
-            "list_tasks",
-            "velocity_chart",
-            "burndown_chart",
-            "sprint_report",
-            "cfd_chart",
-            "cycle_time_chart",
-            "work_distribution_chart",
-            "issue_trend_chart"
-        ]
-        
-        # Check all step descriptions for tool mentions
-        all_descriptions = " ".join([
-            step.get("description", "").lower() + " " + step.get("title", "").lower()
-            for step in steps
-        ])
-        
-        missing_tools = []
-        for tool in required_tools:
-            # Check if tool is mentioned (with variations)
-            tool_variations = [
-                tool,
-                tool.replace("_", " "),
-                tool.replace("_chart", ""),
-                tool.replace("_", "-")
-            ]
-            if not any(variant in all_descriptions for variant in tool_variations):
-                missing_tools.append(tool)
+    is_valid, analysis_type, missing_tools = validate_analysis_plan(plan, steps)
+    
+    if analysis_type != AnalysisType.UNKNOWN:
+        logger.info(
+            f"[VALIDATION] Detected analysis type: {analysis_type.value} "
+            f"(title: '{plan.get('title', 'N/A')}')"
+        )
         
         if missing_tools:
             logger.warning(
-                f"[VALIDATION] Project analysis plan missing {len(missing_tools)} required tools: {', '.join(missing_tools)}"
+                f"[VALIDATION] {analysis_type.value.capitalize()} analysis plan missing {len(missing_tools)} required tools: {', '.join(missing_tools)}"
             )
             logger.warning(
                 f"[VALIDATION] Plan title: {plan.get('title', 'N/A')}, "
@@ -218,19 +182,23 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
                     current_desc = step.get("description", "")
                     if missing_tools:
                         missing_list = ", ".join(missing_tools)
+                        required_count = len(get_required_tools(analysis_type))
                         enhanced_desc = (
                             f"{current_desc}\n\n"
-                            f"⚠️ MISSING TOOLS DETECTED: You must also call these tools: {missing_list}. "
-                            f"Call ALL 11 tools: get_project, project_health, list_sprints, list_tasks, "
-                            f"velocity_chart, burndown_chart, sprint_report, cfd_chart, cycle_time_chart, "
-                            f"work_distribution_chart, issue_trend_chart."
+                            f"⚠️ MISSING TOOLS DETECTED: For {analysis_type.value} analysis, "
+                            f"you must also call these tools: {missing_list}. "
+                            f"Call ALL {required_count} required tools for {analysis_type.value} analysis."
                         )
                         step["description"] = enhanced_desc
                         logger.info(
                             f"[VALIDATION] Enhanced step '{step.get('title', 'N/A')}' description "
-                            f"with missing tools reminder"
+                            f"with missing tools reminder for {analysis_type.value} analysis"
                         )
                     break
+        else:
+            logger.info(
+                f"[VALIDATION] {analysis_type.value.capitalize()} analysis plan is complete - all required tools present"
+            )
 
     # ============================================================
     # SECTION 3: Enforce web search requirements
@@ -385,6 +353,9 @@ def planner_node(
                 "epic analysis", "epic progress", "epic status", "analyze epic",
                 # Task analysis
                 "task analysis", "task completion", "task progress", "task metrics",
+                # Resource analysis
+                "resource analysis", "resource allocation", "resource assignation", 
+                "workload analysis", "team workload", "resource utilization",
                 "task statistics", "task distribution",
                 # Team metrics
                 "team performance", "team velocity", "team metrics", "how is the team",
@@ -1018,6 +989,62 @@ def reporter_node(state: State, config: RunnableConfig):
         obs_preview = str(obs)[:200] if len(str(obs)) > 200 else str(obs)
         logger.debug(f"Observation {idx + 1}: {obs_preview}")
 
+    # 🔴 VALIDATION: Check if observations contain real data (not just errors)
+    has_real_data = False
+    error_only_observations = True
+    
+    for obs in observations:
+        obs_str = str(obs)
+        # Check if observation contains actual data (not just errors)
+        if obs_str and len(obs_str) > 50:  # Minimum length to be meaningful
+            # Check if it's not just an error message
+            if not (obs_str.startswith("[ERROR]") or 
+                    "Error" in obs_str[:100] or 
+                    "error" in obs_str[:100].lower() or
+                    "failed" in obs_str[:100].lower() or
+                    "rate limit" in obs_str.lower() or
+                    "token limit" in obs_str.lower()):
+                has_real_data = True
+                error_only_observations = False
+                break
+            # If it's an error but also has some data, that's still useful
+            if len(obs_str) > 200 and not obs_str.startswith("[ERROR]"):
+                has_real_data = True
+                error_only_observations = False
+    
+    # If no real data is available, add a warning to the reporter
+    if not has_real_data and len(observations) > 0:
+        logger.warning(
+            f"Reporter: No real data found in {len(observations)} observations. "
+            "All observations appear to be errors or empty. Adding warning to reporter."
+        )
+        invoke_messages.append(
+            HumanMessage(
+                content=(
+                    "🔴 CRITICAL WARNING: The observations provided contain only errors or are empty. "
+                    "You MUST NOT generate fake data. Instead, you MUST report that:\n"
+                    "1. The data collection failed\n"
+                    "2. No real data is available\n"
+                    "3. The report cannot be generated without actual data\n\n"
+                    "DO NOT create fake metrics, tables, statistics, or any data. "
+                    "State clearly that data is unavailable."
+                ),
+                name="system",
+            )
+        )
+    elif len(observations) == 0:
+        logger.warning("Reporter: No observations provided at all. Adding warning to reporter.")
+        invoke_messages.append(
+            HumanMessage(
+                content=(
+                    "🔴 CRITICAL WARNING: No observations were provided. "
+                    "You MUST report that no data was collected and the report cannot be generated. "
+                    "DO NOT create fake data."
+                ),
+                name="system",
+            )
+        )
+
     # Context compression
     llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP["reporter"])
     compressed_state = ContextManager(llm_token_limit).compress_messages(
@@ -1099,12 +1126,29 @@ async def _execute_agent_step(
     logger.debug(f"[_execute_agent_step] Completed steps so far: {len(completed_steps)}")
 
     # Format completed steps information
+    # Compress large execution results to prevent token overflow
     completed_steps_info = ""
     if completed_steps:
         completed_steps_info = "# Completed Research Steps\n\n"
         for i, step in enumerate(completed_steps):
+            # Compress execution result if it's too large (e.g., large task lists)
+            execution_res = step.execution_res
+            if execution_res and len(str(execution_res)) > 20000:
+                # Try to compress JSON arrays in the result
+                try:
+                    import json
+                    parsed = json.loads(str(execution_res))
+                    from src.utils.json_utils import _compress_large_array
+                    compressed = _compress_large_array(parsed, max_items=20)
+                    execution_res = json.dumps(compressed, ensure_ascii=False)
+                    logger.info(f"Compressed execution result for step '{step.title}' from {len(str(step.execution_res))} to {len(execution_res)} chars")
+                except (json.JSONDecodeError, TypeError):
+                    # Not JSON, just truncate
+                    execution_res = str(execution_res)[:20000] + f"\n\n... (truncated, original length: {len(str(step.execution_res))} chars) ..."
+                    logger.warning(f"Truncated non-JSON execution result for step '{step.title}'")
+            
             completed_steps_info += f"## Completed Step {i + 1}: {step.title}\n\n"
-            completed_steps_info += f"<finding>\n{step.execution_res}\n</finding>\n\n"
+            completed_steps_info += f"<finding>\n{execution_res}\n</finding>\n\n"
 
     # Prepare the input for the agent with completed steps info
     # Include project_id if available (for PM Agent)

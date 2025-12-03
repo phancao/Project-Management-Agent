@@ -14,7 +14,7 @@ import asyncio
 import json
 import re
 import sys
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 from urllib.parse import urljoin
 
 import httpx
@@ -166,8 +166,8 @@ def extract_section(text: str, section_title: str, alternatives: List[str]) -> T
 
 def check_section_title(report: str, section_key: str) -> Tuple[bool, str]:
     """Check if section title is correct."""
-    section_info = REQUIRED_SECTIONS[section_key]
-    all_titles = [section_key] + section_info["alternatives"]
+    section_info: Dict[str, Any] = REQUIRED_SECTIONS[section_key]
+    all_titles: List[str] = [section_key] + section_info["alternatives"]
     
     # Check for correct titles
     for title in all_titles:
@@ -338,9 +338,9 @@ async def call_chat_api(query: str) -> str:
     return report_content
 
 
-def validate_report(report: str) -> Dict:
+def validate_report(report: str) -> Dict[str, Any]:
     """Validate the report against all requirements."""
-    results = {
+    results: Dict[str, Any] = {
         "valid": True,
         "errors": [],
         "warnings": [],
@@ -353,40 +353,46 @@ def validate_report(report: str) -> Dict:
     print()
     
     # Check each required section
-    for section_key, section_info in REQUIRED_SECTIONS.items():
+    for section_key, section_info_raw in REQUIRED_SECTIONS.items():
+        section_info: Dict[str, Any] = section_info_raw
         print(f"Checking {section_key}...")
         
         # Check section title
         title_ok, title_msg = check_section_title(report, section_key)
         if not title_ok:
             results["valid"] = False
-            results["errors"].append(f"{section_key}: {title_msg}")
+            errors_list: List[str] = results["errors"]
+            errors_list.append(f"{section_key}: {title_msg}")
             print(f"  ❌ Title check failed: {title_msg}")
             continue
         else:
             print(f"  ✅ Title: {title_msg}")
         
         # Extract section content
-        section_content, word_count = extract_section(report, section_key, section_info["alternatives"])
+        alternatives: List[str] = section_info["alternatives"]
+        section_content, word_count = extract_section(report, section_key, alternatives)
         
         if not section_content:
             results["valid"] = False
-            results["errors"].append(f"{section_key}: Section content not found")
-            print(f"  ❌ Content not found")
+            errors_list = results["errors"]
+            errors_list.append(f"{section_key}: Section content not found")
+            print("  ❌ Content not found")
             continue
         
         # Check word count
-        min_words = section_info["min_words"]
-        max_words = section_info["max_words"]
+        min_words: int = section_info["min_words"]
+        max_words: int = section_info["max_words"]
         
         if word_count < min_words:
             results["valid"] = False
-            results["errors"].append(
+            errors_list = results["errors"]
+            errors_list.append(
                 f"{section_key}: Word count {word_count} is below minimum {min_words}"
             )
             print(f"  ❌ Word count: {word_count} (minimum: {min_words})")
         elif word_count > max_words:
-            results["warnings"].append(
+            warnings_list: List[str] = results["warnings"]
+            warnings_list.append(
                 f"{section_key}: Word count {word_count} exceeds maximum {max_words}"
             )
             print(f"  ⚠️  Word count: {word_count} (maximum: {max_words})")
@@ -394,18 +400,21 @@ def validate_report(report: str) -> Dict:
             print(f"  ✅ Word count: {word_count} (range: {min_words}-{max_words})")
         
         # Check required components
+        required_components: List[str] = section_info["required_components"]
         missing_components = check_required_components(
-            section_content, section_info["required_components"]
+            section_content, required_components
         )
         if missing_components:
-            results["warnings"].append(
+            warnings_list = results["warnings"]
+            warnings_list.append(
                 f"{section_key}: Missing components: {', '.join(missing_components)}"
             )
             print(f"  ⚠️  Missing components: {', '.join(missing_components)}")
         else:
-            print(f"  ✅ All required components present")
+            print("  ✅ All required components present")
         
-        results["sections"][section_key] = {
+        sections_dict: Dict[str, Any] = results["sections"]
+        sections_dict[section_key] = {
             "title_found": title_ok,
             "word_count": word_count,
             "missing_components": missing_components,
@@ -415,17 +424,18 @@ def validate_report(report: str) -> Dict:
     
     # Check for wrong titles
     print("Checking for wrong section titles...")
-    found_wrong = []
+    found_wrong: List[str] = []
     for wrong_title in WRONG_TITLES:
         if wrong_title.lower() in report.lower():
             found_wrong.append(wrong_title)
     
     if found_wrong:
         results["valid"] = False
-        results["errors"].append(f"Found wrong section titles: {', '.join(found_wrong)}")
+        errors_list = results["errors"]
+        errors_list.append(f"Found wrong section titles: {', '.join(found_wrong)}")
         print(f"  ❌ Found wrong titles: {', '.join(found_wrong)}")
     else:
-        print(f"  ✅ No wrong titles found")
+        print("  ✅ No wrong titles found")
     
     print()
     
@@ -489,7 +499,7 @@ async def main():
         # Save report to file
         with open("test_report_output.md", "w", encoding="utf-8") as f:
             f.write(report)
-        print(f"Report saved to test_report_output.md\n")
+        print("Report saved to test_report_output.md\n")
         
         # Validate report
         results = validate_report(report)
@@ -501,7 +511,7 @@ async def main():
         if not results["valid"]:
             sys.exit(1)
         
-    except Exception as e:
+    except (httpx.HTTPError, httpx.RequestError, ValueError, KeyError, IOError, json.JSONDecodeError) as e:
         print(f"❌ ERROR: {e}")
         import traceback
         traceback.print_exc()

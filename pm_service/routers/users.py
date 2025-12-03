@@ -27,9 +27,19 @@ async def list_users(
     
     The handler fetches ALL users from providers.
     This endpoint applies limit/offset for pagination.
+    
+    If permission errors occur, they are raised as HTTPException with 403 status
+    so the client can properly handle and display them to the user.
     """
     handler = PMHandler(db)
-    all_users = await handler.list_users(project_id=project_id)
+    try:
+        all_users = await handler.list_users(project_id=project_id)
+    except PermissionError as e:
+        # Convert PermissionError to HTTPException so it's properly returned to client
+        raise HTTPException(
+            status_code=403,
+            detail=str(e)
+        ) from e
     
     # Apply pagination
     total = len(all_users)

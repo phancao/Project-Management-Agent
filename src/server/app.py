@@ -395,13 +395,20 @@ def _process_tool_call_chunks(tool_call_chunks):
     return chunks
 
 
-def _get_agent_name(agent, message_metadata):
-    """Extract agent name from agent tuple."""
+def _get_agent_name(agent, message_metadata, message_chunk=None):
+    """Extract agent name from agent tuple, message metadata, or message name attribute."""
     agent_name = "unknown"
-    if agent and len(agent) > 0:
+    
+    # Priority 1: Check message.name attribute (most reliable for AIMessage with name="pm_agent")
+    if message_chunk and hasattr(message_chunk, 'name') and message_chunk.name:
+        agent_name = message_chunk.name
+    # Priority 2: Check agent tuple from LangGraph
+    elif agent and len(agent) > 0:
         agent_name = agent[0].split(":")[0] if ":" in agent[0] else agent[0]
+    # Priority 3: Check message metadata
     else:
         agent_name = message_metadata.get("langgraph_node", "unknown")
+    
     return agent_name
 
 
@@ -503,14 +510,14 @@ async def _process_message_chunk(
 ):
     """Process a single message chunk and yield appropriate events."""
 
-    agent_name = _get_agent_name(agent, message_metadata)
+    agent_name = _get_agent_name(agent, message_metadata, message_chunk)
     safe_agent_name = sanitize_agent_name(agent_name)
     safe_thread_id = sanitize_thread_id(thread_id)
     logger.debug(
         f"[{safe_thread_id}] _process_message_chunk started for "
         f"agent={safe_agent_name}"
     )
-    logger.debug(f"[{safe_thread_id}] Extracted agent_name: {safe_agent_name}")
+    logger.debug(f"[{safe_thread_id}] Extracted agent_name: {safe_agent_name} (from message.name={getattr(message_chunk, 'name', 'N/A')}, agent={agent}, metadata={message_metadata.get('langgraph_node', 'N/A')})")
     
     event_stream_message = _create_event_stream_message(
         message_chunk, message_metadata, thread_id, agent_name

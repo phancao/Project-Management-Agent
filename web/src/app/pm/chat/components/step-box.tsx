@@ -45,6 +45,9 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   
   // Task tools
   list_tasks: <ListTodo size={12} />,
+  list_tasks_by_assignee: <ListTodo size={12} />,
+  list_tasks_in_sprint: <ListTodo size={12} />,
+  list_unassigned_tasks: <ListTodo size={12} />,
   get_task: <ListTodo size={12} />,
   create_task: <ListTodo size={12} />,
   update_task: <ListTodo size={12} />,
@@ -55,6 +58,10 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   sprint_report: <BarChart3 size={12} />,
   burndown_chart: <BarChart3 size={12} />,
   velocity_chart: <BarChart3 size={12} />,
+  cfd_chart: <BarChart3 size={12} />,
+  cycle_time_chart: <BarChart3 size={12} />,
+  work_distribution_chart: <BarChart3 size={12} />,
+  issue_trend_chart: <BarChart3 size={12} />,
   
   // User tools
   list_users: <Users size={12} />,
@@ -72,6 +79,9 @@ function getToolDisplayName(toolName: string): string {
     create_project: "Create Project",
     project_health: "Project Health",
     list_tasks: "List Tasks",
+    list_tasks_by_assignee: "List Tasks by Assignee",
+    list_tasks_in_sprint: "List Tasks in Sprint",
+    list_unassigned_tasks: "List Unassigned Tasks",
     get_task: "Get Task",
     create_task: "Create Task",
     update_task: "Update Task",
@@ -80,6 +90,10 @@ function getToolDisplayName(toolName: string): string {
     sprint_report: "Sprint Report",
     burndown_chart: "Burndown Chart",
     velocity_chart: "Velocity Chart",
+    cfd_chart: "CFD Chart",
+    cycle_time_chart: "Cycle Time Chart",
+    work_distribution_chart: "Work Distribution Chart",
+    issue_trend_chart: "Issue Trend Chart",
     list_users: "List Users",
     get_user: "Get User",
     web_search: "Web Search",
@@ -89,12 +103,54 @@ function getToolDisplayName(toolName: string): string {
   return nameMap[toolName] || toolName.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// Get friendly name and color for agent
+function getAgentDisplayInfo(agent?: string): { name: string; color: string; bgColor: string } {
+  const agentMap: Record<string, { name: string; color: string; bgColor: string }> = {
+    pm_agent: { 
+      name: "PM Agent", 
+      color: "text-blue-600 dark:text-blue-400", 
+      bgColor: "bg-blue-100 dark:bg-blue-900/30" 
+    },
+    researcher: { 
+      name: "Researcher", 
+      color: "text-purple-600 dark:text-purple-400", 
+      bgColor: "bg-purple-100 dark:bg-purple-900/30" 
+    },
+    coder: { 
+      name: "Coder", 
+      color: "text-green-600 dark:text-green-400", 
+      bgColor: "bg-green-100 dark:bg-green-900/30" 
+    },
+    planner: { 
+      name: "Planner", 
+      color: "text-orange-600 dark:text-orange-400", 
+      bgColor: "bg-orange-100 dark:bg-orange-900/30" 
+    },
+    reporter: { 
+      name: "Reporter", 
+      color: "text-amber-600 dark:text-amber-400", 
+      bgColor: "bg-amber-100 dark:bg-amber-900/30" 
+    },
+  };
+  
+  if (agent && agent in agentMap) {
+    return agentMap[agent]!;
+  }
+  
+  // Default for unknown agents
+  return { 
+    name: agent ? agent.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Agent", 
+    color: "text-gray-600 dark:text-gray-400", 
+    bgColor: "bg-gray-100 dark:bg-gray-900/30" 
+  };
+}
+
 // Parse result to get summary
 function getResultSummary(toolName: string, result: string | undefined): string {
   if (!result) return "Running...";
   
   try {
-    const parsed = parseJSON(result, null);
+    const parsed = parseJSON<unknown>(result, null);
     
     if (parsed === null) {
       // Plain text result
@@ -109,36 +165,40 @@ function getResultSummary(toolName: string, result: string | undefined): string 
       return `Found ${parsed.length} item${parsed.length !== 1 ? "s" : ""}`;
     }
     
-    if (parsed.total !== undefined) {
-      return `Found ${parsed.total} item${parsed.total !== 1 ? "s" : ""}`;
-    }
-    
-    if (parsed.sprints) {
-      return `Found ${parsed.sprints.length} sprint${parsed.sprints.length !== 1 ? "s" : ""}`;
-    }
-    
-    if (parsed.tasks) {
-      return `Found ${parsed.tasks.length} task${parsed.tasks.length !== 1 ? "s" : ""}`;
-    }
-    
-    if (parsed.projects) {
-      return `Found ${parsed.projects.length} project${parsed.projects.length !== 1 ? "s" : ""}`;
-    }
-    
-    if (parsed.name) {
-      return parsed.name;
-    }
-    
-    if (parsed.title) {
-      return parsed.title;
-    }
-    
-    if (parsed.message) {
-      return parsed.message;
-    }
-    
-    if (parsed.error) {
-      return `Error: ${parsed.error}`;
+    if (typeof parsed === "object" && parsed !== null) {
+      const obj = parsed as Record<string, unknown>;
+      
+      if (typeof obj.total === "number") {
+        return `Found ${obj.total} item${obj.total !== 1 ? "s" : ""}`;
+      }
+      
+      if (Array.isArray(obj.sprints)) {
+        return `Found ${obj.sprints.length} sprint${obj.sprints.length !== 1 ? "s" : ""}`;
+      }
+      
+      if (Array.isArray(obj.tasks)) {
+        return `Found ${obj.tasks.length} task${obj.tasks.length !== 1 ? "s" : ""}`;
+      }
+      
+      if (Array.isArray(obj.projects)) {
+        return `Found ${obj.projects.length} project${obj.projects.length !== 1 ? "s" : ""}`;
+      }
+      
+      if (typeof obj.name === "string") {
+        return obj.name;
+      }
+      
+      if (typeof obj.title === "string") {
+        return obj.title;
+      }
+      
+      if (typeof obj.message === "string") {
+        return obj.message;
+      }
+      
+      if (typeof obj.error === "string") {
+        return `Error: ${obj.error}`;
+      }
     }
     
     return "Completed";
@@ -153,6 +213,7 @@ interface StepBoxProps {
   totalSteps?: number;
   className?: string;
   defaultExpanded?: boolean;
+  agent?: string;
 }
 
 export function StepBox({ 
@@ -160,7 +221,8 @@ export function StepBox({
   stepNumber, 
   totalSteps,
   className,
-  defaultExpanded = false 
+  defaultExpanded = false,
+  agent
 }: StepBoxProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const { resolvedTheme } = useTheme();
@@ -172,6 +234,7 @@ export function StepBox({
   const icon = TOOL_ICONS[toolCall.name] || TOOL_ICONS.default;
   const displayName = getToolDisplayName(toolCall.name);
   const summary = getResultSummary(toolCall.name, toolCall.result);
+  const agentInfo = getAgentDisplayInfo(agent);
   
   // Parse args for display
   const argsDisplay = useMemo(() => {
@@ -203,7 +266,7 @@ export function StepBox({
           onClick={() => setIsExpanded(!isExpanded)}
         >
           {/* Status icon */}
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             {isRunning ? (
               <Loader2 size={12} className="animate-spin text-blue-500" />
             ) : hasError ? (
@@ -214,7 +277,7 @@ export function StepBox({
           </div>
           
           {/* Tool icon and name */}
-          <div className="flex items-center gap-1 flex-shrink-0 text-muted-foreground">
+          <div className="flex items-center gap-1 shrink-0 text-muted-foreground">
             {icon}
             <span className="font-medium text-xs">{displayName}</span>
           </div>
@@ -226,13 +289,24 @@ export function StepBox({
             </span>
           )}
           
+          {/* Agent badge */}
+          {agent && (
+            <span className={cn(
+              "text-[10px] px-1.5 py-px rounded-full font-medium",
+              agentInfo.color,
+              agentInfo.bgColor
+            )}>
+              {agentInfo.name}
+            </span>
+          )}
+          
           {/* Summary */}
-          <span className="flex-grow text-xs text-muted-foreground truncate">
+          <span className="grow text-xs text-muted-foreground truncate">
             {summary}
           </span>
           
           {/* Expand icon */}
-          <div className="flex-shrink-0 text-muted-foreground">
+          <div className="shrink-0 text-muted-foreground">
             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </div>
         </button>

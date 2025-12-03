@@ -83,7 +83,7 @@ export default function Main() {
       >
         <MessagesBlock className="h-full" />
       </div>
-
+      
       {/* Resize Handle */}
       <div
         className={`

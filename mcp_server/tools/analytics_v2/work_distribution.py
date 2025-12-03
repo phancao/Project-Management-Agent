@@ -28,7 +28,7 @@ from ..decorators import mcp_tool, require_project, default_value
                 "type": "string",
                 "description": "Optional sprint ID to filter by"
             },
-            "group_by": {
+            "dimension": {
                 "type": "string",
                 "description": "Dimension to group by: 'assignee', 'status', 'priority', or 'type'",
                 "enum": ["assignee", "status", "priority", "type"]
@@ -55,12 +55,12 @@ class WorkDistributionChartTool(AnalyticsTool):
     """
     
     @require_project
-    @default_value("group_by", "assignee")
+    @default_value("dimension", "assignee")
     async def execute(
         self,
         project_id: str,
         sprint_id: Optional[str] = None,
-        group_by: str = "assignee"
+        dimension: str = "assignee"
     ) -> dict[str, Any]:
         """
         Generate work distribution analysis.
@@ -68,7 +68,7 @@ class WorkDistributionChartTool(AnalyticsTool):
         Args:
             project_id: Project ID (format: "provider_uuid:project_key")
             sprint_id: Optional sprint ID to filter by
-            group_by: Dimension to group by (assignee, status, priority, type)
+            dimension: Dimension to group by (assignee, status, priority, type)
         
         Returns:
             Work distribution data with:
@@ -81,7 +81,7 @@ class WorkDistributionChartTool(AnalyticsTool):
         result = await self.context.analytics_manager.get_work_distribution_chart(
             project_id=project_id,
             sprint_id=sprint_id,
-            group_by=group_by
+            group_by=dimension  # Analytics manager uses group_by internally
         )
         
         return result

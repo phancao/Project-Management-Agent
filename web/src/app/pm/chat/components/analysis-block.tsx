@@ -73,8 +73,15 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
   }, [planMessage?.content]);
   
   // Collect all tool calls from activities - now reactive to messages changes
+  // Also track which agent each tool call came from
   const toolCalls = useMemo(() => {
-    const calls: Array<{ id: string; name: string; args: Record<string, unknown>; result?: string }> = [];
+    const calls: Array<{ 
+      id: string; 
+      name: string; 
+      args: Record<string, unknown>; 
+      result?: string;
+      agent?: string;
+    }> = [];
     
     for (const activityId of activityIds) {
       const message = messages.get(activityId);
@@ -84,7 +91,10 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
           if (typeof tc.result === "string" && tc.result.startsWith("Error")) {
             continue;
           }
-          calls.push(tc);
+          calls.push({
+            ...tc,
+            agent: message.agent, // Include agent info
+          });
         }
       }
     }
@@ -249,6 +259,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                           toolCall={toolCall}
                           stepNumber={index + 1}
                           totalSteps={ongoing ? undefined : toolCalls.length}
+                          agent={toolCall.agent}
                         />
                       ))}
                     </div>

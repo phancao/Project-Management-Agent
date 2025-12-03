@@ -1332,9 +1332,10 @@ async def _execute_agent_step(
                     if tool_name != "unknown_tool":
                         break
             
-            # Include tool result in execution result
-            tool_results.append(f"### Tool: {tool_name}\n\n{tool_content}")
-            tool_calls_info.append(f"{tool_name}: {len(tool_content)} chars")
+            # Sanitize each tool result individually before combining to prevent token overflow
+            sanitized_tool_content = sanitize_tool_response(str(tool_content))
+            tool_results.append(f"### Tool: {tool_name}\n\n{sanitized_tool_content}")
+            tool_calls_info.append(f"{tool_name}: {len(tool_content)}→{len(sanitized_tool_content)} chars")
         
         elif msg_type == "AIMessage":
             if hasattr(msg, 'tool_calls') and msg.tool_calls:
@@ -1352,7 +1353,7 @@ async def _execute_agent_step(
     else:
         combined_result = response_content
     
-    # Sanitize response to remove extra tokens and truncate if needed
+    # Final sanitization pass on combined result to ensure it's within limits
     combined_result = sanitize_tool_response(str(combined_result))
     
     logger.debug(f"{agent_name.capitalize()} full response: {combined_result[:500]}...")

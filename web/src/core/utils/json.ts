@@ -123,7 +123,7 @@ function tryParseJSON<T>(raw: string): T | null {
       // Re-throw to be caught by outer catch
       throw parseError;
     }
-  } catch (error: unknown) {
+  } catch {
     // If all parsing strategies failed, return null
     // The error will be handled by the caller's fallback
     return null;
@@ -136,7 +136,7 @@ export function parseJSON<T>(json: string | null | undefined, fallback: T) {
   }
   
   try {
-    let raw = json
+    const raw = json
       .trim()
       .replace(/^```json\s*/, "")
       .replace(/^```js\s*/, "")

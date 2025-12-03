@@ -492,7 +492,7 @@ function SprintSection({
     data: { type: 'sprint', sprintId: sprint.id }
   });
 
-  const taskIds = useMemo(() => tasks.map(t => `task-${t.id}`), [tasks]);
+  const taskIds = useMemo(() => tasks.map((t: Task) => `task-${t.id}`), [tasks]);
   
   return (
     <div className={`mb-4 ${isSorting ? "opacity-80" : ""}`}>
@@ -634,7 +634,7 @@ function BacklogSection({
     data: { type: 'backlog' }
   });
 
-  const taskIds = useMemo(() => tasks.map(t => `task-${t.id}`), [tasks]);
+  const taskIds = useMemo(() => tasks.map((t: Task) => `task-${t.id}`), [tasks]);
   
   return (
     <div className="mb-4">
@@ -905,13 +905,13 @@ export function BacklogView() {
   const defaultStatusValue = useMemo(() => {
     if (availableStatuses.length === 0) return "todo";
     const todo = availableStatuses.find(status => status.value === "todo");
-    return todo?.value ?? availableStatuses[0].value;
+    return todo?.value ?? availableStatuses[0]?.value ?? "todo";
   }, [availableStatuses]);
 
   const defaultPriorityValue = useMemo(() => {
     if (availablePriorities.length === 0) return "medium";
     const medium = availablePriorities.find(priority => priority.value === "medium");
-    return medium?.value ?? availablePriorities[0].value;
+    return medium?.value ?? availablePriorities[0]?.value ?? "medium";
   }, [availablePriorities]);
 
   const resetCreateTaskState = useCallback(() => {
@@ -974,8 +974,8 @@ export function BacklogView() {
         body: JSON.stringify({
           title: trimmedTitle,
           description: createTaskForm.description,
-          priority: createTaskForm.priority || undefined,
-          status: createTaskForm.status || undefined,
+          priority: createTaskForm.priority ?? undefined,
+          status: createTaskForm.status ?? undefined,
           sprint_id: createTaskSprintId,
         }),
       });
@@ -1033,24 +1033,24 @@ export function BacklogView() {
     
     let filtered = [...tasks];
 
-    const trimmedQuery = (searchQuery || "").trim();
+    const trimmedQuery = (searchQuery ?? "").trim();
     if (trimmedQuery) {
       const query = trimmedQuery.toLowerCase();
       filtered = filtered.filter(t => {
-        const title = (t.title || "").toLowerCase();
-        const description = (t.description || "").toLowerCase();
+        const title = (t.title ?? "").toLowerCase();
+        const description = (t.description ?? "").toLowerCase();
         return title.includes(query) || description.includes(query);
       });
     }
 
     if (statusFilter && statusFilter !== "all") {
       const filterStatusLower = statusFilter.toLowerCase();
-      filtered = filtered.filter(t => (t.status || "").toLowerCase() === filterStatusLower);
+      filtered = filtered.filter(t => (t.status ?? "").toLowerCase() === filterStatusLower);
     }
 
     if (priorityFilter && priorityFilter !== "all") {
       const filterPriorityLower = priorityFilter.toLowerCase();
-      filtered = filtered.filter(t => (t.priority || "").toLowerCase() === filterPriorityLower);
+      filtered = filtered.filter(t => (t.priority ?? "").toLowerCase() === filterPriorityLower);
     }
 
     return filtered;

@@ -23,18 +23,18 @@ export function WorkDistributionView() {
   const distributionData = chartData?.series[0]?.data.map((point) => ({
     name: point.label || "Unknown",
     value: point.value,
-    storyPoints: point.metadata?.story_points || 0,
-    percentage: point.metadata?.percentage || 0,
-    pointsPercentage: point.metadata?.points_percentage || 0,
-    completed: point.metadata?.completed || 0,
-    inProgress: point.metadata?.in_progress || 0,
-    todo: point.metadata?.todo || 0,
+    storyPoints: point.metadata?.story_points ?? 0,
+    percentage: point.metadata?.percentage ?? 0,
+    pointsPercentage: point.metadata?.points_percentage ?? 0,
+    completed: point.metadata?.completed ?? 0,
+    inProgress: point.metadata?.in_progress ?? 0,
+    todo: point.metadata?.todo ?? 0,
     color: point.metadata?.color || "#3b82f6",
   })) || [];
 
   const metadata = chartData?.metadata || {};
-  const totalItems = metadata.total_items || 0;
-  const totalPoints = metadata.total_story_points || 0;
+  const totalItems = metadata.total_items ?? 0;
+  const totalPoints = metadata.total_story_points ?? 0;
   const insights = metadata.insights || [];
 
   if (loading) {

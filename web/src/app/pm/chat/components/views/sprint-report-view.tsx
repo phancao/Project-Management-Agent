@@ -28,7 +28,7 @@ export function SprintReportView() {
   const sortedSprints = useMemo(() => {
     if (!sprints) return [];
 
-    const normalizeStatus = (status?: string) => (status || "").toLowerCase();
+    const normalizeStatus = (status?: string) => (status ?? "").toLowerCase();
     const statusPriority = (status?: string) => {
       const value = normalizeStatus(status);
       if (["active", "in_progress", "ongoing"].includes(value)) return 0;
@@ -68,7 +68,7 @@ export function SprintReportView() {
       if (sprintParam && sortedSprints.some((s) => s.id === sprintParam)) {
         return sprintParam;
       }
-      return sortedSprints[0].id;
+      return sortedSprints[0]?.id ?? "";
     });
   }, [sortedSprints, sprintParam]);
   
@@ -168,7 +168,7 @@ export function SprintReportView() {
             </SelectTrigger>
             <SelectContent className="min-w-[20rem] max-w-xl">
               {sortedSprints.map((sprint) => {
-                const normalizedStatus = (sprint.status || "").toLowerCase();
+                const normalizedStatus = (sprint.status ?? "").toLowerCase();
                 const statusLabel =
                   normalizedStatus === "active"
                     ? "Active"

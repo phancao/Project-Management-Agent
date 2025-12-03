@@ -334,7 +334,7 @@ export function SprintBoardView() {
   const { priorities: backendPriorities } = usePriorities(activeProjectId ?? undefined);
   const { epics } = useEpics(activeProjectId ?? undefined);
   // Use projectIdForTasks for sprints to match tasks (ensures same cache key)
-  const { sprints } = useSprints(projectIdForTasks || "");
+  const { sprints } = useSprints(projectIdForTasks ?? "");
   const {
     statuses: availableStatuses,
     loading: statusesLoading,
@@ -639,10 +639,10 @@ export function SprintBoardView() {
     let result = [...tasks];
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase();
-      result = result.filter((task) => (task.title || "").toLowerCase().includes(query));
+      result = result.filter((task) => (task.title ?? "").toLowerCase().includes(query));
     }
     if (priorityFilter !== "all") {
-      result = result.filter((task) => (task.priority || "").toLowerCase() === priorityFilter);
+      result = result.filter((task) => (task.priority ?? "").toLowerCase() === priorityFilter);
     }
     if (epicFilter && epicFilter !== "all") {
       if (epicFilter === "none") result = result.filter((task) => !task.epic_id);

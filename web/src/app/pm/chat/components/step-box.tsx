@@ -100,7 +100,7 @@ function getToolDisplayName(toolName: string): string {
     crawl_tool: "Read Page",
     python_repl_tool: "Run Python",
   };
-  return nameMap[toolName] || toolName.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  return nameMap[toolName] ?? toolName.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // Get friendly name and color for agent
@@ -231,7 +231,7 @@ export function StepBox({
   const hasError = toolCall.result?.startsWith("Error") || 
                    toolCall.result?.includes('"error"');
   
-  const icon = TOOL_ICONS[toolCall.name] || TOOL_ICONS.default;
+  const icon = TOOL_ICONS[toolCall.name] ?? TOOL_ICONS.default;
   const displayName = getToolDisplayName(toolCall.name);
   const summary = getResultSummary(toolCall.name, toolCall.result);
   const agentInfo = getAgentDisplayInfo(agent);
@@ -239,7 +239,7 @@ export function StepBox({
   // Parse args for display
   const argsDisplay = useMemo(() => {
     if (!toolCall.args) return null;
-    const args = toolCall.args as Record<string, unknown>;
+    const args = toolCall.args;
     const entries = Object.entries(args).filter(([_, v]) => v !== undefined && v !== null);
     if (entries.length === 0) return null;
     return entries.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ");

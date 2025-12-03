@@ -146,7 +146,7 @@ export function ProviderManagementView() {
       base_url: provider.base_url,
       api_key: "", // Don't pre-fill for security
       api_token: "", // Don't pre-fill for security
-      username: provider.username || "",
+      username: provider.username ?? "",
       organization_id: provider.organization_id,
       workspace_id: provider.workspace_id,
     });
@@ -337,7 +337,7 @@ export function ProviderManagementView() {
           );
           setProjects((prev) => ({
             ...prev,
-            [response.provider_config_id || ""]: {
+            [response.provider_config_id ?? ""]: {
               projects: response.projects,
               loading: false,
             },
@@ -538,11 +538,11 @@ export function ProviderManagementView() {
                             </p>
                           </div>
                         </div>
-                      ) : (providerProjects?.projects?.length || 0) > 0 ? (
+                      ) : (providerProjects?.projects?.length ?? 0) > 0 ? (
                         <div className="space-y-2">
                           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                             Projects (
-                            {providerProjects?.projects?.length || 0}):
+                            {providerProjects?.projects?.length ?? 0}):
                           </p>
                           <div className="space-y-1">
                             {providerProjects?.projects?.slice(0, 3).map((project) => {

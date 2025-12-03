@@ -20,17 +20,17 @@ export function VelocityView() {
     return {
       sprint: point.label || `Sprint ${index + 1}`,
       committed: point.value,
-      completed: completedPoint?.value || 0,
+      completed: completedPoint?.value ?? 0,
     };
   }) || [];
 
   // Extract metadata
   const metadata = chartData?.metadata || {};
-  const averageVelocity = metadata.average_velocity || 0;
-  const medianVelocity = metadata.median_velocity || 0;
-  const latestVelocity = metadata.latest_velocity || 0;
+  const averageVelocity = metadata.average_velocity ?? 0;
+  const medianVelocity = metadata.median_velocity ?? 0;
+  const latestVelocity = metadata.latest_velocity ?? 0;
   const trend = metadata.trend || "stable";
-  const predictabilityScore = metadata.predictability_score || 0;
+  const predictabilityScore = metadata.predictability_score ?? 0;
 
   if (loading) {
     return (

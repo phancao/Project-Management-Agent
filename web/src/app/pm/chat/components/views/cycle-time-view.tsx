@@ -49,12 +49,12 @@ export function CycleTimeView() {
 
   // Extract metadata
   const metadata = chartData?.metadata || {};
-  const avgCycleTime = metadata.avg_cycle_time || 0;
-  const medianCycleTime = metadata.median_cycle_time || 0;
-  const p50 = metadata.percentile_50 || 0;
-  const p85 = metadata.percentile_85 || 0;
-  const p95 = metadata.percentile_95 || 0;
-  const totalItems = metadata.total_items || 0;
+  const avgCycleTime = metadata.avg_cycle_time ?? 0;
+  const medianCycleTime = metadata.median_cycle_time ?? 0;
+  const p50 = metadata.percentile_50 ?? 0;
+  const p85 = metadata.percentile_85 ?? 0;
+  const p95 = metadata.percentile_95 ?? 0;
+  const totalItems = metadata.total_items ?? 0;
   const outliers = metadata.outliers || [];
   const insights = metadata.insights || [];
 

@@ -31,10 +31,10 @@ export function mergeMessage(message: Message, event: ChatEvent) {
     if (message.toolCalls) {
       message.toolCalls.forEach((toolCall) => {
         if (toolCall.argsChunks?.length) {
-          const argsString = toolCall.argsChunks.join("");
+          const argsString = toolCall.argsChunks?.join("") ?? "";
           try {
             toolCall.args = JSON.parse(argsString);
-          } catch (e) {
+          } catch {
             // Try to extract valid JSON if there are extra characters
             try {
               // Find the first { or [ and the matching closing bracket

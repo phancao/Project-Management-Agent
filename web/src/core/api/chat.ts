@@ -19,7 +19,7 @@ import type { ChatEvent } from "./types";
 function buildConversationHistory(
   messages: Map<string, Message>,
   messageIds: string[],
-  maxMessages: number = 20
+  maxMessages = 20
 ): Array<{ role: string; content: string }> {
   const history: Array<{ role: string; content: string }> = [];
   

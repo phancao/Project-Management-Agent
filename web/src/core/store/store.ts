@@ -20,7 +20,7 @@ import { getChatStreamSettings } from "./settings-store";
 function buildConversationHistory(
   messages: Map<string, Message>,
   messageIds: string[],
-  maxMessages: number = 20
+  maxMessages = 20
 ): Array<{ role: string; content: string }> {
   const history: Array<{ role: string; content: string }> = [];
   
@@ -32,9 +32,9 @@ function buildConversationHistory(
     if (!msg) continue;
     
     // Only include user and assistant messages with actual content
-    if (msg.role === "user" && msg.content && msg.content.trim()) {
+    if (msg.role === "user" && msg.content?.trim()) {
       history.push({ role: "user", content: msg.content });
-    } else if (msg.role === "assistant" && msg.content && msg.content.trim()) {
+    } else if (msg.role === "assistant" && msg.content?.trim()) {
       // Include assistant responses (reporter, coordinator, etc.)
       // Truncate very long responses to save tokens
       const content = msg.content.length > 2000 
@@ -238,9 +238,7 @@ export async function sendMessage(
       message ??= getMessage(messageId);
       if (message) {
         const previousIsStreaming = message.isStreaming;
-        const previousContentLength = message.content?.length ?? 0;
         message = mergeMessage(message, event);
-        const newContentLength = message.content?.length ?? 0;
         
         // If finish_reason is present, apply update immediately to ensure UI updates quickly
         // This is especially important for reporter messages to show the final report

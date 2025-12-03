@@ -141,7 +141,7 @@ export const ColorSelector = ({ open, onOpenChange }: ColorSelectorProps) => {
                   editor
                     .chain()
                     .focus()
-                    .setColor(color || "")
+                    .setColor(color ?? "")
                     .run();
                 onOpenChange(false);
               }}

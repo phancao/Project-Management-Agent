@@ -88,6 +88,10 @@ class ChatRequest(BaseModel):
         None,
         description="Model name to use (e.g., 'gpt-4o', 'claude-3-5-sonnet-20241022'). Overrides default model selection.",
     )
+    search_provider: Optional[str] = Field(
+        None,
+        description="Search provider ID to use (e.g., 'duckduckgo', 'tavily', 'brave_search'). Overrides default search provider selection.",
+    )
 
 
 class TTSRequest(BaseModel):

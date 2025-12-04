@@ -14,7 +14,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
-from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage, HumanMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.checkpoint.mongodb import AsyncMongoDBSaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.store.memory import InMemoryStore
@@ -54,6 +54,10 @@ from src.server.config_request import ConfigResponse
 from src.server.ai_provider_request import (
     AIProviderAPIKeyRequest,
     AIProviderAPIKeyResponse,
+)
+from src.server.search_provider_request import (
+    SearchProviderAPIKeyRequest,
+    SearchProviderAPIKeyResponse,
 )
 from src.server.mcp_request import (
     MCPServerMetadataRequest,
@@ -983,25 +987,10 @@ async def _stream_graph_events(
                         # in the "messages" stream. Streaming here would create
                         # a duplicate message with a different ID, causing the
                         # frontend to not recognize the finish_reason properly.
-                        # Stream messages from state updates
-                        # For reporter, we stream errors from state updates (success messages come from "messages" stream)
-                        if "messages" in node_update:
+                        # Only stream non-reporter messages from state updates.
+                        if "messages" in node_update and node_name != "reporter":
                             messages = node_update.get("messages", [])
                             if messages:
-                                # For reporter, only stream if it's an error (has error in metadata)
-                                if node_name == "reporter":
-                                    # Check if any message has error metadata
-                                    has_error = any(
-                                        hasattr(msg, 'response_metadata') and 
-                                        msg.response_metadata and 
-                                        msg.response_metadata.get('finish_reason') == 'error'
-                                        for msg in messages
-                                    )
-                                    if not has_error:
-                                        # Reporter success messages come from "messages" stream, skip here
-                                        continue
-                                
-                                # For non-reporter nodes, always stream
                                 # Get the latest message
                                 import sys
                                 sys.stderr.write(f"\n🔍 CHECKING MESSAGES: node_name='{node_name}', messages_count={len(messages)}\n")
@@ -1030,22 +1019,14 @@ async def _stream_graph_events(
                                             (node_name,),
                                         ):
                                             yield event
-                                    # Process AIMessage and HumanMessage - yield message_chunk events
-                                    elif isinstance(msg, (AIMessage, HumanMessage)):
-                                        logger.info(
-                                            f"[{safe_thread_id}] 📨 Processing {type(msg).__name__} from updates stream: "
-                                            f"name={getattr(msg, 'name', 'N/A')}"
-                                        )
-                                        msg_metadata = {
-                                            "langgraph_node": node_name,
-                                        }
-                                        async for event in _process_message_chunk(
-                                            msg,
-                                            msg_metadata,
-                                            thread_id,
-                                            (node_name,),
-                                        ):
-                                            yield event
+                                    # Process AIMessages
+                                    elif (
+                                        isinstance(msg, AIMessage)
+                                        and msg.name == node_name
+                                    ):
+                                        import sys
+                                        sys.stderr.write(f"\n✨ STREAMING MESSAGE: node_name='{node_name}', content_len={len(msg.content)}\n")
+                                        sys.stderr.flush()
                                         
                                         logger.debug(
                                             f"[{safe_thread_id}] "
@@ -3514,14 +3495,17 @@ async def list_ai_providers():
         from database.connection import get_db_session
         from database.orm_models import AIProviderAPIKey
         
+        logger.info("[list_ai_providers] Starting to fetch AI providers from database")
         db_gen = get_db_session()
         db = next(db_gen)
         
         try:
+            logger.debug("[list_ai_providers] Database session obtained, querying providers")
             providers = db.query(AIProviderAPIKey).filter(
                 AIProviderAPIKey.is_active.is_(True)
             ).all()
             
+            logger.info(f"[list_ai_providers] Found {len(providers)} active AI providers")
             result = []
             for p in providers:
                 # Mask API key - show only last 4 characters
@@ -3547,12 +3531,16 @@ async def list_ai_providers():
                     updated_at=p.updated_at.isoformat() if p.updated_at else "",
                 ))
             
+            logger.info(f"[list_ai_providers] Returning {len(result)} providers")
             return result
         finally:
             db.close()
+            logger.debug("[list_ai_providers] Database session closed")
     except Exception as e:
-        logger.error(f"Failed to list AI providers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(f"Failed to list AI providers: {e}\n{error_trace}")
+        raise HTTPException(status_code=500, detail=f"Failed to list AI providers: {str(e)}")
 
 
 @app.post("/api/ai/providers", response_model=AIProviderAPIKeyResponse)
@@ -3659,6 +3647,341 @@ async def delete_ai_provider(provider_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to delete AI provider: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Search Provider Endpoints
+# ============================================================================
+
+@app.get("/api/search/providers", response_model=List[SearchProviderAPIKeyResponse])
+async def list_search_providers():
+    """List all configured search provider API keys"""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import SearchProviderAPIKey
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            providers = db.query(SearchProviderAPIKey).filter(
+                SearchProviderAPIKey.is_active.is_(True)
+            ).all()
+            
+            result = []
+            for p in providers:
+                # Mask API key - show only last 4 characters
+                masked_key = None
+                api_key_str = str(p.api_key) if p.api_key else None
+                has_key = bool(api_key_str)
+                if api_key_str and len(api_key_str) > 4:
+                    masked_key = f"****{api_key_str[-4:]}"
+                elif api_key_str:
+                    masked_key = "****"
+                
+                result.append(SearchProviderAPIKeyResponse(
+                    id=str(p.id),
+                    provider_id=str(p.provider_id),
+                    provider_name=str(p.provider_name),
+                    api_key=masked_key,
+                    base_url=str(p.base_url) if p.base_url else None,
+                    additional_config=p.additional_config if p.additional_config else None,
+                    is_active=bool(p.is_active),
+                    is_default=bool(p.is_default),
+                    has_api_key=has_key,
+                    created_at=p.created_at.isoformat() if p.created_at else "",
+                    updated_at=p.updated_at.isoformat() if p.updated_at else "",
+                ))
+            
+            return result
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to list search providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/search/providers", response_model=SearchProviderAPIKeyResponse)
+async def save_search_provider(request: SearchProviderAPIKeyRequest):
+    """Save or update a search provider API key"""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import SearchProviderAPIKey
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # If setting as default, unset other defaults first
+            if request.is_default:
+                db.query(SearchProviderAPIKey).filter(
+                    SearchProviderAPIKey.is_default.is_(True)
+                ).update({"is_default": False})
+                db.commit()
+            
+            # Check if provider already exists
+            existing = db.query(SearchProviderAPIKey).filter(
+                SearchProviderAPIKey.provider_id == request.provider_id
+            ).first()
+            
+            if existing:
+                # Update existing
+                existing.provider_name = request.provider_name  # type: ignore[assignment]
+                if request.api_key:
+                    existing.api_key = request.api_key  # type: ignore[assignment]
+                existing.base_url = request.base_url  # type: ignore[assignment]
+                existing.additional_config = request.additional_config  # type: ignore[assignment]
+                existing.is_active = request.is_active  # type: ignore[assignment]
+                existing.is_default = request.is_default  # type: ignore[assignment]
+                existing.updated_at = datetime.utcnow()  # type: ignore[assignment]
+                db.commit()
+                db.refresh(existing)
+                provider = existing
+            else:
+                # Create new
+                provider = SearchProviderAPIKey(
+                    provider_id=request.provider_id,
+                    provider_name=request.provider_name,
+                    api_key=request.api_key,
+                    base_url=request.base_url,
+                    additional_config=request.additional_config,
+                    is_active=request.is_active,
+                    is_default=request.is_default,
+                )
+                db.add(provider)
+                db.commit()
+                db.refresh(provider)
+            
+            # Mask API key for response
+            masked_key = None
+            api_key_str = str(provider.api_key) if provider.api_key else None
+            has_key = bool(api_key_str)
+            if api_key_str and len(api_key_str) > 4:
+                masked_key = f"****{api_key_str[-4:]}"
+            elif api_key_str:
+                masked_key = "****"
+            
+            return SearchProviderAPIKeyResponse(
+                id=str(provider.id),
+                provider_id=str(provider.provider_id),
+                provider_name=str(provider.provider_name),
+                api_key=masked_key,
+                base_url=str(provider.base_url) if provider.base_url else None,
+                additional_config=provider.additional_config if provider.additional_config else None,
+                is_active=bool(provider.is_active),
+                is_default=bool(provider.is_default),
+                has_api_key=has_key,
+                created_at=provider.created_at.isoformat() if provider.created_at else "",
+                updated_at=provider.updated_at.isoformat() if provider.updated_at else "",
+            )
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to save search provider: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/search/providers/test-connection")
+async def test_search_provider_connection(request: SearchProviderAPIKeyRequest):
+    """Test connection to a search provider by making a test search"""
+    try:
+        from src.tools.search import get_web_search_tool
+        from src.config import SearchEngine
+        
+        # Check if provider needs API key
+        needs_api_key = request.provider_id in [
+            SearchEngine.TAVILY.value,
+            "tavily",
+            SearchEngine.BRAVE_SEARCH.value,
+            "brave_search",
+        ]
+        
+        # Check if API key is required and provided
+        if needs_api_key and not request.api_key:
+            return {
+                "success": False,
+                "message": f"API key is required for {request.provider_name}"
+            }
+        
+        # For Searx, check if base_url is provided
+        if request.provider_id in [SearchEngine.SEARX.value, "searx"]:
+            if not request.base_url:
+                return {
+                    "success": False,
+                    "message": "Base URL is required for Searx"
+                }
+        
+        # Create a temporary search tool with the provided credentials
+        # We'll temporarily set environment variables or pass credentials directly
+        import os
+        original_env = {}
+        
+        try:
+            # Set environment variables temporarily for testing
+            if request.provider_id in [SearchEngine.TAVILY.value, "tavily"]:
+                if request.api_key:
+                    original_env["TAVILY_API_KEY"] = os.environ.get("TAVILY_API_KEY")
+                    os.environ["TAVILY_API_KEY"] = request.api_key
+            elif request.provider_id in [SearchEngine.BRAVE_SEARCH.value, "brave_search"]:
+                if request.api_key:
+                    original_env["BRAVE_SEARCH_API_KEY"] = os.environ.get("BRAVE_SEARCH_API_KEY")
+                    os.environ["BRAVE_SEARCH_API_KEY"] = request.api_key
+            
+            # Get search tool with test credentials
+            # We need to create the tool directly with the provided credentials
+            test_query = "test"
+            
+            if request.provider_id in [SearchEngine.TAVILY.value, "tavily"]:
+                from src.tools.tavily_search.tavily_search_results_with_images import TavilySearchWithImages
+                from src.tools.tavily_search.tavily_search_api_wrapper import EnhancedTavilySearchAPIWrapper
+                
+                if not request.api_key:
+                    return {
+                        "success": False,
+                        "message": "API key is required for Tavily"
+                    }
+                
+                # Create Tavily wrapper with API key
+                api_wrapper = EnhancedTavilySearchAPIWrapper(tavily_api_key=request.api_key)
+                search_tool = TavilySearchWithImages(
+                    name="web_search",
+                    max_results=1,
+                    api_wrapper=api_wrapper
+                )
+                
+                # Test with a simple query
+                result = search_tool.invoke(test_query)
+                if isinstance(result, tuple):
+                    result = result[0]
+                
+                # Check if result contains error
+                if isinstance(result, str):
+                    try:
+                        import json
+                        parsed = json.loads(result)
+                        if isinstance(parsed, dict) and "error" in parsed:
+                            return {
+                                "success": False,
+                                "message": f"Tavily API error: {parsed.get('error', 'Unknown error')}"
+                            }
+                    except json.JSONDecodeError:
+                        pass  # Not JSON, assume success
+                
+            elif request.provider_id in [SearchEngine.BRAVE_SEARCH.value, "brave_search"]:
+                from src.tools.search import BraveSearch
+                
+                if not request.api_key:
+                    return {
+                        "success": False,
+                        "message": "API key is required for Brave Search"
+                    }
+                
+                search_tool = BraveSearch(api_key=request.api_key)
+                result = search_tool.invoke(test_query)
+                
+                # Check for errors
+                if isinstance(result, str) and "ERROR" in result:
+                    return {
+                        "success": False,
+                        "message": result
+                    }
+                    
+            elif request.provider_id in [SearchEngine.SEARX.value, "searx"]:
+                from src.tools.search import SearxSearchRun, SearxSearchWrapper
+                
+                if not request.base_url:
+                    return {
+                        "success": False,
+                        "message": "Base URL is required for Searx"
+                    }
+                
+                wrapper = SearxSearchWrapper(k=1, base_url=request.base_url)
+                search_tool = SearxSearchRun(wrapper=wrapper)
+                result = search_tool.invoke(test_query)
+                
+                # Check for errors
+                if isinstance(result, str) and "ERROR" in result:
+                    return {
+                        "success": False,
+                        "message": result
+                    }
+                    
+            elif request.provider_id in [SearchEngine.DUCKDUCKGO.value, "duckduckgo"]:
+                # DuckDuckGo doesn't need API key, just test that it works
+                from src.tools.search import DuckDuckGoSearchResults
+                search_tool = DuckDuckGoSearchResults(num_results=1)
+                result = search_tool.invoke(test_query)
+                
+            else:
+                return {
+                    "success": False,
+                    "message": f"Unsupported search provider: {request.provider_id}"
+                }
+            
+            return {
+                "success": True,
+                "message": f"Connection successful. {request.provider_name} API key is valid."
+            }
+            
+        finally:
+            # Restore original environment variables
+            for key, value in original_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+                    
+    except Exception as e:
+        logger.error(f"Search provider connection test failed: {e}", exc_info=True)
+        error_message = str(e)
+        
+        # Provide more user-friendly error messages
+        if "api_key" in error_message.lower() or "authentication" in error_message.lower():
+            error_message = "Authentication failed. Please check your API key."
+        elif "connection" in error_message.lower() or "timeout" in error_message.lower():
+            error_message = "Connection failed. Please check your network connection and base URL."
+        elif "not found" in error_message.lower() or "404" in error_message:
+            error_message = "Service not found. Please check your base URL."
+        
+        return {
+            "success": False,
+            "message": f"Connection test failed: {error_message}"
+        }
+
+
+@app.delete("/api/search/providers/{provider_id}")
+async def delete_search_provider(provider_id: str):
+    """Delete (deactivate) a search provider API key"""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import SearchProviderAPIKey
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            provider = db.query(SearchProviderAPIKey).filter(
+                SearchProviderAPIKey.provider_id == provider_id
+            ).first()
+            
+            if not provider:
+                raise HTTPException(
+                    status_code=404, detail="Search provider not found"
+                )
+            
+            # Soft delete by deactivating
+            provider.is_active = False  # type: ignore
+            provider.is_default = False  # type: ignore
+            db.commit()
+            
+            return {"success": True, "message": "Search provider deactivated"}
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete search provider: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

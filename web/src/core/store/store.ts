@@ -166,6 +166,7 @@ export async function sendMessage(
       conversation_history: conversationHistory,
       model_provider: settings.modelProvider,
       model_name: settings.modelName,
+      search_provider: settings.searchProvider,
     },
     options,
   );

@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS: SettingsState = {
     reportStyle: "academic",
     modelProvider: undefined,
     modelName: undefined,
+    searchProvider: undefined, // Search provider ID (e.g., "duckduckgo", "tavily")
   },
   mcp: {
     servers: [],
@@ -39,6 +40,7 @@ export type SettingsState = {
     reportStyle: "academic" | "popular_science" | "news" | "social_media" | "strategic_investment";
     modelProvider?: string; // Provider ID (e.g., "openai", "anthropic")
     modelName?: string; // Model name (e.g., "gpt-4o", "claude-3-5-sonnet-20241022")
+    searchProvider?: string; // Search provider ID (e.g., "duckduckgo", "tavily", "brave_search")
   };
   mcp: {
     servers: MCPServerMetadata[];
@@ -180,6 +182,16 @@ export function setModelProvider(providerId: string | undefined, modelName?: str
       ...state.general,
       modelProvider: providerId,
       modelName: modelName,
+    },
+  }));
+  saveSettings();
+}
+
+export function setSearchProvider(providerId: string | undefined) {
+  useSettingsStore.setState((state) => ({
+    general: {
+      ...state.general,
+      searchProvider: providerId,
     },
   }));
   saveSettings();

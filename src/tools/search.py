@@ -3,15 +3,8 @@
 
 import logging
 import os
-from typing import List, Optional
-
-# Official Brave Search implementation using brave-search package
 import json
-from typing import Dict, Any
-
-# Official Brave Search implementation using brave-search package
-import json
-from typing import Dict, Any, Optional
+from typing import List, Optional, Any
 from langchain.tools import BaseTool
 from langchain.callbacks.manager import CallbackManagerForToolRun
 
@@ -25,13 +18,13 @@ class BraveSearch(BaseTool):
     api_key: Optional[str] = None
     brave_api: Any = None
     
-    def __init__(self, api_key: str = None, name: str = None, **kwargs):
+    def __init__(self, api_key: Optional[str] = None, name: Optional[str] = None, **kwargs):
         super().__init__(**kwargs)
         self.api_key = api_key or os.getenv("BRAVE_API_KEY")
         if name:
             self.name = name
         try:
-            from brave_search import BraveSearch as BraveSearchAPI
+            from brave_search import BraveSearch as BraveSearchAPI  # type: ignore[import]
             self.brave_api = BraveSearchAPI(api_key=self.api_key)
         except ImportError:
             self.brave_api = None
@@ -79,7 +72,7 @@ class DuckDuckGoSearchResults(BaseTool):
     num_results: int = 5
     ddgs: Any = None
     
-    def __init__(self, name: str = None, num_results: int = 5, **kwargs):
+    def __init__(self, name: Optional[str] = None, num_results: int = 5, **kwargs):
         super().__init__(**kwargs)
         if name:
             self.name = name
@@ -180,14 +173,100 @@ def get_search_config():
     return search_config
 
 
-# Get the selected search tool
-def get_web_search_tool(max_search_results: int):
-    search_config = get_search_config()
+def get_search_provider_from_db(provider_id: Optional[str] = None):
+    """Get search provider configuration from database"""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import SearchProviderAPIKey
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            if provider_id:
+                # Get specific provider
+                provider = db.query(SearchProviderAPIKey).filter(
+                    SearchProviderAPIKey.provider_id == provider_id,
+                    SearchProviderAPIKey.is_active.is_(True)
+                ).first()
+                # If specific provider not found, fall back to default DuckDuckGo
+                if not provider and provider_id == "duckduckgo":
+                    logger.info(f"Using default DuckDuckGo provider (no configuration needed)")
+                    return {
+                        "provider_id": "duckduckgo",
+                        "provider_name": "DuckDuckGo",
+                        "api_key": None,
+                        "base_url": None,
+                        "additional_config": {},
+                    }
+            else:
+                # Get default provider
+                provider = db.query(SearchProviderAPIKey).filter(
+                    SearchProviderAPIKey.is_default.is_(True),
+                    SearchProviderAPIKey.is_active.is_(True)
+                ).first()
+                
+                # If no default, get first active provider
+                if not provider:
+                    provider = db.query(SearchProviderAPIKey).filter(
+                        SearchProviderAPIKey.is_active.is_(True)
+                    ).first()
+            
+            if provider:
+                return {
+                    "provider_id": str(provider.provider_id),
+                    "provider_name": str(provider.provider_name),
+                    "api_key": str(provider.api_key) if provider.api_key else None,
+                    "base_url": str(provider.base_url) if provider.base_url else None,
+                    "additional_config": provider.additional_config if provider.additional_config else {},
+                }
+            # Return default free provider (DuckDuckGo) when no provider is configured
+            logger.info("No search provider found in database, using default DuckDuckGo")
+            return {
+                "provider_id": "duckduckgo",
+                "provider_name": "DuckDuckGo",
+                "api_key": None,
+                "base_url": None,
+                "additional_config": {},
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Failed to get search provider from database: {e}. Using default DuckDuckGo.")
+        # Return default free provider (DuckDuckGo) when database query fails
+        return {
+            "provider_id": "duckduckgo",
+            "provider_name": "DuckDuckGo",
+            "api_key": None,
+            "base_url": None,
+            "additional_config": {},
+        }
 
-    if SELECTED_SEARCH_ENGINE == SearchEngine.TAVILY.value:
+
+# Get the selected search tool
+def get_web_search_tool(max_search_results: int, provider_id: Optional[str] = None):
+    # Try to get provider from database first
+    db_provider = get_search_provider_from_db(provider_id)
+    
+    # Determine which provider to use
+    # db_provider will always return a value (defaults to DuckDuckGo if none configured)
+    selected_provider = db_provider["provider_id"]
+    api_key = db_provider.get("api_key")
+    base_url = db_provider.get("base_url")
+    additional_config = db_provider.get("additional_config", {})
+    logger.info(f"Using search provider: {selected_provider}")
+    
+    search_config = get_search_config()
+    # Merge additional_config from database with search_config from yaml
+    if additional_config:
+        search_config = {**search_config, **additional_config}
+
+    if selected_provider == SearchEngine.TAVILY.value or selected_provider == "tavily":
         # Get all Tavily search parameters from configuration with defaults
-        include_domains: Optional[List[str]] = search_config.get("include_domains", [])
-        exclude_domains: Optional[List[str]] = search_config.get("exclude_domains", [])
+        include_domains_raw = search_config.get("include_domains", [])
+        exclude_domains_raw = search_config.get("exclude_domains", [])
+        include_domains: List[str] = include_domains_raw if isinstance(include_domains_raw, list) else []
+        exclude_domains: List[str] = exclude_domains_raw if isinstance(exclude_domains_raw, list) else []
         include_answer: bool = search_config.get("include_answer", False)
         search_depth: str = search_config.get("search_depth", "advanced")
         include_raw_content: bool = search_config.get("include_raw_content", True)
@@ -214,20 +293,19 @@ def get_web_search_tool(max_search_results: int):
             include_domains=include_domains,
             exclude_domains=exclude_domains,
         )
-    elif SELECTED_SEARCH_ENGINE == SearchEngine.DUCKDUCKGO.value:
+    elif selected_provider == SearchEngine.DUCKDUCKGO.value or selected_provider == "duckduckgo":
         return LoggedDuckDuckGoSearch(
             name="web_search",
             num_results=max_search_results,
         )
-    elif SELECTED_SEARCH_ENGINE == SearchEngine.BRAVE_SEARCH.value:
+    elif selected_provider == SearchEngine.BRAVE_SEARCH.value or selected_provider == "brave_search":
+        # Use API key from database if available, otherwise fall back to environment variable
+        brave_api_key = api_key or os.getenv("BRAVE_SEARCH_API_KEY", "")
         return LoggedBraveSearch(
             name="web_search",
-            search_wrapper=BraveSearchWrapper(
-                api_key=os.getenv("BRAVE_SEARCH_API_KEY", ""),
-                search_kwargs={"count": max_search_results},
-            ),
+            api_key=brave_api_key,
         )
-    elif SELECTED_SEARCH_ENGINE == SearchEngine.ARXIV.value:
+    elif selected_provider == SearchEngine.ARXIV.value or selected_provider == "arxiv":
         return LoggedArxivSearch(
             name="web_search",
             api_wrapper=ArxivAPIWrapper(
@@ -236,14 +314,17 @@ def get_web_search_tool(max_search_results: int):
                 load_all_available_meta=True,
             ),
         )
-    elif SELECTED_SEARCH_ENGINE == SearchEngine.SEARX.value:
+    elif selected_provider == SearchEngine.SEARX.value or selected_provider == "searx":
+        # Use base_url from database if available
+        searx_base_url = base_url or os.getenv("SEARX_BASE_URL", "https://searx.be")
         return LoggedSearxSearch(
             name="web_search",
             wrapper=SearxSearchWrapper(
                 k=max_search_results,
+                base_url=searx_base_url,
             ),
         )
-    elif SELECTED_SEARCH_ENGINE == SearchEngine.WIKIPEDIA.value:
+    elif selected_provider == SearchEngine.WIKIPEDIA.value or selected_provider == "wikipedia":
         wiki_lang = search_config.get("wikipedia_lang", "en")
         wiki_doc_content_chars_max = search_config.get(
             "wikipedia_doc_content_chars_max", 4000
@@ -258,4 +339,4 @@ def get_web_search_tool(max_search_results: int):
             ),
         )
     else:
-        raise ValueError(f"Unsupported search engine: {SELECTED_SEARCH_ENGINE}")
+        raise ValueError(f"Unsupported search engine: {selected_provider}")

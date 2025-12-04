@@ -97,6 +97,8 @@ export async function* chatStream(
     // Model selection
     model_provider?: string;
     model_name?: string;
+    // Search provider selection
+    search_provider?: string;
   },
   options: { abortSignal?: AbortSignal } = {},
 ) {

@@ -48,6 +48,7 @@ class Configuration:
     max_plan_iterations: int = 1  # Maximum number of plan iterations
     max_step_num: int = 3  # Maximum number of steps in a plan
     max_search_results: int = 3  # Maximum number of search results
+    search_provider: Optional[str] = None  # Search provider ID (e.g., "duckduckgo", "tavily")
     mcp_settings: dict = None  # MCP settings, including dynamic loaded tools
     report_style: str = ReportStyle.ACADEMIC.value  # Report style
     enable_deep_thinking: bool = False  # Whether to enable deep thinking

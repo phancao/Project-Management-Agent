@@ -1,6 +1,7 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
+import asyncio
 import logging
 import os
 
@@ -211,10 +212,11 @@ async def run_agent_workflow_stream(
     if debug:
         enable_debug_logging()
 
-    logger.info(f"Starting streaming workflow with user input: {user_input}")
+    logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-1] Starting streaming workflow with user input: {user_input}")
 
     # Use provided initial_state or create a new one
     if initial_state is None:
+        logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-2] Creating initial state")
         initial_state = {
             # Runtime Variables
             "messages": [{"role": "user", "content": user_input}],
@@ -230,6 +232,7 @@ async def run_agent_workflow_stream(
 
         if max_clarification_rounds is not None:
             initial_state["max_clarification_rounds"] = max_clarification_rounds
+        logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-3] Initial state created: {list(initial_state.keys())}")
 
     config = {
         "configurable": {
@@ -261,19 +264,45 @@ async def run_agent_workflow_stream(
     }
     last_message_cnt = 0
     final_state = None
-    async for s in graph.astream(
-        input=initial_state, config=config, stream_mode="values"
-    ):
-        try:
-            final_state = s
-            # Yield intermediate states
-            yield s
-            if isinstance(s, dict) and "messages" in s:
-                if len(s["messages"]) <= last_message_cnt:
-                    continue
-                last_message_cnt = len(s["messages"])
-        except Exception as e:
-            logger.error(f"Error processing stream output: {e}")
+    workflow_timeout = 300  # 5 minutes total timeout
+    import time
+    start_time = time.time()
+    
+    logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-4] About to call graph.astream with config keys: {list(config.get('configurable', {}).keys())}")
+    try:
+        logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-5] Starting graph.astream iteration")
+        state_iteration = 0
+        async for s in graph.astream(
+            input=initial_state, config=config, stream_mode="values"
+        ):
+            state_iteration += 1
+            logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-6.{state_iteration}] Graph yielded state #{state_iteration}, type: {type(s)}")
+            # Check timeout on each iteration
+            elapsed = time.time() - start_time
+            if elapsed > workflow_timeout:
+                logger.error(f"Workflow stream timed out after {workflow_timeout} seconds")
+                break
+            
+            try:
+                final_state = s
+                # Yield intermediate states
+                yield s
+                if isinstance(s, dict) and "messages" in s:
+                    if len(s["messages"]) <= last_message_cnt:
+                        continue
+                    last_message_cnt = len(s["messages"])
+            except Exception as e:
+                logger.error(f"Error processing stream output: {e}")
+    except asyncio.TimeoutError:
+        logger.error(f"Workflow stream timed out after {workflow_timeout} seconds")
+        # Yield a final state indicating timeout
+        if final_state:
+            yield final_state
+    except Exception as e:
+        logger.error(f"Error in workflow stream: {e}", exc_info=True)
+        # Yield final state if available
+        if final_state:
+            yield final_state
 
     # Check if clarification is needed using centralized logic
     if final_state and isinstance(final_state, dict):

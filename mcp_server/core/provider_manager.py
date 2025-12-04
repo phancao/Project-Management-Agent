@@ -55,34 +55,50 @@ class ProviderManager:
         if not self.db:
             return []
         
-        query = self.db.query(PMProviderConnection).filter(
-            PMProviderConnection.is_active.is_(True)
-        )
+        try:
+            # Ensure clean transaction state
+            self.db.rollback()
+        except Exception:
+            pass  # Ignore if no transaction to rollback
         
-        # Filter by user if user_id is provided
-        # Include providers where created_by matches OR created_by is NULL (shared/synced providers)
-        if self.user_id:
-            from sqlalchemy import or_
-            query = query.filter(
-                or_(
-                    PMProviderConnection.created_by == self.user_id,
-                    PMProviderConnection.created_by.is_(None)  # Include synced/shared providers
+        try:
+            query = self.db.query(PMProviderConnection).filter(
+                PMProviderConnection.is_active.is_(True)
+            )
+            
+            # Filter by user if user_id is provided
+            # Include providers where created_by matches OR created_by is NULL (shared/synced providers)
+            if self.user_id:
+                from sqlalchemy import or_
+                query = query.filter(
+                    or_(
+                        PMProviderConnection.created_by == self.user_id,
+                        PMProviderConnection.created_by.is_(None)  # Include synced/shared providers
+                    )
                 )
-            )
+                logger.info(
+                    "[ProviderManager] Filtering providers by user_id: %s (including shared providers)",
+                    self.user_id
+                )
+            
+            # Exclude mock providers - they are UI-only
+            query = query.filter(PMProviderConnection.provider_type != "mock")
+            
+            providers = query.all()
             logger.info(
-                "[ProviderManager] Filtering providers by user_id: %s (including shared providers)",
-                self.user_id
+                "[ProviderManager] Found %d active provider(s)",
+                len(providers)
             )
-        
-        # Exclude mock providers - they are UI-only
-        query = query.filter(PMProviderConnection.provider_type != "mock")
-        
-        providers = query.all()
-        logger.info(
-            "[ProviderManager] Found %d active provider(s)",
-            len(providers)
-        )
-        return providers
+            return providers
+        except Exception as e:
+            logger.error(f"[ProviderManager] Error getting active providers: {e}", exc_info=True)
+            # Rollback on error to prevent transaction issues
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
+            # Return empty list on error to prevent system crash
+            return []
     
     def get_provider_by_id(self, provider_id: str) -> Optional[PMProviderConnection]:
         """
@@ -102,18 +118,31 @@ class ProviderManager:
             PMProviderConnection.id == provider_id
         ).first()
         
-        # If not found, try to find by backend_provider_id (for synced providers)
+        # If not found, try to find by backend_provider_id stored in additional_config (for synced providers)
         if not provider_conn:
-            provider_conn = self.db.query(PMProviderConnection).filter(
-                PMProviderConnection.backend_provider_id == provider_id
-            ).first()
-            if provider_conn:
-                logger.info(
-                    "[ProviderManager] Found provider by backend_provider_id=%s, "
-                    "mcp_id=%s",
-                    provider_id,
-                    provider_conn.id
-                )
+            # Search in additional_config JSONB field for backend_provider_id
+            # Use Python-side filtering instead of SQL function to avoid transaction issues
+            try:
+                all_providers = self.db.query(PMProviderConnection).all()
+                for p in all_providers:
+                    if p.additional_config and isinstance(p.additional_config, dict):
+                        backend_id = p.additional_config.get('backend_provider_id')
+                        if backend_id and str(backend_id) == str(provider_id):
+                            provider_conn = p
+                            logger.info(
+                                "[ProviderManager] Found provider by backend_provider_id=%s (from additional_config), "
+                                "mcp_id=%s",
+                                provider_id,
+                                provider_conn.id
+                            )
+                            break
+            except Exception as e:
+                logger.debug(f"[ProviderManager] Error querying by backend_provider_id in additional_config: {e}")
+                # Rollback on error to prevent transaction issues
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
         
         # Check user access if user_id is set
         # Allow access if created_by matches OR created_by is NULL (shared/synced providers)

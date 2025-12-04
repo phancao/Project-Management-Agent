@@ -190,6 +190,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                 
                 # Route all queries to DeerFlow
                 if needs_research:
+                    logger.info(f"[DEBUG-API] [STEP 1] Entering DeerFlow research path for query: {user_message[:100]}")
                     # Yield initial message
                     initial_chunk = {
                         "id": str(uuid.uuid4()),
@@ -201,11 +202,13 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                     }
                     yield "event: message_chunk\n"
                     yield f"data: {json.dumps(initial_chunk)}\n\n"
+                    logger.info(f"[DEBUG-API] [STEP 2] Initial message yielded")
                     
                     # Stream DeerFlow research progress
                     try:
                         # Use original message for research query (Option 2: agents decide what to do)
                         research_query = user_message
+                        logger.info(f"[DEBUG-API] [STEP 3] Research query prepared: {research_query[:100]}")
                         
                         # Call streaming workflow
                         research_chunk = {
@@ -218,76 +221,169 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         }
                         yield "event: message_chunk\n"
                         yield f"data: {json.dumps(research_chunk)}\n\n"
+                        logger.info(f"[DEBUG-API] [STEP 4] Research chunk yielded")
                         
                         # Stream intermediate states from DeerFlow
                         research_start = time.time()
-                        logger.info(f"[API-TIMING] Starting DeerFlow research: {time.time() - api_start:.2f}s")
+                        logger.info(f"[API-TIMING] [DEBUG-API] [STEP 5] About to call run_agent_workflow_stream. Time elapsed: {time.time() - api_start:.2f}s")
                         last_step_emitted = ""
                         final_research_state = None
-                        async for state in run_agent_workflow_stream(
-                            user_input=research_query,
-                            max_plan_iterations=1,
-                            max_step_num=3,
-                            enable_background_investigation=True,
-                            enable_clarification=False
-                        ):
-                            # Store final state for later use
-                            final_research_state = state
+                        
+                        # Add timeout to prevent hanging
+                        import asyncio
+                        workflow_timeout = 300  # 5 minutes timeout
+                        workflow_start_time = time.time()
+                        last_heartbeat = time.time()
+                        heartbeat_interval = 10  # Send heartbeat every 10 seconds
+                        
+                        try:
+                            logger.info(f"[DEBUG-API] [STEP 6] Calling run_agent_workflow_stream with query: {research_query[:100]}")
+                            workflow_stream = run_agent_workflow_stream(
+                                user_input=research_query,
+                                max_plan_iterations=1,
+                                max_step_num=3,
+                                enable_background_investigation=True,
+                                enable_clarification=False
+                            )
+                            logger.info(f"[DEBUG-API] [STEP 7] run_agent_workflow_stream returned, starting to iterate")
                             
-                            # Extract progress information from state
-                            if isinstance(state, dict):
-                                # Check for current plan
-                                current_plan = state.get("current_plan")
-                                if current_plan:
-                                    # Handle different plan types
-                                    from src.prompts.planner_model import Plan
-                                    
-                                    if isinstance(current_plan, Plan):
-                                        # Pydantic Plan model
-                                        plan_title = current_plan.title
-                                    elif isinstance(current_plan, dict):
-                                        # Dict
-                                        plan_title = current_plan.get("title", "")
-                                    elif isinstance(current_plan, str):
-                                        # String - skip it to avoid the .title() method issue
-                                        continue
-                                    else:
-                                        # Unknown type - convert to string
-                                        plan_title = str(current_plan)
-                                    
-                                    if plan_title and plan_title != last_step_emitted:
-                                        progress_msg = f"📋 Planning: {plan_title}\n\n"
-                                        progress_chunk = {
-                                            "id": str(uuid.uuid4()),
-                                            "thread_id": thread_id,
-                                            "agent": "coordinator",
-                                            "role": "assistant",
-                                            "content": progress_msg,
-                                            "finish_reason": None
-                                        }
-                                        yield "event: message_chunk\n"
-                                        yield f"data: {json.dumps(progress_chunk)}\n\n"
-                                        last_step_emitted = plan_title
+                            state_count = 0
+                            last_state_time = time.time()
+                            async for state in workflow_stream:
+                                state_count += 1
+                                current_time = time.time()
+                                time_since_last_state = current_time - last_state_time
+                                last_state_time = current_time
                                 
-                                # Check for messages with agent names
-                                messages = state.get("messages", [])
-                                if messages:
-                                    last_msg = messages[-1]
-                                    if isinstance(last_msg, dict):
-                                        agent_name = last_msg.get("name", "")
-                                        content = last_msg.get("content", "")
-                                        if agent_name and agent_name not in ["planner", "reporter"] and len(content) > 50:
-                                            step_msg = f"⚙️ {agent_name.capitalize()} agent working...\n\n"
-                                            step_chunk = {
+                                logger.info(f"[DEBUG-API] [STEP 8.{state_count}] Received state #{state_count} from workflow stream (elapsed: {time_since_last_state:.1f}s)")
+                                
+                                # Update heartbeat
+                                last_heartbeat = current_time
+                                
+                                # If no state update for 30 seconds, send warning
+                                if time_since_last_state > 30 and state_count > 1:
+                                    logger.warning(f"[API] No workflow state update for {time_since_last_state:.1f}s - workflow may be stuck")
+                                    stuck_chunk = {
+                                        "id": str(uuid.uuid4()),
+                                        "thread_id": thread_id,
+                                        "agent": "system",
+                                        "role": "assistant",
+                                        "content": f"⏳ Still processing... (no update for {int(time_since_last_state)}s)\n\n",
+                                        "finish_reason": None
+                                    }
+                                    yield "event: message_chunk\n"
+                                    yield f"data: {json.dumps(stuck_chunk)}\n\n"
+                                
+                                # Check for timeout
+                                elapsed = current_time - workflow_start_time
+                                if elapsed > workflow_timeout:
+                                    logger.warning(f"[API-TIMING] Workflow timeout reached: {elapsed:.2f}s")
+                                    timeout_chunk = {
+                                        "id": str(uuid.uuid4()),
+                                        "thread_id": thread_id,
+                                        "agent": "coordinator",
+                                        "role": "assistant",
+                                        "content": f"⏱️ Workflow timed out after {workflow_timeout} seconds. The analysis may be incomplete.\n\n",
+                                        "finish_reason": "timeout"
+                                    }
+                                    yield "event: message_chunk\n"
+                                    yield f"data: {json.dumps(timeout_chunk)}\n\n"
+                                    break
+                                
+                                # Send heartbeat if no progress for a while
+                                if time.time() - last_heartbeat > heartbeat_interval:
+                                    heartbeat_chunk = {
+                                        "id": str(uuid.uuid4()),
+                                        "thread_id": thread_id,
+                                        "agent": "coordinator",
+                                        "role": "assistant",
+                                        "content": "⏳ Processing...\n\n",
+                                        "finish_reason": None
+                                    }
+                                    yield "event: message_chunk\n"
+                                    yield f"data: {json.dumps(heartbeat_chunk)}\n\n"
+                                    last_heartbeat = time.time()
+                                # Store final state for later use
+                                final_research_state = state
+                                
+                                # Extract progress information from state
+                                if isinstance(state, dict):
+                                    # Check for current plan
+                                    current_plan = state.get("current_plan")
+                                    if current_plan:
+                                        # Handle different plan types
+                                        from src.prompts.planner_model import Plan
+                                        
+                                        if isinstance(current_plan, Plan):
+                                            # Pydantic Plan model
+                                            plan_title = current_plan.title
+                                        elif isinstance(current_plan, dict):
+                                            # Dict
+                                            plan_title = current_plan.get("title", "")
+                                        elif isinstance(current_plan, str):
+                                            # String - skip it to avoid the .title() method issue
+                                            continue
+                                        else:
+                                            # Unknown type - convert to string
+                                            plan_title = str(current_plan)
+                                        
+                                        if plan_title and plan_title != last_step_emitted:
+                                            progress_msg = f"📋 Planning: {plan_title}\n\n"
+                                            progress_chunk = {
                                                 "id": str(uuid.uuid4()),
                                                 "thread_id": thread_id,
                                                 "agent": "coordinator",
                                                 "role": "assistant",
-                                                "content": step_msg,
+                                                "content": progress_msg,
                                                 "finish_reason": None
                                             }
                                             yield "event: message_chunk\n"
-                                            yield f"data: {json.dumps(step_chunk)}\n\n"
+                                            yield f"data: {json.dumps(progress_chunk)}\n\n"
+                                            last_step_emitted = plan_title
+                                    
+                                    # Check for messages with agent names
+                                    messages = state.get("messages", [])
+                                    if messages:
+                                        last_msg = messages[-1]
+                                        if isinstance(last_msg, dict):
+                                            agent_name = last_msg.get("name", "")
+                                            content = last_msg.get("content", "")
+                                            if agent_name and agent_name not in ["planner", "reporter"] and len(content) > 50:
+                                                step_msg = f"⚙️ {agent_name.capitalize()} agent working...\n\n"
+                                                step_chunk = {
+                                                    "id": str(uuid.uuid4()),
+                                                    "thread_id": thread_id,
+                                                    "agent": "coordinator",
+                                                    "role": "assistant",
+                                                    "content": step_msg,
+                                                    "finish_reason": None
+                                                }
+                                                yield "event: message_chunk\n"
+                                                yield f"data: {json.dumps(step_chunk)}\n\n"
+                        except asyncio.TimeoutError:
+                            logger.error(f"[API-TIMING] DeerFlow workflow timed out after {workflow_timeout}s")
+                            timeout_chunk = {
+                                "id": str(uuid.uuid4()),
+                                "thread_id": thread_id,
+                                "agent": "coordinator",
+                                "role": "assistant",
+                                "content": f"⏱️ Workflow timed out after {workflow_timeout} seconds. The analysis may be incomplete.\n\n",
+                                "finish_reason": "timeout"
+                            }
+                            yield "event: message_chunk\n"
+                            yield f"data: {json.dumps(timeout_chunk)}\n\n"
+                        except Exception as research_error:
+                            logger.error(f"[API-TIMING] DeerFlow streaming failed: {research_error}", exc_info=True)
+                            error_chunk = {
+                                "id": str(uuid.uuid4()),
+                                "thread_id": thread_id,
+                                "agent": "coordinator",
+                                "role": "assistant",
+                                "content": f"❌ Error during research: {str(research_error)}\n\n",
+                                "finish_reason": "error"
+                            }
+                            yield "event: message_chunk\n"
+                            yield f"data: {json.dumps(error_chunk)}\n\n"
                         
                         # Store research result in context to avoid re-running
                         if final_research_state and isinstance(final_research_state, dict):

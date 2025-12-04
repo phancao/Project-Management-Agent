@@ -1,6 +1,7 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
+import asyncio
 import json
 import logging
 import os
@@ -296,6 +297,7 @@ def background_investigation_node(state: State, config: RunnableConfig):
 def planner_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["human_feedback", "reporter"]]:
+    logger.info(f"[DEBUG-NODES] [NODE-PLANNER-1] Planner node entered")
     """Planner node that generate the full plan."""
     logger.info("Planner generating full plan")
     configurable = Configuration.from_runnable_config(config)
@@ -641,6 +643,7 @@ def human_feedback_node(
 def coordinator_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["planner", "background_investigator", "coordinator", "__end__"]]:
+    logger.info(f"[DEBUG-NODES] [NODE-COORD-1] Coordinator node entered")
     """Coordinator node that communicate with customers and handle clarification."""
     logger.info("Coordinator talking.")
     configurable = Configuration.from_runnable_config(config)
@@ -911,6 +914,7 @@ def coordinator_node(
 
 
 def reporter_node(state: State, config: RunnableConfig):
+    logger.info(f"[DEBUG-NODES] [NODE-REPORTER-1] Reporter node entered")
     """Reporter node that write a final report."""
     logger.info("Reporter write final report")
     configurable = Configuration.from_runnable_config(config)
@@ -940,12 +944,65 @@ def reporter_node(state: State, config: RunnableConfig):
     
     # CRITICAL: Also collect observations from all completed steps
     # This ensures we get data even if observations state is incomplete
+    # IMPORTANT: Compress step execution results to prevent context length errors
     if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps') and current_plan.steps:
         step_observations = []
+        
+        # Get token limit for reporter's model to adjust compression
+        reporter_llm_type = AGENT_LLM_MAP.get("reporter", "basic")
+        token_limit = get_llm_token_limit_by_type(reporter_llm_type)
+        
+        # Calculate compression limits based on model's token limit
+        # Reserve 40% for prompt overhead (system messages, instructions, etc.)
+        # Use remaining 60% for observations
+        if token_limit:
+            chars_per_token = 4
+            reserved_tokens = int(token_limit * 0.4)  # Reserve 40% for prompt
+            available_tokens = token_limit - reserved_tokens
+            available_chars = available_tokens * chars_per_token
+            
+            # Distribute available chars across steps
+            num_steps = len([s for s in current_plan.steps if s.execution_res])
+            if num_steps > 0:
+                max_length_per_step = min(available_chars // max(num_steps, 1), 30000)
+                # Adjust max_items based on token limit
+                if token_limit >= 100000:
+                    max_items = 20
+                elif token_limit >= 32000:
+                    max_items = 15
+                else:
+                    max_items = 10
+            else:
+                max_length_per_step = 10000
+                max_items = 10
+        else:
+            # Fallback to conservative defaults
+            max_length_per_step = 10000
+            max_items = 10
+        
+        logger.debug(f"[reporter_node] Token limit: {token_limit}, max_length_per_step: {max_length_per_step}, max_items: {max_items}")
+        
         for idx, step in enumerate(current_plan.steps):
             if step.execution_res:
+                execution_res = step.execution_res
+                
+                # Compress execution result if it's too large
+                if len(str(execution_res)) > max_length_per_step:
+                    try:
+                        # Try to compress JSON arrays in the result
+                        import json
+                        parsed = json.loads(str(execution_res))
+                        from src.utils.json_utils import _compress_large_array
+                        compressed = _compress_large_array(parsed, max_items=max_items)
+                        execution_res = json.dumps(compressed, ensure_ascii=False)
+                        logger.info(f"[reporter_node] Compressed step {idx + 1} ('{step.title}') from {len(str(step.execution_res))} to {len(execution_res)} chars")
+                    except (json.JSONDecodeError, TypeError):
+                        # Not JSON, just truncate
+                        execution_res = str(execution_res)[:max_length_per_step] + f"\n\n... (truncated, original length: {len(str(step.execution_res))} chars) ..."
+                        logger.warning(f"[reporter_node] Truncated step {idx + 1} ('{step.title}') from {len(str(step.execution_res))} to {len(execution_res)} chars")
+                
                 # Include step title for context
-                step_obs = f"## Step {idx + 1}: {step.title}\n\n{step.execution_res}"
+                step_obs = f"## Step {idx + 1}: {step.title}\n\n{execution_res}"
                 step_observations.append(step_obs)
                 logger.debug(f"Reporter: Collected observation from step {idx + 1}: {step.title}")
         
@@ -1041,6 +1098,9 @@ def reporter_node(state: State, config: RunnableConfig):
 
     # Context compression
     llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP["reporter"])
+    if llm_token_limit is None:
+        logger.warning("[reporter_node] Token limit unknown, using default 16385")
+        llm_token_limit = 16385  # Default for gpt-3.5-turbo
     compressed_state = ContextManager(llm_token_limit).compress_messages(
         {"messages": observation_messages}
     )
@@ -1058,28 +1118,151 @@ def reporter_node(state: State, config: RunnableConfig):
     invoke_messages += compressed_messages
 
     logger.debug(f"Current invoke messages: {invoke_messages}")
-    response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)
-    response_content = response.content
-    logger.info(f"reporter response: {response_content}")
+    
+    # Wrap LLM invocation in try/except to catch errors and notify user/LLM
+    try:
+        response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)
+        response_content = response.content
+        logger.info(f"reporter response: {response_content}")
 
-    # Create AIMessage with finish_reason in response_metadata
-    # This ensures the frontend knows the message is complete
-    reporter_message = AIMessage(
-        content=response_content,
-        name="reporter",
-        response_metadata={"finish_reason": "stop"}
-    )
+        # Create AIMessage with finish_reason in response_metadata
+        # This ensures the frontend knows the message is complete
+        reporter_message = AIMessage(
+            content=response_content,
+            name="reporter",
+            response_metadata={"finish_reason": "stop"}
+        )
 
-    # Add AIMessage so the final report gets streamed to the client
-    return {
-        "messages": [reporter_message],
-        "final_report": response_content,
-    }
+        # Add AIMessage so the final report gets streamed to the client
+        return {
+            "messages": [reporter_message],
+            "final_report": response_content,
+        }
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        error_message = f"Error in reporter node: {str(e)}"
+        logger.error(f"[reporter_node] {error_message}", exc_info=True)
+        logger.error(f"Full traceback:\n{error_traceback}")
+        
+        # Check for context length errors specifically
+        error_str = str(e)
+        is_context_length_error = (
+            "context_length_exceeded" in error_str.lower() or
+            "maximum context length" in error_str.lower() or
+            "context length" in error_str.lower() and "exceeded" in error_str.lower()
+        )
+        
+        if is_context_length_error:
+            # Extract token information if available
+            token_info = ""
+            if "tokens" in error_str:
+                import re
+                token_match = re.search(r'(\d+)\s*tokens', error_str)
+                if token_match:
+                    actual_tokens = token_match.group(1)
+                    token_info = f" (actual: {actual_tokens} tokens)"
+            
+            detailed_error = f"""[ERROR] Reporter Failed: Context Length Exceeded
+
+The report generation failed because the data is too large for the current model's context window{token_info}.
+
+**What happened:**
+- All research steps completed successfully
+- The reporter attempted to generate the final report
+- The combined data exceeded the model's token limit
+
+**Possible solutions:**
+1. Use a model with a larger context window (e.g., GPT-4o, Claude 3.5)
+2. Reduce the amount of data in the analysis
+3. Request a more focused analysis with fewer steps
+
+**Error Details:** {error_str[:500]}"""
+        else:
+            detailed_error = f"""[ERROR] Reporter Failed
+
+The report generation encountered an error.
+
+**Error Details:** {error_str[:500]}
+
+**What to do:**
+- Check the server logs for more details
+- Try the analysis again
+- If the error persists, contact support"""
+        
+        # Add error to the current plan's last step so user sees it in the step list
+        # This ensures the user knows which step failed
+        error_observation = detailed_error
+        
+        # Update the last step's execution_res to include the error
+        # This makes the error visible in the frontend step list
+        if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps') and current_plan.steps:
+            from src.prompts.planner_model import Step, Plan
+            
+            # Find the last step and update it with error
+            last_step_idx = len(current_plan.steps) - 1
+            last_step = current_plan.steps[last_step_idx]
+            
+            # Create updated step with error appended to execution_res
+            updated_last_step = Step(
+                need_search=last_step.need_search,
+                title=last_step.title,
+                description=last_step.description,
+                step_type=last_step.step_type,
+                execution_res=f"{last_step.execution_res or ''}\n\n{detailed_error}" if last_step.execution_res else detailed_error,
+            )
+            
+            # Create updated plan with error step
+            updated_steps = list(current_plan.steps)
+            updated_steps[last_step_idx] = updated_last_step
+            updated_plan = Plan(
+                locale=current_plan.locale,
+                has_enough_context=current_plan.has_enough_context,
+                thought=current_plan.thought,
+                title=current_plan.title,
+                steps=updated_steps,
+            )
+        else:
+            updated_plan = current_plan
+        
+        # Create an error message for the user
+        # Use HumanMessage so it's clearly visible as an error notification
+        error_ai_message = AIMessage(
+            content=detailed_error,
+            name="reporter",
+            response_metadata={"finish_reason": "error", "error_type": type(e).__name__}
+        )
+        
+        # Also add a system message to make it clear this is an error
+        error_system_message = HumanMessage(
+            content=f"⚠️ **ERROR**: The reporter failed to generate the final report.\n\n{detailed_error}",
+            name="system"
+        )
+        
+        # Return error state so it gets streamed to frontend
+        # Include updated plan so the step shows the error
+        # Include both messages so error is clearly visible
+        return {
+            "messages": [error_system_message, error_ai_message],
+            "observations": observations + [error_observation],
+            "final_report": detailed_error,  # Store error as final report so user sees it
+            "current_plan": updated_plan,  # Update plan so step shows error
+        }
 
 
 def research_team_node(state: State):  # noqa: ARG001
-    """Research team node that collaborates on tasks."""
-    logger.info("Research team is collaborating on tasks.")
+    logger.info(f"[DEBUG-NODES] [NODE-RESEARCH-TEAM-1] Research team node entered")
+    """Research team node that routes to appropriate agent or reporter."""
+    logger.info("Research team node - checking step completion status")
+    
+    # Check if all steps are complete
+    current_plan = state.get("current_plan")
+    if current_plan and not isinstance(current_plan, str) and current_plan.steps:
+        all_complete = all(step.execution_res for step in current_plan.steps)
+        if all_complete:
+            logger.info(f"[research_team_node] All {len(current_plan.steps)} steps completed! Routing to reporter.")
+            return Command(goto="reporter")
+    
     logger.debug("Entering research_team_node - coordinating research and coder agents")
 
 
@@ -1088,6 +1271,7 @@ async def _execute_agent_step(
 ) -> Command[Literal["research_team"]]:
     """Helper function to execute a step using the specified agent."""
     import sys
+    logger.info(f"[DEBUG-NODES] [EXEC-1] [{agent_name}] _execute_agent_step entered")
     sys.stderr.write(f"\n⚡ EXECUTE_AGENT_STEP: agent_name='{agent_name}'\n")
     sys.stderr.flush()
     
@@ -1124,11 +1308,52 @@ async def _execute_agent_step(
             completed_steps.append(step)
 
     if not current_step:
-        logger.warning(f"[_execute_agent_step] No unexecuted step found in {len(current_plan.steps)} total steps")
-        return Command(goto="research_team")
+        # All steps are complete - route to reporter
+        logger.info(f"[_execute_agent_step] All {len(current_plan.steps)} steps completed! Routing to reporter.")
+        return Command(goto="reporter")
 
     logger.info(f"[_execute_agent_step] Executing step: {current_step.title}, agent: {agent_name}")
     logger.debug(f"[_execute_agent_step] Completed steps so far: {len(completed_steps)}")
+    import time
+    step_start_time = time.time()
+    logger.info(f"[STEP-TIMING] Starting step '{current_step.title}' at {step_start_time}")
+
+    # Get token limit for this agent's model to adjust compression dynamically
+    agent_llm_type = AGENT_LLM_MAP.get(agent_name, "basic")
+    token_limit = get_llm_token_limit_by_type(agent_llm_type)
+    
+    # Calculate compression limits based on model's token limit
+    # Reserve 30% for prompt overhead (system messages, current step, etc.)
+    # Use remaining 70% for completed steps data
+    if token_limit:
+        # Estimate: ~4 characters per token (conservative estimate)
+        chars_per_token = 4
+        reserved_tokens = int(token_limit * 0.3)  # Reserve 30% for prompt
+        available_tokens = token_limit - reserved_tokens
+        available_chars = available_tokens * chars_per_token
+        
+        # Distribute available chars across completed steps (with some buffer)
+        num_completed_steps = len(completed_steps)
+        if num_completed_steps > 0:
+            # Allocate chars per step, but cap at reasonable limits
+            max_length_per_step = min(available_chars // max(num_completed_steps, 1), 50000)
+            # Adjust max_items based on token limit (more tokens = more items)
+            if token_limit >= 100000:  # Large context models (Claude, GPT-4o, Gemini)
+                max_items = 20
+            elif token_limit >= 32000:  # Medium context models
+                max_items = 15
+            else:  # Small context models (GPT-3.5-turbo)
+                max_items = 10
+        else:
+            max_length_per_step = 10000  # Default if no completed steps
+            max_items = 10
+    else:
+        # Fallback to conservative defaults if token limit unknown
+        logger.warning(f"[_execute_agent_step] Token limit unknown for agent '{agent_name}', using conservative defaults")
+        max_length_per_step = 10000
+        max_items = 10
+    
+    logger.debug(f"[_execute_agent_step] Agent '{agent_name}' token_limit={token_limit}, max_length_per_step={max_length_per_step}, max_items={max_items}")
 
     # Format completed steps information
     # Compress large execution results to prevent token overflow
@@ -1137,19 +1362,20 @@ async def _execute_agent_step(
         completed_steps_info = "# Completed Research Steps\n\n"
         for i, step in enumerate(completed_steps):
             # Compress execution result if it's too large (e.g., large task lists)
+            # Use model-aware compression based on token limit
             execution_res = step.execution_res
-            if execution_res and len(str(execution_res)) > 20000:
+            if execution_res and len(str(execution_res)) > max_length_per_step:
                 # Try to compress JSON arrays in the result
                 try:
                     parsed = json.loads(str(execution_res))
                     from src.utils.json_utils import _compress_large_array
-                    compressed = _compress_large_array(parsed, max_items=20)
+                    compressed = _compress_large_array(parsed, max_items=max_items)
                     execution_res = json.dumps(compressed, ensure_ascii=False)
-                    logger.info(f"Compressed execution result for step '{step.title}' from {len(str(step.execution_res))} to {len(execution_res)} chars")
+                    logger.info(f"[_execute_agent_step] Compressed execution result for step '{step.title}' from {len(str(step.execution_res))} to {len(execution_res)} chars (token_limit={token_limit}, max_items={max_items})")
                 except (json.JSONDecodeError, TypeError):
-                    # Not JSON, just truncate
-                    execution_res = str(execution_res)[:20000] + f"\n\n... (truncated, original length: {len(str(step.execution_res))} chars) ..."
-                    logger.warning(f"Truncated non-JSON execution result for step '{step.title}'")
+                    # Not JSON, just truncate based on model's token limit
+                    execution_res = str(execution_res)[:max_length_per_step] + f"\n\n... (truncated, original length: {len(str(step.execution_res))} chars) ..."
+                    logger.warning(f"[_execute_agent_step] Truncated non-JSON execution result for step '{step.title}' from {len(str(step.execution_res))} to {len(execution_res)} chars (token_limit={token_limit})")
             
             completed_steps_info += f"## Completed Step {i + 1}: {step.title}\n\n"
             completed_steps_info += f"<finding>\n{execution_res}\n</finding>\n\n"
@@ -1244,9 +1470,15 @@ async def _execute_agent_step(
         logger.error(f"Error validating agent input messages: {validation_error}")
     
     try:
+        import time
+        invoke_start_time = time.time()
+        logger.info(f"[STEP-TIMING] Invoking agent '{agent_name}' for step '{current_step.title}' at {invoke_start_time}")
         result = await agent.ainvoke(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )
+        invoke_end_time = time.time()
+        invoke_duration = invoke_end_time - invoke_start_time
+        logger.info(f"[STEP-TIMING] Agent '{agent_name}' completed in {invoke_duration:.2f}s (step: '{current_step.title}')")
         
         # Check if agent made tool calls
         last_message = result.get("messages", [])[-1] if result.get("messages") else None
@@ -1569,8 +1801,30 @@ async def _setup_and_execute_agent_step(
             logger.info(f"[{agent_type}] Creating MultiServerMCPClient with {len(mcp_servers)} server(s)...")
             # Log the exact dict being passed
             logger.info(f"[{agent_type}] Passing to MultiServerMCPClient: {json.dumps(mcp_servers, indent=2, default=str)}")
-            client = MultiServerMCPClient(mcp_servers)
-            logger.info(f"[{agent_type}] MultiServerMCPClient created. Checking connections...")
+            
+            # Create MCP client with timeout protection
+            try:
+                # MultiServerMCPClient constructor should be fast, but wrap in timeout just in case
+                client = MultiServerMCPClient(mcp_servers)
+                logger.info(f"[{agent_type}] MultiServerMCPClient created. Checking connections...")
+            except Exception as client_error:
+                logger.error(
+                    f"[{agent_type}] Failed to create MultiServerMCPClient: {client_error}. "
+                    "Continuing without MCP tools.",
+                    exc_info=True
+                )
+                all_tools = []
+                loaded_tools = default_tools[:]
+                # Skip to agent creation without MCP tools
+                agent = create_agent(
+                    agent_type,
+                    agent_type,
+                    loaded_tools,
+                    agent_type,
+                    pre_model_hook,
+                    interrupt_before_tools=configurable.interrupt_before_tools,
+                )
+                return await _execute_agent_step(state, agent, agent_type)
             # Verify what connections were actually stored
             for server_name, connection in client.connections.items():
                 logger.info(
@@ -1584,11 +1838,33 @@ async def _setup_and_execute_agent_step(
                         f"[{agent_type}] Connection '{server_name}' dict contents: {json.dumps(connection, indent=2, default=str)}"
                     )
             loaded_tools = default_tools[:]
-            logger.info(f"[{agent_type}] Calling client.get_tools()...")
-            all_tools = await client.get_tools()
-            logger.info(
-                f"[{agent_type}] Retrieved {len(all_tools)} tools from MCP servers"
-            )
+            logger.info(f"[DEBUG-NODES] [MCP-5] [{agent_type}] About to call client.get_tools()...")
+            
+            # Add timeout to prevent hanging on MCP server connection
+            mcp_timeout = 30  # 30 seconds timeout for MCP connection
+            try:
+                logger.info(f"[DEBUG-NODES] [MCP-6] [{agent_type}] Calling asyncio.wait_for(client.get_tools(), timeout={mcp_timeout})")
+                all_tools = await asyncio.wait_for(
+                    client.get_tools(),
+                    timeout=mcp_timeout
+                )
+                logger.info(f"[DEBUG-NODES] [MCP-7] [{agent_type}] client.get_tools() completed successfully")
+                logger.info(
+                    f"[{agent_type}] Retrieved {len(all_tools)} tools from MCP servers"
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"[{agent_type}] MCP server connection timed out after {mcp_timeout}s. "
+                    "Continuing without MCP tools."
+                )
+                all_tools = []
+            except Exception as mcp_error:
+                logger.error(
+                    f"[{agent_type}] Failed to connect to MCP server: {mcp_error}. "
+                    "Continuing without MCP tools.",
+                    exc_info=True
+                )
+                all_tools = []
             logger.info(
                 f"[{agent_type}] MCP tool names: {[tool.name for tool in all_tools]}"
             )
@@ -1686,6 +1962,7 @@ async def researcher_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["research_team"]]:
     """Researcher node that do research"""
+    logger.info(f"[DEBUG-NODES] [NODE-RESEARCHER-1] Researcher node entered")
     logger.info("Researcher node is researching.")
     logger.debug(f"[researcher_node] Starting researcher agent")
     
@@ -1771,6 +2048,7 @@ async def pm_agent_node(
     This agent ONLY has access to PM tools (no web search) and is specifically
     designed to retrieve and analyze data from the connected PM system.
     """
+    logger.info(f"[DEBUG-NODES] [NODE-PM-AGENT-1] PM Agent node entered")
     import sys
     sys.stderr.write("\n🚨🚨🚨 PM_AGENT_NODE CALLED 🚨🚨🚨\n")
     sys.stderr.flush()

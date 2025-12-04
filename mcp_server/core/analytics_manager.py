@@ -222,11 +222,124 @@ class AnalyticsManager:
                     "[AnalyticsManager] Constructed composite sprint_id from project_id provider: %s",
                     sprint_id
                 )
+            elif project_id and ":" not in project_id:
+                # project_id is UUID format, use _parse_project_id to get provider_id
+                # _parse_project_id handles UUID format by treating it as provider_id
+                try:
+                    provider_id, _ = self._parse_project_id(project_id)
+                    # If _parse_project_id returns empty actual_project_id, it means project_id was treated as provider_id
+                    # But we need to find the actual provider from the project
+                    # Try to get service which will resolve the provider
+                    try:
+                        service, _ = await self.get_service(project_id)
+                        # Extract provider_id from the service's adapter
+                        if hasattr(service, 'adapter') and hasattr(service.adapter, 'provider'):
+                            provider_id = service.adapter.provider.provider_id
+                            sprint_id = f"{provider_id}:{sprint_id}"
+                            logger.info(
+                                "[AnalyticsManager] Constructed composite sprint_id from service adapter provider: %s",
+                                sprint_id
+                            )
+                        else:
+                            # Fallback: use provider_id from _parse_project_id
+                            sprint_id = f"{provider_id}:{sprint_id}"
+                            logger.info(
+                                "[AnalyticsManager] Constructed composite sprint_id from parsed provider_id: %s",
+                                sprint_id
+                            )
+                    except Exception as service_error:
+                        logger.warning(f"[AnalyticsManager] Failed to get service for project_id '{project_id}': {service_error}")
+                        # Fallback: try to get first active provider
+                        active_providers = self.provider_manager.get_active_providers()
+                        if active_providers:
+                            # Get provider_id from connection (stored in additional_config as backend_provider_id)
+                            provider_conn = active_providers[0]
+                            provider_id = None
+                            if provider_conn.additional_config and isinstance(provider_conn.additional_config, dict):
+                                provider_id = provider_conn.additional_config.get('backend_provider_id')
+                            if not provider_id:
+                                # Use connection ID as fallback
+                                provider_id = str(provider_conn.id)
+                            sprint_id = f"{provider_id}:{sprint_id}"
+                            logger.info(
+                                "[AnalyticsManager] Constructed composite sprint_id from first active provider: %s",
+                                sprint_id
+                            )
+                        else:
+                            raise ValueError(
+                                f"Cannot determine provider for sprint_id '{sprint_id}'. "
+                                "No active PM providers found. Please use composite format 'provider_id:sprint_key' "
+                                "or provide project_id in format 'provider_id:project_key'."
+                            )
+                except Exception as e:
+                    logger.warning(f"[AnalyticsManager] Failed to resolve provider for project_id '{project_id}': {e}")
+                    # Final fallback: try to get first active provider
+                    try:
+                        active_providers = self.provider_manager.get_active_providers()
+                        if active_providers:
+                            # Get provider_id from connection
+                            provider_conn = active_providers[0]
+                            provider_id = None
+                            if provider_conn.additional_config and isinstance(provider_conn.additional_config, dict):
+                                provider_id = provider_conn.additional_config.get('backend_provider_id')
+                            if not provider_id:
+                                provider_id = str(provider_conn.id)
+                            sprint_id = f"{provider_id}:{sprint_id}"
+                            logger.info(
+                                "[AnalyticsManager] Constructed composite sprint_id from first active provider (final fallback): %s",
+                                sprint_id
+                            )
+                        else:
+                            raise ValueError(
+                                f"sprint_id must be in composite format 'provider_id:sprint_key', got: '{sprint_id}'. "
+                                "Either use composite sprint_id or provide project_id with provider. "
+                                "No active PM providers found."
+                            )
+                    except Exception as fallback_error:
+                        raise ValueError(
+                            f"sprint_id must be in composite format 'provider_id:sprint_key', got: '{sprint_id}'. "
+                            "Either use composite sprint_id or provide project_id with provider. "
+                            f"Error: {fallback_error}"
+                        )
             else:
-                raise ValueError(
-                    f"sprint_id must be in composite format 'provider_id:sprint_key', got: '{sprint_id}'. "
-                    "Either use composite sprint_id or provide project_id with provider."
-                )
+                # No project_id provided, try to get from first active provider
+                try:
+                    active_providers = self.provider_manager.get_active_providers()
+                    if active_providers:
+                        # Get provider_id from the connection
+                        provider_connection = active_providers[0]
+                        # provider_id is stored in additional_config or we need to get it from backend_provider_id
+                        provider_id = None
+                        if hasattr(provider_connection, 'additional_config') and provider_connection.additional_config:
+                            provider_id = provider_connection.additional_config.get('backend_provider_id')
+                        if not provider_id:
+                            # Fallback: use provider connection ID or try to get from provider instance
+                            try:
+                                provider = await self.provider_manager.get_provider(str(provider_connection.id))
+                                if provider and hasattr(provider, 'config') and hasattr(provider.config, 'provider_id'):
+                                    provider_id = provider.config.provider_id
+                            except Exception:
+                                pass
+                        if not provider_id:
+                            # Last resort: use connection ID as provider_id
+                            provider_id = str(provider_connection.id)
+                        sprint_id = f"{provider_id}:{sprint_id}"
+                        logger.info(
+                            "[AnalyticsManager] Constructed composite sprint_id from first active provider (no project_id): %s",
+                            sprint_id
+                        )
+                    else:
+                        raise ValueError(
+                            f"sprint_id must be in composite format 'provider_id:sprint_key', got: '{sprint_id}'. "
+                            "Either use composite sprint_id or provide project_id with provider. "
+                            "No active PM providers found."
+                        )
+                except Exception as e:
+                    raise ValueError(
+                        f"sprint_id must be in composite format 'provider_id:sprint_key', got: '{sprint_id}'. "
+                        "Either use composite sprint_id or provide project_id with provider. "
+                        f"Error: {e}"
+                    )
         
         # Extract provider_id from sprint_id
         provider_id = sprint_id.split(":", 1)[0]

@@ -15,10 +15,25 @@ import sys
 import uvicorn
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+import os
+log_file = os.path.join(os.path.dirname(__file__), "logs", "backend.log")
+os.makedirs(os.path.dirname(log_file), exist_ok=True)
+
+# Create file handler
+file_handler = logging.FileHandler(log_file, mode='a')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
+# Create console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
+# Configure root logger
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+root_logger.addHandler(file_handler)
+root_logger.addHandler(console_handler)
 
 logger = logging.getLogger(__name__)
 

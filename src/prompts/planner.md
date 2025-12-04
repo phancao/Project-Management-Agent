@@ -241,7 +241,7 @@ For complex PM queries:
     {
       "need_search": false,
       "title": "Analyze Sprint 4",
-      "description": "🔴 CRITICAL: Use AGGREGATED analytics tools to avoid token limit errors!\n\n1. First call list_sprints(project_id) to find Sprint 4 and get its sprint_id\n2. PRIMARY: Call sprint_report(sprint_id, project_id) - Returns aggregated metrics WITHOUT raw task data (prevents token limits)\n3. SECONDARY: Call burndown_chart(sprint_id, project_id) - Returns aggregated burndown data\n4. OPTIONAL (only if needed): Call list_tasks_in_sprint(sprint_id, project_id) - ⚠️ WARNING: Returns ALL tasks (50+ tasks = 50k+ tokens). Only use if sprint_report doesn't provide enough detail. If you must use it, add filters like status='done' to reduce data size.\n\n❌ DO NOT call project-wide tools: velocity_chart, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart, project_health, get_project\n\nWhy? Aggregated tools (sprint_report, burndown_chart) return summarized data without raw task lists, preventing token limit errors.",
+      "description": "1. First call list_sprints(project_id) to find Sprint 4 and get its sprint_id\n2. PRIMARY: Call sprint_report(sprint_id, project_id) - Returns aggregated metrics and sprint analysis\n3. SECONDARY: Call burndown_chart(sprint_id, project_id) - Returns burndown chart data\n4. OPTIONAL: Call list_tasks_in_sprint(sprint_id, project_id) if you need detailed task information\n\n❌ DO NOT call project-wide tools: velocity_chart, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart, project_health, get_project\n\nWhy? Sprint-specific analysis should focus on the specific sprint, not the entire project.",
       "step_type": "pm_query"
     }
   ]
@@ -262,13 +262,13 @@ For complex PM queries:
 {
   "locale": "en-US",
   "has_enough_context": false,
-  "thought": "User wants to analyze resource assignation. Use aggregated tools to avoid token limit errors.",
+      "thought": "User wants to analyze resource assignation. Use appropriate tools to get workload per user.",
   "title": "Resource Assignation Analysis",
   "steps": [
     {
       "need_search": false,
       "title": "Analyze Resource Assignation",
-      "description": "🔴 MANDATORY TOOLS TO CALL (call these EXACTLY):\n1. list_users(project_id) - Get all team members in the project\n2. For EACH user from list_users, call: list_tasks_by_assignee(project_id, assignee_id=user_id) - Get tasks for that specific user (much smaller dataset than all tasks)\n3. list_unassigned_tasks(project_id) - Get tasks that are not assigned to anyone\n4. Optionally: work_distribution_chart(project_id, dimension='assignee') - Get aggregated workload summary (counts, percentages)\n\n🔴 FORBIDDEN TOOLS (DO NOT CALL THESE):\n- list_tasks(project_id) WITHOUT assignee_id - FORBIDDEN! Returns ALL tasks (100+ tasks), causes token limit errors\n- list_sprints - NOT NEEDED for resource analysis\n\nWhy? Resource analysis needs to check workload per user. Using list_tasks_by_assignee for each user returns only that user's tasks (e.g., 20-30 tasks per user), which is much more efficient than listing all 384 tasks at once.",
+      "description": "MANDATORY TOOLS TO CALL:\n1. list_users(project_id) - Get all team members in the project\n2. For EACH user from list_users, call: list_tasks_by_assignee(project_id, assignee_id=user_id) - Get tasks for that specific user\n3. list_unassigned_tasks(project_id) - Get tasks that are not assigned to anyone\n4. Optionally: work_distribution_chart(project_id, dimension='assignee') - Get aggregated workload summary (counts, percentages)\n\nWhy? Resource analysis needs to check workload per user. Using list_tasks_by_assignee for each user returns tasks for that specific user, making it easier to analyze per-user workload.",
       "step_type": "pm_query"
     }
   ]
@@ -280,7 +280,7 @@ For complex PM queries:
 - ✅ DO call: `list_tasks_by_assignee(project_id, assignee_id)` - For EACH user, get their tasks (returns only that user's tasks, much smaller dataset)
 - ✅ DO call: `list_unassigned_tasks(project_id)` - Get tasks that need to be assigned
 - ✅ Optionally call: `work_distribution_chart(project_id, dimension="assignee")` - Get aggregated summary (counts, percentages)
-- ❌ DO NOT call: `list_tasks(project_id)` WITHOUT assignee_id - Returns ALL tasks (384 tasks), causes token limit errors
+- Use `list_tasks_by_assignee` for per-user analysis instead of `list_tasks` without filters
 - **Why per-user approach?** `list_tasks_by_assignee` returns only tasks for one user (e.g., 20-30 tasks), which is much more efficient than listing all 384 tasks at once
 
 **🔴 CRITICAL RULES FOR SPRINT-SPECIFIC ANALYSIS:**
@@ -302,18 +302,18 @@ For complex PM queries:
 
 **🔴 MANDATORY: You MUST use `step_type: "pm_query"` (NOT "research" or "processing")!**
 
-**YOU MUST USE THIS SINGLE-STEP FORMAT (ALL 11 TOOLS):**
+**YOU MUST USE THIS SINGLE-STEP FORMAT (ALL 10 TOOLS):**
 ```json
 {
   "locale": "en-US",
   "has_enough_context": false,
-  "thought": "User wants project-wide analysis. Creating ONE step with ALL 11 analytics tools listed. This is a PM query, NOT a research query.",
+  "thought": "User wants project-wide analysis. Creating ONE step with ALL 10 analytics tools listed. This is a PM query, NOT a research query.",
   "title": "Comprehensive Project Analysis",
   "steps": [
     {
       "need_search": false,
       "title": "Full Project Analysis with All Analytics",
-      "description": "Call ALL 11 tools EXACTLY ONCE: get_project, project_health, list_sprints, list_tasks, velocity_chart, burndown_chart, sprint_report, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart. Each tool once only.",
+      "description": "MANDATORY TOOLS TO CALL (call these EXACTLY ONCE): get_project, project_health, list_sprints, velocity_chart, burndown_chart, sprint_report, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart. Each tool once only.\n\nWhy? Analytics tools provide comprehensive aggregated data for project analysis.",
       "step_type": "pm_query"
     }
   ]
@@ -326,6 +326,7 @@ For complex PM queries:
 - ❌ DO NOT use `step_type: "research"` - This routes to Researcher Agent (wrong!)
 - ❌ DO NOT use `step_type: "processing"` - This routes to Coder Agent (wrong!)
 - **If you use the wrong step_type, the PM tools will NOT be called and the agent will generate fake data!**
+- Analytics tools provide comprehensive data for project analysis
 
 **⚠️ DO NOT create multiple steps for project analysis! ONE step with ALL tools listed!**
 
@@ -341,7 +342,7 @@ See the 🔴🔴🔴 section above for the required single-step format for proje
 
 **WHY SINGLE STEP?**
 - Multiple steps = PM Agent only calls tools mentioned in each step
-- ONE step with ALL 11 tools = complete data collection
+- ONE step with ALL 10 tools = complete data collection
 - DO NOT split into "Get Project", "Check Health", "List Tasks" steps!
 
 ## Information Quantity and Quality Standards

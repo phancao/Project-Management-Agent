@@ -66,25 +66,23 @@ class AnalyticsService:
             return cached
         
         if not self.adapter:
-            logger.info("No analytics adapter configured for project %s", project_id)
-            return ChartResponse(
-                chart_type=ChartType.BURNDOWN,
-                title="Sprint Burndown",
-                series=[],
-                metadata={"message": "No data source configured for this project."},
-            )
+            error_msg = f"No analytics adapter configured for project {project_id}"
+            logger.error(f"[AnalyticsService] {error_msg}")
+            raise ValueError(error_msg)
 
-        sprint_data = await self.adapter.get_burndown_data(project_id, sprint_id, scope_type)
-        if sprint_data is None:
-            logger.info("No sprint data found for project %s", project_id)
-            return ChartResponse(
-                chart_type=ChartType.BURNDOWN,
-                title="Sprint Burndown",
-                series=[],
-                metadata={
-                    "message": "No sprint data available. Please configure sprints in your project."
-                },
-            )
+        try:
+            sprint_data = await self.adapter.get_burndown_data(project_id, sprint_id, scope_type)
+            if sprint_data is None:
+                error_msg = f"No sprint data found for project {project_id}"
+                logger.warning(f"[AnalyticsService] {error_msg}")
+                raise ValueError(error_msg)
+        except ValueError as e:
+            # Re-raise ValueError as-is (these are expected errors)
+            raise
+        except Exception as e:
+            error_msg = f"Failed to fetch burndown data for project {project_id}: {str(e)}"
+            logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
+            raise ValueError(error_msg) from e
         
         if not isinstance(sprint_data, SprintData):
             sprint_data = self._payload_to_sprint_data(sprint_data, project_id)
@@ -119,25 +117,23 @@ class AnalyticsService:
             return cached
         
         if not self.adapter:
-            logger.info("No analytics adapter configured for project %s", project_id)
-            return ChartResponse(
-                chart_type=ChartType.VELOCITY,
-                title="Team Velocity",
-                series=[],
-                metadata={"message": "No data source configured for this project."},
-            )
+            error_msg = f"No analytics adapter configured for project {project_id}"
+            logger.error(f"[AnalyticsService] {error_msg}")
+            raise ValueError(error_msg)
 
-        sprint_history = await self.adapter.get_velocity_data(project_id, sprint_count)
-        if not sprint_history:
-            logger.info("No sprint history found for project %s", project_id)
-            return ChartResponse(
-                chart_type=ChartType.VELOCITY,
-                title="Team Velocity",
-                series=[],
-                metadata={
-                    "message": "No sprint history available. Please configure sprints in your project."
-                },
-            )
+        try:
+            sprint_history = await self.adapter.get_velocity_data(project_id, sprint_count)
+            if not sprint_history:
+                error_msg = f"No sprint history found for project {project_id}"
+                logger.warning(f"[AnalyticsService] {error_msg}")
+                raise ValueError(error_msg)
+        except ValueError as e:
+            # Re-raise ValueError as-is (these are expected errors)
+            raise
+        except Exception as e:
+            error_msg = f"Failed to fetch velocity data for project {project_id}: {str(e)}"
+            logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
+            raise ValueError(error_msg) from e
 
         sprint_history = [
             self._payload_to_sprint_data(payload, project_id)
@@ -177,33 +173,23 @@ class AnalyticsService:
             return cached
         
         if not self.adapter:
-            logger.info("No analytics adapter configured for project %s", project_id)
-            # Return empty sprint report with informative message
-            return SprintReport(
-                sprint_id=sprint_id,
-                sprint_name=f"Sprint {sprint_id}",
-                project_id=project_id,
-                start_date=date.today(),
-                end_date=date.today(),
-                status="unknown",
-                planned_points=0,
-                completed_points=0,
-                added_points=0,
-                removed_points=0,
-                completion_rate=0.0,
-                velocity=0.0,
-                total_tasks=0,
-                completed_tasks=0,
-                in_progress_tasks=0,
-                todo_tasks=0,
-                team_members=[],
-                summary="Analytics adapter not configured. Sprint data unavailable.",
-                recommendations=["Configure analytics adapter to access sprint metrics and reports."]
-            )
+            error_msg = f"No analytics adapter configured for project {project_id}"
+            logger.error(f"[AnalyticsService] {error_msg}")
+            raise ValueError(error_msg)
 
-        sprint_data_payload = await self.adapter.get_sprint_report_data(sprint_id, project_id)
-        if sprint_data_payload is None:
-            raise ValueError(f"Sprint {sprint_id} not found or no data available.")
+        try:
+            sprint_data_payload = await self.adapter.get_sprint_report_data(sprint_id, project_id)
+            if sprint_data_payload is None:
+                error_msg = f"Sprint {sprint_id} not found or no data available for project {project_id}"
+                logger.warning(f"[AnalyticsService] {error_msg}")
+                raise ValueError(error_msg)
+        except ValueError as e:
+            # Re-raise ValueError as-is (these are expected errors)
+            raise
+        except Exception as e:
+            error_msg = f"Failed to fetch sprint report data for sprint {sprint_id} in project {project_id}: {str(e)}"
+            logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
+            raise ValueError(error_msg) from e
 
         if isinstance(sprint_data_payload, SprintData):
             sprint_data = sprint_data_payload
@@ -242,30 +228,25 @@ class AnalyticsService:
             return cached
 
         if not self.adapter:
-            logger.info("No analytics adapter configured for project %s", project_id)
-            return {
-                "project_id": project_id,
-                "message": "Analytics adapter not configured. Project metrics unavailable.",
-                "project_overview": None,
-                "sprints_summary": None,
-                "current_sprint": None,
-                "velocity": {"average": 0, "latest": 0, "trend": "unknown"},
-                "overall_stats": {"total_items": 0, "completed_items": 0, "completion_rate": 0},
-                "backlog_health": None,
-                "team_size": 0,
-                "recent_trends": []
-            }
+            error_msg = f"No analytics adapter configured for project {project_id}"
+            logger.error(f"[AnalyticsService] {error_msg}")
+            raise ValueError(error_msg)
 
         # Get ALL sprints for comprehensive project view (not just 3)
-        all_velocity_payloads = await self.adapter.get_velocity_data(project_id, num_sprints=20)
-        
-        if not all_velocity_payloads:
-            summary = {
-                "project_id": project_id,
-                "error": "No sprint data available",
-            }
-            self._set_cache(cache_key, summary)
-            return summary
+        try:
+            all_velocity_payloads = await self.adapter.get_velocity_data(project_id, num_sprints=20)
+            
+            if not all_velocity_payloads:
+                error_msg = f"No sprint data available for project {project_id}"
+                logger.warning(f"[AnalyticsService] {error_msg}")
+                raise ValueError(error_msg)
+        except ValueError as e:
+            # Re-raise ValueError as-is (these are expected errors)
+            raise
+        except Exception as e:
+            error_msg = f"Failed to fetch project summary data for project {project_id}: {str(e)}"
+            logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
+            raise ValueError(error_msg) from e
 
         # Convert all payloads to SprintData
         all_sprints: List[SprintData] = [
@@ -443,26 +424,34 @@ class AnalyticsService:
             return cached
         
         if not self.adapter:
-            logger.info("No analytics adapter configured for project %s", project_id)
-            return ChartResponse(
-                chart_type=ChartType.CFD,
-                title="Cumulative Flow Diagram",
-                series=[],
-                metadata={"message": "No data source configured for this project."},
-            )
+            error_msg = f"No analytics adapter configured for project {project_id}"
+            logger.error(f"[AnalyticsService] {error_msg}")
+            raise ValueError(error_msg)
 
-        cfd_data = await self.adapter.get_cfd_data(project_id, sprint_id, days_back)
-        chart = calculate_cfd(
-            work_items=cfd_data["work_items"],
-            start_date=cfd_data["start_date"],
-            end_date=cfd_data["end_date"],
-            statuses=cfd_data["statuses"],
-        )
-        
-        # Cache result
-        self._set_cache(cache_key, chart)
-        
-        return chart
+        try:
+            cfd_data = await self.adapter.get_cfd_data(project_id, sprint_id, days_back)
+            if not cfd_data or not cfd_data.get("work_items"):
+                error_msg = f"No CFD data available for project {project_id}"
+                logger.warning(f"[AnalyticsService] {error_msg}")
+                raise ValueError(error_msg)
+            chart = calculate_cfd(
+                work_items=cfd_data["work_items"],
+                start_date=cfd_data["start_date"],
+                end_date=cfd_data["end_date"],
+                statuses=cfd_data["statuses"],
+            )
+            
+            # Cache result
+            self._set_cache(cache_key, chart)
+            
+            return chart
+        except ValueError as e:
+            # Re-raise ValueError as-is (these are expected errors)
+            raise
+        except Exception as e:
+            error_msg = f"Failed to fetch CFD data for project {project_id}: {str(e)}"
+            logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
+            raise ValueError(error_msg) from e
     
     async def get_cycle_time_chart(
         self,
@@ -487,21 +476,29 @@ class AnalyticsService:
             return cached
         
         if not self.adapter:
-            logger.info("No analytics adapter configured for project %s", project_id)
-            return ChartResponse(
-                chart_type=ChartType.CYCLE_TIME,
-                title="Cycle Time",
-                series=[],
-                metadata={"message": "No data source configured for this project."},
-            )
+            error_msg = f"No analytics adapter configured for project {project_id}"
+            logger.error(f"[AnalyticsService] {error_msg}")
+            raise ValueError(error_msg)
 
-        work_items = await self.adapter.get_cycle_time_data(project_id, sprint_id, days_back)
-        chart = calculate_cycle_time(work_items=work_items)
-        
-        # Cache result
-        self._set_cache(cache_key, chart)
-        
-        return chart
+        try:
+            work_items = await self.adapter.get_cycle_time_data(project_id, sprint_id, days_back)
+            if not work_items:
+                error_msg = f"No cycle time data available for project {project_id}"
+                logger.warning(f"[AnalyticsService] {error_msg}")
+                raise ValueError(error_msg)
+            chart = calculate_cycle_time(work_items=work_items)
+            
+            # Cache result
+            self._set_cache(cache_key, chart)
+            
+            return chart
+        except ValueError as e:
+            # Re-raise ValueError as-is (these are expected errors)
+            raise
+        except Exception as e:
+            error_msg = f"Failed to fetch cycle time data for project {project_id}: {str(e)}"
+            logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
+            raise ValueError(error_msg) from e
     
     async def get_work_distribution_chart(
         self,
@@ -526,21 +523,29 @@ class AnalyticsService:
             return cached
         
         if not self.adapter:
-            logger.info("No analytics adapter configured for project %s", project_id)
-            return ChartResponse(
-                chart_type=ChartType.DISTRIBUTION,
-                title="Work Distribution",
-                series=[],
-                metadata={"message": "No data source configured for this project."},
-            )
+            error_msg = f"No analytics adapter configured for project {project_id}"
+            logger.error(f"[AnalyticsService] {error_msg}")
+            raise ValueError(error_msg)
 
-        work_items = await self.adapter.get_work_distribution_data(project_id, sprint_id)
-        chart = calculate_work_distribution(work_items=work_items, dimension=dimension)
-        
-        # Cache result
-        self._set_cache(cache_key, chart)
-        
-        return chart
+        try:
+            work_items = await self.adapter.get_work_distribution_data(project_id, sprint_id)
+            if not work_items:
+                error_msg = f"No work distribution data available for project {project_id}"
+                logger.warning(f"[AnalyticsService] {error_msg}")
+                raise ValueError(error_msg)
+            chart = calculate_work_distribution(work_items=work_items, dimension=dimension)
+            
+            # Cache result
+            self._set_cache(cache_key, chart)
+            
+            return chart
+        except ValueError as e:
+            # Re-raise ValueError as-is (these are expected errors)
+            raise
+        except Exception as e:
+            error_msg = f"Failed to fetch work distribution data for project {project_id}: {str(e)}"
+            logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
+            raise ValueError(error_msg) from e
     
     async def get_issue_trend_chart(
         self,
@@ -565,25 +570,33 @@ class AnalyticsService:
             return cached
         
         if not self.adapter:
-            logger.info("No analytics adapter configured for project %s", project_id)
-            return ChartResponse(
-                chart_type=ChartType.TREND,
-                title="Issue Trend",
-                series=[],
-                metadata={"message": "No data source configured for this project."},
-            )
+            error_msg = f"No analytics adapter configured for project {project_id}"
+            logger.error(f"[AnalyticsService] {error_msg}")
+            raise ValueError(error_msg)
 
-        trend_data = await self.adapter.get_issue_trend_data(project_id, days_back, sprint_id)
-        chart = calculate_issue_trend(
-            work_items=trend_data["work_items"],
-            start_date=trend_data["start_date"],
-            end_date=trend_data["end_date"],
-        )
-        
-        # Cache result
-        self._set_cache(cache_key, chart)
-        
-        return chart
+        try:
+            trend_data = await self.adapter.get_issue_trend_data(project_id, days_back, sprint_id)
+            if not trend_data or not trend_data.get("work_items"):
+                error_msg = f"No issue trend data available for project {project_id}"
+                logger.warning(f"[AnalyticsService] {error_msg}")
+                raise ValueError(error_msg)
+            chart = calculate_issue_trend(
+                work_items=trend_data["work_items"],
+                start_date=trend_data["start_date"],
+                end_date=trend_data["end_date"],
+            )
+            
+            # Cache result
+            self._set_cache(cache_key, chart)
+            
+            return chart
+        except ValueError as e:
+            # Re-raise ValueError as-is (these are expected errors)
+            raise
+        except Exception as e:
+            error_msg = f"Failed to fetch issue trend data for project {project_id}: {str(e)}"
+            logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
+            raise ValueError(error_msg) from e
     
     def clear_cache(self):
         """Clear all cached data"""

@@ -14,7 +14,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
-from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage, HumanMessage
 from langgraph.checkpoint.mongodb import AsyncMongoDBSaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.store.memory import InMemoryStore
@@ -728,6 +728,9 @@ async def _stream_graph_events(
                                 f"[{safe_thread_id}] ❌ Task failed: {task_name} "
                                 f"(id={task_id}, step={step}): {error}"
                             )
+                            
+                            # Check if this is a quota error - we'll handle it in the main exception handler
+                            # since debug events don't stream to client
                         else:
                             logger.info(
                                 f"[{safe_thread_id}] ✅ Task completed: {task_name} "
@@ -980,10 +983,25 @@ async def _stream_graph_events(
                         # in the "messages" stream. Streaming here would create
                         # a duplicate message with a different ID, causing the
                         # frontend to not recognize the finish_reason properly.
-                        # Only stream non-reporter messages from state updates.
-                        if "messages" in node_update and node_name != "reporter":
+                        # Stream messages from state updates
+                        # For reporter, we stream errors from state updates (success messages come from "messages" stream)
+                        if "messages" in node_update:
                             messages = node_update.get("messages", [])
                             if messages:
+                                # For reporter, only stream if it's an error (has error in metadata)
+                                if node_name == "reporter":
+                                    # Check if any message has error metadata
+                                    has_error = any(
+                                        hasattr(msg, 'response_metadata') and 
+                                        msg.response_metadata and 
+                                        msg.response_metadata.get('finish_reason') == 'error'
+                                        for msg in messages
+                                    )
+                                    if not has_error:
+                                        # Reporter success messages come from "messages" stream, skip here
+                                        continue
+                                
+                                # For non-reporter nodes, always stream
                                 # Get the latest message
                                 import sys
                                 sys.stderr.write(f"\n🔍 CHECKING MESSAGES: node_name='{node_name}', messages_count={len(messages)}\n")
@@ -1012,14 +1030,22 @@ async def _stream_graph_events(
                                             (node_name,),
                                         ):
                                             yield event
-                                    # Process AIMessages
-                                    elif (
-                                        isinstance(msg, AIMessage)
-                                        and msg.name == node_name
-                                    ):
-                                        import sys
-                                        sys.stderr.write(f"\n✨ STREAMING MESSAGE: node_name='{node_name}', content_len={len(msg.content)}\n")
-                                        sys.stderr.flush()
+                                    # Process AIMessage and HumanMessage - yield message_chunk events
+                                    elif isinstance(msg, (AIMessage, HumanMessage)):
+                                        logger.info(
+                                            f"[{safe_thread_id}] 📨 Processing {type(msg).__name__} from updates stream: "
+                                            f"name={getattr(msg, 'name', 'N/A')}"
+                                        )
+                                        msg_metadata = {
+                                            "langgraph_node": node_name,
+                                        }
+                                        async for event in _process_message_chunk(
+                                            msg,
+                                            msg_metadata,
+                                            thread_id,
+                                            (node_name,),
+                                        ):
+                                            yield event
                                         
                                         logger.debug(
                                             f"[{safe_thread_id}] "
@@ -1065,13 +1091,72 @@ async def _stream_graph_events(
             f"[{safe_thread_id}] ❌ Error in graph event stream: {e}",
             exc_info=True
         )
-        yield _make_event(
-            "error",
-            {
-                "thread_id": thread_id,
-                "error": f"Streaming error: {str(e)}",
-            }
+        
+        # Check for quota/rate limit errors and provide user-friendly message
+        error_str = str(e)
+        error_type = type(e).__name__
+        
+        is_quota_error = (
+            "429" in error_str or
+            "insufficient_quota" in error_str.lower() or
+            "quota" in error_str.lower() or
+            "rate limit" in error_str.lower() or
+            "RateLimitError" in error_type or
+            "exceeded" in error_str.lower() and "quota" in error_str.lower()
         )
+        
+        if is_quota_error:
+            # Extract provider name from error if available
+            provider_name = "OpenAI"  # Default
+            if "openai" in error_str.lower():
+                provider_name = "OpenAI"
+            elif "anthropic" in error_str.lower():
+                provider_name = "Anthropic"
+            elif "google" in error_str.lower():
+                provider_name = "Google"
+            
+            quota_message = f"""⚠️ **AI Provider Quota Exceeded**
+
+Your {provider_name} account has exceeded its usage quota or rate limit. 
+
+**To continue using the service, please:**
+
+1. **Check your {provider_name} account billing:**
+   - Visit your {provider_name} dashboard
+   - Review your usage and billing information
+   - Add payment method or increase your quota
+
+2. **For OpenAI:** https://platform.openai.com/account/billing
+3. **For Anthropic:** https://console.anthropic.com/settings/billing
+4. **For Google:** https://console.cloud.google.com/billing
+
+Once you've added credits or increased your quota, you can try your request again.
+
+**Error Details:** {error_str[:200]}"""
+            
+            # Stream as a message_chunk so frontend displays it properly
+            quota_event = {
+                "id": str(uuid4()),
+                "thread_id": thread_id,
+                "agent": "system",
+                "role": "assistant",
+                "content": quota_message,
+                "finish_reason": "error",
+                "error_type": "quota_exceeded",
+                "provider": provider_name
+            }
+            # Use the same format as other message chunks
+            json_data = json.dumps(quota_event, ensure_ascii=False, separators=(",", ":"))
+            yield f"event: message_chunk\ndata: {json_data}\n\n"
+        else:
+            # For other errors, use the standard error event
+            yield _make_event(
+                "error",
+                {
+                    "thread_id": thread_id,
+                    "error": f"Streaming error: {str(e)}",
+                }
+            )
 
 
 async def _astream_workflow_generator(

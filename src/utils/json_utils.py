@@ -139,65 +139,188 @@ def repair_json_output(content: str) -> str:
     return content
 
 
+def _create_task_summary(tasks: list, max_items: int) -> list:
+    """
+    Create an intelligent summary of tasks by grouping and aggregating data.
+    
+    Args:
+        tasks: List of task dictionaries
+        max_items: Maximum number of sample tasks to include
+        
+    Returns:
+        List containing summary statistics and representative samples
+    """
+    if not tasks:
+        return []
+    
+    # Analyze all tasks to create comprehensive summary
+    status_counts = {}
+    priority_counts = {}
+    assignee_counts = {}
+    total_hours = 0
+    completed_hours = 0
+    high_priority_tasks = []
+    recent_tasks = []
+    
+    for task in tasks:
+        if isinstance(task, dict):
+            # Count by status
+            status = task.get("status", "unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+            
+            # Count by priority
+            priority = task.get("priority", "unknown")
+            priority_counts[priority] = priority_counts.get(priority, 0) + 1
+            
+            # Count by assignee
+            assignee = task.get("assigned_to") or task.get("assignee") or "unassigned"
+            assignee_counts[assignee] = assignee_counts.get(assignee, 0) + 1
+            
+            # Sum hours
+            hours = task.get("estimated_hours", 0) or 0
+            total_hours += hours
+            if status in ["done", "completed", "closed"]:
+                completed_hours += hours
+            
+            # Collect high priority tasks
+            if priority in ["high", "critical", "urgent"]:
+                high_priority_tasks.append(task)
+            
+            # Collect recent tasks (by updated_at or created_at)
+            if task.get("updated_at") or task.get("created_at"):
+                recent_tasks.append(task)
+    
+    # Sort recent tasks by date (most recent first)
+    recent_tasks.sort(
+        key=lambda t: t.get("updated_at") or t.get("created_at") or "",
+        reverse=True
+    )
+    
+    # Create summary structure
+    summary_items = []
+    
+    # Overall statistics
+    summary_items.append({
+        "_summary_type": "statistics",
+        "total_tasks": len(tasks),
+        "status_breakdown": status_counts,
+        "priority_breakdown": priority_counts,
+        "assignee_breakdown": assignee_counts,
+        "total_estimated_hours": round(total_hours, 1),
+        "completed_hours": round(completed_hours, 1),
+        "completion_percentage": round((completed_hours / total_hours * 100) if total_hours > 0 else 0, 1)
+    })
+    
+    # Representative samples: high priority tasks first, then recent tasks
+    samples = []
+    sample_count = min(max_items, len(tasks))
+    
+    # Add high priority tasks as samples (up to half of max_items)
+    high_priority_samples = min(len(high_priority_tasks), sample_count // 2)
+    samples.extend(high_priority_tasks[:high_priority_samples])
+    
+    # Add recent tasks as samples (fill remaining slots)
+    remaining_slots = sample_count - len(samples)
+    for task in recent_tasks:
+        if len(samples) >= sample_count:
+            break
+        # Avoid duplicates
+        if task not in samples:
+            samples.append(task)
+    
+    # If we still need more samples, add from the beginning
+    if len(samples) < sample_count:
+        for task in tasks:
+            if len(samples) >= sample_count:
+                break
+            if task not in samples:
+                samples.append(task)
+    
+    # Add samples with metadata
+    if samples:
+        summary_items.append({
+            "_summary_type": "samples",
+            "_note": f"Showing {len(samples)} representative tasks (high priority and recent)",
+            "_samples": samples
+        })
+    
+    return summary_items
+
+
 def _compress_large_array(data: Any, max_items: int = 20) -> Any:
     """
-    Compress large arrays by keeping only a summary and sample items.
+    Compress large arrays by creating intelligent summaries instead of cutting off content.
+    
+    This function analyzes the data structure and creates meaningful summaries:
+    - For task lists: Groups by status, priority, assignee and shows statistics + samples
+    - For general arrays: Analyzes structure and creates category summaries
     
     Args:
         data: Data structure (dict, list, etc.)
         max_items: Maximum items to keep in arrays (default 20 for token efficiency)
         
     Returns:
-        Compressed data structure
+        Compressed data structure with summaries instead of cut-off content
     """
     if isinstance(data, list):
         if len(data) > max_items:
-            # Keep first few and last few items, add summary
-            keep_count = max_items // 2
-            compressed = (
-                data[:keep_count] + 
-                [{"_summary": f"... {len(data) - max_items} more items (total: {len(data)}) ..."}] +
-                data[-keep_count:]
+            # Check if this looks like a task list
+            is_task_list = (
+                len(data) > 0 and
+                isinstance(data[0], dict) and
+                any(key in data[0] for key in ["status", "priority", "assigned_to", "assignee", "task_id", "title"])
             )
-            logger.info(f"Compressed array from {len(data)} to {len(compressed)} items")
-            return compressed
+            
+            if is_task_list:
+                # Use intelligent task summarization
+                summary = _create_task_summary(data, max_items)
+                logger.info(f"Compressed task list from {len(data)} items to summary with {len(summary)} sections")
+                return summary
+            else:
+                # For generic arrays, create category-based summary
+                # Group items by type or key characteristics
+                item_types = {}
+                for item in data:
+                    item_type = type(item).__name__
+                    if item_type not in item_types:
+                        item_types[item_type] = []
+                    item_types[item_type].append(item)
+                
+                # Create summary with type breakdown and samples
+                summary = [{
+                    "_summary_type": "array_summary",
+                    "total_items": len(data),
+                    "type_breakdown": {k: len(v) for k, v in item_types.items()},
+                    "_note": f"Array contains {len(data)} items across {len(item_types)} types"
+                }]
+                
+                # Add samples from each type (proportional to type frequency)
+                samples = []
+                samples_per_type = max(1, max_items // len(item_types)) if item_types else max_items
+                for item_type, items in item_types.items():
+                    samples.extend(items[:samples_per_type])
+                    if len(samples) >= max_items:
+                        break
+                
+                if samples:
+                    summary.append({
+                        "_summary_type": "samples",
+                        "_note": f"Showing {len(samples)} representative items",
+                        "_samples": samples[:max_items]
+                    })
+                
+                logger.info(f"Compressed array from {len(data)} to summary with {len(summary)} sections")
+                return summary
         else:
             return [_compress_large_array(item, max_items) for item in data]
     elif isinstance(data, dict):
-        # Check if this is a task list response - compress more aggressively
+        # Check if this is a task list response - use intelligent summarization
         if "tasks" in data and isinstance(data["tasks"], list) and len(data["tasks"]) > max_items:
             tasks = data["tasks"]
-            keep_count = max_items // 2
-            # For very large task lists, create a summary instead of keeping samples
-            if len(tasks) > 100:
-                # For 100+ tasks, just return summary statistics
-                status_counts = {}
-                priority_counts = {}
-                total_hours = 0
-                for task in tasks[:100]:  # Sample first 100 for stats
-                    if isinstance(task, dict):
-                        status = task.get("status", "unknown")
-                        priority = task.get("priority", "unknown")
-                        status_counts[status] = status_counts.get(status, 0) + 1
-                        priority_counts[priority] = priority_counts.get(priority, 0) + 1
-                        total_hours += task.get("estimated_hours", 0) or 0
-                
-                compressed_tasks = [
-                    {"_summary": f"Total tasks: {len(tasks)}", "_compressed": True},
-                    {"_summary": f"Status breakdown: {status_counts}", "_compressed": True},
-                    {"_summary": f"Priority breakdown: {priority_counts}", "_compressed": True},
-                    {"_summary": f"Total estimated hours: {total_hours:.1f}", "_compressed": True},
-                    {"_summary": f"Showing first {keep_count} tasks as samples", "_compressed": True},
-                ] + tasks[:keep_count]
-                logger.info(f"Compressed large task list from {len(tasks)} to {len(compressed_tasks)} items (summary mode)")
-            else:
-                compressed_tasks = (
-                    tasks[:keep_count] +
-                    [{"_summary": f"... {len(tasks) - max_items} more tasks (total: {len(tasks)}) ..."}] +
-                    tasks[-keep_count:]
-                )
-                logger.info(f"Compressed task list from {len(tasks)} to {len(compressed_tasks)} tasks")
-            return {**data, "tasks": compressed_tasks, "_total_tasks": len(tasks), "_compressed": True}
+            # Always use intelligent summarization for task lists
+            compressed_tasks = _create_task_summary(tasks, max_items)
+            logger.info(f"Compressed task list from {len(tasks)} to summary (intelligent summarization)")
+            return {**data, "tasks": compressed_tasks, "_total_tasks": len(tasks), "_compressed": True, "_compression_method": "intelligent_summary"}
         else:
             return {k: _compress_large_array(v, max_items) for k, v in data.items()}
     else:

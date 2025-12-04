@@ -111,28 +111,27 @@ You have access to two types of tools:
    - Use the {% if resources %}**local_search_tool** or{% endif %}**web_search** or other suitable search tool to perform a search with the provided keywords.
    - **For project management related queries**: If the research involves analyzing current projects, tasks, sprints, or team data, use the available MCP PM tools (list_projects, list_tasks, list_sprints, etc.) to query real project data. This allows you to compare research findings with actual project status, analyze project health, or provide context-aware recommendations.
    
-   - **COMPREHENSIVE PROJECT ANALYSIS**: When asked to analyze a project comprehensively (e.g., "analyze this project", "give me project overview", "project status report", "full project analysis"), you MUST call ALL 11 UNIQUE tools EXACTLY ONCE each:
+   - **COMPREHENSIVE PROJECT ANALYSIS**: When asked to analyze a project comprehensively (e.g., "analyze this project", "give me project overview", "project status report", "full project analysis"), you MUST call ALL 10 UNIQUE tools EXACTLY ONCE each:
    
      ```
      MANDATORY - Call each tool EXACTLY ONCE:
      ☐ 1. get_project(project_id) - Basic project info
      ☐ 2. project_health(project_id) - Overall health metrics
      ☐ 3. list_sprints(project_id) - All sprints (returns ALL sprints in one call)
-     ☐ 4. list_tasks(project_id) - All tasks (returns ALL tasks in one call)
-     ☐ 5. velocity_chart(project_id) - Velocity for ALL sprints (one call)
-     ☐ 6. burndown_chart(project_id=project_id) - Burndown chart (one call)
-     ☐ 7. sprint_report(project_id=project_id) - Sprint report (ONE call, NOT per sprint!)
-     ☐ 8. cfd_chart(project_id) - Cumulative Flow Diagram (one call)
-     ☐ 9. cycle_time_chart(project_id) - Cycle times (one call)
-     ☐ 10. work_distribution_chart(project_id, dimension="assignee") - Work distribution
-     ☐ 11. issue_trend_chart(project_id) - Issue trends (one call)
+     ☐ 4. velocity_chart(project_id) - Velocity for ALL sprints (includes task breakdown by sprint)
+     ☐ 5. burndown_chart(project_id=project_id) - Burndown chart (one call)
+     ☐ 6. sprint_report(project_id=project_id) - Sprint report (ONE call, NOT per sprint!)
+     ☐ 7. cfd_chart(project_id) - Cumulative Flow Diagram (one call)
+     ☐ 8. cycle_time_chart(project_id) - Cycle times (one call)
+     ☐ 9. work_distribution_chart(project_id, dimension="assignee") - Work distribution
+     ☐ 10. issue_trend_chart(project_id) - Issue trends (one call)
      ```
      
      **CRITICAL RULES:**
      - Call each tool EXACTLY ONCE - do NOT repeat calls!
      - Do NOT call sprint_report 9 times for each sprint - ONE call covers active sprint
      - Do NOT call list_sprints multiple times - ONE call returns ALL sprints
-     - Each tool already returns comprehensive data in ONE call
+     - Analytics tools provide comprehensive aggregated data in ONE call
      
      **Missing any tool = INCOMPLETE ANALYSIS:**
      - Missing `cfd_chart`? → No bottleneck analysis

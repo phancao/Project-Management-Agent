@@ -4,10 +4,13 @@ Sprint Report Tool
 Generates comprehensive sprint analysis reports.
 """
 
+import logging
 from typing import Any, Optional
 
 from ..base import AnalyticsTool
 from ..decorators import mcp_tool, require_sprint
+
+logger = logging.getLogger(__name__)
 
 
 @mcp_tool(
@@ -22,7 +25,7 @@ from ..decorators import mcp_tool, require_sprint
         "properties": {
             "sprint_id": {
                 "type": "string",
-                "description": "Sprint ID"
+                "description": "Sprint ID (numeric ID, sprint name, or 'current' for active sprint)"
             },
             "project_id": {
                 "type": "string",
@@ -55,7 +58,7 @@ class SprintReportTool(AnalyticsTool):
         Generate sprint report.
         
         Args:
-            sprint_id: Sprint ID (can include "#" prefix, e.g., "#7" or "7")
+            sprint_id: Sprint ID (can include "#" prefix, e.g., "#7" or "7", or "current" for active sprint)
             project_id: Project ID (optional, uses first active provider if not provided)
         
         Returns:
@@ -71,6 +74,11 @@ class SprintReportTool(AnalyticsTool):
         # Normalize sprint_id: strip "#" prefix if present
         if sprint_id and sprint_id.startswith("#"):
             sprint_id = sprint_id[1:]
+        
+        # Resolve 'current' to actual active sprint ID
+        # Note: This is handled by _resolve_sprint_id in PMProviderAnalyticsAdapter,
+        # but we can also handle it here for better error messages
+        # The analytics manager will call the adapter which will resolve 'current'
         
         # Get sprint report from analytics manager
         result = await self.context.analytics_manager.get_sprint_report(

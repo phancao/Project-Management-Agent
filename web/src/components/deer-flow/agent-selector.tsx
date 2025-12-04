@@ -14,7 +14,7 @@ import {
 } from "~/components/ui/select";
 import { setEnableBackgroundInvestigation, setReportStyle, setModelProvider, useSettingsStore } from "~/core/store";
 import { useConfig } from "~/core/api/hooks";
-import { listAIProviders } from "~/core/api/ai-providers";
+import { listAIProviders, saveAIProvider } from "~/core/api/ai-providers";
 import type { ModelProvider } from "~/core/config/types";
 import { useState, useEffect } from "react";
 
@@ -145,10 +145,55 @@ export function AgentSelector() {
   const currentProvider = providers.find((p: ModelProvider) => p.id === modelProvider);
   const currentModel = currentProvider?.models.find((m) => m === modelName) || currentProvider?.models[0];
 
-  const handleModelChange = (value: string) => {
+  const handleModelChange = async (value: string) => {
     // Format: "providerId:modelName" or just "providerId"
     const [providerId, selectedModel] = value.includes(":") ? value.split(":") : [value, undefined];
+    
+    // Update local state immediately
     setModelProvider(providerId, selectedModel);
+    
+    // Also update the default model in the database for this provider
+    if (providerId && selectedModel) {
+      try {
+        // Get the current provider configuration
+        const providers = await listAIProviders();
+        const existingProvider = providers.find((p) => p.provider_id === providerId);
+        
+        if (existingProvider) {
+          // Update the provider's default model in the database
+          await saveAIProvider({
+            provider_id: providerId,
+            provider_name: existingProvider.provider_name,
+            model_name: selectedModel,
+            base_url: existingProvider.base_url || undefined,
+            is_active: existingProvider.is_active,
+            // Don't send api_key - it will be preserved on the backend
+          });
+        } else {
+          // Provider not configured yet, try to get info from config
+          const providerConfig = allProviders.find((p: ModelProvider) => p.id === providerId);
+          if (providerConfig) {
+            // Create new provider entry with just the model name
+            // Note: This will fail without API key, but that's okay - user can add it later
+            try {
+              await saveAIProvider({
+                provider_id: providerId,
+                provider_name: providerConfig.name,
+                model_name: selectedModel,
+                base_url: providerConfig.base_url,
+                is_active: true,
+              });
+            } catch (error) {
+              // If it fails (e.g., no API key), that's okay - model selection still works for this session
+              console.warn("Could not save model to database (provider may not be configured yet):", error);
+            }
+          }
+        }
+      } catch (error) {
+        // If database update fails, log but don't block the UI update
+        console.warn("Failed to update default model in database:", error);
+      }
+    }
   };
 
   const CurrentIcon = currentPreset.icon;

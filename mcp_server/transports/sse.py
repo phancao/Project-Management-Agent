@@ -82,16 +82,37 @@ def create_sse_app(context: ToolContext, config: PMServerConfig, mcp_server_inst
     @app.get("/health")
     async def health_check():
         """Health check endpoint"""
+        # Use a fresh database session for health check to avoid transaction issues
+        from ..database.connection import get_mcp_db_session
+        
+        db = next(get_mcp_db_session())
         try:
-            providers = context.provider_manager.get_active_providers()
+            # Create a temporary provider manager with fresh session
+            from ..core.provider_manager import ProviderManager
+            temp_provider_manager = ProviderManager(db_session=db, user_id=context.user_id)
+            
+            providers = temp_provider_manager.get_active_providers()
             return {
                 "status": "healthy",
-                "providers": len(providers),
+                "version": config.server_version,
+                "providers_count": len(providers),
+                "database_connected": True,
                 "tools": len(mcp_server_instance._tool_names) if mcp_server_instance else 0
             }
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
-            return {"status": "unhealthy", "error": str(e)}
+            logger.error(f"Health check failed: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return {
+                "status": "unhealthy",
+                "version": config.server_version,
+                "error": str(e),
+                "database_connected": False
+            }
+        finally:
+            db.close()
     
     @app.get("/sse")
     async def sse_endpoint(request: Request):

@@ -98,9 +98,10 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         - Numeric ID: "613" -> returns ("613", sprint_object)
         - Composite ID: "uuid:613" -> extracts "613", returns ("613", sprint_object)
         - Sprint name: "Sprint 4" or "sprint-4" -> looks up by name, returns (numeric_id, sprint_object)
+        - "current" -> finds active sprint, returns (numeric_id, sprint_object)
         
         Args:
-            sprint_id: Sprint identifier (ID, composite ID, or name)
+            sprint_id: Sprint identifier (ID, composite ID, name, or "current")
             project_key: Project key for listing sprints
         
         Returns:
@@ -108,6 +109,53 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         """
         # Extract sprint key from composite ID
         sprint_key = self._extract_sprint_key(sprint_id)
+        
+        # Handle 'current' - find active sprint
+        if sprint_key.lower() == "current":
+            logger.info(f"[PMProviderAnalyticsAdapter] Resolving 'current' sprint for project '{project_key}'...")
+            try:
+                # First try to get active sprints
+                active_sprints = await self.provider.list_sprints(
+                    project_id=project_key, state="active"
+                )
+                if not active_sprints:
+                    # If no active sprints, try "in_progress" or "open"
+                    all_sprints = await self.provider.list_sprints(project_id=project_key)
+                    # Filter for active statuses
+                    active_sprints = [
+                        s for s in all_sprints
+                        if s.status and s.status.lower() in ("active", "in_progress", "open", "in progress")
+                    ]
+                
+                if not active_sprints:
+                    # If still no active sprint, use the most recent sprint
+                    all_sprints = await self.provider.list_sprints(project_id=project_key)
+                    if all_sprints:
+                        # Sort by start_date or id to get most recent
+                        all_sprints_sorted = sorted(
+                            all_sprints,
+                            key=lambda s: (s.start_date or datetime.min, s.id or ""),
+                            reverse=True
+                        )
+                        active_sprints = [all_sprints_sorted[0]]
+                
+                if not active_sprints:
+                    raise ValueError(
+                        f"No sprints found for project '{project_key}'. "
+                        "Please create a sprint first or specify a specific sprint_id."
+                    )
+                
+                sprint = active_sprints[0]
+                logger.info(
+                    f"[PMProviderAnalyticsAdapter] Resolved 'current' to sprint: {sprint.name} (id={sprint.id})"
+                )
+                return str(sprint.id), sprint
+            except Exception as e:
+                logger.error(f"[PMProviderAnalyticsAdapter] Failed to resolve 'current' sprint: {e}")
+                raise ValueError(
+                    f"Could not find current/active sprint for project '{project_key}'. "
+                    f"Error: {str(e)}"
+                ) from e
         
         # Check if it's a numeric ID
         if sprint_key.isdigit():
@@ -500,13 +548,34 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 logger.warning(f"[PMProviderAnalyticsAdapter] Sprint {sprint_id} not found")
                 raise ValueError(f"Sprint '{sprint_id}' not found.")
             
-            # Get all tasks in sprint
+            # Get tasks in sprint
             if not project_key:
                 project_key = self._extract_project_key(sprint.project_id or "")
-            all_tasks = await self.provider.list_tasks(project_id=project_key)
-            # Filter tasks by sprint_id (compare as strings to handle type mismatches)
-            sprint_tasks = [t for t in all_tasks if str(t.sprint_id) == str(sprint_id)]
-            logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks in sprint {sprint_id}")
+            
+            # NOTE: This fetches all tasks and filters - this is inefficient for large projects
+            # but necessary since the base provider interface doesn't support sprint_id filtering
+            # TODO: Add sprint_id parameter to base provider list_tasks method for efficiency
+            try:
+                logger.info(f"[PMProviderAnalyticsAdapter] Fetching tasks for project {project_key} to filter by sprint {sprint_id}")
+                all_tasks = await self.provider.list_tasks(project_id=project_key)
+                logger.info(f"[PMProviderAnalyticsAdapter] Fetched {len(all_tasks)} total tasks, filtering by sprint_id={sprint_id}")
+                
+                # Filter tasks by sprint_id (compare as strings to handle type mismatches)
+                sprint_tasks = [t for t in all_tasks if t.sprint_id and str(t.sprint_id) == str(sprint_id)]
+                logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks in sprint {sprint_id}")
+                
+                # Warn if we fetched many tasks but found few in sprint (inefficiency indicator)
+                if len(all_tasks) > 100 and len(sprint_tasks) < 10:
+                    logger.warning(
+                        f"[PMProviderAnalyticsAdapter] Inefficient: Fetched {len(all_tasks)} tasks to get {len(sprint_tasks)} sprint tasks. "
+                        "Consider adding sprint_id filtering to provider interface."
+                    )
+            except Exception as e:
+                logger.error(f"[PMProviderAnalyticsAdapter] Error fetching tasks for sprint {sprint_id}: {e}", exc_info=True)
+                # Re-raise with context
+                raise ValueError(
+                    f"Failed to fetch tasks for sprint {sprint_id} in project {project_key}: {str(e)}"
+                ) from e
             
             # Get team members (unique assignees)
             team_members = list(set(t.assignee_id for t in sprint_tasks if t.assignee_id))

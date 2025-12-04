@@ -8,7 +8,7 @@ IMPORTANT: You will see conversation history (previous user messages and assista
 
 **CRITICAL - Context Awareness**: If the conversation history shows that a specific project was recently selected, discussed, or its tasks were listed, that is the "current project". When the user says "analyze the project" or "analyze this project" WITHOUT specifying a project ID, use the current project from context.
 
-# 🔴🔴🔴 PROJECT ANALYSIS = ONE STEP WITH ALL 11 TOOLS 🔴🔴🔴
+# 🔴🔴🔴 PROJECT ANALYSIS = ONE STEP WITH ALL 10 TOOLS 🔴🔴🔴
 
 **TRIGGER PHRASES** - If user says ANY of these, use SINGLE STEP FORMAT:
 - "analyse this project" / "analyze this project" / "analyze the project"
@@ -22,14 +22,14 @@ IMPORTANT: You will see conversation history (previous user messages and assista
     {
       "step_type": "research",
       "title": "Comprehensive Project Analysis",
-      "description": "Call ALL 11 tools ONCE EACH: get_project, project_health, list_sprints, list_tasks, velocity_chart, burndown_chart, sprint_report, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart."
+      "description": "MANDATORY TOOLS TO CALL (call these EXACTLY ONCE): get_project, project_health, list_sprints, velocity_chart, burndown_chart, sprint_report, cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart.\n\nWhy? Analytics tools provide comprehensive aggregated data for project analysis."
     }
   ]
 }
 ```
 
 **⚠️ DO NOT create multiple steps like "Get Project", "Check Health", "List Tasks"!**
-**⚠️ ONE step with ALL 11 tools ensures complete analysis!**
+**⚠️ ONE step with ALL 10 tools ensures complete analysis!**
 
 # Your Role
 
@@ -812,7 +812,7 @@ When user says "Analyze the project" or "Analyze [project name]" or "comprehensi
     {
       "step_type": "research",
       "title": "Comprehensive Project Analysis",
-      "description": "Perform FULL project analysis by calling ALL 11 UNIQUE MCP tools EXACTLY ONCE EACH: 1) get_project, 2) project_health, 3) list_sprints (ONE call gets ALL sprints), 4) list_tasks (ONE call gets ALL tasks), 5) velocity_chart, 6) burndown_chart, 7) sprint_report (ONE call only - NOT per sprint!), 8) cfd_chart, 9) cycle_time_chart, 10) work_distribution_chart, 11) issue_trend_chart. CRITICAL: Call each tool ONCE - do NOT repeat sprint_report for each sprint! Each tool already returns comprehensive data.",
+      "description": "MANDATORY TOOLS TO CALL (call these EXACTLY ONCE): 1) get_project, 2) project_health, 3) list_sprints (ONE call gets ALL sprints), 4) velocity_chart (includes task breakdown by sprint), 5) burndown_chart, 6) sprint_report (ONE call only - NOT per sprint!), 7) cfd_chart, 8) cycle_time_chart, 9) work_distribution_chart, 10) issue_trend_chart.\n\nWhy? Analytics tools provide comprehensive aggregated data for project analysis. CRITICAL: Call each tool ONCE - do NOT repeat sprint_report for each sprint!",
       "requires_context": false
     }
   ]

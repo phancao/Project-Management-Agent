@@ -6,7 +6,6 @@ import logging
 
 from src.analytics.models import (
     ChartResponse,
-    ChartType,
     SprintReport,
     SprintData,
     WorkItem,
@@ -76,13 +75,13 @@ class AnalyticsService:
                 error_msg = f"No sprint data found for project {project_id}"
                 logger.warning(f"[AnalyticsService] {error_msg}")
                 raise ValueError(error_msg)
-        except ValueError as e:
+        except ValueError:
             # Re-raise ValueError as-is (these are expected errors)
             raise
-        except Exception as e:
-            error_msg = f"Failed to fetch burndown data for project {project_id}: {str(e)}"
+        except Exception as exc:
+            error_msg = f"Failed to fetch burndown data for project {project_id}: {str(exc)}"
             logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
-            raise ValueError(error_msg) from e
+            raise ValueError(error_msg) from exc
         
         if not isinstance(sprint_data, SprintData):
             sprint_data = self._payload_to_sprint_data(sprint_data, project_id)
@@ -127,13 +126,13 @@ class AnalyticsService:
                 error_msg = f"No sprint history found for project {project_id}"
                 logger.warning(f"[AnalyticsService] {error_msg}")
                 raise ValueError(error_msg)
-        except ValueError as e:
+        except ValueError:
             # Re-raise ValueError as-is (these are expected errors)
             raise
-        except Exception as e:
-            error_msg = f"Failed to fetch velocity data for project {project_id}: {str(e)}"
+        except Exception as exc:
+            error_msg = f"Failed to fetch velocity data for project {project_id}: {str(exc)}"
             logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
-            raise ValueError(error_msg) from e
+            raise ValueError(error_msg) from exc
 
         sprint_history = [
             self._payload_to_sprint_data(payload, project_id)
@@ -183,13 +182,13 @@ class AnalyticsService:
                 error_msg = f"Sprint {sprint_id} not found or no data available for project {project_id}"
                 logger.warning(f"[AnalyticsService] {error_msg}")
                 raise ValueError(error_msg)
-        except ValueError as e:
+        except ValueError:
             # Re-raise ValueError as-is (these are expected errors)
             raise
-        except Exception as e:
-            error_msg = f"Failed to fetch sprint report data for sprint {sprint_id} in project {project_id}: {str(e)}"
+        except Exception as exc:
+            error_msg = f"Failed to fetch sprint report data for sprint {sprint_id} in project {project_id}: {str(exc)}"
             logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
-            raise ValueError(error_msg) from e
+            raise ValueError(error_msg) from exc
 
         if isinstance(sprint_data_payload, SprintData):
             sprint_data = sprint_data_payload
@@ -240,13 +239,13 @@ class AnalyticsService:
                 error_msg = f"No sprint data available for project {project_id}"
                 logger.warning(f"[AnalyticsService] {error_msg}")
                 raise ValueError(error_msg)
-        except ValueError as e:
+        except ValueError:
             # Re-raise ValueError as-is (these are expected errors)
             raise
-        except Exception as e:
-            error_msg = f"Failed to fetch project summary data for project {project_id}: {str(e)}"
+        except Exception as exc:
+            error_msg = f"Failed to fetch project summary data for project {project_id}: {str(exc)}"
             logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
-            raise ValueError(error_msg) from e
+            raise ValueError(error_msg) from exc
 
         # Convert all payloads to SprintData
         all_sprints: List[SprintData] = [
@@ -445,13 +444,13 @@ class AnalyticsService:
             self._set_cache(cache_key, chart)
             
             return chart
-        except ValueError as e:
+        except ValueError:
             # Re-raise ValueError as-is (these are expected errors)
             raise
-        except Exception as e:
-            error_msg = f"Failed to fetch CFD data for project {project_id}: {str(e)}"
+        except Exception as exc:
+            error_msg = f"Failed to fetch CFD data for project {project_id}: {str(exc)}"
             logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
-            raise ValueError(error_msg) from e
+            raise ValueError(error_msg) from exc
     
     async def get_cycle_time_chart(
         self,
@@ -492,13 +491,13 @@ class AnalyticsService:
             self._set_cache(cache_key, chart)
             
             return chart
-        except ValueError as e:
+        except ValueError:
             # Re-raise ValueError as-is (these are expected errors)
             raise
-        except Exception as e:
-            error_msg = f"Failed to fetch cycle time data for project {project_id}: {str(e)}"
+        except Exception as exc:
+            error_msg = f"Failed to fetch cycle time data for project {project_id}: {str(exc)}"
             logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
-            raise ValueError(error_msg) from e
+            raise ValueError(error_msg) from exc
     
     async def get_work_distribution_chart(
         self,
@@ -539,13 +538,13 @@ class AnalyticsService:
             self._set_cache(cache_key, chart)
             
             return chart
-        except ValueError as e:
+        except ValueError:
             # Re-raise ValueError as-is (these are expected errors)
             raise
-        except Exception as e:
-            error_msg = f"Failed to fetch work distribution data for project {project_id}: {str(e)}"
+        except Exception as exc:
+            error_msg = f"Failed to fetch work distribution data for project {project_id}: {str(exc)}"
             logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
-            raise ValueError(error_msg) from e
+            raise ValueError(error_msg) from exc
     
     async def get_issue_trend_chart(
         self,
@@ -590,13 +589,13 @@ class AnalyticsService:
             self._set_cache(cache_key, chart)
             
             return chart
-        except ValueError as e:
+        except ValueError:
             # Re-raise ValueError as-is (these are expected errors)
             raise
-        except Exception as e:
-            error_msg = f"Failed to fetch issue trend data for project {project_id}: {str(e)}"
+        except Exception as exc:
+            error_msg = f"Failed to fetch issue trend data for project {project_id}: {str(exc)}"
             logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
-            raise ValueError(error_msg) from e
+            raise ValueError(error_msg) from exc
     
     def clear_cache(self):
         """Clear all cached data"""
@@ -734,8 +733,7 @@ class AnalyticsService:
         if data.get("completed") is True:
             status = TaskStatus.DONE
             # Log this important status change
-            import logging
-            logger = logging.getLogger(__name__)
+            # Use existing logger from module level
             logger.info(
                 f"[AnalyticsService] Task {data.get('id')} marked as completed=True, "
                 f"setting status to DONE (was: {status})"

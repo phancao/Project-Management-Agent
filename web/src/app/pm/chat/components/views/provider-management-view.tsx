@@ -49,9 +49,10 @@ import {
 } from "~/core/api/pm/providers";
 import { PROVIDER_TYPES, getProviderIcon } from "~/app/pm/utils/provider-utils";
 import { AIProviderManagementView } from "./ai-provider-management-view";
+import { SearchProviderManagementView } from "./search-provider-management-view";
 import { cn } from "~/lib/utils";
 
-export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm" | "ai" } = {}) {
+export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm" | "ai" | "search" } = {}) {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -423,6 +424,10 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
             <Brain className="w-4 h-4" />
             AI Providers
           </TabsTrigger>
+          <TabsTrigger value="search" className="flex items-center gap-2">
+            <Key className="w-4 h-4" />
+            Search Providers
+          </TabsTrigger>
         </TabsList>
 
         {/* Messages */}
@@ -689,6 +694,10 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
 
         <TabsContent value="ai" className="flex-1 flex flex-col mt-0">
           <AIProviderManagementView />
+        </TabsContent>
+
+        <TabsContent value="search" className="flex-1 flex flex-col mt-0">
+          <SearchProviderManagementView />
         </TabsContent>
       </Tabs>
 

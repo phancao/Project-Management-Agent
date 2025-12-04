@@ -22,7 +22,11 @@ engine = create_engine(
     pool_pre_ping=True,  # Verify connections before using
     pool_size=10,
     max_overflow=20,
-    echo=False  # Set to True for SQL query logging
+    echo=False,  # Set to True for SQL query logging
+    connect_args={
+        "connect_timeout": 5,  # 5 second connection timeout
+        "options": "-c statement_timeout=10000"  # 10 second statement timeout
+    } if "postgresql" in DATABASE_URL else {}
 )
 
 # Create SessionLocal class
@@ -73,7 +77,7 @@ def init_db():
         ResearchSession, KnowledgeBaseItem, ConversationSession, ConversationMessage,
         ProjectTemplate, ProjectMetric, IntentClassification, IntentFeedback,
         IntentMetric, LearnedIntentPattern, Sprint, SprintTask,
-        PMProviderConnection, ProjectSyncMapping, AIProviderAPIKey,
+        PMProviderConnection, ProjectSyncMapping, AIProviderAPIKey, SearchProviderAPIKey,
         MockProject, MockUser, MockSprint, MockEpic, MockTask
     )
     try:

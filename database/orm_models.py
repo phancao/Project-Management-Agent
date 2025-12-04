@@ -28,6 +28,23 @@ import uuid
 Base = declarative_base()  # type: ignore
 
 
+class SearchProviderAPIKey(Base):  # type: ignore
+    """Search Provider API Key model for storing search provider credentials"""
+    __tablename__ = "search_provider_api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider_id = Column(String(50), nullable=False, unique=True)  # 'tavily', 'brave_search', etc.
+    provider_name = Column(String(255), nullable=False)
+    api_key = Column(String(1000), nullable=True)
+    base_url = Column(String(500), nullable=True)  # Optional custom base URL
+    additional_config = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True)
+    is_default = Column(Boolean, default=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class User(Base):  # type: ignore
     """User model"""
     __tablename__ = "users"

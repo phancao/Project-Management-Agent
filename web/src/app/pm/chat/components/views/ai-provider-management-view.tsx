@@ -335,7 +335,7 @@ export function AIProviderManagementView() {
                       ...formData,
                       provider_id: selected.id,
                       provider_name: selected.name,
-                      base_url: selected.base_url,
+                      // base_url is optional and can be set separately
                     });
                   }
                 }}
@@ -395,23 +395,19 @@ export function AIProviderManagementView() {
                   </p>
                 </div>
 
-                {availableProviders.find((p) => p.id === formData.provider_id)?.base_url && (
-                  <div className="space-y-2">
-                    <Label htmlFor="base_url">Base URL (Optional)</Label>
-                    <Input
-                      id="base_url"
-                      type="text"
-                      placeholder={
-                        availableProviders.find((p) => p.id === formData.provider_id)?.base_url ||
-                        "Custom base URL"
-                      }
-                      value={formData.base_url}
-                      onChange={(e) =>
-                        setFormData({ ...formData, base_url: e.target.value })
-                      }
-                    />
-                  </div>
-                )}
+                {/* Base URL is always available as an optional field */}
+                <div className="space-y-2">
+                  <Label htmlFor="base_url">Base URL (Optional)</Label>
+                  <Input
+                    id="base_url"
+                    type="text"
+                    placeholder="Custom base URL (e.g., https://api.openai.com/v1)"
+                    value={formData.base_url}
+                    onChange={(e) =>
+                      setFormData({ ...formData, base_url: e.target.value })
+                    }
+                  />
+                </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="model_name">Default Model (Optional)</Label>

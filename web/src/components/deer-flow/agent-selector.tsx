@@ -12,11 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { setEnableBackgroundInvestigation, setReportStyle, setModelProvider, useSettingsStore } from "~/core/store";
+import { setEnableBackgroundInvestigation, setReportStyle, setModelProvider, setSearchProvider, useSettingsStore } from "~/core/store";
 import { useConfig } from "~/core/api/hooks";
 import { listAIProviders, saveAIProvider } from "~/core/api/ai-providers";
+import { listSearchProviders, type SearchProviderConfig } from "~/core/api/search-providers";
 import type { ModelProvider } from "~/core/config/types";
 import { useState, useEffect } from "react";
+import { Search } from "lucide-react";
 
 export type ReportStyle = "academic" | "popular_science" | "news" | "social_media" | "strategic_investment";
 
@@ -84,9 +86,11 @@ const getAgentPresets = (t: (key: string) => string): AgentPreset[] => [
 export function AgentSelector() {
   const t = useTranslations("chat.inputBox");
   const tReportStyle = useTranslations("settings.reportStyle");
-  const { config } = useConfig();
+  const { config, loading: configLoading } = useConfig();
   const [configuredAIProviders, setConfiguredAIProviders] = useState<string[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
+  const [searchProviders, setSearchProviders] = useState<SearchProviderConfig[]>([]);
+  const [loadingSearchProviders, setLoadingSearchProviders] = useState(true);
   
   const backgroundInvestigation = useSettingsStore(
     (state) => state.general.enableBackgroundInvestigation,
@@ -94,6 +98,7 @@ export function AgentSelector() {
   const reportStyle = useSettingsStore((state) => state.general.reportStyle);
   const modelProvider = useSettingsStore((state) => state.general.modelProvider);
   const modelName = useSettingsStore((state) => state.general.modelName);
+  const searchProvider = useSettingsStore((state) => state.general.searchProvider);
 
   // Get presets with translations
   const AGENT_PRESETS = getAgentPresets(t);
@@ -116,8 +121,15 @@ export function AgentSelector() {
   // Load configured AI providers from database
   useEffect(() => {
     const loadConfiguredProviders = async () => {
+      // Add timeout to prevent blocking
+      const timeoutId = setTimeout(() => {
+        console.warn("Loading AI providers timed out, using fallback");
+        setLoadingProviders(false);
+      }, 5000); // 5 second timeout for loading state
+
       try {
         const configured = await listAIProviders();
+        clearTimeout(timeoutId);
         // Get list of provider IDs that are configured and active
         // Check both has_api_key field and if api_key exists (for backward compatibility)
         const providerIds = configured
@@ -125,6 +137,7 @@ export function AgentSelector() {
           .map((p) => p.provider_id);
         setConfiguredAIProviders(providerIds);
       } catch (error) {
+        clearTimeout(timeoutId);
         // If we can't load configured providers, show all available providers as fallback
         console.warn("Failed to load configured AI providers:", error);
         setConfiguredAIProviders([]);
@@ -136,11 +149,49 @@ export function AgentSelector() {
     void loadConfiguredProviders();
   }, []);
 
+  // Load search providers from database
+  useEffect(() => {
+    const loadSearchProviders = async () => {
+      try {
+        const providers = await listSearchProviders();
+        setSearchProviders(providers);
+        // Set default to DuckDuckGo if no provider is selected and DuckDuckGo is available
+        if (!searchProvider) {
+          const duckduckgo = providers.find((p) => p.provider_id === "duckduckgo");
+          if (duckduckgo || providers.length === 0) {
+            // DuckDuckGo is always available as default (free, no API key needed)
+            setSearchProvider("duckduckgo");
+          } else if (providers.length > 0) {
+            // Use first available provider
+            setSearchProvider(providers[0]!.provider_id);
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to load search providers:", error);
+        // Set DuckDuckGo as default even if loading fails
+        // DuckDuckGo doesn't need to be in the database - it's always available
+        if (!searchProvider) {
+          setSearchProvider("duckduckgo");
+        }
+        // Don't set providers to empty array - keep it empty so we show DuckDuckGo as default
+        setSearchProviders([]);
+      } finally {
+        setLoadingSearchProviders(false);
+      }
+    };
+
+    void loadSearchProviders();
+  }, [searchProvider]);
+
   // Filter available providers to only show configured ones
   const allProviders = config.providers || [];
-  const providers = configuredAIProviders.length > 0
+  // Show providers based on configuration status
+  // If we're still loading config or providers, show all providers
+  // If loading is done and we have configured providers, show only configured ones
+  // If loading is done and no providers are configured, show all providers as fallback
+  const providers = !configLoading && !loadingProviders && configuredAIProviders.length > 0
     ? allProviders.filter((p: ModelProvider) => configuredAIProviders.includes(p.id))
-    : allProviders; // Fallback to all providers if none configured or loading failed
+    : allProviders; // Show all providers while loading or if none configured
   
   const currentProvider = providers.find((p: ModelProvider) => p.id === modelProvider);
   const currentModel = currentProvider?.models.find((m) => m === modelName) || currentProvider?.models[0];
@@ -180,7 +231,7 @@ export function AgentSelector() {
                 provider_id: providerId,
                 provider_name: providerConfig.name,
                 model_name: selectedModel,
-                base_url: providerConfig.base_url,
+                // base_url is optional and can be set separately if needed
                 is_active: true,
               });
             } catch (error) {
@@ -251,11 +302,12 @@ export function AgentSelector() {
         </SelectContent>
       </Select>
 
-      {providers.length > 0 && (
-        <Select
-          value={modelProvider && currentModel ? `${modelProvider}:${currentModel}` : modelProvider || ""}
-          onValueChange={handleModelChange}
-        >
+      {/* Always show AI provider selector - it will show providers from config even if database call fails */}
+      <Select
+        value={modelProvider && currentModel ? `${modelProvider}:${currentModel}` : modelProvider || ""}
+        onValueChange={handleModelChange}
+        disabled={configLoading || (loadingProviders && allProviders.length === 0)}
+      >
           <SelectTrigger
             className={cn(
               "rounded-2xl w-auto min-w-[180px]",
@@ -271,31 +323,85 @@ export function AgentSelector() {
             </div>
           </SelectTrigger>
           <SelectContent className="w-[280px]">
-            {providers.map((provider: ModelProvider) => (
-              <div key={provider.id}>
-                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                  {provider.icon} {provider.name}
-                </div>
-                {provider.models.map((model) => {
-                  const value = `${provider.id}:${model}`;
+            {providers.length > 0 ? (
+              providers.map((provider: ModelProvider) => (
+                <div key={provider.id}>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                    {provider.icon} {provider.name}
+                  </div>
+                  {provider.models.map((model) => {
+                    const value = `${provider.id}:${model}`;
 
-                  return (
-                    <SelectItem
-                      key={value}
-                      value={value}
-                      className="cursor-pointer pl-6"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">{model}</span>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
+                    return (
+                      <SelectItem
+                        key={value}
+                        value={value}
+                        className="cursor-pointer pl-6"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">{model}</span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </div>
+              ))
+            ) : (
+              <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                {configLoading || loadingProviders 
+                  ? "Loading providers..." 
+                  : "No providers available. Please configure providers in Settings."}
               </div>
-            ))}
+            )}
           </SelectContent>
         </Select>
-      )}
+
+      {/* Search Provider Selector */}
+      <Select
+        value={searchProvider || "duckduckgo"}
+        onValueChange={(value) => setSearchProvider(value)}
+      >
+        <SelectTrigger
+          className={cn(
+            "rounded-2xl w-auto min-w-[160px]",
+            "!border-brand !text-brand",
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="font-medium text-sm">
+              {searchProviders.find((p) => p.provider_id === searchProvider)?.provider_name || 
+               (searchProvider === "duckduckgo" ? "DuckDuckGo" : "Search")}
+            </span>
+          </div>
+        </SelectTrigger>
+        <SelectContent className="w-[240px]">
+          {/* Always show DuckDuckGo as default free option */}
+          <SelectItem value="duckduckgo" className="cursor-pointer">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">🦆 DuckDuckGo</span>
+              <span className="text-xs text-muted-foreground">(Free)</span>
+            </div>
+          </SelectItem>
+          {/* Show configured providers */}
+          {searchProviders
+            .filter((p) => p.provider_id !== "duckduckgo" && p.is_active)
+            .map((provider) => (
+              <SelectItem
+                key={provider.id}
+                value={provider.provider_id}
+                className="cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">{provider.provider_name}</span>
+                  {provider.is_default && (
+                    <span className="text-xs text-muted-foreground">(Default)</span>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

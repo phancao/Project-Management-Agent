@@ -17,7 +17,7 @@ import { ProviderManagementView } from "./views/provider-management-view";
 
 export function ProviderManagementDialog() {
   const [open, setOpen] = useState(false);
-  const [defaultTab, setDefaultTab] = useState<"pm" | "ai">("pm");
+  const [defaultTab, setDefaultTab] = useState<"pm" | "ai" | "search">("pm");
 
   useEffect(() => {
     const handleShowProviders = (event?: CustomEvent) => {

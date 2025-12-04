@@ -3,3 +3,4 @@
 
 export * from "./store";
 export * from "./settings-store";
+export { setSearchProvider } from "./settings-store";

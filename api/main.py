@@ -239,11 +239,11 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         try:
                             logger.info(f"[DEBUG-API] [STEP 6] Calling run_agent_workflow_stream with query: {research_query[:100]}")
                             workflow_stream = run_agent_workflow_stream(
-                                user_input=research_query,
-                                max_plan_iterations=1,
-                                max_step_num=3,
-                                enable_background_investigation=True,
-                                enable_clarification=False
+                            user_input=research_query,
+                            max_plan_iterations=1,
+                            max_step_num=3,
+                            enable_background_investigation=True,
+                            enable_clarification=False
                             )
                             logger.info(f"[DEBUG-API] [STEP 7] run_agent_workflow_stream returned, starting to iterate")
                             
@@ -303,63 +303,63 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                                     yield "event: message_chunk\n"
                                     yield f"data: {json.dumps(heartbeat_chunk)}\n\n"
                                     last_heartbeat = time.time()
-                                # Store final state for later use
-                                final_research_state = state
+                            # Store final state for later use
+                            final_research_state = state
+                            
+                            # Extract progress information from state
+                            if isinstance(state, dict):
+                                # Check for current plan
+                                current_plan = state.get("current_plan")
+                                if current_plan:
+                                    # Handle different plan types
+                                    from src.prompts.planner_model import Plan
+                                    
+                                    if isinstance(current_plan, Plan):
+                                        # Pydantic Plan model
+                                        plan_title = current_plan.title
+                                    elif isinstance(current_plan, dict):
+                                        # Dict
+                                        plan_title = current_plan.get("title", "")
+                                    elif isinstance(current_plan, str):
+                                        # String - skip it to avoid the .title() method issue
+                                        continue
+                                    else:
+                                        # Unknown type - convert to string
+                                        plan_title = str(current_plan)
+                                    
+                                    if plan_title and plan_title != last_step_emitted:
+                                        progress_msg = f"📋 Planning: {plan_title}\n\n"
+                                        progress_chunk = {
+                                            "id": str(uuid.uuid4()),
+                                            "thread_id": thread_id,
+                                            "agent": "coordinator",
+                                            "role": "assistant",
+                                            "content": progress_msg,
+                                            "finish_reason": None
+                                        }
+                                        yield "event: message_chunk\n"
+                                        yield f"data: {json.dumps(progress_chunk)}\n\n"
+                                        last_step_emitted = plan_title
                                 
-                                # Extract progress information from state
-                                if isinstance(state, dict):
-                                    # Check for current plan
-                                    current_plan = state.get("current_plan")
-                                    if current_plan:
-                                        # Handle different plan types
-                                        from src.prompts.planner_model import Plan
-                                        
-                                        if isinstance(current_plan, Plan):
-                                            # Pydantic Plan model
-                                            plan_title = current_plan.title
-                                        elif isinstance(current_plan, dict):
-                                            # Dict
-                                            plan_title = current_plan.get("title", "")
-                                        elif isinstance(current_plan, str):
-                                            # String - skip it to avoid the .title() method issue
-                                            continue
-                                        else:
-                                            # Unknown type - convert to string
-                                            plan_title = str(current_plan)
-                                        
-                                        if plan_title and plan_title != last_step_emitted:
-                                            progress_msg = f"📋 Planning: {plan_title}\n\n"
-                                            progress_chunk = {
+                                # Check for messages with agent names
+                                messages = state.get("messages", [])
+                                if messages:
+                                    last_msg = messages[-1]
+                                    if isinstance(last_msg, dict):
+                                        agent_name = last_msg.get("name", "")
+                                        content = last_msg.get("content", "")
+                                        if agent_name and agent_name not in ["planner", "reporter"] and len(content) > 50:
+                                            step_msg = f"⚙️ {agent_name.capitalize()} agent working...\n\n"
+                                            step_chunk = {
                                                 "id": str(uuid.uuid4()),
                                                 "thread_id": thread_id,
                                                 "agent": "coordinator",
                                                 "role": "assistant",
-                                                "content": progress_msg,
+                                                "content": step_msg,
                                                 "finish_reason": None
                                             }
                                             yield "event: message_chunk\n"
-                                            yield f"data: {json.dumps(progress_chunk)}\n\n"
-                                            last_step_emitted = plan_title
-                                    
-                                    # Check for messages with agent names
-                                    messages = state.get("messages", [])
-                                    if messages:
-                                        last_msg = messages[-1]
-                                        if isinstance(last_msg, dict):
-                                            agent_name = last_msg.get("name", "")
-                                            content = last_msg.get("content", "")
-                                            if agent_name and agent_name not in ["planner", "reporter"] and len(content) > 50:
-                                                step_msg = f"⚙️ {agent_name.capitalize()} agent working...\n\n"
-                                                step_chunk = {
-                                                    "id": str(uuid.uuid4()),
-                                                    "thread_id": thread_id,
-                                                    "agent": "coordinator",
-                                                    "role": "assistant",
-                                                    "content": step_msg,
-                                                    "finish_reason": None
-                                                }
-                                                yield "event: message_chunk\n"
-                                                yield f"data: {json.dumps(step_chunk)}\n\n"
+                                            yield f"data: {json.dumps(step_chunk)}\n\n"
                         except asyncio.TimeoutError:
                             logger.error(f"[API-TIMING] DeerFlow workflow timed out after {workflow_timeout}s")
                             timeout_chunk = {

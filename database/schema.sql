@@ -267,6 +267,31 @@ CREATE TABLE IF NOT EXISTS ai_provider_api_keys (
 CREATE TRIGGER update_ai_provider_api_keys_updated_at BEFORE UPDATE ON ai_provider_api_keys
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Search Provider API Keys
+-- Stores API keys for different search providers (Tavily, Brave Search, etc.)
+CREATE TABLE IF NOT EXISTS search_provider_api_keys (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    provider_id VARCHAR(50) NOT NULL UNIQUE, -- 'tavily', 'brave_search', 'duckduckgo', etc.
+    provider_name VARCHAR(255) NOT NULL,
+    api_key VARCHAR(1000), -- Encrypted or plain (depending on security requirements)
+    base_url VARCHAR(500), -- Optional custom base URL (e.g., for Searx)
+    additional_config JSONB, -- Additional provider-specific config (e.g., include_domains for Tavily)
+    is_active BOOLEAN DEFAULT true,
+    is_default BOOLEAN DEFAULT false, -- Only one provider can be default
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Trigger to update updated_at
+CREATE TRIGGER update_search_provider_api_keys_updated_at BEFORE UPDATE ON search_provider_api_keys
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Ensure only one default provider
+CREATE UNIQUE INDEX IF NOT EXISTS search_provider_api_keys_default_unique 
+    ON search_provider_api_keys (is_default) 
+    WHERE is_default = true;
+
     due_date DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

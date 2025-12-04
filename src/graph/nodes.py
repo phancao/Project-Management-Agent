@@ -5,9 +5,10 @@ import asyncio
 import json
 import logging
 import os
+import re
+import time
 from functools import partial
 from typing import Annotated, Any, Literal
-import re
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -241,20 +242,24 @@ def background_investigation_node(state: State, config: RunnableConfig):
     query = state.get("clarified_research_topic") or state.get("research_topic")
     background_investigation_results: list[str] = []
     
-    if SELECTED_SEARCH_ENGINE == SearchEngine.TAVILY.value:
-        searched_content = LoggedTavilySearch(
-            max_results=configurable.max_search_results
-        ).invoke(query or "")
+    # Use get_web_search_tool() which handles provider selection and fallback to DuckDuckGo
+    try:
+        search_tool = get_web_search_tool(
+            configurable.max_search_results,
+            provider_id=configurable.search_provider
+        )
+        searched_content = search_tool.invoke(query or "")
+        
         # check if the searched_content is a tuple, then we need to unpack it
         if isinstance(searched_content, tuple):
             searched_content = searched_content[0]
         
-        # Handle string JSON response (new format from fixed Tavily tool)
+        # Handle string JSON response (from Tavily or other tools)
         if isinstance(searched_content, str):
             try:
                 parsed = json.loads(searched_content)
                 if isinstance(parsed, dict) and "error" in parsed:
-                    logger.error(f"Tavily search error: {parsed['error']}")
+                    logger.error(f"Search error: {parsed['error']}")
                     background_investigation_results = []
                 elif isinstance(parsed, list):
                     background_investigation_results = [
@@ -262,35 +267,36 @@ def background_investigation_node(state: State, config: RunnableConfig):
                         for elem in parsed
                     ]
                 else:
-                    logger.error(f"Unexpected Tavily response format: {searched_content}")
+                    logger.error(f"Unexpected search response format: {searched_content}")
                     background_investigation_results = []
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse Tavily response as JSON: {searched_content}")
-                background_investigation_results = []
+                # If it's not JSON, treat it as plain text (e.g., DuckDuckGo results)
+                logger.debug(f"Search returned plain text (not JSON): {searched_content[:100]}...")
+                background_investigation_results = [searched_content]
         # Handle legacy list format
         elif isinstance(searched_content, list):
             background_investigation_results = [
-                f"## {elem['title']}\n\n{elem['content']}" for elem in searched_content
+                f"## {elem.get('title', 'Untitled')}\n\n{elem.get('content', 'No content')}" 
+                if isinstance(elem, dict) else str(elem)
+                for elem in searched_content
             ]
-            return {
-                "background_investigation_results": "\n\n".join(
-                    background_investigation_results
-                )
-            }
         else:
             logger.error(
-                f"Tavily search returned malformed response: {searched_content}"
+                f"Search returned malformed response: {type(searched_content)}"
             )
             background_investigation_results = []
+    except Exception as e:
+        logger.error(f"Error in background investigation search: {e}", exc_info=True)
+        background_investigation_results = []
+    
+    # Format results as a single string
+    if background_investigation_results:
+        results_text = "\n\n".join(background_investigation_results)
     else:
-        background_investigation_results = get_web_search_tool(
-            configurable.max_search_results
-        ).invoke(query)
+        results_text = ""
     
     return {
-        "background_investigation_results": json.dumps(
-            background_investigation_results, ensure_ascii=False
-        )
+        "background_investigation_results": results_text
     }
 
 
@@ -990,7 +996,6 @@ def reporter_node(state: State, config: RunnableConfig):
                 if len(str(execution_res)) > max_length_per_step:
                     try:
                         # Try to compress JSON arrays in the result
-                        import json
                         parsed = json.loads(str(execution_res))
                         from src.utils.json_utils import _compress_large_array
                         compressed = _compress_large_array(parsed, max_items=max_items)
@@ -1157,7 +1162,6 @@ def reporter_node(state: State, config: RunnableConfig):
             # Extract token information if available
             token_info = ""
             if "tokens" in error_str:
-                import re
                 token_match = re.search(r'(\d+)\s*tokens', error_str)
                 if token_match:
                     actual_tokens = token_match.group(1)
@@ -1197,7 +1201,7 @@ The report generation encountered an error.
         # Update the last step's execution_res to include the error
         # This makes the error visible in the frontend step list
         if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps') and current_plan.steps:
-            from src.prompts.planner_model import Step, Plan
+            from src.prompts.planner_model import Step
             
             # Find the last step and update it with error
             last_step_idx = len(current_plan.steps) - 1
@@ -1314,7 +1318,6 @@ async def _execute_agent_step(
 
     logger.info(f"[_execute_agent_step] Executing step: {current_step.title}, agent: {agent_name}")
     logger.debug(f"[_execute_agent_step] Completed steps so far: {len(completed_steps)}")
-    import time
     step_start_time = time.time()
     logger.info(f"[STEP-TIMING] Starting step '{current_step.title}' at {step_start_time}")
 
@@ -1470,7 +1473,6 @@ async def _execute_agent_step(
         logger.error(f"Error validating agent input messages: {validation_error}")
     
     try:
-        import time
         invoke_start_time = time.time()
         logger.info(f"[STEP-TIMING] Invoking agent '{agent_name}' for step '{current_step.title}' at {invoke_start_time}")
         result = await agent.ainvoke(
@@ -1548,8 +1550,8 @@ async def _execute_agent_step(
                 title=current_plan.title,
                 steps=updated_steps,
             )
-            
-            # Calculate the current step index even on error
+
+        # Calculate the current step index even on error
             completed_count = sum(1 for step in updated_plan.steps if step.execution_res)
             current_step_index = min(completed_count, len(updated_plan.steps) - 1)
         else:
@@ -1661,7 +1663,7 @@ async def _execute_agent_step(
     )
     
     logger.info(f"Step '{current_step.title}' execution completed by {agent_name}")
-    
+
     # Calculate the current step index (number of completed steps)
     completed_count = sum(1 for step in updated_plan.steps if step.execution_res)
     current_step_index = min(completed_count, len(updated_plan.steps) - 1)
@@ -1969,7 +1971,7 @@ async def researcher_node(
     configurable = Configuration.from_runnable_config(config)
     logger.debug(f"[researcher_node] Max search results: {configurable.max_search_results}")
     
-    tools = [get_web_search_tool(configurable.max_search_results), crawl_tool, backend_api_call]
+    tools = [get_web_search_tool(configurable.max_search_results, provider_id=configurable.search_provider), crawl_tool, backend_api_call]
     retriever_tool = get_retriever_tool(state.get("resources", []))
     if retriever_tool:
         logger.debug(f"[researcher_node] Adding retriever tool to tools list")

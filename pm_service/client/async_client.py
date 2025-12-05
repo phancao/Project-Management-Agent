@@ -113,7 +113,10 @@ class AsyncPMServiceClient:
             except httpx.HTTPStatusError as e:
                 # Don't retry 4xx errors (client errors)
                 if 400 <= e.response.status_code < 500:
-                    logger.error(f"Client error: {e.response.status_code} - {e.response.text}")
+                    error_msg = e.response.text[:500] if e.response.text else "No error message"
+                    logger.error(
+                        f"Client error {e.response.status_code} for {method} {path}: {error_msg}"
+                    )
                     # Convert 403 errors to PermissionError for better error handling
                     if e.response.status_code == 403:
                         error_text = e.response.text or "Permission denied"
@@ -124,17 +127,35 @@ class AsyncPMServiceClient:
                         ) from e
                     raise
                 last_error = e
+                error_msg = str(e)
+                if hasattr(e, 'response') and e.response:
+                    error_msg = f"{e.response.status_code} - {e.response.text[:200] if e.response.text else 'No response body'}"
                 
             except httpx.RequestError as e:
                 last_error = e
+                error_msg = str(e)
+                if hasattr(e, 'request') and e.request:
+                    error_msg = f"{type(e).__name__}: {str(e)} (URL: {e.request.url if hasattr(e.request, 'url') else 'unknown'})"
             
             # Wait before retry
             if attempt < self.max_retries - 1:
-                delay = self.retry_delay * (2 ** attempt)  # Exponential backoff
-                logger.warning(f"Request failed, retrying in {delay}s: {last_error}")
+                delay = min(self.retry_delay * (2 ** attempt), 60.0)  # Cap at 60s to prevent infinite retries
+                logger.warning(
+                    f"Request failed (attempt {attempt + 1}/{self.max_retries}) for {method} {path}, "
+                    f"retrying in {delay}s. Error: {error_msg}"
+                )
                 await asyncio.sleep(delay)
         
-        logger.error(f"Request failed after {self.max_retries} attempts: {last_error}")
+        # Final error logging with full details
+        error_details = str(last_error)
+        if hasattr(last_error, 'response') and last_error.response:
+            error_details = f"{last_error.response.status_code} - {last_error.response.text[:500] if last_error.response.text else 'No response body'}"
+        elif hasattr(last_error, 'request') and last_error.request:
+            error_details = f"{type(last_error).__name__}: {str(last_error)} (URL: {last_error.request.url if hasattr(last_error.request, 'url') else 'unknown'})"
+        
+        logger.error(
+            f"Request failed after {self.max_retries} attempts for {method} {path}: {error_details}"
+        )
         raise last_error
     
     async def _paginate_all(

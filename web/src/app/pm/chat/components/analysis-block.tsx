@@ -40,6 +40,7 @@ import { cn } from "~/lib/utils";
 
 import { StepBox } from "./step-box";
 import { ThoughtBox } from "./thought-box";
+import { useResearchThoughts } from "../hooks/use-research-thoughts";
 
 interface AnalysisBlockProps {
   className?: string;
@@ -49,22 +50,12 @@ interface AnalysisBlockProps {
 export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
   const { isReplay } = useReplay();
   
-  // DEBUG: Log when AnalysisBlock is rendered
-  console.log(`[DEBUG-ANALYSIS-BLOCK] 🎯 AnalysisBlock RENDERED for researchId: ${researchId}`, {
-    stack: new Error().stack,
-    timestamp: new Date().toISOString()
-  });
-  
-  // Get research data from store - subscribe to messages map for real-time updates
-  // Add null safety checks to prevent crashes when research block is just created
-  // CRITICAL: Subscribe to researchIds FIRST to catch any state changes
+  // Get research data from store
   const researchIds = useStore((state) => state.researchIds);
   const reportId = useStore((state) => state.researchReportIds.get(researchId));
   const activityIds = useStore((state) => state.researchActivityIds.get(researchId)) ?? [];
   const planMessageId = useStore((state) => state.researchPlanIds.get(researchId));
   const ongoing = useStore((state) => state.ongoingResearchId === researchId);
-  
-  // Subscribe to the entire messages map to get real-time tool call updates
   const messages = useStore((state) => state.messages) ?? new Map();
   
   const reportMessage = useMessage(reportId ?? "");
@@ -78,15 +69,12 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
     if (planMessage?.content) {
       return parseJSON(planMessage.content, { title: "", thought: "", steps: [] });
     }
-    // Don't default to "AI Analysis" - try to get title from report or use a generic one
     if (reportMessage?.content) {
-      // Try to extract title from report content (first line or heading)
       const firstLine = reportMessage.content.split('\n')[0]?.trim();
       if (firstLine && firstLine.length < 100) {
         return { title: firstLine.replace(/^#+\s*/, ""), thought: "", steps: [] };
       }
     }
-    // Only show default if we have some content (report or activities)
     if (reportId || activityIds.length > 0) {
       return { title: "Analysis", thought: "", steps: [] };
     }
@@ -95,44 +83,16 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
   
   const title = planData.title;
   
-  // ROOT CAUSE INVESTIGATION: Log all state values to understand why block disappears
-  // CRITICAL: Filter out undefined/null researchIds to prevent bugs
+  // Determine if block should be shown
   const validResearchIds = researchIds.filter(id => id != null && id !== undefined);
   const hasResearchId = validResearchIds.includes(researchId);
   const hasContent = title || reportId || activityIds.length > 0 || ongoing || planMessageId;
   const shouldShow = hasResearchId || hasContent;
   
-  // DEBUG: Log EVERY render to trace state changes
-  console.log(`[DEBUG-ANALYSIS-BLOCK] 🔍 State check for researchId: ${researchId}`, {
-    hasResearchId,
-    researchIds: Array.from(researchIds),
-    hasContent,
-    title,
-    reportId,
-    activityIdsLength: activityIds.length,
-    ongoing,
-    planMessageId,
-    shouldShow,
-    timestamp: new Date().toISOString()
-  });
-  
-  // DEBUG: Log when block would be hidden
   if (!shouldShow) {
-    console.error(`[DEBUG-ANALYSIS-BLOCK] ❌ HIDING AnalysisBlock for researchId: ${researchId}`, {
-      title,
-      reportId,
-      activityIdsLength: activityIds.length,
-      ongoing,
-      planMessageId,
-      hasResearchId,
-      researchIds: Array.from(researchIds),
-      timestamp: new Date().toISOString(),
-      stack: new Error().stack
-    });
     return null;
   }
   
-  // If researchId exists but no content yet, show loading state instead of hiding
   const isLoading = hasResearchId && !hasContent;
   
   // Collect all tool calls from activities - now reactive to messages changes
@@ -169,117 +129,9 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
     return calls;
   }, [activityIds, messages]);
   
-  // Cursor-style: Collect thoughts from ReAct agent and PM Agent
-  // CRITICAL: Extract thoughts from PLAN immediately (before tool calls execute)
-  // This makes thoughts appear FIRST, before tool calls
-  const thoughts = useMemo(() => {
-    const thoughtList: Array<{
-      thought: string;
-      step_index: number;
-    }> = [];
-    
-    if (!messages) {
-      return thoughtList;
-    }
-    
-    // PRIORITY 1: Extract thoughts from plan message IMMEDIATELY (plan exists before tool calls)
-    if (planMessage && planMessage.content) {
-      console.log(`[DEBUG-ANALYSIS-BLOCK] 🔍 Extracting thoughts from plan message ${planMessage.id}:`, {
-        hasContent: !!planMessage.content,
-        contentLength: planMessage.content?.length,
-        contentPreview: planMessage.content?.substring(0, 200)
-      });
-      try {
-        const planData = parseJSON(planMessage.content, { title: "", thought: "", steps: [] });
-        console.log(`[DEBUG-ANALYSIS-BLOCK] 📋 Parsed plan data:`, {
-          hasSteps: !!planData.steps,
-          stepsCount: planData.steps?.length || 0,
-          steps: planData.steps
-        });
-        if (planData.steps && Array.isArray(planData.steps)) {
-          // Extract thoughts from plan steps - these are available IMMEDIATELY
-          planData.steps.forEach((step: any, stepIndex: number) => {
-            if (step.description) {
-              console.log(`[DEBUG-ANALYSIS-BLOCK] ✅ Extracting thought from step ${stepIndex}:`, step.description.substring(0, 100));
-              thoughtList.push({
-                thought: step.description,
-                step_index: stepIndex,
-              });
-            } else {
-              console.log(`[DEBUG-ANALYSIS-BLOCK] ⚠️ Step ${stepIndex} has no description:`, step);
-            }
-          });
-          console.log(`[DEBUG-ANALYSIS-BLOCK] 📊 Extracted ${thoughtList.length} thoughts from plan`);
-        } else {
-          console.log(`[DEBUG-ANALYSIS-BLOCK] ⚠️ Plan has no steps array:`, planData);
-        }
-      } catch (e) {
-        console.error(`[DEBUG-ANALYSIS-BLOCK] ❌ Failed to parse plan for thoughts:`, e);
-      }
-    } else {
-      console.log(`[DEBUG-ANALYSIS-BLOCK] ⚠️ No plan message available:`, {
-        hasPlanMessage: !!planMessage,
-        planMessageId,
-        planMessageContent: planMessage?.content?.substring(0, 100)
-      });
-    }
-    
-    // PRIORITY 2: Also check pm_agent/react_agent messages for thoughts (in case plan extraction failed)
-    const state = useStore.getState();
-    const recentMessageIds = state.messageIds.slice(-30);
-    
-    console.log(`[DEBUG-ANALYSIS-BLOCK] 🔍 Checking pm_agent/react_agent messages for thoughts:`, {
-      activityIdsCount: activityIds.length,
-      recentMessageIdsCount: recentMessageIds.length,
-      messagesSize: messages.size
-    });
-    
-    for (const [messageId, message] of messages.entries()) {
-      if ((message.agent === "pm_agent" || message.agent === "react_agent") && message.reactThoughts) {
-        const isInActivity = activityIds.includes(messageId);
-        const isRecent = recentMessageIds.includes(messageId);
-        
-        console.log(`[DEBUG-ANALYSIS-BLOCK] 🔍 Found ${message.agent} message ${messageId} with thoughts:`, {
-          reactThoughtsCount: message.reactThoughts.length,
-          isInActivity,
-          isRecent,
-          thoughts: message.reactThoughts
-        });
-        
-        if (isInActivity || isRecent) {
-          // Only add if not already in list (from plan)
-          for (const thought of message.reactThoughts) {
-            const alreadyAdded = thoughtList.some(
-              t => t.step_index === (thought.step_index ?? 0)
-            );
-            if (!alreadyAdded) {
-              console.log(`[DEBUG-ANALYSIS-BLOCK] ✅ Adding thought from ${message.agent} message:`, thought);
-              thoughtList.push({
-                thought: thought.thought,
-                step_index: thought.step_index ?? 0,
-              });
-            } else {
-              console.log(`[DEBUG-ANALYSIS-BLOCK] ⏭️ Skipping duplicate thought at step_index ${thought.step_index}`);
-            }
-          }
-        }
-      }
-    }
-    
-    console.log(`[DEBUG-ANALYSIS-BLOCK] 📊 Final thought list (before sort):`, thoughtList);
-    
-    // Sort by step_index to maintain order
-    const sortedThoughts = thoughtList.sort((a, b) => a.step_index - b.step_index);
-    console.log(`[DEBUG-ANALYSIS-BLOCK] 📊 Final thought list (after sort, count=${sortedThoughts.length}):`, sortedThoughts);
-    return sortedThoughts;
-  }, [activityIds, messages, planMessage, planMessageId, researchId]);
-  
-  // Subscribe to messageIds to trigger re-render when new messages arrive
-  const messageIds = useStore((state) => state.messageIds);
-  // Force re-compute when messageIds change
-  const thoughtsWithReactivity = useMemo(() => {
-    return thoughts;
-  }, [thoughts, messageIds.length]);
+  // Cursor-style: Collect thoughts using the dedicated hook
+  // Extracts from plan steps and pm_agent/react_agent reactThoughts
+  const thoughts = useResearchThoughts(researchId);
   
   // UI state
   const [stepsExpanded, setStepsExpanded] = useState(true);
@@ -429,7 +281,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
           )}
           
           {/* Steps Section - Collapsible (FIRST) */}
-          {(toolCalls.length > 0 || thoughtsWithReactivity.length > 0) && (
+          {(toolCalls.length > 0 || thoughts.length > 0) && (
             <div className="mb-4">
               <button
                 className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full py-2"
@@ -438,7 +290,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                 {stepsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 <span className="font-medium">Steps</span>
                 <span className="text-xs bg-accent px-2 py-0.5 rounded-full">
-                  {toolCalls.length + thoughtsWithReactivity.length}
+                  {toolCalls.length + thoughts.length}
                 </span>
               </button>
               
@@ -463,7 +315,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                         }> = [];
                         
                         // Add thoughts - use step_index as sort key, but subtract 0.5 so they appear BEFORE tools
-                        thoughtsWithReactivity.forEach((thought) => {
+                        thoughts.forEach((thought) => {
                           combinedSteps.push({
                             type: 'thought',
                             data: thought,
@@ -520,7 +372,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
           
           {/* Report/Insights Section - Inline (BELOW steps) */}
           {(hasReport || isGeneratingReport) && (
-            <div className={(toolCalls.length > 0 || thoughtsWithReactivity.length > 0) ? "border-t pt-4" : ""}>
+            <div className={(toolCalls.length > 0 || thoughts.length > 0) ? "border-t pt-4" : ""}>
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles size={16} className="text-amber-500" />
                 <span className="font-medium text-sm">Insights</span>

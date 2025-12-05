@@ -1,10 +1,15 @@
-import { parse } from "best-effort-json-parser";
+// Removed best-effort-json-parser import - it throws errors via callbacks that we can't suppress
+// We now use only native JSON.parse with improved extraction logic
 
 /**
  * Extract valid JSON from content that may have extra tokens.
  * Finds the last closing brace/bracket that could be valid JSON.
+ * This helps avoid calling the parser library which throws errors via callbacks.
  */
 function extractValidJSON(content: string): string {
+  // Trim whitespace first
+  content = content.trim();
+  
   let braceCount = 0;
   let bracketCount = 0;
   let inString = false;
@@ -63,7 +68,15 @@ function extractValidJSON(content: string): string {
   
   // If we found a valid end and start, return the extracted portion
   if (lastValidEnd > 0 && startIndex >= 0) {
-    return content.substring(startIndex, lastValidEnd + 1);
+    const extracted = content.substring(startIndex, lastValidEnd + 1);
+    // Verify the extracted portion is actually valid JSON
+    try {
+      JSON.parse(extracted);
+      return extracted;
+    } catch {
+      // Extracted portion is not valid JSON, return original
+      return content;
+    }
   }
   
   return content;
@@ -90,56 +103,50 @@ function tryParseJSON<T>(raw: string): T | null {
     // Still failed, continue
   }
 
-  // Strategy 3: Use best-effort-json-parser (handles malformed JSON)
-  // This parser can throw errors even when it successfully parses JSON
-  // if there are extra tokens after the JSON. We need to handle this gracefully.
+  // Strategy 3: Try multiple extraction strategies with native JSON.parse
+  // We avoid using best-effort-json-parser because it throws errors via callbacks
+  // that we can't catch or suppress, causing console errors.
+  // Instead, we use improved extraction logic with native JSON.parse.
   try {
-    // First, try to extract valid JSON to minimize extra tokens
+    // First, try to extract valid JSON
     const extracted = extractValidJSON(raw);
     
-    // Suppress console errors from parser library temporarily
-    const originalError = console.error;
-    const originalWarn = console.warn;
-    let parseResult: T | null = null;
-    let parseError: unknown = null;
-    
-    try {
-      // Temporarily suppress console errors/warnings from parser library
-      console.error = () => {}; // Suppress error logging
-      console.warn = () => {}; // Suppress warning logging
-      parseResult = parse(extracted) as T;
-    } catch (error: unknown) {
-      parseError = error;
-    } finally {
-      // Always restore console methods
-      console.error = originalError;
-      console.warn = originalWarn;
+    // If extraction succeeded (different from raw), try native JSON.parse
+    if (extracted !== raw) {
+      try {
+        return JSON.parse(extracted) as T;
+      } catch {
+        // Native parser failed on extracted portion, try more aggressive extraction
+      }
     }
     
-    // If parsing succeeded, return the result
-    if (parseResult !== null) {
-      return parseResult;
-    }
+    // If extraction didn't help or native parser failed, try more aggressive extraction
+    // Look for JSON-like patterns and try to extract them
+    const jsonPatterns = [
+      // Try to find JSON object: {...}
+      /\{[\s\S]*\}/,
+      // Try to find JSON array: [...]
+      /\[[\s\S]*\]/,
+    ];
     
-    // If parsing failed with "extra tokens" error, try native JSON.parse
-    if (parseError) {
-      const parseErrorMessage = parseError instanceof Error 
-        ? parseError.message 
-        : String(parseError);
-      
-      // If the error is about "extra tokens", the parser might have
-      // successfully parsed the JSON but is complaining about trailing content.
-      // Try using native JSON.parse on the extracted portion.
-      if (parseErrorMessage.includes("parsed json with extra tokens") || 
-          parseErrorMessage.includes("extra tokens")) {
+    for (const pattern of jsonPatterns) {
+      const match = raw.match(pattern);
+      if (match && match[0]) {
         try {
-          // The JSON was likely parsed successfully, but there's extra content.
-          // Try native parser on the extracted JSON.
-          return JSON.parse(extracted) as T;
+          return JSON.parse(match[0]) as T;
         } catch {
-          // Native parser also failed, continue to next strategy
+          // This pattern didn't work, try next
+          continue;
         }
       }
+    }
+    
+    // Last resort: Try parsing the entire raw string (might work for simple cases)
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      // All strategies failed, return null
+      return null;
     }
   } catch {
     // If all parsing strategies failed, return null

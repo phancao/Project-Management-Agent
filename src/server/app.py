@@ -51,8 +51,22 @@ from src.server.chat_request import (
     TTSRequest,
 )
 
+# Import streaming utilities (extracted for better separation of concerns)
+from src.server.streaming import (
+    make_event as _make_event_new,
+    safe_serialize as _safe_serialize_new,
+    get_agent_name as _get_agent_name_new,
+    process_tool_call_chunks as _process_tool_call_chunks_new,
+    create_event_stream_message as _create_event_stream_message_new,
+    process_message_chunk as _process_message_chunk_new,
+    cache_thoughts,
+    get_cached_thoughts,
+    clear_thoughts_cache,
+)
+
 # Cache to store react_thoughts by message ID for AIMessageChunk processing
 # This is needed because AIMessageChunk is streamed before the final AIMessage is created
+# NOTE: Now uses streaming module cache, kept for backward compatibility
 _react_thoughts_cache: dict[str, list] = {}
 from src.server.config_request import ConfigResponse
 from src.server.ai_provider_request import (
@@ -457,16 +471,35 @@ def _safe_serialize(obj):
 def _create_event_stream_message(
     message_chunk, message_metadata, thread_id, agent_name
 ):
-    """Create base event stream message."""
+    """Create base event stream message.
+    
+    Ensures every message has a valid ID by generating one if missing.
+    This prevents frontend research block failures caused by undefined IDs.
+    """
     content = message_chunk.content
     if not isinstance(content, str):
         # Safely serialize content, handling non-JSON-serializable objects
         content = json.dumps(_safe_serialize(content), ensure_ascii=False)
 
+    # CRITICAL: Ensure message ID is always present
+    # Some messages arrive without ID, causing frontend research block failures
+    message_id = getattr(message_chunk, 'id', None)
+    if not message_id:
+        message_id = f"run--{uuid4().hex}"
+        logger.warning(
+            f"[_create_event_stream_message] Generated ID {message_id} for {agent_name} message (was None)"
+        )
+        # Set ID on message_chunk for consistency downstream
+        if hasattr(message_chunk, 'id'):
+            try:
+                message_chunk.id = message_id
+            except AttributeError:
+                pass  # Some message types have read-only id
+
     event_stream_message = {
         "thread_id": thread_id,
         "agent": agent_name,
-        "id": message_chunk.id,
+        "id": message_id,
         "role": "assistant",
         "checkpoint_ns": message_metadata.get("checkpoint_ns", ""),
         "langgraph_node": message_metadata.get("langgraph_node", ""),
@@ -481,8 +514,7 @@ def _create_event_stream_message(
             message_chunk.additional_kwargs["reasoning_content"]
         )
     
-    # Cursor-style: Add react_thoughts if available
-    # Check both additional_kwargs and response_metadata (response_metadata is more reliable)
+    # Add react_thoughts if available (check response_metadata first, then additional_kwargs)
     react_thoughts = None
     if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
         react_thoughts = message_chunk.response_metadata.get("react_thoughts")
@@ -490,21 +522,7 @@ def _create_event_stream_message(
         react_thoughts = message_chunk.additional_kwargs.get("react_thoughts")
     
     if react_thoughts:
-        logger.info(
-            f"[_create_event_stream_message] ✅ Adding {len(react_thoughts)} react_thoughts to event_stream_message "
-            f"for message {message_chunk.id} (agent: {agent_name})"
-        )
         event_stream_message["react_thoughts"] = react_thoughts
-    else:
-        # Debug: Log when react_thoughts are NOT found for pm_agent/react_agent
-        if agent_name in ["pm_agent", "react_agent"]:
-            logger.warning(
-                f"[_create_event_stream_message] ⚠️ No react_thoughts found for {agent_name} message {message_chunk.id}: "
-                f"has_response_metadata={hasattr(message_chunk, 'response_metadata')}, "
-                f"has_additional_kwargs={hasattr(message_chunk, 'additional_kwargs')}, "
-                f"response_metadata_keys={list(message_chunk.response_metadata.keys()) if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata else []}, "
-                f"additional_kwargs_keys={list(message_chunk.additional_kwargs.keys()) if hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs else []}"
-            )
 
     # Include finish_reason from response_metadata or message_metadata
     finish_reason = None
@@ -573,87 +591,30 @@ async def _process_message_chunk(
         message_chunk, message_metadata, thread_id, agent_name
     )
     
-    # CRITICAL FIX: Check cache for react_thoughts if not in message_chunk (for AIMessageChunk)
+    # Check cache for react_thoughts if not already in message
     if agent_name in ["pm_agent", "react_agent"]:
         message_id = event_stream_message.get("id")
         if message_id and message_id in _react_thoughts_cache and "react_thoughts" not in event_stream_message:
             cached_thoughts = _react_thoughts_cache[message_id]
             event_stream_message["react_thoughts"] = cached_thoughts
-            # Also attach to message_chunk for consistency
             if isinstance(message_chunk, AIMessageChunk):
-                if not hasattr(message_chunk, 'additional_kwargs') or not message_chunk.additional_kwargs:
+                if not message_chunk.additional_kwargs:
                     message_chunk.additional_kwargs = {}
                 message_chunk.additional_kwargs["react_thoughts"] = cached_thoughts
-            logger.info(
-                f"[{safe_thread_id}] ✅ Retrieved {len(cached_thoughts)} react_thoughts from cache for "
-                f"AIMessageChunk {message_id}"
-            )
-    
-    # CRITICAL DEBUG: Log if react_thoughts are in event_stream_message after creation
-    if agent_name in ["pm_agent", "react_agent"]:
-        has_thoughts_in_event = "react_thoughts" in event_stream_message
-        thoughts_count = len(event_stream_message.get("react_thoughts", [])) if has_thoughts_in_event else 0
-        logger.info(
-            f"[{safe_thread_id}] 🔍 [_process_message_chunk] After _create_event_stream_message: "
-            f"has_react_thoughts={has_thoughts_in_event}, count={thoughts_count}, "
-            f"message_id={event_stream_message.get('id')}, agent={agent_name}, "
-            f"message_type={type(message_chunk).__name__}"
-        )
-        if not has_thoughts_in_event:
-            # Check what's actually in the message_chunk
-            msg_has_response_metadata = hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata
-            msg_has_additional_kwargs = hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs
-            logger.warning(
-                f"[{safe_thread_id}] ⚠️ [_process_message_chunk] react_thoughts NOT in event_stream_message! "
-                f"message_chunk.response_metadata={list(message_chunk.response_metadata.keys()) if msg_has_response_metadata else 'N/A'}, "
-                f"message_chunk.additional_kwargs={list(message_chunk.additional_kwargs.keys()) if msg_has_additional_kwargs else 'N/A'}"
-            )
 
     if isinstance(message_chunk, ToolMessage):
         # Tool Message - Return the result of the tool call
-        logger.info(f"[{safe_thread_id}] 🔧 Processing ToolMessage")
-        tool_call_id = message_chunk.tool_call_id
-        event_stream_message["tool_call_id"] = tool_call_id
-        
-        # Validate tool_call_id for debugging
-        if tool_call_id:
-            safe_tool_id = sanitize_log_input(tool_call_id, max_length=100)
-            logger.info(
-                f"[{safe_thread_id}] 🔧 ToolMessage with tool_call_id: "
-                f"{safe_tool_id}, content_len={len(str(event_stream_message.get('content', '')))}"
-            )
-        else:
-            logger.warning(
-                f"[{safe_thread_id}] ToolMessage received without tool_call_id"
-            )
-        
-        logger.info(f"[{safe_thread_id}] 🔧 Yielding tool_call_result event")
+        event_stream_message["tool_call_id"] = message_chunk.tool_call_id
         yield _make_event("tool_call_result", event_stream_message)
+        
     elif isinstance(message_chunk, AIMessageChunk):
-        # AI Message - Raw message tokens
-        has_tool_calls = bool(message_chunk.tool_calls)
-        has_chunks = bool(message_chunk.tool_call_chunks)
-        logger.debug(
-            f"[{safe_thread_id}] Processing AIMessageChunk, "
-            f"tool_calls={has_tool_calls}, tool_call_chunks={has_chunks}"
-        )
-
+        # AI Message Chunk - Streaming response
         if message_chunk.tool_calls:
-            # AI Message - Tool Call (complete tool calls)
-            safe_tool_names = [
-                sanitize_tool_name(tc.get('name', 'unknown'))
-                for tc in message_chunk.tool_calls
-            ]
-            logger.debug(
-                f"[{safe_thread_id}] AIMessageChunk has complete tool_calls: "
-                f"{safe_tool_names}"
-            )
+            # Complete tool calls
             event_stream_message["tool_calls"] = message_chunk.tool_calls
             
-            # CRITICAL: Include react_thoughts in tool_calls event for AIMessageChunk too
-            # This ensures thoughts appear IMMEDIATELY when tool calls are streamed
+            # Include react_thoughts if available
             if "react_thoughts" not in event_stream_message:
-                # Check if thoughts are in the message_chunk
                 chunk_thoughts = None
                 if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
                     chunk_thoughts = message_chunk.response_metadata.get("react_thoughts")
@@ -661,188 +622,39 @@ async def _process_message_chunk(
                     chunk_thoughts = message_chunk.additional_kwargs.get("react_thoughts")
                 if chunk_thoughts:
                     event_stream_message["react_thoughts"] = chunk_thoughts
-                    logger.info(
-                        f"[{safe_thread_id}] ✅ Adding {len(chunk_thoughts)} react_thoughts to AIMessageChunk tool_calls event "
-                        f"for immediate display"
-                    )
             
-            # Process tool_call_chunks with proper index-based grouping
-            processed_chunks = _process_tool_call_chunks(
-                message_chunk.tool_call_chunks
-            )
+            # Process tool_call_chunks
+            processed_chunks = _process_tool_call_chunks(message_chunk.tool_call_chunks)
             if processed_chunks:
                 event_stream_message["tool_call_chunks"] = processed_chunks
-                safe_chunk_names = [
-                    sanitize_tool_name(c.get('name'))
-                    for c in processed_chunks
-                ]
-                logger.debug(
-                    f"[{safe_thread_id}] Tool calls: {safe_tool_names}, "
-                    f"Processed chunks: {len(processed_chunks)}"
-                )
             
-            logger.debug(f"[{safe_thread_id}] Yielding tool_calls event")
             yield _make_event("tool_calls", event_stream_message)
         elif message_chunk.tool_call_chunks:
-            # AI Message - Tool Call Chunks (streaming)
-            chunks_count = len(message_chunk.tool_call_chunks)
-            logger.debug(
-                f"[{safe_thread_id}] AIMessageChunk has streaming "
-                f"tool_call_chunks: {chunks_count} chunks"
-            )
-            processed_chunks = _process_tool_call_chunks(
-                message_chunk.tool_call_chunks
-            )
-            
-            # Emit separate events for chunks with different indices
-            # (tool call boundaries)
+            # Streaming tool call chunks
+            processed_chunks = _process_tool_call_chunks(message_chunk.tool_call_chunks)
             if processed_chunks:
-                prev_chunk = None
-                for chunk in processed_chunks:
-                    current_index = chunk.get("index")
-                    
-                    # Log index transitions to detect tool call boundaries
-                    if prev_chunk is not None and (
-                        current_index != prev_chunk.get("index")
-                    ):
-                        prev_name = sanitize_tool_name(prev_chunk.get('name'))
-                        curr_name = sanitize_tool_name(chunk.get('name'))
-                        logger.debug(
-                            f"[{safe_thread_id}] Tool call boundary detected: "
-                            f"index {prev_chunk.get('index')} "
-                            f"({prev_name}) -> {current_index} ({curr_name})"
-                        )
-                    
-                    prev_chunk = chunk
-                
-                # Include all processed chunks in the event
                 event_stream_message["tool_call_chunks"] = processed_chunks
-                safe_chunk_names = [
-                    sanitize_tool_name(c.get('name'))
-                    for c in processed_chunks
-                ]
-                logger.debug(
-                    f"[{safe_thread_id}] Streamed {len(processed_chunks)} "
-                    f"tool call chunk(s): {safe_chunk_names}"
-                )
-            
-            logger.debug(f"[{safe_thread_id}] Yielding tool_call_chunks event")
             yield _make_event("tool_call_chunks", event_stream_message)
         else:
-            # AI Message - Raw message tokens
-            content_len = (
-                len(message_chunk.content)
-                if isinstance(message_chunk.content, str)
-                else 0
-            )
-            logger.debug(
-                f"[{safe_thread_id}] AIMessageChunk is raw message tokens, "
-                f"content_len={content_len}"
-            )
-            # Log finish_reason for debugging
-            if event_stream_message.get("finish_reason"):
-                logger.info(
-                    f"[{safe_thread_id}] ✅ Including finish_reason in "
-                    f"message_chunk event: "
-                    f"{event_stream_message.get('finish_reason')}, "
-                    f"message_id: {event_stream_message.get('id')}, "
-                    f"agent: {event_stream_message.get('agent')}"
-                )
-            # NOTE: Don't add finish_reason to all chunks - only include it
-            # when it's actually present in the message metadata (final chunk).
-            # The frontend will set isStreaming=false when it receives ANY
-            # chunk with finish_reason.
-            
-            # CRITICAL DEBUG: Log if react_thoughts are in the event before yielding
-            if agent_name in ["pm_agent", "react_agent"]:
-                has_thoughts = "react_thoughts" in event_stream_message
-                if has_thoughts:
-                    logger.info(
-                        f"[{safe_thread_id}] ✅ About to yield AIMessageChunk WITH {len(event_stream_message['react_thoughts'])} react_thoughts"
-                    )
-                else:
-                    logger.error(
-                        f"[{safe_thread_id}] ❌ CRITICAL: About to yield AIMessageChunk WITHOUT react_thoughts! "
-                        f"message_id={event_stream_message.get('id')}, agent={agent_name}"
-                    )
+            # Regular content chunk
             yield _make_event("message_chunk", event_stream_message)
     elif isinstance(message_chunk, AIMessage):
         # Full AIMessage (not chunk) - used for state update streaming
-        # This happens when agents return full AIMessage objects instead of streaming chunks
-        content_len = (
-            len(message_chunk.content)
-            if isinstance(message_chunk.content, str)
-            else 0
-        )
-        logger.debug(
-            f"[{safe_thread_id}] Processing full AIMessage, "
-            f"content_len={content_len}, has_additional_kwargs={bool(message_chunk.additional_kwargs)}"
-        )
+        # Ensure react_thoughts are included
+        if "react_thoughts" not in event_stream_message:
+            react_thoughts = None
+            if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
+                react_thoughts = message_chunk.response_metadata.get("react_thoughts")
+            if not react_thoughts and hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs:
+                react_thoughts = message_chunk.additional_kwargs.get("react_thoughts")
+            if react_thoughts:
+                event_stream_message["react_thoughts"] = react_thoughts
         
-        # Log if we have react_thoughts (check both response_metadata and additional_kwargs)
-        react_thoughts_in_msg = None
-        if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
-            react_thoughts_in_msg = message_chunk.response_metadata.get("react_thoughts")
-        if not react_thoughts_in_msg and hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs:
-            react_thoughts_in_msg = message_chunk.additional_kwargs.get("react_thoughts")
-        
-        if react_thoughts_in_msg:
-            logger.info(
-                f"[{safe_thread_id}] 💭 AIMessage has react_thoughts: "
-                f"{len(react_thoughts_in_msg)} thoughts"
-            )
-            # Ensure react_thoughts are in event_stream_message (they should be added by _create_event_stream_message)
-            # But double-check here to be safe
-            if "react_thoughts" not in event_stream_message:
-                event_stream_message["react_thoughts"] = react_thoughts_in_msg
-                logger.info(f"[{safe_thread_id}] ✅ Added react_thoughts to event_stream_message in AIMessage handler")
-        
-        # Include tool_calls if present (for PM Agent tool calls)
+        # Include tool_calls if present
         if hasattr(message_chunk, 'tool_calls') and message_chunk.tool_calls:
             event_stream_message["tool_calls"] = message_chunk.tool_calls
-            
-            # CRITICAL: Include react_thoughts in tool_calls event so they appear IMMEDIATELY
-            # This ensures thoughts appear before tool calls execute, not after
-            if "react_thoughts" not in event_stream_message:
-                # Check if thoughts are in the message
-                if react_thoughts_in_msg:
-                    event_stream_message["react_thoughts"] = react_thoughts_in_msg
-                    logger.info(
-                        f"[{safe_thread_id}] ✅ Adding {len(react_thoughts_in_msg)} react_thoughts to tool_calls event "
-                        f"for immediate display"
-                    )
-            
-            safe_tool_names = [
-                sanitize_tool_name(tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown'))
-                for tc in message_chunk.tool_calls
-            ]
-            logger.info(
-                f"[{safe_thread_id}] AIMessage has tool_calls: {safe_tool_names}, "
-                f"has_react_thoughts={'react_thoughts' in event_stream_message}"
-            )
             yield _make_event("tool_calls", event_stream_message)
         else:
-            # Regular message (no tool calls)
-            if event_stream_message.get("finish_reason"):
-                logger.info(
-                    f"[{safe_thread_id}] ✅ Including finish_reason in "
-                    f"AIMessage event: {event_stream_message.get('finish_reason')}, "
-                    f"message_id: {event_stream_message.get('id')}, "
-                    f"agent: {event_stream_message.get('agent')}"
-                )
-            # Log if react_thoughts are in the event
-            if event_stream_message.get("react_thoughts"):
-                logger.info(
-                    f"[{safe_thread_id}] ✅ Streaming AIMessage with {len(event_stream_message['react_thoughts'])} react_thoughts"
-                )
-            else:
-                # CRITICAL: Log when thoughts are missing right before yielding
-                if agent_name in ["pm_agent", "react_agent"]:
-                    logger.error(
-                        f"[{safe_thread_id}] ❌ CRITICAL: About to yield AIMessage WITHOUT react_thoughts! "
-                        f"message_id={event_stream_message.get('id')}, agent={agent_name}, "
-                        f"event_keys={list(event_stream_message.keys())}"
-                    )
             yield _make_event("message_chunk", event_stream_message)
 
 

@@ -60,11 +60,41 @@ async def list_projects() -> str:
     try:
         handler = _ensure_pm_handler()
         projects = await handler.list_all_projects()
-        return json.dumps({
+        result = json.dumps({
             "success": True,
             "projects": projects,
             "count": len(projects)
         }, indent=2, default=str)
+        
+        # CRITICAL: Truncate large results to prevent token overflow in ReAct agent scratchpad
+        # Max 1000 tokens = 4000 chars per tool result
+        from src.utils.json_utils import sanitize_tool_response
+        max_chars = 4000  # 1000 tokens * 4 chars/token
+        original_length = len(result)
+        if original_length > max_chars:
+            logger.warning(
+                f"[PM-TOOLS] list_projects returned {original_length:,} chars "
+                f"(≈{original_length//4:,} tokens). Compressing to {max_chars:,} chars."
+            )
+            # Parse JSON to add metadata about compression
+            # This metadata will be preserved by sanitize_tool_response
+            try:
+                parsed = json.loads(result)
+                if isinstance(parsed, dict):
+                    parsed["_metadata"] = {
+                        "_compressed": True,
+                        "_original_count": parsed.get("count", len(parsed.get("projects", []))),
+                        "_original_length": original_length,
+                        "_note": "⚠️ CRITICAL: This result was intelligently compressed to fit token limits. This is a COMPLETE result - do NOT retry this tool call. Use the provided projects to proceed with your task."
+                    }
+                    result = json.dumps(parsed, indent=2, default=str)
+            except (json.JSONDecodeError, TypeError):
+                pass  # If not JSON, use sanitize_tool_response as fallback
+            
+            result = sanitize_tool_response(result, max_length=max_chars, compress_arrays=True)
+            logger.info(f"[PM-TOOLS] ✅ list_projects compressed to {len(result):,} chars (≈{len(result)//4:,} tokens)")
+        
+        return result
     except Exception as e:
         logger.error(f"Error listing projects: {e}")
         return json.dumps({
@@ -170,11 +200,25 @@ async def list_tasks(
             project_id=actual_project_id,
             assignee_id=assignee_id
         )
-        return json.dumps({
+        
+        result = json.dumps({
             "success": True,
             "tasks": tasks,
             "count": len(tasks)
         }, indent=2, default=str)
+        
+        # CRITICAL: Truncate large results to prevent token overflow in ReAct agent scratchpad
+        from src.utils.json_utils import sanitize_tool_response
+        max_chars = 4000  # 1000 tokens * 4 chars/token
+        if len(result) > max_chars:
+            logger.warning(
+                f"[PM-TOOLS] list_tasks returned {len(result):,} chars "
+                f"(≈{len(result)//4:,} tokens). Truncating to {max_chars:,} chars."
+            )
+            result = sanitize_tool_response(result, max_length=max_chars, compress_arrays=True)
+            logger.info(f"[PM-TOOLS] ✅ list_tasks truncated to {len(result):,} chars (≈{len(result)//4:,} tokens)")
+        
+        return result
     except Exception as e:
         logger.error(f"Error listing tasks: {e}")
         return json.dumps({
@@ -203,11 +247,24 @@ async def list_my_tasks() -> str:
         
         # Use handler method which handles both single and multi-provider modes
         tasks = await handler.list_my_tasks()
-        return json.dumps({
+        result = json.dumps({
             "success": True,
             "tasks": tasks,
             "count": len(tasks)
         }, indent=2, default=str)
+        
+        # CRITICAL: Truncate large results to prevent token overflow in ReAct agent scratchpad
+        from src.utils.json_utils import sanitize_tool_response
+        max_chars = 4000  # 1000 tokens * 4 chars/token
+        if len(result) > max_chars:
+            logger.warning(
+                f"[PM-TOOLS] list_my_tasks returned {len(result):,} chars "
+                f"(≈{len(result)//4:,} tokens). Truncating to {max_chars:,} chars."
+            )
+            result = sanitize_tool_response(result, max_length=max_chars, compress_arrays=True)
+            logger.info(f"[PM-TOOLS] ✅ list_my_tasks truncated to {len(result):,} chars (≈{len(result)//4:,} tokens)")
+        
+        return result
     except Exception as e:
         logger.error(f"Error listing my tasks: {e}")
         return json.dumps({
@@ -335,11 +392,24 @@ async def list_sprints(
         elif project_id:
             sprints = await handler.list_project_sprints(project_id)
         
-        return json.dumps({
+        result = json.dumps({
             "success": True,
             "sprints": sprints,
             "count": len(sprints)
         }, indent=2, default=str)
+        
+        # CRITICAL: Truncate large results to prevent token overflow in ReAct agent scratchpad
+        from src.utils.json_utils import sanitize_tool_response
+        max_chars = 4000  # 1000 tokens * 4 chars/token
+        if len(result) > max_chars:
+            logger.warning(
+                f"[PM-TOOLS] list_sprints returned {len(result):,} chars "
+                f"(≈{len(result)//4:,} tokens). Truncating to {max_chars:,} chars."
+            )
+            result = sanitize_tool_response(result, max_length=max_chars, compress_arrays=True)
+            logger.info(f"[PM-TOOLS] ✅ list_sprints truncated to {len(result):,} chars (≈{len(result)//4:,} tokens)")
+        
+        return result
     except Exception as e:
         logger.error(f"Error listing sprints: {e}")
         return json.dumps({

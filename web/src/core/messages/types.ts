@@ -13,7 +13,8 @@ export interface Message {
   | "coder"
   | "reporter"
   | "podcast"
-  | "pm_agent";
+  | "pm_agent"
+  | "react_agent";  // NEW: ReAct agent (fast path)
   role: MessageRole;
   isStreaming?: boolean;
   content: string;
@@ -30,6 +31,12 @@ export interface Message {
   currentStepDescription?: string;
   currentStepIndex?: number;
   totalSteps?: number;
+  // Cursor-style: Thoughts from ReAct agent
+  reactThoughts?: Array<{
+    thought: string;
+    before_tool: boolean;
+    step_index: number;
+  }>;
 }
 
 export interface Option {

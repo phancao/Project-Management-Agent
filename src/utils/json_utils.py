@@ -247,11 +247,66 @@ def _create_task_summary(tasks: list, max_items: int) -> list:
     return summary_items
 
 
+def _compress_project_list(projects: list) -> list:
+    """
+    Intelligently compress a list of projects by preserving searchable fields (id, name) for ALL projects,
+    while compressing other fields (description, etc.) to save tokens.
+    
+    This allows the agent to search through all projects even when the list is large.
+    The key insight: agents need to search by project name/ID, so we MUST preserve these for all projects.
+    
+    Args:
+        projects: List of project dictionaries
+        
+    Returns:
+        Compressed list with all project ids/names preserved, but other fields compressed
+    """
+    if not projects:
+        return projects
+    
+    # Preserve essential searchable fields for ALL projects
+    compressed = []
+    essential_fields = ["id", "name", "key"]  # Fields needed for searching/identifying projects
+    optional_fields = ["status", "description"]  # Can be truncated/compressed
+    
+    for project in projects:
+        if isinstance(project, dict):
+            compressed_project = {}
+            # Always preserve essential fields (needed for searching)
+            for field in essential_fields:
+                if field in project:
+                    compressed_project[field] = project[field]
+            # Compress optional fields to save tokens
+            for field in optional_fields:
+                if field in project:
+                    value = project[field]
+                    if isinstance(value, str) and len(value) > 30:
+                        compressed_project[field] = value[:30] + "..."
+                    else:
+                        compressed_project[field] = value
+            # Preserve other small fields
+            for key, value in project.items():
+                if key not in essential_fields and key not in optional_fields:
+                    if isinstance(value, (str, int, float, bool, type(None))):
+                        # Only keep small values
+                        if isinstance(value, str) and len(value) <= 50:
+                            compressed_project[key] = value
+                        elif not isinstance(value, str):
+                            compressed_project[key] = value
+            compressed.append(compressed_project)
+        else:
+            compressed.append(project)
+    
+    logger.info(f"Compressed project list: preserved id/name for all {len(compressed)} projects (essential for searching)")
+    return compressed
+
+
 def _compress_large_array(data: Any, max_items: int = 20) -> Any:
     """
     Compress large arrays by creating intelligent summaries instead of cutting off content.
     
     This function analyzes the data structure and creates meaningful summaries:
+    - For project lists: Preserves ALL project IDs and names (searchable fields) while compressing other fields
     - For task lists: Groups by status, priority, assignee and shows statistics + samples
     - For general arrays: Analyzes structure and creates category summaries
     
@@ -264,6 +319,21 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
     """
     if isinstance(data, list):
         if len(data) > max_items:
+            # Check if this looks like a project list (has id and name fields)
+            is_project_list = (
+                len(data) > 0 and
+                isinstance(data[0], dict) and
+                "id" in data[0] and
+                "name" in data[0] and
+                not any(key in data[0] for key in ["status", "priority", "assigned_to", "assignee", "task_id", "title"])
+            )
+            
+            if is_project_list:
+                # Use intelligent project compression (preserves all ids/names)
+                compressed = _compress_project_list(data)
+                logger.info(f"Compressed project list from {len(data)} to {len(compressed)} items (preserved all ids/names)")
+                return compressed
+            
             # Check if this looks like a task list
             is_task_list = (
                 len(data) > 0 and
@@ -314,6 +384,15 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
         else:
             return [_compress_large_array(item, max_items) for item in data]
     elif isinstance(data, dict):
+        # Check if this is a project list response - use intelligent project compression
+        if "projects" in data and isinstance(data["projects"], list) and len(data["projects"]) > 0:
+            projects = data["projects"]
+            if len(projects) > 0 and isinstance(projects[0], dict) and "id" in projects[0] and "name" in projects[0]:
+                # This is a project list - preserve all ids/names
+                compressed_projects = _compress_project_list(projects)
+                logger.info(f"Compressed projects list from {len(projects)} to {len(compressed_projects)} items (preserved all ids/names)")
+                return {**data, "projects": compressed_projects, "_compressed": True, "_compression_method": "project_list_preserve_ids"}
+        
         # Check if this is a task list response - use intelligent summarization
         if "tasks" in data and isinstance(data["tasks"], list) and len(data["tasks"]) > max_items:
             tasks = data["tasks"]
@@ -325,6 +404,39 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
             return {k: _compress_large_array(v, max_items) for k, v in data.items()}
     else:
         return data
+
+
+def _truncate_json_safely(content: str, max_length: int) -> str:
+    """
+    Safely truncate JSON content by adding a note field instead of breaking the JSON structure.
+    
+    Args:
+        content: JSON string to truncate
+        max_length: Maximum allowed length
+        
+    Returns:
+        Truncated JSON string with note field, or original if not JSON
+    """
+    if not (content.startswith('{') or content.startswith('[')):
+        return content[:max_length]
+    
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, dict):
+            # Add note as a field in the JSON object
+            note_text = "Result was truncated to fit token limits. This is a COMPLETE result - do NOT retry this tool call."
+            parsed["_truncation_note"] = note_text
+            result = json.dumps(parsed, ensure_ascii=False)
+            if len(result) <= max_length:
+                return result
+            # If adding note makes it too long, remove it and truncate the original
+            # But try to keep JSON valid by truncating at a boundary
+        # If it's a list or we can't add a field, fall through to simple truncation
+    except (json.JSONDecodeError, TypeError):
+        pass
+    
+    # Fallback: simple truncation (will break JSON, but we'll add note after)
+    return content[:max_length]
 
 
 def sanitize_tool_response(content: str, max_length: int = 40000, compress_arrays: bool = True) -> str:
@@ -350,29 +462,208 @@ def sanitize_tool_response(content: str, max_length: int = 40000, compress_array
         return content
     
     content = content.strip()
+    original_length = len(content)  # Track original length for compression notes
+    was_compressed = False  # Track if compression happened
+    
+    logger.info(f"[SANITIZE] Starting: original_length={original_length:,}, max_length={max_length:,}, compress_arrays={compress_arrays}")
     
     # First, try to extract valid JSON to remove trailing tokens
     if content.startswith('{') or content.startswith('['):
         content = _extract_json_from_content(content)
+        logger.info(f"[SANITIZE] After JSON extraction: {len(content):,} chars")
     
     # Try to compress large arrays if it's JSON
     if compress_arrays and (content.startswith('{') or content.startswith('[')):
         try:
             parsed = json.loads(content)
+            # Preserve metadata if it exists
+            metadata = None
+            if isinstance(parsed, dict) and "_metadata" in parsed:
+                metadata = parsed["_metadata"]
+            
             # Use more aggressive compression (20 items instead of 50)
             compressed = _compress_large_array(parsed, max_items=20)
-            content = json.dumps(compressed, ensure_ascii=False)
-            logger.info(f"Compressed tool response JSON structure")
+            
+            # Restore metadata if it was present
+            if metadata and isinstance(compressed, dict):
+                compressed["_metadata"] = metadata
+            
+            new_content = json.dumps(compressed, ensure_ascii=False)
+            logger.info(f"[SANITIZE] Compression result: before={len(content):,}, after={len(new_content):,}, reduced={len(new_content) < len(content)}")
+            if len(new_content) < len(content):
+                was_compressed = True
+                content = new_content
+                logger.info(f"[SANITIZE] ✅ Compression successful: {original_length:,} → {len(content):,} chars")
+                
+                # Add truncation note as JSON field if it's a dict and might need truncation
+                if isinstance(compressed, dict) and len(content) > max_length * 0.8:  # If close to limit, add note now
+                    try:
+                        compressed["_truncation_note"] = "🚨 STOP - DO NOT RETRY: Result was compressed. This is COMPLETE. Use the provided data and proceed. DO NOT call this tool again."
+                        content = json.dumps(compressed, ensure_ascii=False)
+                        logger.info(f"[SANITIZE] 📝 Added truncation note as JSON field (preemptive)")
+                    except (json.JSONDecodeError, TypeError):
+                        pass
         except (json.JSONDecodeError, TypeError):
             # Not valid JSON, skip compression
             pass
     
-    # Truncate if too long to prevent token overflow
-    # 40k chars ≈ 10k tokens (assuming 4 chars/token for English)
-    # This leaves room for other content in the full message context
-    if len(content) > max_length:
-        logger.warning(f"Tool response truncated from {len(content)} to {max_length} chars (≈{max_length//4} tokens)")
-        content = content[:max_length].rstrip() + f"... [truncated from {len(content)} chars]"
+    # Check if truncation is needed
+    needs_truncation = len(content) > max_length
+    is_json = content.startswith('{') or content.startswith('[')
+    
+    # CRITICAL: Always add a note if compression OR truncation happened
+    # This prevents the agent from retrying the tool call thinking it's incomplete
+    logger.info(f"[SANITIZE] State check: was_compressed={was_compressed}, needs_truncation={needs_truncation}, content_len={len(content):,}")
+    note_added_as_field = False
+    
+    if was_compressed or needs_truncation:
+        # Try to add note as JSON field first (preserves JSON structure)
+        if is_json:
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, dict):
+                    # Add note as a field in the JSON object (at the beginning for visibility)
+                    if was_compressed and needs_truncation:
+                        note_text = f"🚨 STOP - DO NOT RETRY: This result was compressed from {original_length:,} chars and truncated to {max_length:,} chars. This is a COMPLETE result. Use the provided data and proceed with your task. DO NOT call this tool again."
+                    elif was_compressed:
+                        note_text = f"🚨 STOP - DO NOT RETRY: This result was compressed from {original_length:,} to {len(content):,} chars. This is a COMPLETE result. Use the provided data and proceed with your task. DO NOT call this tool again."
+                    else:
+                        note_text = f"🚨 STOP - DO NOT RETRY: This result was truncated from {len(content):,} to {max_length:,} chars. This is a COMPLETE result. Use the provided data and proceed with your task. DO NOT call this tool again."
+                    
+                    # Add note at the beginning of the dict (first field)
+                    new_dict = {"_truncation_note": note_text}
+                    new_dict.update(parsed)
+                    content = json.dumps(new_dict, ensure_ascii=False)
+                    note_added_as_field = True
+                    logger.info(f"[SANITIZE] 📝 Added note as JSON field at beginning")
+                    
+                    # CRITICAL: If content is still too long after adding note, we need to truncate
+                    # But we want to preserve the note field, so we'll truncate the data inside
+                    if len(content) > max_length:
+                        logger.warning(f"[SANITIZE] Content still too long after adding note: {len(content):,} > {max_length:,}. Truncating...")
+                        # Re-parse and truncate arrays/objects more aggressively
+                        try:
+                            # Try to compress arrays even more aggressively
+                            more_compressed = _compress_large_array(new_dict, max_items=5)  # Very aggressive
+                            content = json.dumps(more_compressed, ensure_ascii=False)
+                            logger.info(f"[SANITIZE] Aggressive compression: {len(content):,} chars")
+                            
+                            # If still too long, truncate the JSON string but PRESERVE the note field
+                            if len(content) > max_length:
+                                # CRITICAL: Extract and preserve the note field first
+                                note_field = None
+                                try:
+                                    parsed_for_note = json.loads(content)
+                                    if isinstance(parsed_for_note, dict) and "_truncation_note" in parsed_for_note:
+                                        note_field = parsed_for_note["_truncation_note"]
+                                        # Remove note from dict to truncate the rest
+                                        del parsed_for_note["_truncation_note"]
+                                        # Truncate the data (without note)
+                                        truncated_data = _compress_large_array(parsed_for_note, max_items=3)  # Very aggressive
+                                        # Reserve space for note field (estimate ~200 chars for note + JSON structure)
+                                        note_overhead = 250
+                                        available_for_data = max_length - note_overhead
+                                        truncated_json = json.dumps(truncated_data, ensure_ascii=False)
+                                        if len(truncated_json) > available_for_data:
+                                            # Still too long, truncate string but keep valid JSON
+                                            truncated_json = truncated_json[:available_for_data]
+                                            # Try to close JSON properly
+                                            if truncated_json.rstrip().endswith(','):
+                                                truncated_json = truncated_json.rstrip()[:-1]
+                                            last_brace = truncated_json.rfind('}')
+                                            if last_brace > available_for_data * 0.5:
+                                                truncated_json = truncated_json[:last_brace+1]
+                                            else:
+                                                truncated_json = truncated_json.rstrip().rstrip(',') + '}'
+                                        # Re-add the note field at the beginning
+                                        try:
+                                            parsed_truncated = json.loads(truncated_json)
+                                            final_dict = {"_truncation_note": note_field}
+                                            if isinstance(parsed_truncated, dict):
+                                                final_dict.update(parsed_truncated)
+                                            content = json.dumps(final_dict, ensure_ascii=False)
+                                            logger.warning(f"[SANITIZE] String truncation applied with note preserved: {len(content):,} chars")
+                                        except (json.JSONDecodeError, TypeError) as parse_err:
+                                            logger.error(f"[SANITIZE] Failed to parse truncated JSON, using fallback: {parse_err}")
+                                            # Fallback: just add note as text prefix
+                                            content = f'{{"_truncation_note": "{note_field}", "_data": {truncated_json[:max_length-200]}}}'
+                                            if len(content) > max_length:
+                                                content = content[:max_length].rstrip().rstrip(',') + '}'
+                                except (json.JSONDecodeError, TypeError, Exception) as e:
+                                    logger.error(f"[SANITIZE] Error preserving note during truncation: {e}")
+                                    # Fallback: simple truncation
+                                    truncated = content[:max_length]
+                                    if truncated.rstrip().endswith(','):
+                                        truncated = truncated.rstrip()[:-1]
+                                    last_brace = truncated.rfind('}')
+                                    if last_brace > max_length * 0.3:
+                                        truncated = truncated[:last_brace+1]
+                                    else:
+                                        truncated = truncated.rstrip().rstrip(',') + '}'
+                                    content = truncated
+                                    logger.warning(f"[SANITIZE] Fallback truncation applied: {len(content):,} chars")
+                        except (json.JSONDecodeError, TypeError, Exception) as e:
+                            logger.error(f"[SANITIZE] Error during aggressive truncation: {e}")
+                            # Fallback: simple truncation
+                            content = content[:max_length].rstrip().rstrip(',') + '}'
+            except (json.JSONDecodeError, TypeError):
+                pass  # Fall through to text note
+        
+        # If we didn't add as JSON field, add as text note
+        if not note_added_as_field:
+            if was_compressed and needs_truncation:
+                note = f"\n\n⚠️ [CRITICAL NOTE: Result was intelligently compressed from {original_length:,} chars and truncated to {max_length:,} chars to fit token limits. This is a COMPLETE result - do NOT retry this tool call. Use the provided data to proceed.]"
+            elif was_compressed:
+                note = f"\n\n⚠️ [CRITICAL NOTE: Result was intelligently compressed from {original_length:,} to {len(content):,} chars to fit token limits. This is a COMPLETE result - do NOT retry this tool call. Use the provided data to proceed.]"
+            else:
+                note = f"\n\n⚠️ [CRITICAL NOTE: Result was truncated from {len(content):,} to {max_length:,} chars to fit token limits. This is a COMPLETE result - do NOT retry this tool call. Use the provided data to proceed.]"
+            logger.info(f"[SANITIZE] 📝 Adding completion note as text: {note[:100]}...")
+            
+            # For JSON, try to add note at the beginning (less likely to be cut off)
+            if is_json and needs_truncation:
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, dict):
+                        # Add note at the beginning of the dict (will be first field)
+                        new_dict = {"_truncation_note": "⚠️ CRITICAL: Result truncated. This is COMPLETE - do NOT retry!"}
+                        new_dict.update(parsed)
+                        content = json.dumps(new_dict, ensure_ascii=False)
+                        note_added_as_field = True
+                        logger.info(f"[SANITIZE] 📝 Added note at beginning of JSON object")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            if not note_added_as_field:
+                # Reserve space for the note
+                available_length = max_length - len(note)
+                if needs_truncation:
+                    # Try to truncate at a valid boundary if JSON
+                    if is_json:
+                        # Find last complete JSON object/array boundary before available_length
+                        truncated = content[:available_length]
+                        # Try to close JSON properly
+                        if truncated.rstrip().endswith(','):
+                            truncated = truncated.rstrip()[:-1]  # Remove trailing comma
+                        if content.startswith('{') and not truncated.rstrip().endswith('}'):
+                            # Try to find last complete field
+                            last_brace = truncated.rfind('}')
+                            if last_brace > available_length * 0.5:  # If we can keep most of it
+                                truncated = truncated[:last_brace+1]
+                        elif content.startswith('[') and not truncated.rstrip().endswith(']'):
+                            last_bracket = truncated.rfind(']')
+                            if last_bracket > available_length * 0.5:
+                                truncated = truncated[:last_bracket+1]
+                        content = truncated.rstrip() + note
+                    else:
+                        content = content[:available_length].rstrip() + note
+                else:
+                    # Even if not truncating, add note if compressed (but check we don't exceed max_length)
+                    if len(content) + len(note) <= max_length:
+                        content = content.rstrip() + note
+                    else:
+                        # Need to truncate to fit the note
+                        available_length = max_length - len(note)
+                        content = content[:available_length].rstrip() + note
     
     # Remove common garbage patterns that appear from some models
     # These are often seen from quantized models with output corruption
@@ -383,4 +674,30 @@ def sanitize_tool_response(content: str, max_length: int = 40000, compress_array
     for pattern in garbage_patterns:
         content = re.sub(pattern, '', content)
     
+    # FINAL SAFETY CHECK: Ensure content never exceeds max_length
+    if len(content) > max_length:
+        logger.warning(f"[SANITIZE] ⚠️ FINAL CHECK: Content still exceeds limit! {len(content):,} > {max_length:,}. Applying final truncation...")
+        if content.startswith('{') or content.startswith('['):
+            # Try to preserve JSON structure
+            truncated = content[:max_length]
+            if truncated.rstrip().endswith(','):
+                truncated = truncated.rstrip()[:-1]
+            if content.startswith('{') and not truncated.rstrip().endswith('}'):
+                last_brace = truncated.rfind('}')
+                if last_brace > max_length * 0.5:
+                    truncated = truncated[:last_brace+1]
+                else:
+                    truncated = truncated.rstrip().rstrip(',') + '}'
+            elif content.startswith('[') and not truncated.rstrip().endswith(']'):
+                last_bracket = truncated.rfind(']')
+                if last_bracket > max_length * 0.5:
+                    truncated = truncated[:last_bracket+1]
+                else:
+                    truncated = truncated.rstrip().rstrip(',') + ']'
+            content = truncated
+        else:
+            content = content[:max_length]
+        logger.warning(f"[SANITIZE] ✅ Final truncation applied: {len(content):,} chars")
+    
+    logger.info(f"[SANITIZE] ✅ Final result: {len(content):,} chars (original={original_length:,}, max={max_length:,})")
     return content

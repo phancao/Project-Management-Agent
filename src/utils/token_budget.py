@@ -133,19 +133,34 @@ def get_token_budget_for_model(model_name: Optional[str] = None) -> TokenBudget:
         TokenBudget instance with appropriate limits
     """
     # Model token limits (context windows)
+    # Order matters: more specific patterns should come first
     MODEL_LIMITS = {
-        "gpt-3.5-turbo": 16385,
-        "gpt-3.5-turbo-16k": 16385,
-        "gpt-4": 8192,
-        "gpt-4-turbo": 128000,
-        "gpt-4o": 128000,
+        # GPT-5 series (400K context) - most specific first
+        "gpt-5.1-preview": 400000,
+        "gpt-5.1": 400000,
+        "gpt-5-mini": 400000,
+        "gpt-5-nano": 400000,
+        # GPT-4o series (128K context) - specific versions first
         "gpt-4o-mini": 128000,
+        "gpt-4o-2024": 128000,
+        "gpt-4o-2025": 128000,
+        "gpt-4o": 128000,
+        # GPT-4 Turbo series (128K context)
+        "gpt-4-turbo-preview": 128000,
+        "gpt-4-turbo": 128000,
+        # GPT-3.5 series (16K context)
+        "gpt-3.5-turbo-16k": 16385,
+        "gpt-3.5-turbo": 16385,
+        # GPT-4 base (8K context) - check after turbo variants
+        "gpt-4": 8192,
+        # Claude models (200K context)
+        "claude-3-5-sonnet": 200000,
         "claude-3-opus": 200000,
         "claude-3-sonnet": 200000,
         "claude-3-haiku": 200000,
-        "claude-3-5-sonnet": 200000,
-        "deepseek-chat": 64000,
+        # DeepSeek models (64K context)
         "deepseek-reasoner": 64000,
+        "deepseek-chat": 64000,
     }
     
     # Default to GPT-3.5 limit if unknown
@@ -153,6 +168,7 @@ def get_token_budget_for_model(model_name: Optional[str] = None) -> TokenBudget:
         limit = 16385
     else:
         # Find matching model (case-insensitive partial match)
+        # More specific patterns are checked first due to dictionary order
         model_lower = model_name.lower()
         limit = next(
             (v for k, v in MODEL_LIMITS.items() if k in model_lower),

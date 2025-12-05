@@ -28,6 +28,8 @@ PROVIDERS: Dict[str, ModelProvider] = {
         models=[
             "gpt-5.1",
             "gpt-5.1-preview",
+            "gpt-5-mini",
+            "gpt-5-nano",
             "gpt-4o-2024-11-20",
             "gpt-4o-2024-08-06",
             "gpt-4o",

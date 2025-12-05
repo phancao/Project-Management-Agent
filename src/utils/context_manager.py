@@ -403,11 +403,36 @@ class ContextManager:
             logger.warning(f"[CONTEXT-MANAGER] Failed to count compressed tokens with model, trying without: {e}")
             compressed_token_count = self.count_tokens(compressed_messages)
         
+        # 3. Validate compressed result fits within limit (with retry if needed)
+        max_iterations = 3
+        iteration = 0
+        while compressed_token_count > self.token_limit and iteration < max_iterations:
+            logger.warning(
+                f"[CONTEXT-MANAGER] ⚠️ Compressed result ({compressed_token_count:,} tokens) "
+                f"still exceeds limit ({self.token_limit:,} tokens), applying additional compression (iteration {iteration + 1}/{max_iterations})"
+            )
+            # Apply more aggressive compression: truncate largest messages
+            compressed_messages = self._aggressive_truncate(compressed_messages, self.token_limit)
+            try:
+                compressed_token_count = self.count_tokens(compressed_messages, model=model)
+            except Exception as e:
+                logger.warning(f"[CONTEXT-MANAGER] Failed to count tokens after aggressive compression: {e}")
+                compressed_token_count = self.count_tokens(compressed_messages)
+            iteration += 1
+        
+        if compressed_token_count > self.token_limit:
+            logger.error(
+                f"[CONTEXT-MANAGER] 🚨 CRITICAL: Final compressed result ({compressed_token_count:,} tokens) "
+                f"still exceeds limit ({self.token_limit:,} tokens) after {max_iterations} iterations. "
+                f"This may cause API errors."
+            )
+        
         compression_ratio = compressed_token_count / original_token_count if original_token_count > 0 else 1.0
 
         logger.info(
             f"[CONTEXT-MANAGER] 🔍 DEBUG: Message compression completed: {original_token_count:,} -> {compressed_token_count:,} tokens "
-            f"(ratio: {compression_ratio:.2%}, strategy: {self.compression_mode})"
+            f"(ratio: {compression_ratio:.2%}, strategy: {self.compression_mode}, "
+            f"within_limit: {compressed_token_count <= self.token_limit})"
         )
 
         state["messages"] = compressed_messages
@@ -415,6 +440,8 @@ class ContextManager:
             "compressed": True,
             "original_tokens": original_token_count,
             "compressed_tokens": compressed_token_count,
+            "token_limit": self.token_limit,
+            "within_limit": compressed_token_count <= self.token_limit,
             "compression_ratio": compression_ratio,
             "strategy": self.compression_mode,
             "agent_type": self.agent_type,
@@ -656,6 +683,69 @@ class ContextManager:
             # Keep all if not too many
             return system_msgs + medium_importance + high_importance
 
+    def _aggressive_truncate(
+        self, messages: List[BaseMessage], target_token_limit: int
+    ) -> List[BaseMessage]:
+        """
+        Aggressively truncate messages to fit within token limit.
+        Used as fallback when normal compression doesn't reduce enough.
+        
+        Args:
+            messages: List of messages to truncate
+            target_token_limit: Target token limit to fit within
+            
+        Returns:
+            Truncated message list
+        """
+        if not messages:
+            return messages
+        
+        # Calculate current token count
+        current_tokens = self.count_tokens(messages)
+        if current_tokens <= target_token_limit:
+            return messages
+        
+        # Sort messages by size (largest first) to truncate biggest ones
+        message_sizes = [
+            (i, self._count_message_tokens(msg)) 
+            for i, msg in enumerate(messages)
+        ]
+        message_sizes.sort(key=lambda x: x[1], reverse=True)
+        
+        # Calculate how much we need to reduce
+        reduction_needed = current_tokens - target_token_limit
+        
+        truncated_messages = list(messages)
+        total_reduced = 0
+        
+        # Truncate largest messages until we fit
+        for msg_idx, msg_tokens in message_sizes:
+            if total_reduced >= reduction_needed:
+                break
+            
+            # Calculate how much to truncate from this message
+            tokens_to_remove = min(msg_tokens, reduction_needed - total_reduced)
+            chars_to_remove = tokens_to_remove * 4  # ~4 chars per token
+            
+            msg = truncated_messages[msg_idx]
+            if hasattr(msg, 'content') and isinstance(msg.content, str):
+                # Truncate from the end (preserve beginning)
+                new_length = max(0, len(msg.content) - chars_to_remove)
+                if new_length < len(msg.content):
+                    from copy import deepcopy
+                    truncated_msg = deepcopy(msg)
+                    truncated_msg.content = truncated_msg.content[:new_length] + "\n\n... (truncated to fit context limit) ..."
+                    truncated_messages[msg_idx] = truncated_msg
+                    total_reduced += tokens_to_remove
+        
+        logger.info(
+            f"[CONTEXT-MANAGER] Aggressive truncation: {current_tokens:,} -> "
+            f"{self.count_tokens(truncated_messages):,} tokens "
+            f"(reduced {total_reduced:,} tokens)"
+        )
+        
+        return truncated_messages
+    
     def _truncate_message_content(
         self, message: BaseMessage, max_tokens: int
     ) -> BaseMessage:

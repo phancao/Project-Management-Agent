@@ -9,6 +9,10 @@
 // Model token limit mappings (context window sizes)
 export const MODEL_TOKEN_LIMITS: Record<string, number> = {
   // OpenAI models
+  "gpt-5.1": 400000,
+  "gpt-5.1-preview": 400000,
+  "gpt-5-mini": 400000,
+  "gpt-5-nano": 400000,
   "gpt-3.5-turbo": 16385,
   "gpt-3.5-turbo-16k": 16385,
   "gpt-4": 8192,

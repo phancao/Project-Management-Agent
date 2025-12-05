@@ -42,5 +42,22 @@ class State(MessagesState):
         3  # Default: 3 rounds (only used when enable_clarification=True)
     )
 
+    # Autonomous loop state (validation and reflection)
+    validation_results: list[dict] = field(default_factory=list)  # Results from validator node
+    reflection: str = ""  # Reflection on failures for replanning
+    retry_count: int = 0  # Number of retries for current step
+    replan_reason: str = ""  # Reason for replanning
+    max_replan_iterations: int = 3  # Maximum number of replanning attempts
+
+    # Adaptive routing state
+    routing_mode: str = ""  # "react_first", "user_escalated", "auto_escalated", etc.
+    previous_result: str = ""
+    
+    # Token budget coordination (for frontend + backend context sharing)
+    frontend_history_message_count: int = 0  # Number of messages from frontend history  # Store previous ReAct result for user feedback detection
+    escalation_reason: str = ""  # Why was query escalated
+    escalation_context: str = ""  # Context for escalated planning
+    react_intermediate_steps: list = field(default_factory=list)  # ReAct execution steps
+
     # Workflow control
     goto: str = "planner"  # Default next node

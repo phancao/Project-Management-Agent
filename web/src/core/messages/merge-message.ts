@@ -126,6 +126,26 @@ function mergeTextMessage(message: Message, event: MessageChunkEvent) {
     message.reasoningContentChunks = message.reasoningContentChunks ?? [];
     message.reasoningContentChunks.push(event.data.reasoning_content);
   }
+  // Cursor-style: Add react_thoughts if available
+  if (event.data.react_thoughts) {
+    console.log(`[DEBUG-MERGE] 💭 Adding react_thoughts to message ${message.id} (agent: ${message.agent}):`, {
+      thoughtCount: event.data.react_thoughts.length,
+      thoughts: event.data.react_thoughts,
+      eventType: event.type,
+      eventData: event.data
+    });
+    message.reactThoughts = event.data.react_thoughts;
+  } else {
+    // Debug: Log when react_thoughts is NOT in event
+    if (message.agent === "pm_agent" || message.agent === "react_agent") {
+      console.log(`[DEBUG-MERGE] ⚠️ No react_thoughts in event for ${message.agent} message ${message.id}`, {
+        eventType: event.type,
+        eventDataKeys: Object.keys(event.data || {}),
+        hasContent: !!event.data.content,
+        hasReasoningContent: !!event.data.reasoning_content
+      });
+    }
+  }
 }
 function convertToolChunkArgs(args: string) {
   // Convert escaped characters in args
@@ -138,6 +158,17 @@ function mergeToolCallMessage(
 ) {
   // Initialize toolCalls array if not present
   message.toolCalls ??= [];
+  
+  // CRITICAL: Extract react_thoughts from tool_calls event if present
+  // This ensures thoughts appear IMMEDIATELY when tool calls are streamed
+  if (event.data.react_thoughts) {
+    console.log(`[DEBUG-MERGE] 💭 Adding react_thoughts from tool_calls event to message ${message.id} (agent: ${message.agent}):`, {
+      thoughtCount: event.data.react_thoughts.length,
+      thoughts: event.data.react_thoughts,
+      eventType: event.type
+    });
+    message.reactThoughts = event.data.react_thoughts;
+  }
   
   if (event.type === "tool_calls" && event.data.tool_calls?.length) {
     // MERGE tool calls instead of replacing - backend may send multiple tool_calls events
@@ -169,20 +200,23 @@ function mergeToolCallMessage(
     }
   }
 
-  for (const chunk of event.data.tool_call_chunks) {
-    if (chunk.id) {
-      const toolCall = message.toolCalls.find(
-        (toolCall) => toolCall.id === chunk.id,
-      );
-      if (toolCall) {
-        toolCall.argsChunks = [convertToolChunkArgs(chunk.args)];
-      }
-    } else {
-      const streamingToolCall = message.toolCalls.find(
-        (toolCall) => toolCall.argsChunks?.length,
-      );
-      if (streamingToolCall) {
-        streamingToolCall.argsChunks!.push(convertToolChunkArgs(chunk.args));
+  // Safely handle tool_call_chunks - may be undefined or not an array
+  if (event.data.tool_call_chunks && Array.isArray(event.data.tool_call_chunks)) {
+    for (const chunk of event.data.tool_call_chunks) {
+      if (chunk.id) {
+        const toolCall = message.toolCalls.find(
+          (toolCall) => toolCall.id === chunk.id,
+        );
+        if (toolCall) {
+          toolCall.argsChunks = [convertToolChunkArgs(chunk.args)];
+        }
+      } else {
+        const streamingToolCall = message.toolCalls.find(
+          (toolCall) => toolCall.argsChunks?.length,
+        );
+        if (streamingToolCall) {
+          streamingToolCall.argsChunks!.push(convertToolChunkArgs(chunk.args));
+        }
       }
     }
   }

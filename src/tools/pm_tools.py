@@ -371,10 +371,17 @@ async def list_sprints(
         
         # Use handler method if available, otherwise use provider directly
         sprints = []
+        handler_type = handler.__class__.__name__
+        logger.info(f"[PM-TOOLS] list_sprints: Using handler type: {handler_type}, project_id: {actual_project_id}")
+        
         if hasattr(handler, 'list_all_sprints'):
+            logger.info(f"[PM-TOOLS] list_sprints: Calling handler.list_all_sprints(project_id={actual_project_id})")
             sprints = await handler.list_all_sprints(project_id=actual_project_id)
+            logger.info(f"[PM-TOOLS] list_sprints: handler.list_all_sprints returned {len(sprints)} sprints")
         elif handler.single_provider:
+            logger.info(f"[PM-TOOLS] list_sprints: Using single_provider.list_sprints(project_id={actual_project_id})")
             sprint_objs = await handler.single_provider.list_sprints(project_id=actual_project_id)
+            logger.info(f"[PM-TOOLS] list_sprints: single_provider.list_sprints returned {len(sprint_objs)} sprint objects")
             sprints = [
                 {
                     "id": str(s.id),
@@ -390,7 +397,49 @@ async def list_sprints(
                 for s in sprint_objs
             ]
         elif project_id:
+            logger.info(f"[PM-TOOLS] list_sprints: Calling handler.list_project_sprints(project_id={project_id})")
             sprints = await handler.list_project_sprints(project_id)
+            logger.info(f"[PM-TOOLS] list_sprints: handler.list_project_sprints returned {len(sprints)} sprints")
+        
+        # INVESTIGATE: Check for duplicate sprint IDs to understand why list is doubled
+        sprint_ids = [s.get("id") if isinstance(s, dict) else str(getattr(s, "id", None)) for s in sprints]
+        unique_ids = set(sprint_ids)
+        if len(sprint_ids) != len(unique_ids):
+            duplicate_count = len(sprint_ids) - len(unique_ids)
+            logger.warning(
+                f"[PM-TOOLS] ⚠️ DUPLICATE SPRINTS DETECTED: {len(sprint_ids)} total sprints, "
+                f"{len(unique_ids)} unique IDs, {duplicate_count} duplicates found!"
+            )
+            # Log which IDs are duplicated
+            from collections import Counter
+            id_counts = Counter(sprint_ids)
+            duplicates = {id: count for id, count in id_counts.items() if count > 1}
+            logger.warning(f"[PM-TOOLS] Duplicate sprint IDs: {duplicates}")
+            # Log first few sprint IDs to see pattern
+            logger.info(f"[PM-TOOLS] First 10 sprint IDs: {sprint_ids[:10]}")
+        else:
+            logger.info(f"[PM-TOOLS] ✅ No duplicates: {len(sprint_ids)} sprints, all unique IDs")
+        
+        # TEMPORARY: Deduplicate sprints by ID to prevent duplicates from PM service
+        # TODO: Remove this once root cause is fixed
+        seen_ids = set()
+        deduplicated_sprints = []
+        for sprint in sprints:
+            sprint_id = sprint.get("id") if isinstance(sprint, dict) else None
+            if sprint_id and sprint_id not in seen_ids:
+                seen_ids.add(sprint_id)
+                deduplicated_sprints.append(sprint)
+            elif sprint_id:
+                logger.warning(f"[PM-TOOLS] Removing duplicate sprint (ID: {sprint_id})")
+        
+        if len(deduplicated_sprints) < len(sprints):
+            logger.warning(
+                f"[PM-TOOLS] ⚠️ Deduplicated sprints: {len(sprints)} → {len(deduplicated_sprints)} "
+                f"(removed {len(sprints) - len(deduplicated_sprints)} duplicates) - "
+                f"THIS IS A WORKAROUND, ROOT CAUSE NEEDS INVESTIGATION"
+            )
+        
+        sprints = deduplicated_sprints
         
         result = json.dumps({
             "success": True,

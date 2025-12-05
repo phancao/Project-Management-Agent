@@ -141,20 +141,81 @@ function MessageListItem({
   const message = useMessage(messageId);
   const researchIds = useStore((state) => state.researchIds);
   const startOfResearch = useMemo(() => {
-    return researchIds.includes(messageId);
+    // CRITICAL: Filter out undefined/null researchIds to prevent bugs
+    const validResearchIds = researchIds.filter(id => id != null && id !== undefined);
+    const isStart = validResearchIds.includes(messageId);
+    // DEBUG: Log when startOfResearch changes
+    if (isStart) {
+      console.log(`[DEBUG-RENDER] ✅ startOfResearch=true for messageId: ${messageId}`, {
+        researchIds: Array.from(validResearchIds),
+        timestamp: new Date().toISOString()
+      });
+    }
+    return isStart;
   }, [researchIds, messageId]);
+  
+  // Safety check: ensure message exists before rendering
+  if (!message) {
+    return null;
+  }
+  
   if (message) {
+    // Check if this planner message is part of a research block
+    // If so, don't render it separately - it will be shown in AnalysisBlock
+    const researchPlanIds = useStore((state) => state.researchPlanIds);
+    const isPlannerInResearch = message.agent === "planner" && 
+      researchPlanIds && 
+      Array.from(researchPlanIds.values()).includes(message.id);
+    
+    // Skip rendering planner messages that are part of research blocks
+    // They will be shown in AnalysisBlock instead
+    if (isPlannerInResearch) {
+      console.log(`[DEBUG-RENDER] 🚫 Skipping planner message ${message.id} (part of research block)`, new Error().stack);
+      return null;
+    }
+    
     if (
       message.role === "user" ||
       message.agent === "coordinator" ||
       message.agent === "planner" ||
       message.agent === "podcast" ||
+      message.agent === "react_agent" ||  // NEW: Handle ReAct agent messages
       startOfResearch
       // Note: reporter is NOT included here - report is shown inside AnalysisBlock
     ) {
-      // Removed debug logging
       let content: React.ReactNode;
-      if (message.agent === "planner") {
+      
+      // Priority 1: If this is the start of research, show AnalysisBlock (includes plan)
+      if (startOfResearch && message?.id) {
+        const state = useStore.getState();
+        const researchPlanIds = state.researchPlanIds;
+        const planId = researchPlanIds.get(message.id);
+        const allResearchIds = state.researchIds;
+        
+        // CRITICAL DEBUG: Verify researchId is actually in researchIds
+        const researchIdInList = allResearchIds.includes(message.id);
+        console.log(`[DEBUG-RENDER] 📦 Rendering AnalysisBlock for message ${message.id} (agent: ${message.agent}, startOfResearch: ${startOfResearch})`, {
+          researchId: message.id,
+          researchIdInList,
+          planId,
+          allResearchIds: Array.from(allResearchIds),
+          allPlanIds: Array.from(researchPlanIds.entries()),
+          ongoingResearchId: state.ongoingResearchId,
+          timestamp: new Date().toISOString(),
+          stack: new Error().stack
+        });
+        
+        // Use AnalysisBlock for inline display of steps and report
+        // This works for both planner (full pipeline) and react_agent (fast path)
+        // The AnalysisBlock will display the plan content, so we don't show PlanCard separately
+        content = (
+          <div className="w-full px-4">
+            <AnalysisBlock researchId={message.id} />
+          </div>
+        );
+      } else if (message.agent === "planner") {
+        console.log(`[DEBUG-RENDER] 📋 Rendering PlanCard for message ${message.id} (standalone planner)`, new Error().stack);
+        // Show PlanCard for standalone planner messages (not in research)
         content = (
           <div className="w-full px-4">
             <PlanCard
@@ -167,19 +228,14 @@ function MessageListItem({
           </div>
         );
       } else if (message.agent === "podcast") {
+        console.log(`[DEBUG-RENDER] 🎙️ Rendering PodcastCard for message ${message.id}`, new Error().stack);
         content = (
           <div className="w-full px-4">
             <PodcastCard message={message} />
           </div>
         );
-      } else if (startOfResearch) {
-        // Use AnalysisBlock for inline display of steps and report
-        content = (
-          <div className="w-full px-4">
-            <AnalysisBlock researchId={message.id} />
-          </div>
-        );
       } else {
+        console.log(`[DEBUG-RENDER] 💬 Rendering MessageBubble for message ${message.id} (agent: ${message.agent}, role: ${message.role})`, new Error().stack);
         // Render if there's content OR if it's streaming (content may be accumulating)
         content = (message.content || message.isStreaming) ? (
           <div

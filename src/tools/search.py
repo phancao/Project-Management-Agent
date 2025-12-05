@@ -282,17 +282,46 @@ def get_web_search_tool(max_search_results: int, provider_id: Optional[str] = No
             f"include_images={include_images}, include_image_descriptions={include_image_descriptions}"
         )
 
-        return LoggedTavilySearch(
-            name="web_search",
-            max_results=max_search_results,
-            include_answer=include_answer,
-            search_depth=search_depth,
-            include_raw_content=include_raw_content,
-            include_images=include_images,
-            include_image_descriptions=include_image_descriptions,
-            include_domains=include_domains,
-            exclude_domains=exclude_domains,
-        )
+        try:
+            # Create API wrapper with API key if available from database
+            from src.tools.tavily_search.tavily_search_api_wrapper import EnhancedTavilySearchAPIWrapper
+            
+            # Initialize API wrapper with API key (required for Tavily)
+            if api_key:
+                logger.info("Using Tavily API key from database")
+                api_wrapper = EnhancedTavilySearchAPIWrapper(tavily_api_key=api_key)
+            else:
+                # Try to use environment variable as fallback
+                import os
+                env_api_key = os.getenv("TAVILY_API_KEY")
+                if env_api_key:
+                    logger.info("Using Tavily API key from environment variable")
+                    api_wrapper = EnhancedTavilySearchAPIWrapper(tavily_api_key=env_api_key)
+                else:
+                    raise ValueError("Tavily API key is required. Please configure it in the database or set TAVILY_API_KEY environment variable.")
+            
+            # Create Tavily search tool with the API wrapper
+            tavily_kwargs = {
+                "name": "web_search",
+                "max_results": max_search_results,
+                "include_answer": include_answer,
+                "search_depth": search_depth,
+                "include_raw_content": include_raw_content,
+                "include_images": include_images,
+                "include_image_descriptions": include_image_descriptions,
+                "include_domains": include_domains,
+                "exclude_domains": exclude_domains,
+                "api_wrapper": api_wrapper,  # Pass the initialized wrapper
+            }
+            
+            return LoggedTavilySearch(**tavily_kwargs)
+        except Exception as e:
+            logger.warning(f"Failed to initialize Tavily search: {e}. Falling back to DuckDuckGo.")
+            # Fall back to DuckDuckGo
+            return LoggedDuckDuckGoSearch(
+                name="web_search",
+                max_results=max_search_results,
+            )
     elif selected_provider == SearchEngine.DUCKDUCKGO.value or selected_provider == "duckduckgo":
         return LoggedDuckDuckGoSearch(
             name="web_search",

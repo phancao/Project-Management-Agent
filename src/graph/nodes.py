@@ -2078,37 +2078,40 @@ async def _execute_agent_step(
     token_limit = get_llm_token_limit_by_type(agent_llm_type)
     
     # Calculate compression limits based on model's token limit
-    # Reserve 30% for prompt overhead (system messages, current step, etc.)
-    # Use remaining 70% for completed steps data
+    # Reserve 40% for prompt overhead (system messages, current step, tools, etc.)
+    # Use remaining 60% for completed steps data (more conservative to account for function tokens)
     if token_limit:
         # Estimate: ~4 characters per token (conservative estimate)
         chars_per_token = 4
-        reserved_tokens = int(token_limit * 0.3)  # Reserve 30% for prompt
+        reserved_tokens = int(token_limit * 0.4)  # Reserve 40% for prompt, tools, and overhead
         available_tokens = token_limit - reserved_tokens
         available_chars = available_tokens * chars_per_token
         
-        # Distribute available chars across completed steps (with some buffer)
+        # Distribute available chars across completed steps (with aggressive limits)
         num_completed_steps = len(completed_steps)
         if num_completed_steps > 0:
-            # Allocate chars per step, but cap at reasonable limits
-            max_length_per_step = min(available_chars // max(num_completed_steps, 1), 50000)
-            # Adjust max_items based on token limit (more tokens = more items)
+            # Allocate chars per step, but cap aggressively to prevent overflow
+            # For PM agent with many steps, be very conservative
+            chars_per_step = available_chars // max(num_completed_steps, 1)
+            # Cap at 10K chars per step (2.5K tokens) to prevent any single step from being too large
+            max_length_per_step = min(chars_per_step, 10000)
+            # Adjust max_items based on token limit and number of steps (fewer items when more steps)
             if token_limit >= 100000:  # Large context models (Claude, GPT-4o, Gemini)
-                max_items = 20
+                max_items = max(5, 20 - num_completed_steps)  # Reduce items as steps increase
             elif token_limit >= 32000:  # Medium context models
-                max_items = 15
+                max_items = max(5, 15 - num_completed_steps // 2)
             else:  # Small context models (GPT-3.5-turbo)
-                max_items = 10
+                max_items = max(3, 10 - num_completed_steps // 2)  # Very conservative for small models
         else:
             max_length_per_step = 10000  # Default if no completed steps
             max_items = 10
     else:
         # Fallback to conservative defaults if token limit unknown
         logger.warning(f"[_execute_agent_step] Token limit unknown for agent '{agent_name}', using conservative defaults")
-        max_length_per_step = 10000
-        max_items = 10
+        max_length_per_step = 5000  # More conservative default
+        max_items = 5
     
-    logger.debug(f"[_execute_agent_step] Agent '{agent_name}' token_limit={token_limit}, max_length_per_step={max_length_per_step}, max_items={max_items}")
+    logger.info(f"[_execute_agent_step] Agent '{agent_name}' token_limit={token_limit}, completed_steps={len(completed_steps)}, max_length_per_step={max_length_per_step}, max_items={max_items}, available_chars={available_chars if token_limit else 'N/A'}")
 
     # Format completed steps information
     # CRITICAL: Compress ALL execution results to prevent token overflow
@@ -2274,9 +2277,10 @@ async def _execute_agent_step(
         logger.info(f"[{agent_name}] Message token limit (70% of total): {message_token_limit:,} tokens")
         
         # If over message limit, compress/truncate the messages
-        if input_token_count > message_token_limit * 0.9:  # If over 90% of message limit, compress
+        # Use a lower threshold (80% of message limit = 56% of total) to catch issues earlier
+        if input_token_count > message_token_limit * 0.8:  # If over 80% of message limit, compress
             logger.warning(
-                f"[{agent_name}] Agent input ({input_token_count:,} tokens) exceeds 90% of message limit ({message_token_limit:,}). "
+                f"[{agent_name}] Agent input ({input_token_count:,} tokens) exceeds 80% of message limit ({message_token_limit:,}). "
                 f"Compressing messages..."
             )
             
@@ -2359,11 +2363,93 @@ async def _execute_agent_step(
                                             goto="research_team",
                                         )
         else:
-            logger.info(f"[{agent_name}] Agent input within limit ({input_token_count:,} < {message_token_limit * 0.9:.0f}), no compression needed")
+            logger.info(f"[{agent_name}] Agent input within limit ({input_token_count:,} < {message_token_limit * 0.8:.0f}), no compression needed")
+    
+    # CRITICAL: Final context check right before LLM invocation
+    # This ensures we catch any context growth during agent execution
+    if agent_name == "pm_agent" and token_limit:
+        # Re-count tokens right before invocation (context may have grown)
+        final_token_count = context_manager.count_tokens(agent_input["messages"], model=model_name)
+        logger.info(f"[{agent_name}] 🔍 Final token check before LLM: {final_token_count:,} tokens (limit: {token_limit:,}, message limit: {message_token_limit:,})")
+        
+        # If still over limit, apply emergency truncation
+        if final_token_count > message_token_limit:
+            logger.warning(
+                f"[{agent_name}] 🚨 EMERGENCY: Context still over limit ({final_token_count:,} > {message_token_limit:,}) "
+                f"right before LLM call. Applying emergency truncation..."
+            )
+            
+            # Emergency truncation: truncate first message (contains completed_steps_info)
+            if agent_input["messages"]:
+                first_msg = agent_input["messages"][0]
+                if hasattr(first_msg, 'content') and isinstance(first_msg.content, str):
+                    # Calculate emergency max chars (reserve 15% for other messages and overhead)
+                    emergency_max_chars = int((message_token_limit * 0.85) * 4)  # 85% of message tokens * 4 chars/token
+                    if len(first_msg.content) > emergency_max_chars:
+                        original_len = len(first_msg.content)
+                        first_msg.content = first_msg.content[:emergency_max_chars] + "\n\n... (emergency truncation - context too large) ..."
+                        logger.warning(
+                            f"[{agent_name}] 🚨 Emergency truncated first message: {original_len:,} → {emergency_max_chars:,} chars"
+                        )
+                        
+                        # Recalculate after emergency truncation
+                        final_token_count = context_manager.count_tokens(agent_input["messages"], model=model_name)
+                        logger.info(
+                            f"[{agent_name}] 🔍 After emergency truncation: {final_token_count:,} tokens "
+                            f"(message limit: {message_token_limit:,}, total limit: {token_limit:,})"
+                        )
+                        
+                        # If STILL over limit, return error
+                        if final_token_count > message_token_limit:
+                            error_msg = (
+                                f"❌ **Context Too Large for {agent_name}**\n\n"
+                                f"The analysis data ({final_token_count:,} tokens) exceeds the model's limit ({token_limit:,} tokens).\n\n"
+                                f"**Current model:** {model_name} (max {token_limit:,} tokens)\n\n"
+                                f"**Solutions:**\n"
+                                f"1. Switch to a larger model (GPT-4o, Claude 3.5 Sonnet)\n"
+                                f"2. Request a more focused analysis with fewer steps\n"
+                                f"3. Reduce the amount of data being analyzed"
+                            )
+                            logger.error(f"[{agent_name}] 🚨 Cannot proceed - context still too large after emergency truncation")
+                            from src.prompts.planner_model import Step, Plan
+                            updated_step = Step(
+                                need_search=current_step.need_search,
+                                title=current_step.title,
+                                description=current_step.description,
+                                step_type=current_step.step_type,
+                                execution_res=error_msg,
+                            )
+                            updated_steps = list(current_plan.steps)
+                            updated_steps[current_step_idx] = updated_step
+                            updated_plan = Plan(
+                                locale=current_plan.locale,
+                                has_enough_context=current_plan.has_enough_context,
+                                thought=current_plan.thought,
+                                title=current_plan.title,
+                                steps=updated_steps,
+                            )
+                            completed_count = sum(1 for step in updated_plan.steps if step.execution_res)
+                            return Command(
+                                update={
+                                    "messages": [HumanMessage(content=error_msg, name=agent_name)],
+                                    "observations": observations + [error_msg],
+                                    "current_plan": updated_plan,
+                                    "current_step_index": min(completed_count, len(updated_plan.steps) - 1),
+                                },
+                                goto="research_team",
+                            )
+        else:
+            logger.info(f"[{agent_name}] ✅ Final token check passed: {final_token_count:,} tokens within limit")
     
     try:
         invoke_start_time = time.time()
         logger.info(f"[STEP-TIMING] Invoking agent '{agent_name}' for step '{current_step.title}' at {invoke_start_time}")
+        
+        # Log final token count for frontend tracking (if available)
+        if agent_name == "pm_agent" and token_limit:
+            final_count = context_manager.count_tokens(agent_input["messages"], model=model_name)
+            logger.info(f"[{agent_name}] 📊 Context token count before LLM: {final_count:,} / {token_limit:,} tokens ({final_count/token_limit*100:.1f}%)")
+        
         result = await agent.ainvoke(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )
@@ -2511,6 +2597,34 @@ async def _execute_agent_step(
         elif msg_type == "AIMessage":
             if hasattr(msg, 'tool_calls') and msg.tool_calls:
                 logger.info(f"[{agent_name}] Message {i}: AIMessage with {len(msg.tool_calls)} tool calls: {[tc.get('name', 'N/A') for tc in msg.tool_calls]}")
+                
+                # Cursor-style: Extract thoughts from PM Agent step descriptions
+                # For PM Agent, the step description contains the reasoning
+                if agent_name == "pm_agent" and current_step:
+                    # Extract thought from step description
+                    step_description = getattr(current_step, 'description', '') or ''
+                    if step_description:
+                        # Create thought from step description
+                        thought_text = step_description.strip()
+                        logger.info(f"[{agent_name}] 💭 Extracted thought from step description: {thought_text[:100]}...")
+                        
+                        # Add thought to message's additional_kwargs so it gets streamed
+                        if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
+                            msg.additional_kwargs = {}
+                        
+                        # Initialize react_thoughts if not exists
+                        if "react_thoughts" not in msg.additional_kwargs:
+                            msg.additional_kwargs["react_thoughts"] = []
+                        
+                        # Add thought for each tool call
+                        for tool_idx, tool_call in enumerate(msg.tool_calls):
+                            tool_name = tool_call.get('name', 'unknown') if isinstance(tool_call, dict) else getattr(tool_call, 'name', 'unknown')
+                            msg.additional_kwargs["react_thoughts"].append({
+                                "thought": thought_text,
+                                "before_tool": True,
+                                "step_index": len(msg.additional_kwargs["react_thoughts"])
+                            })
+                            logger.info(f"[{agent_name}] 💭 Added thought for tool call {tool_idx + 1}: {tool_name}")
             else:
                 logger.debug(f"[{agent_name}] Message {i}: AIMessage - content={str(msg.content)[:200]}")
         else:
@@ -2588,13 +2702,47 @@ async def _execute_agent_step(
     sys.stderr.write(f"🔄 Updated plan has {completed_count} completed steps out of {len(updated_plan.steps)}\n")
     sys.stderr.flush()
     
+    # Collect thoughts from PM Agent step descriptions
+    # Extract thoughts from ALL plan steps (not just current) so they show up in the UI
+    pm_thoughts = []
+    if agent_name == "pm_agent" and current_plan and hasattr(current_plan, 'steps'):
+        # Extract thoughts from all plan steps
+        for step_idx, step in enumerate(current_plan.steps):
+            step_description = getattr(step, 'description', '') or ''
+            if step_description:
+                # Extract thought from step description
+                thought_text = step_description.strip()
+                pm_thoughts.append({
+                    "thought": thought_text,
+                    "before_tool": True,
+                    "step_index": step_idx
+                })
+                logger.info(f"[{agent_name}] 💭 Extracted thought from step {step_idx} ('{step.title}'): {thought_text[:50]}...")
+        
+        logger.info(f"[{agent_name}] 💭 Collected {len(pm_thoughts)} thoughts from {len(current_plan.steps)} plan steps")
+    
     # Include optimization messages if they exist
-    return_messages = [
-        AIMessage(
-            content=response_content,
-            name=agent_name,
-        )
-    ]
+    final_message = AIMessage(
+        content=response_content,
+        name=agent_name,
+    )
+    
+    # Add thoughts to final message's additional_kwargs AND response_metadata for streaming
+    # response_metadata is more reliably preserved through LangGraph state management
+    if pm_thoughts:
+        # Add to additional_kwargs (for compatibility)
+        if not hasattr(final_message, 'additional_kwargs') or not final_message.additional_kwargs:
+            final_message.additional_kwargs = {}
+        final_message.additional_kwargs["react_thoughts"] = pm_thoughts
+        
+        # Also add to response_metadata (more reliable)
+        if not hasattr(final_message, 'response_metadata') or not final_message.response_metadata:
+            final_message.response_metadata = {}
+        final_message.response_metadata["react_thoughts"] = pm_thoughts
+        
+        logger.info(f"[{agent_name}] 💭 Added {len(pm_thoughts)} thoughts to final message (additional_kwargs + response_metadata) for streaming")
+    
+    return_messages = [final_message]
     optimization_messages = state.get("_optimization_messages", [])
     if optimization_messages:
         return_messages = optimization_messages + return_messages
@@ -2602,13 +2750,21 @@ async def _execute_agent_step(
         state.pop("_optimization_messages", None)
     
     # CRITICAL: Include updated_plan in the update to ensure LangGraph persists the state change
+    # Also include thoughts in state for backend streaming
+    update_dict = {
+        "messages": return_messages,
+        "observations": observations + [response_content],
+        "current_step_index": current_step_index,  # Update step progress
+        "current_plan": updated_plan,  # Include new plan object with updated step execution_res
+    }
+    
+    # Add thoughts to state for PM Agent (for backend streaming)
+    if agent_name == "pm_agent" and pm_thoughts:
+        update_dict["react_thoughts"] = pm_thoughts
+        logger.info(f"[{agent_name}] 💭 Added {len(pm_thoughts)} thoughts to state update")
+    
     return Command(
-        update={
-            "messages": return_messages,
-            "observations": observations + [response_content],
-            "current_step_index": current_step_index,  # Update step progress
-            "current_plan": updated_plan,  # Include new plan object with updated step execution_res
-        },
+        update=update_dict,
         goto="research_team",
     )
 
@@ -3959,9 +4115,22 @@ async def react_agent_node(
 - **For "analyse sprint X" queries:** Use the provided project_id directly - no need to search for projects!
 """
     
-    react_prompt_template = """You are a helpful PM assistant with access to project management tools.
+    react_prompt_template = """You are a helpful PM assistant with access to project management tools and web search.
 
-Answer the user's question using the available tools.
+**CRITICAL: You MUST include your reasoning in the message content BEFORE calling tools!**
+
+Even when using structured tool calls, you MUST write your thinking process in the message content. This helps users understand your reasoning.
+
+**WORKFLOW:**
+1. **Understand the Request**: Read the user's question carefully
+2. **Research if Needed**: If you're unsure how to fulfill the request, use `web_search` to research:
+   - Best practices for the task
+   - How to interpret or analyze the data
+   - Industry standards or methodologies
+   - Any context that would help you provide a better answer
+3. **Plan Your Approach**: Think about which tools to use and in what order
+4. **Execute**: Call the appropriate tools to get the data
+5. **Analyze & Answer**: Process the data and provide a comprehensive answer
 
 **CRITICAL: Tool Name Format**
 - Tool names do NOT have parentheses: use `list_sprints` NOT `list_sprints()`
@@ -3969,17 +4138,41 @@ Answer the user's question using the available tools.
 - Tool names do NOT have parentheses: use `list_projects` NOT `list_projects()`
 - Always use the EXACT tool name as shown in the "Available tools" section below
 
-Use this format:
+**MESSAGE FORMAT (CRITICAL - Include reasoning in content!):**
 
-Thought: Think about what you need to do
-Action: tool_name
-Action Input: {{"{{"arg1": "value1", "arg2": "value2"}}}}
-Observation: [result will be shown here]
+When you want to call a tool, your message should look like this:
 
-... (repeat Thought/Action/Observation as needed)
+**Content (REQUIRED - write your thinking here):**
+```
+Thought: [Your reasoning about what you need to do]
+- What is the user asking for?
+- What information do I need?
+- Which tools should I use?
+- Do I need to research first (use web_search)?
+- What's my plan?
+```
 
-Thought: I now know the final answer
-Final Answer: [your answer here]
+**Then call the tool** (structured tool call will be added automatically)
+
+**Example Flow:**
+
+**ITERATION 1 - Research (if needed):**
+Content: "The user wants to analyze Sprint 4. I should first understand what makes a good sprint analysis. Let me research best practices for sprint analysis to ensure I provide comprehensive insights."
+Tool: web_search
+Tool Input: {{"{{"query": "sprint analysis best practices agile methodology"}}}}
+
+**ITERATION 2 - Get Data:**
+Content: "Based on the research, a good sprint analysis should include velocity, burndown, completed work, and blockers. Now I need to get the sprint data. I have the project_id, so I'll call list_sprints to find Sprint 4's ID."
+Tool: list_sprints
+Tool Input: {{"{{"project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478"}}}}
+
+**ITERATION 3 - Analyze:**
+Content: "I found Sprint 4 with ID '613'. Now I'll get the detailed sprint report to analyze velocity, completed tasks, and performance metrics."
+Tool: sprint_report
+Tool Input: {{"{{"sprint_id": "613", "project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478"}}}}
+
+**ITERATION 4 - Final Answer:**
+Content: "Based on the sprint report and best practices I researched, here's my analysis: [comprehensive analysis with insights]"
 
 **EXAMPLES OF CORRECT TOOL CALLS:**
 
@@ -3987,6 +4180,43 @@ Final Answer: [your answer here]
 Action: list_sprints
 Action Input: {{"{{"project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:495"}}}}
 (Use the project_id from context - see "CURRENT PROJECT ID" section above)
+
+✅ CORRECT - Complete Sprint Analysis Workflow (STEP-BY-STEP):
+
+**Example: User asks "Analyze Sprint 4" with project_id already provided**
+
+**ITERATION 1:**
+Thought: The user wants to analyze Sprint 4. I have the project_id (d7e300c6-d6c0-4c08-bc8d-e41967458d86:478) already, so I should call list_sprints to get all sprints and find Sprint 4's ID.
+Action: list_sprints
+Action Input: {{"{{"project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478"}}}}
+
+**ITERATION 2:**
+Observation: {{"success": true, "sprints": [{{"id": "617", "name": "Sprint 8", "status": "future"}}, {{"id": "616", "name": "Sprint 7", "status": "future"}}, {{"id": "615", "name": "Sprint 6", "status": "future"}}, {{"id": "614", "name": "Sprint 5", "status": "active"}}, {{"id": "613", "name": "Sprint 4", "status": "closed"}}, {{"id": "612", "name": "Sprint 3", "status": "closed"}}, ...], "count": 10}}
+
+Thought: I received the list_sprints response. I can see it's a JSON object with a "sprints" array. I need to find the sprint with name "Sprint 4". Looking at the sprints array, I can see:
+- Sprint with id "617" has name "Sprint 8"
+- Sprint with id "616" has name "Sprint 7"
+- Sprint with id "615" has name "Sprint 6"
+- Sprint with id "614" has name "Sprint 5"
+- Sprint with id "613" has name "Sprint 4" ← THIS IS THE ONE!
+- Sprint with id "612" has name "Sprint 3"
+
+So Sprint 4 has id "613". Now I should call sprint_report with sprint_id="613" and the project_id.
+Action: sprint_report
+Action Input: {{"{{"sprint_id": "613", "project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478"}}}}
+
+**ITERATION 3:**
+Observation: [Sprint report data will be shown here]
+
+Thought: I now have the sprint report for Sprint 4. I have enough information to provide a comprehensive analysis.
+Final Answer: [Provide the analysis based on the sprint report data]
+
+**KEY POINTS:**
+1. **ALWAYS parse the JSON response** - The list_sprints response is JSON, not plain text
+2. **Search the sprints array** - Look through each sprint object in the "sprints" array
+3. **Match by name field** - Find the sprint where `name == "Sprint 4"` or name contains "4"
+4. **Extract the id field** - Once you find the matching sprint, use its "id" field value (e.g., "613")
+5. **Use the actual ID** - NEVER use "Sprint 4" or "Sprint 4 ID" as the sprint_id - use the actual ID like "613"
 
 ✅ CORRECT - Get project details when project_id is provided:
 Action: get_project
@@ -4026,6 +4256,7 @@ CRITICAL WORKFLOW RULES:
 - Tool results may be compressed/truncated to fit token limits
 - If you see "[NOTE: Result was intelligently compressed..." in a tool response, this is NORMAL
 - **For `list_projects`**: Even when compressed, ALL project IDs and names are preserved - you can search through all projects
+- **For `list_sprints`**: Even when compressed, ALL sprint IDs, names, and status are preserved - you can search through all sprints to find "Sprint 4", "Sprint 10", etc.
 - **For other tools**: Compressed results contain summaries or samples, but are still COMPLETE for the task
 - The compressed result IS COMPLETE - use the provided data as-is
 - ❌ DO NOT retry the same tool call expecting different/more results
@@ -4046,18 +4277,65 @@ CRITICAL WORKFLOW RULES:
    - ❌ NEVER use placeholder strings like "project_id" or "sprint_id"
    - ✅ ALWAYS use actual UUIDs from tool results
 
-3. **Sprint Analysis Workflow:**
+3. **Sprint Analysis Workflow (CRITICAL - FOLLOW EXACTLY):**
    - **IF PROJECT_ID IS PROVIDED:**
      - ✅ Skip Step 1 - use the provided project_id directly
-     - Step 2: Call `list_sprints` with the provided project_id
-     - Step 3: Search sprint results for sprint number (e.g., "Sprint 4" → find sprint with "4" in name/number)
-     - Step 4: Extract the sprint_id (UUID format) from matching sprint
-     - Step 5: Call `sprint_report` with sprint_id and project_id
+     - **ITERATION 1: Call list_sprints**
+       - Thought: "I need to find Sprint 4's ID. I'll call list_sprints with the provided project_id."
+       - Action: list_sprints
+       - Action Input: {{"{{"project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478"}}}}
+     - **ITERATION 3: Parse JSON and Extract sprint_id**
+       - Observation: You will receive a JSON response like:
+         ```json
+         {
+           "success": true,
+           "sprints": [
+             {"id": "617", "name": "Sprint 8", "status": "future"},
+             {"id": "616", "name": "Sprint 7", "status": "future"},
+             {"id": "615", "name": "Sprint 6", "status": "future"},
+             {"id": "614", "name": "Sprint 5", "status": "active"},
+             {"id": "613", "name": "Sprint 4", "status": "closed"},  ← FIND THIS ONE!
+             {"id": "612", "name": "Sprint 3", "status": "closed"},
+             ...
+           ],
+           "count": 10
+         }
+         ```
+       - Content: "I received the JSON response. I need to:
+         1. Parse the JSON to access the 'sprints' array
+         2. Search through each sprint object in the array
+         3. Find the sprint where name == 'Sprint 4' or name contains '4'
+         4. Extract the 'id' field from that sprint object
+         
+         Looking at the sprints array:
+         - Sprint with id '617' has name 'Sprint 8' (not Sprint 4)
+         - Sprint with id '616' has name 'Sprint 7' (not Sprint 4)
+         - Sprint with id '615' has name 'Sprint 6' (not Sprint 4)
+         - Sprint with id '614' has name 'Sprint 5' (not Sprint 4)
+         - Sprint with id '613' has name 'Sprint 4' ← FOUND IT! The sprint_id is '613'
+         - Sprint with id '612' has name 'Sprint 3' (not Sprint 4)
+         
+         So Sprint 4 has id '613'. Now I'll call sprint_report with sprint_id='613'."
+       - Tool: sprint_report
+       - Tool Input: {{"{{"sprint_id": "613", "project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478"}}}}
+     - **ITERATION 4: Provide Final Answer**
+       - Observation: [Sprint report data]
+       - Content: "I now have the sprint report for Sprint 4 and the research on best practices. I'll combine the research insights with the actual sprint data to provide a comprehensive analysis covering velocity, burndown, completed work, blockers, and team performance."
+       - Final Answer: [Your comprehensive analysis combining research insights with sprint data]
    - **IF PROJECT_ID IS NOT PROVIDED:**
      - Step 1: Call `list_projects` to find project_id (only if needed)
-     - Step 2-5: Same as above
-   - ❌ NEVER pass sprint names like "Sprint 4" directly to sprint_report!
-   - ✅ ALWAYS lookup sprint_id first, then call sprint_report
+     - Step 2-3: Same as above
+   - **CRITICAL RULES:**
+     - ❌ NEVER pass sprint names like "Sprint 4" directly to sprint_report!
+     - ❌ NEVER use placeholder values like "sprint_id" or "Sprint 4 ID"!
+     - ❌ NEVER retry list_sprints if you already got the response - the data is there, just parse it!
+     - ✅ ALWAYS parse the JSON response (it's JSON, not plain text!)
+     - ✅ ALWAYS search through the sprints array to find the matching sprint
+     - ✅ ALWAYS extract the actual `id` field value (e.g., "613") from the sprint object
+     - ✅ ALWAYS use the extracted ID in subsequent tool calls
+     - ✅ **REMEMBER**: Even if `list_sprints` result is compressed, ALL sprint IDs and names are preserved - you can search through all sprints
+     - ✅ **JSON STRUCTURE**: The response is `{{"success": true, "sprints": [{{"id": "...", "name": "...", ...}}, ...], "count": N}}`
+     - ✅ **PARSING STEPS**: 1) Parse JSON → 2) Access "sprints" array → 3) Loop through sprints → 4) Match by name → 5) Extract id field
 
 4. **Tool Input Format:**
    - Use VALID JSON in Action Input
@@ -4075,9 +4353,24 @@ CRITICAL WORKFLOW RULES:
    - ONLY say "This requires detailed planning" if task is truly complex
    - Simple sprint analysis → Answer directly!
 
-6. **Web Search (Optional):**
-   - Use web_search ONLY for external context (best practices, benchmarks)
-   - Don't use it for PM data retrieval
+6. **Research & Reasoning (CRITICAL):**
+   - **ALWAYS include your reasoning in the message content** before calling tools
+   - **Use web_search when you need to:**
+     - Understand best practices for the task (e.g., "how to analyze sprint performance")
+     - Research methodologies or frameworks
+     - Get industry benchmarks or standards
+     - Understand how to interpret or analyze data
+     - Clarify ambiguous requests
+   - **Research workflow:**
+     1. Read the user's request
+     2. Think: "Do I need external context or best practices?"
+     3. If yes: Use web_search first to research
+     4. Then: Use PM tools to get the data
+     5. Finally: Combine research insights with data to provide comprehensive answer
+   - **Example:** For "analyze sprint 4":
+     - First: web_search("sprint analysis best practices agile")
+     - Then: list_sprints → sprint_report
+     - Finally: Provide analysis combining research insights with sprint data
 
 {project_id_context}
 
@@ -4113,6 +4406,8 @@ Question: {input}
             self.max_scratchpad_tokens = max_scratchpad_tokens
             self.prompt_tokens = []
             self.should_escalate = False
+            self.captured_messages = []  # Store messages for detailed logging
+            self.iteration_count = 0
         
         def on_llm_start(self, serialized, prompts, **kwargs):
             """Monitor prompt tokens before LLM call."""
@@ -4330,13 +4625,76 @@ Answer the user's question using the tools as needed."""
             # recursion_limit controls max iterations, which is the proper way to limit ReAct loops
             recursion_limit = 8  # Same as our escalation threshold - allows complex queries but prevents loops
             logger.info(f"[REACT-AGENT] 🔍 Starting LangGraph agent.ainvoke() with recursion_limit={recursion_limit}")
-            result_state = await agent_graph.ainvoke(
-                agent_state, 
-                config={
-                    "callbacks": [scratchpad_monitor],
-                    "recursion_limit": recursion_limit  # Proper iteration limit, not timeout
-                }
-            )
+            
+            # Use astream to capture state incrementally so we can log what happened even if recursion limit is hit
+            result_state = {"messages": []}
+            incremental_thoughts = []  # Track thoughts as they're generated
+            try:
+                async for chunk in agent_graph.astream(
+                    agent_state, 
+                    config={
+                        "callbacks": [scratchpad_monitor],
+                        "recursion_limit": recursion_limit  # Proper iteration limit, not timeout
+                    }
+                ):
+                    # Accumulate state from each chunk
+                    for node_name, state_update in chunk.items():
+                        if isinstance(state_update, dict):
+                            if "messages" in state_update:
+                                new_messages = state_update["messages"]
+                                result_state["messages"].extend(new_messages)
+                                
+                                # Extract thoughts incrementally from new messages
+                                for msg in new_messages:
+                                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                                        # Extract thought from this message
+                                        thought_text = None
+                                        
+                                        # Method 1: Check additional_kwargs for reasoning_content
+                                        if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+                                            reasoning_content = msg.additional_kwargs.get('reasoning_content', '')
+                                            if reasoning_content and isinstance(reasoning_content, str):
+                                                thought_text = reasoning_content.strip()
+                                        
+                                        # Method 2: Extract from content
+                                        if not thought_text:
+                                            msg_content = getattr(msg, 'content', '') or ''
+                                            if msg_content and isinstance(msg_content, str):
+                                                if "Thought:" in msg_content:
+                                                    thought_match = msg_content.split("Thought:")[-1].split("Action:")[0].strip()
+                                                    if thought_match:
+                                                        thought_text = thought_match
+                                                elif msg_content and not msg_content.startswith("Question:"):
+                                                    thought_text = msg_content[:200].strip()
+                                                    if len(msg_content) > 200:
+                                                        thought_text += "..."
+                                        
+                                        # Method 3: Generate based on tool
+                                        if not thought_text and msg.tool_calls:
+                                            tool_names = [tc.get('name') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown') for tc in msg.tool_calls]
+                                            if tool_names:
+                                                thought_text = f"I need to use {', '.join(tool_names)} to answer the user's question."
+                                        
+                                        if thought_text:
+                                            incremental_thoughts.append({
+                                                "thought": thought_text,
+                                                "before_tool": True,
+                                                "step_index": len(incremental_thoughts)
+                                            })
+                                            logger.info(f"[REACT-AGENT] 💭 Extracted incremental thought: {thought_text[:100]}...")
+                                            
+                                            # Add thought to message's additional_kwargs so it gets streamed
+                                            if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
+                                                msg.additional_kwargs = {}
+                                            msg.additional_kwargs["react_thoughts"] = incremental_thoughts.copy()
+                            
+                            # Merge other state fields
+                            for key, value in state_update.items():
+                                if key != "messages":
+                                    result_state[key] = value
+            except Exception as stream_error:
+                # Re-raise to be caught by outer handler, but result_state now has partial data
+                raise
             
             # Extract result from LangGraph state
             # LangGraph returns state with "messages" containing the final response
@@ -4361,20 +4719,56 @@ Answer the user's question using the tools as needed."""
             thoughts = []  # Store thoughts separately for Cursor-style display
             logger.info(f"[REACT-AGENT] 🔍 DEBUG: Extracting intermediate steps from {len(result_messages)} messages")
             
-            # Debug: Log message types (use INFO level so it shows up)
+            # Debug: Log message types and extract Thought/Action/Observation (use INFO level so it shows up)
+            iteration_count = 0
             for i, msg in enumerate(result_messages):
                 msg_type = type(msg).__name__
                 has_tool_calls = hasattr(msg, 'tool_calls') and bool(msg.tool_calls)
                 has_tool_call_id = hasattr(msg, 'tool_call_id') and bool(msg.tool_call_id)
                 tool_calls_count = len(msg.tool_calls) if hasattr(msg, 'tool_calls') and msg.tool_calls else 0
-                content_preview = str(getattr(msg, 'content', ''))[:200] if hasattr(msg, 'content') else 'N/A'
+                content = str(getattr(msg, 'content', '')) if hasattr(msg, 'content') else ''
+                content_preview = content[:200] if content else 'N/A'
+                
+                # Extract Thought/Action/Observation from AIMessage content
+                if msg_type == "AIMessage" and content:
+                    # Look for Thought/Action pattern in content
+                    import re
+                    thought_match = re.search(r"Thought:\s*(.*?)(?=Action:|$)", content, re.DOTALL)
+                    action_match = re.search(r"Action:\s*(.*?)(?=Action Input:|Observation:|$)", content, re.DOTALL)
+                    action_input_match = re.search(r"Action Input:\s*(.*?)(?=Observation:|$)", content, re.DOTALL)
+                    
+                    if thought_match or action_match:
+                        iteration_count += 1
+                        thought = thought_match.group(1).strip() if thought_match else "N/A"
+                        action = action_match.group(1).strip() if action_match else "N/A"
+                        action_input = action_input_match.group(1).strip() if action_input_match else "N/A"
+                        
+                        logger.info(
+                            f"[REACT-AGENT] 🔍 ITERATION {iteration_count} - AIMessage {i}:\n"
+                            f"  Thought: {thought[:300]}...\n"
+                            f"  Action: {action}\n"
+                            f"  Action Input: {action_input[:200]}..."
+                        )
+                
+                # Log ToolMessage with observation
+                if msg_type == "ToolMessage" and has_tool_call_id:
+                    tool_name = getattr(msg, 'name', 'unknown')
+                    tool_call_id = getattr(msg, 'tool_call_id', 'N/A')
+                    obs_content = content[:500] if content else 'N/A'
+                    logger.info(
+                        f"[REACT-AGENT] 🔍 OBSERVATION - ToolMessage {i}:\n"
+                        f"  Tool: {tool_name}\n"
+                        f"  Tool Call ID: {tool_call_id}\n"
+                        f"  Observation: {obs_content}..."
+                    )
+                
                 # Check for reasoning_content in additional_kwargs (LangGraph might store it there)
                 reasoning = getattr(msg, 'additional_kwargs', {}).get('reasoning_content', '') if hasattr(msg, 'additional_kwargs') else ''
                 logger.info(
                     f"[REACT-AGENT] 🔍 Message {i}: type={msg_type}, "
                     f"has_tool_calls={has_tool_calls} ({tool_calls_count} calls), "
                     f"has_tool_call_id={has_tool_call_id}, "
-                    f"content_len={len(str(getattr(msg, 'content', '')))}, "
+                    f"content_len={len(content)}, "
                     f"content_preview={content_preview[:100]}..., "
                     f"reasoning_content={bool(reasoning)}"
                 )
@@ -4413,13 +4807,29 @@ Answer the user's question using the tools as needed."""
                                 if len(msg_content) > 200:
                                     thought_text += "..."
                     
-                    # Method 3: Generate a thought based on tool being called (fallback)
+                    # Method 3: Generate a descriptive thought based on tool being called (fallback)
                     if not thought_text and msg.tool_calls:
-                        # Create a simple thought based on the tool being called
+                        # Create a descriptive thought based on the tool being called
                         tool_names = [tc.get('name') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown') for tc in msg.tool_calls]
+                        tool_args = []
+                        for tc in msg.tool_calls:
+                            args = tc.get('args', {}) if isinstance(tc, dict) else getattr(tc, 'args', {})
+                            if args:
+                                tool_args.append(args)
+                        
                         if tool_names:
-                            thought_text = f"I need to use {', '.join(tool_names)} to answer the user's question."
-                            logger.info(f"[REACT-AGENT] 💭 Generated fallback thought based on tool calls: {tool_names}")
+                            # Create a more descriptive thought
+                            if len(tool_names) == 1:
+                                tool_name = tool_names[0]
+                                if tool_args and tool_args[0]:
+                                    # Include key args in the thought
+                                    args_str = ", ".join([f"{k}={v}" for k, v in list(tool_args[0].items())[:2]])
+                                    thought_text = f"I'll use {tool_name}({args_str}) to get the information I need."
+                                else:
+                                    thought_text = f"I'll use {tool_name} to get the information I need."
+                            else:
+                                thought_text = f"I'll use {', '.join(tool_names)} to gather the required information."
+                            logger.info(f"[REACT-AGENT] 💭 Generated descriptive thought based on tool calls: {tool_names}")
                     
                     if thought_text:
                         thoughts.append({
@@ -4429,7 +4839,7 @@ Answer the user's question using the tools as needed."""
                         })
                         logger.info(f"[REACT-AGENT] 💭 Extracted thought: {thought_text[:100]}...")
                     else:
-                        logger.debug(f"[REACT-AGENT] 💭 No thought found in message {i} (content empty, no reasoning_content, no tool_calls)")
+                        logger.warning(f"[REACT-AGENT] 💭 No thought found in message {i} (content empty, no reasoning_content, no tool_calls)")
                     
                     for tool_call in msg.tool_calls:
                         tool_call_id = tool_call.get('id') if isinstance(tool_call, dict) else getattr(tool_call, 'id', None)
@@ -4893,7 +5303,8 @@ Answer the user's question using the tools as needed."""
         logger.info(f"[REACT-AGENT] ✅ Success - returning answer ({len(output)} chars)")
         
         # Cursor-style: Include thoughts in state for UI display
-        thoughts = result.get("thoughts", [])
+        # Use incremental_thoughts if available (from streaming), otherwise extract from result
+        thoughts = incremental_thoughts if 'incremental_thoughts' in locals() and incremental_thoughts else result.get("thoughts", [])
         
         # Convert intermediate_steps to AIMessage/ToolMessage pairs for frontend display
         # This allows tool calls to show up in the step box
@@ -4945,8 +5356,22 @@ Answer the user's question using the tools as needed."""
         # Add tool call messages (AIMessage + ToolMessage pairs)
         return_messages.extend(tool_call_messages)
         
-        # Add final output message
-        return_messages.append(AIMessage(content=output, name="react_agent"))
+        # Add final output message with thoughts in additional_kwargs AND response_metadata for streaming
+        # response_metadata is more reliably preserved through LangGraph state management
+        final_message = AIMessage(content=output, name="react_agent")
+        if thoughts:
+            # Add to additional_kwargs (for compatibility)
+            if not hasattr(final_message, 'additional_kwargs') or not final_message.additional_kwargs:
+                final_message.additional_kwargs = {}
+            final_message.additional_kwargs["react_thoughts"] = thoughts
+            
+            # Also add to response_metadata (more reliable)
+            if not hasattr(final_message, 'response_metadata') or not final_message.response_metadata:
+                final_message.response_metadata = {}
+            final_message.response_metadata["react_thoughts"] = thoughts
+            
+            logger.info(f"[REACT-AGENT] 💭 Added {len(thoughts)} thoughts to final message (additional_kwargs + response_metadata) for streaming")
+        return_messages.append(final_message)
         
         logger.info(f"[REACT-AGENT] 🔧 Returning {len(return_messages)} messages ({len(tool_call_messages)} tool call pairs + final output)")
         
@@ -4956,7 +5381,7 @@ Answer the user's question using the tools as needed."""
                 "previous_result": output,  # Store for potential user feedback escalation
                 "final_report": output,
                 "react_intermediate_steps": intermediate_steps,
-                "react_thoughts": thoughts,  # Cursor-style: Store thoughts for UI display
+                "react_thoughts": thoughts,  # Cursor-style: Store thoughts for UI display (also in state for backend streaming)
                 "routing_mode": "react_first",  # Mark that we used ReAct first
                 "goto": "reporter"  # Set goto in state for conditional edge
             },
@@ -4971,6 +5396,92 @@ Answer the user's question using the tools as needed."""
             f"[REACT-AGENT] ❌ Error during execution: {error_type}: {error_msg}",
             exc_info=True
         )
+        
+        # CRITICAL: If it's a GraphRecursionError, log what the agent was doing
+        if error_type == "GraphRecursionError":
+            try:
+                # First, try to get messages from scratchpad monitor callback
+                if hasattr(scratchpad_monitor, 'captured_messages') and scratchpad_monitor.captured_messages:
+                    logger.warning(f"[REACT-AGENT] ⚠️ Hit recursion limit. Logging {len(scratchpad_monitor.captured_messages)} captured messages:")
+                    for i, (msg_type, msg_data) in enumerate(scratchpad_monitor.captured_messages):
+                        if msg_type == "AIMessage":
+                            content = getattr(msg_data, 'content', '') if hasattr(msg_data, 'content') else str(msg_data)
+                            tool_calls = getattr(msg_data, 'tool_calls', [])
+                            if tool_calls:
+                                tool_names = [tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown') for tc in tool_calls]
+                                tool_args = [str(tc.get('args', {})) if isinstance(tc, dict) else str(getattr(tc, 'args', {})) for tc in tool_calls]
+                                logger.warning(
+                                    f"[REACT-AGENT] 🔍 ITERATION {i+1} (BEFORE LIMIT) - AIMessage:\n"
+                                    f"  Content: {str(content)[:500]}...\n"
+                                    f"  Tool Calls: {tool_names}\n"
+                                    f"  Tool Args: {tool_args}"
+                                )
+                        elif msg_type == "ToolMessage":
+                            tool_name = msg_data.get('name', 'unknown')
+                            tool_output = msg_data.get('output', 'N/A')
+                            logger.warning(
+                                f"[REACT-AGENT] 🔍 OBSERVATION (BEFORE LIMIT) - ToolMessage:\n"
+                                f"  Tool: {tool_name}\n"
+                                f"  Output: {str(tool_output)[:500]}..."
+                            )
+                
+                # Extract messages from result_state (captured via astream)
+                result_messages = result_state.get("messages", []) if result_state else []
+                if result_messages:
+                    logger.warning(f"[REACT-AGENT] ⚠️ Hit recursion limit. Logging {len(result_messages)} messages from result_state:")
+                    
+                    # Log all messages to see what happened
+                    iteration_count = 0
+                    for i, msg in enumerate(result_messages):
+                        msg_type = type(msg).__name__
+                        content = str(getattr(msg, 'content', '')) if hasattr(msg, 'content') else ''
+                        
+                        # Extract Thought/Action from AIMessage
+                        if msg_type == "AIMessage" and content:
+                            import re
+                            thought_match = re.search(r"Thought:\s*(.*?)(?=Action:|$)", content, re.DOTALL)
+                            action_match = re.search(r"Action:\s*(.*?)(?=Action Input:|Observation:|$)", content, re.DOTALL)
+                            action_input_match = re.search(r"Action Input:\s*(.*?)(?=Observation:|$)", content, re.DOTALL)
+                            
+                            # Check for tool calls (LangGraph uses tool_calls, not Action: format)
+                            tool_calls = getattr(msg, 'tool_calls', [])
+                            
+                            if thought_match or action_match or tool_calls:
+                                iteration_count += 1
+                                thought = thought_match.group(1).strip() if thought_match else "N/A"
+                                action = action_match.group(1).strip() if action_match else "N/A"
+                                action_input = action_input_match.group(1).strip() if action_input_match else "N/A"
+                                
+                                if tool_calls:
+                                    tool_names = [tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown') for tc in tool_calls]
+                                    tool_args = [str(tc.get('args', {})) if isinstance(tc, dict) else str(getattr(tc, 'args', {})) for tc in tool_calls]
+                                    logger.warning(
+                                        f"[REACT-AGENT] 🔍 ITERATION {iteration_count} (FROM RESULT_STATE) - AIMessage {i}:\n"
+                                        f"  Content: {content[:500]}...\n"
+                                        f"  Tool Calls: {tool_names}\n"
+                                        f"  Tool Args: {tool_args}"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"[REACT-AGENT] 🔍 ITERATION {iteration_count} (FROM RESULT_STATE) - AIMessage {i}:\n"
+                                        f"  Thought: {thought[:300]}...\n"
+                                        f"  Action: {action}\n"
+                                        f"  Action Input: {action_input[:200]}..."
+                                    )
+                        
+                        # Log ToolMessage observations
+                        if msg_type == "ToolMessage":
+                            tool_name = getattr(msg, 'name', 'unknown')
+                            tool_call_id = getattr(msg, 'tool_call_id', 'N/A')
+                            obs_content = content[:500] if content else 'N/A'
+                            logger.warning(
+                                f"[REACT-AGENT] 🔍 OBSERVATION (FROM RESULT_STATE) - ToolMessage {i}:\n"
+                                f"  Tool: {tool_name}\n"
+                                f"  Tool Call ID: {tool_call_id}\n"
+                                f"  Observation: {obs_content}..."
+                            )
+            except Exception as log_error:
+                logger.error(f"[REACT-AGENT] Error logging partial execution: {log_error}")
         
         # Check if it's a rate limit error
         if "rate_limit" in error_msg.lower() or "429" in error_msg or "too large" in error_msg.lower():
@@ -5079,6 +5590,14 @@ async def pm_agent_node(
                 )
         
         # Fallback: route to reporter with error
+        return Command(
+            update={
+                "messages": [HumanMessage(content=error_message, name="pm_agent")],
+                "observations": state.get("observations", []) + [error_message],
+            },
+            goto="reporter",
+        )
+
         return Command(
             update={
                 "messages": [HumanMessage(content=error_message, name="pm_agent")],

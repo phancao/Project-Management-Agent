@@ -25,6 +25,7 @@ export function useContextTokens() {
         role: msg.role || "user",
         content: msg.content || "",
         name: msg.agent || msg.name,
+        agent: msg.agent, // Include agent type for system prompt estimation
         toolCalls: msg.toolCalls, // Include tool calls for accurate token counting
       }));
     

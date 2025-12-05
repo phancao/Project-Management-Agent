@@ -103,25 +103,62 @@ class AnalyticsManager:
         
         Args:
             project_id: Project ID - either composite "provider_id:project_key" 
-                        or just "provider_id" (for sprint operations where project_key
-                        is extracted from sprint)
+                        or just "project_key" (will use first active provider)
         
         Returns:
             Tuple of (provider_id, actual_project_id)
-            If project_id is provider-only, actual_project_id will be empty string
         """
         if ":" in project_id:
             # Composite ID: "provider_uuid:project_key"
             provider_id, actual_project_id = project_id.split(":", 1)
-            return provider_id, actual_project_id
+            # Validate provider_id is UUID format
+            try:
+                import uuid
+                uuid.UUID(provider_id)  # Will raise ValueError if not valid UUID
+                return provider_id, actual_project_id
+            except ValueError:
+                # Not a valid UUID, treat as project_key with no provider
+                logger.warning(
+                    "[AnalyticsManager] provider_id '%s' in composite ID is not a valid UUID. "
+                    "Treating as project_key only.",
+                    provider_id
+                )
+                # Fall through to non-composite handling
         else:
-            # Provider-only ID (valid for sprint operations)
-            # The actual_project_id will be determined from sprint info
-            logger.info(
-                "[AnalyticsManager] project_id '%s' is provider-only (no project_key)",
-                project_id
-            )
-            return project_id, ""
+            # Not composite - could be project_key or provider_id
+            # Check if it's a valid UUID
+            try:
+                import uuid
+                uuid.UUID(project_id)  # Will raise ValueError if not valid UUID
+                # It's a UUID, treat as provider_id (for sprint operations)
+                logger.info(
+                    "[AnalyticsManager] project_id '%s' is UUID format, treating as provider_id (no project_key)",
+                    project_id
+                )
+                return project_id, ""
+            except ValueError:
+                # Not a UUID, treat as project_key - use first active provider
+                logger.info(
+                    "[AnalyticsManager] project_id '%s' is not UUID format, treating as project_key. "
+                    "Will use first active provider.",
+                    project_id
+                )
+                # Get first active provider
+                active_providers = self.provider_manager.get_active_providers()
+                if not active_providers:
+                    raise ValueError(
+                        f"Cannot determine provider for project_id '{project_id}'. "
+                        "No active PM providers found. Please use composite format 'provider_id:project_key'."
+                    )
+                # Use first active provider
+                provider_conn = active_providers[0]
+                provider_id = str(provider_conn.id)
+                logger.info(
+                    "[AnalyticsManager] Using first active provider '%s' for project_key '%s'",
+                    provider_id,
+                    project_id
+                )
+                return provider_id, project_id
     
     def clear_cache(self) -> None:
         """Clear analytics service cache."""

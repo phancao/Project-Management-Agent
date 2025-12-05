@@ -49,6 +49,9 @@ function buildConversationHistory(
 
 const THREAD_ID = nanoid();
 
+// Block types for different agents
+export type ResearchBlockType = "react" | "planner" | "pm" | "researcher" | "coder";
+
 export const useStore = create<{
   responding: boolean;
   threadId: string | undefined;
@@ -58,6 +61,7 @@ export const useStore = create<{
   researchPlanIds: Map<string, string>;
   researchReportIds: Map<string, string>;
   researchActivityIds: Map<string, string[]>;
+  researchBlockTypes: Map<string, ResearchBlockType>; // Track block type for each research
   ongoingResearchId: string | null;
   openResearchId: string | null;
 
@@ -76,13 +80,24 @@ export const useStore = create<{
   researchPlanIds: new Map<string, string>(),
   researchReportIds: new Map<string, string>(),
   researchActivityIds: new Map<string, string[]>(),
+  researchBlockTypes: new Map<string, ResearchBlockType>(),
   ongoingResearchId: null,
   openResearchId: null,
 
   appendMessage(message: Message) {
     set((state) => {
+      // DEBUG: Log when messages are added
+      const isDuplicate = state.messageIds.includes(message.id);
+      console.log(`[DEBUG-STORE] 📥 appendMessage called:`, {
+        messageId: message.id,
+        agent: message.agent,
+        role: message.role,
+        existingMessageIds: state.messageIds.length,
+        isDuplicate
+      });
+      
       // Prevent duplicate message IDs in the array to avoid React key warnings
-      const newMessageIds = state.messageIds.includes(message.id)
+      const newMessageIds = isDuplicate
         ? state.messageIds
         : [...state.messageIds, message.id];
       return {
@@ -92,11 +107,24 @@ export const useStore = create<{
     });
   },
   updateMessage(message: Message) {
+    console.log(`[DEBUG-STORE] 🔄 updateMessage called:`, {
+      messageId: message.id,
+      agent: message.agent,
+      role: message.role,
+      stack: new Error().stack,
+      timestamp: new Date().toISOString()
+    });
     set((state) => ({
       messages: new Map(state.messages).set(message.id, message),
     }));
   },
   updateMessages(messages: Message[]) {
+    console.log(`[DEBUG-STORE] 🔄 updateMessages called:`, {
+      count: messages.length,
+      messageIds: messages.map(m => m.id),
+      stack: new Error().stack,
+      timestamp: new Date().toISOString()
+    });
     set((state) => {
       const newMessages = new Map(state.messages);
       messages.forEach((m) => newMessages.set(m.id, m));
@@ -358,21 +386,144 @@ function findMessageByToolCallId(toolCallId: string) {
 }
 
 function appendMessage(message: Message) {
-  // Track research activities for all research-related agents including pm_agent
+  // ROOT CAUSE FIX: Planner creates the research block FIRST
+  // Then pm_agent/react_agent reuse it (they execute the plan)
+  if (message.agent === "planner") {
+    // CRITICAL: Prevent creating research block with undefined message.id
+    if (!message.id) {
+      console.error(`[DEBUG-STORE] ❌ CRITICAL: Planner message has undefined id! Skipping research block creation.`, {
+        message,
+        stack: new Error().stack,
+        timestamp: new Date().toISOString()
+      });
+      // Still append the message, but don't create a research block
+      useStore.getState().appendMessage(message);
+      return;
+    }
+    
+    const state = useStore.getState();
+    
+    // Check if this planner message already has a block
+    if (state.researchIds.includes(message.id)) {
+      console.log(`[DEBUG-STORE] ✅ Planner message ${message.id} already has research block, reusing`);
+      appendResearchActivity(message);
+      useStore.getState().appendMessage(message);
+      return;
+    }
+    
+    // Planner creates the research block
+    console.log(`[DEBUG-STORE] 🔬 Planner creating research block for message ${message.id}`, {
+      stack: new Error().stack,
+      timestamp: new Date().toISOString()
+    });
+    appendResearch(message.id, "planner");
+    openResearch(message.id);
+    useStore.getState().setOngoingResearch(message.id);
+    appendResearchActivity(message);
+    useStore.getState().appendMessage(message);
+    return;
+  }
+  
+  // Track research activities for execution agents (they reuse planner's block)
   if (
     message.agent === "coder" ||
     message.agent === "reporter" ||
     message.agent === "researcher" ||
-    message.agent === "pm_agent"
+    message.agent === "pm_agent" ||
+    message.agent === "react_agent"
   ) {
-    const ongoingResearchId = getOngoingResearchId();
+    const state = useStore.getState();
     
-    if (!ongoingResearchId) {
-      const id = message.id;
-      appendResearch(id);
-      openResearch(id);
+    // Map agent to block type (for fallback if no planner block exists)
+    const agentToBlockType: Record<string, ResearchBlockType> = {
+      "react_agent": "react",
+      "pm_agent": "pm",
+      "researcher": "researcher",
+      "coder": "coder",
+    };
+    
+    const blockType = agentToBlockType[message.agent] || "pm";
+    
+    // CRITICAL FIX: Check if this message ID already has a research block
+    // This prevents duplicate blocks when the same message is processed multiple times
+    // Also check if message.id is already a researchId (message was used to create a block)
+    let existingBlockForThisMessage: string | null = null;
+    
+    // Check 1: Is this message ID already a researchId?
+    if (state.researchIds.includes(message.id)) {
+      existingBlockForThisMessage = message.id;
+      console.log(`[DEBUG-STORE] 🔍 Message ${message.id} IS a research block ID, reusing it`);
+    } else {
+      // Check 2: Does this message belong to any existing research block?
+      for (const [researchId, activityIds] of state.researchActivityIds.entries()) {
+        if (activityIds.includes(message.id)) {
+          existingBlockForThisMessage = researchId;
+          console.log(`[DEBUG-STORE] 🔍 Message ${message.id} already belongs to research block ${researchId}`);
+          break;
+        }
+      }
     }
-    appendResearchActivity(message);
+    
+    // If message already belongs to a block, reuse it
+    if (existingBlockForThisMessage) {
+      const existingType = state.researchBlockTypes.get(existingBlockForThisMessage);
+      console.log(`[DEBUG-STORE] ✅ Message ${message.id} already in ${existingType} block ${existingBlockForThisMessage}, reusing`);
+      if (state.ongoingResearchId !== existingBlockForThisMessage) {
+        useStore.getState().setOngoingResearch(existingBlockForThisMessage);
+      }
+      appendResearchActivity(message);
+      useStore.getState().appendMessage(message);
+      return; // Early return to prevent duplicate block creation
+    }
+    
+    // ROOT CAUSE FIX: ALWAYS reuse ongoing research block if it exists
+    // This prevents multiple blocks from being created for the same research session
+    let blockToUse: string | null = null;
+    
+    // PRIORITY 1: ALWAYS reuse ongoing research (prevents chaos)
+    if (state.ongoingResearchId) {
+      blockToUse = state.ongoingResearchId;
+      const ongoingType = state.researchBlockTypes.get(state.ongoingResearchId);
+      console.log(`[DEBUG-STORE] ✅ REUSING ongoing ${ongoingType} block ${blockToUse} for ${message.agent} (prevents duplicates)`);
+    } else {
+      // PRIORITY 2: Find most recent planner block (preferred if no ongoing)
+      const reversedIds = [...state.researchIds].reverse();
+      for (const researchId of reversedIds.slice(0, 5)) {
+        const existingType = state.researchBlockTypes.get(researchId);
+        if (existingType === "planner") {
+          blockToUse = researchId;
+          console.log(`[DEBUG-STORE] ✅ Found planner block ${blockToUse} for ${message.agent}`);
+          break;
+        }
+      }
+      
+      // PRIORITY 3: Find most recent block of same type (fallback)
+      if (!blockToUse) {
+        for (const researchId of reversedIds.slice(0, 5)) {
+          const existingType = state.researchBlockTypes.get(researchId);
+          if (existingType === blockType) {
+            blockToUse = researchId;
+            console.log(`[DEBUG-STORE] ✅ Found ${blockType} block ${blockToUse} for ${message.agent}`);
+            break;
+          }
+        }
+      }
+    }
+    
+    if (blockToUse) {
+      // Reuse existing block - CRITICAL: Set as ongoing to prevent new blocks
+      if (state.ongoingResearchId !== blockToUse) {
+        useStore.getState().setOngoingResearch(blockToUse);
+      }
+      appendResearchActivity(message);
+    } else {
+      // LAST RESORT: Create new block only if truly no existing block
+      console.warn(`[DEBUG-STORE] ⚠️ No existing block found for ${message.agent}, creating new ${blockType} block`);
+      appendResearch(message.id, blockType);
+      openResearch(message.id);
+      useStore.getState().setOngoingResearch(message.id);
+      appendResearchActivity(message);
+    }
   }
   useStore.getState().appendMessage(message);
 }
@@ -427,30 +578,94 @@ function getOngoingResearchId() {
   return useStore.getState().ongoingResearchId;
 }
 
-function appendResearch(researchId: string) {
+function appendResearch(researchId: string, blockType: ResearchBlockType) {
+  // CRITICAL: Prevent creating research block with undefined/null researchId
+  if (!researchId) {
+    console.error(`[DEBUG-STORE] ❌ CRITICAL: appendResearch called with undefined/null researchId! Blocking creation.`, {
+      researchId,
+      blockType,
+      stack: new Error().stack,
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+  
+  // Deduplication: Check if this research already exists
+  const state = useStore.getState();
+  if (state.researchIds.includes(researchId)) {
+    console.log(`[DEBUG-STORE] 🔬 Research ${researchId} already exists, skipping appendResearch`);
+    return;
+  }
+  
+  console.log(`[DEBUG-STORE] 🔬 appendResearch called for researchId: ${researchId}, blockType: ${blockType}`, {
+    stack: new Error().stack,
+    timestamp: new Date().toISOString()
+  });
   let planMessage: Message | undefined;
-  const reversedMessageIds = [...useStore.getState().messageIds].reverse();
+  const reversedMessageIds = [...state.messageIds].reverse();
   for (const messageId of reversedMessageIds) {
     const message = getMessage(messageId);
     if (message?.agent === "planner") {
       planMessage = message;
+      console.log(`[DEBUG-STORE] 🔬 Found planner message ${messageId} for research ${researchId}`);
       break;
     }
   }
+  
   const messageIds = [researchId];
-  messageIds.unshift(planMessage!.id);
-  useStore.setState({
-    ongoingResearchId: researchId,
-    researchIds: [...useStore.getState().researchIds, researchId],
-    researchPlanIds: new Map(useStore.getState().researchPlanIds).set(
-      researchId,
-      planMessage!.id,
-    ),
-    researchActivityIds: new Map(useStore.getState().researchActivityIds).set(
-      researchId,
-      messageIds,
-    ),
-  });
+  
+  // Only add planner message if it exists (may not exist for ReAct fast path)
+  if (planMessage?.id) {
+    messageIds.unshift(planMessage.id);
+    
+    // Full pipeline with planner
+    const newResearchIds = [...useStore.getState().researchIds, researchId];
+    console.log(`[DEBUG-STORE] 🔬 Setting researchIds:`, {
+      oldCount: useStore.getState().researchIds.length,
+      newCount: newResearchIds.length,
+      addedResearchId: researchId,
+      allResearchIds: newResearchIds,
+      timestamp: new Date().toISOString()
+    });
+    useStore.setState({
+      ongoingResearchId: researchId,
+      researchIds: newResearchIds,
+      researchPlanIds: new Map(useStore.getState().researchPlanIds).set(
+        researchId,
+        planMessage.id,
+      ),
+      researchActivityIds: new Map(useStore.getState().researchActivityIds).set(
+        researchId,
+        messageIds,
+      ),
+      researchBlockTypes: new Map(useStore.getState().researchBlockTypes).set(
+        researchId,
+        blockType,
+      ),
+    });
+  } else {
+    // Fast path (ReAct) - no planner message
+    const newResearchIds = [...useStore.getState().researchIds, researchId];
+    console.log(`[DEBUG-STORE] 🔬 Setting researchIds (fast path):`, {
+      oldCount: useStore.getState().researchIds.length,
+      newCount: newResearchIds.length,
+      addedResearchId: researchId,
+      allResearchIds: newResearchIds,
+      timestamp: new Date().toISOString()
+    });
+    useStore.setState({
+      ongoingResearchId: researchId,
+      researchIds: newResearchIds,
+      researchActivityIds: new Map(useStore.getState().researchActivityIds).set(
+        researchId,
+        messageIds,
+      ),
+      researchBlockTypes: new Map(useStore.getState().researchBlockTypes).set(
+        researchId,
+        blockType,
+      ),
+    });
+  }
 }
 
 function appendResearchActivity(message: Message) {
@@ -460,6 +675,10 @@ function appendResearchActivity(message: Message) {
     const researchActivityIds = useStore.getState().researchActivityIds;
     const current = researchActivityIds.get(researchId)!;
     if (!current.includes(message.id)) {
+      console.log(`[DEBUG-STORE] 🔬 appendResearchActivity: Adding message ${message.id} (agent: ${message.agent}) to research ${researchId}`, {
+        stack: new Error().stack,
+        timestamp: new Date().toISOString()
+      });
       useStore.setState({
         researchActivityIds: new Map(researchActivityIds).set(researchId, [
           ...current,

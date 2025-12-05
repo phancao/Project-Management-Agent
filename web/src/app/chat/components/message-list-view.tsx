@@ -152,6 +152,12 @@ function MessageListItem({
   const startOfResearch = useMemo(() => {
     return researchIds.includes(messageId);
   }, [researchIds, messageId]);
+  
+  // Safety check: ensure message exists before rendering
+  if (!message) {
+    return null;
+  }
+  
   if (message) {
     if (
       message.role === "user" ||
@@ -159,6 +165,7 @@ function MessageListItem({
       message.agent === "planner" ||
       message.agent === "podcast" ||
       message.agent === "reporter" ||
+      message.agent === "react_agent" ||  // NEW: Handle ReAct agent messages
       startOfResearch
     ) {
       // Removed debug logging
@@ -181,7 +188,7 @@ function MessageListItem({
             <PodcastCard message={message} />
           </div>
         );
-      } else if (startOfResearch) {
+      } else if (startOfResearch && message?.id) {
         content = (
           <div className="w-full px-4">
             <ResearchCard

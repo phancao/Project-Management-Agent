@@ -32,6 +32,8 @@ class PMServiceHandler:
         """
         self.user_id = user_id
         self._client = AsyncPMServiceClient(base_url=PM_SERVICE_URL)
+        # For compatibility with PM tools that expect single_provider
+        self.single_provider = self
     
     @classmethod
     def from_db_session(cls, db_session=None, user_id: Optional[str] = None):
@@ -186,21 +188,54 @@ class PMServiceHandler:
     
     # ==================== Sprints ====================
     
+    async def list_sprints(
+        self,
+        project_id: str,
+        status: Optional[str] = None,
+        state: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        """List sprints in a project (compatible with both old and new API)."""
+        # Use state if provided (for backward compatibility)
+        sprint_status = state or status
+        logger.info(f"[PMServiceHandler] list_sprints called: project_id={project_id}, status={sprint_status}")
+        async with self._client as client:
+            result = await client.list_sprints(
+                project_id=project_id,
+                status=sprint_status
+            )
+        items = result.get("items", [])
+        total = result.get("total", len(items))
+        returned = result.get("returned", len(items))
+        logger.info(
+            f"[PMServiceHandler] list_sprints result: {len(items)} items, "
+            f"total={total}, returned={returned}"
+        )
+        # Check for duplicates
+        sprint_ids = [item.get("id") for item in items if isinstance(item, dict)]
+        unique_ids = set(sprint_ids)
+        if len(sprint_ids) != len(unique_ids):
+            logger.warning(
+                f"[PMServiceHandler] ⚠️ DUPLICATES in PM Service response: "
+                f"{len(sprint_ids)} items, {len(unique_ids)} unique IDs"
+            )
+        return items
+    
+    async def list_all_sprints(
+        self,
+        project_id: Optional[str] = None,
+        status: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        """List all sprints (optionally filtered by project)."""
+        return await self.list_sprints(project_id=project_id or "", status=status)
+    
     async def list_project_sprints(
         self,
         project_id: str,
         status: Optional[str] = None,
         state: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        """List sprints in a project."""
-        # Use state if provided (for backward compatibility)
-        sprint_status = state or status
-        async with self._client as client:
-            result = await client.list_sprints(
-                project_id=project_id,
-                status=sprint_status
-            )
-        return result.get("items", [])
+        """List sprints in a project (legacy method name)."""
+        return await self.list_sprints(project_id=project_id, status=status, state=state)
     
     async def get_sprint(self, sprint_id: str) -> Optional[dict[str, Any]]:
         """Get sprint by ID."""

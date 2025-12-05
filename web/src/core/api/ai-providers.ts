@@ -33,16 +33,16 @@ export async function listAIProviders(): Promise<AIProviderAPIKey[]> {
   const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
   
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
       signal: controller.signal,
-    });
+  });
     
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
+  if (!response.ok) {
       let errorMessage = "Failed to fetch AI providers";
       try {
         const errorData = await response.json();
@@ -66,7 +66,7 @@ export async function listAIProviders(): Promise<AIProviderAPIKey[]> {
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
         throw new Error('Request timeout: Failed to fetch providers within 15 seconds. The backend server may be slow or unresponsive.');
-      }
+  }
       if (error.message.startsWith('Request timeout') || error.message.startsWith('Invalid response format')) {
         throw error; // Re-throw already formatted errors
       }

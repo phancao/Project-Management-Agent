@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
+import copy
 import json
 import logging
 import os
@@ -10,9 +11,10 @@ import time
 from functools import partial
 from typing import Annotated, Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
+import uuid
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.types import Command, interrupt
 
@@ -42,6 +44,181 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _add_context_optimization_tool_call(state: State, agent_name: str, optimization_metadata: dict) -> list:
+    """
+    Create context optimization tool call messages.
+    
+    Args:
+        state: The state (for reference, not modified)
+        agent_name: Name of the agent performing optimization
+        optimization_metadata: Metadata from compress_messages() containing optimization details
+    
+    Returns:
+        List of messages (AIMessage with tool call + ToolMessage with result) to add to state
+    """
+    # Always add tool call if optimization metadata exists (even if no compression happened)
+    # This shows users that context optimization was attempted
+    if not optimization_metadata:
+        return []
+    
+    tool_call_id = f"context_opt_{uuid.uuid4().hex[:8]}"
+    
+    # Create tool call result message
+    original_tokens = optimization_metadata.get("original_tokens", 0)
+    compressed_tokens = optimization_metadata.get("compressed_tokens", 0)
+    compression_ratio = optimization_metadata.get("compression_ratio", 1.0)
+    strategy = optimization_metadata.get("strategy", "unknown")
+    original_count = optimization_metadata.get("original_message_count", 0)
+    compressed_count = optimization_metadata.get("compressed_message_count", 0)
+    
+    reduction_pct = (1.0 - compression_ratio) * 100
+    was_compressed = optimization_metadata.get("compressed", False)
+    
+    if was_compressed:
+        result_text = (
+            f"Context optimized: {original_tokens:,} → {compressed_tokens:,} tokens "
+            f"({reduction_pct:.1f}% reduction)\n"
+            f"Messages: {original_count} → {compressed_count}\n"
+            f"Strategy: {strategy}"
+        )
+    else:
+        result_text = (
+            f"Context checked: {original_tokens:,} tokens (within limit, no compression needed)\n"
+            f"Messages: {original_count}\n"
+            f"Strategy: {strategy}"
+        )
+    
+    # Create tool call result message
+    tool_call_message = ToolMessage(
+        content=result_text,
+        tool_call_id=tool_call_id,
+        name="optimize_context"
+    )
+    
+    # Create AIMessage with tool call
+    tool_call_aimessage = AIMessage(
+        content="",
+        name=agent_name,
+        tool_calls=[{
+            "id": tool_call_id,
+            "name": "optimize_context",
+            "args": {
+                "original_tokens": original_tokens,
+                "compressed_tokens": compressed_tokens,
+                "compression_ratio": compression_ratio,
+                "strategy": strategy,
+                "original_message_count": original_count,
+                "compressed_message_count": compressed_count
+            }
+        }]
+    )
+    
+    logger.info(
+        f"[{agent_name}] Created context optimization tool call: "
+        f"{original_tokens:,} → {compressed_tokens:,} tokens ({reduction_pct:.1f}% reduction)"
+    )
+    
+    return [tool_call_aimessage, tool_call_message]
+
+
+def detect_user_needs_more_detail(messages: list) -> bool:
+    """
+    Detects if user is not satisfied with previous answer and wants more detail.
+    
+    Returns True if:
+    - User expresses dissatisfaction
+    - User requests more detail/depth
+    - User asks follow-up questions indicating incomplete answer
+    """
+    if len(messages) < 2:
+        return False
+    
+    # Get last user message
+    last_user_message = None
+    for msg in reversed(messages):
+        # Check both dict format and Message objects
+        role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "type", None)
+        if role == "user" or role == "human":
+            content = get_message_content(msg)
+            if content:
+                last_user_message = content
+                break
+    
+    if not last_user_message:
+        return False
+    
+    msg_lower = last_user_message.lower()
+    
+    # Fast heuristic patterns
+    escalation_patterns = [
+        # More detail requests
+        "more detail", "not enough", "incomplete", "need more",
+        "can you elaborate", "expand on", "tell me more",
+        "need comprehensive", "need detailed", "need full",
+        
+        # Dissatisfaction
+        "not what i wanted", "not helpful", "not sufficient",
+        "missing", "didn't answer", "not complete",
+        
+        # Request for deeper analysis
+        "comprehensive", "detailed", "full analysis",
+        "deeper", "thorough", "complete",
+        "in depth", "detailed breakdown",
+        
+        # With specific additions
+        "with charts", "with analysis", "with trends",
+        "with recommendations", "with breakdown",
+        "step by step", "detailed report",
+        
+        # Follow-up depth indicators
+        "why", "how come", "what about",
+        "what if", "can you also", "additionally"
+    ]
+    
+    # Check for clear indicators
+    if any(pattern in msg_lower for pattern in escalation_patterns):
+        logger.info(f"[FEEDBACK-DETECT] User needs more detail (pattern match)")
+        return True
+    
+    # Check message length - very short messages likely satisfied ("thanks", "ok")
+    if len(last_user_message) < 20:
+        return False
+    
+    # For longer ambiguous messages, use LLM classification
+    return detect_escalation_with_llm(last_user_message)
+
+
+def detect_escalation_with_llm(message: str) -> bool:
+    """
+    Use LLM to detect if user needs escalation to more detailed analysis.
+    Fast single call for ambiguous cases.
+    """
+    try:
+        prompt = f"""Analyze if this user message indicates they want MORE DETAIL or are SATISFIED.
+
+Context: User just received a quick answer to their query.
+
+User's response: "{message}"
+
+Does the user want:
+- MORE DETAIL / COMPREHENSIVE ANALYSIS (not satisfied with quick answer)
+- OR is SATISFIED with the answer?
+
+Respond with ONLY one word: MORE or SATISFIED"""
+
+        llm = get_llm_by_type("basic")
+        response = llm.invoke(prompt)
+        
+        result = "MORE" in response.content.upper()
+        logger.info(f"[FEEDBACK-DETECT] LLM classification: {'MORE' if result else 'SATISFIED'}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"[FEEDBACK-DETECT] LLM classification failed: {e}")
+        # Conservative: don't escalate on error
+        return False
 
 
 def extract_project_id(text: str) -> str:
@@ -305,9 +482,15 @@ def planner_node(
 ) -> Command[Literal["human_feedback", "reporter"]]:
     logger.info(f"[DEBUG-NODES] [NODE-PLANNER-1] Planner node entered")
     """Planner node that generate the full plan."""
-    logger.info("Planner generating full plan")
     configurable = Configuration.from_runnable_config(config)
     plan_iterations = state["plan_iterations"] if state.get("plan_iterations", 0) else 0
+    reflection = state.get("reflection", "")
+    
+    # Check if this is a replanning iteration
+    if reflection and plan_iterations > 0:
+        logger.info(f"[PLANNER] Replanning (iteration {plan_iterations}) with reflection context")
+    else:
+        logger.info("Planner generating full plan")
 
     # Extract project_id from research topic or messages
     project_id = state.get("project_id", "")
@@ -421,6 +604,100 @@ def planner_node(
                 ),
             }
         ]
+    
+    # Add ReAct escalation context if escalating from fast path
+    escalation_reason = state.get("escalation_reason", "")
+    partial_result = state.get("partial_result", "")
+    react_attempts = state.get("react_attempts", [])
+    
+    if escalation_reason:
+        escalation_context = f"""
+⚡ **ESCALATION FROM REACT AGENT**
+
+**Reason:** {escalation_reason}
+
+**What happened:**
+The fast ReAct agent attempted to handle this query but encountered issues:
+- Iterations: {len(react_attempts)}
+- Partial result: {partial_result[:300] if partial_result else 'None'}
+
+**Your task:**
+Create a comprehensive plan that addresses the user's query with proper multi-step execution.
+Learn from the ReAct agent's attempts and create a better strategy.
+"""
+        
+        # Add observations from React attempts if available
+        if react_attempts and len(react_attempts) > 0:
+            escalation_context += "\n**ReAct Agent's Observations:**\n"
+            for idx, attempt in enumerate(react_attempts[:3]):  # Show first 3 attempts
+                if len(attempt) > 1:
+                    action = str(attempt[0])[:100] if attempt[0] else ""
+                    observation = str(attempt[1])[:200] if attempt[1] else ""
+                    escalation_context += f"{idx + 1}. Action: {action}\n   Observation: {observation}\n\n"
+        
+        messages += [
+            {
+                "role": "user",
+                "content": escalation_context
+            }
+        ]
+        
+        logger.info(f"[PLANNER] Added ReAct escalation context (reason: {escalation_reason})")
+    
+    # CRITICAL: Add reflection context if this is a replanning iteration
+    if reflection and plan_iterations > 0:
+        previous_plan = state.get("current_plan")
+        validation_results = state.get("validation_results", [])
+        
+        reflection_context = f"""
+🔄 **REPLANNING REQUIRED** (Iteration {plan_iterations})
+
+**Previous Plan Failed:**
+"""
+        if previous_plan and not isinstance(previous_plan, str):
+            reflection_context += f"\nTitle: {previous_plan.title}\n"
+            reflection_context += f"Thought: {previous_plan.thought}\n\n"
+            reflection_context += "Steps executed:\n"
+            for idx, step in enumerate(previous_plan.steps):
+                status = "✅ Completed" if step.execution_res else "⏸️ Pending"
+                reflection_context += f"{idx + 1}. {step.title} - {status}\n"
+                if step.execution_res and len(str(step.execution_res)) > 0:
+                    # Show first 200 chars of result
+                    result_preview = str(step.execution_res)[:200]
+                    if "[ERROR]" in result_preview or "Error" in result_preview:
+                        reflection_context += f"   ❌ Error: {result_preview}...\n"
+        
+        reflection_context += f"\n**Failure Analysis (Reflection):**\n{reflection}\n"
+        
+        if validation_results:
+            failed_validations = [v for v in validation_results if v.get("status") == "failure"]
+            if failed_validations:
+                reflection_context += "\n**Failed Validations:**\n"
+                for v in failed_validations:
+                    reflection_context += f"- Step: {v.get('step_title')}\n"
+                    reflection_context += f"  Reason: {v.get('reason')}\n"
+                    if v.get("suggested_fix"):
+                        reflection_context += f"  Suggested Fix: {v.get('suggested_fix')}\n"
+        
+        reflection_context += """
+
+**Instructions for New Plan:**
+1. Address the issues identified in the reflection
+2. Use a different approach or break down steps differently
+3. Add validation or error handling steps if needed
+4. Consider dependencies between steps
+5. Be more specific in step descriptions to avoid ambiguity
+
+Create a NEW plan that learns from these failures."""
+
+        messages += [
+            {
+                "role": "user",
+                "content": reflection_context
+            }
+        ]
+        
+        logger.debug(f"[PLANNER] Added reflection context ({len(reflection_context)} chars)")
 
     if configurable.enable_deep_thinking:
         llm = get_llm_by_type("reasoning")
@@ -648,11 +925,56 @@ def human_feedback_node(
 
 def coordinator_node(
     state: State, config: RunnableConfig
-) -> Command[Literal["planner", "background_investigator", "coordinator", "__end__"]]:
+) -> Command[Literal["planner", "background_investigator", "coordinator", "react_agent", "__end__"]]:
     logger.info(f"[DEBUG-NODES] [NODE-COORD-1] Coordinator node entered")
-    """Coordinator node that communicate with customers and handle clarification."""
+    logger.info(f"[COORDINATOR] 🚀 COORDINATOR NODE CALLED - State keys: {list(state.keys())}")
+    """
+    Adaptive coordinator that intelligently routes queries.
+    
+    Routing logic:
+    1. First query → Start with ReAct (optimistic, fast)
+    2. Follow-up with "need more detail" → Escalate to planner
+    3. Background investigation enabled → Use that flow
+    4. Clarification enabled → Use that flow
+    """
     logger.info("Coordinator talking.")
     configurable = Configuration.from_runnable_config(config)
+    
+    # ADAPTIVE ROUTING: Check if user wants more detail (follow-up escalation)
+    messages = state.get("messages", [])
+    previous_result = state.get("previous_result", None)
+    routing_mode = state.get("routing_mode", "")
+    
+    if previous_result and routing_mode == "react_first":
+        # We previously used ReAct fast path, check if user wants more
+        logger.info("[COORDINATOR] Checking if user needs escalation from previous ReAct result")
+        
+        needs_escalation = detect_user_needs_more_detail(messages)
+        
+        if needs_escalation:
+            logger.info("[COORDINATOR] 🔄 USER ESCALATION - User needs more detail, routing to planner")
+            
+            # Build context for planner
+            last_user_msg = get_message_content(messages[-1]) if messages else ""
+            escalation_context = f"""
+Previous Quick Answer (ReAct):
+{previous_result[:500]}...
+
+User Feedback:
+"{last_user_msg}"
+
+The user indicated the quick answer was not sufficient. 
+Create a comprehensive plan that addresses their need for more detailed analysis.
+"""
+            
+            return Command(
+                update={
+                    "routing_mode": "user_escalated",
+                    "escalation_context": escalation_context,
+                    "goto": "planner"  # Must update state to prevent KeyError
+                },
+                goto="planner"
+            )
 
     # Check if clarification is enabled
     enable_clarification = state.get("enable_clarification", False)
@@ -679,7 +1001,7 @@ def coordinator_node(
             .invoke(messages)
         )
 
-        goto = "__end__"
+        goto = "planner"
         locale = state.get("locale", "en-US")
         research_topic = state.get("research_topic", "")
 
@@ -810,26 +1132,30 @@ def coordinator_node(
                     f"Clarification response: {clarification_rounds}/{max_clarification_rounds}: {response.content}"
                 )
 
-                # Append coordinator's question to messages
-                updated_messages = list(state_messages)
+                # Only collect NEW messages to add (not the entire list to avoid duplicates)
+                new_messages = []
                 if response.content:
-                    updated_messages.append(
+                    new_messages.append(
                         HumanMessage(content=response.content, name="coordinator")
                     )
 
+                update_dict = {
+                    "locale": locale,
+                    "research_topic": research_topic,
+                    "resources": configurable.resources,
+                    "clarification_rounds": clarification_rounds,
+                    "clarification_history": clarification_history,
+                    "clarified_research_topic": clarified_topic,
+                    "is_clarification_complete": False,
+                    "goto": goto,
+                    "__interrupt__": [("coordinator", response.content)],
+                }
+                # Only add messages if we have new ones (prevents duplicating existing messages)
+                if new_messages:
+                    update_dict["messages"] = new_messages
+
                 return Command(
-                    update={
-                        "messages": updated_messages,
-                        "locale": locale,
-                        "research_topic": research_topic,
-                        "resources": configurable.resources,
-                        "clarification_rounds": clarification_rounds,
-                        "clarification_history": clarification_history,
-                        "clarified_research_topic": clarified_topic,
-                        "is_clarification_complete": False,
-                        "goto": goto,
-                        "__interrupt__": [("coordinator", response.content)],
-                    },
+                    update=update_dict,
                     goto=goto,
                 )
         else:
@@ -845,12 +1171,15 @@ def coordinator_node(
     # ============================================================
     # Final: Build and return Command
     # ============================================================
-    messages = list(state.get("messages", []) or [])
-    if response.content:
-        messages.append(HumanMessage(content=response.content, name="coordinator"))
+    # Only collect NEW messages to add (not the entire list to avoid duplicates)
+    new_messages = []
+    # Only add coordinator message if response exists (not early return path)
+    if 'response' in locals() and response and hasattr(response, 'content') and response.content:
+        new_messages.append(HumanMessage(content=response.content, name="coordinator"))
 
     # Process tool calls for BOTH branches (legacy and clarification)
-    if response.tool_calls:
+    # Only process if response exists (not early return path)
+    if 'response' in locals() and response and hasattr(response, 'tool_calls') and response.tool_calls:
         try:
             for tool_call in response.tool_calls:
                 tool_name = tool_call.get("name", "")
@@ -885,15 +1214,12 @@ def coordinator_node(
             "LLM didn't call any tools. This may indicate tool calling issues with the model. "
             "Falling back to planner to ensure research proceeds."
         )
-        # Log full response for debugging
-        logger.debug(f"Coordinator response content: {response.content}")
-        logger.debug(f"Coordinator response object: {response}")
+        # Log full response for debugging (only if response exists)
+        if 'response' in locals() and response:
+            logger.debug(f"Coordinator response content: {response.content if hasattr(response, 'content') else 'N/A'}")
+            logger.debug(f"Coordinator response object: {response}")
         # Fallback to planner to ensure workflow continues
         goto = "planner"
-
-    # Apply background_investigation routing if enabled (unified logic)
-    if goto == "planner" and state.get("enable_background_investigation"):
-        goto = "background_investigator"
 
     # Set default values for state variables (in case they're not defined in legacy mode)
     if not enable_clarification:
@@ -902,19 +1228,82 @@ def coordinator_node(
 
     clarified_research_topic_value = clarified_topic or research_topic
 
+    # ============================================================
+    # CRITICAL: Extract project_id BEFORE routing
+    # ============================================================
+    # Extract project_id from state or messages so ReAct agent can use it
+    project_id = state.get("project_id", "")
+    if not project_id:
+        # Try to extract from research_topic
+        project_id = extract_project_id(research_topic)
+        
+        # If not found, try from clarified_research_topic
+        if not project_id:
+            project_id = extract_project_id(clarified_research_topic_value)
+        
+        # If still not found, try from messages
+        if not project_id:
+            for msg in state.get("messages", []):
+                content = get_message_content(msg)
+                if content:
+                    project_id = extract_project_id(content)
+                    if project_id:
+                        break
+        
+        if project_id:
+            logger.info(f"[COORDINATOR] 📌 Extracted project_id: {project_id}")
+    
+    # ============================================================
+    # ADAPTIVE ROUTING: Apply AFTER all tool call processing
+    # ============================================================
+    # Strategy:
+    # 1. First query → ReAct (fast, has web_search tool for context if needed)
+    # 2. User escalation → Full Pipeline (comprehensive analysis)
+    # 3. Background investigation is now a TOOL for ReAct, not a separate route
+    # ============================================================
+    escalation_reason = state.get("escalation_reason", "")
+    
+    logger.info(f"[COORDINATOR] 🔍 Routing state: goto={goto}, escalation={bool(escalation_reason)}, previous_result={bool(previous_result)}, project_id={project_id if project_id else 'None'}")
+    
+    # Check if user explicitly wants detailed/comprehensive analysis
+    user_query = str(state.get("messages", [])[-1].content if state.get("messages") else "").lower()
+    wants_detailed = any(kw in user_query for kw in ["comprehensive", "detailed report", "full analysis", "in-depth"])
+    
+    if goto == "planner" and not escalation_reason and not previous_result and not wants_detailed:
+        # First-time query, not asking for comprehensive analysis → Use ReAct (fast)
+        logger.info("[COORDINATOR] ⚡ ADAPTIVE ROUTING - Using ReAct fast path (has web_search tool)")
+        goto = "react_agent"
+    elif escalation_reason or wants_detailed:
+        # User escalation or explicitly wants detailed analysis → Use full pipeline
+        logger.info(f"[COORDINATOR] 📊 Using full pipeline: escalation={escalation_reason}, detailed={wants_detailed}")
+        goto = "planner"
+    
+    # Final routing decision
+    logger.info(f"[COORDINATOR] 🎯 FINAL DECISION: {goto}")
+
     # clarified_research_topic: Complete clarified topic with all clarification rounds
+    # Only include messages in update if we have new messages to add (prevents duplicates)
+    update_dict = {
+        "locale": locale,
+        "research_topic": research_topic,
+        "clarified_research_topic": clarified_research_topic_value,
+        "resources": configurable.resources,
+        "clarification_rounds": clarification_rounds,
+        "clarification_history": clarification_history,
+        "is_clarification_complete": goto != "coordinator",
+        "goto": goto,
+        "routing_mode": "react_first" if goto == "react_agent" else "",
+    }
+    # CRITICAL: Include project_id in state so ReAct agent can use it
+    if project_id:
+        update_dict["project_id"] = project_id
+        logger.info(f"[COORDINATOR] ✅ Passing project_id to {goto}: {project_id}")
+    # Only add messages if we have new ones (prevents duplicating existing messages)
+    if new_messages:
+        update_dict["messages"] = new_messages
+    
     return Command(
-        update={
-            "messages": messages,
-            "locale": locale,
-            "research_topic": research_topic,
-            "clarified_research_topic": clarified_research_topic_value,
-            "resources": configurable.resources,
-            "clarification_rounds": clarification_rounds,
-            "clarification_history": clarification_history,
-            "is_clarification_complete": goto != "coordinator",
-            "goto": goto,
-        },
+        update=update_dict,
         goto=goto,
     )
 
@@ -922,6 +1311,16 @@ def coordinator_node(
 def reporter_node(state: State, config: RunnableConfig):
     logger.info(f"[DEBUG-NODES] [NODE-REPORTER-1] Reporter node entered")
     """Reporter node that write a final report."""
+    
+    # CRITICAL: Check if reporter already completed (prevent infinite loop)
+    if state.get("final_report"):
+        logger.warning("[REPORTER] 🚨 CRITICAL: Reporter already completed (final_report exists). Skipping execution to prevent duplicate reports.")
+        # Return the existing report without re-executing
+        return Command(
+            update={},  # No state changes
+            goto="__end__"  # Route to END to stop the workflow
+        )
+    
     logger.info("Reporter write final report")
     configurable = Configuration.from_runnable_config(config)
     current_plan = state.get("current_plan")
@@ -937,6 +1336,8 @@ def reporter_node(state: State, config: RunnableConfig):
         plan_title = "Research Task"
         plan_thought = ""
     
+    # CRITICAL: Only include the task message, NOT all messages from state
+    # The reporter doesn't need the full conversation history - only the task and observations
     input_ = {
         "messages": [
             HumanMessage(
@@ -945,15 +1346,20 @@ def reporter_node(state: State, config: RunnableConfig):
         ],
         "locale": state.get("locale", "en-US"),
     }
-    invoke_messages = apply_prompt_template("reporter", input_, configurable, input_.get("locale", "en-US"))
+    # Get system prompt only (first message from apply_prompt_template)
+    # Don't include all messages from state - that causes token overflow!
+    all_template_messages = apply_prompt_template("reporter", input_, configurable, input_.get("locale", "en-US"))
+    # Only take the system prompt (first message), not the rest
+    invoke_messages = [all_template_messages[0]] if all_template_messages else []
     observations = state.get("observations", [])
     
-    # CRITICAL: Also collect observations from all completed steps
-    # This ensures we get data even if observations state is incomplete
-    # IMPORTANT: Compress step execution results to prevent context length errors
+    # CRITICAL: PRIORITIZE step execution results over ReAct intermediate steps
+    # Step execution results contain the actual data from the planner flow
+    # ReAct intermediate steps are only used as fallback if no plan steps exist
+    step_observations = []
+    has_completed_steps = False
+    
     if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps') and current_plan.steps:
-        step_observations = []
-        
         # Get token limit for reporter's model to adjust compression
         reporter_llm_type = AGENT_LLM_MAP.get("reporter", "basic")
         token_limit = get_llm_token_limit_by_type(reporter_llm_type)
@@ -1009,11 +1415,15 @@ def reporter_node(state: State, config: RunnableConfig):
                 # Include step title for context
                 step_obs = f"## Step {idx + 1}: {step.title}\n\n{execution_res}"
                 step_observations.append(step_obs)
-                logger.debug(f"Reporter: Collected observation from step {idx + 1}: {step.title}")
+                has_completed_steps = True
+                logger.info(f"Reporter: Collected observation from step {idx + 1}: {step.title} ({len(str(execution_res))} chars)")
         
-        # Combine state observations with step observations
-        # Use step observations if they exist and are more complete
-        if step_observations:
+        # Use step observations if we have completed steps (PRIORITY)
+        if step_observations and has_completed_steps:
+            logger.info(f"Reporter: Using step execution results ({len(step_observations)} steps) - PRIORITY over state observations")
+            observations = step_observations
+        elif step_observations:
+            # Merge step observations with state observations if no completed steps
             if len(step_observations) > len(observations):
                 logger.info(f"Reporter: Using step observations ({len(step_observations)}) instead of state observations ({len(observations)})")
                 observations = step_observations
@@ -1024,6 +1434,36 @@ def reporter_node(state: State, config: RunnableConfig):
                     if step_obs not in all_observations:
                         all_observations.append(step_obs)
                 observations = all_observations
+    
+    # FALLBACK: Extract observations from ReAct agent's intermediate steps ONLY if no step observations
+    # ReAct agent stores tool calls/results in react_intermediate_steps, not observations
+    if not observations or not has_completed_steps:
+        react_intermediate_steps = state.get("react_intermediate_steps", [])
+        if react_intermediate_steps:
+            logger.info(f"Reporter: No step observations found, extracting from ReAct intermediate steps ({len(react_intermediate_steps)} steps)")
+            react_observations = []
+            for step_idx, step in enumerate(react_intermediate_steps):
+                logger.debug(f"Reporter: Processing ReAct step {step_idx + 1}: type={type(step)}")
+                if isinstance(step, (list, tuple)) and len(step) >= 2:
+                    action = step[0]  # Tool call (AgentAction object)
+                    observation = step[1]  # Tool result
+                    
+                    # Extract tool name and input from AgentAction
+                    tool_name = getattr(action, 'tool', None) or (action.tool if hasattr(action, 'tool') else str(action))
+                    tool_input = getattr(action, 'tool_input', None) or (action.tool_input if hasattr(action, 'tool_input') else {})
+                    
+                    # Format as observation string
+                    obs_text = f"Tool: {tool_name}\nInput: {tool_input}\nResult: {observation}"
+                    react_observations.append(obs_text)
+                    logger.info(f"Reporter: Extracted observation {step_idx + 1}: {tool_name} -> {len(str(observation))} chars")
+                else:
+                    logger.warning(f"Reporter: ReAct step {step_idx + 1} has unexpected structure: {type(step)}")
+            
+            if react_observations:
+                observations = react_observations
+                logger.info(f"Reporter: Extracted {len(observations)} observations from ReAct steps (FALLBACK)")
+            else:
+                logger.warning("Reporter: Failed to extract observations from ReAct intermediate steps")
 
     # Add a reminder about the new report format, citation style, and table usage
     invoke_messages.append(
@@ -1101,28 +1541,334 @@ def reporter_node(state: State, config: RunnableConfig):
             )
         )
 
-    # Context compression
+    # Context compression WITH token budget coordination
+    # Account for frontend conversation history + system prompts + overhead
     llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP["reporter"])
     if llm_token_limit is None:
         logger.warning("[reporter_node] Token limit unknown, using default 16385")
         llm_token_limit = 16385  # Default for gpt-3.5-turbo
-    compressed_state = ContextManager(llm_token_limit).compress_messages(
-        {"messages": observation_messages}
+    
+    # Get the actual model name for accurate token counting
+    reporter_llm = get_llm_by_type(AGENT_LLM_MAP["reporter"])
+    model_name = getattr(reporter_llm, "model_name", None) or getattr(reporter_llm, "model", None) or "gpt-3.5-turbo"
+    
+    # CRITICAL: Use ADAPTIVE token budget based on model's context window
+    # Extract frontend messages for budgeting
+    frontend_count = state.get("frontend_history_message_count", 0)
+    all_messages = list(state.get("messages", []))
+    frontend_messages = all_messages[:frontend_count] if frontend_count > 0 else []
+    
+    # Get adaptive context manager (uses percentage of model's context)
+    from src.utils.adaptive_context_config import get_adaptive_context_manager
+    context_manager = get_adaptive_context_manager(
+        agent_type="reporter",
+        model_name=model_name,
+        model_context_limit=llm_token_limit,
+        frontend_history_messages=frontend_messages
     )
+    
+    logger.info(
+        f"[reporter_node] Token budget: total={llm_token_limit}, "
+        f"frontend_history={frontend_count} messages, "
+        f"adjusted_limit={context_manager.token_limit}"
+    )
+    
+    # CRITICAL: Compress ALL messages (system prompt + task + observations) together
+    # This ensures context optimization is applied to everything, not just observations
+    all_messages_to_compress = invoke_messages + observation_messages
+    
+    # DEBUG: Log what we're compressing
+    logger.info(
+        f"Reporter: Compressing {len(invoke_messages)} invoke messages + {len(observation_messages)} observation messages = {len(all_messages_to_compress)} total"
+    )
+    
+    # Count original tokens for logging
+    original_token_count = context_manager.count_tokens(all_messages_to_compress, model=model_name)
+    logger.info(
+        f"Reporter: Original token count: {original_token_count:,} tokens "
+        f"(invoke: {len(invoke_messages)} msgs, observations: {len(observation_messages)} msgs)"
+    )
+    
+    # Compress all messages together to fit in token budget
+    compressed_state = context_manager.compress_messages(
+        {"messages": all_messages_to_compress}
+    )
+    optimization_messages = []
     if isinstance(compressed_state, dict):
         compressed_messages = compressed_state.get("messages", [])
+        optimization_metadata = compressed_state.get("_context_optimization")
+        
+        # Create context optimization tool call messages
+        if optimization_metadata:
+            optimization_messages = _add_context_optimization_tool_call(state, "reporter", optimization_metadata)
     else:
-        compressed_messages = observation_messages
+        compressed_messages = all_messages_to_compress
     
     # Log compression results for debugging
-    if len(compressed_messages) != len(observation_messages):
-        logger.warning(
-            f"Reporter: Observations compressed from {len(observation_messages)} to {len(compressed_messages)} messages"
+    compressed_token_count = context_manager.count_tokens(compressed_messages, model=model_name)
+    if compressed_token_count < original_token_count:
+        reduction_pct = ((original_token_count - compressed_token_count) / original_token_count) * 100
+        logger.info(
+            f"Reporter: All messages compressed from {original_token_count} to {compressed_token_count} tokens "
+            f"({reduction_pct:.1f}% reduction)"
         )
     
-    invoke_messages += compressed_messages
+    # Use compressed messages (includes system prompt + task + observations)
+    invoke_messages = compressed_messages
 
-    logger.debug(f"Current invoke messages: {invoke_messages}")
+    # CRITICAL: Add optimization messages to invoke_messages BEFORE counting tokens
+    # This ensures we count the actual messages that will be sent to the LLM
+    if optimization_messages:
+        invoke_messages = optimization_messages + invoke_messages
+
+    # Final check: if still over limit, truncate aggressively
+    total_tokens = context_manager.count_tokens(invoke_messages, model=model_name)
+    logger.info(
+        f"Reporter: Token count check - total_tokens={total_tokens:,}, limit={llm_token_limit:,}, "
+        f"compressed_token_count={compressed_token_count:,}, optimization_msgs={len(optimization_messages)}"
+    )
+    
+    if total_tokens > llm_token_limit:
+        logger.warning(
+            f"Reporter: Total tokens ({total_tokens:,}) still exceed limit ({llm_token_limit:,}). "
+            f"Applying aggressive truncation."
+        )
+        # Calculate how much we need to reduce
+        # Reserve space for optimization messages and system prompt overhead
+        optimization_tokens = context_manager.count_tokens(optimization_messages, model=model_name) if optimization_messages else 0
+        system_overhead = 1000  # Reserve for system prompt and overhead
+        available_for_data = llm_token_limit - optimization_tokens - system_overhead
+        excess_tokens = total_tokens - llm_token_limit
+        target_data_tokens = max(1000, available_for_data - 500)  # Leave 500 token buffer
+        
+        logger.info(
+            f"Reporter: Truncation plan - optimization_tokens={optimization_tokens}, "
+            f"available_for_data={available_for_data:,}, target_data_tokens={target_data_tokens:,}"
+        )
+        
+        # Truncate each message in compressed_messages proportionally
+        # CRITICAL: Always truncate if we're over limit, regardless of compressed_token_count
+        # The compressed_token_count might be from before optimization messages were added
+        if compressed_messages and total_tokens > llm_token_limit:
+            # Calculate target tokens per message
+            target_per_msg = target_data_tokens // max(1, len(compressed_messages))
+            truncated_messages = []
+            current_total = 0
+            
+            for i, msg in enumerate(compressed_messages):
+                # Count tokens - use accurate counting for both dict and message objects
+                # Convert dict to message object temporarily for accurate counting, or use count_tokens directly
+                if isinstance(msg, dict):
+                    # For dict messages, use count_tokens which handles dicts correctly
+                    msg_tokens = context_manager.count_tokens([msg], model=model_name)
+                else:
+                    msg_tokens = context_manager._count_message_tokens(msg)
+                
+                remaining_budget = target_data_tokens - current_total
+                remaining_msgs = len(compressed_messages) - i
+                # Distribute remaining budget among remaining messages
+                if remaining_msgs > 0:
+                    max_for_this_msg = remaining_budget // remaining_msgs
+                else:
+                    max_for_this_msg = remaining_budget
+                
+                # CRITICAL: Always truncate if message is too large, even if max_for_this_msg is small
+                # Convert tokens to approximate characters (4 chars per token)
+                max_chars = max_for_this_msg * 4
+                truncated_msg = copy.deepcopy(msg)
+                original_content_len = 0
+                truncated = False
+                
+                # Handle both dict messages and message objects
+                if isinstance(truncated_msg, dict):
+                    content = truncated_msg.get("content", "")
+                    if isinstance(content, str):
+                        original_content_len = len(content)
+                        # Truncate if content is longer than max_chars (always truncate if over budget)
+                        if len(content) > max_chars:
+                            truncated_msg["content"] = content[:max_chars] + "\n\n... (truncated due to context length limit) ..."
+                            truncated = True
+                            logger.info(f"Reporter: Truncated dict message {i} from {original_content_len} to {max_chars} chars (target: {max_for_this_msg} tokens)")
+                elif hasattr(truncated_msg, 'content') and isinstance(truncated_msg.content, str):
+                    original_content_len = len(truncated_msg.content)
+                    if len(truncated_msg.content) > max_chars:
+                        truncated_msg.content = truncated_msg.content[:max_chars] + "\n\n... (truncated due to context length limit) ..."
+                        truncated = True
+                        logger.info(f"Reporter: Truncated message object {i} from {original_content_len} to {max_chars} chars (target: {max_for_this_msg} tokens)")
+                
+                truncated_messages.append(truncated_msg)
+                # Count tokens after truncation - use accurate counting
+                if isinstance(truncated_msg, dict):
+                    # Use count_tokens which handles dicts correctly
+                    new_msg_tokens = context_manager.count_tokens([truncated_msg], model=model_name)
+                else:
+                    new_msg_tokens = context_manager._count_message_tokens(truncated_msg)
+                current_total += new_msg_tokens
+                if truncated:
+                    logger.info(f"Reporter: Message {i} tokens: {msg_tokens} → {new_msg_tokens} (target: {max_for_this_msg})")
+            
+            compressed_messages = truncated_messages
+            # Rebuild invoke_messages with truncated compressed_messages
+            if optimization_messages:
+                invoke_messages = optimization_messages + compressed_messages
+            else:
+                invoke_messages = compressed_messages
+            
+            # CRITICAL: Recalculate token count after truncation
+            final_tokens = context_manager.count_tokens(invoke_messages, model=model_name)
+            logger.info(
+                f"Reporter: After aggressive truncation - compressed_messages: {len(compressed_messages)}, "
+                f"invoke_messages: {len(invoke_messages)}, total tokens: {final_tokens:,} (target: {llm_token_limit:,})"
+            )
+            
+            # If still over limit, apply even more aggressive truncation
+            if final_tokens > llm_token_limit:
+                logger.warning(
+                    f"Reporter: Still over limit after truncation ({final_tokens:,} > {llm_token_limit:,}). "
+                    f"Applying emergency truncation."
+                )
+                # Emergency: truncate to 80% of limit
+                emergency_target = int(llm_token_limit * 0.8)
+                emergency_data_target = emergency_target - optimization_tokens - system_overhead
+                
+                # Truncate each message to fit emergency target
+                emergency_messages = []
+                max_chars_per_msg = (emergency_data_target * 4) // max(1, len(compressed_messages))
+                logger.info(f"Reporter: Emergency truncation - max_chars_per_msg={max_chars_per_msg}, emergency_data_target={emergency_data_target}")
+                
+                for i, msg in enumerate(compressed_messages):
+                    emergency_msg = copy.deepcopy(msg)
+                    original_len = 0
+                    
+                    # Handle both dict messages and message objects
+                    if isinstance(emergency_msg, dict):
+                        content = emergency_msg.get("content", "")
+                        if isinstance(content, str):
+                            original_len = len(content)
+                            if len(content) > max_chars_per_msg:
+                                emergency_msg["content"] = content[:max_chars_per_msg] + "\n\n... (emergency truncation) ..."
+                                logger.info(f"Reporter: Emergency truncated dict message {i} from {original_len} to {max_chars_per_msg} chars")
+                    elif hasattr(emergency_msg, 'content') and isinstance(emergency_msg.content, str):
+                        original_len = len(emergency_msg.content)
+                        if len(emergency_msg.content) > max_chars_per_msg:
+                            emergency_msg.content = emergency_msg.content[:max_chars_per_msg] + "\n\n... (emergency truncation) ..."
+                            logger.info(f"Reporter: Emergency truncated message object {i} from {original_len} to {max_chars_per_msg} chars")
+                    
+                    emergency_messages.append(emergency_msg)
+                
+                compressed_messages = emergency_messages
+                if optimization_messages:
+                    invoke_messages = optimization_messages + compressed_messages
+                else:
+                    invoke_messages = compressed_messages
+                
+                final_tokens = context_manager.count_tokens(invoke_messages, model=model_name)
+                logger.info(
+                    f"Reporter: After emergency truncation, total tokens: {final_tokens:,} (target: {llm_token_limit:,})"
+                )
+                
+                # If STILL over limit, return error
+                if final_tokens > llm_token_limit:
+                    logger.error(
+                        f"Reporter: Still over limit after emergency truncation ({final_tokens:,} > {llm_token_limit:,}). "
+                        f"Will return error message instead."
+                    )
+                    # This will be caught by the try/except below and return an error
+
+    # Use accurate token counting with tiktoken
+    accurate_token_count = context_manager.count_tokens(invoke_messages, model=model_name)
+    logger.info(
+        f"Reporter: Accurate token count: {accurate_token_count} (limit: {llm_token_limit})"
+    )
+    
+    # If accurate count suggests we're over, apply more aggressive compression
+    if accurate_token_count > llm_token_limit * 0.8:  # If over 80% of limit, be aggressive
+        logger.warning(
+            f"Reporter: Accurate token count ({accurate_token_count}) exceeds 80% of limit ({llm_token_limit}). "
+            f"Applying aggressive compression."
+        )
+        # Calculate target size more aggressively - reserve 40% for system and overhead
+        available_for_data = int(llm_token_limit * 0.6)  # Use only 60% for data
+        target_chars = int(available_for_data * 2.5)  # Convert to chars (conservative), ensure int
+        if compressed_messages:
+            target_per_msg = int(target_chars // max(1, len(compressed_messages)))  # Ensure int
+            more_aggressive_messages = []
+            for msg in compressed_messages:
+                # Handle both dict messages (from apply_prompt_template) and message objects
+                if isinstance(msg, dict):
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and len(content) > target_per_msg:
+                        truncated_msg = msg.copy()
+                        truncated_msg["content"] = content[:int(target_per_msg)] + "\n\n... (data truncated due to context limits) ..."
+                        more_aggressive_messages.append(truncated_msg)
+                        logger.debug(f"Reporter: Truncated dict message from {len(content)} to {target_per_msg} chars")
+                    else:
+                        more_aggressive_messages.append(msg)
+                elif hasattr(msg, 'content') and isinstance(msg.content, str):
+                    msg_chars = len(msg.content)
+                    if msg_chars > target_per_msg:
+                        truncated_msg = copy.deepcopy(msg)
+                        # Truncate more aggressively - ensure target_per_msg is int
+                        truncated_msg.content = msg.content[:int(target_per_msg)] + "\n\n... (data truncated due to context limits) ..."
+                        more_aggressive_messages.append(truncated_msg)
+                        logger.debug(f"Reporter: Truncated message from {msg_chars} to {target_per_msg} chars")
+                    else:
+                        more_aggressive_messages.append(msg)
+                else:
+                    more_aggressive_messages.append(msg)
+            compressed_messages = more_aggressive_messages
+            invoke_messages = invoke_messages[:len(invoke_messages) - len(compressed_messages)] + compressed_messages
+            logger.info(f"Reporter: Applied aggressive character-based truncation (target: {target_chars} total, {target_per_msg} per message)")
+    
+    # Final check with accurate token count
+    final_total_tokens = context_manager.count_tokens(invoke_messages, model=model_name)
+    logger.info(
+        f"Reporter: After compression - Accurate token count: {final_total_tokens} (limit: {llm_token_limit})"
+    )
+    
+    # If still over limit, STOP and return error immediately (don't call LLM)
+    if final_total_tokens > llm_token_limit * 0.95:  # 95% threshold - use accurate count
+        logger.error(
+            f"Reporter: Final token count ({final_total_tokens}) exceeds 95% of limit ({llm_token_limit}). "
+            f"Cannot generate report - context too large even after compression."
+        )
+        
+        # Create user-friendly error message
+        error_message = (
+            f"❌ **Context Too Large**\n\n"
+            f"The analysis data ({final_total_tokens:,} tokens) exceeds the model's limit ({llm_token_limit:,} tokens).\n\n"
+            f"**Current model:** {model_name} (max {llm_token_limit:,} tokens)\n\n"
+            f"**Solutions:**\n"
+            f"1. ✅ **Switch to a larger model:**\n"
+            f"   - GPT-4o (128,000 tokens)\n"
+            f"   - Claude 3.5 Sonnet (200,000 tokens)\n"
+            f"   - DeepSeek (64,000 tokens)\n\n"
+            f"2. Request a more focused analysis with fewer steps\n\n"
+            f"3. Reduce the number of sprints or tasks being analyzed"
+        )
+        
+        # Return error message to user (don't crash the workflow)
+        error_ai_message = AIMessage(
+            content=error_message,
+            name="reporter",
+            response_metadata={"finish_reason": "stop", "error_type": "context_too_large"}
+        )
+        
+        return {
+            "messages": [error_ai_message],
+            "final_report": error_message,
+        }
+    
+    # Debug: Log what we're actually sending to the LLM
+    logger.info(f"Reporter: About to invoke LLM with {len(invoke_messages)} messages")
+    for idx, msg in enumerate(invoke_messages):
+        if isinstance(msg, dict):
+            msg_type = f"dict(role={msg.get('role', 'unknown')})"
+            content_len = len(str(msg.get('content', '')))
+        else:
+            msg_type = type(msg).__name__
+            content_len = len(str(getattr(msg, 'content', '')))
+        logger.info(f"  Message {idx}: {msg_type}, content_len={content_len}")
     
     # Wrap LLM invocation in try/except to catch errors and notify user/LLM
     try:
@@ -1130,17 +1876,25 @@ def reporter_node(state: State, config: RunnableConfig):
         response_content = response.content
         logger.info(f"reporter response: {response_content}")
 
-        # Create AIMessage with finish_reason in response_metadata
-        # This ensures the frontend knows the message is complete
-        reporter_message = AIMessage(
-            content=response_content,
-            name="reporter",
-            response_metadata={"finish_reason": "stop"}
-        )
+        # Use the response directly instead of creating a new AIMessage
+        # This prevents duplicate messages - LangGraph already streams the LLM response
+        # We just need to set the name and ensure finish_reason is set
+        if not hasattr(response, 'name') or not response.name:
+            response.name = "reporter"
+        if not response.response_metadata:
+            response.response_metadata = {}
+        if "finish_reason" not in response.response_metadata:
+            response.response_metadata["finish_reason"] = "stop"
 
         # Add AIMessage so the final report gets streamed to the client
+        # Use the original response object to maintain the same ID
+        # Include optimization messages if they exist
+        return_messages = [response]
+        if optimization_messages:
+            return_messages = optimization_messages + return_messages
+        
         return {
-            "messages": [reporter_message],
+            "messages": return_messages,
             "final_report": response_content,
         }
     except Exception as e:
@@ -1230,42 +1984,40 @@ The report generation encountered an error.
             updated_plan = current_plan
         
         # Create an error message for the user
-        # Use HumanMessage so it's clearly visible as an error notification
+        # Use AIMessage with finish_reason="stop" so frontend recognizes completion
         error_ai_message = AIMessage(
             content=detailed_error,
             name="reporter",
-            response_metadata={"finish_reason": "error", "error_type": type(e).__name__}
-        )
-        
-        # Also add a system message to make it clear this is an error
-        error_system_message = HumanMessage(
-            content=f"⚠️ **ERROR**: The reporter failed to generate the final report.\n\n{detailed_error}",
-            name="system"
+            response_metadata={"finish_reason": "stop", "error_type": type(e).__name__}
         )
         
         # Return error state so it gets streamed to frontend
-        # Include updated plan so the step shows the error
-        # Include both messages so error is clearly visible
+        # DON'T return current_plan here - validator will handle plan updates
+        # This prevents LangGraph state conflicts (multiple writers to current_plan)
         return {
-            "messages": [error_system_message, error_ai_message],
+            "messages": [error_ai_message],
             "observations": observations + [error_observation],
             "final_report": detailed_error,  # Store error as final report so user sees it
-            "current_plan": updated_plan,  # Update plan so step shows error
+            # Note: current_plan omitted - validator will update it for retry logic
         }
 
 
 def research_team_node(state: State):  # noqa: ARG001
     logger.info(f"[DEBUG-NODES] [NODE-RESEARCH-TEAM-1] Research team node entered")
-    """Research team node that routes to appropriate agent or reporter."""
+    """Research team node that routes to appropriate agent or reporter.
+    
+    NOTE: This node does NOT return a Command for routing. The routing is handled
+    by the conditional edge function continue_to_running_research_team() in builder.py.
+    This prevents conflicts between Command.goto and conditional edge routing.
+    """
     logger.info("Research team node - checking step completion status")
     
-    # Check if all steps are complete
+    # Check if all steps are complete (for logging only)
     current_plan = state.get("current_plan")
     if current_plan and not isinstance(current_plan, str) and current_plan.steps:
         all_complete = all(step.execution_res for step in current_plan.steps)
         if all_complete:
-            logger.info(f"[research_team_node] All {len(current_plan.steps)} steps completed! Routing to reporter.")
-            return Command(goto="reporter")
+            logger.info(f"[research_team_node] All {len(current_plan.steps)} steps completed! Conditional edge will route to validator.")
     
     logger.debug("Entering research_team_node - coordinating research and coder agents")
 
@@ -1359,29 +2111,47 @@ async def _execute_agent_step(
     logger.debug(f"[_execute_agent_step] Agent '{agent_name}' token_limit={token_limit}, max_length_per_step={max_length_per_step}, max_items={max_items}")
 
     # Format completed steps information
-    # Compress large execution results to prevent token overflow
+    # CRITICAL: Compress ALL execution results to prevent token overflow
+    # Even if individual results are small, the total can exceed limits
+    # Note: sanitize_tool_response is already imported at module level
+    from src.utils.json_utils import _compress_large_array
+    
     completed_steps_info = ""
     if completed_steps:
         completed_steps_info = "# Completed Research Steps\n\n"
+        total_chars_used = 0
         for i, step in enumerate(completed_steps):
-            # Compress execution result if it's too large (e.g., large task lists)
-            # Use model-aware compression based on token limit
+            # ALWAYS compress execution results to ensure they fit within token budget
             execution_res = step.execution_res
-            if execution_res and len(str(execution_res)) > max_length_per_step:
-                # Try to compress JSON arrays in the result
+            original_length = len(str(execution_res)) if execution_res else 0
+            
+            if execution_res:
+                # Calculate remaining budget for this step
+                remaining_budget = max_length_per_step - (len(completed_steps_info) - total_chars_used)
+                step_max_length = min(max_length_per_step, remaining_budget)
+                
+                # Always apply compression/truncation to fit within budget
                 try:
                     parsed = json.loads(str(execution_res))
-                    from src.utils.json_utils import _compress_large_array
+                    # First compress arrays
                     compressed = _compress_large_array(parsed, max_items=max_items)
-                    execution_res = json.dumps(compressed, ensure_ascii=False)
-                    logger.info(f"[_execute_agent_step] Compressed execution result for step '{step.title}' from {len(str(step.execution_res))} to {len(execution_res)} chars (token_limit={token_limit}, max_items={max_items})")
+                    compressed_json = json.dumps(compressed, ensure_ascii=False)
+                    # Then sanitize to ensure it fits within step_max_length (sanitize_tool_response imported at top)
+                    execution_res = sanitize_tool_response(compressed_json, max_length=step_max_length, compress_arrays=False)
+                    logger.info(f"[_execute_agent_step] Compressed execution result for step '{step.title}': {original_length:,} → {len(execution_res):,} chars (budget={step_max_length:,})")
                 except (json.JSONDecodeError, TypeError):
-                    # Not JSON, just truncate based on model's token limit
-                    execution_res = str(execution_res)[:max_length_per_step] + f"\n\n... (truncated, original length: {len(str(step.execution_res))} chars) ..."
-                    logger.warning(f"[_execute_agent_step] Truncated non-JSON execution result for step '{step.title}' from {len(str(step.execution_res))} to {len(execution_res)} chars (token_limit={token_limit})")
+                    # Not JSON, use sanitize_tool_response for truncation (already imported at top)
+                    execution_res = sanitize_tool_response(str(execution_res), max_length=step_max_length, compress_arrays=False)
+                    logger.info(f"[_execute_agent_step] Truncated non-JSON execution result for step '{step.title}': {original_length:,} → {len(execution_res):,} chars (budget={step_max_length:,})")
             
-            completed_steps_info += f"## Completed Step {i + 1}: {step.title}\n\n"
-            completed_steps_info += f"<finding>\n{execution_res}\n</finding>\n\n"
+            step_info = f"## Completed Step {i + 1}: {step.title}\n\n<finding>\n{execution_res}\n</finding>\n\n"
+            completed_steps_info += step_info
+            total_chars_used += len(step_info)
+        
+        # Final check: if total exceeds available budget, truncate the entire string
+        if len(completed_steps_info) > available_chars:
+            logger.warning(f"[_execute_agent_step] Total completed_steps_info ({len(completed_steps_info):,} chars) exceeds budget ({available_chars:,} chars). Truncating...")
+            completed_steps_info = completed_steps_info[:available_chars] + "\n\n... (truncated due to token limit) ..."
 
     # Prepare the input for the agent with completed steps info
     # Include project_id if available (for PM Agent)
@@ -1471,6 +2241,125 @@ async def _execute_agent_step(
         agent_input["messages"] = list(validated_messages)  # Convert to list
     except Exception as validation_error:
         logger.error(f"Error validating agent input messages: {validation_error}")
+    
+    # CRITICAL: Apply context compression for PM agent to prevent context_length_exceeded errors
+    # The agent input can be very large when there are many completed steps
+    if agent_name == "pm_agent" and token_limit:
+        logger.info(f"[{agent_name}] Applying context compression before agent invocation (token_limit={token_limit})")
+        
+        # Get model name for accurate token counting
+        agent_llm_type = AGENT_LLM_MAP.get(agent_name, "basic")
+        from src.llms.llm import get_llm_by_type
+        agent_llm = get_llm_by_type(agent_llm_type)
+        model_name = getattr(agent_llm, "model_name", None) or getattr(agent_llm, "model", None) or "gpt-3.5-turbo"
+        
+        # Create context manager for PM agent
+        # Reserve 40% for system prompt, tools, and overhead, use 60% for messages
+        from src.utils.adaptive_context_config import get_adaptive_context_manager
+        context_manager = get_adaptive_context_manager(
+            agent_type="pm_agent",
+            model_name=model_name,
+            model_context_limit=token_limit,
+            frontend_history_messages=[]  # No frontend history for PM agent
+        )
+        
+        # Count tokens in agent input messages
+        input_token_count = context_manager.count_tokens(agent_input["messages"], model=model_name)
+        logger.info(f"[{agent_name}] Agent input token count: {input_token_count:,} (limit: {token_limit:,})")
+        
+        # Account for function/tool definitions (typically 20-30% of context)
+        # Reserve 30% for functions, system prompts, and overhead
+        # Use 70% for actual messages
+        message_token_limit = int(token_limit * 0.7)
+        logger.info(f"[{agent_name}] Message token limit (70% of total): {message_token_limit:,} tokens")
+        
+        # If over message limit, compress/truncate the messages
+        if input_token_count > message_token_limit * 0.9:  # If over 90% of message limit, compress
+            logger.warning(
+                f"[{agent_name}] Agent input ({input_token_count:,} tokens) exceeds 90% of message limit ({message_token_limit:,}). "
+                f"Compressing messages..."
+            )
+            
+            # Compress messages using context manager
+            compressed_state = context_manager.compress_messages({"messages": agent_input["messages"]})
+            if isinstance(compressed_state, dict):
+                compressed_messages = compressed_state.get("messages", [])
+                if compressed_messages:
+                    compressed_token_count = context_manager.count_tokens(compressed_messages, model=model_name)
+                    logger.info(
+                        f"[{agent_name}] Messages compressed: {input_token_count:,} → {compressed_token_count:,} tokens "
+                        f"({((input_token_count - compressed_token_count) / input_token_count * 100):.1f}% reduction)"
+                    )
+                    agent_input["messages"] = compressed_messages
+                    
+                    # If still over limit after compression, apply aggressive truncation
+                    if compressed_token_count > message_token_limit * 0.95:
+                        logger.warning(
+                            f"[{agent_name}] Still over limit after compression ({compressed_token_count:,} > {message_token_limit * 0.95:.0f}). "
+                            f"Applying aggressive truncation..."
+                        )
+                        
+                        # Truncate the first message (which contains completed_steps_info) more aggressively
+                        if agent_input["messages"]:
+                            first_msg = agent_input["messages"][0]
+                            if hasattr(first_msg, 'content') and isinstance(first_msg.content, str):
+                                # Calculate max chars for first message (reserve 10% for other messages)
+                                max_chars_for_first = int((message_token_limit * 0.9) * 4)  # 90% of message tokens * 4 chars/token
+                                if len(first_msg.content) > max_chars_for_first:
+                                    original_len = len(first_msg.content)
+                                    first_msg.content = first_msg.content[:max_chars_for_first] + "\n\n... (truncated due to context length limit) ..."
+                                    logger.info(
+                                        f"[{agent_name}] Aggressively truncated first message: {original_len:,} → {max_chars_for_first:,} chars"
+                                    )
+                                    
+                                    # Recalculate token count
+                                    final_token_count = context_manager.count_tokens(agent_input["messages"], model=model_name)
+                                    logger.info(
+                                        f"[{agent_name}] After aggressive truncation: {final_token_count:,} tokens (message limit: {message_token_limit:,}, total limit: {token_limit:,})"
+                                    )
+                                    
+                                    # If STILL over message limit, return error instead of calling agent
+                                    if final_token_count > message_token_limit:
+                                        error_msg = (
+                                            f"❌ **Context Too Large for {agent_name}**\n\n"
+                                            f"The analysis data ({final_token_count:,} tokens) exceeds the model's limit ({token_limit:,} tokens).\n\n"
+                                            f"**Current model:** {model_name} (max {token_limit:,} tokens)\n\n"
+                                            f"**Solutions:**\n"
+                                            f"1. Switch to a larger model (GPT-4o, Claude 3.5 Sonnet)\n"
+                                            f"2. Request a more focused analysis with fewer steps\n"
+                                            f"3. Reduce the amount of data being analyzed"
+                                        )
+                                        logger.error(f"[{agent_name}] Cannot proceed - context still too large after truncation")
+                                        # Return error as execution result
+                                        from src.prompts.planner_model import Step, Plan
+                                        updated_step = Step(
+                                            need_search=current_step.need_search,
+                                            title=current_step.title,
+                                            description=current_step.description,
+                                            step_type=current_step.step_type,
+                                            execution_res=error_msg,
+                                        )
+                                        updated_steps = list(current_plan.steps)
+                                        updated_steps[current_step_idx] = updated_step
+                                        updated_plan = Plan(
+                                            locale=current_plan.locale,
+                                            has_enough_context=current_plan.has_enough_context,
+                                            thought=current_plan.thought,
+                                            title=current_plan.title,
+                                            steps=updated_steps,
+                                        )
+                                        completed_count = sum(1 for step in updated_plan.steps if step.execution_res)
+                                        return Command(
+                                            update={
+                                                "messages": [HumanMessage(content=error_msg, name=agent_name)],
+                                                "observations": observations + [error_msg],
+                                                "current_plan": updated_plan,
+                                                "current_step_index": min(completed_count, len(updated_plan.steps) - 1),
+                                            },
+                                            goto="research_team",
+                                        )
+        else:
+            logger.info(f"[{agent_name}] Agent input within limit ({input_token_count:,} < {message_token_limit * 0.9:.0f}), no compression needed")
     
     try:
         invoke_start_time = time.time()
@@ -1604,8 +2493,18 @@ async def _execute_agent_step(
                     if tool_name != "unknown_tool":
                         break
             
-            # Sanitize each tool result individually before combining to prevent token overflow
-            sanitized_tool_content = sanitize_tool_response(str(tool_content))
+            # CRITICAL: Sanitize each tool result with aggressive truncation for PM agent context
+            # PM agent has 16K token limit, so we need to keep tool responses very small
+            # Use max_length=10000 (≈2500 tokens) per tool response to leave room for other content
+            # Note: sanitize_tool_response is imported at module level (line 36)
+            max_tool_response_length = 10000  # 10K chars ≈ 2.5K tokens
+            # Import with alias to avoid UnboundLocalError (Python sees it as local if imported in function)
+            import src.utils.json_utils as json_utils_module
+            sanitized_tool_content = json_utils_module.sanitize_tool_response(
+                str(tool_content), 
+                max_length=max_tool_response_length,
+                compress_arrays=True
+            )
             tool_results.append(f"### Tool: {tool_name}\n\n{sanitized_tool_content}")
             tool_calls_info.append(f"{tool_name}: {len(tool_content)}→{len(sanitized_tool_content)} chars")
         
@@ -1626,7 +2525,22 @@ async def _execute_agent_step(
         combined_result = response_content
     
     # Final sanitization pass on combined result to ensure it's within limits
-    combined_result = sanitize_tool_response(str(combined_result))
+    # Use model-aware max_length based on token limit
+    # Reserve 30% for prompt, use remaining for execution result
+    if token_limit:
+        max_execution_result_length = int((token_limit * 0.7) * 4)  # 70% of tokens * 4 chars/token
+        max_execution_result_length = min(max_execution_result_length, 50000)  # Cap at 50K chars
+    else:
+        max_execution_result_length = 20000  # Default 20K chars ≈ 5K tokens
+    
+    # Use module import to avoid UnboundLocalError
+    import src.utils.json_utils as json_utils_module
+    combined_result = json_utils_module.sanitize_tool_response(
+        str(combined_result),
+        max_length=max_execution_result_length,
+        compress_arrays=True
+    )
+    logger.info(f"[{agent_name}] Final execution result length: {len(combined_result)} chars (max={max_execution_result_length}, token_limit={token_limit})")
     
     logger.debug(f"{agent_name.capitalize()} full response: {combined_result[:500]}...")
 
@@ -1674,15 +2588,23 @@ async def _execute_agent_step(
     sys.stderr.write(f"🔄 Updated plan has {completed_count} completed steps out of {len(updated_plan.steps)}\n")
     sys.stderr.flush()
     
+    # Include optimization messages if they exist
+    return_messages = [
+        AIMessage(
+            content=response_content,
+            name=agent_name,
+        )
+    ]
+    optimization_messages = state.get("_optimization_messages", [])
+    if optimization_messages:
+        return_messages = optimization_messages + return_messages
+        # Clear from state after use
+        state.pop("_optimization_messages", None)
+    
     # CRITICAL: Include updated_plan in the update to ensure LangGraph persists the state change
     return Command(
         update={
-            "messages": [
-                AIMessage(
-                    content=response_content,
-                    name=agent_name,
-                )
-            ],
+            "messages": return_messages,
             "observations": observations + [response_content],
             "current_step_index": current_step_index,  # Update step progress
             "current_plan": updated_plan,  # Include new plan object with updated step execution_res
@@ -1884,6 +2806,75 @@ async def _setup_and_execute_agent_step(
                     f"Available tools: {[tool.name for tool in all_tools]}"
                 )
             
+            # CRITICAL: Wrap MCP tools with truncation to prevent token overflow
+            from src.utils.json_utils import sanitize_tool_response
+            from langchain_core.tools import BaseTool
+            import inspect
+            
+            def wrap_mcp_tool_with_truncation(tool: BaseTool, max_tokens: int = 1000) -> BaseTool:
+                """Wrap an MCP tool to truncate its output to prevent token overflow."""
+                max_chars = max_tokens * 4  # 4 chars per token
+                
+                # Get the original tool function
+                if hasattr(tool, 'func'):
+                    original_func = tool.func
+                elif hasattr(tool, '_run'):
+                    original_func = tool._run
+                else:
+                    return tool  # Can't wrap, return as-is
+                
+                # Check if it's async
+                is_async = inspect.iscoroutinefunction(original_func)
+                
+                if is_async:
+                    async def truncated_func(*args, **kwargs):
+                        result = await original_func(*args, **kwargs)
+                        result_str = str(result)
+                        original_len = len(result_str)
+                        
+                        if original_len > max_chars:
+                            logger.warning(
+                                f"[{agent_type}] 🔍 MCP Tool '{tool.name}' returned {original_len:,} chars "
+                                f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
+                            )
+                            result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
+                            final_len = len(result_str)
+                            logger.info(
+                                f"[{agent_type}] ✅ MCP Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                                f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
+                            )
+                        return result_str
+                    
+                    if hasattr(tool, 'func'):
+                        tool.func = truncated_func
+                    elif hasattr(tool, '_run'):
+                        tool._run = truncated_func
+                else:
+                    def truncated_func(*args, **kwargs):
+                        result = original_func(*args, **kwargs)
+                        result_str = str(result)
+                        original_len = len(result_str)
+                        
+                        if original_len > max_chars:
+                            logger.warning(
+                                f"[{agent_type}] 🔍 MCP Tool '{tool.name}' returned {original_len:,} chars "
+                                f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
+                            )
+                            result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
+                            final_len = len(result_str)
+                            logger.info(
+                                f"[{agent_type}] ✅ MCP Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                                f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
+                            )
+                        return result_str
+                    
+                    if hasattr(tool, 'func'):
+                        tool.func = truncated_func
+                    elif hasattr(tool, '_run'):
+                        tool._run = truncated_func
+                
+                return tool
+            
             added_count = 0
             list_my_tasks_added = False
             for tool in all_tools:
@@ -1894,13 +2885,15 @@ async def _setup_and_execute_agent_step(
                     tool.description = (
                         f"Powered by '{server_name}'.\n{tool.description}"
                     )
+                    # CRITICAL: Wrap tool with truncation before adding
+                    tool = wrap_mcp_tool_with_truncation(tool, max_tokens=1000)
                     loaded_tools.append(tool)
                     added_count += 1
                     if tool.name == "list_my_tasks":
                         list_my_tasks_added = True
                     logger.info(
                         f"[{agent_type}] Added MCP tool: {tool.name} "
-                        f"(from {server_name})"
+                        f"(from {server_name}, with truncation)"
                     )
             
             import sys
@@ -1926,16 +2919,94 @@ async def _setup_and_execute_agent_step(
                 f"[{agent_type}] Failed to load MCP tools: {e}",
                 exc_info=True
             )
-            # CRITICAL: Do NOT fall back to default tools - this causes AI to hallucinate data
-            # Instead, raise an error so the user knows PM tools aren't available
-            raise RuntimeError(
-                f"Failed to load PM tools from MCP server: {e}. "
-                "Cannot proceed without PM tools as this would cause AI to generate fake data. "
-                "Please ensure the MCP server is running and accessible."
+            # Instead of raising RuntimeError (which stops the workflow), handle gracefully
+            # by creating an error step and routing to reporter
+            error_message = (
+                f"[ERROR] Failed to load PM tools from MCP server: {e}. "
+                "Cannot proceed without PM tools. Please ensure the MCP server is running and accessible."
+            )
+            logger.error(error_message)
+            
+            # Get current plan and mark current step as failed
+            current_plan = state.get("current_plan")
+            if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps'):
+                from src.prompts.planner_model import Step, Plan
+                
+                # Find first incomplete step
+                current_step_idx = None
+                for idx, step in enumerate(current_plan.steps):
+                    if not step.execution_res:
+                        current_step_idx = idx
+                        break
+                
+                if current_step_idx is not None:
+                    # Mark step as failed
+                    updated_step = Step(
+                        need_search=current_plan.steps[current_step_idx].need_search,
+                        title=current_plan.steps[current_step_idx].title,
+                        description=current_plan.steps[current_step_idx].description,
+                        step_type=current_plan.steps[current_step_idx].step_type,
+                        execution_res=error_message,
+                    )
+                    updated_steps = list(current_plan.steps)
+                    updated_steps[current_step_idx] = updated_step
+                    updated_plan = Plan(
+                        locale=current_plan.locale,
+                        has_enough_context=current_plan.has_enough_context,
+                        thought=current_plan.thought,
+                        title=current_plan.title,
+                        steps=updated_steps,
+                    )
+                    
+                    # Check if all steps are done (including failed ones)
+                    all_done = all(step.execution_res for step in updated_plan.steps)
+                    return Command(
+                        update={
+                            "messages": [HumanMessage(content=error_message, name=agent_type)],
+                            "observations": state.get("observations", []) + [error_message],
+                            "current_plan": updated_plan,
+                        },
+                        goto="reporter" if all_done else "research_team",
+                    )
+            
+            # Fallback: route to reporter with error
+            return Command(
+                update={
+                    "messages": [HumanMessage(content=error_message, name=agent_type)],
+                    "observations": state.get("observations", []) + [error_message],
+                },
+                goto="reporter",
             )
 
-        llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP[agent_type])
-        pre_model_hook = partial(ContextManager(llm_token_limit, 3).compress_messages)
+        # Use agent-specific context strategy for better compression
+        # Account for frontend history to coordinate token budgets
+        from src.utils.agent_context_config import get_context_manager_for_agent
+        
+        # Extract frontend history messages for token budgeting
+        frontend_count = state.get("frontend_history_message_count", 0)
+        all_messages = list(state.get("messages", []))
+        
+        # Frontend history is the first N messages (before agent's additions)
+        frontend_messages = all_messages[:frontend_count] if frontend_count > 0 else []
+        
+        # Get context manager with adjusted token limit
+        context_manager = get_context_manager_for_agent(
+            agent_type,
+            frontend_history_messages=frontend_messages
+        )
+        
+        # Create pre_model_hook that captures optimization metadata
+        # Store optimization messages in state for later inclusion in Command return
+        def compress_with_tracking(state_dict):
+            compressed = context_manager.compress_messages(state_dict)
+            optimization_metadata = compressed.get("_context_optimization") if isinstance(compressed, dict) else None
+            if optimization_metadata:
+                opt_messages = _add_context_optimization_tool_call(state, agent_type, optimization_metadata)
+                if opt_messages:
+                    state["_optimization_messages"] = opt_messages
+            return compressed
+        
+        pre_model_hook = compress_with_tracking
         agent = create_agent(
             agent_type,
             agent_type,
@@ -1947,17 +3018,88 @@ async def _setup_and_execute_agent_step(
         return await _execute_agent_step(state, agent, agent_type)
     else:
         # Use default tools if no MCP servers are configured
-        llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP[agent_type])
-        pre_model_hook = partial(ContextManager(llm_token_limit, 3).compress_messages)
-        agent = create_agent(
-            agent_type,
-            agent_type,
-            default_tools,
-            agent_type,
-            pre_model_hook,
-            interrupt_before_tools=configurable.interrupt_before_tools,
-        )
-        return await _execute_agent_step(state, agent, agent_type)
+        try:
+            llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP[agent_type])
+            context_manager_default = ContextManager(llm_token_limit, 3, agent_type=agent_type)
+            
+            # Create pre_model_hook that captures optimization metadata
+            # Store optimization messages in state for later inclusion in Command return
+            def compress_with_tracking_default(state_dict):
+                compressed = context_manager_default.compress_messages(state_dict)
+                optimization_metadata = compressed.get("_context_optimization") if isinstance(compressed, dict) else None
+                if optimization_metadata:
+                    opt_messages = _add_context_optimization_tool_call(state, agent_type, optimization_metadata)
+                    if opt_messages:
+                        state["_optimization_messages"] = opt_messages
+                return compressed
+            
+            pre_model_hook = compress_with_tracking_default
+            agent = create_agent(
+                agent_type,
+                agent_type,
+                default_tools,
+                agent_type,
+                pre_model_hook,
+                interrupt_before_tools=configurable.interrupt_before_tools,
+            )
+            return await _execute_agent_step(state, agent, agent_type)
+        except Exception as e:
+            logger.error(
+                f"[{agent_type}] Failed to create agent or execute step: {e}",
+                exc_info=True
+            )
+            # Handle error gracefully by marking step as failed and routing appropriately
+            error_message = f"[ERROR] {agent_type.capitalize()} agent failed: {str(e)}"
+            
+            current_plan = state.get("current_plan")
+            if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps'):
+                from src.prompts.planner_model import Step, Plan
+                
+                # Find first incomplete step
+                current_step_idx = None
+                for idx, step in enumerate(current_plan.steps):
+                    if not step.execution_res:
+                        current_step_idx = idx
+                        break
+                
+                if current_step_idx is not None:
+                    # Mark step as failed
+                    updated_step = Step(
+                        need_search=current_plan.steps[current_step_idx].need_search,
+                        title=current_plan.steps[current_step_idx].title,
+                        description=current_plan.steps[current_step_idx].description,
+                        step_type=current_plan.steps[current_step_idx].step_type,
+                        execution_res=error_message,
+                    )
+                    updated_steps = list(current_plan.steps)
+                    updated_steps[current_step_idx] = updated_step
+                    updated_plan = Plan(
+                        locale=current_plan.locale,
+                        has_enough_context=current_plan.has_enough_context,
+                        thought=current_plan.thought,
+                        title=current_plan.title,
+                        steps=updated_steps,
+                    )
+                    
+                    # Check if all steps are done (including failed ones)
+                    all_done = all(step.execution_res for step in updated_plan.steps)
+                    return Command(
+                        update={
+                            "messages": [HumanMessage(content=error_message, name=agent_type)],
+                            "observations": state.get("observations", []) + [error_message],
+                            "current_plan": updated_plan,
+                        },
+                        goto="reporter" if all_done else "research_team",
+                    )
+            
+            # Fallback: route to reporter with error
+            return Command(
+                update={
+                    "messages": [HumanMessage(content=error_message, name=agent_type)],
+                    "observations": state.get("observations", []) + [error_message],
+                },
+                goto="reporter",
+            )
 
 
 async def researcher_node(
@@ -2041,6 +3183,1819 @@ async def coder_node(
     )
 
 
+def validator_node(state: State, config: RunnableConfig) -> Command:
+    """
+    Validates the last executed step and decides next action.
+    
+    Uses LLM to analyze execution results and determine if the step succeeded,
+    partially succeeded, or failed. Routes accordingly:
+    - success/partial: Continue to next step (research_team)
+    - failure: Route to reflection for replanning
+    """
+    logger.info("[VALIDATOR] Validating last executed step")
+    
+    current_plan = state.get("current_plan")
+    current_step_index = state.get("current_step_index", 0)
+    
+    # Get the step that was just executed
+    if not current_plan or isinstance(current_plan, str):
+        logger.warning("[VALIDATOR] No valid plan found, routing to research_team")
+        return Command(goto="research_team")
+    
+    # CRITICAL: Check if reporter already completed (prevent infinite loop)
+    if state.get("final_report"):
+        logger.info("[VALIDATOR] Reporter already completed (final_report exists). Workflow should end.")
+        # Don't route anywhere - let the graph edge handle END
+        return Command(
+            update={
+                "validation_results": state.get("validation_results", [])
+            },
+            goto="__end__"  # Route to END to stop the workflow
+        )
+    
+    # CRITICAL: Check if all steps are complete FIRST (before finding last completed step)
+    # This prevents the validator from processing steps that are already all done
+    all_steps_complete = all(step.execution_res for step in current_plan.steps) if current_plan.steps else False
+    if all_steps_complete:
+        # CRITICAL: Check if reporter already completed BEFORE routing to reporter
+        if state.get("final_report"):
+            logger.info(f"[VALIDATOR] 🔍 DEBUG: All {len(current_plan.steps)} steps complete, but reporter already finished. Routing to __end__.")
+            return Command(
+                update={
+                    "validation_results": state.get("validation_results", [])
+                },
+                goto="__end__"  # Don't route to reporter if it's already done
+            )
+        logger.info(f"[VALIDATOR] 🔍 DEBUG: All {len(current_plan.steps)} steps already have execution_res. Routing directly to reporter.")
+        return Command(
+            update={
+                "validation_results": state.get("validation_results", [])
+            },
+            goto="reporter"
+        )
+    
+    if not current_plan.steps or current_step_index >= len(current_plan.steps):
+        logger.info("[VALIDATOR] No steps or step index out of range, routing to reporter")
+        return Command(goto="reporter")
+    
+    # Find the most recently completed step
+    last_completed_step = None
+    last_completed_idx = None
+    for idx, step in enumerate(current_plan.steps):
+        if step.execution_res:
+            last_completed_step = step
+            last_completed_idx = idx
+    
+    if not last_completed_step:
+        logger.warning("[VALIDATOR] No completed steps found, routing to research_team")
+        return Command(goto="research_team")
+    
+    execution_res = last_completed_step.execution_res
+    
+    # Quick check for obvious errors
+    execution_str = str(execution_res).lower()
+    has_error_indicators = any(indicator in execution_str[:500] for indicator in [
+        "[error]", "error:", "failed:", "exception:", 
+        "traceback", "invalid", "uuid", "syntax error"
+    ])
+    
+    # Use LLM to validate result for non-obvious cases
+    try:
+        validation_prompt = f"""Analyze if this step execution succeeded:
+
+**Step Title:** {last_completed_step.title}
+**Step Description:** {last_completed_step.description}
+
+**Execution Result (first 1000 chars):**
+{str(execution_res)[:1000]}
+
+**Analysis Required:**
+1. Did it achieve the intended goal?
+2. Is the output valid and useful?
+3. Are there any errors or critical issues?
+
+**Respond with ONLY valid JSON:**
+{{
+    "status": "success" | "partial" | "failure",
+    "reason": "brief explanation (max 100 chars)",
+    "should_retry": true | false,
+    "suggested_fix": "what to do differently (max 200 chars)"
+}}
+
+IMPORTANT: Your response must be ONLY the JSON object, no other text."""
+
+        llm = get_llm_by_type("basic")
+        validation_result = llm.invoke(validation_prompt)
+        validation_content = validation_result.content.strip()
+        
+        # Extract JSON from response
+        json_match = re.search(r'\{.*\}', validation_content, re.DOTALL)
+        if json_match:
+            validation = json.loads(json_match.group(0))
+        else:
+            # Fallback if LLM didn't return JSON
+            logger.warning("[VALIDATOR] LLM didn't return valid JSON, using heuristic")
+            if has_error_indicators:
+                validation = {
+                    "status": "failure",
+                    "reason": "Detected error indicators in execution result",
+                    "should_retry": True,
+                    "suggested_fix": "Fix the error and retry"
+                }
+            else:
+                validation = {
+                    "status": "success",
+                    "reason": "No obvious errors detected",
+                    "should_retry": False,
+                    "suggested_fix": ""
+                }
+    
+    except Exception as e:
+        logger.error(f"[VALIDATOR] Error during validation: {e}", exc_info=True)
+        # Default to success if validation fails
+        validation = {
+            "status": "success",
+            "reason": "Validation failed, assuming success",
+            "should_retry": False,
+            "suggested_fix": ""
+        }
+    
+    # Log validation result
+    logger.info(f"[VALIDATOR] Step '{last_completed_step.title}' validation: {validation['status']} - {validation['reason']}")
+    
+    # Route based on validation
+    validation_results = state.get("validation_results", [])
+    validation_results.append({
+        "step_index": last_completed_idx,
+        "step_title": last_completed_step.title,
+        **validation
+    })
+    
+    if validation["status"] == "success":
+        logger.info(f"[VALIDATOR] ✅ Step '{last_completed_step.title}' validated successfully")
+        
+        # CRITICAL: Check if all steps are now complete (double-check to prevent loops)
+        all_steps_complete = all(step.execution_res for step in current_plan.steps)
+        completed_count = sum(1 for step in current_plan.steps if step.execution_res)
+        total_steps = len(current_plan.steps)
+        
+        logger.info(
+            f"[VALIDATOR] 🔍 DEBUG: Step completion status - "
+            f"Completed: {completed_count}/{total_steps}, "
+            f"All complete: {all_steps_complete}"
+        )
+        
+        if all_steps_complete:
+            logger.info(f"[VALIDATOR] ✅ All {total_steps} steps completed and validated! Routing to reporter.")
+            return Command(
+                update={
+                    "validation_results": validation_results,
+                    "retry_count": 0  # Reset retry count on success
+                },
+                goto="reporter"
+            )
+        
+        # Not all steps complete, continue to next step
+        logger.info(f"[VALIDATOR] 🔄 Continuing to next step ({completed_count + 1}/{total_steps})")
+        return Command(
+            update={
+                "validation_results": validation_results,
+                "retry_count": 0  # Reset retry count on success
+            },
+            goto="research_team"
+        )
+    
+    elif validation["status"] == "partial":
+        logger.warning(f"[VALIDATOR] ⚠️ Step partially successful: {validation['reason']}")
+        return Command(
+            update={
+                "validation_results": validation_results,
+                "retry_count": 0  # Reset retry count on partial success
+            },
+            goto="research_team"
+        )
+    
+    else:  # failure
+        logger.error(f"[VALIDATOR] ❌ Step failed: {validation['reason']}")
+        
+        retry_count = state.get("retry_count", 0)
+        max_retries = 2  # Max 2 retries before replanning
+        plan_iterations = state.get("plan_iterations", 0)
+        max_replan_iterations = state.get("max_replan_iterations", 3)
+        
+        # Check if should retry or replan
+        if validation["should_retry"] and retry_count < max_retries:
+            # Retry same step - clear execution_res to mark as incomplete
+            logger.info(f"[VALIDATOR] 🔄 Retrying step (attempt {retry_count + 1}/{max_retries})")
+            
+            # Clear the failed step's execution_res so it gets retried
+            from src.prompts.planner_model import Step, Plan
+            updated_steps = list(current_plan.steps)
+            updated_steps[last_completed_idx] = Step(
+                need_search=last_completed_step.need_search,
+                title=last_completed_step.title,
+                description=last_completed_step.description,
+                step_type=last_completed_step.step_type,
+                execution_res=None  # Clear to retry
+            )
+            
+            updated_plan = Plan(
+                locale=current_plan.locale,
+                has_enough_context=current_plan.has_enough_context,
+                thought=current_plan.thought,
+                title=current_plan.title,
+                steps=updated_steps
+            )
+            
+            return Command(
+                update={
+                    "retry_count": retry_count + 1,
+                    "validation_results": validation_results,
+                    "current_plan": updated_plan,
+                    "current_step_index": last_completed_idx  # Go back to retry
+                },
+                goto="research_team"
+            )
+        
+        elif plan_iterations < max_replan_iterations:
+            # Need to replan - route to reflection
+            logger.warning(f"[VALIDATOR] 🤔 Routing to reflector for replanning (iteration {plan_iterations + 1}/{max_replan_iterations})")
+            logger.warning(f"[VALIDATOR] Failure reason: {validation.get('reason', 'Unknown')}")
+            logger.warning(f"[VALIDATOR] Suggested fix: {validation.get('suggested_fix', 'None')}")
+            
+            # NOTE: Don't update retry_count here - let reflection_node handle it to avoid state conflicts
+            return Command(
+                update={
+                    "validation_results": validation_results,
+                    "replan_reason": validation["reason"],
+                    # retry_count will be reset by reflection_node
+                },
+                goto="reflector"
+            )
+        else:
+            # Max replanning iterations reached, continue anyway
+            logger.error(f"[VALIDATOR] ⚠️ Max replan iterations reached ({plan_iterations}/{max_replan_iterations}), continuing to reporter")
+            logger.error(f"[VALIDATOR] Final failure reason: {validation.get('reason', 'Unknown')}")
+            return Command(
+                update={
+                    "validation_results": validation_results
+                },
+                goto="reporter"
+            )
+
+
+def reflection_node(state: State, config: RunnableConfig) -> Command:
+    """
+    Reflects on failed execution and provides context for replanning.
+    
+    Analyzes what went wrong, why it failed, and suggests alternative approaches.
+    Routes back to planner with reflection context.
+    """
+    logger.info("[REFLECTION] Analyzing failure and preparing for replan")
+    
+    current_plan = state.get("current_plan")
+    validation_results = state.get("validation_results", [])
+    replan_reason = state.get("replan_reason", "Unknown failure")
+    plan_iterations = state.get("plan_iterations", 0)
+    
+    if not current_plan or isinstance(current_plan, str):
+        logger.error("[REFLECTION] No valid plan to reflect on, routing to planner")
+        return Command(
+            update={"plan_iterations": plan_iterations + 1},
+            goto="planner"
+        )
+    
+    # Build reflection context
+    steps_summary = []
+    for idx, step in enumerate(current_plan.steps):
+        step_info = {
+            "index": idx + 1,
+            "title": step.title,
+            "status": "completed" if step.execution_res else "pending"
+        }
+        if step.execution_res:
+            # Include first 300 chars of result
+            result_preview = str(step.execution_res)[:300]
+            step_info["result_preview"] = result_preview
+        steps_summary.append(step_info)
+    
+    # Get failed validations
+    failed_validations = [v for v in validation_results if v.get("status") == "failure"]
+    
+    reflection_prompt = f"""Reflect on why the current plan failed and suggest a better approach.
+
+**Original Plan:** {current_plan.title}
+**Plan Thought:** {current_plan.thought}
+
+**Steps Executed:**
+{json.dumps(steps_summary, indent=2)}
+
+**Failed Validations:**
+{json.dumps(failed_validations, indent=2)}
+
+**Primary Failure Reason:** {replan_reason}
+
+**Reflection Task:**
+1. Identify the root cause of failure
+2. Explain why the current approach didn't work
+3. Suggest a specific alternative approach
+4. Identify any missing information needed
+
+**CRITICAL:** If the failure is due to using the wrong sprint number (e.g., Sprint 8 instead of Sprint 10), 
+you MUST suggest explicitly looking up the sprint by NAME/NUMBER in the list_sprints results, 
+not by index position. The new plan should include clear instructions to:
+- Call list_sprints() first
+- Search the results for the specific sprint number/name (e.g., "Sprint 10")
+- Extract the correct sprint_id (UUID) from the matching sprint
+- Use that exact sprint_id in all subsequent calls
+
+**Provide a concise reflection (max 500 words) that will help create a better plan.**
+"""
+    
+    try:
+        llm = get_llm_by_type("basic")
+        reflection_result = llm.invoke(reflection_prompt)
+        reflection_content = reflection_result.content
+        
+        logger.info(f"[REFLECTION] Generated reflection ({len(reflection_content)} chars)")
+        logger.debug(f"[REFLECTION] Content preview: {reflection_content[:200]}...")
+        
+    except Exception as e:
+        logger.error(f"[REFLECTION] Error generating reflection: {e}", exc_info=True)
+        reflection_content = f"Failed to generate detailed reflection. Reason: {replan_reason}. Suggested: Try a different approach or break into smaller steps."
+    
+    # Route back to planner with reflection context
+    return Command(
+        update={
+            "reflection": reflection_content,
+            "plan_iterations": plan_iterations + 1,
+            "retry_count": 0  # Reset retry count for new plan
+        },
+        goto="planner"
+    )
+
+
+async def react_agent_node(
+    state: State, config: RunnableConfig
+) -> Command[Literal["planner", "reporter"]]:
+    """
+    Fast ReAct agent for simple queries with auto-escalation.
+    
+    Uses ReAct pattern (Reasoning + Acting) for quick execution.
+    Automatically escalates to full pipeline if:
+    - Too many iterations (>8)
+    - Repeated errors (>2)
+    - Agent explicitly requests planning
+    
+    This is the optimistic fast path for 80% of queries.
+    """
+    logger.info("[REACT-AGENT] 🚀 Starting fast ReAct agent")
+    
+    configurable = Configuration.from_runnable_config(config)
+    
+    # Load PM tools + web_search for background investigation
+    try:
+        from src.tools.pm_tools import get_pm_tools
+        from src.tools.search import get_web_search_tool
+        from src.utils.json_utils import sanitize_tool_response
+        from langchain_core.tools import BaseTool
+        
+        # Get PM tools (synchronous function, no config needed)
+        pm_tools = get_pm_tools()
+        
+        # Add web search tool for background investigation when needed
+        search_tool = get_web_search_tool(
+            configurable.max_search_results,
+            provider_id=configurable.search_provider
+        )
+        
+        # CRITICAL FIX: Wrap all tools to truncate large outputs before they enter the scratchpad
+        # This prevents 329K token accumulation in the agent's scratchpad
+        import asyncio
+        import inspect
+        
+        def wrap_tool_with_truncation(tool: BaseTool, max_tokens: int = 1000) -> BaseTool:
+            """Wrap a tool to truncate its output and track usage in Cursor-style tracker.
+            
+            CRITICAL: Using 1000 tokens (4000 chars) per tool result to prevent accumulation.
+            Even with 3 iterations, max accumulation = 3K tokens, which is safe.
+            
+            Also tracks usage in Cursor-style context tracker for auto-optimization.
+            """
+            from src.utils.cursor_style_context_tracker import get_global_tracker
+            
+            # Check if tool has func attribute (for @tool decorated functions)
+            if hasattr(tool, 'func'):
+                original_func = tool.func
+                is_async = inspect.iscoroutinefunction(original_func)
+                
+                if is_async:
+                    async def truncated_func(*args, **kwargs):
+                        result = await original_func(*args, **kwargs)
+                        result_str = str(result)
+                        max_chars = max_tokens * 4  # 1000 tokens = 4000 chars
+                        original_len = len(result_str)
+                        
+                        # Estimate tokens (rough: 4 chars per token)
+                        estimated_tokens = original_len // 4
+                        
+                        # Track usage in Cursor-style tracker
+                        tracker = get_global_tracker()
+                        if tracker:
+                            tool_name = f"tool_{tool.name}"
+                            needs_optimize, reason = tracker.record_usage(tool_name, estimated_tokens)
+                            if needs_optimize:
+                                logger.debug(
+                                    f"[REACT-AGENT] 🔍 Tool '{tool.name}' usage triggered optimization check: {reason}"
+                                )
+                        
+                        if original_len > max_chars:
+                            logger.warning(
+                                f"[REACT-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
+                                f"(≈{estimated_tokens:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
+                            )
+                            result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
+                            final_len = len(result_str)
+                            logger.info(
+                                f"[REACT-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                                f"(≈{estimated_tokens:,} → ≈{final_len//4:,} tokens)"
+                            )
+                        else:
+                            logger.debug(f"[REACT-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                        return result_str
+                    tool.func = truncated_func
+                else:
+                    def truncated_func(*args, **kwargs):
+                        from src.utils.cursor_style_context_tracker import get_global_tracker
+                        result = original_func(*args, **kwargs)
+                        result_str = str(result)
+                        max_chars = max_tokens * 4  # 1000 tokens = 4000 chars
+                        original_len = len(result_str)
+                        estimated_tokens = original_len // 4
+                        
+                        # Track usage in Cursor-style tracker
+                        tracker = get_global_tracker()
+                        if tracker:
+                            tool_name = f"tool_{tool.name}"
+                            tracker.record_usage(tool_name, estimated_tokens)
+                        
+                        if original_len > max_chars:
+                            logger.warning(
+                                f"[REACT-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
+                                f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
+                            )
+                            result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
+                            final_len = len(result_str)
+                            logger.info(
+                                f"[REACT-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                                f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
+                            )
+                        else:
+                            logger.debug(f"[REACT-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                        return result_str
+                    tool.func = truncated_func
+            # Check if tool has _arun method (for BaseTool subclasses)
+            elif hasattr(tool, '_arun'):
+                original_arun = tool._arun
+                async def truncated_arun(*args, **kwargs):
+                    from src.utils.cursor_style_context_tracker import get_global_tracker
+                    result = await original_arun(*args, **kwargs)
+                    result_str = str(result)
+                    max_chars = max_tokens * 4  # 1000 tokens = 4000 chars
+                    original_len = len(result_str)
+                    estimated_tokens = original_len // 4
+                    
+                    # Track usage in Cursor-style tracker
+                    tracker = get_global_tracker()
+                    if tracker:
+                        tool_name = f"tool_{tool.name}"
+                        tracker.record_usage(tool_name, estimated_tokens)
+                    
+                    if original_len > max_chars:
+                        logger.warning(
+                            f"[REACT-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
+                            f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
+                        )
+                        result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
+                        final_len = len(result_str)
+                        logger.info(
+                            f"[REACT-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                            f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
+                        )
+                    else:
+                        logger.debug(f"[REACT-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                    return result_str
+                tool._arun = truncated_arun
+            # Check if tool has _run method (for BaseTool subclasses)
+            elif hasattr(tool, '_run'):
+                original_run = tool._run
+                def truncated_run(*args, **kwargs):
+                    from src.utils.cursor_style_context_tracker import get_global_tracker
+                    result = original_run(*args, **kwargs)
+                    result_str = str(result)
+                    max_chars = max_tokens * 4  # 1000 tokens = 4000 chars
+                    original_len = len(result_str)
+                    estimated_tokens = original_len // 4
+                    
+                    # Track usage in Cursor-style tracker
+                    tracker = get_global_tracker()
+                    if tracker:
+                        tool_name = f"tool_{tool.name}"
+                        tracker.record_usage(tool_name, estimated_tokens)
+                    
+                    if original_len > max_chars:
+                        logger.warning(
+                            f"[REACT-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
+                            f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
+                        )
+                        result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
+                        final_len = len(result_str)
+                        logger.info(
+                            f"[REACT-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                            f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
+                        )
+                    else:
+                        logger.debug(f"[REACT-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                    return result_str
+                tool._run = truncated_run
+            else:
+                logger.warning(f"[REACT-AGENT] ⚠️ Tool '{tool.name}' has no func/_run/_arun attribute. Cannot wrap for truncation.")
+            
+            return tool
+        
+        # Wrap all tools to truncate outputs - VERY AGGRESSIVE: 1000 tokens per tool (was 2000)
+        # This prevents scratchpad from accumulating too many tokens
+        # With 3 max iterations, max accumulation = 3K tokens, which is safe
+        wrapped_pm_tools = [wrap_tool_with_truncation(tool, max_tokens=1000) for tool in pm_tools]
+        wrapped_search_tool = wrap_tool_with_truncation(search_tool, max_tokens=1000)
+        
+        tools = wrapped_pm_tools + [wrapped_search_tool]
+        logger.info(f"[REACT-AGENT] Loaded {len(pm_tools)} PM tools + web_search (all wrapped with truncation)")
+    except Exception as e:
+        logger.error(f"[REACT-AGENT] Failed to load tools: {e}", exc_info=True)
+        # Escalate if tools fail
+        return Command(
+            update={"escalation_reason": "tool_loading_failed"},
+            goto="planner"
+        )
+    
+    # Get user query
+    user_query = state.get("research_topic") or get_message_content(state["messages"][-1])
+    project_id = state.get("project_id", "")
+    
+    logger.info(f"[REACT-AGENT] Query: {user_query[:100]}...")
+    logger.info(f"[REACT-AGENT] Project ID: {project_id}")
+    logger.info(f"[REACT-AGENT] Available tools: {len(tools)}")
+    
+    # CRITICAL: Apply ADAPTIVE context compression (based on model's context window)
+    # ReAct was trying to send 331K tokens! Need to compress conversation history
+    from src.utils.adaptive_context_config import get_adaptive_context_manager
+    from src.llms.llm import get_llm_token_limit_by_type
+    
+    # Extract frontend history for token budgeting
+    frontend_count = state.get("frontend_history_message_count", 0)
+    all_messages = list(state.get("messages", []))
+    frontend_messages = all_messages[:frontend_count] if frontend_count > 0 else []
+    
+    # Get model's context limit
+    model_context_limit = get_llm_token_limit_by_type("basic") or 16385
+    
+    # Get adaptive context manager (uses 35% of model's context for ReAct)
+    logger.info(
+        f"[REACT-AGENT] 🔍 DEBUG: Creating context manager - "
+        f"agent_type=react_agent, "
+        f"model_context_limit={model_context_limit:,}, "
+        f"frontend_messages={len(frontend_messages)}"
+    )
+    context_manager = get_adaptive_context_manager(
+        agent_type="react_agent",
+        model_name="gpt-3.5-turbo",  # Will be replaced by actual model
+        model_context_limit=model_context_limit,
+        frontend_history_messages=frontend_messages
+    )
+    logger.info(
+        f"[REACT-AGENT] 🔍 DEBUG: Context manager created - "
+        f"token_limit={context_manager.token_limit}, "
+        f"compression_mode={context_manager.compression_mode}, "
+        f"preserve_prefix={context_manager.preserve_prefix_message_count}"
+    )
+    
+    # Get actual model name early (needed for token counting before compression)
+    from langgraph.prebuilt import create_react_agent
+    llm = get_llm_by_type("basic")
+    
+    # Try to get model name from LLM instance (do this early so it's available for context compression)
+    try:
+        actual_model_name = getattr(llm, 'model_name', None) or getattr(llm, 'model', None) or "gpt-3.5-turbo"
+    except:
+        actual_model_name = "gpt-3.5-turbo"
+    
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Model name determined: {actual_model_name}")
+    
+    # Compress the state to fit in ReAct's budget
+    # ReAct only needs: current query + recent context (not full history)
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Starting context compression. Original messages: {len(all_messages)}")
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: ContextManager token_limit: {context_manager.token_limit}")
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: ContextManager compression_mode: {context_manager.compression_mode}")
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: ContextManager agent_type: {context_manager.agent_type}")
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: State type: {type(state)}, has 'messages' key: {'messages' in state if isinstance(state, dict) else 'N/A'}")
+    
+    # Count tokens BEFORE compression to see if we're over limit
+    try:
+        pre_compression_tokens = context_manager.count_tokens(all_messages, model=actual_model_name)
+        is_over = context_manager.is_over_limit(all_messages)
+        logger.info(
+            f"[REACT-AGENT] 🔍 DEBUG: BEFORE compression - "
+            f"Token count: {pre_compression_tokens:,}, "
+            f"Token limit: {context_manager.token_limit:,}, "
+            f"Is over limit: {is_over}"
+        )
+    except Exception as e:
+        logger.warning(f"[REACT-AGENT] 🔍 DEBUG: Failed to count tokens before compression: {e}")
+    
+    compressed_state = context_manager.compress_messages(state)
+    
+    # Extract compressed messages (CRITICAL FIX: Actually use the compressed state!)
+    compressed_messages = compressed_state.get("messages", [])
+    optimization_metadata = compressed_state.get("_context_optimization")
+    
+    logger.info(
+        f"[REACT-AGENT] 🔍 DEBUG: Context compression complete. "
+        f"Original: {len(all_messages)} messages, "
+        f"Compressed: {len(compressed_messages)} messages"
+    )
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Optimization metadata: {optimization_metadata}")
+    if optimization_metadata:
+        logger.info(
+            f"[REACT-AGENT] 🔍 DEBUG: Compression details - "
+            f"Compressed: {optimization_metadata.get('compressed', False)}, "
+            f"Original tokens: {optimization_metadata.get('original_tokens', 0):,}, "
+            f"Compressed tokens: {optimization_metadata.get('compressed_tokens', 0):,}, "
+            f"Ratio: {optimization_metadata.get('compression_ratio', 1.0):.2%}, "
+            f"Strategy: {optimization_metadata.get('strategy', 'unknown')}"
+        )
+    else:
+        logger.error(f"[REACT-AGENT] 🚨 CRITICAL: No optimization metadata returned! This means compression didn't work!")
+    
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Using model: {actual_model_name}, Model limit: {model_context_limit:,} tokens")
+    
+    # Count tokens in compressed messages
+    compressed_token_count = context_manager.count_tokens(compressed_messages, model=actual_model_name)
+    original_token_count = context_manager.count_tokens(all_messages, model=actual_model_name)
+    
+    logger.info(
+        f"[REACT-AGENT] 🔍 DEBUG: Token counts - "
+        f"Original: {original_token_count:,} tokens, "
+        f"Compressed: {compressed_token_count:,} tokens, "
+        f"Model limit: {model_context_limit:,} tokens, "
+        f"ReAct budget (35%): {int(model_context_limit * 0.35):,} tokens"
+    )
+    
+    # Estimate total tokens that will be sent to LLM
+    # ReAct agent sends: system prompt + tool descriptions + query + agent scratchpad
+    # Estimate: prompt (~2K) + tools (~5K) + query (~100) + scratchpad (~1K) = ~8K base
+    estimated_prompt_tokens = 2000  # System prompt
+    estimated_tool_tokens = len(tools) * 200  # ~200 tokens per tool description
+    estimated_query_tokens = len(user_query) // 4  # Rough estimate
+    estimated_base_tokens = estimated_prompt_tokens + estimated_tool_tokens + estimated_query_tokens + 1000  # Buffer
+    
+    # IMPORTANT: LangChain's ReAct agent is stateless - it doesn't use chat history in the prompt
+    # However, we still check if the compressed messages would fit if they were included
+    # This is a safety check in case the LLM somehow accesses the full state
+    total_estimated_tokens = estimated_base_tokens + compressed_token_count
+    
+    logger.info(
+        f"[REACT-AGENT] 🔍 DEBUG: Token estimation - "
+        f"Base (prompt+tools+query): ~{estimated_base_tokens:,} tokens, "
+        f"With compressed messages: ~{total_estimated_tokens:,} tokens, "
+        f"Model limit: {model_context_limit:,} tokens"
+    )
+    
+    # PRE-FLIGHT CHECK: Check against both context limit AND TPM rate limit
+    # TPM (Tokens Per Minute) limits are often lower than context limits
+    # For gpt-3.5-turbo: Context limit = 16,385, TPM limit = 200,000
+    # For gpt-4o-mini: Context limit = 128,000, TPM limit = 2,000,000
+    # We need to be conservative because tool results accumulate in scratchpad
+    
+    # Get TPM limit based on model (default to 200K for gpt-3.5-turbo)
+    tpm_limit = 200000  # Default TPM limit
+    if "gpt-4o" in actual_model_name.lower() or "gpt-4" in actual_model_name.lower():
+        tpm_limit = 2000000  # GPT-4 models have higher TPM
+    elif "gpt-3.5" in actual_model_name.lower():
+        tpm_limit = 200000  # GPT-3.5-turbo TPM limit
+    
+    # Use the MORE restrictive limit (context or TPM)
+    effective_limit = min(model_context_limit, tpm_limit)
+    
+    # INTELLIGENT PRE-FLIGHT CHECK:
+    # 1. If base tokens (without tool accumulation) are already > 80% of limit, escalate
+    # 2. If base tokens + realistic tool accumulation > limit, escalate
+    # 3. Don't use overly conservative 30% threshold - that's too aggressive
+    
+    # Realistic tool accumulation: 3 iterations * 1000 tokens = 3K tokens (no 2x safety factor)
+    # Tool truncation limits each tool result to 1000 tokens max
+    realistic_tool_accumulation = 3 * 1000  # 3K tokens (realistic max with truncation)
+    
+    # Check 1: Base tokens already too high?
+    base_token_threshold = int(effective_limit * 0.80)  # 80% of limit
+    if total_estimated_tokens > base_token_threshold:
+        logger.warning(
+            f"[REACT-AGENT] ⚠️ PRE-FLIGHT CHECK FAILED: "
+            f"Base estimated tokens ({total_estimated_tokens:,}) exceed 80% of limit ({base_token_threshold:,}). "
+            f"Escalating to planner."
+        )
+        return Command(
+            update={
+                "escalation_reason": f"token_limit_exceeded_base: estimated={total_estimated_tokens}, threshold={base_token_threshold}, limit={effective_limit}",
+                "partial_result": f"Context too large ({total_estimated_tokens:,} tokens estimated, limit: {effective_limit:,}). Escalating to full pipeline.",
+                "goto": "planner"
+            },
+            goto="planner"
+        )
+    
+    # Check 2: Base + realistic tool accumulation > limit?
+    total_with_realistic_tools = total_estimated_tokens + realistic_tool_accumulation
+    if total_with_realistic_tools > effective_limit:
+        logger.warning(
+            f"[REACT-AGENT] ⚠️ PRE-FLIGHT CHECK FAILED: "
+            f"Estimated tokens ({total_estimated_tokens:,}) + realistic tool accumulation ({realistic_tool_accumulation:,}) = {total_with_realistic_tools:,} "
+            f"exceeds effective limit ({effective_limit:,}). "
+            f"Escalating to planner."
+        )
+        return Command(
+            update={
+                "escalation_reason": f"token_limit_exceeded_with_tools: estimated={total_estimated_tokens}, with_tools={total_with_realistic_tools}, limit={effective_limit}",
+                "partial_result": f"Context too large ({total_estimated_tokens:,} tokens estimated, with tool accumulation: {total_with_realistic_tools:,}). Escalating to full pipeline.",
+                "goto": "planner"
+            },
+            goto="planner"
+        )
+    
+    logger.info(
+        f"[REACT-AGENT] ✅ PRE-FLIGHT CHECK PASSED: "
+        f"Base tokens ({total_estimated_tokens:,}) < 80% threshold ({base_token_threshold:,}), "
+        f"and with realistic tool accumulation ({total_with_realistic_tools:,}) < limit ({effective_limit:,})"
+    )
+    
+    # Create context optimization tool call messages
+    optimization_messages = []
+    if optimization_metadata:
+        optimization_messages = _add_context_optimization_tool_call(state, "react_agent", optimization_metadata)
+        logger.info(f"[REACT-AGENT] 🔍 DEBUG: Created {len(optimization_messages)} optimization messages")
+    
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Created LLM instance: {type(llm).__name__}")
+    
+    # ReAct prompt - ENHANCED with explicit tool name format and project_id context
+    project_id_context = ""
+    if project_id:
+        project_id_context = f"""
+
+**🚨 CRITICAL: PROJECT ID IS ALREADY PROVIDED**
+- **Project ID:** {project_id}
+- **DO NOT call `list_projects`** - the project is already identified!
+- **If you need project details:** Use `get_project` with project_id: {project_id}
+- **For sprint/task queries:** Use the project_id directly in tool calls (e.g., `list_sprints` with project_id)
+- **Only call `list_projects`** if the user explicitly asks to list/search all projects by name
+- **For "analyse sprint X" queries:** Use the provided project_id directly - no need to search for projects!
+"""
+    
+    react_prompt_template = """You are a helpful PM assistant with access to project management tools.
+
+Answer the user's question using the available tools.
+
+**CRITICAL: Tool Name Format**
+- Tool names do NOT have parentheses: use `list_sprints` NOT `list_sprints()`
+- Tool names do NOT have parentheses: use `get_sprint` NOT `get_sprint()`
+- Tool names do NOT have parentheses: use `list_projects` NOT `list_projects()`
+- Always use the EXACT tool name as shown in the "Available tools" section below
+
+Use this format:
+
+Thought: Think about what you need to do
+Action: tool_name
+Action Input: {{"{{"arg1": "value1", "arg2": "value2"}}}}
+Observation: [result will be shown here]
+
+... (repeat Thought/Action/Observation as needed)
+
+Thought: I now know the final answer
+Final Answer: [your answer here]
+
+**EXAMPLES OF CORRECT TOOL CALLS:**
+
+✅ CORRECT - When project_id is provided (USE IT DIRECTLY, don't call list_projects):
+Action: list_sprints
+Action Input: {{"{{"project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:495"}}}}
+(Use the project_id from context - see "CURRENT PROJECT ID" section above)
+
+✅ CORRECT - Get project details when project_id is provided:
+Action: get_project
+Action Input: {{"{{"project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:495"}}}}
+(Use get_project to get project name/details if needed, NOT list_projects)
+
+✅ CORRECT - Sprint report with provided project_id:
+Action: sprint_report
+Action Input: {{"{{"sprint_id": "e6890ea6-0c3c-4a83-aa05-41b223df3284", "project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:495"}}}}
+
+✅ CORRECT - Only when project_id is NOT provided and you need to search by name:
+Action: list_projects
+Action Input: {{"{{"}}}}
+(Only use this if you need to search for a project by name)
+
+❌ WRONG - Calling list_projects when project_id is already provided:
+Action: list_projects
+Action Input: {{"{{"}}}}
+(If project_id is provided in context, use it directly - don't call list_projects!)
+
+❌ WRONG (has parentheses):
+Action: list_sprints()
+Action Input: {{"{{"project_id": "project_id"}}}}
+
+❌ WRONG (placeholder values):
+Action: list_sprints
+Action Input: {{"{{"project_id": "project_id"}}}}
+
+CRITICAL WORKFLOW RULES:
+1. **Tool Name Format (CRITICAL!):**
+   - Tool names are WITHOUT parentheses: `list_sprints`, `get_sprint`, `list_projects`
+   - ❌ NEVER use: `list_sprints()`, `get_sprint()`, `list_projects()`
+   - ✅ ALWAYS use: `list_sprints`, `get_sprint`, `list_projects`
+   - Check the "Available tools" section for exact tool names
+
+**⚠️ CRITICAL: COMPRESSED RESULTS - DO NOT RETRY!**
+- Tool results may be compressed/truncated to fit token limits
+- If you see "[NOTE: Result was intelligently compressed..." in a tool response, this is NORMAL
+- **For `list_projects`**: Even when compressed, ALL project IDs and names are preserved - you can search through all projects
+- **For other tools**: Compressed results contain summaries or samples, but are still COMPLETE for the task
+- The compressed result IS COMPLETE - use the provided data as-is
+- ❌ DO NOT retry the same tool call expecting different/more results
+- ❌ DO NOT assume compressed results are incomplete or errors
+- ✅ Search through the provided data - if you don't find what you need, it doesn't exist (don't retry)
+
+2. **Project ID Usage (CRITICAL!):**
+   - **IF PROJECT_ID IS PROVIDED IN CONTEXT:**
+     - ✅ **USE IT DIRECTLY** - do NOT call `list_projects`
+     - ✅ Use `get_project(project_id)` if you need project details (name, description, etc.)
+     - ✅ Use the project_id directly in other tools (e.g., `list_sprints(project_id)`)
+     - ❌ **DO NOT call `list_projects`** - it's unnecessary and wastes tokens
+   - **IF PROJECT_ID IS NOT PROVIDED:**
+     - If user mentions a project NAME (e.g., "HD Saison"), call `list_projects` to search
+     - Search through the projects array for the project name (case-insensitive)
+     - Extract the actual project_id (UUID format) from the matching project
+     - If you don't find the project, it doesn't exist - don't retry `list_projects`
+   - ❌ NEVER use placeholder strings like "project_id" or "sprint_id"
+   - ✅ ALWAYS use actual UUIDs from tool results
+
+3. **Sprint Analysis Workflow:**
+   - **IF PROJECT_ID IS PROVIDED:**
+     - ✅ Skip Step 1 - use the provided project_id directly
+     - Step 2: Call `list_sprints` with the provided project_id
+     - Step 3: Search sprint results for sprint number (e.g., "Sprint 4" → find sprint with "4" in name/number)
+     - Step 4: Extract the sprint_id (UUID format) from matching sprint
+     - Step 5: Call `sprint_report` with sprint_id and project_id
+   - **IF PROJECT_ID IS NOT PROVIDED:**
+     - Step 1: Call `list_projects` to find project_id (only if needed)
+     - Step 2-5: Same as above
+   - ❌ NEVER pass sprint names like "Sprint 4" directly to sprint_report!
+   - ✅ ALWAYS lookup sprint_id first, then call sprint_report
+
+4. **Tool Input Format:**
+   - Use VALID JSON in Action Input
+   - Use actual UUIDs from tool results, NOT placeholder strings
+   - Example: {{"{{"project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478"}}}}
+   - ❌ BAD: {{"{{"project_id": "project_id"}}}} (placeholder!)
+   - ❌ BAD: {{"{{"sprint_id": "sprint_id"}}}} (placeholder!)
+   - ✅ GOOD: {{"{{"sprint_id": "e6890ea6-0c3c-4a83-aa05-41b223df3284"}}}}
+
+5. **Error Handling:**
+   - If you get "tool not found" errors, check tool name (no parentheses!)
+   - If you get 404 errors, verify you're using correct UUIDs (not placeholders)
+   - If no sprints found, verify project_id is correct
+   - If format errors occur, ensure Action and Action Input are on separate lines
+   - ONLY say "This requires detailed planning" if task is truly complex
+   - Simple sprint analysis → Answer directly!
+
+6. **Web Search (Optional):**
+   - Use web_search ONLY for external context (best practices, benchmarks)
+   - Don't use it for PM data retrieval
+
+{project_id_context}
+
+Available tools:
+{tools}
+
+Tool names: {tool_names}
+
+Question: {input}
+
+{agent_scratchpad}"""
+    
+    # LangGraph uses state_modifier function instead of PromptTemplate
+    # The state_modifier will be defined when creating the agent graph below
+    
+    # DEBUG: Log tool names for verification
+    tool_names_list = [tool.name for tool in tools]
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Available tool names: {tool_names_list}")
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Project ID in context: {project_id if project_id else 'None'}")
+    logger.info(f"[REACT-AGENT] 🔍 DEBUG: User query: {user_query}")
+    
+    # CRITICAL FIX: Monitor scratchpad token usage with callback
+    # Callbacks can't modify prompts, but we can detect when scratchpad is too large
+    # and escalate to planner before hitting rate limits
+    from langchain_core.callbacks import BaseCallbackHandler
+    
+    class ScratchpadTokenMonitor(BaseCallbackHandler):
+        """Monitor scratchpad token usage and escalate if too large."""
+        
+        def __init__(self, model_name, max_scratchpad_tokens=10000):
+            super().__init__()
+            self.model_name = model_name
+            self.max_scratchpad_tokens = max_scratchpad_tokens
+            self.prompt_tokens = []
+            self.should_escalate = False
+        
+        def on_llm_start(self, serialized, prompts, **kwargs):
+            """Monitor prompt tokens before LLM call."""
+            if not prompts:
+                return
+            
+            try:
+                import tiktoken
+                try:
+                    encoding = tiktoken.encoding_for_model(self.model_name)
+                except:
+                    encoding = tiktoken.get_encoding("cl100k_base")
+                
+                prompt_text = prompts[0] if isinstance(prompts[0], str) else str(prompts[0])
+                prompt_tokens = len(encoding.encode(prompt_text))
+                self.prompt_tokens.append(prompt_tokens)
+                
+                if prompt_tokens > self.max_scratchpad_tokens:
+                    logger.error(
+                        f"[REACT-AGENT] 🚨 CRITICAL: Scratchpad too large: {prompt_tokens:,} tokens "
+                        f"(limit: {self.max_scratchpad_tokens:,}). Tool truncation is NOT working!"
+                    )
+                    self.should_escalate = True
+                else:
+                    logger.debug(
+                        f"[REACT-AGENT] 🔍 Scratchpad token count: {prompt_tokens:,} tokens "
+                        f"(limit: {self.max_scratchpad_tokens:,})"
+                    )
+            except Exception as e:
+                logger.error(f"[REACT-AGENT] ❌ Error monitoring scratchpad: {e}")
+    
+    # Create callback to monitor scratchpad
+    scratchpad_monitor = ScratchpadTokenMonitor(
+        model_name=actual_model_name,
+        max_scratchpad_tokens=10000  # Max 10K tokens for scratchpad (should be safe with tool truncation)
+    )
+    
+    # Create LangGraph ReAct agent (returns a graph, not an executor)
+    # LangGraph provides better scratchpad control and context management
+    # Based on src/agents/agents.py, LangGraph's create_react_agent uses 'prompt' parameter
+    # The prompt function receives state and should return messages (typically via apply_prompt_template)
+    # But we have a custom prompt template, so we'll format it directly
+    
+    # Format the prompt template
+    formatted_template = react_prompt_template.replace("{project_id_context}", project_id_context)
+    
+    # Create prompt function for LangGraph
+    # CRITICAL: LangGraph's create_react_agent uses STRUCTURED TOOL CALLING, not text-based ReAct format!
+    # The LLM should use tool calls directly, not "Action: tool_name" text format.
+    # We need a simpler system prompt that doesn't confuse the LLM.
+    def react_prompt_func(state: dict):
+        """Prompt function for LangGraph - returns simple system prompt for tool calling."""
+        # LangGraph handles tool calling automatically, so we just need a simple system prompt
+        # Include project_id context if available
+        system_prompt = f"""You are a helpful PM assistant with access to project management tools.
+
+{project_id_context}
+
+Use the available tools to answer the user's question. When you need to use a tool, call it directly using the tool calling feature.
+
+**Important Notes:**
+- Tool names do NOT have parentheses: use `list_sprints` NOT `list_sprints()`
+- If project_id is provided in context, use it directly
+- If user mentions a project NAME, first call `list_projects` to find the project_id
+- Always use actual UUIDs from tool results, not placeholder strings
+- For sprint analysis: first find project_id, then list_sprints, then get sprint_id, then sprint_report
+
+Available tools:
+{chr(10).join([f"- {tool.name}: {tool.description}" for tool in tools])}
+
+Answer the user's question using the tools as needed."""
+        
+        # Return as SystemMessage (LangGraph expects list of messages to prepend)
+        from langchain_core.messages import SystemMessage
+        return [SystemMessage(content=system_prompt)]
+    
+    # CRITICAL: Use LangGraph's native pre_model_hook with Cursor-style context tracking
+    # This tracks cumulative usage across all tools/agents and auto-optimizes at 100%
+    def react_pre_model_hook(state: dict):
+        """
+        LangGraph pre_model_hook: Cursor-style context optimization.
+        
+        - Tracks cumulative usage across all tools/agents
+        - Auto-optimizes when reaching 100%
+        - Allocates context as percentages (like Cursor)
+        """
+        from src.utils.cursor_style_context_tracker import get_global_tracker
+        
+        # Get messages from state
+        messages = state.get("messages", [])
+        if not messages:
+            return state
+        
+        # Get or create Cursor-style tracker
+        tracker = get_global_tracker()
+        if not tracker:
+            # Create tracker if it doesn't exist (first call in request)
+            from src.utils.cursor_style_context_tracker import create_tracker_for_request
+            tracker = create_tracker_for_request(model_context_limit)
+            
+            # Allocate percentages to agents/tools (Cursor-style)
+            from src.utils.adaptive_context_config import get_agent_strategy
+            strategy = get_agent_strategy("react_agent")
+            tracker.allocate(
+                "react_agent",
+                strategy.get("token_percent", 0.35),
+                "ReAct agent context"
+            )
+            # Allocate for tools (each tool gets a small percentage)
+            for tool in tools:
+                tracker.allocate(
+                    f"tool_{tool.name}",
+                    0.05,  # 5% per tool (adjust as needed)
+                    f"Tool: {tool.name}"
+                )
+        
+        # Count tokens in current messages
+        try:
+            token_count = context_manager.count_tokens(messages, model=actual_model_name)
+            
+            # Record usage in tracker
+            needs_optimize, reason = tracker.record_usage("react_agent", token_count, messages)
+            
+            # Check if we should optimize
+            should_optimize, optimize_reason = tracker.should_optimize()
+            
+            if should_optimize:
+                logger.info(
+                    f"[REACT-AGENT] 🔄 Cursor-style auto-optimization triggered: {optimize_reason}"
+                )
+                # Perform optimization
+                opt_metadata = tracker.optimize(context_manager)
+                logger.info(
+                    f"[REACT-AGENT] ✅ Optimization complete - "
+                    f"Freed {opt_metadata.get('freed_tokens', 0):,} tokens, "
+                    f"Usage: {opt_metadata.get('usage_percentage', 0):.0%}"
+                )
+                
+                # Compress messages after optimization
+                compressed_state = context_manager.compress_messages({"messages": messages})
+                if isinstance(compressed_state, dict):
+                    compressed_messages = compressed_state.get("messages", [])
+                    if compressed_messages:
+                        logger.debug(
+                            f"[REACT-AGENT] 🔍 pre_model_hook: Compressed {len(messages)} → {len(compressed_messages)} messages "
+                            f"({token_count:,} → {context_manager.count_tokens(compressed_messages, model=actual_model_name):,} tokens)"
+                        )
+                        state["messages"] = compressed_messages
+            else:
+                # Normal compression (if over limit)
+                if context_manager.is_over_limit(messages):
+                    compressed_state = context_manager.compress_messages({"messages": messages})
+                    if isinstance(compressed_state, dict):
+                        compressed_messages = compressed_state.get("messages", [])
+                        if compressed_messages:
+                            logger.debug(
+                                f"[REACT-AGENT] 🔍 pre_model_hook: Compressed {len(messages)} → {len(compressed_messages)} messages"
+                            )
+                            state["messages"] = compressed_messages
+                
+                # Log usage status
+                usage_pct = tracker.get_total_usage_percentage()
+                if usage_pct > 0.5:  # Log if usage > 50%
+                    logger.debug(
+                        f"[REACT-AGENT] 📊 Context usage: {usage_pct:.0%} "
+                        f"({tracker.total_used:,}/{tracker.total_limit:,} tokens)"
+                    )
+                    
+        except Exception as e:
+            logger.warning(f"[REACT-AGENT] ⚠️ pre_model_hook failed: {e}")
+            # Continue with original messages if tracking fails
+        
+        return state
+    
+    agent_graph = create_react_agent(
+        model=llm,
+        tools=tools,
+        prompt=react_prompt_func,  # LangGraph uses 'prompt' parameter (function that returns messages)
+        pre_model_hook=react_pre_model_hook,  # ✅ Use LangGraph's native context optimization!
+        interrupt_before=[],  # No interrupts needed for fast path
+        checkpointer=None,  # No checkpointing for fast path
+    )
+    
+    logger.info("[REACT-AGENT] ✅ Created LangGraph ReAct agent (better scratchpad control)")
+    
+    # Execute ReAct loop with proper iteration limits (NOT timeout - that's a bad workaround)
+    # LangGraph's recursion_limit properly stops the agent after N iterations
+    # This is better than timeout because it doesn't interrupt legitimate processing
+    try:
+        logger.info(f"[REACT-AGENT] 🔍 DEBUG: Starting executor.ainvoke() with query: {user_query[:100]}...")
+        logger.info(f"[REACT-AGENT] 🔍 DEBUG: Using compressed messages: {len(compressed_messages)} messages ({compressed_token_count:,} tokens)")
+        
+        try:
+            # DEBUG: Log what we're about to send
+            logger.info(
+                f"[REACT-AGENT] 🔍 DEBUG: About to call executor.ainvoke() with:\n"
+                f"  - input: {user_query[:200]}...\n"
+                f"  - state messages count: {len(all_messages)}\n"
+                f"  - compressed messages count: {len(compressed_messages)}\n"
+                f"  - compressed tokens: {compressed_token_count:,}\n"
+                f"  - NOTE: LangGraph agent manages scratchpad internally with better control"
+            )
+            
+            # LangGraph agent expects state dict with "messages" key
+            # Use compressed messages (pre_model_hook will further optimize if needed)
+            from langchain_core.messages import HumanMessage
+            # Include compressed context + current query
+            # pre_model_hook will optimize this further before each model call
+            agent_state = {
+                "messages": compressed_messages + [HumanMessage(content=user_query)]
+            }
+            
+            # Invoke LangGraph agent (returns state dict, not executor result)
+            # Use recursion_limit to prevent infinite loops (NOT timeout - that's a bad workaround)
+            # recursion_limit controls max iterations, which is the proper way to limit ReAct loops
+            recursion_limit = 8  # Same as our escalation threshold - allows complex queries but prevents loops
+            logger.info(f"[REACT-AGENT] 🔍 Starting LangGraph agent.ainvoke() with recursion_limit={recursion_limit}")
+            result_state = await agent_graph.ainvoke(
+                agent_state, 
+                config={
+                    "callbacks": [scratchpad_monitor],
+                    "recursion_limit": recursion_limit  # Proper iteration limit, not timeout
+                }
+            )
+            
+            # Extract result from LangGraph state
+            # LangGraph returns state with "messages" containing the final response
+            result_messages = result_state.get("messages", [])
+            logger.info(f"[REACT-AGENT] 🔍 DEBUG: LangGraph returned state with {len(result_messages)} messages")
+            logger.info(f"[REACT-AGENT] 🔍 DEBUG: State keys: {list(result_state.keys())}")
+            
+            if result_messages:
+                # Get the last AI message as the output
+                last_message = result_messages[-1]
+                if hasattr(last_message, 'content'):
+                    output = last_message.content
+                else:
+                    output = str(last_message)
+            else:
+                output = ""
+            
+            # Extract intermediate steps from LangGraph state
+            # LangGraph stores tool calls and results in messages
+            # Cursor-style: Extract "Thought" (reasoning) before tool calls
+            intermediate_steps = []
+            thoughts = []  # Store thoughts separately for Cursor-style display
+            logger.info(f"[REACT-AGENT] 🔍 DEBUG: Extracting intermediate steps from {len(result_messages)} messages")
+            
+            # Debug: Log message types (use INFO level so it shows up)
+            for i, msg in enumerate(result_messages):
+                msg_type = type(msg).__name__
+                has_tool_calls = hasattr(msg, 'tool_calls') and bool(msg.tool_calls)
+                has_tool_call_id = hasattr(msg, 'tool_call_id') and bool(msg.tool_call_id)
+                tool_calls_count = len(msg.tool_calls) if hasattr(msg, 'tool_calls') and msg.tool_calls else 0
+                content_preview = str(getattr(msg, 'content', ''))[:200] if hasattr(msg, 'content') else 'N/A'
+                # Check for reasoning_content in additional_kwargs (LangGraph might store it there)
+                reasoning = getattr(msg, 'additional_kwargs', {}).get('reasoning_content', '') if hasattr(msg, 'additional_kwargs') else ''
+                logger.info(
+                    f"[REACT-AGENT] 🔍 Message {i}: type={msg_type}, "
+                    f"has_tool_calls={has_tool_calls} ({tool_calls_count} calls), "
+                    f"has_tool_call_id={has_tool_call_id}, "
+                    f"content_len={len(str(getattr(msg, 'content', '')))}, "
+                    f"content_preview={content_preview[:100]}..., "
+                    f"reasoning_content={bool(reasoning)}"
+                )
+            
+            for i, msg in enumerate(result_messages):
+                if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    # This is a tool-calling message
+                    logger.info(f"[REACT-AGENT] 🔍 Found tool-calling message at index {i} with {len(msg.tool_calls)} tool calls")
+                    
+                    # Cursor-style: Extract "Thought" from AIMessage content before tool calls
+                    # LangGraph's structured tool calling may store reasoning in different places
+                    thought_text = None
+                    
+                    # Method 1: Check additional_kwargs for reasoning_content (LangGraph/OpenAI format)
+                    if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+                        reasoning_content = msg.additional_kwargs.get('reasoning_content', '')
+                        if reasoning_content and isinstance(reasoning_content, str):
+                            thought_text = reasoning_content.strip()
+                            logger.info(f"[REACT-AGENT] 💭 Found reasoning_content in additional_kwargs: {len(thought_text)} chars")
+                    
+                    # Method 2: Check AIMessage content (text-based ReAct format)
+                    if not thought_text:
+                        msg_content = getattr(msg, 'content', '') or ''
+                        if msg_content and isinstance(msg_content, str):
+                            # Try to extract thought/reasoning from content
+                            # Common patterns: "Thought:", "I need to", "Let me", etc.
+                            if "Thought:" in msg_content:
+                                # Extract text after "Thought:"
+                                thought_match = msg_content.split("Thought:")[-1].split("Action:")[0].strip()
+                                if thought_match:
+                                    thought_text = thought_match
+                            elif msg_content and not msg_content.startswith("Question:"):
+                                # If content exists and isn't just a question, treat it as reasoning
+                                # Limit to first 200 chars to avoid including tool call details
+                                thought_text = msg_content[:200].strip()
+                                if len(msg_content) > 200:
+                                    thought_text += "..."
+                    
+                    # Method 3: Generate a thought based on tool being called (fallback)
+                    if not thought_text and msg.tool_calls:
+                        # Create a simple thought based on the tool being called
+                        tool_names = [tc.get('name') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown') for tc in msg.tool_calls]
+                        if tool_names:
+                            thought_text = f"I need to use {', '.join(tool_names)} to answer the user's question."
+                            logger.info(f"[REACT-AGENT] 💭 Generated fallback thought based on tool calls: {tool_names}")
+                    
+                    if thought_text:
+                        thoughts.append({
+                            "thought": thought_text,
+                            "before_tool": True,
+                            "step_index": len(intermediate_steps)
+                        })
+                        logger.info(f"[REACT-AGENT] 💭 Extracted thought: {thought_text[:100]}...")
+                    else:
+                        logger.debug(f"[REACT-AGENT] 💭 No thought found in message {i} (content empty, no reasoning_content, no tool_calls)")
+                    
+                    for tool_call in msg.tool_calls:
+                        tool_call_id = tool_call.get('id') if isinstance(tool_call, dict) else getattr(tool_call, 'id', None)
+                        tool_name = tool_call.get('name') if isinstance(tool_call, dict) else getattr(tool_call, 'name', 'unknown')
+                        logger.debug(f"[REACT-AGENT] 🔍 Looking for tool result for call_id={tool_call_id}, tool={tool_name}")
+                        
+                        # Find corresponding tool result in subsequent messages
+                        tool_result = None
+                        for j in range(i + 1, len(result_messages)):
+                            result_msg = result_messages[j]
+                            result_tool_call_id = getattr(result_msg, 'tool_call_id', None)
+                            if result_tool_call_id == tool_call_id:
+                                tool_result = result_msg.content if hasattr(result_msg, 'content') else str(result_msg)
+                                logger.debug(f"[REACT-AGENT] 🔍 Found tool result for {tool_name} at index {j}")
+                                break
+                        
+                        if tool_result:
+                            # Create a tuple compatible with AgentExecutor format
+                            # AgentExecutor uses (AgentAction, observation) tuples
+                            from langchain_core.agents import AgentAction
+                            action = AgentAction(
+                                tool=tool_name,
+                                tool_input=tool_call.get('args', {}) if isinstance(tool_call, dict) else getattr(tool_call, 'args', {}),
+                                log=f"Tool: {tool_name}"
+                            )
+                            intermediate_steps.append((action, tool_result))
+                        else:
+                            logger.warning(f"[REACT-AGENT] ⚠️ No tool result found for {tool_name} (call_id={tool_call_id})")
+            
+            # Store thoughts in result for frontend display
+            if thoughts:
+                logger.info(f"[REACT-AGENT] 💭 Extracted {len(thoughts)} thought(s) for Cursor-style display")
+            
+            logger.info(f"[REACT-AGENT] 🔍 Extracted {len(intermediate_steps)} intermediate steps")
+            
+            # Create result dict compatible with existing code
+            result = {
+                "output": output,
+                "intermediate_steps": intermediate_steps,
+                "thoughts": thoughts  # Cursor-style: Include thoughts for UI display
+            }
+            
+            # Check if scratchpad monitor detected issues
+            if scratchpad_monitor.should_escalate:
+                output = result.get("output", "")
+                logger.error(
+                    f"[REACT-AGENT] 🚨 Escalating to planner: Scratchpad exceeded token limit. "
+                    f"Max prompt tokens: {max(scratchpad_monitor.prompt_tokens) if scratchpad_monitor.prompt_tokens else 0:,}"
+                )
+                return Command(
+                    update={
+                        "escalation_reason": f"scratchpad_too_large: max_tokens={max(scratchpad_monitor.prompt_tokens) if scratchpad_monitor.prompt_tokens else 0}",
+                        "react_attempts": intermediate_steps,
+                        "react_thoughts": thoughts,  # Preserve thoughts when escalating
+                        "partial_result": output or "ReAct agent scratchpad exceeded token limit. Escalating to full pipeline.",
+                        "goto": "planner"
+                    },
+                    goto="planner"
+                )
+            
+            logger.info(f"[REACT-AGENT] 🔍 DEBUG: LangGraph agent.ainvoke() completed successfully")
+            if scratchpad_monitor.prompt_tokens:
+                logger.info(
+                    f"[REACT-AGENT] 🔍 Scratchpad token usage: "
+                    f"min={min(scratchpad_monitor.prompt_tokens):,}, "
+                    f"max={max(scratchpad_monitor.prompt_tokens):,}, "
+                    f"avg={sum(scratchpad_monitor.prompt_tokens)//len(scratchpad_monitor.prompt_tokens):,}"
+                )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"[REACT-AGENT] ⏱️ TIMEOUT: LangGraph agent.ainvoke() exceeded 60 second timeout. "
+                f"Escalating to planner. This may indicate the agent is looping or taking too long."
+            )
+            
+            # Extract any intermediate steps that were completed before timeout
+            # This allows tool calls to still show in the UI even if ReAct times out
+            partial_intermediate_steps = []
+            partial_thoughts = []
+            try:
+                # Try to extract partial results from result_state if available
+                if 'result_state' in locals() and result_state:
+                    result_messages = result_state.get("messages", [])
+                    # Extract any tool calls that were made before timeout
+                    for i, msg in enumerate(result_messages):
+                        if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                            # Extract thoughts if available
+                            if i > 0:
+                                prev_msg = result_messages[i-1]
+                                if isinstance(prev_msg, AIMessage) and hasattr(prev_msg, 'content'):
+                                    thought_match = re.search(r"Thought:\s*(.*)", prev_msg.content, re.DOTALL)
+                                    if thought_match:
+                                        partial_thoughts.append({
+                                            "thought": thought_match.group(1).strip(),
+                                            "step_index": len(partial_intermediate_steps) + 1
+                                        })
+                            
+                            # Extract tool calls
+                            for tool_call in msg.tool_calls:
+                                tool_call_id = tool_call.get('id') if isinstance(tool_call, dict) else getattr(tool_call, 'id', None)
+                                tool_name = tool_call.get('name') if isinstance(tool_call, dict) else getattr(tool_call, 'name', 'unknown')
+                                
+                                # Find corresponding tool result
+                                tool_result = None
+                                for j in range(i + 1, len(result_messages)):
+                                    result_msg = result_messages[j]
+                                    result_tool_call_id = getattr(result_msg, 'tool_call_id', None)
+                                    if result_tool_call_id == tool_call_id:
+                                        tool_result = result_msg.content if hasattr(result_msg, 'content') else str(result_msg)
+                                        break
+                                
+                                if tool_result:
+                                    from langchain_core.agents import AgentAction
+                                    action = AgentAction(
+                                        tool=tool_name,
+                                        tool_input=tool_call.get('args', {}) if isinstance(tool_call, dict) else getattr(tool_call, 'args', {}),
+                                        log=f"Tool: {tool_name}"
+                                    )
+                                    partial_intermediate_steps.append((action, tool_result))
+            except Exception as extract_error:
+                logger.warning(f"[REACT-AGENT] Failed to extract partial steps on timeout: {extract_error}")
+            
+            # Convert partial intermediate steps to messages for frontend display
+            tool_call_messages = []
+            if partial_intermediate_steps:
+                logger.info(f"[REACT-AGENT] 🔧 Converting {len(partial_intermediate_steps)} partial intermediate steps to tool call messages")
+                import uuid
+                from langchain_core.messages import AIMessage, ToolMessage
+                
+                for step_idx, step in enumerate(partial_intermediate_steps):
+                    if isinstance(step, (list, tuple)) and len(step) >= 2:
+                        action = step[0]
+                        observation = step[1]
+                        tool_name = getattr(action, 'tool', None) or (action.tool if hasattr(action, 'tool') else 'unknown')
+                        tool_input = getattr(action, 'tool_input', None) or (action.tool_input if hasattr(action, 'tool_input') else {})
+                        tool_call_id = f"react_call_{uuid.uuid4().hex[:8]}_{step_idx}"
+                        
+                        tool_call_msg = AIMessage(
+                            content="",
+                            name="react_agent",
+                            tool_calls=[{
+                                "id": tool_call_id,
+                                "name": tool_name,
+                                "args": tool_input if isinstance(tool_input, dict) else {}
+                            }]
+                        )
+                        tool_call_messages.append(tool_call_msg)
+                        
+                        tool_result_msg = ToolMessage(
+                            content=str(observation)[:10000],
+                            tool_call_id=tool_call_id,
+                            name=tool_name
+                        )
+                        tool_call_messages.append(tool_result_msg)
+            
+            return_messages = tool_call_messages if tool_call_messages else []
+            
+            return Command(
+                update={
+                    "messages": return_messages,
+                    "escalation_reason": "executor_timeout",
+                    "react_intermediate_steps": partial_intermediate_steps,
+                    "react_thoughts": partial_thoughts,  # Preserve thoughts even on timeout
+                    "partial_result": "ReAct agent execution timed out. Escalating to full pipeline.",
+                    "goto": "planner"
+                },
+                goto="planner"
+            )
+        
+        output = result.get("output", "")
+        intermediate_steps = result.get("intermediate_steps", [])
+        
+        logger.info(f"[REACT-AGENT] Completed in {len(intermediate_steps)} iterations")
+        
+        # DEBUG: Log intermediate steps structure and token counts with DETAILED analysis
+        if intermediate_steps:
+            logger.info(f"[REACT-AGENT] 🔍 DEBUG: Intermediate steps structure: {len(intermediate_steps)} steps")
+            total_obs_tokens = 0
+            error_count = 0
+            invalid_tool_count = 0
+            placeholder_count = 0
+            
+            for idx, step in enumerate(intermediate_steps):
+                logger.info(f"[REACT-AGENT] 🔍 DEBUG: Step {idx + 1}: type={type(step)}, len={len(step) if isinstance(step, (list, tuple)) else 'N/A'}")
+                if isinstance(step, (list, tuple)) and len(step) >= 2:
+                    action = step[0]
+                    observation = step[1]
+                    
+                    # Extract tool name and input from action
+                    tool_name = None
+                    tool_input = None
+                    if hasattr(action, 'tool'):
+                        tool_name = action.tool
+                    elif hasattr(action, 'tool_input'):
+                        tool_input = action.tool_input
+                    
+                    # Check for common errors
+                    obs_str = str(observation)
+                    obs_lower = obs_str.lower()
+                    
+                    # Check for invalid tool name (with parentheses)
+                    if tool_name and "()" in tool_name:
+                        invalid_tool_count += 1
+                        logger.error(f"[REACT-AGENT] ❌ ERROR: Step {idx + 1} - Invalid tool name with parentheses: {tool_name}")
+                    
+                    # Check for placeholder values
+                    if tool_input:
+                        tool_input_str = str(tool_input)
+                        if '"project_id": "project_id"' in tool_input_str or '"sprint_id": "sprint_id"' in tool_input_str:
+                            placeholder_count += 1
+                            logger.error(f"[REACT-AGENT] ❌ ERROR: Step {idx + 1} - Placeholder values detected: {tool_input_str[:200]}")
+                    
+                    # Check for errors in observation
+                    if any(err in obs_lower for err in ["error", "failed", "exception", "invalid", "not found", "not a valid tool"]):
+                        error_count += 1
+                        logger.warning(f"[REACT-AGENT] ⚠️ ERROR DETECTED in Step {idx + 1}: {obs_str[:300]}")
+                    
+                    action_str = str(action)[:200] if action else "None"
+                    obs_len = len(obs_str)
+                    
+                    # CRITICAL: Count tokens in observation and check if too large
+                    obs_tokens = 0
+                    try:
+                        import tiktoken
+                        try:
+                            encoding = tiktoken.encoding_for_model(actual_model_name)
+                        except:
+                            encoding = tiktoken.get_encoding("cl100k_base")
+                        obs_tokens = len(encoding.encode(obs_str))
+                        total_obs_tokens += obs_tokens
+                        
+                        # CRITICAL: Log observation size to verify truncation is working
+                        logger.info(
+                            f"[REACT-AGENT] 🔍 Step {idx + 1} observation: "
+                            f"{obs_len:,} chars, {obs_tokens:,} tokens "
+                            f"(tool: {tool_name or 'unknown'})"
+                        )
+                        
+                        # CRITICAL: Check if observation is too large (should be truncated to 1000 tokens)
+                        # If we see > 3000 tokens, the truncation wrapper might not be working
+                        if obs_tokens > 3000:
+                            logger.error(
+                                f"[REACT-AGENT] 🚨 CRITICAL: Step {idx + 1} observation has {obs_tokens:,} tokens "
+                                f"(expected max 2000). Tool truncation may not be working! Escalating immediately."
+                            )
+                            return Command(
+                                update={
+                                    "escalation_reason": f"tool_result_too_large: step_{idx+1}_has_{obs_tokens}_tokens",
+                                    "react_attempts": intermediate_steps[:idx+1],
+                                    "partial_result": output,
+                                    "goto": "planner"
+                                },
+                                goto="planner"
+                            )
+                        logger.info(
+                            f"[REACT-AGENT] 🔍 DEBUG: Step {idx + 1} - "
+                            f"Tool: {tool_name if tool_name else 'N/A'}, "
+                            f"Input: {str(tool_input)[:100] if tool_input else 'N/A'}, "
+                            f"Observation: {obs_len:,} chars, {obs_tokens:,} tokens"
+                        )
+                    except Exception as e:
+                        logger.warning(f"[REACT-AGENT] Failed to count tokens in observation: {e}")
+                        # Estimate tokens as fallback
+                        obs_tokens = obs_len // 4
+                        total_obs_tokens += obs_tokens
+                        logger.info(f"[REACT-AGENT]   Action: {action_str}")
+                        logger.info(f"[REACT-AGENT]   Observation: {obs_str[:200]}...")
+            
+            logger.info(
+                f"[REACT-AGENT] 🔍 DEBUG: Summary - "
+                f"Total steps: {len(intermediate_steps)}, "
+                f"Errors: {error_count}, "
+                f"Invalid tool names: {invalid_tool_count}, "
+                f"Placeholder values: {placeholder_count}, "
+                f"Total observation tokens: {total_obs_tokens:,}"
+            )
+            
+            # CRITICAL: Check if total observation tokens exceed safe limit
+            # If observations alone are > 10K tokens, escalate to prevent rate limit
+            safe_obs_limit = 10000  # 10K tokens for all observations combined
+            if total_obs_tokens > safe_obs_limit:
+                logger.error(
+                    f"[REACT-AGENT] 🚨 CRITICAL: Total observation tokens ({total_obs_tokens:,}) "
+                    f"exceed safe limit ({safe_obs_limit:,}). Escalating to prevent rate limit error."
+                )
+                return Command(
+                    update={
+                        "escalation_reason": f"observation_tokens_too_large: {total_obs_tokens}_tokens",
+                        "react_attempts": intermediate_steps,
+                        "partial_result": output,
+                        "goto": "planner"
+                    },
+                    goto="planner"
+                )
+            
+            # Early escalation if we detect too many errors
+            if invalid_tool_count >= 2 or placeholder_count >= 2:
+                logger.error(
+                    f"[REACT-AGENT] ❌ CRITICAL: Detected {invalid_tool_count} invalid tool names and {placeholder_count} placeholder values. "
+                    f"Escalating to planner immediately."
+                )
+                return Command(
+                    update={
+                        "escalation_reason": f"tool_format_errors: invalid_tools={invalid_tool_count}, placeholders={placeholder_count}",
+                        "partial_result": output,
+                        "goto": "planner"
+                    },
+                    goto="planner"
+                )
+        else:
+            logger.warning("[REACT-AGENT] ⚠️ No intermediate steps - agent may not have called any tools")
+        
+        # Check for escalation triggers
+        
+        # Trigger 1: Too many iterations (agent is struggling)
+        # Reasonable limit: Escalate after 8 iterations to allow complex queries
+        # Most queries need 2-4 tool calls, so 8 iterations gives plenty of room
+        if len(intermediate_steps) >= 8:
+            logger.warning(
+                f"[REACT-AGENT] ⬆️ Too many iterations ({len(intermediate_steps)} >= 8) - escalating to planner. "
+                f"This prevents infinite loops and token accumulation."
+            )
+            return Command(
+                update={
+                    "escalation_reason": f"max_iterations: {len(intermediate_steps)} iterations",
+                    "react_attempts": intermediate_steps,
+                    "react_thoughts": thoughts,  # Preserve thoughts when escalating
+                    "partial_result": output,
+                    "goto": "planner"  # Set goto in state for conditional edge
+                },
+                goto="planner"
+            )
+        
+        # Trigger 2: Multiple errors detected (lower threshold to 2)
+        error_count = 0
+        error_details = []
+        for idx, step in enumerate(intermediate_steps):
+            observation = str(step[1]) if len(step) > 1 else ""
+            obs_upper = observation.upper()
+            if any(err in obs_upper for err in ["ERROR", "FAILED", "EXCEPTION", "INVALID", "NOT FOUND", "NOT A VALID TOOL"]):
+                error_count += 1
+                error_details.append(f"Step {idx + 1}: {observation[:200]}")
+        
+        if error_count >= 2:
+            logger.warning(
+                f"[REACT-AGENT] ⬆️ Multiple errors detected ({error_count} >= 2) - escalating to planner. "
+                f"Error details: {error_details}"
+            )
+            return Command(
+                update={
+                    "escalation_reason": f"repeated_errors: {error_count} errors detected",
+                    "react_attempts": intermediate_steps,
+                    "react_thoughts": thoughts,  # Preserve thoughts when escalating
+                    "partial_result": output,
+                    "goto": "planner"  # Set goto in state for conditional edge
+                },
+                goto="planner"
+            )
+        
+        # Trigger 3: Agent explicitly requests planning
+        # ONLY escalate if agent explicitly says it needs planning
+        # Don't escalate for informational responses
+        escalation_phrases = [
+            "this requires detailed planning",
+            "i need to plan",
+            "this is a complex task that requires",
+            "this requires comprehensive analysis"
+        ]
+        if any(phrase in output.lower() for phrase in escalation_phrases):
+            logger.info("[REACT-AGENT] ⬆️ Agent requested planning - escalating")
+            return Command(
+                update={
+                    "escalation_reason": "agent_requested_planning",
+                    "react_attempts": intermediate_steps,
+                    "react_thoughts": thoughts,  # Preserve thoughts when escalating
+                    "partial_result": output,
+                    "goto": "planner"  # Set goto in state for conditional edge
+                },
+                goto="planner"
+            )
+        
+        # Trigger 4: Data too large for reporter (CRITICAL FIX!)
+        # Check if the collected data (including intermediate_steps/tool results) would exceed reporter's token limit
+        # This prevents sending huge datasets to reporter only to fail
+        
+        # Count tokens accurately using tiktoken (not rough estimates!)
+        try:
+            import tiktoken
+            
+            # Get model name for accurate token counting
+            try:
+                model_name_for_encoding = getattr(llm, 'model_name', None) or getattr(llm, 'model', None) or "gpt-3.5-turbo"
+            except:
+                model_name_for_encoding = "gpt-3.5-turbo"
+            
+            # Get encoding for the model
+            try:
+                encoding = tiktoken.encoding_for_model(model_name_for_encoding)
+            except (KeyError, ValueError):
+                # Fallback to cl100k_base for GPT-3.5/4 models
+                encoding = tiktoken.get_encoding("cl100k_base")
+            
+            # Count tokens in the ReAct output (accurate count)
+            output_tokens = len(encoding.encode(output))
+            
+            # CRITICAL: Count tokens in intermediate_steps (tool results) - this is what reporter receives!
+            intermediate_tokens = 0
+            for step in intermediate_steps:
+                if isinstance(step, (list, tuple)) and len(step) >= 2:
+                    action = step[0]
+                    observation = step[1]
+                    # Count tokens in observation (tool result) - this can be HUGE!
+                    obs_str = str(observation)
+                    intermediate_tokens += len(encoding.encode(obs_str))
+            
+            # Count tokens in current state (accurate count for context)
+            state_messages = state.get("messages", [])
+            state_tokens = 0
+            for msg in state_messages[-5:]:  # Last 5 messages for context
+                if hasattr(msg, 'content'):
+                    content_str = str(msg.content)
+                    state_tokens += len(encoding.encode(content_str))
+            
+            # Total = output + tool results + state context
+            total_estimated_tokens = output_tokens + intermediate_tokens + state_tokens
+            
+            # Get reporter's token limit (85% of model's context window)
+            from src.llms.llm import get_llm_token_limit_by_type
+            model_limit = get_llm_token_limit_by_type("basic") or 16385
+            reporter_limit = int(model_limit * 0.85)  # Reporter uses 85%
+            
+            logger.info(
+                f"[REACT-AGENT] 🔍 DEBUG: Token check for reporter - "
+                f"output={output_tokens}, intermediate_steps={intermediate_tokens}, "
+                f"state={state_tokens}, total={total_estimated_tokens}, "
+                f"reporter_limit={reporter_limit}"
+            )
+            
+            # If data is too large, escalate to full pipeline
+            # Full pipeline will break it into smaller steps with validation
+            if total_estimated_tokens > reporter_limit:
+                logger.warning(
+                    f"[REACT-AGENT] ⬆️ Data too large for reporter ({total_estimated_tokens:,} tokens > {reporter_limit:,} limit) - "
+                    f"Intermediate steps alone: {intermediate_tokens:,} tokens. "
+                    f"Escalating to full pipeline for incremental processing"
+                )
+                return Command(
+                    update={
+                        "escalation_reason": f"data_too_large_for_reporter ({total_estimated_tokens:,} tokens vs {reporter_limit:,} limit, intermediate_steps: {intermediate_tokens:,} tokens)",
+                        "react_attempts": intermediate_steps,
+                        "react_thoughts": thoughts,  # Preserve thoughts when escalating
+                        "partial_result": output,
+                        "goto": "planner"
+                    },
+                    goto="planner"
+                )
+        except Exception as token_check_error:
+            # If token checking fails, log but don't block the flow
+            logger.warning(f"[REACT-AGENT] ⚠️ Token check failed: {token_check_error}", exc_info=True)
+        
+        # Success - return result to user
+        logger.info(f"[REACT-AGENT] ✅ Success - returning answer ({len(output)} chars)")
+        
+        # Cursor-style: Include thoughts in state for UI display
+        thoughts = result.get("thoughts", [])
+        
+        # Convert intermediate_steps to AIMessage/ToolMessage pairs for frontend display
+        # This allows tool calls to show up in the step box
+        tool_call_messages = []
+        if intermediate_steps:
+            logger.info(f"[REACT-AGENT] 🔧 Converting {len(intermediate_steps)} intermediate steps to tool call messages for frontend")
+            import uuid
+            from langchain_core.messages import AIMessage, ToolMessage
+            
+            for step_idx, step in enumerate(intermediate_steps):
+                if isinstance(step, (list, tuple)) and len(step) >= 2:
+                    action = step[0]  # AgentAction object
+                    observation = step[1]  # Tool result
+                    
+                    # Extract tool name and input
+                    tool_name = getattr(action, 'tool', None) or (action.tool if hasattr(action, 'tool') else 'unknown')
+                    tool_input = getattr(action, 'tool_input', None) or (action.tool_input if hasattr(action, 'tool_input') else {})
+                    
+                    # Generate unique tool_call_id
+                    tool_call_id = f"react_call_{uuid.uuid4().hex[:8]}_{step_idx}"
+                    
+                    # Create AIMessage with tool_calls (for frontend to display as tool call)
+                    tool_call_msg = AIMessage(
+                        content="",  # Empty content for tool-calling messages
+                        name="react_agent",
+                        tool_calls=[{
+                            "id": tool_call_id,
+                            "name": tool_name,
+                            "args": tool_input if isinstance(tool_input, dict) else {}
+                        }]
+                    )
+                    tool_call_messages.append(tool_call_msg)
+                    
+                    # Create ToolMessage with result (for frontend to display as result)
+                    tool_result_msg = ToolMessage(
+                        content=str(observation)[:10000],  # Limit result size
+                        tool_call_id=tool_call_id,
+                        name=tool_name
+                    )
+                    tool_call_messages.append(tool_result_msg)
+                    
+                    logger.debug(f"[REACT-AGENT] 🔧 Created tool call message pair: {tool_name} (id={tool_call_id})")
+        
+        # Include optimization messages if they exist
+        return_messages = []
+        if optimization_messages:
+            return_messages.extend(optimization_messages)
+        
+        # Add tool call messages (AIMessage + ToolMessage pairs)
+        return_messages.extend(tool_call_messages)
+        
+        # Add final output message
+        return_messages.append(AIMessage(content=output, name="react_agent"))
+        
+        logger.info(f"[REACT-AGENT] 🔧 Returning {len(return_messages)} messages ({len(tool_call_messages)} tool call pairs + final output)")
+        
+        return Command(
+            update={
+                "messages": return_messages,
+                "previous_result": output,  # Store for potential user feedback escalation
+                "final_report": output,
+                "react_intermediate_steps": intermediate_steps,
+                "react_thoughts": thoughts,  # Cursor-style: Store thoughts for UI display
+                "routing_mode": "react_first",  # Mark that we used ReAct first
+                "goto": "reporter"  # Set goto in state for conditional edge
+            },
+            goto="reporter"  # Route to reporter to finalize
+        )
+        
+    except Exception as e:
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        logger.error(
+            f"[REACT-AGENT] ❌ Error during execution: {error_type}: {error_msg}",
+            exc_info=True
+        )
+        
+        # Check if it's a rate limit error
+        if "rate_limit" in error_msg.lower() or "429" in error_msg or "too large" in error_msg.lower():
+            logger.error(
+                f"[REACT-AGENT] 🚨 RATE LIMIT ERROR DETECTED: {error_msg}. "
+                f"This should have been caught by pre-flight check. "
+                f"Original tokens: {original_token_count:,}, "
+                f"Compressed tokens: {compressed_token_count:,}, "
+                f"Estimated total: {total_estimated_tokens:,}, "
+                f"Model limit: {model_context_limit:,}"
+            )
+        
+        # Escalate on errors
+        return Command(
+            update={
+                "escalation_reason": f"execution_error: {error_type}: {error_msg[:200]}",
+                "react_attempts": intermediate_steps if 'intermediate_steps' in locals() else [],
+                "react_thoughts": thoughts if 'thoughts' in locals() else [],  # Preserve thoughts if available
+                "partial_result": f"Error occurred: {error_type}: {error_msg[:200]}",
+                "goto": "planner"  # Set goto in state for conditional edge
+            },
+            goto="planner"
+        )
+
+
 async def pm_agent_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["research_team"]]:
@@ -2065,9 +5020,69 @@ async def pm_agent_node(
     
     logger.info(f"[pm_agent_node] PM Agent will use PM tools exclusively (loaded via MCP)")
     
-    return await _setup_and_execute_agent_step(
-        state,
-        config,
-        "pm_agent",
-        tools,
-    )
+    try:
+        return await _setup_and_execute_agent_step(
+            state,
+            config,
+            "pm_agent",
+            tools,
+        )
+    except Exception as e:
+        # Catch any unhandled exceptions to prevent workflow from getting stuck
+        logger.error(
+            f"[pm_agent_node] Unhandled exception: {e}",
+            exc_info=True
+        )
+        
+        # Handle error gracefully by marking step as failed
+        error_message = f"[ERROR] PM Agent failed with unhandled exception: {str(e)}"
+        
+        current_plan = state.get("current_plan")
+        if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps'):
+            from src.prompts.planner_model import Step, Plan
+            
+            # Find first incomplete step
+            current_step_idx = None
+            for idx, step in enumerate(current_plan.steps):
+                if not step.execution_res:
+                    current_step_idx = idx
+                    break
+            
+            if current_step_idx is not None:
+                # Mark step as failed
+                updated_step = Step(
+                    need_search=current_plan.steps[current_step_idx].need_search,
+                    title=current_plan.steps[current_step_idx].title,
+                    description=current_plan.steps[current_step_idx].description,
+                    step_type=current_plan.steps[current_step_idx].step_type,
+                    execution_res=error_message,
+                )
+                updated_steps = list(current_plan.steps)
+                updated_steps[current_step_idx] = updated_step
+                updated_plan = Plan(
+                    locale=current_plan.locale,
+                    has_enough_context=current_plan.has_enough_context,
+                    thought=current_plan.thought,
+                    title=current_plan.title,
+                    steps=updated_steps,
+                )
+                
+                # Check if all steps are done (including failed ones)
+                all_done = all(step.execution_res for step in updated_plan.steps)
+                return Command(
+                    update={
+                        "messages": [HumanMessage(content=error_message, name="pm_agent")],
+                        "observations": state.get("observations", []) + [error_message],
+                        "current_plan": updated_plan,
+                    },
+                    goto="reporter" if all_done else "research_team",
+                )
+        
+        # Fallback: route to reporter with error
+        return Command(
+            update={
+                "messages": [HumanMessage(content=error_message, name="pm_agent")],
+                "observations": state.get("observations", []) + [error_message],
+            },
+            goto="reporter",
+        )

@@ -50,6 +50,10 @@ from src.server.chat_request import (
     GenerateProseRequest,
     TTSRequest,
 )
+
+# Cache to store react_thoughts by message ID for AIMessageChunk processing
+# This is needed because AIMessageChunk is streamed before the final AIMessage is created
+_react_thoughts_cache: dict[str, list] = {}
 from src.server.config_request import ConfigResponse
 from src.server.ai_provider_request import (
     AIProviderAPIKeyRequest,
@@ -476,12 +480,38 @@ def _create_event_stream_message(
         event_stream_message["reasoning_content"] = (
             message_chunk.additional_kwargs["reasoning_content"]
         )
+    
+    # Cursor-style: Add react_thoughts if available
+    # Check both additional_kwargs and response_metadata (response_metadata is more reliable)
+    react_thoughts = None
+    if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
+        react_thoughts = message_chunk.response_metadata.get("react_thoughts")
+    if not react_thoughts and hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs:
+        react_thoughts = message_chunk.additional_kwargs.get("react_thoughts")
+    
+    if react_thoughts:
+        logger.info(
+            f"[_create_event_stream_message] ✅ Adding {len(react_thoughts)} react_thoughts to event_stream_message "
+            f"for message {message_chunk.id} (agent: {agent_name})"
+        )
+        event_stream_message["react_thoughts"] = react_thoughts
+    else:
+        # Debug: Log when react_thoughts are NOT found for pm_agent/react_agent
+        if agent_name in ["pm_agent", "react_agent"]:
+            logger.warning(
+                f"[_create_event_stream_message] ⚠️ No react_thoughts found for {agent_name} message {message_chunk.id}: "
+                f"has_response_metadata={hasattr(message_chunk, 'response_metadata')}, "
+                f"has_additional_kwargs={hasattr(message_chunk, 'additional_kwargs')}, "
+                f"response_metadata_keys={list(message_chunk.response_metadata.keys()) if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata else []}, "
+                f"additional_kwargs_keys={list(message_chunk.additional_kwargs.keys()) if hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs else []}"
+            )
 
     # Include finish_reason from response_metadata or message_metadata
-    finish_reason = (
-        message_chunk.response_metadata.get("finish_reason")
-        or message_metadata.get("finish_reason")
-    )
+    finish_reason = None
+    if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
+        finish_reason = message_chunk.response_metadata.get("finish_reason")
+    if not finish_reason:
+        finish_reason = message_metadata.get("finish_reason")
     if finish_reason:
         event_stream_message["finish_reason"] = finish_reason
 
@@ -542,6 +572,42 @@ async def _process_message_chunk(
     event_stream_message = _create_event_stream_message(
         message_chunk, message_metadata, thread_id, agent_name
     )
+    
+    # CRITICAL FIX: Check cache for react_thoughts if not in message_chunk (for AIMessageChunk)
+    if agent_name in ["pm_agent", "react_agent"]:
+        message_id = event_stream_message.get("id")
+        if message_id and message_id in _react_thoughts_cache and "react_thoughts" not in event_stream_message:
+            cached_thoughts = _react_thoughts_cache[message_id]
+            event_stream_message["react_thoughts"] = cached_thoughts
+            # Also attach to message_chunk for consistency
+            if isinstance(message_chunk, AIMessageChunk):
+                if not hasattr(message_chunk, 'additional_kwargs') or not message_chunk.additional_kwargs:
+                    message_chunk.additional_kwargs = {}
+                message_chunk.additional_kwargs["react_thoughts"] = cached_thoughts
+            logger.info(
+                f"[{safe_thread_id}] ✅ Retrieved {len(cached_thoughts)} react_thoughts from cache for "
+                f"AIMessageChunk {message_id}"
+            )
+    
+    # CRITICAL DEBUG: Log if react_thoughts are in event_stream_message after creation
+    if agent_name in ["pm_agent", "react_agent"]:
+        has_thoughts_in_event = "react_thoughts" in event_stream_message
+        thoughts_count = len(event_stream_message.get("react_thoughts", [])) if has_thoughts_in_event else 0
+        logger.info(
+            f"[{safe_thread_id}] 🔍 [_process_message_chunk] After _create_event_stream_message: "
+            f"has_react_thoughts={has_thoughts_in_event}, count={thoughts_count}, "
+            f"message_id={event_stream_message.get('id')}, agent={agent_name}, "
+            f"message_type={type(message_chunk).__name__}"
+        )
+        if not has_thoughts_in_event:
+            # Check what's actually in the message_chunk
+            msg_has_response_metadata = hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata
+            msg_has_additional_kwargs = hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs
+            logger.warning(
+                f"[{safe_thread_id}] ⚠️ [_process_message_chunk] react_thoughts NOT in event_stream_message! "
+                f"message_chunk.response_metadata={list(message_chunk.response_metadata.keys()) if msg_has_response_metadata else 'N/A'}, "
+                f"message_chunk.additional_kwargs={list(message_chunk.additional_kwargs.keys()) if msg_has_additional_kwargs else 'N/A'}"
+            )
 
     if isinstance(message_chunk, ToolMessage):
         # Tool Message - Return the result of the tool call
@@ -583,6 +649,22 @@ async def _process_message_chunk(
                 f"{safe_tool_names}"
             )
             event_stream_message["tool_calls"] = message_chunk.tool_calls
+            
+            # CRITICAL: Include react_thoughts in tool_calls event for AIMessageChunk too
+            # This ensures thoughts appear IMMEDIATELY when tool calls are streamed
+            if "react_thoughts" not in event_stream_message:
+                # Check if thoughts are in the message_chunk
+                chunk_thoughts = None
+                if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
+                    chunk_thoughts = message_chunk.response_metadata.get("react_thoughts")
+                if not chunk_thoughts and hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs:
+                    chunk_thoughts = message_chunk.additional_kwargs.get("react_thoughts")
+                if chunk_thoughts:
+                    event_stream_message["react_thoughts"] = chunk_thoughts
+                    logger.info(
+                        f"[{safe_thread_id}] ✅ Adding {len(chunk_thoughts)} react_thoughts to AIMessageChunk tool_calls event "
+                        f"for immediate display"
+                    )
             
             # Process tool_call_chunks with proper index-based grouping
             processed_chunks = _process_tool_call_chunks(
@@ -670,6 +752,97 @@ async def _process_message_chunk(
             # when it's actually present in the message metadata (final chunk).
             # The frontend will set isStreaming=false when it receives ANY
             # chunk with finish_reason.
+            
+            # CRITICAL DEBUG: Log if react_thoughts are in the event before yielding
+            if agent_name in ["pm_agent", "react_agent"]:
+                has_thoughts = "react_thoughts" in event_stream_message
+                if has_thoughts:
+                    logger.info(
+                        f"[{safe_thread_id}] ✅ About to yield AIMessageChunk WITH {len(event_stream_message['react_thoughts'])} react_thoughts"
+                    )
+                else:
+                    logger.error(
+                        f"[{safe_thread_id}] ❌ CRITICAL: About to yield AIMessageChunk WITHOUT react_thoughts! "
+                        f"message_id={event_stream_message.get('id')}, agent={agent_name}"
+                    )
+            yield _make_event("message_chunk", event_stream_message)
+    elif isinstance(message_chunk, AIMessage):
+        # Full AIMessage (not chunk) - used for state update streaming
+        # This happens when agents return full AIMessage objects instead of streaming chunks
+        content_len = (
+            len(message_chunk.content)
+            if isinstance(message_chunk.content, str)
+            else 0
+        )
+        logger.debug(
+            f"[{safe_thread_id}] Processing full AIMessage, "
+            f"content_len={content_len}, has_additional_kwargs={bool(message_chunk.additional_kwargs)}"
+        )
+        
+        # Log if we have react_thoughts (check both response_metadata and additional_kwargs)
+        react_thoughts_in_msg = None
+        if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
+            react_thoughts_in_msg = message_chunk.response_metadata.get("react_thoughts")
+        if not react_thoughts_in_msg and hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs:
+            react_thoughts_in_msg = message_chunk.additional_kwargs.get("react_thoughts")
+        
+        if react_thoughts_in_msg:
+            logger.info(
+                f"[{safe_thread_id}] 💭 AIMessage has react_thoughts: "
+                f"{len(react_thoughts_in_msg)} thoughts"
+            )
+            # Ensure react_thoughts are in event_stream_message (they should be added by _create_event_stream_message)
+            # But double-check here to be safe
+            if "react_thoughts" not in event_stream_message:
+                event_stream_message["react_thoughts"] = react_thoughts_in_msg
+                logger.info(f"[{safe_thread_id}] ✅ Added react_thoughts to event_stream_message in AIMessage handler")
+        
+        # Include tool_calls if present (for PM Agent tool calls)
+        if hasattr(message_chunk, 'tool_calls') and message_chunk.tool_calls:
+            event_stream_message["tool_calls"] = message_chunk.tool_calls
+            
+            # CRITICAL: Include react_thoughts in tool_calls event so they appear IMMEDIATELY
+            # This ensures thoughts appear before tool calls execute, not after
+            if "react_thoughts" not in event_stream_message:
+                # Check if thoughts are in the message
+                if react_thoughts_in_msg:
+                    event_stream_message["react_thoughts"] = react_thoughts_in_msg
+                    logger.info(
+                        f"[{safe_thread_id}] ✅ Adding {len(react_thoughts_in_msg)} react_thoughts to tool_calls event "
+                        f"for immediate display"
+                    )
+            
+            safe_tool_names = [
+                sanitize_tool_name(tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown'))
+                for tc in message_chunk.tool_calls
+            ]
+            logger.info(
+                f"[{safe_thread_id}] AIMessage has tool_calls: {safe_tool_names}, "
+                f"has_react_thoughts={'react_thoughts' in event_stream_message}"
+            )
+            yield _make_event("tool_calls", event_stream_message)
+        else:
+            # Regular message (no tool calls)
+            if event_stream_message.get("finish_reason"):
+                logger.info(
+                    f"[{safe_thread_id}] ✅ Including finish_reason in "
+                    f"AIMessage event: {event_stream_message.get('finish_reason')}, "
+                    f"message_id: {event_stream_message.get('id')}, "
+                    f"agent: {event_stream_message.get('agent')}"
+                )
+            # Log if react_thoughts are in the event
+            if event_stream_message.get("react_thoughts"):
+                logger.info(
+                    f"[{safe_thread_id}] ✅ Streaming AIMessage with {len(event_stream_message['react_thoughts'])} react_thoughts"
+                )
+            else:
+                # CRITICAL: Log when thoughts are missing right before yielding
+                if agent_name in ["pm_agent", "react_agent"]:
+                    logger.error(
+                        f"[{safe_thread_id}] ❌ CRITICAL: About to yield AIMessage WITHOUT react_thoughts! "
+                        f"message_id={event_stream_message.get('id')}, agent={agent_name}, "
+                        f"event_keys={list(event_stream_message.keys())}"
+                    )
             yield _make_event("message_chunk", event_stream_message)
 
 
@@ -694,6 +867,8 @@ async def _stream_graph_events(
         
         # Use latest LangGraph streaming with debug mode for observability
         # debug events processed server-side only, not streamed to client
+        logger.info(f"[{safe_thread_id}] 🎬 Starting graph.astream with workflow_input keys: {list(workflow_input.keys()) if isinstance(workflow_input, dict) else 'Command object'}")
+        logger.info(f"[{safe_thread_id}] 🎬 Graph entry point should be: START → coordinator")
         async for agent, stream_type, event_data in graph_instance.astream(
             workflow_input,
             config=workflow_config,
@@ -701,6 +876,9 @@ async def _stream_graph_events(
             subgraphs=True,
             debug=False,  # Set to True for verbose debug output
         ):
+            # Log first few events to track entry point
+            if event_count < 5:
+                logger.info(f"[{safe_thread_id}] 🎯 Graph event #{event_count}: agent={agent}, stream_type={stream_type}")
             event_count += 1
             safe_agent = sanitize_agent_name(agent)
             
@@ -813,31 +991,70 @@ async def _stream_graph_events(
                             if current_plan:
                                 # Extract plan information
                                 plan_data = {}
-                                if hasattr(current_plan, 'title'):
-                                    plan_data["title"] = current_plan.title
-                                if hasattr(current_plan, 'steps'):
+                                
+                                # Handle different types of current_plan (string, dict, or Plan object)
+                                plan_obj = None
+                                if isinstance(current_plan, str):
+                                    # Try to parse JSON string
+                                    try:
+                                        import json
+                                        plan_dict = json.loads(current_plan)
+                                        plan_obj = plan_dict
+                                    except (json.JSONDecodeError, TypeError):
+                                        logger.warning(f"[{safe_thread_id}] Could not parse current_plan as JSON string")
+                                        plan_obj = None
+                                elif isinstance(current_plan, dict):
+                                    plan_obj = current_plan
+                                else:
+                                    # Assume it's a Plan object with attributes
+                                    plan_obj = current_plan
+                                
+                                # Extract title
+                                if isinstance(plan_obj, dict):
+                                    plan_data["title"] = plan_obj.get("title", "")
+                                    # Extract steps
+                                    steps = plan_obj.get("steps", [])
                                     plan_data["steps"] = [
                                         {
-                                            "title": step.title,
-                                            "description": step.description,
+                                            "title": step.get("title", "") if isinstance(step, dict) else getattr(step, "title", ""),
+                                            "description": step.get("description", "") if isinstance(step, dict) else getattr(step, "description", ""),
                                             "step_type": (
-                                                step.step_type.value
-                                                if hasattr(
-                                                    step.step_type, 'value'
-                                                )
-                                                else str(step.step_type)
-                                            ) if hasattr(
-                                                step, 'step_type'
-                                            ) else None,
+                                                step.get("step_type", {}).get("value") if isinstance(step.get("step_type"), dict)
+                                                else step.get("step_type") if isinstance(step, dict)
+                                                else getattr(step.step_type, "value", None) if hasattr(getattr(step, "step_type", None), "value")
+                                                else str(getattr(step, "step_type", "")) if hasattr(step, "step_type")
+                                                else None
+                                            ),
                                             "execution_res": (
-                                                step.execution_res
-                                                if hasattr(
-                                                    step, 'execution_res'
-                                                ) else None
+                                                step.get("execution_res") if isinstance(step, dict)
+                                                else getattr(step, "execution_res", None)
                                             ),
                                         }
-                                        for step in current_plan.steps
-                                    ] if current_plan.steps else []
+                                        for step in steps
+                                    ] if steps else []
+                                elif hasattr(plan_obj, 'title'):
+                                    # Plan object with attributes
+                                    plan_data["title"] = plan_obj.title if not callable(plan_obj.title) else ""
+                                    if hasattr(plan_obj, 'steps'):
+                                        steps = plan_obj.steps if not callable(plan_obj.steps) else []
+                                        plan_data["steps"] = [
+                                            {
+                                                "title": step.title if hasattr(step, 'title') and not callable(step.title) else "",
+                                                "description": step.description if hasattr(step, 'description') and not callable(step.description) else "",
+                                                "step_type": (
+                                                    step.step_type.value
+                                                    if hasattr(step, 'step_type') and hasattr(step.step_type, 'value')
+                                                    else str(step.step_type) if hasattr(step, 'step_type')
+                                                    else None
+                                                ),
+                                                "execution_res": (
+                                                    step.execution_res
+                                                    if hasattr(step, 'execution_res')
+                                                    else None
+                                                ),
+                                            }
+                                            for step in steps
+                                        ] if steps else []
                                 
                                 # Debug current_plan structure
                                 try:
@@ -937,6 +1154,62 @@ async def _stream_graph_events(
                                     }
                                 )
                         
+                        # Cursor-style: Stream react_thoughts for ReAct agent and PM Agent
+                        # We need to stream thoughts even if message content is empty (tool calls only)
+                        # Note: node_name might be "agent" but we need to check messages to get actual agent name
+                        node_react_thoughts = None
+                        actual_agent_name = None
+                        
+                        # Debug: Log node_update keys for pm_agent/react_agent nodes
+                        if node_name in ["react_agent", "pm_agent", "agent"]:
+                            logger.debug(
+                                f"[{safe_thread_id}] 🔍 Checking node_update for {node_name}: "
+                                f"keys={list(node_update.keys())}, has_react_thoughts={'react_thoughts' in node_update}"
+                            )
+                        
+                        # Check if react_thoughts exist in node_update
+                        if "react_thoughts" in node_update:
+                            # Determine actual agent name from messages if node_name is generic "agent"
+                            if node_name == "agent" and "messages" in node_update:
+                                messages = node_update.get("messages", [])
+                                for msg in messages:
+                                    if isinstance(msg, AIMessage) and hasattr(msg, 'name') and msg.name:
+                                        actual_agent_name = msg.name
+                                        if actual_agent_name in ["react_agent", "pm_agent"]:
+                                            break
+                            elif node_name in ["react_agent", "pm_agent"]:
+                                actual_agent_name = node_name
+                            
+                            if actual_agent_name in ["react_agent", "pm_agent"]:
+                                node_react_thoughts = node_update.get("react_thoughts", [])
+                                if node_react_thoughts:
+                                    logger.info(
+                                        f"[{safe_thread_id}] 💭 Found react_thoughts in node_update for {actual_agent_name} (node: {node_name}): "
+                                        f"{len(node_react_thoughts)} thoughts: {[t.get('thought', '')[:50] if isinstance(t, dict) else str(t)[:50] for t in node_react_thoughts[:3]]}"
+                                    )
+                                    # CRITICAL FIX: Store thoughts in cache for AIMessageChunk processing
+                                    # Find the message ID from messages in node_update
+                                    if "messages" in node_update:
+                                        for msg in node_update.get("messages", []):
+                                            if isinstance(msg, AIMessage) and hasattr(msg, 'id') and msg.id:
+                                                _react_thoughts_cache[msg.id] = node_react_thoughts
+                                                logger.info(
+                                                    f"[{safe_thread_id}] ✅ Cached {len(node_react_thoughts)} react_thoughts for message {msg.id} "
+                                                    f"for AIMessageChunk processing"
+                                                )
+                                                break
+                                    logger.debug(
+                                        f"[{safe_thread_id}] 💭 Thoughts will be attached to agent message when it's streamed"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"[{safe_thread_id}] ⚠️ react_thoughts key exists but is empty for {actual_agent_name} (node: {node_name})"
+                                    )
+                            else:
+                                logger.debug(
+                                    f"[{safe_thread_id}] 🔍 react_thoughts found but actual_agent_name={actual_agent_name} not in [react_agent, pm_agent]"
+                                )
+                        
                         # Stream step progress updates when current_step_index changes
                         if "current_step_index" in node_update or "total_steps" in node_update:
                             current_step_index = node_update.get("current_step_index")
@@ -1002,8 +1275,49 @@ async def _stream_graph_events(
                                     sys.stderr.write(f"🔍 Message: type={msg_type}, name={msg_name}, is_AIMessage={is_ai}, name_matches={name_match}\n")
                                 sys.stderr.flush()
                                 
+                                # Find the LAST AIMessage with content (that's the final response)
+                                # Earlier messages might be tool-calling messages with empty content
+                                final_ai_message = None
+                                for msg in reversed(messages):
+                                    if isinstance(msg, AIMessage) and msg.name == node_name:
+                                        msg_content = getattr(msg, 'content', '') or ''
+                                        # Pick the last message with content, or any message if none have content
+                                        if msg_content or final_ai_message is None:
+                                            final_ai_message = msg
+                                            if msg_content:  # Found message with content, use it
+                                                break
+                                
+                                # CRITICAL: Find AIMessage with tool_calls FIRST and attach thoughts to it
+                                # This ensures thoughts are available when tool_calls are streamed
+                                tool_call_ai_message = None
                                 for msg in messages:
-                                    # Process ToolMessages - yield tool_call_result events
+                                    if isinstance(msg, AIMessage) and msg.name == node_name:
+                                        if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                                            tool_call_ai_message = msg
+                                            logger.info(
+                                                f"[{safe_thread_id}] 🔍 Found AIMessage with tool_calls: {len(msg.tool_calls)} calls"
+                                            )
+                                            break
+                                
+                                # Attach thoughts to tool_call message if found
+                                if tool_call_ai_message and node_name in ["pm_agent", "react_agent"]:
+                                    # Check for thoughts in node_update first
+                                    if "react_thoughts" in node_update:
+                                        node_thoughts = node_update.get("react_thoughts", [])
+                                        if node_thoughts:
+                                            if not hasattr(tool_call_ai_message, 'additional_kwargs') or not tool_call_ai_message.additional_kwargs:
+                                                tool_call_ai_message.additional_kwargs = {}
+                                            if not hasattr(tool_call_ai_message, 'response_metadata') or not tool_call_ai_message.response_metadata:
+                                                tool_call_ai_message.response_metadata = {}
+                                            tool_call_ai_message.additional_kwargs["react_thoughts"] = node_thoughts
+                                            tool_call_ai_message.response_metadata["react_thoughts"] = node_thoughts
+                                            logger.info(
+                                                f"[{safe_thread_id}] ✅ Attached {len(node_thoughts)} react_thoughts to tool_call AIMessage "
+                                                f"for immediate streaming"
+                                            )
+                                
+                                # Process ToolMessages
+                                for msg in messages:
                                     if isinstance(msg, ToolMessage):
                                         logger.info(
                                             f"[{safe_thread_id}] 🔧 Processing ToolMessage from updates stream: "
@@ -1019,44 +1333,123 @@ async def _stream_graph_events(
                                             (node_name,),
                                         ):
                                             yield event
-                                    # Process AIMessages
-                                    elif (
-                                        isinstance(msg, AIMessage)
-                                        and msg.name == node_name
+                                
+                                # Process AIMessage with tool_calls (stream tool_calls event with thoughts)
+                                if tool_call_ai_message:
+                                    logger.info(
+                                        f"[{safe_thread_id}] 🔧 Streaming AIMessage with tool_calls: "
+                                        f"{len(tool_call_ai_message.tool_calls)} calls"
+                                    )
+                                    msg_metadata = {
+                                        "langgraph_node": node_name,
+                                        "finish_reason": "tool_calls"
+                                    }
+                                    async for event in _process_message_chunk(
+                                        tool_call_ai_message,
+                                        msg_metadata,
+                                        thread_id,
+                                        (node_name,),
                                     ):
-                                        import sys
-                                        sys.stderr.write(f"\n✨ STREAMING MESSAGE: node_name='{node_name}', content_len={len(msg.content)}\n")
-                                        sys.stderr.flush()
-                                        
-                                        logger.debug(
-                                            f"[{safe_thread_id}] "
-                                            f"Streaming {node_name} message "
-                                            f"from state update: "
-                                            f"{len(msg.content)} chars, "
-                                            f"id: {msg.id}"
-                                        )
-                                        # Ensure finish_reason is set
-                                        if not msg.response_metadata:
-                                            msg.response_metadata = {}
-                                        if (
+                                        yield event
+                                
+                                # Process the final AIMessage (with content)
+                                if final_ai_message:
+                                    msg = final_ai_message
+                                    import sys
+                                    sys.stderr.write(f"\n✨ STREAMING MESSAGE: node_name='{node_name}', content_len={len(msg.content)}\n")
+                                    sys.stderr.flush()
+                                    
+                                    logger.info(
+                                        f"[{safe_thread_id}] "
+                                        f"Streaming {node_name} message "
+                                        f"from state update: "
+                                        f"{len(msg.content)} chars, "
+                                        f"id: {msg.id}"
+                                    )
+                                    # Ensure finish_reason is set
+                                    if not msg.response_metadata:
+                                        msg.response_metadata = {}
+                                    if (
+                                        "finish_reason"
+                                        not in msg.response_metadata
+                                    ):
+                                        msg.response_metadata[
                                             "finish_reason"
-                                            not in msg.response_metadata
-                                        ):
-                                            msg.response_metadata[
-                                                "finish_reason"
-                                            ] = "stop"
-                                        msg_metadata = {
-                                            "langgraph_node": node_name,
-                                            "finish_reason": "stop"
-                                        }
-                                        async for event in _process_message_chunk(
-                                            msg,
-                                            msg_metadata,
-                                            thread_id,
-                                            (node_name,),
-                                        ):
-                                            yield event
-                                        break
+                                        ] = "stop"
+                                    
+                                    # Cursor-style: Add react_thoughts to metadata if available
+                                    # Check multiple sources in order of reliability:
+                                    # 1. response_metadata (most reliable, preserved through LangGraph)
+                                    # 2. additional_kwargs (may be lost during serialization)
+                                    # 3. node_update (may not be present)
+                                    # Support both react_agent and pm_agent
+                                    react_thoughts = None
+                                    
+                                    # Method 1: Check response_metadata first (most reliable)
+                                    if hasattr(msg, 'response_metadata') and msg.response_metadata:
+                                        metadata_thoughts = msg.response_metadata.get("react_thoughts")
+                                        if metadata_thoughts:
+                                            react_thoughts = metadata_thoughts
+                                            logger.info(f"[{safe_thread_id}] ✅ Found react_thoughts in message.response_metadata for {node_name}: {len(react_thoughts) if react_thoughts else 0} thoughts")
+                                    
+                                    # Method 2: Check additional_kwargs
+                                    if not react_thoughts and hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+                                        msg_thoughts = msg.additional_kwargs.get("react_thoughts")
+                                        if msg_thoughts:
+                                            react_thoughts = msg_thoughts
+                                            logger.info(f"[{safe_thread_id}] ✅ Found react_thoughts in message.additional_kwargs for {node_name}: {len(react_thoughts) if react_thoughts else 0} thoughts")
+                                    
+                                    # Method 3: Check node_update (fallback)
+                                    if not react_thoughts and "react_thoughts" in node_update and node_name in ["react_agent", "pm_agent"]:
+                                        react_thoughts = node_update.get("react_thoughts", [])
+                                        logger.info(f"[{safe_thread_id}] ✅ Found react_thoughts in node_update for {node_name}: {len(react_thoughts) if react_thoughts else 0} thoughts")
+                                    
+                                    # Debug: Log what we're checking
+                                    logger.info(f"[{safe_thread_id}] 🔍 Checking for thoughts: node_update_keys={list(node_update.keys())}, msg_has_additional_kwargs={hasattr(msg, 'additional_kwargs')}, additional_kwargs={msg.additional_kwargs if hasattr(msg, 'additional_kwargs') else 'N/A'}")
+                                    
+                                    if react_thoughts:
+                                        # Store thoughts in both additional_kwargs and response_metadata for maximum compatibility
+                                        if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
+                                            msg.additional_kwargs = {}
+                                        msg.additional_kwargs["react_thoughts"] = react_thoughts
+                                        
+                                        if not hasattr(msg, 'response_metadata') or not msg.response_metadata:
+                                            msg.response_metadata = {}
+                                        msg.response_metadata["react_thoughts"] = react_thoughts
+                                        
+                                        logger.info(
+                                            f"[{safe_thread_id}] ✅ Added {len(react_thoughts)} react_thoughts to message {msg.id} "
+                                            f"for streaming ({node_name}): {[t.get('thought', '')[:50] if isinstance(t, dict) else str(t)[:50] for t in react_thoughts[:3]]}"
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"[{safe_thread_id}] ⚠️ No react_thoughts found for {node_name} message {msg.id} "
+                                            f"(node_update has react_thoughts: {'react_thoughts' in node_update})"
+                                        )
+                                    
+                                    # CRITICAL: Ensure thoughts are in the message BEFORE calling _process_message_chunk
+                                    # _process_message_chunk calls _create_event_stream_message which needs thoughts
+                                    if react_thoughts:
+                                        # Double-check thoughts are still in the message
+                                        if not hasattr(msg, 'response_metadata') or not msg.response_metadata:
+                                            msg.response_metadata = {}
+                                        if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
+                                            msg.additional_kwargs = {}
+                                        msg.response_metadata["react_thoughts"] = react_thoughts
+                                        msg.additional_kwargs["react_thoughts"] = react_thoughts
+                                        logger.info(f"[{safe_thread_id}] ✅ Verified thoughts are in message {msg.id} before streaming")
+                                    
+                                    msg_metadata = {
+                                        "langgraph_node": node_name,
+                                        "finish_reason": "stop"
+                                    }
+                                    async for event in _process_message_chunk(
+                                        msg,
+                                        msg_metadata,
+                                        thread_id,
+                                        (node_name,),
+                                    ):
+                                        yield event
                     
                     logger.debug(
                         f"[{safe_thread_id}] Processed state update from "
@@ -2484,6 +2877,10 @@ async def pm_chat_stream(request: Request):
             # If no explicit history, use messages array (excluding last)
             conversation_history = raw_messages[:-1]
         
+        # Extract model selection from request
+        model_provider = body.get("model_provider")
+        model_name = body.get("model_name")
+        
         thread_id = body.get("thread_id", str(uuid.uuid4()))
         
         logger.info(f"[PM-CHAT] Received message with {len(conversation_history)} history messages")
@@ -2604,7 +3001,9 @@ async def pm_chat_stream(request: Request):
                                 enable_clarification=False,
                                 max_clarification_rounds=3,
                                 locale="en-US",
-                                interrupt_before_tools=None
+                                interrupt_before_tools=None,
+                                model_provider=model_provider,
+                                model_name=model_name,
                             ):
                                 # Yield formatted DeerFlow events directly
                                 yield event
@@ -4258,6 +4657,77 @@ async def get_cycle_time_chart(
         logger.warning("Cycle time chart unavailable: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
+        logger.error(f"Failed to get cycle time chart: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/projects/{project_id}/work-distribution")
+async def get_work_distribution_chart(
+    project_id: str,
+    dimension: str = "assignee",
+    sprint_id: Optional[str] = None
+):
+    """Get Work Distribution chart for a project"""
+    try:
+        from database.connection import get_db_session
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
+            chart = await analytics_service.get_work_distribution_chart(project_id=actual_project_id, dimension=dimension, sprint_id=sprint_id)
+            return chart.model_dump()
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
+    except NotImplementedError as e:
+        logger.warning("Work distribution chart unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to get work distribution chart: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/projects/{project_id}/issue-trend")
+async def get_issue_trend_chart(
+    project_id: str,
+    days_back: int = 30,
+    sprint_id: Optional[str] = None
+):
+    """Get Issue Trend Analysis chart for a project"""
+    try:
+        from database.connection import get_db_session
+        db_gen = get_db_session()
+        db = next(db_gen)
+        try:
+            analytics_service = get_analytics_service(project_id, db)
+            # Extract actual project ID if in provider_id:project_id format
+            actual_project_id = (
+                project_id.split(":", 1)[1]
+                if ":" in project_id
+                else project_id
+            )
+            chart = await analytics_service.get_issue_trend_chart(project_id=actual_project_id, days_back=days_back, sprint_id=sprint_id)
+            return chart.model_dump()
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
+    except NotImplementedError as e:
+        logger.warning("Issue trend chart unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to get issue trend chart: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
         logger.error(f"Failed to get cycle time chart: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 

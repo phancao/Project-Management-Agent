@@ -14,6 +14,7 @@ import MessageInput, {
 import { Tooltip } from "~/components/deer-flow/tooltip";
 import { BorderBeam } from "~/components/magicui/border-beam";
 import { Button } from "~/components/ui/button";
+import { ContextTokenIndicator } from "~/components/chat/context-token-indicator";
 import { enhancePrompt } from "~/core/api";
 import { useConfig } from "~/core/api/hooks";
 import type { Option, Resource } from "~/core/messages";
@@ -243,6 +244,9 @@ export function InputBox({
           )}
 
           <AgentSelector />
+          
+          {/* Context Token Indicator */}
+          <ContextTokenIndicator className="ml-auto" />
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip title={t("enhancePrompt")}>

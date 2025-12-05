@@ -301,6 +301,64 @@ def _compress_project_list(projects: list) -> list:
     return compressed
 
 
+def _compress_sprint_list(sprints: list) -> list:
+    """
+    Intelligently compress a list of sprints by preserving searchable fields (id, name, status) for ALL sprints,
+    while compressing other fields (goal, dates, etc.) to save tokens.
+    
+    This allows the agent to search through all sprints even when the list is large.
+    The key insight: agents need to search by sprint name/number/ID, so we MUST preserve these for all sprints.
+    
+    CRITICAL: Sprint names often contain numbers (e.g., "Sprint 4", "Sprint 10"), so preserving ALL sprint
+    names is essential for the agent to find specific sprints by number.
+    
+    Args:
+        sprints: List of sprint dictionaries
+        
+    Returns:
+        Compressed list with all sprint ids/names/status preserved, but other fields compressed
+    """
+    if not sprints:
+        return sprints
+    
+    # Preserve essential searchable fields for ALL sprints
+    compressed = []
+    essential_fields = ["id", "name", "status"]  # Fields needed for searching/identifying sprints
+    optional_fields = ["project_id", "start_date", "end_date"]  # Can be truncated/compressed
+    drop_fields = ["goal", "capacity_hours", "planned_hours", "created_at", "updated_at"]  # Drop large/unnecessary fields
+    
+    for sprint in sprints:
+        if isinstance(sprint, dict):
+            compressed_sprint = {}
+            # Always preserve essential fields (needed for searching)
+            for field in essential_fields:
+                if field in sprint:
+                    compressed_sprint[field] = sprint[field]
+            # Compress optional fields to save tokens
+            for field in optional_fields:
+                if field in sprint:
+                    value = sprint[field]
+                    if isinstance(value, str) and len(value) > 30:
+                        compressed_sprint[field] = value[:30] + "..."
+                    else:
+                        compressed_sprint[field] = value
+            # Preserve other small fields (but drop large ones)
+            for key, value in sprint.items():
+                if key not in essential_fields and key not in optional_fields and key not in drop_fields:
+                    if isinstance(value, (str, int, float, bool, type(None))):
+                        # Only keep small values
+                        if isinstance(value, str) and len(value) <= 50:
+                            compressed_sprint[key] = value
+                        elif not isinstance(value, str):
+                            compressed_sprint[key] = value
+            compressed.append(compressed_sprint)
+        else:
+            compressed.append(sprint)
+    
+    logger.info(f"Compressed sprint list: preserved id/name/status for all {len(compressed)} sprints (essential for searching)")
+    return compressed
+
+
 def _compress_large_array(data: Any, max_items: int = 20) -> Any:
     """
     Compress large arrays by creating intelligent summaries instead of cutting off content.
@@ -319,7 +377,25 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
     """
     if isinstance(data, list):
         if len(data) > max_items:
-            # Check if this looks like a project list (has id and name fields)
+            # Check if this looks like a sprint list (has id, name, status, project_id, start_date, end_date)
+            # CRITICAL: Sprint lists have "status" field, which distinguishes them from project lists
+            is_sprint_list = (
+                len(data) > 0 and
+                isinstance(data[0], dict) and
+                "id" in data[0] and
+                "name" in data[0] and
+                "status" in data[0] and
+                ("project_id" in data[0] or "start_date" in data[0] or "end_date" in data[0]) and
+                not any(key in data[0] for key in ["priority", "assigned_to", "assignee", "task_id", "title", "description"])
+            )
+            
+            if is_sprint_list:
+                # Use intelligent sprint compression (preserves all ids/names/status)
+                compressed = _compress_sprint_list(data)
+                logger.info(f"Compressed sprint list from {len(data)} to {len(compressed)} items (preserved all ids/names/status)")
+                return compressed
+            
+            # Check if this looks like a project list (has id and name fields, but NOT status)
             is_project_list = (
                 len(data) > 0 and
                 isinstance(data[0], dict) and
@@ -384,6 +460,51 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
         else:
             return [_compress_large_array(item, max_items) for item in data]
     elif isinstance(data, dict):
+        # Check if this is a sprint list response - use intelligent sprint compression
+        if "sprints" in data and isinstance(data["sprints"], list) and len(data["sprints"]) > 0:
+            sprints = data["sprints"]
+            if len(sprints) > 0 and isinstance(sprints[0], dict) and "id" in sprints[0] and "name" in sprints[0] and "status" in sprints[0]:
+                # This is a sprint list - preserve all ids/names/status
+                compressed_sprints = _compress_sprint_list(sprints)
+                logger.info(f"Compressed sprints list from {len(sprints)} to {len(compressed_sprints)} items (preserved all ids/names/status)")
+                
+                # DEBUG: Print compressed sprint data to see what agent receives
+                try:
+                    sprint_names = [s.get("name", "N/A") for s in compressed_sprints if isinstance(s, dict)]
+                    sprint_ids = [s.get("id", "N/A") for s in compressed_sprints if isinstance(s, dict)]
+                    logger.info(f"[DEBUG] Compressed sprint names: {sprint_names}")
+                    logger.info(f"[DEBUG] Compressed sprint IDs (first 3): {sprint_ids[:3]}")
+                    logger.info(f"[DEBUG] Total sprints in compressed data: {len(compressed_sprints)}")
+                    
+                    # Check if "Sprint 4" or "4" is in any sprint name
+                    sprint_4_found = any("4" in str(s.get("name", "")).lower() or "sprint 4" in str(s.get("name", "")).lower() for s in compressed_sprints if isinstance(s, dict))
+                    logger.info(f"[DEBUG] Sprint 4 found in compressed data: {sprint_4_found}")
+                except Exception as e:
+                    logger.warning(f"[DEBUG] Error printing sprint data: {e}")
+                
+                # Add helpful note for agents on how to search for sprints
+                result = {
+                    **data, 
+                    "sprints": compressed_sprints, 
+                    "_compressed": True, 
+                    "_compression_method": "sprint_list_preserve_ids",
+                    "_note": "✅ ALL sprint IDs and names are preserved. To find a specific sprint (e.g., 'Sprint 4'): 1) Search through the 'sprints' array, 2) Look for a sprint where the 'name' field contains the number (e.g., '4' or 'Sprint 4'), 3) Extract the 'id' field from that sprint, 4) Use that 'id' in subsequent tool calls."
+                }
+                
+                # DEBUG: Print the final JSON structure
+                try:
+                    result_json = json.dumps(result, indent=2, default=str)
+                    logger.info(f"[DEBUG] Final compressed sprint response (first 2000 chars):\n{result_json[:2000]}")
+                    
+                    # Also log a sample sprint structure for debugging
+                    if compressed_sprints and len(compressed_sprints) > 0:
+                        sample_sprint = compressed_sprints[0] if isinstance(compressed_sprints[0], dict) else {}
+                        logger.info(f"[DEBUG] Sample sprint structure: {json.dumps(sample_sprint, indent=2, default=str)[:500]}")
+                except Exception as e:
+                    logger.warning(f"[DEBUG] Error printing final JSON: {e}")
+                
+                return result
+        
         # Check if this is a project list response - use intelligent project compression
         if "projects" in data and isinstance(data["projects"], list) and len(data["projects"]) > 0:
             projects = data["projects"]

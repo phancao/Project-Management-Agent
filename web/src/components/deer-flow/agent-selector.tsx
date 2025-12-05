@@ -254,13 +254,13 @@ export function AgentSelector() {
       <Select value={currentPreset.id} onValueChange={handlePresetChange}>
         <SelectTrigger
           className={cn(
-            "rounded-2xl w-auto min-w-[180px]",
+            "rounded-2xl w-auto min-w-[140px] h-8 text-xs",
             "!border-brand !text-brand",
           )}
         >
-          <div className="flex items-center gap-2">
-            <CurrentIcon className="h-4 w-4 shrink-0" />
-            <span className="font-medium">{currentPreset.name}</span>
+          <div className="flex items-center gap-1.5">
+            <CurrentIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-normal text-xs">{currentPreset.name}</span>
           </div>
         </SelectTrigger>
         <SelectContent className="w-[280px]">
@@ -303,20 +303,20 @@ export function AgentSelector() {
       </Select>
 
       {/* Always show AI provider selector - it will show providers from config even if database call fails */}
-      <Select
-        value={modelProvider && currentModel ? `${modelProvider}:${currentModel}` : modelProvider || ""}
-        onValueChange={handleModelChange}
+        <Select
+          value={modelProvider && currentModel ? `${modelProvider}:${currentModel}` : modelProvider || ""}
+          onValueChange={handleModelChange}
         disabled={configLoading || (loadingProviders && allProviders.length === 0)}
-      >
+        >
           <SelectTrigger
             className={cn(
-              "rounded-2xl w-auto min-w-[180px]",
+              "rounded-2xl w-auto min-w-[140px] h-8 text-xs",
               "!border-brand !text-brand",
             )}
           >
-            <div className="flex items-center gap-2">
-              <span className="text-lg shrink-0">{currentProvider?.icon || "🤖"}</span>
-              <span className="font-medium text-sm">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm shrink-0">{currentProvider?.icon || "🤖"}</span>
+              <span className="font-normal text-xs">
                 {currentProvider?.name || "Model"}
                 {currentModel && ` - ${currentModel}`}
               </span>
@@ -325,26 +325,26 @@ export function AgentSelector() {
           <SelectContent className="w-[280px]">
             {providers.length > 0 ? (
               providers.map((provider: ModelProvider) => (
-                <div key={provider.id}>
-                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                    {provider.icon} {provider.name}
-                  </div>
-                  {provider.models.map((model) => {
-                    const value = `${provider.id}:${model}`;
-
-                    return (
-                      <SelectItem
-                        key={value}
-                        value={value}
-                        className="cursor-pointer pl-6"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">{model}</span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
+              <div key={provider.id}>
+                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                  {provider.icon} {provider.name}
                 </div>
+                {provider.models.map((model) => {
+                  const value = `${provider.id}:${model}`;
+
+                  return (
+                    <SelectItem
+                      key={value}
+                      value={value}
+                      className="cursor-pointer pl-6"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{model}</span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </div>
               ))
             ) : (
               <div className="px-2 py-4 text-center text-sm text-muted-foreground">
@@ -363,13 +363,13 @@ export function AgentSelector() {
       >
         <SelectTrigger
           className={cn(
-            "rounded-2xl w-auto min-w-[160px]",
+            "rounded-2xl w-auto min-w-[120px] h-8 text-xs",
             "!border-brand !text-brand",
           )}
         >
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 shrink-0" />
-            <span className="font-medium text-sm">
+          <div className="flex items-center gap-1.5">
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-normal text-xs">
               {searchProviders.find((p) => p.provider_id === searchProvider)?.provider_name || 
                (searchProvider === "duckduckgo" ? "DuckDuckGo" : "Search")}
             </span>

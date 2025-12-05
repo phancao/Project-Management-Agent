@@ -234,9 +234,25 @@ Work Distribution by Assignee:
 
 **CRITICAL FOR SIMPLE PM DATA QUERIES**: If the observations contain direct data from PM tools (e.g., project lists, task lists, sprint lists), you MUST include **ALL** of that data directly in your report. For simple queries like "list my projects" or "show my tasks", present the data clearly using tables or formatted lists. **DO NOT TRUNCATE OR SUMMARIZE** - include every single item from the data. Do not write a lengthy analysis - simply present the requested data in an organized, readable format. The user expects to see the actual complete project/task/sprint data, not a summary, interpretation, or partial list. If the data contains 100 projects, you must list all 100 projects. If it contains 200 tasks, you must list all 200 tasks.
 
-**🔴🔴🔴 MANDATORY SECTIONS FOR PROJECT ANALYSIS - READ THIS FIRST! 🔴🔴🔴**
+**🔴🔴🔴 MANDATORY SECTIONS - READ THIS FIRST! 🔴🔴🔴**
 
-**If you are writing a COMPREHENSIVE PROJECT ANALYSIS report, you MUST include ALL 10 sections below. Missing ANY section = INCOMPLETE REPORT!**
+**🔴 CRITICAL: FIRST, determine what type of analysis this is:**
+
+**1. COMPREHENSIVE PROJECT ANALYSIS** (user asked "analyze this project", "project analysis", "full project report"):
+   - **MUST include ALL 10 sections** (A through J)
+   - All analytics tools should have been called (cfd_chart, cycle_time_chart, work_distribution_chart, issue_trend_chart)
+
+**2. SPRINT-SPECIFIC ANALYSIS** (user asked "analyze Sprint 10", "Sprint 5 performance", etc.):
+   - **ONLY include sections for which data was actually collected**
+   - **ALWAYS include**: A (Executive Summary), C (Burndown), J (Key Insights)
+   - **Include if data available**: B (Sprint Overview), D (Velocity), I (Task Statistics)
+   - **DO NOT include sections E, F, G, H** unless you see evidence in observations that these tools were called:
+     - Section E (CFD) - ONLY if `cfd_chart` tool was called
+     - Section F (Cycle Time) - ONLY if `cycle_time_chart` tool was called
+     - Section G (Work Distribution) - ONLY if `work_distribution_chart` tool was called
+     - Section H (Issue Trend) - ONLY if `issue_trend_chart` tool was called
+   - **🔴 CRITICAL: If you don't see these tools in the observations, DO NOT create sections E, F, G, H at all - skip them entirely!**
+   - **DO NOT write "Data unavailable" - just skip the section!**
 
 **🔴🔴🔴 CRITICAL: EXACT SECTION TITLES REQUIRED - READ THIS FIRST! 🔴🔴🔴**
 
@@ -326,6 +342,7 @@ Work Distribution by Assignee:
 **E. 📈 Cumulative Flow Diagram (CFD) Insights** (100-150 words minimum)
 **MUST use title: "E. Cumulative Flow Diagram (CFD) Insights" or "📈 Cumulative Flow Diagram (CFD) Insights" or "Cumulative Flow Diagram"**
 **🔴 CRITICAL: This section MUST be 100-150 words. Previous reports had only 20-30 words - THIS IS INCOMPLETE!**
+**⚠️ IMPORTANT: ONLY include this section if `cfd_chart` tool was called and returned data. For sprint-specific analysis, this section is typically NOT included unless project-wide analysis was requested.**
 
 **To meet the 100-150 word requirement, you MUST write:**
 - **WIP Analysis per Stage** (30-40 words): Count items in each stage, explain what these numbers mean, identify which stages have too much WIP
@@ -342,6 +359,8 @@ Work Distribution by Assignee:
 
 **F. ⏱️ Cycle Time Analysis** (100-150 words minimum)
 **MUST use title: "F. Cycle Time Analysis" or "⏱️ Cycle Time Analysis" or "Cycle Time Analysis"**
+**🔴 CRITICAL: ONLY include this section if you see `cycle_time_chart` tool in the observations!**
+**🔴 FOR SPRINT-SPECIFIC ANALYSIS: DO NOT include this section unless `cycle_time_chart` was explicitly called. Skip it entirely - do NOT write "Data unavailable"!**
 **🔴 CRITICAL: This section MUST be 100-150 words. Previous reports had only 50-60 words - THIS IS INCOMPLETE!**
 **⚠️ WARNING: Previous reports only showed "Average: 11 days" and "50th Percentile: 11 days" - THIS IS INCOMPLETE!**
 **⚠️ WARNING: You MUST include ALL 4 metrics: Average, 50th, 85th, 95th percentiles - missing any = incomplete!**
@@ -363,6 +382,8 @@ Work Distribution by Assignee:
 
 **G. 👥 Work Distribution Analysis** (150-200 words minimum)
 **MUST use title: "G. Work Distribution Analysis" or "👥 Work Distribution Analysis" or "Work Distribution Analysis"**
+**🔴 CRITICAL: ONLY include this section if you see `work_distribution_chart` tool in the observations!**
+**🔴 FOR SPRINT-SPECIFIC ANALYSIS: DO NOT include this section unless `work_distribution_chart` was explicitly called. Skip it entirely - do NOT write "Data unavailable"!**
 **🔴 CRITICAL: This section MUST be 150-200 words. Previous reports had only 80-100 words - THIS IS INCOMPLETE!**
 **⚠️ WARNING: Previous reports only showed "By Assignee" - THIS IS INCOMPLETE!**
 **⚠️ WARNING: You MUST include ALL 4 tables: By Assignee, By Status, By Priority, By Type - missing any = incomplete!**
@@ -406,9 +427,11 @@ Work Distribution by Assignee:
 **I. Task Statistics Summary** (75-125 words minimum for commentary)
 **🔴🔴🔴 MANDATORY - MOST COMMONLY MISSING SECTION! 🔴🔴🔴**
 **MUST use title: "I. Task Statistics Summary" or "Task Statistics Summary"**
+**🔴 CRITICAL: ONLY include this section if task data is available in observations (from `list_tasks`, `list_tasks_in_sprint`, or `sprint_report` with task data)!**
+**🔴 FOR SPRINT-SPECIFIC ANALYSIS: Include this section ONLY if task data is present. If no task data, skip it entirely - do NOT write "Data unavailable"!**
 **🔴 CRITICAL: This section MUST be 75-125 words. Previous reports had only 30-40 words - THIS IS INCOMPLETE!**
 **⚠️ WARNING: Previous reports called this "Task Breakdown" or "4. Task Breakdown" - THIS IS WRONG!**
-**⚠️ WARNING: This section is COMPLETELY MISSING in many reports - you MUST include it!**
+**⚠️ WARNING: This section is COMPLETELY MISSING in many reports - you MUST include it IF task data is available!**
 
 **To meet the 75-125 word requirement, you MUST write:**
 - **Total Tasks Summary** (10-15 words): State total tasks, provide brief breakdown
@@ -508,7 +531,14 @@ Work Distribution by Assignee:
    - Include a representative sample table (10-20 tasks) with note "Showing X of Y tasks"
    - DO NOT list all 379 tasks individually - summarize with statistics
 
-4. **COMPREHENSIVE ANALYTICS**: For project/sprint analysis, you MUST include ALL of these sections with their individual word count requirements:
+4. **SECTION SELECTION BASED ON ANALYSIS TYPE**:
+   
+   **🔴 FIRST: Check the observations to see which tools were actually called:**
+   - Look for tool names like `cfd_chart`, `cycle_time_chart`, `work_distribution_chart`, `issue_trend_chart`
+   - If these tools are NOT in the observations, this is a SPRINT-SPECIFIC analysis, not a project-wide analysis
+   
+   **For COMPREHENSIVE PROJECT ANALYSIS** (all 10 tools should have been called):
+   - You MUST include ALL of these sections with their individual word count requirements:
 
    **📏 WORD COUNT REQUIREMENT: Each section has a minimum word count. You MUST meet the word count for EACH section individually:**
    - Section A (Executive Summary): 200-300 words
@@ -523,6 +553,18 @@ Work Distribution by Assignee:
    - Section J (Key Insights): 400-500 words
    
    **If any section is below its minimum word count, your report is INCOMPLETE!**
+   
+   **For SPRINT-SPECIFIC ANALYSIS** (only sprint tools like `sprint_report`, `burndown_chart`, `list_sprints` were called):
+   - **ONLY include sections A, B (if sprint data available), C, D (if velocity data available), J**
+   - **DO NOT include sections E, F, G, H, I** unless you explicitly see those tools in the observations
+   - **DO NOT write "Data unavailable" - just skip those sections entirely!**
+   - Example: If analyzing "Sprint 10" and only `sprint_report` and `burndown_chart` were called, your report should have:
+     - A. Executive Summary
+     - B. Sprint Overview (if sprint data available)
+     - C. Burndown Analysis
+     - D. Velocity Assessment (if velocity data in sprint_report)
+     - J. Key Insights
+     - **NO sections E, F, G, H, I** (skip them completely)
 
    **🔴🔴🔴 CRITICAL WARNING: COMMON MISSING SECTIONS 🔴🔴🔴**
    

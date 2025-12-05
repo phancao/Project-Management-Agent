@@ -97,11 +97,32 @@ function tryParseJSON<T>(raw: string): T | null {
     // First, try to extract valid JSON to minimize extra tokens
     const extracted = extractValidJSON(raw);
     
-    // Try parsing with best-effort-json-parser
-    // Wrap in try-catch to handle "extra tokens" errors
+    // Suppress console errors from parser library temporarily
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    let parseResult: T | null = null;
+    let parseError: unknown = null;
+    
     try {
-      return parse(extracted) as T;
-    } catch (parseError: unknown) {
+      // Temporarily suppress console errors/warnings from parser library
+      console.error = () => {}; // Suppress error logging
+      console.warn = () => {}; // Suppress warning logging
+      parseResult = parse(extracted) as T;
+    } catch (error: unknown) {
+      parseError = error;
+    } finally {
+      // Always restore console methods
+      console.error = originalError;
+      console.warn = originalWarn;
+    }
+    
+    // If parsing succeeded, return the result
+    if (parseResult !== null) {
+      return parseResult;
+    }
+    
+    // If parsing failed with "extra tokens" error, try native JSON.parse
+    if (parseError) {
       const parseErrorMessage = parseError instanceof Error 
         ? parseError.message 
         : String(parseError);
@@ -119,15 +140,15 @@ function tryParseJSON<T>(raw: string): T | null {
           // Native parser also failed, continue to next strategy
         }
       }
-      
-      // Re-throw to be caught by outer catch
-      throw parseError;
     }
   } catch {
     // If all parsing strategies failed, return null
     // The error will be handled by the caller's fallback
     return null;
   }
+  
+  // If we get here, all strategies failed
+  return null;
 }
 
 export function parseJSON<T>(json: string | null | undefined, fallback: T) {

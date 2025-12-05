@@ -22,7 +22,8 @@ import {
   ListTodo,
   FolderKanban,
   Users,
-  GitBranch
+  GitBranch,
+  Brain
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
@@ -67,6 +68,9 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   list_users: <Users size={12} />,
   get_user: <Users size={12} />,
   
+  // Cursor-style: Thought (reasoning)
+  thought: <Brain size={12} />,
+  
   // Default
   default: <Wrench size={12} />,
 };
@@ -99,6 +103,7 @@ function getToolDisplayName(toolName: string): string {
     web_search: "Web Search",
     crawl_tool: "Read Page",
     python_repl_tool: "Run Python",
+    thought: "Thought",  // Cursor-style: Thought display
   };
   return nameMap[toolName] ?? toolName.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
@@ -150,7 +155,15 @@ function getResultSummary(toolName: string, result: string | undefined): string 
   if (!result) return "Running...";
   
   try {
-    const parsed = parseJSON<unknown>(result, null);
+    // Use a more defensive approach - catch any errors from parseJSON
+    let parsed: unknown = null;
+    try {
+      parsed = parseJSON<unknown>(result, null);
+    } catch (parseError) {
+      // If parseJSON throws (shouldn't happen, but be defensive), treat as plain text
+      console.debug(`[StepBox] Failed to parse result for ${toolName}:`, parseError);
+      parsed = null;
+    }
     
     if (parsed === null) {
       // Plain text result
@@ -202,7 +215,9 @@ function getResultSummary(toolName: string, result: string | undefined): string 
     }
     
     return "Completed";
-  } catch {
+  } catch (error) {
+    // Final fallback - return truncated result
+    console.debug(`[StepBox] Error in getResultSummary for ${toolName}:`, error);
     return result.length > 100 ? result.substring(0, 100) + "..." : result;
   }
 }

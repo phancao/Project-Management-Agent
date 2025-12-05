@@ -551,9 +551,33 @@ class ContextManager:
         - Tier 1 (Recent): Keep full (last 10 messages)
         - Tier 2 (Middle): Summarize (messages 10-50 back)
         - Tier 3 (Old): Super-summarize (50+ messages back)
+        
+        Also truncates individual large messages to prevent token overflow.
         """
+        # First, truncate individual large messages to prevent overflow
+        # Calculate max tokens per message (reserve 20% for overhead, distribute rest)
+        max_tokens_per_message = int((self.token_limit * 0.8) / max(len(messages), 1))
+        max_chars_per_message = max_tokens_per_message * 4  # ~4 chars per token
+        
+        truncated_messages = []
+        for msg in messages:
+            if hasattr(msg, 'content') and isinstance(msg.content, str):
+                if len(msg.content) > max_chars_per_message:
+                    logger.info(f"[CONTEXT] Truncating large message: {len(msg.content):,} → {max_chars_per_message:,} chars")
+                    # Create a copy to avoid modifying original
+                    from copy import deepcopy
+                    msg_copy = deepcopy(msg)
+                    msg_copy.content = msg_copy.content[:max_chars_per_message] + "\n\n... (truncated due to context limit) ..."
+                    truncated_messages.append(msg_copy)
+                else:
+                    truncated_messages.append(msg)
+            else:
+                truncated_messages.append(msg)
+        
+        messages = truncated_messages
+        
         if len(messages) <= 10:
-            return messages  # All recent, no compression needed
+            return messages  # All recent, no further compression needed
         
         # Separate system prompts (always keep)
         system_msgs = [m for m in messages if isinstance(m, SystemMessage)]

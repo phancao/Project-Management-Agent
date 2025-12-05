@@ -38,23 +38,24 @@ export const MODEL_TOKEN_LIMITS: Record<string, number> = {
  */
 export function getModelTokenLimit(modelName?: string): number {
   if (!modelName) {
-    return MODEL_TOKEN_LIMITS.default;
+    return MODEL_TOKEN_LIMITS.default ?? 16385;
   }
   
   // Try exact match first
   if (modelName in MODEL_TOKEN_LIMITS) {
-    return MODEL_TOKEN_LIMITS[modelName];
+    const limit = MODEL_TOKEN_LIMITS[modelName];
+    return limit ?? 16385;
   }
   
   // Try partial match (e.g., "gpt-4o" matches "gpt-4o-mini")
   for (const [key, limit] of Object.entries(MODEL_TOKEN_LIMITS)) {
     if (modelName.includes(key) || key.includes(modelName)) {
-      return limit;
+      return limit ?? 16385;
     }
   }
   
   // Default fallback
-  return MODEL_TOKEN_LIMITS.default;
+  return MODEL_TOKEN_LIMITS.default ?? 16385;
 }
 
 /**
@@ -106,7 +107,12 @@ export function countMessageTokens(message: {
   role?: string;
   content?: string;
   name?: string;
-  toolCalls?: Array<{ name?: string; args?: Record<string, unknown> }>;
+  toolCalls?: Array<{ 
+    name?: string; 
+    args?: Record<string, unknown>;
+    argsChunks?: string[];  // Support streaming tool call args
+    result?: string;  // Tool result (sent as separate ToolMessage to LLM)
+  }>;
 }): number {
   let tokenCount = 0;
   
@@ -142,9 +148,28 @@ export function countMessageTokens(message: {
       }
       
       // Tool arguments (JSON stringified)
+      // Handle both parsed args and streaming argsChunks
       if (toolCall.args) {
+        // Args are already parsed (after finish_reason)
         const argsStr = JSON.stringify(toolCall.args);
         tokenCount += countTokensApprox(argsStr);
+      } else if (toolCall.argsChunks && Array.isArray(toolCall.argsChunks) && toolCall.argsChunks.length > 0) {
+        // Args are still streaming (before finish_reason)
+        // Join chunks and count tokens
+        const argsStr = toolCall.argsChunks.join("");
+        tokenCount += countTokensApprox(argsStr);
+      }
+      
+      // Count tool result (if present) - tool results are sent as separate ToolMessage objects to LLM
+      // ToolMessage format: {"role": "tool", "content": "...", "tool_call_id": "..."}
+      if (toolCall.result) {
+        // ToolMessage structure overhead: ~8 tokens (role + tool_call_id + structure)
+        tokenCount += 8;
+        // Count result content
+        const resultStr = String(toolCall.result);
+        tokenCount += countTokensApprox(resultStr);
+        // Tool call ID overhead: ~5 tokens
+        tokenCount += 5;
       }
     }
   }
@@ -153,17 +178,108 @@ export function countMessageTokens(message: {
 }
 
 /**
+ * Estimate system prompt tokens based on agent type.
+ * These are approximate sizes based on actual prompt templates.
+ */
+function estimateSystemPromptTokens(agentType?: string): number {
+  if (!agentType) return 0;
+  
+  // Estimated system prompt sizes (in tokens) based on actual prompt templates
+  const systemPromptSizes: Record<string, number> = {
+    "pm_agent": 1200,      // ~4.5K chars / 3.7 = ~1200 tokens
+    "researcher": 800,     // ~3K chars / 3.7 = ~800 tokens
+    "planner": 1000,       // ~3.7K chars / 3.7 = ~1000 tokens
+    "reporter": 600,       // ~2.2K chars / 3.7 = ~600 tokens
+    "coder": 500,          // ~1.8K chars / 3.7 = ~500 tokens
+    "react_agent": 400,    // ~1.5K chars / 3.7 = ~400 tokens
+    "coordinator": 700,    // ~2.6K chars / 3.7 = ~700 tokens
+  };
+  
+  const size = systemPromptSizes[agentType];
+  return size !== undefined ? size : 500; // Default estimate
+}
+
+/**
+ * Estimate tool definition tokens.
+ * Each tool definition includes: name, description, and input schema.
+ * Average: ~150-200 tokens per tool (name: ~5, description: ~50, schema: ~100-150)
+ */
+function estimateToolDefinitionTokens(toolNames: string[]): number {
+  if (!toolNames || toolNames.length === 0) return 0;
+  
+  // Average tool definition size: ~180 tokens per tool
+  // Includes: function name (~5), description (~50), parameters schema (~125)
+  const tokensPerTool = 180;
+  
+  return toolNames.length * tokensPerTool;
+}
+
+/**
+ * Extract unique tool names from messages (from tool calls).
+ */
+function extractToolNamesFromMessages(
+  messages: Array<{ 
+    toolCalls?: Array<{ name?: string }>;
+  }>
+): string[] {
+  const toolNames = new Set<string>();
+  
+  for (const msg of messages) {
+    if (msg.toolCalls && msg.toolCalls.length > 0) {
+      for (const toolCall of msg.toolCalls) {
+        if (toolCall.name) {
+          toolNames.add(toolCall.name);
+        }
+      }
+    }
+  }
+  
+  return Array.from(toolNames);
+}
+
+/**
  * Count total tokens in an array of messages.
+ * Like Cursor, this counts EVERYTHING that goes into the LLM context:
+ * 1. System prompts (based on agent type)
+ * 2. Tool definitions (based on tools actually used)
+ * 3. All messages (user, assistant, system, tool)
+ * 4. Tool calls and results
  */
 export function countMessagesTokens(
   messages: Array<{ 
     role?: string; 
     content?: string; 
     name?: string;
-    toolCalls?: Array<{ name?: string; args?: Record<string, unknown> }>;
+    agent?: string;
+    toolCalls?: Array<{ 
+      name?: string; 
+      args?: Record<string, unknown>;
+      argsChunks?: string[];  // Support streaming tool call args
+      result?: string;  // Tool result (sent as separate ToolMessage to LLM)
+    }>;
   }>
 ): number {
-  return messages.reduce((total, msg) => total + countMessageTokens(msg), 0);
+  // 1. Count tokens in all messages
+  let totalTokens = messages.reduce((total, msg) => total + countMessageTokens(msg), 0);
+  
+  // 2. Count system prompts (one per unique agent type)
+  const agentTypes = new Set<string>();
+  for (const msg of messages) {
+    if (msg.agent) {
+      agentTypes.add(msg.agent);
+    }
+  }
+  
+  // Add system prompt tokens for each agent type used
+  for (const agentType of agentTypes) {
+    totalTokens += estimateSystemPromptTokens(agentType);
+  }
+  
+  // 3. Count tool definitions (based on tools actually called)
+  const toolNames = extractToolNamesFromMessages(messages);
+  totalTokens += estimateToolDefinitionTokens(toolNames);
+  
+  return totalTokens;
 }
 
 

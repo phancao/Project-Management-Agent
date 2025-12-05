@@ -744,8 +744,6 @@ class AnalyticsService:
             try:
                 if float(percentage_complete) >= 100.0:
                     status = TaskStatus.DONE
-                    import logging
-                    logger = logging.getLogger(__name__)
                     logger.info(
                         f"[AnalyticsService] Task {data.get('id')} has 100% completion, "
                         f"setting status to DONE"

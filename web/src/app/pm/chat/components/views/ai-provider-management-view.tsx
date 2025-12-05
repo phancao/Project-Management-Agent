@@ -396,18 +396,18 @@ export function AIProviderManagementView() {
                 </div>
 
                 {/* Base URL is always available as an optional field */}
-                <div className="space-y-2">
-                  <Label htmlFor="base_url">Base URL (Optional)</Label>
-                  <Input
-                    id="base_url"
-                    type="text"
+                  <div className="space-y-2">
+                    <Label htmlFor="base_url">Base URL (Optional)</Label>
+                    <Input
+                      id="base_url"
+                      type="text"
                     placeholder="Custom base URL (e.g., https://api.openai.com/v1)"
-                    value={formData.base_url}
-                    onChange={(e) =>
-                      setFormData({ ...formData, base_url: e.target.value })
-                    }
-                  />
-                </div>
+                      value={formData.base_url}
+                      onChange={(e) =>
+                        setFormData({ ...formData, base_url: e.target.value })
+                      }
+                    />
+                  </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="model_name">Default Model (Optional)</Label>

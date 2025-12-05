@@ -39,6 +39,11 @@ export interface MessageChunkEvent
     {
       content?: string;
       reasoning_content?: string;
+      react_thoughts?: Array<{
+        thought: string;
+        before_tool?: boolean;
+        step_index: number;
+      }>;
     }
   > { }
 

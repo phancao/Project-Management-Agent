@@ -4,6 +4,7 @@ Burndown chart calculator.
 Generates burndown chart data showing ideal vs actual remaining work over time.
 """
 
+import logging
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Literal
 
@@ -11,6 +12,8 @@ from src.analytics.models import (
     ChartResponse, ChartSeries, ChartDataPoint, ChartType,
     SprintData, WorkItem, TaskStatus
 )
+
+logger = logging.getLogger(__name__)
 
 
 class BurndownCalculator:
@@ -147,6 +150,10 @@ class BurndownCalculator:
         total_scope: float
     ) -> ChartSeries:
         """Calculate actual burndown based on completed work"""
+        # Ensure logger is available (defensive check)
+        from logging import getLogger
+        _logger = getLogger(__name__)
+        
         data_points = []
         
         # Get initial scope at sprint start
@@ -166,9 +173,7 @@ class BurndownCalculator:
             
             for item in sprint_data.work_items:
                 # Log each item for debugging
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.debug(
+                _logger.debug(
                     f"[BurndownCalculator] Checking item {item.id}: "
                     f"status={item.status}, "
                     f"completed_at={item.completed_at}, "
@@ -183,7 +188,7 @@ class BurndownCalculator:
                         # If no completion date but task is done, use sprint end date
                         # This handles cases where tasks are marked done but don't have completion dates
                         completion_date = datetime.combine(sprint_data.end_date, datetime.min.time())
-                        logger.debug(
+                        _logger.debug(
                             f"[BurndownCalculator] Item {item.id} is DONE but no completion_date, "
                             f"using sprint end date: {completion_date.date()}"
                         )
@@ -198,7 +203,7 @@ class BurndownCalculator:
                             work_value = 1
                         
                         completed_work += work_value
-                        logger.debug(
+                        _logger.debug(
                             f"[BurndownCalculator] Item {item.id} counted as completed: "
                             f"{work_value} {scope_type} on {current_date}"
                         )

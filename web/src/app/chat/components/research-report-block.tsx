@@ -23,7 +23,22 @@ export function ResearchReportBlock({
   const message = useMessage(messageId);
   const { isReplay } = useReplay();
   
-  // Removed debug logging
+  // Debug logging to track content disappearance
+  useEffect(() => {
+    if (messageId && message) {
+      const contentLen = message.content?.length ?? 0;
+      const chunksLen = message.contentChunks?.length ?? 0;
+      const chunksTotalLen = message.contentChunks?.join("").length ?? 0;
+      console.log(`[ResearchReportBlock] messageId=${messageId}, contentLen=${contentLen}, chunksLen=${chunksLen}, chunksTotalLen=${chunksTotalLen}, isStreaming=${message.isStreaming}, finishReason=${message.finishReason}`);
+      if (contentLen === 0 && chunksTotalLen > 0) {
+        console.warn(`[ResearchReportBlock] ⚠️ Content is empty but chunks have data! messageId=${messageId}`);
+      }
+      if (contentLen === 0 && chunksLen === 0 && !message.isStreaming && message.finishReason) {
+        console.error(`[ResearchReportBlock] ❌ Content disappeared! messageId=${messageId}, finishReason=${message.finishReason}`);
+      }
+    }
+  }, [messageId, message?.content, message?.contentChunks, message?.isStreaming, message?.finishReason]);
+  
   const handleMarkdownChange = useCallback(
     (markdown: string) => {
       if (message) {

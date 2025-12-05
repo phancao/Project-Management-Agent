@@ -102,14 +102,41 @@ export const useStore = create<{
     });
   },
   updateMessage(message: Message) {
-    set((state) => ({
-      messages: new Map(state.messages).set(message.id, message),
-    }));
+    set((state) => {
+      const existing = state.messages.get(message.id);
+      const existingContentLen = existing?.content?.length ?? 0;
+      const newContentLen = message.content?.length ?? 0;
+      if (existingContentLen > 0 && newContentLen === 0 && message.agent === "reporter") {
+        console.error(`[Store.updateMessage] ❌ REPORTER CONTENT LOSS! messageId=${message.id}, existingContentLen=${existingContentLen}, newContentLen=${newContentLen}, isStreaming=${message.isStreaming}, finishReason=${message.finishReason}`);
+        console.trace("Stack trace for content loss");
+        // Preserve existing content if new message has empty content
+        message.content = existing.content;
+        message.contentChunks = existing.contentChunks ?? [];
+      }
+      return {
+        messages: new Map(state.messages).set(message.id, message),
+      };
+    });
   },
   updateMessages(messages: Message[]) {
     set((state) => {
       const newMessages = new Map(state.messages);
-      messages.forEach((m) => newMessages.set(m.id, m));
+      messages.forEach((m) => {
+        // Debug logging for reporter messages
+        if (m.agent === "reporter") {
+          const existing = state.messages.get(m.id);
+          const existingContentLen = existing?.content?.length ?? 0;
+          const newContentLen = m.content?.length ?? 0;
+          if (existingContentLen > 0 && newContentLen === 0) {
+            console.error(`[Store.updateMessages] ❌ REPORTER CONTENT LOSS in batch update! messageId=${m.id}, existingContentLen=${existingContentLen}, newContentLen=${newContentLen}`);
+            console.trace("Stack trace for batch content loss");
+            // Preserve existing content
+            m.content = existing.content;
+            m.contentChunks = existing.contentChunks ?? [];
+          }
+        }
+        newMessages.set(m.id, m);
+      });
       return { messages: newMessages };
     });
   },
@@ -256,12 +283,25 @@ export async function sendMessage(
       message ??= getMessage(messageId);
       if (message) {
         const previousIsStreaming = message.isStreaming;
+        const contentBeforeMerge = message.content?.length ?? 0;
         message = mergeMessage(message, event);
+        const contentAfterMerge = message.content?.length ?? 0;
+        
+        // Debug logging for reporter messages
+        if (message.agent === "reporter") {
+          console.log(`[Store] mergeMessage: messageId=${message.id}, contentBefore=${contentBeforeMerge}, contentAfter=${contentAfterMerge}, eventType=${type}, hasFinishReason=${!!event.data.finish_reason}`);
+          if (contentBeforeMerge > 0 && contentAfterMerge === 0) {
+            console.error(`[Store] ❌ Content lost during merge! messageId=${message.id}, eventType=${type}`);
+          }
+        }
         
         // If finish_reason is present, apply update immediately to ensure UI updates quickly
         // This is especially important for reporter messages to show the final report
         if (event.data.finish_reason && previousIsStreaming) {
           // Immediately update using helper function to trigger UI re-render and run reporter logic
+          if (message.agent === "reporter") {
+            console.log(`[Store] Updating reporter message immediately with finish_reason: messageId=${message.id}, contentLen=${message.content?.length ?? 0}`);
+          }
           updateMessage(message);
           // Remove from pending updates to avoid duplicate update
           pendingUpdates.delete(message.id);
@@ -298,6 +338,11 @@ export async function sendMessage(
       if (msg.isStreaming && msg.finishReason) {
         msg.isStreaming = false;
         if (msg.agent === "reporter") {
+          const contentLen = msg.content?.length ?? 0;
+          console.log(`[Store] Cleanup loop found reporter message: messageId=${id}, contentLen=${contentLen}, finishReason=${msg.finishReason}`);
+          if (contentLen === 0) {
+            console.error(`[Store] ❌ Cleanup loop: Reporter message has empty content! messageId=${id}`);
+          }
           reporterMessages.push(msg);
         } else {
           finishedMessages.push(msg);
@@ -313,6 +358,8 @@ export async function sendMessage(
     // Process reporter messages LAST - this ensures ongoingResearchId is still available
     // updateMessage will clear ongoingResearchId when reporter finishes
     for (const msg of reporterMessages) {
+      const contentLenBefore = msg.content?.length ?? 0;
+      console.log(`[Store] Cleanup loop updating reporter message: messageId=${msg.id}, contentLen=${contentLenBefore}`);
       useStore.getState().updateMessage(msg);
     }
   } catch (error) {

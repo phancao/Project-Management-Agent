@@ -903,4 +903,3 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         except Exception as e:
             logger.error(f"[PMProviderAnalyticsAdapter] Error fetching issue trend data: {e}", exc_info=True)
             raise
-

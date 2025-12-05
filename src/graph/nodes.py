@@ -42,6 +42,12 @@ from .utils import (
     get_message_content,
     reconstruct_clarification_history,
 )
+from .thought_extractor import (
+    attach_thoughts_to_message,
+    get_thoughts_from_message,
+    merge_thoughts,
+    create_thought,
+)
 
 logger = logging.getLogger(__name__)
 

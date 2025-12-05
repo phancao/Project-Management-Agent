@@ -126,25 +126,9 @@ function mergeTextMessage(message: Message, event: MessageChunkEvent) {
     message.reasoningContentChunks = message.reasoningContentChunks ?? [];
     message.reasoningContentChunks.push(event.data.reasoning_content);
   }
-  // Cursor-style: Add react_thoughts if available
+  // Add react_thoughts if available
   if (event.data.react_thoughts) {
-    console.log(`[DEBUG-MERGE] 💭 Adding react_thoughts to message ${message.id} (agent: ${message.agent}):`, {
-      thoughtCount: event.data.react_thoughts.length,
-      thoughts: event.data.react_thoughts,
-      eventType: event.type,
-      eventData: event.data
-    });
     message.reactThoughts = event.data.react_thoughts;
-  } else {
-    // Debug: Log when react_thoughts is NOT in event
-    if (message.agent === "pm_agent" || message.agent === "react_agent") {
-      console.log(`[DEBUG-MERGE] ⚠️ No react_thoughts in event for ${message.agent} message ${message.id}`, {
-        eventType: event.type,
-        eventDataKeys: Object.keys(event.data || {}),
-        hasContent: !!event.data.content,
-        hasReasoningContent: !!event.data.reasoning_content
-      });
-    }
   }
 }
 function convertToolChunkArgs(args: string) {
@@ -159,14 +143,8 @@ function mergeToolCallMessage(
   // Initialize toolCalls array if not present
   message.toolCalls ??= [];
   
-  // CRITICAL: Extract react_thoughts from tool_calls event if present
-  // This ensures thoughts appear IMMEDIATELY when tool calls are streamed
+  // Extract react_thoughts from tool_calls event if present
   if (event.data.react_thoughts) {
-    console.log(`[DEBUG-MERGE] 💭 Adding react_thoughts from tool_calls event to message ${message.id} (agent: ${message.agent}):`, {
-      thoughtCount: event.data.react_thoughts.length,
-      thoughts: event.data.react_thoughts,
-      eventType: event.type
-    });
     message.reactThoughts = event.data.react_thoughts;
   }
   
@@ -230,11 +208,7 @@ function mergeToolCallResultMessage(
     (toolCall) => toolCall.id === event.data.tool_call_id,
   );
   if (toolCall) {
-    // Ensure result is always a string (not undefined/null)
     toolCall.result = event.data.content ?? "";
-    console.log(`[ToolCallResult] Set result for ${toolCall.name}: ${toolCall.result?.substring(0, 50)}...`);
-  } else {
-    console.warn(`[ToolCallResult] Could not find tool call with id=${event.data.tool_call_id}`);
   }
 }
 

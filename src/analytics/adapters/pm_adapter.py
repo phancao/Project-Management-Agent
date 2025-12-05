@@ -80,14 +80,30 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         """
         Extract the sprint key from a composite sprint ID.
         
+        Handles various formats:
+        - "613" -> "613"
+        - "provider_uuid:613" -> "613"
+        - "provider_uuid:project_id:613" -> "613" (extract last part)
+        - "project_id:613" -> "613"
+        
         Args:
-            sprint_id: Either "provider_uuid:sprint_key" or just "sprint_key"
+            sprint_id: Sprint ID in various formats
         
         Returns:
             The sprint key portion (numeric ID for OpenProject)
         """
+        if not sprint_id:
+            return sprint_id
+        
         if ":" in sprint_id:
-            return sprint_id.split(":", 1)[1]
+            # Extract the last part after the final colon (handles multi-part IDs)
+            # e.g., "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478:613" -> "613"
+            # e.g., "478:613" -> "613"
+            result = sprint_id.rsplit(":", 1)[-1]
+            logger.debug(
+                f"[PMProviderAnalyticsAdapter] _extract_sprint_key: '{sprint_id}' -> '{result}'"
+            )
+            return result
         return sprint_id
     
     async def _resolve_sprint_id(self, sprint_id: str, project_key: str) -> tuple[str, Optional[Any]]:
@@ -97,6 +113,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         Handles various formats:
         - Numeric ID: "613" -> returns ("613", sprint_object)
         - Composite ID: "uuid:613" -> extracts "613", returns ("613", sprint_object)
+        - Composite ID: "uuid:project_id:613" -> extracts "613", returns ("613", sprint_object)
+        - Composite ID: "project_id:613" -> extracts "613", returns ("613", sprint_object)
         - Sprint name: "Sprint 4" or "sprint-4" -> looks up by name, returns (numeric_id, sprint_object)
         - "current" -> finds active sprint, returns (numeric_id, sprint_object)
         
@@ -108,7 +126,12 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             Tuple of (resolved_sprint_id, sprint_object) or raises ValueError
         """
         # Extract sprint key from composite ID
+        # This handles formats like "provider_id:project_id:sprint_id" or "project_id:sprint_id"
         sprint_key = self._extract_sprint_key(sprint_id)
+        logger.debug(
+            f"[PMProviderAnalyticsAdapter] _resolve_sprint_id: sprint_id='{sprint_id}', "
+            f"project_key='{project_key}', extracted sprint_key='{sprint_key}'"
+        )
         
         # Handle 'current' - find active sprint
         if sprint_key.lower() == "current":

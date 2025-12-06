@@ -830,6 +830,15 @@ function updateMessage(message: Message) {
       
       // Auto-open the research when report finishes
       useStore.getState().openResearch(researchId);
+      
+      // Clear ongoingResearchId when report finishes (has finishReason and not streaming)
+      if (message.finishReason && !message.isStreaming) {
+        const currentOngoing = useStore.getState().ongoingResearchId;
+        if (currentOngoing === researchId) {
+          console.log(`[Store.updateMessage helper] ✅ Clearing ongoingResearchId: researchId=${researchId}, report finished`);
+          useStore.getState().setOngoingResearch(null);
+        }
+      }
     } else {
       // Fallback: Try to find researchId by checking activityIds
       const state = useStore.getState();
@@ -851,6 +860,15 @@ function updateMessage(message: Message) {
               researchReportIds: new Map(state.researchReportIds).set(rId, message.id),
             });
             useStore.getState().openResearch(rId);
+            
+            // Clear ongoingResearchId when report finishes (has finishReason and not streaming)
+            if (message.finishReason && !message.isStreaming) {
+              const currentOngoing = useStore.getState().ongoingResearchId;
+              if (currentOngoing === rId) {
+                console.log(`[Store.updateMessage helper] ✅ Clearing ongoingResearchId (fallback): researchId=${rId}, report finished`);
+                useStore.getState().setOngoingResearch(null);
+              }
+            }
           } else {
             const currentMsg = state.messages.get(currentReportId!);
             const currentContentLen = currentMsg?.content?.length ?? 0;

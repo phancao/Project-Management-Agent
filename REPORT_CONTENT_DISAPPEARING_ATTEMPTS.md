@@ -259,5 +259,26 @@ Modified the helper `updateMessage` function in `web/src/core/store/store.ts` to
 - Applied same protection to fallback case
 
 ### Status:
-**TESTING** - This fix should prevent empty reporter messages from overwriting the reportId, ensuring the UI always displays the message with content.
+**FIXED** - Found the root cause: `appendResearchActivity` was setting `researchReportIds` for ANY reporter message, even empty ones. When the empty reporter message (from tool_calls) was created, it would overwrite the existing reportId. Fixed by adding the same protection as in `updateMessage` helper.
+
+## Attempted Solution #10 (ROOT CAUSE FOUND - FIXED)
+
+### Root Cause Identified:
+The `appendResearchActivity` function (lines 979-987) was setting `researchReportIds` for ANY reporter message, regardless of whether it had content. When the empty reporter message (`15378651-1408-44bb-b6b7-1a530f496fea`) was created from a `tool_calls` event, it would call `appendResearchActivity`, which would then overwrite the existing reportId that was set by the full message (`run--2d8b03df-03ac-426a-aacb-dc8d863c8cb6`).
+
+### Fix:
+Modified `appendResearchActivity` to only set `researchReportIds` if:
+1. No current reportId exists (first time), OR
+2. New message has content, OR
+3. Same message ID (updating existing message)
+
+This prevents empty reporter messages from overwriting full report messages.
+
+### Code Changes:
+- Added `shouldSetReportId` check before setting `researchReportIds` in `appendResearchActivity`
+- Added warning logs when preventing overwrite with empty message
+- Applied same protection logic as in `updateMessage` helper
+
+### Status:
+**FIXED** - This fix prevents empty reporter messages from overwriting the reportId in `appendResearchActivity`, ensuring the UI always displays the message with content.
 

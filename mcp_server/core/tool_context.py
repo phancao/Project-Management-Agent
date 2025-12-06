@@ -90,6 +90,7 @@ class ToolContext:
     ) -> "ToolContext":
         """
         Create tool context from database session.
+        Loads PM Service URL from provider configuration if available.
         
         Args:
             db_session: Database session
@@ -98,7 +99,13 @@ class ToolContext:
         Returns:
             ToolContext instance
         """
-        return cls(db_session=db_session, user_id=user_id)
+        # Load PM Service URL from provider configuration (required)
+        from pm_service.handlers import PMHandler
+        handler = PMHandler(db_session, user_id=user_id)
+        pm_service_url = handler.get_pm_service_url()
+        logger.info(f"Loaded PM Service URL from provider config: {pm_service_url}")
+        
+        return cls(db_session=db_session, user_id=user_id, pm_service_url=pm_service_url)
     
     def clear_caches(self) -> None:
         """Clear all caches."""

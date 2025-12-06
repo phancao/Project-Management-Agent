@@ -91,8 +91,8 @@ export function ThoughtBox({
             transition={{ duration: 0.2 }}
             className="border-t border-purple-200/50 dark:border-purple-800/30"
           >
-            <div className="p-3">
-              <div className="prose prose-sm dark:prose-invert max-w-none text-purple-900 dark:text-purple-100">
+            <div className="p-3 max-h-[400px] overflow-y-auto">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-purple-900 dark:text-purple-100 break-words [word-break:break-word] [overflow-wrap:anywhere]">
                 <Markdown animated={false}>
                   {thought}
                 </Markdown>

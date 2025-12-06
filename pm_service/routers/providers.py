@@ -35,7 +35,8 @@ async def list_providers(
             base_url=p.base_url,
             is_active=p.is_active,
             is_connected=True,  # TODO: actual connection check
-            last_sync_at=p.last_sync_at
+            last_sync_at=p.last_sync_at,
+            additional_config=p.additional_config if p.additional_config else None
         )
         for p in providers
     ]
@@ -68,7 +69,8 @@ async def get_provider(
         base_url=provider.base_url,
         is_active=provider.is_active,
         is_connected=True,
-        last_sync_at=provider.last_sync_at
+        last_sync_at=provider.last_sync_at,
+        additional_config=provider.additional_config if provider.additional_config else None
     )
 
 

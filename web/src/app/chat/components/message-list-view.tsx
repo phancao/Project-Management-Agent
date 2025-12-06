@@ -420,10 +420,10 @@ function ThoughtBlock({
             )}
           >
             <CardContent>
-              <div className="flex h-40 w-full overflow-y-auto">
+              <div className="flex max-h-[400px] w-full overflow-y-auto">
                 <ScrollContainer
                   className={cn(
-                    "flex h-full w-full flex-col overflow-hidden",
+                    "flex h-full w-full flex-col overflow-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]",
                     className,
                   )}
                   scrollShadow={false}
@@ -549,17 +549,17 @@ function PlanCard({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div style={{ wordBreak: 'break-all', whiteSpace: 'normal' }}>
+              <div className="max-h-[500px] overflow-y-auto break-words [word-break:break-word] [overflow-wrap:anywhere]">
                 <Markdown className="opacity-80" animated={false}>
                   {plan.thought}
                 </Markdown>
                 {plan.steps && (
                   <ul className="my-2 flex list-decimal flex-col gap-4 border-l-[2px] pl-8">
                     {plan.steps.map((step, i) => (
-                      <li key={`step-${i}`} style={{ wordBreak: 'break-all', whiteSpace: 'normal' }}>
+                      <li key={`step-${i}`} className="break-words [word-break:break-word] [overflow-wrap:anywhere]">
                         <div className="flex items-start gap-2">
-                          <div className="flex-1">
-                            <h3 className="mb flex items-center gap-2 text-lg font-medium">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="mb flex items-center gap-2 text-lg font-medium break-words [word-break:break-word]">
                               <Markdown animated={false}>
                                 {step.title}
                               </Markdown>
@@ -567,14 +567,14 @@ function PlanCard({
                                 <Tooltip
                                   title={`Uses ${step.tools.length} MCP tool${step.tools.length > 1 ? "s" : ""}`}
                                 >
-                                  <div className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">
+                                  <div className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800 shrink-0">
                                     <Wrench size={12} />
                                     <span>{step.tools.length}</span>
                                   </div>
                                 </Tooltip>
                               )}
                             </h3>
-                            <div className="text-muted-foreground text-sm" style={{ wordBreak: 'break-all', whiteSpace: 'normal' }}>
+                            <div className="text-muted-foreground text-sm break-words [word-break:break-word] [overflow-wrap:anywhere]">
                               <Markdown animated={false}>
                                 {step.description}
                               </Markdown>

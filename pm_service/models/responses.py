@@ -209,6 +209,7 @@ class ProviderResponse(BaseModel):
     is_connected: bool
     last_sync_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    additional_config: Optional[dict[str, Any]] = None
 
 
 class ErrorResponse(BaseModel):

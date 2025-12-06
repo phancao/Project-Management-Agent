@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     port: int = 8001
     
     # Database settings
-    database_url: str = "postgresql://mcp_user:mcp_password@localhost:5435/mcp_server"
+    database_url: str = "postgresql://mcp_user:mcp_password@mcp-postgres:5432/mcp_server"
     
     # External PM providers
     openproject_url: str = "http://localhost:8083"

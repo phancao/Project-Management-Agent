@@ -36,7 +36,23 @@ class PMServiceTool:
     def client(self) -> AsyncPMServiceClient:
         """Get PM Service client."""
         if self._client is None:
-            self._client = AsyncPMServiceClient(base_url=PM_SERVICE_URL)
+            # Get PM Service URL from context (required)
+            if self.context and hasattr(self.context, '_pm_service_url'):
+                # Use the context's PM Service URL (loaded from provider config)
+                pm_service_url = self.context._pm_service_url
+            elif self.context and hasattr(self.context, 'db'):
+                # Load from provider configuration if context has database session
+                from pm_service.handlers import PMHandler
+                handler = PMHandler(self.context.db, user_id=getattr(self.context, 'user_id', None))
+                pm_service_url = handler.get_pm_service_url()
+            else:
+                raise ValueError(
+                    "PM Service URL not available. "
+                    "Context must have database session to load PM Service URL from provider configuration. "
+                    "Please ensure providers are configured with pm_service_url in additional_config."
+                )
+            
+            self._client = AsyncPMServiceClient(base_url=pm_service_url)
         return self._client
     
     async def execute(self, **kwargs) -> dict[str, Any]:

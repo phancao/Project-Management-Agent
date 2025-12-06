@@ -346,7 +346,7 @@ export function StepBox({
             
             {/* Result */}
             {toolCall.result && (
-              <div className="p-2 max-h-[300px] overflow-auto">
+              <div className="p-2 max-h-[300px] overflow-y-auto overflow-x-hidden">
                 <SyntaxHighlighter
                   language="json"
                   style={resolvedTheme === "dark" ? dark : docco}
@@ -357,6 +357,8 @@ export function StepBox({
                     fontSize: "12px",
                     margin: 0,
                     padding: "8px",
+                    wordBreak: "break-word",
+                    overflowWrap: "anywhere",
                   }}
                   wrapLongLines
                 >

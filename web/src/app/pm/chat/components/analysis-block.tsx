@@ -303,7 +303,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <div className="flex flex-col gap-0.5 pt-0.5">
+                    <div className="flex flex-col gap-0.5 pt-0.5 max-h-[600px] overflow-y-auto">
                       {/* Cursor-style: Interleave thoughts and tool calls - thoughts appear BEFORE their tool call */}
                       {(() => {
                         // Create a combined list of thoughts and tool calls

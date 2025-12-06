@@ -63,6 +63,37 @@ class PMHandler:
         
         return query.all()
     
+    def get_pm_service_url(self) -> str:
+        """
+        Get PM Service URL from provider configuration.
+        Checks additional_config of active providers for 'pm_service_url'.
+        
+        Raises:
+            ValueError: If no active provider has pm_service_url configured
+        """
+        providers = self.get_active_providers()
+        
+        if not providers:
+            raise ValueError(
+                "No active PM providers configured. "
+                "Please add at least one PM provider with pm_service_url in additional_config."
+            )
+        
+        for provider in providers:
+            if provider.additional_config and isinstance(provider.additional_config, dict):
+                pm_service_url = provider.additional_config.get("pm_service_url")
+                if pm_service_url:
+                    logger.info(f"Found PM Service URL from provider {provider.id}: {pm_service_url}")
+                    return pm_service_url
+        
+        # No provider has pm_service_url configured
+        provider_names = [p.name for p in providers]
+        raise ValueError(
+            f"No PM provider has 'pm_service_url' configured in additional_config. "
+            f"Active providers: {', '.join(provider_names)}. "
+            "Please add 'pm_service_url' to at least one provider's additional_config."
+        )
+    
     def get_provider_by_id(self, provider_id: str) -> Optional[PMProviderConnection]:
         """Get provider by ID (PM Service ID or backend_provider_id)."""
         from uuid import UUID

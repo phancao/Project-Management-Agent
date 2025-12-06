@@ -102,6 +102,24 @@ export const useStore = create<{
     });
   },
   updateMessage(message: Message) {
+    // DEBUG: Log function entry for reporter messages
+    if (message.agent === "reporter") {
+      const state = useStore.getState();
+      const existing = state.messages.get(message.id);
+      const existingContentLen = existing?.content?.length ?? 0;
+      const newContentLen = message.content?.length ?? 0;
+      const existingLastChars = existing?.content?.slice(-50) ?? "";
+      const newLastChars = message.content?.slice(-50) ?? "";
+      console.log(`[DEBUG-UPDATE-ENTRY] 🚪 updateMessage ENTRY: messageId=${message.id}, existingContentLen=${existingContentLen}, newContentLen=${newContentLen}, isStreaming=${message.isStreaming}, finishReason=${message.finishReason}`);
+      if (existingContentLen > 0) {
+        console.log(`[DEBUG-UPDATE-ENTRY] 📝 Existing last 50 chars: "${existingLastChars}"`);
+      }
+      if (newContentLen > 0) {
+        console.log(`[DEBUG-UPDATE-ENTRY] 📝 New last 50 chars: "${newLastChars}"`);
+      }
+      console.trace(`[DEBUG-UPDATE-ENTRY] Stack trace for updateMessage entry`);
+    }
+    
     set((state) => {
       const existing = state.messages.get(message.id);
       const existingContentLen = existing?.content?.length ?? 0;
@@ -128,16 +146,45 @@ export const useStore = create<{
         // Preserve existing content if new message has empty content
         message.content = existing.content;
         message.contentChunks = existing.contentChunks ?? [];
+        console.log(`[DEBUG-REPORTER-UPDATE] ✅ Preserved existing content: contentLen=${message.content?.length ?? 0}, chunksLen=${message.contentChunks?.length ?? 0}`);
       }
-      return {
-      messages: new Map(state.messages).set(message.id, message),
+      
+      const updatedMessage = { ...message };
+      const result = {
+        messages: new Map(state.messages).set(message.id, updatedMessage),
       };
+      
+      // DEBUG: Log function exit for reporter messages
+      if (message.agent === "reporter") {
+        const finalContentLen = updatedMessage.content?.length ?? 0;
+        const finalChunksLen = updatedMessage.contentChunks?.length ?? 0;
+        const finalLastChars = updatedMessage.content?.slice(-50) ?? "";
+        console.log(`[DEBUG-UPDATE-EXIT] 🚪 updateMessage EXIT: messageId=${message.id}, finalContentLen=${finalContentLen}, finalChunksLen=${finalChunksLen}`);
+        if (finalContentLen > 0) {
+          console.log(`[DEBUG-UPDATE-EXIT] 📝 Final last 50 chars: "${finalLastChars}"`);
+        }
+      }
+      
+      return result;
     });
   },
   updateMessages(messages: Message[]) {
+    // DEBUG: Log function entry for reporter messages
+    const reporterMessages = messages.filter(m => m.agent === "reporter");
+    if (reporterMessages.length > 0) {
+      console.log(`[DEBUG-BATCH-ENTRY] 🚪 updateMessages ENTRY: processing ${reporterMessages.length} reporter messages out of ${messages.length} total`);
+      reporterMessages.forEach(m => {
+        const state = useStore.getState();
+        const existing = state.messages.get(m.id);
+        const existingContentLen = existing?.content?.length ?? 0;
+        const newContentLen = m.content?.length ?? 0;
+        console.log(`[DEBUG-BATCH-ENTRY] 📋 Reporter message: messageId=${m.id}, existingLen=${existingContentLen}, newLen=${newContentLen}`);
+      });
+      console.trace(`[DEBUG-BATCH-ENTRY] Stack trace for updateMessages entry`);
+    }
+    
     set((state) => {
       const newMessages = new Map(state.messages);
-      const reporterMessages = messages.filter(m => m.agent === "reporter");
       if (reporterMessages.length > 0) {
         console.log(`[DEBUG-REPORTER-BATCH] 📦 updateMessages: processing ${reporterMessages.length} reporter messages`);
       }
@@ -167,10 +214,26 @@ export const useStore = create<{
             // Preserve existing content
             m.content = existing.content;
             m.contentChunks = existing.contentChunks ?? [];
+            console.log(`[DEBUG-REPORTER-BATCH] ✅ Preserved existing content: contentLen=${m.content?.length ?? 0}, chunksLen=${m.contentChunks?.length ?? 0}`);
           }
         }
         newMessages.set(m.id, m);
       });
+      
+      // DEBUG: Log function exit for reporter messages
+      if (reporterMessages.length > 0) {
+        reporterMessages.forEach(m => {
+          const finalMsg = newMessages.get(m.id);
+          const finalContentLen = finalMsg?.content?.length ?? 0;
+          const finalChunksLen = finalMsg?.contentChunks?.length ?? 0;
+          const finalLastChars = finalMsg?.content?.slice(-50) ?? "";
+          console.log(`[DEBUG-BATCH-EXIT] 🚪 updateMessages EXIT: messageId=${m.id}, finalContentLen=${finalContentLen}, finalChunksLen=${finalChunksLen}`);
+          if (finalContentLen > 0) {
+            console.log(`[DEBUG-BATCH-EXIT] 📝 Final last 50 chars: "${finalLastChars}"`);
+          }
+        });
+      }
+      
       return { messages: newMessages };
     });
   },
@@ -254,12 +317,37 @@ export async function sendMessage(
       if (pendingUpdates.size > 0) {
         const reporterUpdates = Array.from(pendingUpdates.values()).filter(m => m.agent === "reporter");
         if (reporterUpdates.length > 0) {
-          console.log(`[DEBUG-REPORTER-SCHEDULE] ⏰ scheduleUpdate: processing ${reporterUpdates.length} reporter messages`);
+          console.log(`[DEBUG-SCHEDULE-ENTRY] 🚪 scheduleUpdate ENTRY: processing ${reporterUpdates.length} reporter messages out of ${pendingUpdates.size} total`);
           reporterUpdates.forEach(m => {
-            console.log(`[DEBUG-REPORTER-SCHEDULE] 📋 messageId=${m.id}, contentLen=${m.content?.length ?? 0}, chunksLen=${m.contentChunks?.length ?? 0}`);
+            const contentLen = m.content?.length ?? 0;
+            const chunksLen = m.contentChunks?.length ?? 0;
+            const lastChars = m.content?.slice(-50) ?? "";
+            console.log(`[DEBUG-REPORTER-SCHEDULE] 📋 messageId=${m.id}, contentLen=${contentLen}, chunksLen=${chunksLen}, finishReason=${m.finishReason}`);
+            if (contentLen > 0) {
+              console.log(`[DEBUG-REPORTER-SCHEDULE] 📝 Last 50 chars: "${lastChars}"`);
+            }
+          });
+          console.trace(`[DEBUG-SCHEDULE-ENTRY] Stack trace for scheduleUpdate entry`);
+        }
+        const messagesToUpdate = Array.from(pendingUpdates.values());
+        useStore.getState().updateMessages(messagesToUpdate);
+        
+        // DEBUG: Log after updateMessages call
+        if (reporterUpdates.length > 0) {
+          console.log(`[DEBUG-SCHEDULE-EXIT] 🚪 scheduleUpdate EXIT: updated ${reporterUpdates.length} reporter messages`);
+          reporterUpdates.forEach(m => {
+            const state = useStore.getState();
+            const updatedMsg = state.messages.get(m.id);
+            const finalContentLen = updatedMsg?.content?.length ?? 0;
+            const finalChunksLen = updatedMsg?.contentChunks?.length ?? 0;
+            const finalLastChars = updatedMsg?.content?.slice(-50) ?? "";
+            console.log(`[DEBUG-SCHEDULE-EXIT] 📋 messageId=${m.id}, finalContentLen=${finalContentLen}, finalChunksLen=${finalChunksLen}`);
+            if (finalContentLen > 0) {
+              console.log(`[DEBUG-SCHEDULE-EXIT] 📝 Final last 50 chars: "${finalLastChars}"`);
+            }
           });
         }
-        useStore.getState().updateMessages(Array.from(pendingUpdates.values()));
+        
         pendingUpdates.clear();
       }
     }, 16); // ~60fps
@@ -665,6 +753,18 @@ function appendMessage(message: Message) {
 }
 
 function updateMessage(message: Message) {
+  // DEBUG: Log function entry for reporter messages
+  if (message.agent === "reporter") {
+    const contentLen = message.content?.length ?? 0;
+    const chunksLen = message.contentChunks?.length ?? 0;
+    const lastChars = message.content?.slice(-50) ?? "";
+    console.log(`[DEBUG-HELPER-ENTRY] 🚪 updateMessage helper ENTRY: messageId=${message.id}, contentLen=${contentLen}, chunksLen=${chunksLen}, isStreaming=${message.isStreaming}, finishReason=${message.finishReason}`);
+    if (contentLen > 0) {
+      console.log(`[DEBUG-HELPER-ENTRY] 📝 Last 50 chars: "${lastChars}"`);
+    }
+    console.trace(`[DEBUG-HELPER-ENTRY] Stack trace for helper updateMessage entry`);
+  }
+  
   if (message.agent === "reporter" && !message.isStreaming) {
     const contentLen = message.content?.length ?? 0;
     const chunksLen = message.contentChunks?.length ?? 0;
@@ -732,7 +832,33 @@ function updateMessage(message: Message) {
       }
     }
   }
+  
+  // DEBUG: Log before calling store's updateMessage
+  if (message.agent === "reporter") {
+    const contentLen = message.content?.length ?? 0;
+    const chunksLen = message.contentChunks?.length ?? 0;
+    const lastChars = message.content?.slice(-50) ?? "";
+    console.log(`[DEBUG-HELPER-BEFORE-UPDATE] 🔧 About to call store.updateMessage: messageId=${message.id}, contentLen=${contentLen}, chunksLen=${chunksLen}`);
+    if (contentLen > 0) {
+      console.log(`[DEBUG-HELPER-BEFORE-UPDATE] 📝 Last 50 chars: "${lastChars}"`);
+    }
+  }
+  
   useStore.getState().updateMessage(message);
+  
+  // DEBUG: Log after calling store's updateMessage
+  if (message.agent === "reporter") {
+    const state = useStore.getState();
+    const updatedMsg = state.messages.get(message.id);
+    const finalContentLen = updatedMsg?.content?.length ?? 0;
+    const finalChunksLen = updatedMsg?.contentChunks?.length ?? 0;
+    const finalLastChars = updatedMsg?.content?.slice(-50) ?? "";
+    console.log(`[DEBUG-HELPER-AFTER-UPDATE] 🔧 After store.updateMessage: messageId=${message.id}, finalContentLen=${finalContentLen}, finalChunksLen=${finalChunksLen}`);
+    if (finalContentLen > 0) {
+      console.log(`[DEBUG-HELPER-AFTER-UPDATE] 📝 Final last 50 chars: "${finalLastChars}"`);
+    }
+    console.log(`[DEBUG-HELPER-EXIT] 🚪 updateMessage helper EXIT: messageId=${message.id}`);
+  }
 }
 
 function getOngoingResearchId() {

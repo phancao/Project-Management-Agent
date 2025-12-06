@@ -14,6 +14,18 @@ import { deepClone } from "../utils/deep-clone";
 import type { Message } from "./types";
 
 export function mergeMessage(message: Message, event: ChatEvent) {
+  // DEBUG: Log function entry for reporter messages
+  if (message.agent === "reporter") {
+    const contentBefore = message.content?.length ?? 0;
+    const chunksBefore = message.contentChunks?.length ?? 0;
+    const lastCharsBefore = message.content?.slice(-50) ?? "";
+    console.log(`[DEBUG-MERGE-ENTRY] 🚪 mergeMessage ENTRY: messageId=${message.id}, eventType=${event.type}, contentLen=${contentBefore}, chunksLen=${chunksBefore}`);
+    if (contentBefore > 0) {
+      console.log(`[DEBUG-MERGE-ENTRY] 📝 Last 50 chars: "${lastCharsBefore}"`);
+    }
+    console.trace(`[DEBUG-MERGE-ENTRY] Stack trace for mergeMessage entry`);
+  }
+  
   if (event.type === "message_chunk") {
     mergeTextMessage(message, event);
   } else if (event.type === "tool_calls" || event.type === "tool_call_chunks") {
@@ -110,10 +122,34 @@ export function mergeMessage(message: Message, event: ChatEvent) {
       });
     }
   }
+  
+  // DEBUG: Log function exit for reporter messages
+  if (message.agent === "reporter") {
+    const contentAfter = message.content?.length ?? 0;
+    const chunksAfter = message.contentChunks?.length ?? 0;
+    const lastCharsAfter = message.content?.slice(-50) ?? "";
+    console.log(`[DEBUG-MERGE-EXIT] 🚪 mergeMessage EXIT: messageId=${message.id}, contentLen=${contentAfter}, chunksLen=${chunksAfter}, finishReason=${message.finishReason}`);
+    if (contentAfter > 0) {
+      console.log(`[DEBUG-MERGE-EXIT] 📝 Last 50 chars: "${lastCharsAfter}"`);
+    }
+  }
+  
   return deepClone(message);
 }
 
 function mergeTextMessage(message: Message, event: MessageChunkEvent) {
+  // DEBUG: Log function entry for reporter messages
+  if (message.agent === "reporter") {
+    const contentBefore = message.content?.length ?? 0;
+    const chunksBefore = message.contentChunks?.length ?? 0;
+    const lastCharsBefore = message.content?.slice(-50) ?? "";
+    console.log(`[DEBUG-MERGE-TEXT-ENTRY] 🚪 mergeTextMessage ENTRY: messageId=${message.id}, contentLen=${contentBefore}, chunksLen=${chunksBefore}, eventContentLen=${event.data.content?.length ?? 0}`);
+    if (contentBefore > 0) {
+      console.log(`[DEBUG-MERGE-TEXT-ENTRY] 📝 Last 50 chars before: "${lastCharsBefore}"`);
+    }
+    console.trace(`[DEBUG-MERGE-TEXT-ENTRY] Stack trace for mergeTextMessage entry`);
+  }
+  
   if (event.data.content) {
     const contentBefore = message.content?.length ?? 0;
     const chunksBefore = message.contentChunks?.length ?? 0;
@@ -130,12 +166,29 @@ function mergeTextMessage(message: Message, event: MessageChunkEvent) {
       const contentAfter = message.content?.length ?? 0;
       const chunksAfter = message.contentChunks?.length ?? 0;
       const lastCharsAfter = message.content?.slice(-50) ?? "";
-      console.log(`[DEBUG-MERGE-TEXT] 📝 mergeTextMessage (reporter): messageId=${message.id}, contentBefore=${contentBefore}→${contentAfter}, chunksBefore=${chunksBefore}→${chunksAfter}, chunkLen=${event.data.content.length}`);
+      console.log(`[DEBUG-MERGE-TEXT] 📝 mergeTextMessage: messageId=${message.id}, contentBefore=${contentBefore}→${contentAfter}, chunksBefore=${chunksBefore}→${chunksAfter}, chunkLen=${event.data.content.length}`);
       if (contentBefore > 0) {
         console.log(`[DEBUG-MERGE-TEXT] 📝 Last 50 chars before: "${lastCharsBefore}"`);
       }
       console.log(`[DEBUG-MERGE-TEXT] 📝 Last 50 chars after: "${lastCharsAfter}"`);
       console.log(`[DEBUG-MERGE-TEXT] 📝 New chunk: "${event.data.content.substring(0, 50)}${event.data.content.length > 50 ? '...' : ''}"`);
+      
+      // Check for content loss
+      if (contentBefore > 0 && contentAfter === 0) {
+        console.error(`[DEBUG-MERGE-TEXT] ❌ CONTENT LOST in mergeTextMessage! messageId=${message.id}, before=${contentBefore}, after=${contentAfter}`);
+        console.trace("Stack trace for content loss in mergeTextMessage");
+      }
+    }
+  }
+  
+  // DEBUG: Log function exit for reporter messages
+  if (message.agent === "reporter") {
+    const contentAfter = message.content?.length ?? 0;
+    const chunksAfter = message.contentChunks?.length ?? 0;
+    const lastCharsAfter = message.content?.slice(-50) ?? "";
+    console.log(`[DEBUG-MERGE-TEXT-EXIT] 🚪 mergeTextMessage EXIT: messageId=${message.id}, contentLen=${contentAfter}, chunksLen=${chunksAfter}`);
+    if (contentAfter > 0) {
+      console.log(`[DEBUG-MERGE-TEXT-EXIT] 📝 Last 50 chars: "${lastCharsAfter}"`);
     }
   }
   if (event.data.reasoning_content) {

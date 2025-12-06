@@ -424,3 +424,4 @@ def _get_step_type(step: Any) -> Optional[str]:
         return str(step_type) if step_type else None
     return None
 
+

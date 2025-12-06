@@ -268,4 +268,117 @@ Creating comprehensive plan:
 
 The UI will now clearly show which path it's taking! 🎯
 
+---
+
+## Fix 3: Allow React Agent to Try First Even for "Comprehensive" Queries (2025-01-XX)
+
+### Problem
+React Agent was not being invoked for queries containing "comprehensive", "detailed report", "full analysis", or "in-depth" keywords. The coordinator was immediately routing these to planner, preventing React Agent from attempting to handle them first.
+
+**Test Query:**
+```
+"Comprehensive project analysis for project e6890ea6-0c3c-4a83-aa05-41b223df3284:478. Include all analytics..."
+```
+
+**Result:** React Agent never ran - went straight to planner → pm_agent → reporter
+
+### Root Cause
+In `coordinator_node` (line 1276), the code checks for keywords and routes to planner:
+```python
+wants_detailed = any(kw in user_query for kw in ["comprehensive", "detailed report", "full analysis", "in-depth"])
+
+if goto == "planner" and not escalation_reason and not previous_result and not wants_detailed:
+    goto = "react_agent"  # Only if NOT wants_detailed
+elif escalation_reason or wants_detailed:
+    goto = "planner"  # Routes to planner if wants_detailed
+```
+
+This prevents React Agent from trying first, even though it has auto-escalation built-in.
+
+### Solution
+**Changed Strategy:** Let React Agent try first for ALL queries (including comprehensive ones). React Agent will automatically escalate to planner if it can't handle the complexity.
+
+**File:** `src/graph/nodes.py` (line 1274-1285)
+
+**Before:**
+```python
+wants_detailed = any(kw in user_query for kw in ["comprehensive", "detailed report", "full analysis", "in-depth"])
+
+if goto == "planner" and not escalation_reason and not previous_result and not wants_detailed:
+    goto = "react_agent"
+elif escalation_reason or wants_detailed:
+    goto = "planner"
+```
+
+**After:**
+```python
+# Let React Agent try first for ALL queries (it will escalate if needed)
+# Only skip React Agent if:
+# 1. Already escalated from React Agent (escalation_reason exists)
+# 2. User explicitly requested escalation (previous_result exists)
+if goto == "planner" and not escalation_reason and not previous_result:
+    # First-time query → Use ReAct (fast), even for comprehensive queries
+    # React Agent will auto-escalate if it can't handle complexity
+    logger.info("[COORDINATOR] ⚡ ADAPTIVE ROUTING - Using ReAct fast path (will escalate if needed)")
+    goto = "react_agent"
+elif escalation_reason or previous_result:
+    # Already tried React Agent or user requested escalation → Use full pipeline
+    logger.info(f"[COORDINATOR] 📊 Using full pipeline: escalation={escalation_reason}, previous_result={bool(previous_result)}")
+    goto = "planner"
+```
+
+### Impact
+- ✅ React Agent now tries first for ALL queries (including "comprehensive")
+- ✅ React Agent auto-escalates to planner if it can't handle complexity
+- ✅ Better user experience: Fast path for simple queries, graceful escalation for complex ones
+- ✅ No breaking changes: Escalation logic already exists in React Agent
+
+### Testing
+**Test Query:**
+```
+"Comprehensive project analysis for project e6890ea6-0c3c-4a83-aa05-41b223df3284:478. Include all analytics: velocity, burndown, CFD, cycle time, work distribution, issue trends, and task statistics."
+```
+
+**Expected Behavior:**
+1. Coordinator routes to React Agent
+2. React Agent attempts to handle query
+3. If React Agent succeeds → Fast answer
+4. If React Agent fails (too complex) → Escalates to planner with context
+5. Planner uses React Agent's context to create better plan
+
+**Expected Logs:**
+```
+[COORDINATOR] ⚡ ADAPTIVE ROUTING - Using ReAct fast path (will escalate if needed)
+[REACT-AGENT] 🚀 Starting fast ReAct agent
+[REACT-AGENT] Query: Comprehensive project analysis...
+# Either:
+[REACT-AGENT] ✅ Success - returning answer
+# Or:
+[REACT-AGENT] ⬆️ Too many iterations (8 >= 8) - escalating to planner
+[PLANNER] Added ReAct escalation context (reason: max_iterations)
+```
+
+### Files Changed
+1. ✅ `src/graph/nodes.py` (line 1274-1285)
+   - Removed `wants_detailed` check that prevented React Agent from trying
+   - Allow React Agent to attempt all queries first, escalate if needed
+
+2. ✅ `src/graph/nodes.py` (line 5363)
+   - Fixed `UnboundLocalError: cannot access local variable 'AIMessage'` bug
+   - Removed redundant local import of `AIMessage` and `ToolMessage` (already imported at module level)
+   - This bug was causing React Agent to crash even when successfully invoked
+
+3. ✅ `src/graph/nodes.py` (line 5350-5365)
+   - Added escalation check when React Agent returns no output and no intermediate steps
+   - Prevents React Agent from returning empty answers when LangGraph doesn't execute properly
+   - Escalates to planner with clear reason: "no_output_no_steps: LangGraph agent returned empty result"
+
+4. ✅ `src/graph/nodes.py` (line 4509-4533)
+   - Fixed prompt confusion: React Agent was calling `list_projects` even when project_id was already provided
+   - Updated system prompt with priority-ordered rules:
+     - Rule 1: If project_id is provided → DO NOT call `list_projects`, use it directly
+     - Rule 2: If NO project_id → Then call `list_projects` to find it
+   - Added explicit example: "For 'show me all users in this project' → Call `list_users` with the provided project_id"
+   - This prevents unnecessary `list_projects` calls when project_id is already in context
+
 

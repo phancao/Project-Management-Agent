@@ -92,11 +92,24 @@ export interface StepProgressEvent
     }
   > { }
 
+export interface ThoughtsEvent
+  extends GenericEvent<
+    "thoughts",
+    {
+      react_thoughts: Array<{
+        thought: string;
+        before_tool?: boolean;
+        step_index: number;
+      }>;
+    }
+  > { }
+
 export type ChatEvent =
   | MessageChunkEvent
   | ToolCallsEvent
   | ToolCallChunksEvent
   | ToolCallResultEvent
   | InterruptEvent
-  | StepProgressEvent;
+  | StepProgressEvent
+  | ThoughtsEvent;
 

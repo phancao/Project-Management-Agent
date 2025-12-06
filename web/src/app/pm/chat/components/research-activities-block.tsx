@@ -509,15 +509,15 @@ function ContextOptimizationToolCall({ toolCall }: { toolCall: ToolCallRuntime }
   const { resolvedTheme } = useTheme();
   
   // Extract optimization details from tool call args or result
-  const args = toolCall.args || {};
-  const result = toolCall.result || "";
+  const args = (toolCall.args as Record<string, unknown>) || {};
+  const result = (toolCall.result as string) || "";
   
-  const originalTokens = args.original_tokens || 0;
-  const compressedTokens = args.compressed_tokens || 0;
-  const compressionRatio = args.compression_ratio || 1.0;
-  const strategy = args.strategy || "unknown";
-  const originalCount = args.original_message_count || 0;
-  const compressedCount = args.compressed_message_count || 0;
+  const originalTokens = (typeof args.original_tokens === 'number' ? args.original_tokens : 0);
+  const compressedTokens = (typeof args.compressed_tokens === 'number' ? args.compressed_tokens : 0);
+  const compressionRatio = (typeof args.compression_ratio === 'number' ? args.compression_ratio : 1.0);
+  const strategy = (typeof args.strategy === 'string' ? args.strategy : "unknown");
+  const originalCount = (typeof args.original_message_count === 'number' ? args.original_message_count : 0);
+  const compressedCount = (typeof args.compressed_message_count === 'number' ? args.compressed_message_count : 0);
   const reductionPct = (1.0 - compressionRatio) * 100;
   const wasCompressed = compressionRatio < 1.0;
   
@@ -559,7 +559,7 @@ function ContextOptimizationToolCall({ toolCall }: { toolCall: ToolCallRuntime }
                     <div className="flex items-center gap-2">
                       <span className="font-medium">Messages:</span>
                       <span className="text-muted-foreground">
-                        {originalCount} → {compressedCount}
+                        {originalCount.toString()} → {compressedCount.toString()}
                       </span>
                     </div>
                   </>
@@ -573,103 +573,13 @@ function ContextOptimizationToolCall({ toolCall }: { toolCall: ToolCallRuntime }
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">Messages:</span>
-                      <span className="text-muted-foreground">{originalCount}</span>
+                      <span className="text-muted-foreground">{originalCount.toString()}</span>
                     </div>
                   </>
                 )}
                 <div className="flex items-center gap-2">
                   <span className="font-medium">Strategy:</span>
-                  <span className="text-muted-foreground capitalize">{strategy}</span>
-                </div>
-                {result && (
-                  <div className="mt-2 rounded bg-background p-2 text-xs">
-                    <pre className="whitespace-pre-wrap font-mono">{result}</pre>
-                  </div>
-                )}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </div>
-    </section>
-  );
-}
-
-function ContextOptimizationToolCall({ toolCall }: { toolCall: ToolCallRuntime }) {
-  const { resolvedTheme } = useTheme();
-  
-  // Extract optimization details from tool call args or result
-  const args = toolCall.args || {};
-  const result = toolCall.result || "";
-  
-  const originalTokens = args.original_tokens || 0;
-  const compressedTokens = args.compressed_tokens || 0;
-  const compressionRatio = args.compression_ratio || 1.0;
-  const strategy = args.strategy || "unknown";
-  const originalCount = args.original_message_count || 0;
-  const compressedCount = args.compressed_message_count || 0;
-  const reductionPct = (1.0 - compressionRatio) * 100;
-  const wasCompressed = compressionRatio < 1.0;
-  
-  return (
-    <section className="mt-4 pl-4">
-      <div className="w-fit overflow-y-auto rounded-md py-0">
-        <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="context-optimization">
-            <AccordionTrigger className="py-2">
-              <div className="flex items-center gap-2">
-                <Tooltip title="Context Optimization">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded bg-purple-100 dark:bg-purple-900">
-                      <span className="text-xs">⚡</span>
-                    </div>
-                    <RainbowText
-                      className="pr-0.5 text-base font-medium italic"
-                      animated={toolCall.result === undefined}
-                    >
-                      {wasCompressed ? "Context Optimized" : "Context Checked"}
-                    </RainbowText>
-                  </div>
-                </Tooltip>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-2 rounded-md bg-muted/50 p-3 text-sm">
-                {wasCompressed ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Tokens:</span>
-                      <span className="text-muted-foreground">
-                        {originalTokens.toLocaleString()} → {compressedTokens.toLocaleString()}
-                      </span>
-                      <span className="text-green-600 dark:text-green-400">
-                        ({reductionPct.toFixed(1)}% reduction)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Messages:</span>
-                      <span className="text-muted-foreground">
-                        {originalCount} → {compressedCount}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Tokens:</span>
-                      <span className="text-muted-foreground">
-                        {originalTokens.toLocaleString()} (within limit)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Messages:</span>
-                      <span className="text-muted-foreground">{originalCount}</span>
-                    </div>
-                  </>
-                )}
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Strategy:</span>
-                  <span className="text-muted-foreground capitalize">{strategy}</span>
+                  <span className="text-muted-foreground capitalize">{strategy.toString()}</span>
                 </div>
                 {result && (
                   <div className="mt-2 rounded bg-background p-2 text-xs">

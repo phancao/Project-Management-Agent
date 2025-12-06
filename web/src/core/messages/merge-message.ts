@@ -5,6 +5,7 @@ import type {
   ChatEvent,
   InterruptEvent,
   MessageChunkEvent,
+  ThoughtsEvent,
   ToolCallChunksEvent,
   ToolCallResultEvent,
   ToolCallsEvent,
@@ -14,6 +15,9 @@ import { deepClone } from "../utils/deep-clone";
 import type { Message } from "./types";
 
 export function mergeMessage(message: Message, event: ChatEvent) {
+  const mergeTimestamp = new Date().toISOString();
+  console.log(`[mergeMessage] 🚪 [${mergeTimestamp}] ENTRY: messageId=${message.id}, agent=${message.agent}, eventType=${event.type}`);
+  
   // DEBUG: Log function entry for reporter messages
   if (message.agent === "reporter") {
     const contentBefore = message.content?.length ?? 0;
@@ -29,7 +33,10 @@ export function mergeMessage(message: Message, event: ChatEvent) {
   if (event.type === "message_chunk") {
     mergeTextMessage(message, event);
   } else if (event.type === "tool_calls" || event.type === "tool_call_chunks") {
+    console.log(`[mergeMessage] 🔧 [${mergeTimestamp}] Routing to mergeToolCallMessage: messageId=${message.id}, eventType=${event.type}`);
     mergeToolCallMessage(message, event);
+  } else if (event.type === "thoughts") {
+    mergeThoughtsMessage(message, event);
   } else if (event.type === "tool_call_result") {
     mergeToolCallResultMessage(message, event);
   } else if (event.type === "interrupt") {
@@ -210,11 +217,23 @@ function mergeToolCallMessage(
   message: Message,
   event: ToolCallsEvent | ToolCallChunksEvent,
 ) {
+  const mergeToolCallTimestamp = new Date().toISOString();
+  console.log(`[mergeToolCallMessage] 🔧 [${mergeToolCallTimestamp}] Called: messageId=${message.id}, agent=${message.agent}, eventType=${event.type}`, {
+    hasReactThoughts: !!event.data.react_thoughts,
+    reactThoughtsCount: event.data.react_thoughts?.length ?? 0,
+    toolCallsCount: event.data.tool_calls?.length ?? 0,
+    eventDataKeys: Object.keys(event.data),
+  });
+  
   // Initialize toolCalls array if not present
   message.toolCalls ??= [];
   
   // Extract react_thoughts from tool_calls event if present
   if (event.data.react_thoughts) {
+    const thoughtTimestamp = new Date().toISOString();
+    console.log(`[mergeToolCallMessage] 💭 [${thoughtTimestamp}] Found react_thoughts: count=${event.data.react_thoughts.length}`, {
+      thoughts: event.data.react_thoughts.map((t: any) => ({ step_index: t.step_index, thought: t.thought?.substring(0, 50) })),
+    });
     message.reactThoughts = event.data.react_thoughts;
   }
   
@@ -268,6 +287,43 @@ function mergeToolCallMessage(
       }
     }
   }
+}
+
+function mergeThoughtsMessage(
+  message: Message,
+  event: ThoughtsEvent,
+) {
+  const mergeThoughtsTimestamp = new Date().toISOString();
+  console.log(`[mergeThoughtsMessage] 💭 [${mergeThoughtsTimestamp}] Called: messageId=${message.id}, agent=${message.agent}, count=${event.data.react_thoughts?.length ?? 0}`);
+  
+  // Merge thoughts instead of replace to handle incremental updates
+  const existingThoughts = message.reactThoughts ?? [];
+  const thoughtsMap = new Map<string, typeof existingThoughts[0]>();
+  
+  // Add existing thoughts to map (keyed by step_index + thought content)
+  existingThoughts.forEach(thought => {
+    const key = `${thought.step_index}:${thought.thought}`;
+    thoughtsMap.set(key, thought);
+  });
+  
+  // Add new thoughts from event
+  if (event.data.react_thoughts) {
+    event.data.react_thoughts.forEach((thought) => {
+      const key = `${thought.step_index}:${thought.thought}`;
+      if (!thoughtsMap.has(key)) {
+        thoughtsMap.set(key, {
+          thought: thought.thought,
+          before_tool: thought.before_tool ?? false,
+          step_index: thought.step_index,
+        });
+      }
+    });
+  }
+  
+  // Convert map back to array and sort by step_index
+  message.reactThoughts = Array.from(thoughtsMap.values()).sort((a, b) => a.step_index - b.step_index);
+  
+  console.log(`[mergeThoughtsMessage] 💭 [${mergeThoughtsTimestamp}] Merged thoughts: messageId=${message.id}, totalCount=${message.reactThoughts.length}`);
 }
 
 function mergeToolCallResultMessage(

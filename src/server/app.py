@@ -753,9 +753,17 @@ async def _stream_graph_events(
                         event_data[0], 
                         event_data[1] if len(event_data) > 1 else {}
                     )
-                    # Log message type for debugging
+                    # Log message type and agent for debugging
                     msg_type = type(message_chunk).__name__
-                    logger.info(f"[{safe_thread_id}] 📨 messages stream: type={msg_type}")
+                    chunk_content = ""
+                    if hasattr(message_chunk, 'content'):
+                        chunk_content = str(message_chunk.content)[:50] if message_chunk.content else ""
+                    chunk_name = getattr(message_chunk, 'name', 'N/A')
+                    logger.info(
+                        f"[{safe_thread_id}] 📨 messages stream: type={msg_type}, "
+                        f"agent_path={agent}, chunk_name={chunk_name}, "
+                        f"content_preview=\"{chunk_content}...\""
+                    )
                     async for event in _process_message_chunk(
                         message_chunk, message_metadata, thread_id, agent
                     ):
@@ -796,6 +804,15 @@ async def _stream_graph_events(
                             or node_name == "__interrupt__"
                         ):
                             continue
+                        
+                        # DEBUG: Log all node updates for pm_agent/react_agent
+                        if node_name in ["pm_agent", "react_agent"]:
+                            logger.info(
+                                f"[{safe_thread_id}] 🔍 [DEBUG] Processing node_update for {node_name}: "
+                                f"keys={list(node_update.keys())}, "
+                                f"has_react_thoughts={'react_thoughts' in node_update}, "
+                                f"has_messages={'messages' in node_update}"
+                            )
                         
                         # Stream plan updates
                         if "current_plan" in node_update:
@@ -1072,6 +1089,225 @@ async def _stream_graph_events(
                         # in the "messages" stream. Streaming here would create
                         # a duplicate message with a different ID, causing the
                         # frontend to not recognize the finish_reason properly.
+                        # REAL PROGRESSIVE STREAMING: Stream planner's thought and step thoughts
+                        # This ensures the flow is: Planner Thought → Step Thought → Action (tool call) → Observation
+                        
+                        # 1. Stream PLANNER'S overall thought (reasoning for the entire plan)
+                        if "current_plan" in node_update and node_name == "planner":
+                            current_plan = node_update.get("current_plan")
+                            if current_plan:
+                                # Extract planner's thought from the plan
+                                planner_thought = None
+                                if isinstance(current_plan, dict):
+                                    planner_thought = current_plan.get("thought", "")
+                                elif hasattr(current_plan, 'thought'):
+                                    planner_thought = getattr(current_plan, 'thought', '')
+                                
+                                if planner_thought and planner_thought.strip():
+                                    logger.info(
+                                        f"[{safe_thread_id}] 💭 [PLANNER] Found planner thought: {planner_thought[:50]}..."
+                                    )
+                                    
+                                    # Find message ID from planner message
+                                    message_id = None
+                                    if "messages" in node_update:
+                                        messages = node_update.get("messages", [])
+                                        for msg in messages:
+                                            if isinstance(msg, AIMessage) and hasattr(msg, 'id') and msg.id:
+                                                message_id = msg.id
+                                                break
+                                    
+                                    if not message_id:
+                                        message_id = f"run--{uuid4().hex}"
+                                    
+                                    planner_thought_event = {
+                                        "thought": planner_thought.strip(),
+                                        "before_tool": True,
+                                        "step_index": -1  # -1 indicates planner's overall thought (before any steps)
+                                    }
+                                    
+                                    thoughts_event = {
+                                        "thread_id": thread_id,
+                                        "agent": "planner",
+                                        "id": message_id,
+                                        "role": "assistant",
+                                        "react_thoughts": [planner_thought_event]
+                                    }
+                                    logger.info(
+                                        f"[{safe_thread_id}] 💭 [PLANNER] Streaming planner's overall thought (messageId={message_id})"
+                                    )
+                                    yield _make_event("thoughts", thoughts_event)
+                                    
+                                    # Small delay
+                                    import asyncio
+                                    await asyncio.sleep(0.01)
+                        
+                        # 2. Stream thought for current step BEFORE agent execution
+                        # This triggers when PLANNER sets current_step_index, BEFORE pm_agent/react_agent executes
+                        current_step_thought = None
+                        if "current_plan" in node_update and "current_step_index" in node_update:
+                            current_plan = node_update.get("current_plan")
+                            current_step_index = node_update.get("current_step_index")
+                            
+                            # Only stream thought if this is from planner setting up a step for execution
+                            # Planner sends current_step_index when routing to research_team
+                            if current_plan and current_step_index is not None and node_name == "planner":
+                                logger.info(
+                                    f"[{safe_thread_id}] 💭 [PROGRESSIVE] Planner set current_step_index={current_step_index}, "
+                                    f"extracting thought for step BEFORE execution"
+                                )
+                                
+                                # Extract plan structure (handle different types: dict, object, string)
+                                plan_steps = None
+                                if isinstance(current_plan, dict):
+                                    plan_steps = current_plan.get("steps", [])
+                                elif hasattr(current_plan, 'steps'):
+                                    plan_steps = current_plan.steps
+                                
+                                if plan_steps and 0 <= current_step_index < len(plan_steps):
+                                    current_step = plan_steps[current_step_index]
+                                    step_description = None
+                                    step_type = None
+                                    
+                                    if isinstance(current_step, dict):
+                                        step_description = current_step.get("description", "")
+                                        step_type = current_step.get("step_type", "")
+                                    elif hasattr(current_step, 'description'):
+                                        step_description = getattr(current_step, 'description', '')
+                                        step_type = getattr(current_step, 'step_type', '')
+                                        if hasattr(step_type, 'value'):
+                                            step_type = step_type.value
+                                    
+                                    if step_description and step_description.strip():
+                                        # Determine agent based on step_type
+                                        # pm_agent handles: pm (project management), pm_api
+                                        # react_agent handles: research, code, etc.
+                                        agent_for_step = "pm_agent" if step_type in ["pm", "pm_api"] else "react_agent"
+                                        
+                                        current_step_thought = {
+                                            "thought": step_description.strip(),
+                                            "before_tool": True,
+                                            "step_index": current_step_index
+                                        }
+                                        logger.info(
+                                            f"[{safe_thread_id}] 💭 [PROGRESSIVE] Extracted thought for step {current_step_index} "
+                                            f"(type={step_type}, agent={agent_for_step}): {step_description[:50]}..."
+                                        )
+                                        
+                                        # Generate message ID for this thought
+                                        message_id = f"run--{uuid4().hex}"
+                                        
+                                        thoughts_event = {
+                                            "thread_id": thread_id,
+                                            "agent": agent_for_step,
+                                            "id": message_id,
+                                            "role": "assistant",
+                                            "react_thoughts": [current_step_thought]
+                                        }
+                                        logger.info(
+                                            f"[{safe_thread_id}] 💭 [PROGRESSIVE] Streaming thought for step {current_step_index} "
+                                            f"BEFORE execution by {agent_for_step} (messageId={message_id})"
+                                        )
+                                        yield _make_event("thoughts", thoughts_event)
+                                        
+                                        # Small delay to ensure thought is processed before tool calls
+                                        import asyncio
+                                        await asyncio.sleep(0.01)  # 10ms delay
+                                else:
+                                    logger.warning(
+                                        f"[{safe_thread_id}] ⚠️ [PROGRESSIVE] current_step_index={current_step_index} "
+                                        f"out of range for plan with {len(plan_steps) if plan_steps else 0} steps"
+                                    )
+                        
+                        # ROOT CAUSE FIX: Stream thoughts as separate events FIRST, before processing messages
+                        # Thoughts should have their own channel, not be attached to messages
+                        # Stream thoughts if they exist in node_update, regardless of whether messages exist
+                        # CRITICAL: node_name is the internal LangGraph node name (e.g., "agent", "tools", "pre_model_hook")
+                        # We need to extract the actual agent name from messages in node_update
+                        actual_agent_name = None
+                        if "react_thoughts" in node_update:
+                            # Try to determine agent name from messages
+                            if "messages" in node_update:
+                                messages = node_update.get("messages", [])
+                                for msg in messages:
+                                    if isinstance(msg, AIMessage) and hasattr(msg, 'name') and msg.name:
+                                        if msg.name in ["pm_agent", "react_agent"]:
+                                            actual_agent_name = msg.name
+                                            break
+                            
+                            # If node_name itself is the agent name, use it
+                            if not actual_agent_name and node_name in ["pm_agent", "react_agent"]:
+                                actual_agent_name = node_name
+                            
+                            logger.info(
+                                f"[{safe_thread_id}] 🔍 [DEBUG] Checking for thoughts streaming: node_name={node_name}, "
+                                f"actual_agent_name={actual_agent_name}, "
+                                f"has_react_thoughts={'react_thoughts' in node_update}, "
+                                f"node_update_keys={list(node_update.keys())}"
+                            )
+                            
+                            if actual_agent_name in ["pm_agent", "react_agent"]:
+                                node_thoughts = node_update.get("react_thoughts", [])
+                                logger.info(
+                                    f"[{safe_thread_id}] 🔍 [DEBUG] Found react_thoughts in node_update: count={len(node_thoughts) if node_thoughts else 0}"
+                                )
+                                if node_thoughts:
+                                    # Check if we've already streamed the current step's thought progressively
+                                    # If so, filter it out to avoid duplicates (frontend will deduplicate, but this is cleaner)
+                                    already_streamed_step_index = None
+                                    if current_step_thought:
+                                        already_streamed_step_index = current_step_thought.get("step_index")
+                                    
+                                    # Filter out thoughts that were already streamed progressively
+                                    thoughts_to_stream = []
+                                    for thought in node_thoughts:
+                                        thought_step_index = thought.get("step_index")
+                                        # Only stream if not already streamed, or if it's a different thought
+                                        if already_streamed_step_index is None or thought_step_index != already_streamed_step_index:
+                                            thoughts_to_stream.append(thought)
+                                        else:
+                                            logger.debug(
+                                                f"[{safe_thread_id}] ⏭️ Skipping thought for step {thought_step_index} "
+                                                f"(already streamed progressively)"
+                                            )
+                                    
+                                    # Stream remaining thoughts (if any) - these are thoughts from previous steps or all steps
+                                    if thoughts_to_stream:
+                                        # Find message ID from messages if available, or generate one
+                                        message_id = None
+                                        if "messages" in node_update:
+                                            messages = node_update.get("messages", [])
+                                            # Try to find a message ID from messages
+                                            for msg in messages:
+                                                if isinstance(msg, AIMessage) and hasattr(msg, 'id') and msg.id:
+                                                    message_id = msg.id
+                                                    break
+                                        
+                                        if not message_id:
+                                            message_id = f"run--{uuid4().hex}"
+                                        
+                                        logger.info(
+                                            f"[{safe_thread_id}] 💭 Streaming {len(thoughts_to_stream)} additional thoughts "
+                                            f"for {actual_agent_name} (node: {node_name}, messageId={message_id})"
+                                        )
+                                        
+                                        thoughts_event = {
+                                            "thread_id": thread_id,
+                                            "agent": actual_agent_name,
+                                            "id": message_id,
+                                            "role": "assistant",
+                                            "react_thoughts": thoughts_to_stream
+                                        }
+                                        yield _make_event("thoughts", thoughts_event)
+                                        
+                                        # Small delay to ensure thoughts are processed before tool_calls
+                                        import asyncio
+                                        await asyncio.sleep(0.01)  # 10ms delay before tool_calls
+                                    else:
+                                        logger.debug(
+                                            f"[{safe_thread_id}] ⏭️ All thoughts already streamed progressively, skipping batch stream"
+                                        )
+                        
                         # Only stream non-reporter messages from state updates.
                         if "messages" in node_update and node_name != "reporter":
                             messages = node_update.get("messages", [])
@@ -1111,23 +1347,6 @@ async def _stream_graph_events(
                                             )
                                             break
                                 
-                                # Attach thoughts to tool_call message if found
-                                if tool_call_ai_message and node_name in ["pm_agent", "react_agent"]:
-                                    # Check for thoughts in node_update first
-                                    if "react_thoughts" in node_update:
-                                        node_thoughts = node_update.get("react_thoughts", [])
-                                        if node_thoughts:
-                                            if not hasattr(tool_call_ai_message, 'additional_kwargs') or not tool_call_ai_message.additional_kwargs:
-                                                tool_call_ai_message.additional_kwargs = {}
-                                            if not hasattr(tool_call_ai_message, 'response_metadata') or not tool_call_ai_message.response_metadata:
-                                                tool_call_ai_message.response_metadata = {}
-                                            tool_call_ai_message.additional_kwargs["react_thoughts"] = node_thoughts
-                                            tool_call_ai_message.response_metadata["react_thoughts"] = node_thoughts
-                                            logger.info(
-                                                f"[{safe_thread_id}] ✅ Attached {len(node_thoughts)} react_thoughts to tool_call AIMessage "
-                                                f"for immediate streaming"
-                                            )
-                                
                                 # Process ToolMessages
                                 for msg in messages:
                                     if isinstance(msg, ToolMessage):
@@ -1146,7 +1365,8 @@ async def _stream_graph_events(
                                         ):
                                             yield event
                                 
-                                # Process AIMessage with tool_calls (stream tool_calls event with thoughts)
+                                # Process AIMessage with tool_calls (stream tool_calls event WITHOUT thoughts)
+                                # NOTE: Thoughts are already streamed above before this block
                                 if tool_call_ai_message:
                                     logger.info(
                                         f"[{safe_thread_id}] 🔧 Streaming AIMessage with tool_calls: "

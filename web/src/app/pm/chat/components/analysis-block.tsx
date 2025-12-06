@@ -277,16 +277,32 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
             </div>
           )}
           
-          {/* Plan Content Section - Show only overall plan thought (step descriptions are shown in ThoughtBox, not here) */}
-          {planMessage?.content && planData.thought && (
+          {/* Plan Content Section - Show planner thought and full plan JSON */}
+          {planMessage?.content && (
             <div className="mb-4 pb-4 border-b">
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <Markdown animated={false}>
-                  {planData.thought}
-                </Markdown>
-              </div>
+              {/* Show planner's thought if available */}
+              {planData.thought && (
+                <div className="mb-3">
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <Markdown animated={false}>
+                      {planData.thought}
+                    </Markdown>
+                  </div>
+                </div>
+              )}
+              
+              {/* Show full plan JSON in a collapsible code block */}
+              <details className="mt-2">
+                <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  📋 View Full Plan JSON
+                </summary>
+                <div className="mt-2 p-3 bg-muted rounded-md overflow-x-auto">
+                  <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+                    {planMessage.content}
+                  </pre>
+                </div>
+              </details>
               {/* NOTE: Step descriptions are extracted and shown in ThoughtBox in Steps section */}
-              {/* We don't show step descriptions here to avoid duplication */}
             </div>
           )}
           

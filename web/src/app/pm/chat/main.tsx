@@ -78,8 +78,12 @@ export default function Main() {
     <div ref={containerRef} className="flex h-full w-full pt-12">
       {/* Chat Panel - Left Side (resizable) */}
       <div
-        style={{ width: `${chatWidth}%` }}
-        className="flex-shrink-0 border-r border-gray-200 dark:border-gray-700"
+        style={{ 
+          width: `${chatWidth}%`,
+          contain: 'layout size style',
+          maxWidth: `${chatWidth}%`
+        }}
+        className="flex-shrink-0 flex-grow-0 border-r border-gray-200 dark:border-gray-700 overflow-hidden"
       >
         <MessagesBlock className="h-full" />
       </div>

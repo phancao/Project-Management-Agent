@@ -192,8 +192,9 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className={cn("w-full", className)}
+      style={{ minWidth: 0, maxWidth: '100%' }}
     >
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden w-full" style={{ minWidth: 0, maxWidth: '100%' }}>
         {/* Header */}
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">

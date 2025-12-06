@@ -266,18 +266,21 @@ export function StepBox({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
       className={cn("w-full", className)}
+      style={{ minWidth: 0, maxWidth: '100%' }}
     >
       <Card 
         className={cn(
-          "overflow-hidden transition-all duration-200 py-0 gap-0",
+          "overflow-hidden transition-all duration-200 py-0 gap-0 w-full",
           isRunning && "border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20",
           hasError && "border-red-500/50 bg-red-50/50 dark:bg-red-950/20",
           !isRunning && !hasError && "border-green-500/30 bg-green-50/30 dark:bg-green-950/10"
         )}
+        style={{ minWidth: 0, maxWidth: '100%' }}
       >
         {/* Header - always visible */}
         <button
-          className="flex w-full items-center gap-1 px-2 py-0.5 text-left hover:bg-accent/50 transition-colors"
+          className="grid w-full grid-cols-[auto_auto_auto_auto_1fr_auto] items-center gap-1 px-2 py-0.5 text-left hover:bg-accent/50 transition-colors"
+          style={{ minWidth: 0 }}
           onClick={() => setIsExpanded(!isExpanded)}
         >
           {/* Status icon */}
@@ -299,7 +302,7 @@ export function StepBox({
           
           {/* Step number */}
           {stepNumber !== undefined && (
-            <span className="text-[10px] text-muted-foreground bg-accent px-1.5 py-px rounded-full">
+            <span className="text-[10px] text-muted-foreground bg-accent px-1.5 py-px rounded-full shrink-0">
               {totalSteps !== undefined ? `${stepNumber}/${totalSteps}` : `#${stepNumber}`}
             </span>
           )}
@@ -307,7 +310,7 @@ export function StepBox({
           {/* Agent badge */}
           {agent && (
             <span className={cn(
-              "text-[10px] px-1.5 py-px rounded-full font-medium",
+              "text-[10px] px-1.5 py-px rounded-full font-medium shrink-0",
               agentInfo.color,
               agentInfo.bgColor
             )}>
@@ -316,7 +319,7 @@ export function StepBox({
           )}
           
           {/* Summary */}
-          <span className="grow text-xs text-muted-foreground truncate">
+          <span className="text-xs text-muted-foreground truncate min-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {summary}
           </span>
           
@@ -346,7 +349,7 @@ export function StepBox({
             
             {/* Result */}
             {toolCall.result && (
-              <div className="p-2 max-h-[300px] overflow-y-auto overflow-x-hidden">
+              <div className="p-2 max-h-[300px] overflow-y-auto overflow-x-hidden" style={{ minWidth: 0, maxWidth: '100%' }}>
                 <SyntaxHighlighter
                   language="json"
                   style={resolvedTheme === "dark" ? dark : docco}
@@ -359,6 +362,8 @@ export function StepBox({
                     padding: "8px",
                     wordBreak: "break-word",
                     overflowWrap: "anywhere",
+                    maxWidth: "100%",
+                    width: "100%",
                   }}
                   wrapLongLines
                 >

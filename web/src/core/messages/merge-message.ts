@@ -115,11 +115,28 @@ export function mergeMessage(message: Message, event: ChatEvent) {
 
 function mergeTextMessage(message: Message, event: MessageChunkEvent) {
   if (event.data.content) {
+    const contentBefore = message.content?.length ?? 0;
+    const chunksBefore = message.contentChunks?.length ?? 0;
+    const lastCharsBefore = message.content?.slice(-50) ?? "";
+    
     // Ensure content is initialized as string (not undefined/null)
     message.content = (message.content ?? "") + event.data.content;
     // Ensure contentChunks is initialized
     message.contentChunks = message.contentChunks ?? [];
     message.contentChunks.push(event.data.content);
+    
+    // DEBUG: Log for reporter messages
+    if (message.agent === "reporter") {
+      const contentAfter = message.content?.length ?? 0;
+      const chunksAfter = message.contentChunks?.length ?? 0;
+      const lastCharsAfter = message.content?.slice(-50) ?? "";
+      console.log(`[DEBUG-MERGE-TEXT] 📝 mergeTextMessage (reporter): messageId=${message.id}, contentBefore=${contentBefore}→${contentAfter}, chunksBefore=${chunksBefore}→${chunksAfter}, chunkLen=${event.data.content.length}`);
+      if (contentBefore > 0) {
+        console.log(`[DEBUG-MERGE-TEXT] 📝 Last 50 chars before: "${lastCharsBefore}"`);
+      }
+      console.log(`[DEBUG-MERGE-TEXT] 📝 Last 50 chars after: "${lastCharsAfter}"`);
+      console.log(`[DEBUG-MERGE-TEXT] 📝 New chunk: "${event.data.content.substring(0, 50)}${event.data.content.length > 50 ? '...' : ''}"`);
+    }
   }
   if (event.data.reasoning_content) {
     message.reasoningContent = (message.reasoningContent ?? "") + event.data.reasoning_content;

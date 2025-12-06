@@ -230,7 +230,8 @@ CREATE TABLE pm_provider_connections (
     created_by UUID REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_sync_at TIMESTAMP
+    last_sync_at TIMESTAMP,
+    backend_provider_id UUID UNIQUE -- Backend provider ID - used to map backend provider IDs to PM Service provider IDs
 );
 
 -- Sync mapping between our internal projects and external PM system projects

@@ -38,16 +38,57 @@ class PMServiceHandler:
     @classmethod
     def from_db_session(cls, db_session=None, user_id: Optional[str] = None):
         """
-        Create handler (db_session ignored, kept for compatibility).
+        Create handler, loading PM Service URL from provider configuration.
+        
+        Uses the PM Service API to get providers and find pm_service_url,
+        since the backend API can't directly access the MCP Server database.
         
         Args:
-            db_session: Ignored (uses PM Service instead)
+            db_session: Ignored - uses PM Service API instead
             user_id: Optional user ID
             
         Returns:
             PMServiceHandler instance
         """
-        return cls(user_id=user_id)
+        import asyncio
+        import httpx
+        
+        # First, try to get PM Service URL from PM Service API
+        # Use default URL to make initial API call
+        default_pm_service_url = PM_SERVICE_URL
+        pm_service_url = default_pm_service_url
+        
+        try:
+            # Use async context to call PM Service API
+            async def get_pm_service_url_from_api():
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    try:
+                        # Get providers from PM Service API
+                        response = await client.get(f"{default_pm_service_url}/api/v1/providers")
+                        if response.status_code == 200:
+                            providers = response.json().get("items", [])
+                            # Find first provider with pm_service_url
+                            for provider in providers:
+                                additional_config = provider.get("additional_config", {})
+                                if isinstance(additional_config, dict):
+                                    url = additional_config.get("pm_service_url")
+                                    if url:
+                                        logger.info(f"Found PM Service URL from provider {provider.get('id')}: {url}")
+                                        return url
+                    except Exception as e:
+                        logger.warning(f"Failed to get PM Service URL from API: {e}, using default: {default_pm_service_url}")
+                return default_pm_service_url
+            
+            # Run async function
+            pm_service_url = asyncio.run(get_pm_service_url_from_api())
+        except Exception as e:
+            logger.warning(f"Error getting PM Service URL from API: {e}, using default: {default_pm_service_url}")
+            pm_service_url = default_pm_service_url
+        
+        instance = cls(user_id=user_id)
+        # Update client with the loaded URL
+        instance._client = AsyncPMServiceClient(base_url=pm_service_url)
+        return instance
     
     # ==================== Projects ====================
     

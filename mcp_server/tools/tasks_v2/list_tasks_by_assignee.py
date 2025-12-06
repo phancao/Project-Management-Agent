@@ -59,8 +59,8 @@ class ListTasksByAssigneeTool(ReadTool):
         Returns:
             Dictionary with tasks and metadata
         """
-        # Parse project_id
-        provider_id, actual_project_id = self._parse_project_id(project_id)
+        # Parse project_id (now async to support provider discovery)
+        provider_id, actual_project_id = await self._parse_project_id(project_id)
         provider = await self.context.provider_manager.get_provider(provider_id)
         
         # Get tasks for this assignee
@@ -93,15 +93,47 @@ class ListTasksByAssigneeTool(ReadTool):
             "project_id": project_id
         }
     
-    def _parse_project_id(self, project_id: str) -> tuple[str, str]:
-        """Parse composite project ID."""
+    async def _parse_project_id(self, project_id: str) -> tuple[str, str]:
+        """
+        Parse composite project ID.
+        
+        If project_id has a provider prefix (format: "provider_id:project_id"),
+        returns the provider_id and project_id.
+        
+        If project_id doesn't have a prefix, tries to find which provider
+        owns the project by attempting to get the project from each active provider.
+        """
         if ":" in project_id:
             return project_id.split(":", 1)
         else:
+            # No provider prefix - need to find which provider owns this project
             providers = self.context.provider_manager.get_active_providers()
             if not providers:
                 raise ValueError("No active PM providers found")
-            return str(providers[0].id), project_id
+            
+            # Try each provider to find which one has this project
+            # This ensures we use the correct provider instead of just the first one
+            for provider_conn in providers:
+                try:
+                    provider = await self.context.provider_manager.get_provider(str(provider_conn.id))
+                    # Try to get the project to verify it exists in this provider
+                    project = await provider.get_project(project_id)
+                    if project:
+                        # Found the project in this provider
+                        return str(provider_conn.id), project_id
+                except Exception:
+                    # Project not found in this provider, try next one
+                    continue
+            
+            # If we couldn't find the project in any provider, raise an error
+            # This is better than silently using the wrong provider
+            provider_names = [p.name for p in providers]
+            raise ValueError(
+                f"Project '{project_id}' not found in any active provider. "
+                f"Active providers: {', '.join(provider_names)}. "
+                f"Please ensure the project_id includes the provider prefix (format: 'provider_id:project_id') "
+                f"or the project exists in one of the active providers."
+            )
     
     def _to_dict(self, obj) -> dict:
         """Convert object to dictionary."""

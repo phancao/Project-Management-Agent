@@ -235,3 +235,29 @@ By tracking content through every step of the workflow, we can identify exactly 
 - Identify the function causing the issue
 - Implement targeted fix based on findings
 
+## Attempted Solution #9 (ROOT CAUSE FOUND - In Progress)
+
+### Root Cause Identified:
+Through comprehensive debug logging, we discovered that:
+1. The first reporter message (`run--31291e35-8c59-4b59-945f-8be10881fadb`) has full content (12470 chars) and is correctly processed
+2. A second empty reporter message (`19da4fe2-bcfe-4ca6-8a99-f0fe4e2568fb`) is created from a `tool_calls` event
+3. The helper `updateMessage` function sets `researchReportIds` for ANY reporter message that isn't streaming, even if it's empty
+4. The empty second message overwrites the `researchReportIds` entry, causing the UI to display the empty message instead of the full one
+
+### Fix:
+Modified the helper `updateMessage` function in `web/src/core/store/store.ts` to:
+- **Only set `researchReportIds` if:**
+  1. No current reportId exists (first time), OR
+  2. New message has content (even if different from current), OR
+  3. Same message ID (updating existing message)
+- **Prevent overwriting** existing reportId with empty message
+- Applied the same logic to the fallback case that searches by activityIds
+
+### Code Changes:
+- Added `shouldSetReportId` check before setting `researchReportIds`
+- Added warning log when preventing overwrite with empty message
+- Applied same protection to fallback case
+
+### Status:
+**TESTING** - This fix should prevent empty reporter messages from overwriting the reportId, ensuring the UI always displays the message with content.
+

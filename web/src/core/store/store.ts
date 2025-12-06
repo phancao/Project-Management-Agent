@@ -801,12 +801,19 @@ function updateMessage(message: Message) {
       const currentReportId = useStore.getState().researchReportIds.get(researchId);
       console.log(`[Store.updateMessage helper] Setting researchReportIds: researchId=${researchId}, currentReportId=${currentReportId}, newReportId=${message.id}, contentLen=${contentLen}`);
       
-      if (!currentReportId || currentReportId !== message.id) {
-        // WARNING: If we're setting a report with empty content, log it
+      // Only set reportId if:
+      // 1. No current reportId exists (first time), OR
+      // 2. New message has content (even if different from current), OR
+      // 3. Same message ID (updating existing message)
+      // DO NOT overwrite existing reportId with empty message
+      const shouldSetReportId = !currentReportId || contentLen > 0 || currentReportId === message.id;
+      
+      if (shouldSetReportId && (!currentReportId || currentReportId !== message.id)) {
+        // WARNING: If we're setting a report with empty content when there's an existing one, log it
         if (contentLen === 0 && currentReportId) {
           const currentMsg = useStore.getState().messages.get(currentReportId);
           const currentContentLen = currentMsg?.content?.length ?? 0;
-          console.error(`[Store.updateMessage helper] ❌ OVERWRITING reportId! researchId=${researchId}, oldReportId=${currentReportId} (contentLen=${currentContentLen}), newReportId=${message.id} (contentLen=0)`);
+          console.warn(`[Store.updateMessage helper] ⚠️ Setting empty reportId when existing one has content: researchId=${researchId}, oldReportId=${currentReportId} (contentLen=${currentContentLen}), newReportId=${message.id} (contentLen=0)`);
         }
         useStore.setState({
           researchReportIds: new Map(useStore.getState().researchReportIds).set(
@@ -814,6 +821,11 @@ function updateMessage(message: Message) {
             message.id,
           ),
         });
+      } else if (!shouldSetReportId) {
+        // Prevent overwriting existing reportId with empty message
+        const currentMsg = useStore.getState().messages.get(currentReportId!);
+        const currentContentLen = currentMsg?.content?.length ?? 0;
+        console.warn(`[Store.updateMessage helper] 🛑 PREVENTED overwriting reportId with empty message: researchId=${researchId}, keeping oldReportId=${currentReportId} (contentLen=${currentContentLen}), rejecting newReportId=${message.id} (contentLen=0)`);
       }
       
       // Auto-open the research when report finishes
@@ -823,10 +835,18 @@ function updateMessage(message: Message) {
       const state = useStore.getState();
       for (const [rId, activityIds] of state.researchActivityIds.entries()) {
         if (activityIds.includes(message.id)) {
-          useStore.setState({
-            researchReportIds: new Map(state.researchReportIds).set(rId, message.id),
-          });
-          useStore.getState().openResearch(rId);
+          const currentReportId = state.researchReportIds.get(rId);
+          const contentLen = message.content?.length ?? 0;
+          
+          // Only set reportId if no existing one OR new message has content
+          if (!currentReportId || contentLen > 0) {
+            useStore.setState({
+              researchReportIds: new Map(state.researchReportIds).set(rId, message.id),
+            });
+            useStore.getState().openResearch(rId);
+          } else {
+            console.warn(`[Store.updateMessage helper] 🛑 PREVENTED fallback overwrite with empty message: researchId=${rId}, keeping oldReportId=${currentReportId}, rejecting newReportId=${message.id} (contentLen=0)`);
+          }
           break;
         }
       }

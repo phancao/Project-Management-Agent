@@ -68,6 +68,10 @@ from src.server.streaming import (
 # This is needed because AIMessageChunk is streamed before the final AIMessage is created
 # NOTE: Now uses streaming module cache, kept for backward compatibility
 _react_thoughts_cache: dict[str, list] = {}
+
+# Cache to track accumulated planner content for incremental thought extraction
+_planner_content_cache: dict[str, str] = {}  # message_id -> accumulated_content
+_planner_thought_streamed: dict[str, bool] = {}  # message_id -> whether thought was already streamed
 from src.server.config_request import ConfigResponse
 from src.server.ai_provider_request import (
     AIProviderAPIKeyRequest,
@@ -637,6 +641,69 @@ async def _process_message_chunk(
             yield _make_event("tool_call_chunks", event_stream_message)
         else:
             # Regular content chunk
+            # For planner agent, try to extract and stream thought progressively
+            if agent_name == "planner" and message_chunk.content:
+                message_id = event_stream_message.get("id")
+                if message_id:
+                    # Accumulate content
+                    if message_id not in _planner_content_cache:
+                        _planner_content_cache[message_id] = ""
+                    _planner_content_cache[message_id] += message_chunk.content
+                    
+                    # Try to extract thought field from accumulated JSON
+                    accumulated = _planner_content_cache[message_id]
+                    if not _planner_thought_streamed.get(message_id, False):
+                        # Try to find "thought" field in JSON
+                        # Look for pattern: "thought": "..." (handling escaped quotes)
+                        import re
+                        # Match "thought": "..." where ... can contain escaped quotes
+                        # This regex looks for the opening of the thought field
+                        thought_pattern = r'"thought"\s*:\s*"'
+                        thought_start_match = re.search(thought_pattern, accumulated)
+                        if thought_start_match:
+                            thought_start_pos = thought_start_match.end()
+                            # Find the end of the thought string (handling escaped quotes)
+                            thought_text = ""
+                            i = thought_start_pos
+                            while i < len(accumulated):
+                                char = accumulated[i]
+                                if char == '\\' and i + 1 < len(accumulated):
+                                    # Escaped character
+                                    thought_text += accumulated[i:i+2]
+                                    i += 2
+                                elif char == '"':
+                                    # Found closing quote, check if it's followed by comma/brace
+                                    if i + 1 < len(accumulated):
+                                        next_char = accumulated[i + 1]
+                                        if next_char in [',', '}', '\n', ' ']:
+                                            # Thought is complete
+                                            planner_thought_event = {
+                                                "thought": thought_text.strip(),
+                                                "before_tool": True,
+                                                "step_index": -1
+                                            }
+                                            thoughts_event = {
+                                                "thread_id": thread_id,
+                                                "agent": "planner",
+                                                "id": message_id,
+                                                "role": "assistant",
+                                                "react_thoughts": [planner_thought_event]
+                                            }
+                                            logger.info(
+                                                f"[{safe_thread_id}] 💭 [PLANNER] Streaming thought from streaming JSON "
+                                                f"(messageId={message_id}, thought_length={len(thought_text)})"
+                                            )
+                                            yield _make_event("thoughts", thoughts_event)
+                                            _planner_thought_streamed[message_id] = True
+                                            break
+                                    else:
+                                        # End of accumulated content, thought might be incomplete
+                                        thought_text += char
+                                        break
+                                else:
+                                    thought_text += char
+                                    i += 1
+            
             yield _make_event("message_chunk", event_stream_message)
     elif isinstance(message_chunk, AIMessage):
         # Full AIMessage (not chunk) - used for state update streaming
@@ -1108,17 +1175,24 @@ async def _stream_graph_events(
                                         f"[{safe_thread_id}] 💭 [PLANNER] Found planner thought: {planner_thought[:50]}..."
                                     )
                                     
-                                    # Find message ID from planner message
+                                    # Find message ID from planner message in node_update
+                                    # This ensures the thought is associated with the same message that will be streamed
                                     message_id = None
                                     if "messages" in node_update:
                                         messages = node_update.get("messages", [])
                                         for msg in messages:
                                             if isinstance(msg, AIMessage) and hasattr(msg, 'id') and msg.id:
                                                 message_id = msg.id
+                                                logger.info(
+                                                    f"[{safe_thread_id}] 💭 [PLANNER] Found planner message ID for thought: {message_id}"
+                                                )
                                                 break
                                     
                                     if not message_id:
                                         message_id = f"run--{uuid4().hex}"
+                                        logger.warning(
+                                            f"[{safe_thread_id}] 💭 [PLANNER] No message ID found in node_update, generated: {message_id}"
+                                        )
                                     
                                     planner_thought_event = {
                                         "thought": planner_thought.strip(),
@@ -1136,7 +1210,12 @@ async def _stream_graph_events(
                                     logger.info(
                                         f"[{safe_thread_id}] 💭 [PLANNER] Streaming planner's overall thought (messageId={message_id})"
                                     )
-                                    yield _make_event("thoughts", thoughts_event)
+                                    thoughts_event_obj = _make_event("thoughts", thoughts_event)
+                                    logger.info(
+                                        f"[{safe_thread_id}] 💭 [PLANNER] Yielding thoughts event: type=thoughts, messageId={message_id}, "
+                                        f"agent={thoughts_event.get('agent')}, thought_count={len(thoughts_event.get('react_thoughts', []))}"
+                                    )
+                                    yield thoughts_event_obj
                                     
                                     # Small delay
                                     import asyncio
@@ -1309,6 +1388,9 @@ async def _stream_graph_events(
                                         )
                         
                         # Only stream non-reporter messages from state updates.
+                        # For planner: still stream the message from state updates to ensure it's stored,
+                        # but it will be sent as a complete message (not chunks) - the chunks from messages stream
+                        # will have already been received, so this just ensures the message exists in the store
                         if "messages" in node_update and node_name != "reporter":
                             messages = node_update.get("messages", [])
                             if messages:
@@ -1390,6 +1472,15 @@ async def _stream_graph_events(
                                     import sys
                                     sys.stderr.write(f"\n✨ STREAMING MESSAGE: node_name='{node_name}', content_len={len(msg.content)}\n")
                                     sys.stderr.flush()
+                                    
+                                    # Log message content preview for planner messages
+                                    content_preview = ""
+                                    if node_name == "planner" and msg.content:
+                                        content_str = str(msg.content)
+                                        content_preview = content_str[:200] + "..." if len(content_str) > 200 else content_str
+                                        logger.info(
+                                            f"[{safe_thread_id}] 📋 Planner message content preview: {content_preview}"
+                                        )
                                     
                                     logger.info(
                                         f"[{safe_thread_id}] "

@@ -49,9 +49,27 @@ export function Markdown({
         </a>
       ),
       table: ({ children }) => (
-        <div className="overflow-x-auto w-full">
-          <table className="min-w-full">{children}</table>
+        <div className="overflow-x-auto w-full my-4 -mx-4 sm:mx-0">
+          <table className="min-w-full border-collapse border border-border w-full">
+            {children}
+          </table>
         </div>
+      ),
+      thead: ({ children }) => (
+        <thead className="bg-muted/50">{children}</thead>
+      ),
+      tbody: ({ children }) => (
+        <tbody className="[&>tr:nth-child(even)]:bg-muted/20">{children}</tbody>
+      ),
+      th: ({ children }) => (
+        <th className="border border-border px-4 py-2 text-left font-semibold align-top">
+          {children}
+        </th>
+      ),
+      td: ({ children }) => (
+        <td className="border border-border px-4 py-2 align-top">
+          {children}
+        </td>
       ),
     };
   }, [checkLinkCredibility]);

@@ -72,7 +72,6 @@ _react_thoughts_cache: dict[str, list] = {}
 # Cache to track accumulated planner content for incremental thought extraction
 _planner_content_cache: dict[str, str] = {}  # message_id -> accumulated_content
 _planner_thought_streamed: dict[str, bool] = {}  # message_id -> whether thought was already streamed
-_planner_thought_streamed_by_thread: dict[str, bool] = {}  # thread_id -> whether planner thought was already streamed for this thread
 from src.server.config_request import ConfigResponse
 from src.server.ai_provider_request import (
     AIProviderAPIKeyRequest,
@@ -701,7 +700,6 @@ async def _process_message_chunk(
                                             )
                                             yield _make_event("thoughts", thoughts_event)
                                             _planner_thought_streamed[message_id] = True
-                                            _planner_thought_streamed_by_thread[thread_id] = True  # Mark as streamed for this thread
                                             break
                                     else:
                                         # End of accumulated content, thought might be incomplete
@@ -1163,82 +1161,10 @@ async def _stream_graph_events(
                         # in the "messages" stream. Streaming here would create
                         # a duplicate message with a different ID, causing the
                         # frontend to not recognize the finish_reason properly.
-                        # REAL PROGRESSIVE STREAMING: Stream planner's thought and step thoughts
+                        # REAL PROGRESSIVE STREAMING: Stream step thoughts
                         # This ensures the flow is: Planner Thought → Step Thought → Action (tool call) → Observation
-                        
-                        # 1. Stream PLANNER'S overall thought (reasoning for the entire plan)
-                        if "current_plan" in node_update and node_name == "planner":
-                            current_plan = node_update.get("current_plan")
-                            if current_plan:
-                                # Extract planner's thought from the plan
-                                planner_thought = None
-                                if isinstance(current_plan, dict):
-                                    planner_thought = current_plan.get("thought", "")
-                                elif hasattr(current_plan, 'thought'):
-                                    planner_thought = getattr(current_plan, 'thought', '')
-                                
-                                if planner_thought and planner_thought.strip():
-                                    # Check if planner thought was already streamed from progressive streaming
-                                    if _planner_thought_streamed_by_thread.get(thread_id, False):
-                                        logger.info(
-                                            f"[{safe_thread_id}] 💭 [PLANNER] Skipping duplicate planner thought "
-                                            f"(already streamed from progressive path)"
-                                        )
-                                    else:
-                                        logger.info(
-                                            f"[{safe_thread_id}] 💭 [PLANNER] Found planner thought: {planner_thought[:50]}..."
-                                        )
-                                    
-                                    # Find message ID from planner message in node_update
-                                    # This ensures the thought is associated with the same message that will be streamed
-                                    message_id = None
-                                    if "messages" in node_update:
-                                        messages = node_update.get("messages", [])
-                                        for msg in messages:
-                                            if isinstance(msg, AIMessage) and hasattr(msg, 'id') and msg.id:
-                                                message_id = msg.id
-                                                logger.info(
-                                                    f"[{safe_thread_id}] 💭 [PLANNER] Found planner message ID for thought: {message_id}"
-                                                )
-                                                break
-                                    
-                                    if not message_id:
-                                        message_id = f"run--{uuid4().hex}"
-                                        logger.warning(
-                                            f"[{safe_thread_id}] 💭 [PLANNER] No message ID found in node_update, generated: {message_id}"
-                                        )
-                                    
-                                    # Only stream if not already streamed from progressive path
-                                    if _planner_thought_streamed_by_thread.get(thread_id, False):
-                                        continue  # Skip streaming, already done from progressive path
-                                    
-                                    planner_thought_event = {
-                                        "thought": planner_thought.strip(),
-                                        "before_tool": True,
-                                        "step_index": -1  # -1 indicates planner's overall thought (before any steps)
-                                    }
-                                    
-                                    thoughts_event = {
-                                        "thread_id": thread_id,
-                                        "agent": "planner",
-                                        "id": message_id,
-                                        "role": "assistant",
-                                        "react_thoughts": [planner_thought_event]
-                                    }
-                                    logger.info(
-                                        f"[{safe_thread_id}] 💭 [PLANNER] Streaming planner's overall thought (messageId={message_id})"
-                                    )
-                                    thoughts_event_obj = _make_event("thoughts", thoughts_event)
-                                    logger.info(
-                                        f"[{safe_thread_id}] 💭 [PLANNER] Yielding thoughts event: type=thoughts, messageId={message_id}, "
-                                        f"agent={thoughts_event.get('agent')}, thought_count={len(thoughts_event.get('react_thoughts', []))}"
-                                    )
-                                    yield thoughts_event_obj
-                                    _planner_thought_streamed_by_thread[thread_id] = True  # Mark as streamed
-                                    
-                                    # Small delay
-                                    import asyncio
-                                    await asyncio.sleep(0.01)
+                        # NOTE: Planner's overall thought is streamed from the "messages" stream (progressive path),
+                        # not from state updates, to avoid duplicates. This is the same approach used for reporter messages.
                         
                         # 2. Stream thought for current step BEFORE agent execution
                         # This triggers when PLANNER sets current_step_index, BEFORE pm_agent/react_agent executes

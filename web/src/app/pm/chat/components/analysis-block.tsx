@@ -133,6 +133,15 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
   // Extracts from plan steps and pm_agent/react_agent reactThoughts
   const thoughts = useResearchThoughts(researchId);
   
+  // DEBUG: Log thoughts and tool calls for debugging
+  const renderTimestamp = new Date().toISOString();
+  console.log(`[AnalysisBlock] 📋 [${renderTimestamp}] Rendering: researchId=${researchId}`, {
+    thoughtsCount: thoughts.length,
+    toolCallsCount: toolCalls.length,
+    thoughts: thoughts.map(t => ({ step_index: t.step_index, agent: t.agent, thought: t.thought.substring(0, 50) })),
+    toolCalls: toolCalls.map(tc => ({ id: tc.id, name: tc.name, hasResult: !!tc.result })),
+  });
+  
   // UI state
   const [stepsExpanded, setStepsExpanded] = useState(true);
   const [editing, setEditing] = useState(false);

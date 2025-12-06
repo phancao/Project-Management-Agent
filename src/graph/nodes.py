@@ -705,51 +705,35 @@ Create a NEW plan that learns from these failures."""
         
         logger.debug(f"[PLANNER] Added reflection context ({len(reflection_context)} chars)")
 
-    if configurable.enable_deep_thinking:
-        llm = get_llm_by_type("reasoning")
-    elif AGENT_LLM_MAP["planner"] == "basic":
-        llm = get_llm_by_type("basic").with_structured_output(
-            Plan,
-            method="json_mode",
-        )
-    else:
-        llm = get_llm_by_type(AGENT_LLM_MAP["planner"])
-
     # if the plan iterations is greater than the max plan iterations, return the reporter node
     if plan_iterations >= configurable.max_plan_iterations:
         return Command(goto="reporter")
 
     full_response = ""
-    if AGENT_LLM_MAP["planner"] == "basic" and not configurable.enable_deep_thinking:
+    
+    if configurable.enable_deep_thinking:
+        # Deep thinking mode - use reasoning LLM
+        llm = get_llm_by_type("reasoning")
+        logger.info("[PLANNER] 📨 Using reasoning LLM (LangGraph will stream)")
+        response = llm.invoke(messages)
+        full_response = response.content if hasattr(response, 'content') else str(response)
+    else:
+        # Standard mode - use basic LLM with streaming
+        # We DON'T use structured output here because it prevents streaming
+        # Instead, we'll parse the JSON response manually
+        llm = get_llm_by_type("basic")
+        logger.info("[PLANNER] 📨 Using basic LLM invoke (LangGraph will stream)")
+        
         try:
             response = llm.invoke(messages)
-            full_response = response.model_dump_json(indent=4, exclude_none=True)
+            full_response = response.content if hasattr(response, 'content') else str(response)
+            logger.info(f"[PLANNER] 📨 LLM response received, length={len(full_response)}")
         except Exception as e:
-            # If structured output validation fails, extract JSON from error message and fix it
-            logger.error(f"[PLANNER] Structured output validation failed: {e}")
-            error_str = str(e)
-            # Try to extract JSON from error message (format: "Failed to parse Plan from completion {json}...")
-            json_match = re.search(r'from completion\s+(\{.*?\})\s*\.', error_str, re.DOTALL)
-            if json_match:
-                try:
-                    full_response = json_match.group(1)
-                    logger.info(f"[PLANNER] Extracted JSON from error, will fix missing fields")
-                except Exception:
-                    logger.error(f"[PLANNER] Failed to extract JSON from error")
-                    if plan_iterations > 0:
-                        return Command(goto="reporter")
-                    else:
-                        return Command(goto="__end__")
+            logger.error(f"[PLANNER] LLM invocation failed: {e}")
+            if plan_iterations > 0:
+                return Command(goto="reporter")
             else:
-                logger.error(f"[PLANNER] Could not extract JSON from error message")
-                if plan_iterations > 0:
-                    return Command(goto="reporter")
-                else:
-                    return Command(goto="__end__")
-    else:
-        response = llm.stream(messages)
-        for chunk in response:
-            full_response += chunk.content
+                return Command(goto="__end__")
     logger.debug(f"Current state messages: {state['messages']}")
     logger.info(f"Planner response: {full_response}")
 
@@ -1271,17 +1255,18 @@ Create a comprehensive plan that addresses their need for more detailed analysis
     
     logger.info(f"[COORDINATOR] 🔍 Routing state: goto={goto}, escalation={bool(escalation_reason)}, previous_result={bool(previous_result)}, project_id={project_id if project_id else 'None'}")
     
-    # Check if user explicitly wants detailed/comprehensive analysis
-    user_query = str(state.get("messages", [])[-1].content if state.get("messages") else "").lower()
-    wants_detailed = any(kw in user_query for kw in ["comprehensive", "detailed report", "full analysis", "in-depth"])
-    
-    if goto == "planner" and not escalation_reason and not previous_result and not wants_detailed:
-        # First-time query, not asking for comprehensive analysis → Use ReAct (fast)
-        logger.info("[COORDINATOR] ⚡ ADAPTIVE ROUTING - Using ReAct fast path (has web_search tool)")
+    # Let React Agent try first for ALL queries (it will escalate if needed)
+    # Only skip React Agent if:
+    # 1. Already escalated from React Agent (escalation_reason exists)
+    # 2. User explicitly requested escalation (previous_result exists)
+    if goto == "planner" and not escalation_reason and not previous_result:
+        # First-time query → Use ReAct (fast), even for comprehensive queries
+        # React Agent will auto-escalate to planner if it can't handle complexity
+        logger.info("[COORDINATOR] ⚡ ADAPTIVE ROUTING - Using ReAct fast path (will escalate if needed)")
         goto = "react_agent"
-    elif escalation_reason or wants_detailed:
-        # User escalation or explicitly wants detailed analysis → Use full pipeline
-        logger.info(f"[COORDINATOR] 📊 Using full pipeline: escalation={escalation_reason}, detailed={wants_detailed}")
+    elif escalation_reason or previous_result:
+        # Already tried React Agent or user requested escalation → Use full pipeline
+        logger.info(f"[COORDINATOR] 📊 Using full pipeline: escalation={escalation_reason}, previous_result={bool(previous_result)}")
         goto = "planner"
     
     # Final routing decision
@@ -1331,16 +1316,42 @@ def reporter_node(state: State, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     current_plan = state.get("current_plan")
     
-    # Handle case where current_plan might be a string (legacy) or None
-    if isinstance(current_plan, str):
-        plan_title = current_plan
+    # CRITICAL: If this is coming from React Agent (not planner), use the actual user query
+    # React Agent routes to reporter with routing_mode="react_first" and doesn't create a plan
+    # In this case, we should use the research_topic or the actual user query instead of plan title
+    routing_mode = state.get("routing_mode", "")
+    is_from_react = routing_mode == "react_first"
+    
+    if is_from_react:
+        # Coming from React Agent - use the actual user query
+        research_topic = state.get("research_topic") or state.get("clarified_research_topic", "")
+        # Also try to get from messages if research_topic is empty
+        if not research_topic:
+            messages = state.get("messages", [])
+            for msg in messages:
+                if hasattr(msg, 'content') and msg.content:
+                    content = str(msg.content)
+                    # Skip system messages and tool messages
+                    if not content.startswith("#") and "Tool:" not in content:
+                        research_topic = content[:500]  # Limit length
+                        break
+        
+        plan_title = research_topic if research_topic else "User Query"
         plan_thought = ""
-    elif current_plan and hasattr(current_plan, 'title'):
-        plan_title = getattr(current_plan, 'title', 'Research Task')
-        plan_thought = getattr(current_plan, 'thought', '')
+        logger.info(f"[REPORTER] 🔍 Detected React Agent route - using user query as task: {plan_title[:100]}")
     else:
-        plan_title = "Research Task"
-        plan_thought = ""
+        # Coming from planner - use plan title as before
+        # Handle case where current_plan might be a string (legacy) or None
+        if isinstance(current_plan, str):
+            plan_title = current_plan
+            plan_thought = ""
+        elif current_plan and hasattr(current_plan, 'title'):
+            plan_title = getattr(current_plan, 'title', 'Research Task')
+            plan_thought = getattr(current_plan, 'thought', '')
+        else:
+            plan_title = "Research Task"
+            plan_thought = ""
+        logger.info(f"[REPORTER] 📋 Using plan title: {plan_title[:100]}")
     
     # CRITICAL: Only include the task message, NOT all messages from state
     # The reporter doesn't need the full conversation history - only the task and observations
@@ -1471,10 +1482,35 @@ def reporter_node(state: State, config: RunnableConfig):
             else:
                 logger.warning("Reporter: Failed to extract observations from ReAct intermediate steps")
 
+    # CRITICAL: Detect if this is a simple query (list/show/get) that doesn't need comprehensive analysis
+    # Simple queries should just present the data directly, not generate comprehensive project analysis
+    is_simple_query = False
+    if is_from_react:
+        # Check if the query is a simple list/show/get query
+        query_lower = plan_title.lower()
+        simple_keywords = [
+            "list users", "show users", "list all users", "show all users",
+            "list projects", "show projects", "list all projects",
+            "list sprints", "show sprints", "list all sprints",
+            "list tasks", "show tasks", "list all tasks",
+            "list epics", "show epics", "list all epics",
+            "get user", "get project", "get sprint", "get task", "get epic",
+            "current user", "who am i", "show me all users", "show me users"
+        ]
+        is_simple_query = any(keyword in query_lower for keyword in simple_keywords)
+        if is_simple_query:
+            logger.info(f"[REPORTER] 🎯 Simple query detected - will format as simple list/table, not comprehensive analysis")
+    
     # Add a reminder about the new report format, citation style, and table usage
+    format_instructions = "IMPORTANT: Structure your report according to the format in the prompt. Remember to include:\n\n1. Key Points - A bulleted list of the most important findings\n2. Overview - A brief introduction to the topic\n3. Detailed Analysis - Organized into logical sections\n4. Survey Note (optional) - For more comprehensive reports\n5. Key Citations - List all references at the end\n\nFor citations, DO NOT include inline citations in the text. Instead, place all citations in the 'Key Citations' section at the end using the format: `- [Source Title](URL)`. Include an empty line between each citation for better readability.\n\nPRIORITIZE USING MARKDOWN TABLES for data presentation and comparison. Use tables whenever presenting comparative data, statistics, features, or options. Structure tables with clear headers and aligned columns. Example table format:\n\n| Feature | Description | Pros | Cons |\n|---------|-------------|------|------|\n| Feature 1 | Description 1 | Pros 1 | Cons 1 |\n| Feature 2 | Description 2 | Pros 2 | Cons 2 |"
+    
+    # For simple queries, add special instruction to NOT generate comprehensive analysis
+    if is_simple_query:
+        format_instructions += "\n\n🔴 CRITICAL FOR SIMPLE QUERIES: This is a simple list/show/get query. DO NOT generate a comprehensive project analysis report with all 10 analytics sections (Executive Summary, Sprint Overview, Burndown Chart, Velocity Chart, CFD, Cycle Time, Work Distribution, Issue Trend, Task Statistics, Key Insights). Instead, simply present the requested data in a clear, organized format (preferably using tables). For example, if the user asked to 'list users', just show the users in a table with their details. Keep it simple and direct - no need for comprehensive analytics sections."
+    
     invoke_messages.append(
         HumanMessage(
-            content="IMPORTANT: Structure your report according to the format in the prompt. Remember to include:\n\n1. Key Points - A bulleted list of the most important findings\n2. Overview - A brief introduction to the topic\n3. Detailed Analysis - Organized into logical sections\n4. Survey Note (optional) - For more comprehensive reports\n5. Key Citations - List all references at the end\n\nFor citations, DO NOT include inline citations in the text. Instead, place all citations in the 'Key Citations' section at the end using the format: `- [Source Title](URL)`. Include an empty line between each citation for better readability.\n\nPRIORITIZE USING MARKDOWN TABLES for data presentation and comparison. Use tables whenever presenting comparative data, statistics, features, or options. Structure tables with clear headers and aligned columns. Example table format:\n\n| Feature | Description | Pros | Cons |\n|---------|-------------|------|------|\n| Feature 1 | Description 1 | Pros 1 | Cons 1 |\n| Feature 2 | Description 2 | Pros 2 | Cons 2 |",
+            content=format_instructions,
             name="system",
         )
     )
@@ -2768,26 +2804,33 @@ async def _execute_agent_step(
         
         logger.info(f"[{agent_name}] 💭 Collected {len(pm_thoughts)} thoughts from {len(current_plan.steps)} plan steps")
     
+    # ROOT CAUSE FIX: Also collect thoughts from tool_calls AIMessage if they were added there
+    # Thoughts are added to the AIMessage with tool_calls in the loop above (lines 2706-2726)
+    # But that message is not returned - only final_message is returned
+    # So we need to extract thoughts from the tool_calls message and add them to final_message
+    tool_calls_thoughts = []
+    for msg in result.get("messages", []):
+        if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
+            if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+                msg_thoughts = msg.additional_kwargs.get("react_thoughts", [])
+                if msg_thoughts:
+                    tool_calls_thoughts.extend(msg_thoughts)
+                    logger.info(f"[{agent_name}] 💭 Found {len(msg_thoughts)} thoughts in tool_calls AIMessage.additional_kwargs")
+                    break
+    
+    # Merge thoughts: tool_calls thoughts first (they're more specific), then plan step thoughts
+    if tool_calls_thoughts:
+        pm_thoughts = tool_calls_thoughts + pm_thoughts
+        logger.info(f"[{agent_name}] 💭 Merged {len(tool_calls_thoughts)} tool_calls thoughts with {len(pm_thoughts) - len(tool_calls_thoughts)} plan step thoughts")
+    
     # Include optimization messages if they exist
     final_message = AIMessage(
         content=response_content,
         name=agent_name,
     )
     
-    # Add thoughts to final message's additional_kwargs AND response_metadata for streaming
-    # response_metadata is more reliably preserved through LangGraph state management
-    if pm_thoughts:
-        # Add to additional_kwargs (for compatibility)
-        if not hasattr(final_message, 'additional_kwargs') or not final_message.additional_kwargs:
-            final_message.additional_kwargs = {}
-        final_message.additional_kwargs["react_thoughts"] = pm_thoughts
-        
-        # Also add to response_metadata (more reliable)
-        if not hasattr(final_message, 'response_metadata') or not final_message.response_metadata:
-            final_message.response_metadata = {}
-        final_message.response_metadata["react_thoughts"] = pm_thoughts
-        
-        logger.info(f"[{agent_name}] 💭 Added {len(pm_thoughts)} thoughts to final message (additional_kwargs + response_metadata) for streaming")
+    # NOTE: Thoughts are no longer attached to messages - they're streamed separately as "thoughts" events
+    # This allows thoughts to have their own channel to the Analysis Block, independent of tool_calls
     
     return_messages = [final_message]
     optimization_messages = state.get("_optimization_messages", [])
@@ -4515,12 +4558,22 @@ Question: {input}
 
 Use the available tools to answer the user's question. When you need to use a tool, call it directly using the tool calling feature.
 
-**Important Notes:**
-- Tool names do NOT have parentheses: use `list_sprints` NOT `list_sprints()`
-- If project_id is provided in context, use it directly
-- If user mentions a project NAME, first call `list_projects` to find the project_id
-- Always use actual UUIDs from tool results, not placeholder strings
-- For sprint analysis: first find project_id, then list_sprints, then get sprint_id, then sprint_report
+**CRITICAL RULES (in priority order):**
+1. **If project_id is provided above (in the PROJECT ID section):**
+   - **DO NOT call `list_projects`** - the project is already identified!
+   - Use the provided project_id directly in tool calls (e.g., `list_users(project_id="...")`)
+   - For "show me all users in this project" → Call `list_users` with the provided project_id
+   - For "list sprints" → Call `list_sprints` with the provided project_id
+   - Only use `get_project` if you need project details/metadata
+
+2. **If NO project_id is provided:**
+   - If user mentions a project NAME, first call `list_projects` to find the project_id
+   - Then use that project_id in subsequent tool calls
+
+3. **General tool usage:**
+   - Tool names do NOT have parentheses: use `list_sprints` NOT `list_sprints()`
+   - Always use actual UUIDs from tool results, not placeholder strings
+   - For sprint analysis: list_sprints → get_sprint → sprint_report (if project_id is already provided, skip list_projects)
 
 Available tools:
 {chr(10).join([f"- {tool.name}: {tool.description}" for tool in tools])}
@@ -5346,6 +5399,24 @@ Answer the user's question using the tools as needed."""
             # If token checking fails, log but don't block the flow
             logger.warning(f"[REACT-AGENT] ⚠️ Token check failed: {token_check_error}", exc_info=True)
         
+        # CRITICAL: If no output and no intermediate steps, escalate to planner
+        # This means the agent didn't execute properly (likely LangGraph issue)
+        if not output and not intermediate_steps:
+            logger.warning(
+                "[REACT-AGENT] ⬆️ No output and no intermediate steps - agent didn't execute properly. "
+                "Escalating to planner."
+            )
+            return Command(
+                update={
+                    "escalation_reason": "no_output_no_steps: LangGraph agent returned empty result",
+                    "react_attempts": [],
+                    "react_thoughts": [],
+                    "partial_result": "",
+                    "goto": "planner"
+                },
+                goto="planner"
+            )
+        
         # Success - return result to user
         logger.info(f"[REACT-AGENT] ✅ Success - returning answer ({len(output)} chars)")
         
@@ -5359,7 +5430,7 @@ Answer the user's question using the tools as needed."""
         if intermediate_steps:
             logger.info(f"[REACT-AGENT] 🔧 Converting {len(intermediate_steps)} intermediate steps to tool call messages for frontend")
             import uuid
-            from langchain_core.messages import AIMessage, ToolMessage
+            # AIMessage and ToolMessage are already imported at module level (line 14)
             
             for step_idx, step in enumerate(intermediate_steps):
                 if isinstance(step, (list, tuple)) and len(step) >= 2:

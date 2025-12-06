@@ -58,6 +58,7 @@ class State(MessagesState):
     escalation_reason: str = ""  # Why was query escalated
     escalation_context: str = ""  # Context for escalated planning
     react_intermediate_steps: list = field(default_factory=list)  # ReAct execution steps
+    react_thoughts: list = field(default_factory=list)  # ReAct thoughts for UI display (streamed separately)
 
     # Workflow control
     goto: str = "planner"  # Default next node

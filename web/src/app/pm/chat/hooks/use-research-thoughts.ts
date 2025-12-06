@@ -50,14 +50,25 @@ export function useResearchThoughts(researchId: string): Thought[] {
   const messageIds = useStore((state) => state.messageIds);
   
   return useMemo(() => {
+    const timestamp = new Date().toISOString();
+    console.log(`[useResearchThoughts] 🔍 [${timestamp}] Collecting thoughts for researchId=${researchId}`, {
+      planMessageId,
+      activityIds: activityIds.length,
+      totalMessages: messages.size,
+    });
+    
     const thoughts: Thought[] = [];
     const seenThoughts = new Set<string>();
     
     // Helper to add a thought with deduplication
     const addThought = (thought: Thought) => {
-      if (seenThoughts.has(thought.thought)) return;
+      if (seenThoughts.has(thought.thought)) {
+        console.log(`[useResearchThoughts] ⏭️ Skipping duplicate thought: "${thought.thought.substring(0, 50)}..."`);
+        return;
+      }
       seenThoughts.add(thought.thought);
       thoughts.push(thought);
+      console.log(`[useResearchThoughts] ✅ Added thought: step_index=${thought.step_index}, agent=${thought.agent}, thought="${thought.thought.substring(0, 50)}..."`);
     };
     
     // PRIORITY 1: Extract thoughts from plan steps IMMEDIATELY
@@ -111,7 +122,7 @@ export function useResearchThoughts(researchId: string): Thought[] {
       }
     }
     
-    // PRIORITY 3: Check recent pm_agent/react_agent messages not yet in activityIds
+    // PRIORITY 3: Check recent pm_agent/react_agent/planner messages not yet in activityIds
     const recentIds = messageIds.slice(-30);
     for (const msgId of recentIds) {
       if (activityIds.includes(msgId)) continue;
@@ -119,7 +130,8 @@ export function useResearchThoughts(researchId: string): Thought[] {
       
       const msg = messages.get(msgId);
       if (!msg) continue;
-      if (msg.agent !== "pm_agent" && msg.agent !== "react_agent") continue;
+      // Include planner agent for overall plan thoughts
+      if (msg.agent !== "pm_agent" && msg.agent !== "react_agent" && msg.agent !== "planner") continue;
       if (!msg.reactThoughts || msg.reactThoughts.length === 0) continue;
       
       for (const t of msg.reactThoughts) {
@@ -133,6 +145,11 @@ export function useResearchThoughts(researchId: string): Thought[] {
     
     // Sort by step_index
     thoughts.sort((a, b) => a.step_index - b.step_index);
+    
+    const finalTimestamp = new Date().toISOString();
+    console.log(`[useResearchThoughts] 📊 [${finalTimestamp}] Final thoughts count: ${thoughts.length}`, {
+      thoughts: thoughts.map(t => ({ step_index: t.step_index, agent: t.agent, thought: t.thought.substring(0, 50) })),
+    });
     
     return thoughts;
   }, [messages, activityIds, planMessageId, messageIds.length, researchId]);

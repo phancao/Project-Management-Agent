@@ -53,9 +53,6 @@ function buildConversationHistory(
 
 const THREAD_ID = nanoid();
 
-// Block types for different agents
-export type ResearchBlockType = "react" | "planner" | "pm" | "researcher" | "coder";
-
 export const useStore = create<{
   responding: boolean;
   threadId: string | undefined;
@@ -140,7 +137,7 @@ export const useStore = create<{
         console.trace(`[DEBUG-REPORTER-UPDATE] Stack trace for updateMessage call`);
       }
       
-      if (existingContentLen > 0 && newContentLen === 0 && message.agent === "reporter") {
+      if (existingContentLen > 0 && newContentLen === 0 && message.agent === "reporter" && existing) {
         console.error(`[DEBUG-REPORTER-UPDATE] ❌ REPORTER CONTENT LOSS! messageId=${message.id}, existingContentLen=${existingContentLen}, newContentLen=${newContentLen}, isStreaming=${message.isStreaming}, finishReason=${message.finishReason}`);
         console.trace("Stack trace for content loss");
         // Preserve existing content if new message has empty content
@@ -208,7 +205,7 @@ export const useStore = create<{
             console.log(`[DEBUG-REPORTER-BATCH] 📝 New last 50 chars: "${newLastChars}"`);
           }
           
-          if (existingContentLen > 0 && newContentLen === 0) {
+          if (existingContentLen > 0 && newContentLen === 0 && existing) {
             console.error(`[DEBUG-REPORTER-BATCH] ❌ REPORTER CONTENT LOSS in batch update! messageId=${m.id}, existingContentLen=${existingContentLen}, newContentLen=${newContentLen}`);
             console.trace("Stack trace for batch content loss");
             // Preserve existing content
@@ -355,11 +352,15 @@ export async function sendMessage(
 
   try {
     for await (const event of stream) {
+      const eventReceivedTimestamp = new Date().toISOString();
       const { type, data } = event;
+      console.log(`[Store] 📥 [${eventReceivedTimestamp}] Event received from stream: type=${type}, messageId=${data.id}, agent=${data.agent}`);
       
       // DEBUG: Log all events to see what's being received
-      if (data.agent === "reporter" || type === "message_chunk" && data.agent === "reporter") {
-        console.log(`[DEBUG-REPORTER-EVENT] 📨 Event received: type=${type}, agent=${data.agent}, id=${data.id}, hasContent=${!!data.content}, contentLen=${data.content?.length ?? 0}, finishReason=${data.finish_reason}`);
+      // Check if this is a message_chunk event with reporter agent
+      if (type === "message_chunk" && (data.agent === "reporter" || (data as { agent?: string }).agent === "reporter")) {
+        const messageData = data as { content?: string; agent?: string; id: string; finish_reason?: string };
+        console.log(`[DEBUG-REPORTER-EVENT] 📨 Event received: type=${type}, agent=${messageData.agent}, id=${messageData.id}, hasContent=${!!messageData.content}, contentLen=${messageData.content?.length ?? 0}, finishReason=${messageData.finish_reason}`);
       }
       
       // Handle PM refresh events to update PM views
@@ -374,6 +375,53 @@ export async function sendMessage(
       }
       
       let message: Message | undefined;
+      
+      // DEBUG: Log tool_calls events to see if they're being received
+      if (type === "tool_calls") {
+        const timestamp = new Date().toISOString();
+        console.log(`[Store] 🔧 [${timestamp}] tool_calls event received: messageId=${data.id}, agent=${data.agent}`, {
+          hasReactThoughts: !!(data as any).react_thoughts,
+          reactThoughtsCount: (data as any).react_thoughts?.length ?? 0,
+          toolCallsCount: (data as any).tool_calls?.length ?? 0,
+          eventDataKeys: Object.keys(data),
+        });
+      }
+      
+      // Handle thoughts events: stream thoughts separately to Analysis Block
+      if (type === "thoughts") {
+        const timestamp = new Date().toISOString();
+        const thoughtsData = data as { react_thoughts?: Array<{ thought: string; before_tool?: boolean; step_index: number }> };
+        console.log(`[Store] 💭 [${timestamp}] thoughts event received: messageId=${data.id}, agent=${data.agent}, count=${thoughtsData.react_thoughts?.length ?? 0}`);
+        
+        // Find or create message for thoughts
+        messageId = data.id;
+        if (!existsMessage(messageId)) {
+          message = {
+            id: messageId,
+            threadId: data.thread_id,
+            agent: data.agent,
+            role: data.role,
+            content: "",
+            contentChunks: [],
+            reasoningContent: "",
+            reasoningContentChunks: [],
+            isStreaming: true,
+            interruptFeedback,
+          };
+          console.log(`[Store] 🆕 [${timestamp}] Message created for thoughts: messageId=${messageId}, agent=${data.agent}`);
+          appendMessage(message);
+        } else {
+          message = getMessage(messageId);
+        }
+        
+        if (message && thoughtsData.react_thoughts) {
+          // Merge thoughts into message
+          message = mergeMessage(message, event);
+          console.log(`[Store] 🔄 [${timestamp}] Merged thoughts into message: messageId=${message.id}, count=${message.reactThoughts?.length ?? 0}`);
+          updateMessage(message);
+        }
+        continue; // Skip the rest of the loop for thoughts events
+      }
       
       // Handle tool_call_result specially: use the message that contains the tool call
       if (type === "tool_call_result") {
@@ -398,6 +446,7 @@ export async function sendMessage(
         }
         
         if (!existsMessage(messageId)) {
+          const createTimestamp = new Date().toISOString();
           message = {
             id: messageId,
             threadId: data.thread_id,
@@ -410,6 +459,8 @@ export async function sendMessage(
             isStreaming: true,
             interruptFeedback,
           };
+          // DEBUG: Log when message is created
+          console.log(`[Store] 🆕 [${createTimestamp}] Message created: messageId=${messageId}, agent=${data.agent}, role=${data.role}, eventType=${type}`);
           // DEBUG: Log when reporter message is created
           if (data.agent === "reporter") {
             console.log(`[DEBUG-REPORTER-CREATE] 🆕 Reporter message created: messageId=${messageId}, agent=${data.agent}, role=${data.role}`);
@@ -430,6 +481,8 @@ export async function sendMessage(
           console.log(`[DEBUG-REPORTER-STREAM] 📥 Reporter chunk received: messageId=${message.id}, chunkLen=${data.content.length}, contentBefore=${contentBeforeMerge}, chunkText="${data.content.substring(0, 50)}..."`);
         }
         
+        const mergeTimestamp = new Date().toISOString();
+        console.log(`[Store] 🔄 [${mergeTimestamp}] Calling mergeMessage: messageId=${message.id}, agent=${message.agent}, eventType=${type}`);
         message = mergeMessage(message, event);
         const contentAfterMerge = message.content?.length ?? 0;
         const chunksAfterMerge = message.contentChunks?.length ?? 0;
@@ -699,11 +752,14 @@ function appendMessage(message: Message) {
     }
     
     // If message already belongs to a block, reuse it
+    // ROOT CAUSE FIX: Don't call appendResearchActivity if message is already in activityIds
+    // This prevents duplicate entries in activityIds which causes duplicate tool calls
     if (existingBlockForThisMessage) {
       if (state.ongoingResearchId !== existingBlockForThisMessage) {
         useStore.getState().setOngoingResearch(existingBlockForThisMessage);
       }
-      appendResearchActivity(message);
+      // Message is already in activityIds, so don't add it again
+      // Just update the message in the store
       useStore.getState().appendMessage(message);
       return;
     }

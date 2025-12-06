@@ -643,6 +643,10 @@ async def _process_message_chunk(
             # Regular content chunk
             # For planner agent, try to extract and stream thought progressively
             if agent_name == "planner" and message_chunk.content:
+                logger.debug(
+                    f"[{safe_thread_id}] 💭 [PLANNER-STREAM] Processing planner content chunk: "
+                    f"messageId={event_stream_message.get('id')}, content_length={len(message_chunk.content)}"
+                )
                 message_id = event_stream_message.get("id")
                 if message_id:
                     # Accumulate content
@@ -690,8 +694,9 @@ async def _process_message_chunk(
                                                 "react_thoughts": [planner_thought_event]
                                             }
                                             logger.info(
-                                                f"[{safe_thread_id}] 💭 [PLANNER] Streaming thought from streaming JSON "
-                                                f"(messageId={message_id}, thought_length={len(thought_text)})"
+                                                f"[{safe_thread_id}] 💭 [PLANNER-STREAM] Streaming thought from streaming JSON "
+                                                f"(messageId={message_id}, thought_length={len(thought_text)}, "
+                                                f"accumulated_length={len(accumulated)})"
                                             )
                                             yield _make_event("thoughts", thoughts_event)
                                             _planner_thought_streamed[message_id] = True

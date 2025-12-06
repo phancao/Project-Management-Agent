@@ -2610,9 +2610,46 @@ async def _execute_agent_step(
                     # Extract thought from step description
                     step_description = getattr(current_step, 'description', '') or ''
                     if step_description:
-                        # Create thought from step description
-                        thought_text = step_description.strip()
-                        logger.info(f"[{agent_name}] 💭 Extracted thought from step description: {thought_text[:100]}...")
+                        # Split thought if it contains numbered steps (e.g., "1)", "2)", "3)" or "1.", "2.", "3.")
+                        import re
+                        # Pattern to match numbered steps: number followed by ) or . at start of line or after space
+                        # Examples: "1)", "2)", "1.", "2.", " 1)", " 2)", etc.
+                        # Also handle case where first step has no number (implicit step 1)
+                        step_pattern = r'(?:^|\s)(\d+[).])\s+(.+?)(?=\s+\d+[).]|$)'
+                        matches = list(re.finditer(step_pattern, step_description, re.MULTILINE | re.DOTALL))
+                        
+                        if matches and len(matches) > 0:
+                            # Numbered steps found - split them
+                            thought_texts = []
+                            
+                            # Check if there's content before the first numbered step
+                            first_match_start = matches[0].start()
+                            if first_match_start > 0:
+                                # Extract content before first numbered step as first thought
+                                prefix = step_description[:first_match_start].strip()
+                                if prefix:
+                                    thought_texts.append(prefix)
+                                    logger.info(f"[{agent_name}] 💭 Extracted implicit step 1: {prefix[:80]}...")
+                            
+                            # Extract all numbered steps
+                            for i, match in enumerate(matches):
+                                step_num = match.group(1)  # e.g., "1)", "2)"
+                                step_content = match.group(2).strip()  # The actual step content
+                                thought_texts.append(step_content)
+                                logger.info(f"[{agent_name}] 💭 Extracted step {step_num}: {step_content[:80]}...")
+                            
+                            # If we found numbered steps, use the split thoughts
+                            if len(thought_texts) > 1:
+                                logger.info(f"[{agent_name}] 💭 Split step description into {len(thought_texts)} separate thoughts")
+                            else:
+                                # Only one thought extracted (either prefix or first numbered step)
+                                # Use original description
+                                thought_texts = [step_description.strip()]
+                                logger.info(f"[{agent_name}] 💭 Extracted single thought from step description: {thought_texts[0][:100]}...")
+                        else:
+                            # No numbered steps found - use as single thought
+                            thought_texts = [step_description.strip()]
+                            logger.info(f"[{agent_name}] 💭 Extracted single thought from step description: {thought_texts[0][:100]}...")
                         
                         # Add thought to message's additional_kwargs so it gets streamed
                         if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
@@ -2622,15 +2659,19 @@ async def _execute_agent_step(
                         if "react_thoughts" not in msg.additional_kwargs:
                             msg.additional_kwargs["react_thoughts"] = []
                         
-                        # Add thought for each tool call
+                        # Add thoughts - try to match one thought per tool call, or use the thought at the same index
                         for tool_idx, tool_call in enumerate(msg.tool_calls):
                             tool_name = tool_call.get('name', 'unknown') if isinstance(tool_call, dict) else getattr(tool_call, 'name', 'unknown')
+                            # Use thought at same index as tool call, or last thought if more tools than thoughts
+                            thought_idx = min(tool_idx, len(thought_texts) - 1)
+                            thought_text = thought_texts[thought_idx]
+                            
                             msg.additional_kwargs["react_thoughts"].append({
                                 "thought": thought_text,
                                 "before_tool": True,
                                 "step_index": len(msg.additional_kwargs["react_thoughts"])
                             })
-                            logger.info(f"[{agent_name}] 💭 Added thought for tool call {tool_idx + 1}: {tool_name}")
+                            logger.info(f"[{agent_name}] 💭 Added thought {thought_idx + 1}/{len(thought_texts)} for tool call {tool_idx + 1}: {tool_name}")
             else:
                 logger.debug(f"[{agent_name}] Message {i}: AIMessage - content={str(msg.content)[:200]}")
         else:

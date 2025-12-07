@@ -69,9 +69,15 @@ from src.server.streaming import (
 # NOTE: Now uses streaming module cache, kept for backward compatibility
 _react_thoughts_cache: dict[str, list] = {}
 
-# Cache to track accumulated planner content for incremental thought extraction
-_planner_content_cache: dict[str, str] = {}  # message_id -> accumulated_content
-_planner_thought_streamed: dict[str, bool] = {}  # message_id -> whether thought was already streamed
+# Cache to track accumulated reasoning_content for token-by-token thought streaming
+# Reasoning models (o1 series) provide reasoning_content
+_reasoning_content_cache: dict[str, str] = {}  # message_id -> accumulated_reasoning_content
+
+# Cache to track accumulated content for extracting "Thought:" patterns (like Cursor does)
+# This allows ANY model to show thoughts if they write "Thought:" in content
+_content_cache: dict[str, str] = {}  # message_id -> accumulated_content
+_previous_content_length: dict[str, int] = {}  # message_id -> previous accumulated content length (to detect NEW "Thought:")
+
 from src.server.config_request import ConfigResponse
 from src.server.ai_provider_request import (
     AIProviderAPIKeyRequest,
@@ -585,9 +591,10 @@ async def _process_message_chunk(
     agent_name = _get_agent_name(agent, message_metadata, message_chunk)
     safe_agent_name = sanitize_agent_name(agent_name)
     safe_thread_id = sanitize_thread_id(thread_id)
-    logger.debug(
-        f"[{safe_thread_id}] _process_message_chunk started for "
-        f"agent={safe_agent_name}"
+    timestamp_process_start = datetime.now().isoformat()
+    logger.info(
+        f"[{safe_thread_id}] ⏰ [{timestamp_process_start}] [PROCESS-MESSAGE] _process_message_chunk started for "
+        f"agent={safe_agent_name}, message_type={type(message_chunk).__name__}"
     )
     logger.debug(f"[{safe_thread_id}] Extracted agent_name: {safe_agent_name} (from message.name={getattr(message_chunk, 'name', 'N/A')}, agent={agent}, metadata={message_metadata.get('langgraph_node', 'N/A')})")
     
@@ -614,18 +621,132 @@ async def _process_message_chunk(
     elif isinstance(message_chunk, AIMessageChunk):
         # AI Message Chunk - Streaming response
         if message_chunk.tool_calls:
+            # DEBUG: Timestamp when AIMessageChunk with tool_calls arrives
+            timestamp = datetime.now().isoformat()
+            tool_names = [tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown') for tc in message_chunk.tool_calls]
+            logger.info(f"[{safe_thread_id}] ⏰ [{timestamp}] [MESSAGES-STREAM] AIMessageChunk with tool_calls arrived: agent={agent_name}, tools={tool_names}, messageId={event_stream_message.get('id')}")
+            
+            # Check for thoughts from multiple sources (like Cursor does)
+            message_id = event_stream_message.get("id")
+            thoughts_to_stream = None
+            
+            # Method 1: Check reasoning_content (for expensive reasoning models like o1)
+            reasoning_content = None
+            if hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs:
+                reasoning_content = message_chunk.additional_kwargs.get("reasoning_content")
+            if not reasoning_content and hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
+                reasoning_content = message_chunk.response_metadata.get("reasoning_content")
+            
+            if reasoning_content:
+                logger.info(f"[{safe_thread_id}] ⏰ [{timestamp}] 💭 [STREAM] Found reasoning_content: agent={agent_name}, length={len(reasoning_content)}")
+                thoughts_to_stream = [{
+                    "thought": reasoning_content,
+                    "before_tool": True,
+                    "step_index": 0,
+                    "from_reasoning_content": True
+                }]
+            
+            # Method 2: Check if thoughts were already extracted from content (content chunks arrive before tool_calls)
+            # If content chunks arrived first, thoughts were already extracted and streamed in the else block
+            # We don't re-extract or re-stream here to avoid duplicates
+            if not thoughts_to_stream and message_id and message_id in _react_thoughts_cache:
+                # Thoughts were already extracted from content chunks
+                cached_thoughts = _react_thoughts_cache[message_id]
+                if cached_thoughts:
+                    thoughts_to_stream = cached_thoughts
+                    logger.info(f"[{safe_thread_id}] ⏰ [{timestamp}] 💭 [STREAM] Found thoughts already extracted from content: agent={agent_name}, count={len(thoughts_to_stream)}")
+                    # Don't stream again - thoughts were already streamed when first detected in content-only path
+            
+            # Stream thoughts if found (only if not already streamed in content-only path)
+            # Check if thoughts were already streamed by checking if message_id is in _react_thoughts_cache
+            # (which means they were extracted and streamed in content-only path)
+            if thoughts_to_stream and message_id not in _react_thoughts_cache:
+                # Only stream if thoughts weren't already streamed in content-only path
+                thoughts_event = {
+                    "thread_id": thread_id,
+                    "agent": agent_name,
+                    "id": message_id,
+                    "role": "assistant",
+                    "react_thoughts": thoughts_to_stream
+                }
+                logger.info(f"[{safe_thread_id}] ⏰ [{timestamp}] 💭 [STREAM] YIELDING thought(s) before tool_calls: agent={agent_name}, messageId={message_id}, count={len(thoughts_to_stream)}")
+                yield _make_event("thoughts", thoughts_event)
+                # Cache to prevent re-streaming
+                _react_thoughts_cache[message_id] = thoughts_to_stream
+                await asyncio.sleep(0.001)
+            
             # Complete tool calls
             event_stream_message["tool_calls"] = message_chunk.tool_calls
             
-            # Include react_thoughts if available
+            # Include react_thoughts if available (already set by agent in nodes.py)
+            # Works for ANY agent that sets thoughts, not just pm_agent/react_agent
             if "react_thoughts" not in event_stream_message:
                 chunk_thoughts = None
+                timestamp_check = datetime.now().isoformat()
+                logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_check}] [MESSAGES-STREAM] Checking for react_thoughts from agent={agent_name}...")
+                
+                # Check response_metadata first (most reliable, preserved through LangGraph)
                 if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
                     chunk_thoughts = message_chunk.response_metadata.get("react_thoughts")
+                    if chunk_thoughts:
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_check}] [MESSAGES-STREAM] Found react_thoughts in response_metadata: {len(chunk_thoughts) if isinstance(chunk_thoughts, list) else 'N/A'} thoughts")
+                
+                # Check additional_kwargs (may be lost during serialization)
                 if not chunk_thoughts and hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs:
                     chunk_thoughts = message_chunk.additional_kwargs.get("react_thoughts")
+                    if chunk_thoughts:
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_check}] [MESSAGES-STREAM] Found react_thoughts in additional_kwargs: {len(chunk_thoughts) if isinstance(chunk_thoughts, list) else 'N/A'} thoughts")
+                
+                # Check cache (for cases where message chunk arrives before state update)
+                # Works for ALL agents, not just specific ones
+                if not chunk_thoughts:
+                    message_id = event_stream_message.get("id")
+                    if message_id and message_id in _react_thoughts_cache:
+                        chunk_thoughts = _react_thoughts_cache[message_id]
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_check}] [MESSAGES-STREAM] Found react_thoughts in cache: {len(chunk_thoughts) if isinstance(chunk_thoughts, list) else 'N/A'} thoughts")
+                
+                if not chunk_thoughts:
+                    logger.debug(f"[{safe_thread_id}] ⏰ [{timestamp_check}] [MESSAGES-STREAM] No react_thoughts found for agent={agent_name} (agent should set them in nodes.py)")
+                
+                # Stream thoughts from ANY agent that has them
                 if chunk_thoughts:
                     event_stream_message["react_thoughts"] = chunk_thoughts
+                    
+                    # CRITICAL: Stream thoughts as separate event FIRST, before tool_calls
+                    # This ensures thoughts appear immediately when message is sent
+                    message_id = event_stream_message.get("id")
+                    if message_id and chunk_thoughts:
+                        timestamp_stream_thoughts = datetime.now().isoformat()
+                        thoughts_event = {
+                            "thread_id": thread_id,
+                            "agent": agent_name,
+                            "id": message_id,
+                            "role": "assistant",
+                            "react_thoughts": chunk_thoughts
+                        }
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_stream_thoughts}] 💭 [STREAM] YIELDING thoughts event from agent={agent_name}: {len(chunk_thoughts)} thoughts, messageId={message_id}")
+                        yield _make_event("thoughts", thoughts_event)
+                        timestamp_after_thoughts = datetime.now().isoformat()
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_thoughts}] [STREAM] Thoughts event yielded, waiting 10ms before tool_calls...")
+                        
+                        # Small delay to ensure thoughts are processed before tool_calls
+                        await asyncio.sleep(0.01)  # 10ms delay
+                        timestamp_after_delay = datetime.now().isoformat()
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_delay}] [STREAM] Delay complete, now yielding tool_calls event...")
+                else:
+                    timestamp_no_thoughts = datetime.now().isoformat()
+                    logger.debug(f"[{safe_thread_id}] ⏰ [{timestamp_no_thoughts}] [MESSAGES-STREAM] No thoughts to stream for agent={agent_name}, proceeding with tool_calls only")
+            
+            # Process tool_call_chunks
+            processed_chunks = _process_tool_call_chunks(message_chunk.tool_call_chunks)
+            if processed_chunks:
+                event_stream_message["tool_call_chunks"] = processed_chunks
+            
+            timestamp_stream_toolcalls = datetime.now().isoformat()
+            logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_stream_toolcalls}] [STREAM] YIELDING tool_calls event: tools={tool_names}, messageId={event_stream_message.get('id')}")
+            yield _make_event("tool_calls", event_stream_message)
+            timestamp_after_toolcalls = datetime.now().isoformat()
+            logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_toolcalls}] [STREAM] tool_calls event yielded")
             
             # Process tool_call_chunks
             processed_chunks = _process_tool_call_chunks(message_chunk.tool_call_chunks)
@@ -640,7 +761,133 @@ async def _process_message_chunk(
                 event_stream_message["tool_call_chunks"] = processed_chunks
             yield _make_event("tool_call_chunks", event_stream_message)
         else:
-            # Regular content chunk
+            # Regular content chunk - check for reasoning_content and stream thoughts token-by-token!
+            # CRITICAL: For token-by-token streaming, check reasoning_content in each chunk as it arrives
+            timestamp_check = datetime.now().isoformat()
+            message_id = event_stream_message.get("id")
+            
+            # Check for reasoning_content (streams token-by-token from OpenAI o1 models)
+            reasoning_content = None
+            has_additional_kwargs = hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs
+            if has_additional_kwargs:
+                reasoning_content = message_chunk.additional_kwargs.get("reasoning_content")
+            
+            # Stream thoughts incrementally as reasoning_content arrives (token-by-token)
+            if reasoning_content and message_id:
+                # Track accumulated reasoning per message ID for incremental streaming
+                if message_id not in _reasoning_content_cache:
+                    _reasoning_content_cache[message_id] = ""
+                
+                # Get previous accumulated reasoning
+                previous_reasoning = _reasoning_content_cache[message_id]
+                
+                # Update accumulated reasoning (reasoning_content is cumulative in chunks)
+                _reasoning_content_cache[message_id] = reasoning_content
+                
+                # Extract new reasoning tokens (incremental part)
+                new_reasoning = reasoning_content[len(previous_reasoning):] if len(reasoning_content) > len(previous_reasoning) else ""
+                
+                # Stream thoughts incrementally if there's new reasoning content
+                if new_reasoning.strip():
+                    timestamp_stream_reasoning = datetime.now().isoformat()
+                    logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_stream_reasoning}] 💭 [STREAM] Streaming incremental reasoning: messageId={message_id}, new_length={len(new_reasoning)}, total_length={len(reasoning_content)}")
+                    
+                    # Convert reasoning_content to react_thoughts format
+                    # Use accumulated reasoning as the thought text
+                    incremental_thought = {
+                        "thought": reasoning_content,  # Full accumulated reasoning
+                        "before_tool": True,
+                        "step_index": 0,
+                        "incremental": True  # Flag to indicate this is streaming
+                    }
+                    
+                    thoughts_event = {
+                        "thread_id": thread_id,
+                        "agent": agent_name,
+                        "id": message_id,
+                        "role": "assistant",
+                        "react_thoughts": [incremental_thought]
+                    }
+                    
+                    logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_stream_reasoning}] 💭 [STREAM] YIELDING incremental thoughts event: messageId={message_id}, reasoning_length={len(reasoning_content)}")
+                    yield _make_event("thoughts", thoughts_event)
+                    await asyncio.sleep(0.001)  # Small delay to ensure thoughts are processed
+            
+            # Check for thoughts from content (for cheaper models - like Cursor)
+            # This is the ONLY place we extract thoughts from content chunks
+            thoughts_to_stream = None
+            
+            # First check for react_thoughts in metadata (set by agent)
+            if "react_thoughts" not in event_stream_message:
+                chunk_thoughts = None
+                
+                # Check response_metadata first (most reliable)
+                if hasattr(message_chunk, 'response_metadata') and message_chunk.response_metadata:
+                    chunk_thoughts = message_chunk.response_metadata.get("react_thoughts")
+                
+                # Check additional_kwargs
+                if not chunk_thoughts and hasattr(message_chunk, 'additional_kwargs') and message_chunk.additional_kwargs:
+                    chunk_thoughts = message_chunk.additional_kwargs.get("react_thoughts")
+                
+                # Check cache
+                if not chunk_thoughts and message_id and message_id in _react_thoughts_cache:
+                    chunk_thoughts = _react_thoughts_cache[message_id]
+                
+                if chunk_thoughts:
+                    thoughts_to_stream = chunk_thoughts
+            
+            # If no thoughts from metadata, extract from content (like Cursor does)
+            if not thoughts_to_stream and message_id:
+                # Accumulate content to check for "Thought:" pattern
+                if message_id not in _content_cache:
+                    _content_cache[message_id] = ""
+                    _previous_content_length[message_id] = 0
+                
+                # Get current content from chunk
+                current_content = getattr(message_chunk, 'content', '') or ''
+                if current_content:
+                    # Get previous accumulated content
+                    previous_content = _content_cache[message_id]
+                    previous_length = _previous_content_length[message_id]
+                    
+                    # Accumulate content
+                    _content_cache[message_id] += current_content
+                    accumulated_content = _content_cache[message_id]
+                    
+                    # Check if "Thought:" is NEWLY detected (wasn't in previous content, but now is)
+                    had_thought_before = "Thought:" in previous_content
+                    has_thought_now = "Thought:" in accumulated_content
+                    
+                    if has_thought_now and not had_thought_before:
+                        # "Thought:" was just detected for the first time - extract and stream
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_check}] 💭 [CONTENT-CHECK] NEWLY detected 'Thought:' in content: agent={agent_name}, messageId={message_id}, content_preview={accumulated_content[:200]}")
+                        
+                        # Extract thought from content (like Cursor does)
+                        from src.graph.thought_extractor import extract_thoughts_from_response
+                        extracted_thoughts = extract_thoughts_from_response(accumulated_content, None)
+                        
+                        if extracted_thoughts:
+                            thoughts_to_stream = extracted_thoughts
+                            # Cache extracted thoughts so tool_calls path doesn't re-extract
+                            _react_thoughts_cache[message_id] = extracted_thoughts
+                    
+                    # Update previous length for next chunk
+                    _previous_content_length[message_id] = len(accumulated_content)
+            
+            # Stream thoughts ONCE if found (only when newly detected)
+            if thoughts_to_stream:
+                event_stream_message["react_thoughts"] = thoughts_to_stream
+                thoughts_event = {
+                    "thread_id": thread_id,
+                    "agent": agent_name,
+                    "id": message_id,
+                    "role": "assistant",
+                    "react_thoughts": thoughts_to_stream
+                }
+                logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_check}] 💭 [STREAM] YIELDING thoughts event: agent={agent_name}, messageId={message_id}, count={len(thoughts_to_stream)}")
+                yield _make_event("thoughts", thoughts_event)
+                await asyncio.sleep(0.001)
+            
             # For planner agent, try to extract and stream thought progressively
             if agent_name == "planner" and message_chunk.content:
                 logger.debug(
@@ -650,13 +897,14 @@ async def _process_message_chunk(
                 message_id = event_stream_message.get("id")
                 if message_id:
                     # Accumulate content
-                    if message_id not in _planner_content_cache:
-                        _planner_content_cache[message_id] = ""
-                    _planner_content_cache[message_id] += message_chunk.content
+                    if message_id not in _content_cache:
+                        _content_cache[message_id] = ""
+                    _content_cache[message_id] += message_chunk.content
                     
                     # Try to extract thought field from accumulated JSON
-                    accumulated = _planner_content_cache[message_id]
-                    if not _planner_thought_streamed.get(message_id, False):
+                    accumulated = _content_cache[message_id]
+                    # Check if we've already streamed thoughts for this message
+                    if message_id not in _react_thoughts_cache or not _react_thoughts_cache.get(message_id):
                         # Try to find "thought" field in JSON
                         # Look for pattern: "thought": "..." (handling escaped quotes)
                         import re
@@ -699,7 +947,8 @@ async def _process_message_chunk(
                                                 f"accumulated_length={len(accumulated)})"
                                             )
                                             yield _make_event("thoughts", thoughts_event)
-                                            _planner_thought_streamed[message_id] = True
+                                            # Mark that we've streamed thoughts for this message
+                                            _react_thoughts_cache[message_id] = [planner_thought_event]
                                             break
                                     else:
                                         # End of accumulated content, thought might be incomplete
@@ -709,7 +958,13 @@ async def _process_message_chunk(
                                     thought_text += char
                                     i += 1
             
+            # CRITICAL: Always yield the message_chunk event for content chunks
+            # This ensures the frontend receives the message content
+            timestamp_yield_chunk = datetime.now().isoformat()
+            logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_yield_chunk}] [STREAM] YIELDING message_chunk event: agent={agent_name}, messageId={event_stream_message.get('id')}, has_content={bool(message_chunk.content)}")
             yield _make_event("message_chunk", event_stream_message)
+            timestamp_after_chunk = datetime.now().isoformat()
+            logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_chunk}] [STREAM] message_chunk event yielded")
     elif isinstance(message_chunk, AIMessage):
         # Full AIMessage (not chunk) - used for state update streaming
         # Ensure react_thoughts are included
@@ -821,6 +1076,7 @@ async def _stream_graph_events(
             if stream_type == "messages":
                 # Process message chunks (agent responses, tool calls)
                 if isinstance(event_data, (list, tuple)) and len(event_data) > 0:
+                    timestamp_msg_arrival = datetime.now().isoformat()
                     message_chunk, message_metadata = (
                         event_data[0], 
                         event_data[1] if len(event_data) > 1 else {}
@@ -831,15 +1087,23 @@ async def _stream_graph_events(
                     if hasattr(message_chunk, 'content'):
                         chunk_content = str(message_chunk.content)[:50] if message_chunk.content else ""
                     chunk_name = getattr(message_chunk, 'name', 'N/A')
+                    has_tool_calls = hasattr(message_chunk, 'tool_calls') and bool(message_chunk.tool_calls)
                     logger.info(
-                        f"[{safe_thread_id}] 📨 messages stream: type={msg_type}, "
-                        f"agent_path={agent}, chunk_name={chunk_name}, "
+                        f"[{safe_thread_id}] ⏰ [{timestamp_msg_arrival}] 📨 [MESSAGES-STREAM] Message chunk arrived: type={msg_type}, "
+                        f"agent_path={agent}, chunk_name={chunk_name}, has_tool_calls={has_tool_calls}, "
                         f"content_preview=\"{chunk_content}...\""
                     )
+                    timestamp_before_process = datetime.now().isoformat()
+                    logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_before_process}] [MESSAGES-STREAM] About to process message chunk...")
                     async for event in _process_message_chunk(
                         message_chunk, message_metadata, thread_id, agent
                     ):
+                        timestamp_event_yield = datetime.now().isoformat()
+                        event_type = event.split('\n')[0] if '\n' in event else event[:50]
+                        logger.debug(f"[{safe_thread_id}] ⏰ [{timestamp_event_yield}] [MESSAGES-STREAM] Yielding event: {event_type}...")
                         yield event
+                    timestamp_after_process = datetime.now().isoformat()
+                    logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_process}] [MESSAGES-STREAM] Finished processing message chunk")
             
             elif stream_type == "updates":
                 # Process state updates (plan updates, observations)
@@ -1831,6 +2095,10 @@ async def _astream_workflow_generator(
 
 
 def _make_event(event_type: str, data: dict[str, Any]):
+    timestamp_make_event = datetime.now().isoformat()
+    thread_id = data.get("thread_id", "")
+    safe_thread_id = sanitize_thread_id(thread_id) if thread_id else "unknown"
+    
     if data.get("content") == "":
         data.pop("content")
     # Ensure JSON serialization with proper encoding
@@ -1852,13 +2120,19 @@ def _make_event(event_type: str, data: dict[str, Any]):
             return f"event: error\ndata: {error_data}\n\n"
 
     finish_reason = data.get("finish_reason", "")
+    event_str = f"event: {event_type}\ndata: {json_data}\n\n"
+    
+    timestamp_before_chat_stream = datetime.now().isoformat()
+    logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_before_chat_stream}] [MAKE-EVENT] Calling chat_stream_message for event_type={event_type}, thread_id={thread_id[:8] if thread_id else 'N/A'}")
     chat_stream_message(
-        data.get("thread_id", ""),
-        f"event: {event_type}\ndata: {json_data}\n\n",
+        thread_id,
+        event_str,
         finish_reason,
     )
+    timestamp_after_chat_stream = datetime.now().isoformat()
+    logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_chat_stream}] [MAKE-EVENT] chat_stream_message completed, returning event string")
 
-    return f"event: {event_type}\ndata: {json_data}\n\n"
+    return event_str
 
 
 @app.post("/api/tts")

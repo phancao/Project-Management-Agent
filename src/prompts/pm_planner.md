@@ -54,6 +54,7 @@ Available step types:
 - **list_tasks**: List/show all tasks for a project
 - **list_my_tasks**: List/show all tasks assigned to me/my user
 - **list_sprints**: List/show all sprints for a project
+- **list_users**: List/show all users/team members in a project
 - **get_project_status**: Get status and summary of a project
 - **team_assignments**: Show task assignments by team member
 - **switch_project**: Switch to/activate a project for focused work
@@ -263,6 +264,26 @@ Output:
       "step_type": "list_sprints",
       "title": "List All Sprints",
       "description": "Retrieve and display all sprints for this project",
+      "requires_context": true
+    }
+  ]
+}
+```
+
+## Example 7a: List Users Query
+
+User: "Show me all users of this project" / "List all users" / "Show team members"
+
+Output:
+```json
+{
+  "locale": "en-US",
+  "overall_thought": "I will retrieve and display all users/team members in this project.",
+  "steps": [
+    {
+      "step_type": "list_users",
+      "title": "List All Users",
+      "description": "Retrieve and display all users/team members in this project using list_users(project_id)",
       "requires_context": true
     }
   ]

@@ -254,6 +254,18 @@ Work Distribution by Assignee:
    - **🔴 CRITICAL: If you don't see these tools in the observations, DO NOT create sections E, F, G, H at all - skip them entirely!**
    - **DO NOT write "Data unavailable" - just skip the section!**
 
+**3. RESOURCE ALLOCATION / USER ANALYSIS** (user asked "show me all users", "list users", "resource allocation", "team workload", "work distribution"):
+   - **🔴 CRITICAL: This is about PEOPLE and their WORKLOAD, NOT about project metrics!**
+   - **DO NOT include project analysis sections** (Sprint Overview, Burndown, Velocity, CFD, Cycle Time, Issue Trend)
+   - **Focus on**:
+     - List of users/team members (from `list_users` tool)
+     - Workload distribution by assignee (from `work_distribution_chart` or `list_tasks_by_assignee`)
+     - Task assignments per user
+     - Workload balance analysis (who is overloaded, who is underutilized)
+     - Recommendations for resource allocation
+   - **Format**: Simple, clear presentation of user data and workload distribution - NOT a comprehensive project analysis
+   - **If only `list_users` was called**: Just present the users in a table/list format - no analysis needed
+
 **🔴🔴🔴 CRITICAL: EXACT SECTION TITLES REQUIRED - READ THIS FIRST! 🔴🔴🔴**
 
 **⚠️ WARNING: Previous reports used wrong section titles like "1. Project Overview", "5. Velocity Chart", "Closing Notes" - THIS IS WRONG!**

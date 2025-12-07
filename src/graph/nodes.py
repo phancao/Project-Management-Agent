@@ -3004,8 +3004,8 @@ async def _setup_and_execute_agent_step(
             from langchain_core.tools import BaseTool
             import inspect
             
-            def wrap_mcp_tool_with_truncation(tool: BaseTool, max_tokens: int = 1000) -> BaseTool:
-                """Wrap an MCP tool to truncate its output to prevent token overflow."""
+            def wrap_mcp_tool_with_truncation(tool: BaseTool, max_tokens: int = 1000, timeout_seconds: int = 120) -> BaseTool:
+                """Wrap an MCP tool to truncate its output and add timeout protection."""
                 max_chars = max_tokens * 4  # 4 chars per token
                 
                 # Get the original tool function
@@ -3021,7 +3021,21 @@ async def _setup_and_execute_agent_step(
                 
                 if is_async:
                     async def truncated_func(*args, **kwargs):
-                        result = await original_func(*args, **kwargs)
+                        try:
+                            # Add timeout protection
+                            result = await asyncio.wait_for(
+                                original_func(*args, **kwargs),
+                                timeout=timeout_seconds
+                            )
+                        except asyncio.TimeoutError:
+                            error_msg = f"MCP Tool '{tool.name}' timed out after {timeout_seconds} seconds"
+                            logger.error(f"[{agent_type}] ⏱️ {error_msg}")
+                            return f"Error: {error_msg}. The tool execution took too long and was cancelled."
+                        except Exception as e:
+                            error_msg = f"Error executing MCP tool '{tool.name}': {str(e)}"
+                            logger.error(f"[{agent_type}] ❌ {error_msg}", exc_info=True)
+                            return f"Error: {error_msg}"
+                        
                         result_str = str(result)
                         original_len = len(result_str)
                         
@@ -3043,8 +3057,26 @@ async def _setup_and_execute_agent_step(
                     elif hasattr(tool, '_run'):
                         tool._run = truncated_func
                 else:
-                    def truncated_func(*args, **kwargs):
-                        result = original_func(*args, **kwargs)
+                    async def truncated_func(*args, **kwargs):
+                        try:
+                            # For sync functions, run in executor with timeout
+                            import concurrent.futures
+                            loop = asyncio.get_event_loop()
+                            with concurrent.futures.ThreadPoolExecutor() as executor:
+                                future = executor.submit(original_func, *args, **kwargs)
+                                result = await asyncio.wait_for(
+                                    asyncio.wrap_future(future),
+                                    timeout=timeout_seconds
+                                )
+                        except asyncio.TimeoutError:
+                            error_msg = f"MCP Tool '{tool.name}' timed out after {timeout_seconds} seconds"
+                            logger.error(f"[{agent_type}] ⏱️ {error_msg}")
+                            return f"Error: {error_msg}. The tool execution took too long and was cancelled."
+                        except Exception as e:
+                            error_msg = f"Error executing MCP tool '{tool.name}': {str(e)}"
+                            logger.error(f"[{agent_type}] ❌ {error_msg}", exc_info=True)
+                            return f"Error: {error_msg}"
+                        
                         result_str = str(result)
                         original_len = len(result_str)
                         

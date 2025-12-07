@@ -670,7 +670,32 @@ export async function sendMessage(
     if (pendingUpdates.size > 0) {
       useStore.getState().updateMessages(Array.from(pendingUpdates.values()));
     }
-
+    
+    // CRITICAL FIX: Clear ongoingResearchId when stream ends (in finally block to ensure it always runs)
+    // This handles cases where the stream completes but finishReason wasn't explicitly sent
+    const finalState = useStore.getState();
+    const ongoingId = finalState.ongoingResearchId;
+    if (ongoingId) {
+      // Check if there's a reporter message for this research that has content and is not streaming
+      const reportId = finalState.researchReportIds.get(ongoingId);
+      if (reportId) {
+        const reportMessage = finalState.messages.get(reportId);
+        // If reporter message exists and is not streaming (stream ended), clear ongoingResearchId
+        if (reportMessage && !reportMessage.isStreaming && reportMessage.content && reportMessage.content.length > 0) {
+          console.log(`[Store] ✅ [FINALLY] Stream ended: Clearing ongoingResearchId: researchId=${ongoingId}, reportId=${reportId}, contentLen=${reportMessage.content.length}`);
+          useStore.getState().setOngoingResearch(null);
+        }
+      } else {
+        // No report yet, but stream ended - check if there are any activities
+        const activityIds = finalState.researchActivityIds.get(ongoingId) ?? [];
+        // If we have activities but no report, and stream ended, clear ongoingResearchId
+        // This prevents infinite blinking when analysis completes but no report was generated
+        if (activityIds.length > 0) {
+          console.log(`[Store] ✅ [FINALLY] Stream ended: Clearing ongoingResearchId (has activities but no report): researchId=${ongoingId}, activityCount=${activityIds.length}`);
+          useStore.getState().setOngoingResearch(null);
+        }
+      }
+    }
   }
 }
 

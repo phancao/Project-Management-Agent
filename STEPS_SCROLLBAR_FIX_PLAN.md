@@ -504,3 +504,25 @@ All attempts to fix this with CSS constraints, overflow settings, and SyntaxHigh
 - Maybe SyntaxHighlighter is the root cause
 - Try rendering plain text with word wrapping for long content
 - Or use a different code display component
+
+### ❌ Solution 46: Add overflow-x-hidden throughout StepBox hierarchy and wrap SyntaxHighlighter with constraints
+**Status**: FAILED - Reverted
+**Why it failed**: Still didn't work. The horizontal scrollbar still appears. The issue persists even after adding `overflow-x-hidden` at every level, wrapping SyntaxHighlighter in a constrained div, and adding `PreTag="div"`.
+
+**Approach**: 
+- Added `overflow-x-hidden` to Card className and inline style
+- Added `overflow-x-hidden` and `maxWidth: '100%'` to button header
+- Added `overflow-x-hidden` and width constraints to expanded content motion.div
+- Added `overflow-x-hidden`, word-break utilities, and width constraints to arguments display
+- Wrapped SyntaxHighlighter in a div with explicit width constraints and `overflowX: 'hidden'`
+- Added `overflowX: 'hidden'` and `minWidth: 0` to SyntaxHighlighter customStyle
+- Added `PreTag="div"` to SyntaxHighlighter
+- Changed button padding from `px-2 py-0.5` to `px-3 py-2` to match ThoughtBox
+
+**Key Insight**: Even with comprehensive `overflow-x-hidden` at every level and wrapping SyntaxHighlighter in a constrained container, the horizontal scrollbar still appears. This suggests the issue might be:
+1. SyntaxHighlighter's internal rendering (pre/code elements) is not respecting our constraints
+2. The issue is at a parent container level (AnalysisBlock, steps container, etc.)
+3. There's a CSS specificity issue where other styles are overriding our constraints
+4. The grid layout in the button header might be causing issues
+
+**Next Steps**: Need to investigate the actual DOM structure in browser dev tools to identify which element is causing the horizontal overflow. The SyntaxHighlighter component might need to be replaced entirely with a simpler solution.

@@ -203,7 +203,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
       className={cn("w-full", className)}
       style={{ minWidth: 0, maxWidth: '100%' }}
     >
-      <Card className="overflow-hidden w-full" style={{ minWidth: 0, maxWidth: '100%' }}>
+      <Card className="overflow-hidden overflow-x-hidden w-full" style={{ minWidth: 0, maxWidth: '100%', overflowX: 'hidden' }}>
         {/* Header */}
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -269,7 +269,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
           </div>
         </CardHeader>
         
-        <CardContent className="pt-0">
+        <CardContent className="pt-0 overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
           {/* Loading indicator when no tool calls yet */}
           {toolCalls.length === 0 && thoughts.length === 0 && ongoing && (
             <div className="py-4">
@@ -279,11 +279,11 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
           
           {/* Plan Content Section - Show planner thought and full plan JSON */}
           {planMessage?.content && (
-            <div className="mb-4 pb-4 border-b">
+            <div className="mb-4 pb-4 border-b break-words [word-break:break-word] [overflow-wrap:anywhere]">
               {/* Show planner's thought if available */}
               {planData.thought && (
                 <div className="mb-3">
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <div className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere]">
                     <Markdown animated={false}>
                       {planData.thought}
                     </Markdown>
@@ -327,9 +327,10 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
+                    className="overflow-hidden overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]"
+                    style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                   >
-                    <div className="flex flex-col gap-0.5 pt-0.5 max-h-[600px] overflow-y-auto">
+                    <div className="flex flex-col gap-0.5 pt-0.5 max-h-[600px] overflow-y-auto overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       {/* Cursor-style: Interleave thoughts and tool calls - thoughts appear BEFORE their tool call */}
                       {(() => {
                         // Create a combined list of thoughts and tool calls
@@ -398,7 +399,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
           
           {/* Report/Insights Section - Inline (BELOW steps) */}
           {(hasReport || isGeneratingReport) && (
-            <div className={(toolCalls.length > 0 || thoughts.length > 0) ? "border-t pt-4" : ""}>
+            <div className={cn((toolCalls.length > 0 || thoughts.length > 0) ? "border-t pt-4" : "", "break-words [word-break:break-word] [overflow-wrap:anywhere]")}>
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles size={16} className="text-amber-500" />
                 <span className="font-medium text-sm">Insights</span>
@@ -410,7 +411,7 @@ export function AnalysisBlock({ className, researchId }: AnalysisBlockProps) {
                   onMarkdownChange={handleMarkdownChange}
                 />
               ) : (
-                <div className="prose prose-sm dark:prose-invert max-w-none wrap-break-word [word-break:break-word]">
+                <div className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere]">
                   <Markdown animated={isGeneratingReport} checkLinkCredibility>
                     {reportMessage?.content ?? ""}
                   </Markdown>

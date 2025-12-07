@@ -135,6 +135,12 @@ def get_token_budget_for_model(model_name: Optional[str] = None) -> TokenBudget:
     # Model token limits (context windows)
     # Order matters: more specific patterns should come first
     MODEL_LIMITS = {
+        # OpenAI o3 series (200K context) - reasoning models
+        "o3-mini": 200000,  # CHEAPEST: $1.10/$4.40 per million | 200K context | 100K output
+        "o3": 200000,  # $2.00/$8.00 per million | 200K context | 100K output
+        # OpenAI o1 series (128K-200K context) - reasoning models
+        "o1": 200000,  # $15.00/$60.00 per million | 200K context | 100K output
+        "o1-preview": 128000,  # $15.00/$60.00 per million | 128K context | 32K output
         # GPT-5 series (400K context) - most specific first
         "gpt-5.1-preview": 400000,
         "gpt-5.1": 400000,
@@ -153,14 +159,23 @@ def get_token_budget_for_model(model_name: Optional[str] = None) -> TokenBudget:
         "gpt-3.5-turbo": 16385,
         # GPT-4 base (8K context) - check after turbo variants
         "gpt-4": 8192,
+        # DeepSeek models (64K context)
+        "deepseek-reasoner": 64000,
+        "deepseek-chat": 64000,
+        # Dashscope Qwen models
+        "qwen3-235b-a22b-thinking-2507": 200000,  # Approximate - verify actual limit
+        "qwen-plus": 32000,  # Approximate - verify actual limit
+        "qwen-turbo": 8000,  # Approximate - verify actual limit
+        # Google Gemini models
+        "gemini-2.0-flash-thinking-exp": 1000000,  # 1M context
+        "gemini-2.0-flash-exp": 1000000,  # 1M context
+        "gemini-1.5-pro": 2000000,  # 2M context
+        "gemini-1.5-flash": 1000000,  # 1M context
         # Claude models (200K context)
         "claude-3-5-sonnet": 200000,
         "claude-3-opus": 200000,
         "claude-3-sonnet": 200000,
         "claude-3-haiku": 200000,
-        # DeepSeek models (64K context)
-        "deepseek-reasoner": 64000,
-        "deepseek-chat": 64000,
     }
     
     # Default to GPT-3.5 limit if unknown

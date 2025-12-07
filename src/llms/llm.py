@@ -16,6 +16,7 @@ from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from src.config import load_yaml_config
 from src.config.agents import LLMType
 from src.llms.providers.dashscope import ChatDashscope
+from src.llms.providers.openai_reasoning import ChatOpenAIReasoning
 
 logger = logging.getLogger(__name__)
 
@@ -234,11 +235,23 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
             merged_conf["extra_body"] = {"enable_thinking": False}
         return ChatDashscope(**merged_conf)
 
-    if llm_type == "reasoning":
+    # Check if base_url is deepseek endpoint (for reasoning models)
+    if llm_type == "reasoning" and "base_url" in merged_conf and "deepseek" in merged_conf["base_url"].lower():
         merged_conf["api_base"] = merged_conf.pop("base_url", None)
         return ChatDeepSeek(**merged_conf)
-    else:
-        return ChatOpenAI(**merged_conf)
+    
+    # For OpenAI reasoning models (o1/o3), use ChatOpenAIReasoning which extracts reasoning_content
+    # Check if this is an OpenAI reasoning model
+    model_name = merged_conf.get("model", "").lower()
+    is_openai_reasoning = any(
+        model in model_name for model in ["o1", "o3"]
+    )
+    
+    if llm_type == "reasoning" and is_openai_reasoning:
+        return ChatOpenAIReasoning(**merged_conf)
+    
+    # For other models, use ChatOpenAI
+    return ChatOpenAI(**merged_conf)
 
 
 def has_configured_ai_providers() -> bool:

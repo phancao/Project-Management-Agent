@@ -19,97 +19,84 @@ class ModelProvider:
     supports_streaming: bool = True
 
 # Predefined model providers
+# 
+# THOUGHT EXTRACTION SUPPORT:
+# - Reasoning models (o1 series): Provide reasoning_content automatically
+# - All other models: Extract thoughts from content using "Thought:" pattern (like Cursor does)
+# 
+# This means ALL models can show thoughts - we prompt them to write "Thought:" before tool calls,
+# then extract it from content. This works with any model, not just expensive reasoning models.
+#
+# REASONING MODELS (provide reasoning_content automatically):
+# - OpenAI o1 series: o1-preview, o1 - Provide reasoning_content in API
+#
+# CONTENT-BASED MODELS (extract "Thought:" from content):
+# - All GPT models (GPT-3.5, GPT-4, GPT-5, etc.)
+# - OpenAI o3 series (o3-mini, o3) - May also support reasoning_content but we extract from content
+# - DeepSeek models
+# - Dashscope Qwen models
+# - Google Gemini models
 PROVIDERS: Dict[str, ModelProvider] = {
     "openai": ModelProvider(
         id="openai",
         name="OpenAI",
-        description="GPT-5.1, GPT-4o, GPT-4 Turbo, and more",
+        description="OpenAI models - Reasoning models provide reasoning_content, others extract thoughts from content",
         base_url="https://api.openai.com/v1",
         models=[
-            "gpt-5.1",
-            "gpt-5.1-preview",
-            "gpt-5-mini",
-            "gpt-5-nano",
-            "gpt-4o-2024-11-20",
-            "gpt-4o-2024-08-06",
-            "gpt-4o",
-            "gpt-4o-mini",
-            "gpt-4-turbo",
-            "gpt-4-turbo-preview",
-            "gpt-4",
-            "gpt-3.5-turbo",
+            # Reasoning models (provide reasoning_content automatically)
+            "o1-preview",  # $15.00/$60.00 per million | 128K context | 32K output
+            "o1",          # $15.00/$60.00 per million | 200K context | 100K output
+            
+            # Content-based models (extract "Thought:" from content - like Cursor)
+            "o3-mini",     # $1.10/$4.40 per million | 200K context | 100K output | CHEAPEST
+            "o3",          # $2.00/$8.00 per million | 200K context | 100K output
+            "gpt-5.1",     # GPT-5.1 flagship model | 400K context | 128K output
+            "gpt-5.1-preview", # GPT-5.1 preview | 400K context | 128K output
+            "gpt-5-mini",  # GPT-5 Mini - faster, cost-efficient | 400K context | 128K output
+            "gpt-5-nano",  # GPT-5 Nano - lightweight, speed optimized | 400K context | 128K output
+            "gpt-4o",      # Fast and capable
+            "gpt-4o-mini", # Cheaper GPT-4 option
+            "gpt-4-turbo", # GPT-4 Turbo
+            "gpt-4",       # Standard GPT-4
+            "gpt-3.5-turbo", # Cheapest option
         ],
         icon="🤖",
-    ),
-    "anthropic": ModelProvider(
-        id="anthropic",
-        name="Anthropic",
-        description="Claude Opus 4.5, Claude 3.5 Opus, Claude 3.5 Sonnet, and more",
-        base_url="https://api.anthropic.com/v1",
-        models=[
-            "claude-opus-4.5",
-            "claude-opus-4.5-20241124",
-            "claude-3-5-opus-20241022",
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-sonnet-20240620",
-            "claude-3-opus-20240229",
-            "claude-3-sonnet-20240229",
-            "claude-3-haiku-20240307",
-        ],
-        icon="🧠",
-    ),
-    "google": ModelProvider(
-        id="google",
-        name="Google AI Studio",
-        description="Gemini 3 Pro, Gemini 3.5, Gemini 2.0, and more",
-        base_url="https://generativelanguage.googleapis.com/v1",
-        models=[
-            "gemini-3-pro",
-            "gemini-3-pro-20241118",
-            "gemini-3.5",
-            "gemini-3.5-pro",
-            "gemini-2.0-flash-exp",
-            "gemini-2.0-flash-thinking-exp",
-            "gemini-1.5-pro",
-            "gemini-1.5-pro-latest",
-            "gemini-1.5-flash",
-            "gemini-1.5-flash-latest",
-            "gemini-pro",
-        ],
-        icon="🔮",
-    ),
-    "azure": ModelProvider(
-        id="azure",
-        name="Azure OpenAI",
-        description="OpenAI models via Azure",
-        base_url="",  # Varies by deployment
-        models=["gpt-4", "gpt-4-turbo", "gpt-35-turbo"],
-        icon="☁️",
-    ),
-    "ollama": ModelProvider(
-        id="ollama",
-        name="Ollama",
-        description="Local models: Llama, Mistral, Qwen, and more",
-        base_url="http://localhost:11434/v1",
-        models=["llama3.2", "mistral", "qwen2.5", "phi3"],
-        icon="🦙",
-        requires_api_key=False,
     ),
     "deepseek": ModelProvider(
         id="deepseek",
         name="DeepSeek",
-        description="DeepSeek Chat and Reasoning models",
+        description="DeepSeek models - Extract thoughts from content (like Cursor)",
         base_url="https://api.deepseek.com/v1",
-        models=["deepseek-chat", "deepseek-reasoner"],
+        models=[
+            "deepseek-reasoner",  # Reasoning model
+            "deepseek-chat",      # Standard chat model
+        ],
         icon="🔍",
     ),
     "dashscope": ModelProvider(
         id="dashscope",
         name="Dashscope (Alibaba)",
-        description="Qwen models via Alibaba Cloud",
+        description="Qwen models - Extract thoughts from content (like Cursor)",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        models=["qwen-plus", "qwen-turbo", "qwen-max"],
+        models=[
+            "qwen3-235b-a22b-thinking-2507",  # Thinking model
+            "qwen-plus",                      # Standard Qwen model
+            "qwen-turbo",                     # Fast Qwen model
+        ],
         icon="🌏",
+    ),
+    "google": ModelProvider(
+        id="google",
+        name="Google AI Studio",
+        description="Google Gemini models - Extract thoughts from content (like Cursor)",
+        base_url="https://generativelanguage.googleapis.com/v1",
+        models=[
+            "gemini-2.0-flash-thinking-exp",  # Thinking model
+            "gemini-2.0-flash-exp",            # Fast model
+            "gemini-1.5-pro",                  # Pro model
+            "gemini-1.5-flash",                # Flash model
+        ],
+        icon="🔮",
     ),
 }
 

@@ -10,6 +10,29 @@
 
 These logs are essential for tracking the flow of messages and thoughts from backend → frontend → store → hooks → render.
 
+## Current Status (Latest Update)
+
+**Date**: 2025-01-XX
+**Status**: Investigation Phase - Root Cause Analysis
+
+### Latest Issue Report:
+- **Problem**: Thought says "Use list_projects()" but agent calls `list_user`
+- **Root Cause**: Thoughts extracted from plan step descriptions don't match actual tool calls
+- **Wrong Fix Attempted**: Extracting thoughts based on tool calls (REVERTED - violates ReAct pattern)
+- **Correct Understanding**: Thoughts must come BEFORE tool calls, from agent's reasoning
+
+### What We Know:
+1. ✅ Thoughts should come from agent's reasoning BEFORE tool calls (ReAct pattern)
+2. ❌ Plan step descriptions may not match what agent actually does
+3. ❌ Agent's AIMessage content is often empty with structured tool calling
+4. ❓ Need to investigate: Where does agent write its reasoning?
+
+### Next Steps:
+1. Check logs to see agent's message content before tool calls
+2. Check if reasoning_content exists in additional_kwargs
+3. Determine best source for thoughts (agent reasoning vs plan description)
+4. Fix the source, not extract from tool calls
+
 ## Problem Statement
 
 ### User Report:
@@ -150,9 +173,181 @@ After fixes:
 - These messages will only be streamed from node_update with thoughts attached
 5. **Correct sequence**: Thought 0 → Tool 0 → Result 0 → Thought 1 → Tool 1 → Result 1 → ...
 
+## Root Cause Analysis: Thought/Action Mismatch
+
+### Problem: Plan Step Description vs Actual Tool Call
+**Issue**: 
+- Planner creates step description: "Use the list_projects() MCP PM tool to verify that configured providers can return project data"
+- Agent actually calls: `list_users(project_id)` (correct for "list users" query)
+- Thought extracted from plan step description doesn't match actual action
+
+**Why This Happens**:
+1. Planner generates generic step descriptions that may mention verification steps
+2. Agent reads step description but makes its own decision based on user query
+3. Thoughts are extracted from plan step descriptions, not from agent's actual reasoning
+4. With structured tool calling, agent's AIMessage content is often empty (no reasoning written)
+
+**Key Question**: Where should thoughts come from?
+- ❌ NOT from plan step descriptions (they may not match actual actions)
+- ❌ NOT from tool calls (tool calls come AFTER thoughts)
+- ✅ Should come from agent's reasoning BEFORE it decides to call a tool
+- ✅ Agent should write its reasoning in message content before tool calls
+
 ## Attempted Solutions (REVERTED - Did Not Work)
 
-### ❌ Solution 1: Backend - Stream Thoughts First (REVERTED)
+### ❌ Solution 1: Extract Thoughts Based on Tool Calls (REVERTED - WRONG APPROACH)
+**Status**: REVERTED - Wrong approach
+**Why Failed**: 
+- Thoughts should come BEFORE tool calls, not be generated from them
+- This violates the ReAct pattern: Thought → Action → Observation
+- The thought should explain WHY the tool is called, not be generated from WHAT tool was called
+
+**What Was Tried**:
+- Extracting thoughts from agent's message content (but content is often empty with structured tool calling)
+- Generating thoughts from step descriptions matching tool calls (wrong - thought comes before action)
+
+**Lesson Learned**: 
+- Thoughts must come from agent's reasoning BEFORE tool calls
+- Need to ensure agent writes reasoning in message content
+- OR use plan step description but ensure it matches what agent will actually do
+
+### 🔍 Investigation Needed: Where Should Thoughts Come From?
+
+**CRITICAL REQUIREMENT**: 
+- ✅ **Thoughts MUST come from agent's reasoning BEFORE tool calls**
+- ✅ **After reasoning, the agent decides what to do next (which tool to call)**
+- ✅ **We need to capture and stream the agent's reasoning as thoughts**
+
+**Current Flow**:
+1. Planner creates plan with step descriptions (e.g., "Use list_projects() to verify providers")
+2. Agent reads step description but makes its own decision (calls list_users instead)
+3. ❌ **WRONG**: Thoughts are extracted from plan step descriptions (mismatch!)
+4. ✅ **CORRECT**: Thoughts should be extracted from agent's reasoning in message content
+
+**Questions to Answer**:
+1. Does the agent write reasoning in message content before tool calls?
+   - Check: AIMessage.content when tool_calls are present
+   - With structured tool calling, content is often empty
+   - Need to ensure agent writes reasoning in content
+   
+2. Where is agent reasoning streamed?
+   - Check: How message content is streamed from backend to frontend
+   - Check: If reasoning_content in additional_kwargs is streamed
+   - Check: If message chunks contain reasoning before tool calls
+   
+3. Should we modify the agent prompt to require reasoning in content?
+   - pm_agent.md doesn't explicitly require "Thought:" in content
+   - Should we add this requirement to ensure reasoning is captured?
+   
+4. How to extract thoughts from agent reasoning?
+   - Option A: Extract from AIMessage.content (if agent writes reasoning)
+   - Option B: Extract from reasoning_content in additional_kwargs (if model supports it)
+   - Option C: Require agent to write "Thought:" prefix in content
+
+**Investigation Results**:
+
+### Where Agent Reasoning is Streamed:
+
+1. **Message Content Streaming** (`src/server/app.py`):
+   - Line 512: `content` is included in `event_stream_message`
+   - Line 516-519: `reasoning_content` from `additional_kwargs` is streamed if available
+   - Line 614-635: AIMessageChunk with tool_calls streams `tool_calls` event
+   - Line 620-628: `react_thoughts` from `response_metadata` or `additional_kwargs` is included
+
+2. **Current Thought Extraction** (`src/graph/nodes.py`):
+   - Line 2643-2710: **WRONG** - Extracts thoughts from plan step descriptions
+   - This is the root cause - thoughts don't match actual agent actions
+
+3. **React Agent Thought Extraction** (`src/graph/nodes.py`):
+   - Line 4753-4890: React agent extracts thoughts from:
+     - `reasoning_content` in `additional_kwargs` (for models like o1)
+     - Message content with "Thought:" prefix
+     - Message content before "Action:"
+   - **This is the correct approach!**
+
+### Key Findings:
+
+1. ✅ **reasoning_content is streamed** - If agent model supports it (e.g., o1), reasoning_content is in `additional_kwargs` and gets streamed
+2. ✅ **Message content is streamed** - AIMessage.content is included in events
+3. ❌ **pm_agent doesn't write reasoning** - With structured tool calling, content is often empty
+4. ❌ **Thoughts extracted from wrong source** - Currently from plan step descriptions, not agent reasoning
+
+### Solution Plan:
+
+**Step 1: Extract Thoughts from Agent Reasoning (Not Plan Descriptions)**
+- **Location**: `src/graph/nodes.py` lines 2643-2710
+- **Current Code**: Extracts thoughts from `current_step.description` (plan step description)
+- **Problem**: Plan description doesn't match what agent actually does
+- **Fix**: Extract thoughts from agent's actual reasoning:
+  1. **First Priority**: `reasoning_content` in `additional_kwargs` (for models like o1 that support it)
+  2. **Second Priority**: Message `content` before tool calls (if agent writes reasoning)
+     - Look for "Thought:" prefix
+     - Or extract content before tool call markers
+  3. **Last Resort**: Plan step description (only if no reasoning found)
+- **Reference**: See react_agent implementation (lines 4753-4890) for correct approach
+
+**Step 2: Ensure Agent Writes Reasoning**
+- **Location**: `src/prompts/pm_agent.md`
+- **Current**: No explicit requirement to write reasoning
+- **Fix**: Add requirement to write reasoning in content before tool calls:
+  ```
+  **CRITICAL: You MUST include your reasoning in the message content BEFORE calling tools!**
+  
+  When you want to call a tool, write your thinking process first:
+  "Thought: [Your reasoning about what you need to do and why]"
+  
+  Then call the tool using function calls.
+  ```
+- **Alternative**: If using structured tool calling, ensure reasoning is in `reasoning_content` (model-dependent)
+
+**Step 3: Update Thought Collection Logic**
+- **Location**: `src/graph/nodes.py` lines 2791-2824
+- **Current**: Collects thoughts from all plan steps
+- **Fix**: Only collect thoughts from agent's actual reasoning (from tool_calls AIMessage)
+- **Remove**: Collection from plan step descriptions
+
+**Important Note on Ordering**:
+- ✅ **If we extract thoughts correctly from agent reasoning, they will naturally appear before tool calls**
+- ✅ **Agent reasoning comes BEFORE tool calls in the agent's response**
+- ✅ **No need to reorder - correct extraction ensures proper order: Thought → Tool Call → Result**
+
+**Implementation Status**:
+
+### ✅ Step 1: Extract Thoughts from Agent Reasoning (COMPLETED)
+- **Location**: `src/graph/nodes.py` lines 2643-2720
+- **Changes**: 
+  - Replaced plan step description extraction with agent reasoning extraction
+  - Priority: 1) reasoning_content, 2) message content with "Thought:" prefix, 3) content before action, 4) fallback to plan description
+  - Matches react_agent implementation pattern
+
+### ✅ Step 2: Update pm_agent Prompt (COMPLETED)
+- **Location**: `src/prompts/pm_agent.md`
+- **Changes**: Added requirement to write reasoning in content before tool calls
+- **Format**: "Thought: [reasoning]" before calling tools
+
+### ✅ Step 3: Update Thought Collection Logic (COMPLETED)
+- **Location**: `src/graph/nodes.py` lines 2788-2803
+- **Changes**: 
+  - Removed collection from plan step descriptions
+  - Only collects thoughts from agent's actual reasoning (tool_calls AIMessage)
+  - Ensures thoughts match what agent actually does
+
+### ✅ Step 4: Extract Thoughts in Messages Stream (COMPLETED)
+- **Location**: `src/server/app.py` lines 614-635
+- **Problem**: Thoughts were extracted AFTER messages were streamed, so they didn't appear early
+- **Fix**: Extract thoughts from message chunk when it arrives in messages stream (not wait for state update)
+- **Changes**:
+  1. Extract thoughts from `reasoning_content` or message `content` when AIMessageChunk with tool_calls arrives
+  2. Stream thoughts as separate "thoughts" event BEFORE tool_calls event
+  3. This ensures thoughts appear immediately after message is sent
+
+### 🔄 Step 5: Testing (IN PROGRESS)
+- **Next**: Test using browser to verify:
+  1. Thoughts are extracted from agent reasoning
+  2. Thoughts match actual tool calls
+  3. Thoughts appear immediately after message is sent (before tool calls)
+
+### ❌ Solution 2: Backend - Stream Thoughts First (REVERTED)
 **Status**: REVERTED - Did not work
 **Changes Made**:
 - Modified `src/server/app.py` to stream thoughts as separate `message_chunk` event before tool_calls

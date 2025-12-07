@@ -2640,74 +2640,24 @@ async def _execute_agent_step(
             if hasattr(msg, 'tool_calls') and msg.tool_calls:
                 logger.info(f"[{agent_name}] Message {i}: AIMessage with {len(msg.tool_calls)} tool calls: {[tc.get('name', 'N/A') for tc in msg.tool_calls]}")
                 
-                # Cursor-style: Extract thoughts from PM Agent step descriptions
-                # For PM Agent, the step description contains the reasoning
-                if agent_name == "pm_agent" and current_step:
-                    # Extract thought from step description
-                    step_description = getattr(current_step, 'description', '') or ''
-                    if step_description:
-                        # Split thought if it contains numbered steps (e.g., "1)", "2)", "3)" or "1.", "2.", "3.")
-                        import re
-                        # Pattern to match numbered steps: number followed by ) or . at start of line or after space
-                        # Examples: "1)", "2)", "1.", "2.", " 1)", " 2)", etc.
-                        # Also handle case where first step has no number (implicit step 1)
-                        step_pattern = r'(?:^|\s)(\d+[).])\s+(.+?)(?=\s+\d+[).]|$)'
-                        matches = list(re.finditer(step_pattern, step_description, re.MULTILINE | re.DOTALL))
-                        
-                        if matches and len(matches) > 0:
-                            # Numbered steps found - split them
-                            thought_texts = []
-                            
-                            # Check if there's content before the first numbered step
-                            first_match_start = matches[0].start()
-                            if first_match_start > 0:
-                                # Extract content before first numbered step as first thought
-                                prefix = step_description[:first_match_start].strip()
-                                if prefix:
-                                    thought_texts.append(prefix)
-                                    logger.info(f"[{agent_name}] 💭 Extracted implicit step 1: {prefix[:80]}...")
-                            
-                            # Extract all numbered steps
-                            for i, match in enumerate(matches):
-                                step_num = match.group(1)  # e.g., "1)", "2)"
-                                step_content = match.group(2).strip()  # The actual step content
-                                thought_texts.append(step_content)
-                                logger.info(f"[{agent_name}] 💭 Extracted step {step_num}: {step_content[:80]}...")
-                            
-                            # If we found numbered steps, use the split thoughts
-                            if len(thought_texts) > 1:
-                                logger.info(f"[{agent_name}] 💭 Split step description into {len(thought_texts)} separate thoughts")
-                            else:
-                                # Only one thought extracted (either prefix or first numbered step)
-                                # Use original description
-                                thought_texts = [step_description.strip()]
-                                logger.info(f"[{agent_name}] 💭 Extracted single thought from step description: {thought_texts[0][:100]}...")
-                        else:
-                            # No numbered steps found - use as single thought
-                            thought_texts = [step_description.strip()]
-                            logger.info(f"[{agent_name}] 💭 Extracted single thought from step description: {thought_texts[0][:100]}...")
-                        
-                        # Add thought to message's additional_kwargs so it gets streamed
-                        if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
-                            msg.additional_kwargs = {}
-                        
-                        # Initialize react_thoughts if not exists
-                        if "react_thoughts" not in msg.additional_kwargs:
-                            msg.additional_kwargs["react_thoughts"] = []
-                        
-                        # Add thoughts - try to match one thought per tool call, or use the thought at the same index
-                        for tool_idx, tool_call in enumerate(msg.tool_calls):
-                            tool_name = tool_call.get('name', 'unknown') if isinstance(tool_call, dict) else getattr(tool_call, 'name', 'unknown')
-                            # Use thought at same index as tool call, or last thought if more tools than thoughts
-                            thought_idx = min(tool_idx, len(thought_texts) - 1)
-                            thought_text = thought_texts[thought_idx]
-                            
-                            msg.additional_kwargs["react_thoughts"].append({
-                                "thought": thought_text,
-                                "before_tool": True,
-                                "step_index": len(msg.additional_kwargs["react_thoughts"])
-                            })
-                            logger.info(f"[{agent_name}] 💭 Added thought {thought_idx + 1}/{len(thought_texts)} for tool call {tool_idx + 1}: {tool_name}")
+                # Thoughts come directly from OpenAI response - no extraction needed
+                # OpenAI response already has reasoning in:
+                # 1. reasoning_content field (for o1 models) - already in additional_kwargs
+                # 2. response_metadata.react_thoughts (if LangChain/LangGraph attached it)
+                # 3. additional_kwargs.react_thoughts (if already set)
+                # We just read what's already there, don't extract
+                if agent_name == "pm_agent":
+                    # Check if thoughts are already in the message from OpenAI response
+                    existing_thoughts = None
+                    if hasattr(msg, 'response_metadata') and msg.response_metadata:
+                        existing_thoughts = msg.response_metadata.get("react_thoughts")
+                    if not existing_thoughts and hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+                        existing_thoughts = msg.additional_kwargs.get("react_thoughts")
+                    
+                    if existing_thoughts:
+                        logger.info(f"[{agent_name}] 💭 Found {len(existing_thoughts)} thoughts in OpenAI response (already attached)")
+                    else:
+                        logger.debug(f"[{agent_name}] No thoughts found in OpenAI response - agent may not have included reasoning")
             else:
                 logger.debug(f"[{agent_name}] Message {i}: AIMessage - content={str(msg.content)[:200]}")
         else:
@@ -2785,43 +2735,32 @@ async def _execute_agent_step(
     sys.stderr.write(f"🔄 Updated plan has {completed_count} completed steps out of {len(updated_plan.steps)}\n")
     sys.stderr.flush()
     
-    # Collect thoughts from PM Agent step descriptions
-    # Extract thoughts from ALL plan steps (not just current) so they show up in the UI
+    # Collect thoughts from PM Agent's actual reasoning (not plan step descriptions)
+    # CRITICAL: Only use thoughts from agent's reasoning, which matches what the agent actually does
     pm_thoughts = []
-    if agent_name == "pm_agent" and current_plan and hasattr(current_plan, 'steps'):
-        # Extract thoughts from all plan steps
-        for step_idx, step in enumerate(current_plan.steps):
-            step_description = getattr(step, 'description', '') or ''
-            if step_description:
-                # Extract thought from step description
-                thought_text = step_description.strip()
-                pm_thoughts.append({
-                    "thought": thought_text,
-                    "before_tool": True,
-                    "step_index": step_idx
-                })
-                logger.info(f"[{agent_name}] 💭 Extracted thought from step {step_idx} ('{step.title}'): {thought_text[:50]}...")
-        
-        logger.info(f"[{agent_name}] 💭 Collected {len(pm_thoughts)} thoughts from {len(current_plan.steps)} plan steps")
     
-    # ROOT CAUSE FIX: Also collect thoughts from tool_calls AIMessage if they were added there
-    # Thoughts are added to the AIMessage with tool_calls in the loop above (lines 2706-2726)
-    # But that message is not returned - only final_message is returned
-    # So we need to extract thoughts from the tool_calls message and add them to final_message
-    tool_calls_thoughts = []
+    # Read thoughts directly from OpenAI response - they're already in the message
+    # No extraction needed - OpenAI response already has reasoning in response_metadata or additional_kwargs
     for msg in result.get("messages", []):
-        if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
-            if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+        if isinstance(msg, AIMessage):
+            # Check response_metadata first (most reliable, from OpenAI)
+            if hasattr(msg, 'response_metadata') and msg.response_metadata:
+                msg_thoughts = msg.response_metadata.get("react_thoughts", [])
+                if msg_thoughts:
+                    pm_thoughts = msg_thoughts
+                    logger.info(f"[{agent_name}] 💭 Found {len(msg_thoughts)} thoughts in OpenAI response (response_metadata)")
+                    break
+            
+            # Check additional_kwargs (backup location)
+            if not pm_thoughts and hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
                 msg_thoughts = msg.additional_kwargs.get("react_thoughts", [])
                 if msg_thoughts:
-                    tool_calls_thoughts.extend(msg_thoughts)
-                    logger.info(f"[{agent_name}] 💭 Found {len(msg_thoughts)} thoughts in tool_calls AIMessage.additional_kwargs")
+                    pm_thoughts = msg_thoughts
+                    logger.info(f"[{agent_name}] 💭 Found {len(msg_thoughts)} thoughts in OpenAI response (additional_kwargs)")
                     break
     
-    # Merge thoughts: tool_calls thoughts first (they're more specific), then plan step thoughts
-    if tool_calls_thoughts:
-        pm_thoughts = tool_calls_thoughts + pm_thoughts
-        logger.info(f"[{agent_name}] 💭 Merged {len(tool_calls_thoughts)} tool_calls thoughts with {len(pm_thoughts) - len(tool_calls_thoughts)} plan step thoughts")
+    if not pm_thoughts:
+        logger.debug(f"[{agent_name}] No thoughts found in OpenAI response - agent may not have included reasoning")
     
     # Include optimization messages if they exist
     final_message = AIMessage(
@@ -2829,8 +2768,16 @@ async def _execute_agent_step(
         name=agent_name,
     )
     
-    # NOTE: Thoughts are no longer attached to messages - they're streamed separately as "thoughts" events
-    # This allows thoughts to have their own channel to the Analysis Block, independent of tool_calls
+    # CRITICAL: Attach thoughts to the final message so they're available when streamed
+    # Thoughts are independent of tool_calls - they're the agent's reasoning
+    if pm_thoughts:
+        if not hasattr(final_message, 'additional_kwargs') or not final_message.additional_kwargs:
+            final_message.additional_kwargs = {}
+        if not hasattr(final_message, 'response_metadata') or not final_message.response_metadata:
+            final_message.response_metadata = {}
+        final_message.additional_kwargs["react_thoughts"] = pm_thoughts
+        final_message.response_metadata["react_thoughts"] = pm_thoughts
+        logger.info(f"[{agent_name}] 💭 Attached {len(pm_thoughts)} thoughts to final message for streaming")
     
     return_messages = [final_message]
     optimization_messages = state.get("_optimization_messages", [])

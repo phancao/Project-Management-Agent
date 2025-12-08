@@ -124,6 +124,9 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         
         Returns:
             Tuple of (resolved_sprint_id, sprint_object) or raises ValueError
+        
+        Raises:
+            ValueError: If sprint not found or ambiguous (multiple matches)
         """
         # Extract sprint key from composite ID
         # This handles formats like "provider_id:project_id:sprint_id" or "project_id:sprint_id"
@@ -182,11 +185,44 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         
         # Check if it's a numeric ID
         if sprint_key.isdigit():
+            # If we have project_key, prefer listing sprints in that project to ensure correct context
+            # This avoids 403 errors when the sprint belongs to a specific project
+            if project_key:
+                try:
+                    logger.info(f"[PMProviderAnalyticsAdapter] Looking for sprint {sprint_key} in project {project_key} via list_sprints")
+                    all_sprints = await self.provider.list_sprints(project_id=project_key)
+                    # Find sprint by ID in the project's sprints
+                    for s in all_sprints:
+                        if str(s.id) == sprint_key:
+                            logger.info(f"[PMProviderAnalyticsAdapter] Found sprint {sprint_key} in project {project_key}: {s.name}")
+                            return sprint_key, s
+                    logger.warning(f"[PMProviderAnalyticsAdapter] Sprint {sprint_key} not found in project {project_key}")
+                except Exception as e:
+                    logger.warning(f"[PMProviderAnalyticsAdapter] Failed to list sprints for project {project_key}: {e}")
+                    # Fall through to direct get_sprint call
+            
+            # Fallback: try direct get_sprint (may fail with 403 if sprint requires project context)
             try:
+                logger.info(f"[PMProviderAnalyticsAdapter] Attempting direct get_sprint({sprint_key})")
                 sprint = await self.provider.get_sprint(sprint_key)
                 if sprint:
+                    logger.info(f"[PMProviderAnalyticsAdapter] Found sprint {sprint_key} via direct get_sprint")
                     return sprint_key, sprint
             except Exception as e:
+                error_msg = str(e)
+                if "403" in error_msg or "Forbidden" in error_msg:
+                    logger.error(
+                        f"[PMProviderAnalyticsAdapter] get_sprint({sprint_key}) failed with 403 Forbidden. "
+                        f"This usually means the sprint requires project context. "
+                        f"Project key was: {project_key}"
+                    )
+                    # If we have project_key but still got 403, the sprint might not belong to that project
+                    if project_key:
+                        raise ValueError(
+                            f"Access denied (403 Forbidden) when fetching sprint {sprint_key}. "
+                            f"The sprint may not belong to project {project_key}, or the API key doesn't have permission. "
+                            f"Please verify the sprint_id and project_id are correct."
+                        ) from e
                 logger.warning(f"[PMProviderAnalyticsAdapter] get_sprint({sprint_key}) failed: {e}")
         
         # Not a numeric ID or lookup failed - try to find by name
@@ -209,20 +245,62 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             logger.warning(f"[PMProviderAnalyticsAdapter] Failed to list sprints for project '{project_key}': {e}")
             all_sprints = []
         
+        # Collect all potential matches (by name and by number)
+        exact_name_matches = []
+        partial_name_matches = []
+        number_matches = []
+        
         for sprint in all_sprints:
             sprint_name_normalized = sprint.name.lower().replace("-", " ").replace("_", " ").strip()
             
-            # Check for exact match or partial match
-            if sprint_name_normalized == search_name or search_name in sprint_name_normalized:
-                logger.info(f"[PMProviderAnalyticsAdapter] Resolved '{sprint_id}' to sprint ID={sprint.id} (name={sprint.name}) via name match")
-                return str(sprint.id), sprint
+            # Check for exact match
+            if sprint_name_normalized == search_name:
+                exact_name_matches.append(sprint)
+            
+            # Check for partial match (search_name in sprint name)
+            elif search_name in sprint_name_normalized:
+                partial_name_matches.append(sprint)
             
             # Also try matching by sprint number (e.g., "Sprint 4" matches "4")
             if search_number:
                 sprint_number_match = re.search(r'\d+', sprint.name)
                 if sprint_number_match and sprint_number_match.group() == search_number:
-                    logger.info(f"[PMProviderAnalyticsAdapter] Resolved '{sprint_id}' to sprint ID={sprint.id} (name={sprint.name}) via number match")
-                    return str(sprint.id), sprint
+                    number_matches.append(sprint)
+        
+        # Prioritize matches: exact name > partial name > number match
+        # But if multiple matches in any category, it's ambiguous
+        matches = []
+        match_type = None
+        
+        if exact_name_matches:
+            matches = exact_name_matches
+            match_type = "exact name"
+        elif partial_name_matches:
+            matches = partial_name_matches
+            match_type = "partial name"
+        elif number_matches:
+            matches = number_matches
+            match_type = "number"
+        
+        # If multiple matches found, it's ambiguous - ask user to clarify
+        if len(matches) > 1:
+            match_list = [f"'{s.name}' (ID: {s.id}, Status: {s.status})" for s in matches]
+            error_msg = (
+                f"Ambiguous sprint reference: '{sprint_key}' matches multiple sprints in project '{project_key}':\n"
+                f"  - {chr(10).join('  - ' + m for m in match_list)}\n\n"
+                f"Please specify which sprint you mean by:\n"
+                f"  - Using the exact sprint name (e.g., '{matches[0].name}')\n"
+                f"  - Using the sprint ID (e.g., '{matches[0].id}')\n"
+                f"  - Or provide more context to identify the correct sprint"
+            )
+            logger.warning(f"[PMProviderAnalyticsAdapter] {error_msg}")
+            raise ValueError(error_msg)
+        
+        # Single match found - return it
+        if len(matches) == 1:
+            sprint = matches[0]
+            logger.info(f"[PMProviderAnalyticsAdapter] Resolved '{sprint_id}' to sprint ID={sprint.id} (name={sprint.name}) via {match_type} match")
+            return str(sprint.id), sprint
         
         # No match found - raise error with helpful message
         available_sprints = [f"{s.name} (id={s.id})" for s in all_sprints[:10]]
@@ -530,11 +608,37 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         project_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Fetch sprint report data from PM provider"""
-        logger.info(f"[PMProviderAnalyticsAdapter] Fetching sprint report data: sprint={sprint_id}")
+        logger.info(f"[PMProviderAnalyticsAdapter] Fetching sprint report data: sprint={sprint_id}, project={project_id}")
         
         # Get project_key for sprint resolution
         proj_id = project_id or ""
+        
+        # If project_id is empty but sprint_id is composite, try to extract project_id from sprint_id
+        if not proj_id and ":" in sprint_id:
+            parts = sprint_id.split(":")
+            # If sprint_id has format "uuid:project_id:sprint_id" (3 parts), extract project_id
+            if len(parts) >= 3:
+                proj_id = parts[1]  # Middle part is project_id
+                logger.info(f"[PMProviderAnalyticsAdapter] Extracted project_id '{proj_id}' from composite sprint_id (3-part format)")
+            # If sprint_id has format "project_id:sprint_id" (2 parts), first part is likely project_id
+            elif len(parts) == 2:
+                first_part = parts[0]
+                # If first part looks like a UUID (has dashes and is long enough), treat it as project_id
+                if "-" in first_part and len(first_part) > 20:
+                    proj_id = first_part
+                    logger.info(f"[PMProviderAnalyticsAdapter] Extracted project_id '{proj_id}' from composite sprint_id (2-part UUID format)")
+                # If first part is numeric, it might also be project_id (for numeric project IDs)
+                elif first_part.isdigit():
+                    proj_id = first_part
+                    logger.info(f"[PMProviderAnalyticsAdapter] Extracted project_id '{proj_id}' from composite sprint_id (2-part numeric format)")
+        
         project_key = self._extract_project_key(proj_id) if proj_id else None
+        
+        # Log the extracted project_key for debugging
+        if project_key:
+            logger.info(f"[PMProviderAnalyticsAdapter] Using project_key '{project_key}' for sprint resolution")
+        else:
+            logger.warning(f"[PMProviderAnalyticsAdapter] No project_key available - sprint resolution may fail")
         
         try:
             # Resolve sprint ID (handles numeric IDs, composite IDs, and sprint names)
@@ -543,18 +647,57 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 if not project_key:
                     sprint_key = self._extract_sprint_key(sprint_id)
                     if sprint_key.isdigit():
-                        sprint = await self.provider.get_sprint(sprint_key)
-                        if sprint:
-                            project_key = self._extract_project_key(sprint.project_id or "")
-                            sprint_id = sprint_key
-                        else:
-                            raise ValueError(f"Sprint {sprint_id} not found")
+                        try:
+                            sprint = await self.provider.get_sprint(sprint_key)
+                            if sprint:
+                                project_key = self._extract_project_key(sprint.project_id or "")
+                                sprint_id = sprint_key
+                                logger.info(f"[PMProviderAnalyticsAdapter] Got project_key '{project_key}' from sprint {sprint_key}")
+                            else:
+                                raise ValueError(
+                                    f"Sprint {sprint_id} not found. "
+                                    f"Please provide project_id to resolve sprint correctly."
+                                )
+                        except Exception as e:
+                            # If get_sprint fails (e.g., 403 Forbidden), provide helpful error
+                            error_msg = str(e)
+                            if "403" in error_msg or "Forbidden" in error_msg:
+                                raise ValueError(
+                                    f"Access denied (403 Forbidden) when fetching sprint {sprint_key}. "
+                                    f"This usually means: "
+                                    f"1) The sprint ID is incorrect, "
+                                    f"2) The API key doesn't have permission to access this sprint, or "
+                                    f"3) The project_id is required but was not provided. "
+                                    f"Please provide the project_id parameter to resolve the sprint correctly."
+                                ) from e
+                            raise ValueError(
+                                f"Failed to fetch sprint {sprint_id}: {error_msg}. "
+                                f"Please provide project_id to resolve sprint correctly."
+                            ) from e
                     else:
-                        raise ValueError(f"Cannot resolve sprint '{sprint_id}' without project_id")
+                        raise ValueError(
+                            f"Cannot resolve sprint '{sprint_id}' without project_id. "
+                            f"Please provide the project_id parameter."
+                        )
                 else:
-                    resolved_id, sprint = await self._resolve_sprint_id(sprint_id, project_key)
-                    sprint_id = resolved_id
-                    logger.info(f"[PMProviderAnalyticsAdapter] Resolved to sprint: {sprint.name} (id={sprint_id})")
+                    # We have project_key, use _resolve_sprint_id which will list sprints and find by name/ID
+                    try:
+                        resolved_id, sprint = await self._resolve_sprint_id(sprint_id, project_key)
+                        sprint_id = resolved_id
+                        logger.info(f"[PMProviderAnalyticsAdapter] Resolved to sprint: {sprint.name} (id={sprint_id})")
+                    except Exception as e:
+                        # If _resolve_sprint_id fails, provide helpful error
+                        error_msg = str(e)
+                        if "403" in error_msg or "Forbidden" in error_msg:
+                            raise ValueError(
+                                f"Access denied (403 Forbidden) when resolving sprint {sprint_id} in project {project_key}. "
+                                f"This usually means: "
+                                f"1) The sprint ID or project ID is incorrect, "
+                                f"2) The API key doesn't have permission to access this sprint/project, or "
+                                f"3) The sprint doesn't belong to the specified project. "
+                                f"Original error: {error_msg}"
+                            ) from e
+                        raise
             except ValueError as exc:
                 # Sprint not found by name - re-raise with context
                 raise
@@ -574,6 +717,14 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             # Get tasks in sprint
             if not project_key:
                 project_key = self._extract_project_key(sprint.project_id or "")
+                if project_key:
+                    logger.info(f"[PMProviderAnalyticsAdapter] Got project_key '{project_key}' from sprint.project_id")
+                else:
+                    logger.warning(f"[PMProviderAnalyticsAdapter] Sprint has no project_id, cannot fetch tasks")
+                    raise ValueError(
+                        f"Sprint {sprint_id} has no associated project_id. "
+                        f"Please provide project_id parameter to fetch sprint tasks."
+                    )
             
             # NOTE: This fetches all tasks and filters - this is inefficient for large projects
             # but necessary since the base provider interface doesn't support sprint_id filtering

@@ -170,13 +170,15 @@ async def get_project(project_id: Annotated[str, "The project ID to retrieve"]) 
 @tool
 async def list_tasks(
     project_id: Annotated[Optional[str], "Optional project ID to filter tasks"] = None,
-    assignee_id: Annotated[Optional[str], "Optional assignee ID to filter tasks"] = None
+    assignee_id: Annotated[Optional[str], "Optional assignee ID to filter tasks"] = None,
+    sprint_id: Annotated[Optional[str], "Optional sprint ID to filter tasks by sprint"] = None
 ) -> str:
     """List tasks from the PM provider.
     
     Args:
         project_id: Optional project ID to filter tasks by project
         assignee_id: Optional assignee ID to filter tasks by assignee
+        sprint_id: Optional sprint ID to filter tasks by sprint (e.g., "613" or "project_id:613")
         
     Returns:
         JSON string with list of tasks, each containing:
@@ -195,11 +197,116 @@ async def list_tasks(
         elif project_id:
             actual_project_id = project_id
         
-        # Use handler method which handles both single and multi-provider modes
-        tasks = await handler.list_all_tasks(
-            project_id=actual_project_id,
-            assignee_id=assignee_id
-        )
+        # Extract sprint ID from composite format (e.g., "project_id:sprint_id" -> "sprint_id")
+        actual_sprint_id = None
+        if sprint_id:
+            if ":" in sprint_id:
+                # Format: "project_id:sprint_id" or "provider_id:project_id:sprint_id"
+                parts = sprint_id.split(":")
+                actual_sprint_id = parts[-1]  # Get last part (sprint_id)
+            else:
+                actual_sprint_id = sprint_id
+        
+        # If sprint_id is provided, try to use a more efficient method
+        # Check if handler has a method to get tasks by sprint directly
+        if actual_sprint_id and hasattr(handler, 'list_project_tasks'):
+            try:
+                # Try to get tasks for the project and filter by sprint_id at the provider level
+                # This is more efficient than listing all tasks
+                if actual_project_id:
+                    # Extract project_id from composite format if needed
+                    project_for_tasks = actual_project_id
+                    if ":" in project_for_tasks:
+                        project_for_tasks = project_for_tasks.split(":", 1)[1]
+                    
+                    # Use list_project_tasks which may be more efficient
+                    tasks = await handler.list_project_tasks(project_for_tasks)
+                    # Filter by sprint_id
+                    original_count = len(tasks)
+                    tasks = [
+                        t for t in tasks 
+                        if t.get("sprint_id") and str(t.get("sprint_id")) == str(actual_sprint_id)
+                    ]
+                    logger.info(
+                        f"[PM-TOOLS] list_tasks: Used list_project_tasks and filtered by sprint_id={actual_sprint_id}: "
+                        f"{original_count} → {len(tasks)} tasks"
+                    )
+                else:
+                    # No project_id, fall back to list_all_tasks
+                    tasks = await handler.list_all_tasks(
+                        project_id=actual_project_id,
+                        assignee_id=assignee_id
+                    )
+                    # Filter by sprint_id
+                    original_count = len(tasks)
+                    tasks = [
+                        t for t in tasks 
+                        if t.get("sprint_id") and str(t.get("sprint_id")) == str(actual_sprint_id)
+                    ]
+                    logger.info(
+                        f"[PM-TOOLS] list_tasks: Filtered by sprint_id={actual_sprint_id}: "
+                        f"{original_count} → {len(tasks)} tasks"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"[PM-TOOLS] list_tasks: Error using list_project_tasks, falling back to list_all_tasks: {e}"
+                )
+                # Fall back to list_all_tasks
+                tasks = await handler.list_all_tasks(
+                    project_id=actual_project_id,
+                    assignee_id=assignee_id
+                )
+                # Filter by sprint_id
+                if actual_sprint_id:
+                    original_count = len(tasks)
+                    tasks = [
+                        t for t in tasks 
+                        if t.get("sprint_id") and str(t.get("sprint_id")) == str(actual_sprint_id)
+                    ]
+                    logger.info(
+                        f"[PM-TOOLS] list_tasks: Filtered by sprint_id={actual_sprint_id}: "
+                        f"{original_count} → {len(tasks)} tasks"
+                    )
+        else:
+            # No sprint_id filter, use standard method
+            tasks = await handler.list_all_tasks(
+                project_id=actual_project_id,
+                assignee_id=assignee_id
+            )
+            
+            # Filter by sprint_id if provided (fallback for when list_project_tasks not available)
+            if actual_sprint_id:
+                original_count = len(tasks)
+                # Try multiple sprint_id formats for matching:
+                # 1. Exact match: "613"
+                # 2. Composite format: "478:613" or "project_id:613"
+                # 3. Provider format: "provider_id:project_id:613"
+                matching_tasks = []
+                for t in tasks:
+                    task_sprint_id = t.get("sprint_id")
+                    if not task_sprint_id:
+                        continue
+                    
+                    task_sprint_id_str = str(task_sprint_id)
+                    # Try exact match first
+                    if task_sprint_id_str == str(actual_sprint_id):
+                        matching_tasks.append(t)
+                    # Try matching last part of composite sprint_id (e.g., "478:613" -> "613")
+                    elif ":" in task_sprint_id_str:
+                        sprint_parts = task_sprint_id_str.split(":")
+                        if sprint_parts[-1] == str(actual_sprint_id):
+                            matching_tasks.append(t)
+                    # Try matching if actual_sprint_id is composite and task has just the sprint part
+                    elif ":" in str(actual_sprint_id):
+                        actual_parts = str(actual_sprint_id).split(":")
+                        if task_sprint_id_str == actual_parts[-1]:
+                            matching_tasks.append(t)
+                
+                tasks = matching_tasks
+                logger.info(
+                    f"[PM-TOOLS] list_tasks: Filtered by sprint_id={actual_sprint_id}: "
+                    f"{original_count} → {len(tasks)} tasks"
+                )
         
         result = json.dumps({
             "success": True,

@@ -206,6 +206,13 @@ class MCPPMHandler:
                 
                 # Prefix task ID with provider_id
                 for t in tasks:
+                    # Extract sprint_id from task (may be None)
+                    task_sprint_id = None
+                    if hasattr(t, 'sprint_id') and t.sprint_id:
+                        task_sprint_id = str(t.sprint_id)
+                    elif isinstance(t, dict) and t.get('sprint_id'):
+                        task_sprint_id = str(t.get('sprint_id'))
+                    
                     all_tasks.append({
                         "id": f"{provider.id}:{t.id}",
                         "title": t.title,
@@ -223,6 +230,7 @@ class MCPPMHandler:
                         "assignee": t.assignee or "",
                         "project_id": f"{provider.id}:{t.project_id}",
                         "project_name": project_map.get(str(t.project_id), ""),
+                        "sprint_id": task_sprint_id,  # CRITICAL: Include sprint_id for filtering
                         "provider_id": str(provider.id),
                         "provider_type": provider.provider_type,
                     })
@@ -283,6 +291,13 @@ class MCPPMHandler:
                 
                 # Prefix task ID with provider_id
                 for t in tasks:
+                    # Extract sprint_id from task (may be None)
+                    task_sprint_id = None
+                    if hasattr(t, 'sprint_id') and t.sprint_id:
+                        task_sprint_id = str(t.sprint_id)
+                    elif isinstance(t, dict) and t.get('sprint_id'):
+                        task_sprint_id = str(t.get('sprint_id'))
+                    
                     all_tasks.append({
                         "id": f"{provider.id}:{t.id}",
                         "title": t.title,
@@ -300,6 +315,7 @@ class MCPPMHandler:
                         "assignee": t.assignee or current_user.name,
                         "project_id": f"{provider.id}:{t.project_id}",
                         "project_name": project_map.get(str(t.project_id), ""),
+                        "sprint_id": task_sprint_id,  # CRITICAL: Include sprint_id for filtering
                         "provider_id": str(provider.id),
                         "provider_type": provider.provider_type,
                     })

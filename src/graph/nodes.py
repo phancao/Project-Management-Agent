@@ -22,7 +22,7 @@ from src.agents import create_agent
 from src.config.agents import AGENT_LLM_MAP
 from src.config.configuration import Configuration
 from src.llms.llm import get_llm_by_type, get_llm_token_limit_by_type
-from src.prompts.planner_model import Plan
+from src.prompts.planner_model import Plan, StepType
 from src.prompts.template import apply_prompt_template
 from src.tools import (
     crawl_tool,
@@ -2203,10 +2203,15 @@ async def _execute_agent_step(
     project_id = state.get("project_id", "")
     project_id_info = f"\n\n## Project ID\n\n{project_id}" if project_id else ""
     
+    # For processing steps, add explicit instruction to use only previous step data
+    processing_note = ""
+    if hasattr(current_step, 'step_type') and current_step.step_type == StepType.PROCESSING:
+        processing_note = "\n\n**🔴 CRITICAL: This is a PROCESSING step - DO NOT call any tools. Use ONLY the data from previous steps shown above. Analyze and compute using the existing data, do NOT fetch new data.**"
+    
     agent_input = {
         "messages": [
             HumanMessage(
-                content=f"# Research Topic\n\n{plan_title}\n\n{completed_steps_info}# Current Step\n\n## Title\n\n{current_step.title}\n\n## Description\n\n{current_step.description}{project_id_info}\n\n## Locale\n\n{state.get('locale', 'en-US')}"
+                content=f"# Research Topic\n\n{plan_title}\n\n{completed_steps_info}# Current Step\n\n## Title\n\n{current_step.title}\n\n## Description\n\n{current_step.description}{processing_note}{project_id_info}\n\n## Locale\n\n{state.get('locale', 'en-US')}"
             )
         ]
     }
@@ -2531,7 +2536,17 @@ async def _execute_agent_step(
                             f"content_type={type(msg.content).__name__ if hasattr(msg, 'content') else 'N/A'}, "
                             f"content_len={len(str(msg.content)) if hasattr(msg, 'content') and msg.content else 0}")
 
-        detailed_error = f"[ERROR] {agent_name.capitalize()} Agent Error\n\nStep: {current_step.title}\n\nError Details:\n{str(e)}\n\nPlease check the logs for more information."
+        # Check if this is an ambiguous sprint reference error
+        error_str = str(e)
+        if "Ambiguous sprint reference" in error_str:
+            # Format as a clarification question instead of an error
+            detailed_error = (
+                f"❓ **Sprint Clarification Needed**\n\n"
+                f"{error_str}\n\n"
+                f"Please specify which sprint you mean, and I'll continue with the analysis."
+            )
+        else:
+            detailed_error = f"[ERROR] {agent_name.capitalize()} Agent Error\n\nStep: {current_step.title}\n\nError Details:\n{error_str}\n\nPlease check the logs for more information."
         
         # CRITICAL: Create new Step and Plan objects instead of mutating in place
         from src.prompts.planner_model import Step, Plan
@@ -5643,7 +5658,17 @@ async def pm_agent_node(
         )
         
         # Handle error gracefully by marking step as failed
-        error_message = f"[ERROR] PM Agent failed with unhandled exception: {str(e)}"
+        error_str = str(e)
+        # Check if this is an ambiguous sprint reference error
+        if "Ambiguous sprint reference" in error_str:
+            # Format as a clarification question instead of an error
+            error_message = (
+                f"❓ **Sprint Clarification Needed**\n\n"
+                f"{error_str}\n\n"
+                f"Please specify which sprint you mean, and I'll continue with the analysis."
+            )
+        else:
+            error_message = f"[ERROR] PM Agent failed with unhandled exception: {error_str}"
         
         current_plan = state.get("current_plan")
         if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps'):

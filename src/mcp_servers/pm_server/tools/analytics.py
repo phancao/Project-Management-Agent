@@ -483,6 +483,300 @@ def register_analytics_tools(
     if tool_names is not None:
         tool_names.append("time_tracking_report")
     
+    # Tool 12: sprint_health
+    @server.call_tool()
+    async def sprint_health(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Get sprint health metrics (velocity, scope changes, burndown, completion, risks).
+        
+        Args:
+            sprint_id (required): Sprint ID
+            project_id (required): Project ID
+        
+        Returns:
+            Sprint health metrics including velocity, scope changes, burndown status,
+            completion rate, and risk indicators
+        """
+        try:
+            sprint_id = arguments.get("sprint_id")
+            if not sprint_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: sprint_id is required"
+                )]
+            
+            project_id = arguments.get("project_id")
+            if not project_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: project_id is required for sprint_health. "
+                         "Please provide both project_id and sprint_id."
+                )]
+            
+            logger.info(f"sprint_health called: sprint_id={sprint_id}, project_id={project_id}")
+            
+            # Parse project_id to get provider_id (format: provider_id:project_id)
+            provider_id = None
+            actual_project_id = project_id
+            if ":" in project_id:
+                provider_id, actual_project_id = project_id.split(":", 1)
+            
+            # Get provider instance
+            providers = pm_handler._get_active_providers()
+            if not providers:
+                return [TextContent(
+                    type="text",
+                    text="Error: No active providers found"
+                )]
+            
+            # Find the provider
+            provider_connection = None
+            if provider_id:
+                for p in providers:
+                    if str(p.id) == provider_id:
+                        provider_connection = p
+                        break
+            else:
+                # If no provider_id in project_id, use first provider (single provider mode)
+                provider_connection = providers[0]
+            
+            if not provider_connection:
+                return [TextContent(
+                    type="text",
+                    text=f"Error: Could not find provider for project {project_id}"
+                )]
+            
+            # Create provider instance
+            provider = pm_handler._create_provider_instance(provider_connection)
+            
+            # Create analytics adapter and service
+            from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
+            from src.analytics.service import AnalyticsService
+            
+            adapter = PMProviderAnalyticsAdapter(provider)
+            analytics_service = AnalyticsService(adapter)
+            
+            # Get sprint report (contains all health metrics)
+            # Use actual_project_id (without provider prefix) for analytics service
+            # If actual_project_id is empty, the analytics adapter will try to extract it from sprint_id
+            if not actual_project_id:
+                logger.warning(f"[sprint_health] project_id is empty, analytics adapter will try to extract from sprint_id")
+            sprint_report = await analytics_service.get_sprint_report(sprint_id, actual_project_id)
+            
+            # Extract health metrics
+            health_metrics = {
+                "sprint_id": sprint_report.sprint_id,
+                "sprint_name": sprint_report.sprint_name,
+                "status": sprint_report.metadata.get("status", "unknown"),
+                "velocity": sprint_report.team_performance.get("velocity", 0),
+                "completion_rate": sprint_report.commitment.get("completion_rate", 0),
+                "scope_changes": {
+                    "added": sprint_report.scope_changes.get("added", 0),
+                    "removed": sprint_report.scope_changes.get("removed", 0),
+                    "net_change": sprint_report.scope_changes.get("net_change", 0),
+                    "scope_stability": sprint_report.scope_changes.get("scope_stability", 1.0)
+                },
+                "capacity_utilization": sprint_report.team_performance.get("capacity_utilized", 0),
+                "team_size": sprint_report.team_performance.get("team_size", 0),
+                "highlights": sprint_report.highlights,
+                "concerns": sprint_report.concerns,
+                "risks": sprint_report.concerns  # Concerns are the risk indicators
+            }
+            
+            # Get burndown data for on-track status
+            try:
+                burndown = await analytics_service.get_burndown_chart(
+                    project_id=actual_project_id,
+                    sprint_id=sprint_id,
+                    scope_type="story_points"
+                )
+                health_metrics["burndown"] = {
+                    "on_track": burndown.metadata.get("on_track", False),
+                    "completion_percentage": burndown.metadata.get("completion_percentage", 0),
+                    "remaining": burndown.metadata.get("remaining", 0),
+                    "completed": burndown.metadata.get("completed", 0)
+                }
+            except Exception as e:
+                logger.warning(f"Could not fetch burndown data: {e}")
+                health_metrics["burndown"] = {
+                    "on_track": None,
+                    "error": "Burndown data unavailable"
+                }
+            
+            # Format output
+            import json
+            output = json.dumps(health_metrics, indent=2, default=str)
+            
+            return [TextContent(
+                type="text",
+                text=output
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in sprint_health: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error getting sprint health: {str(e)}"
+            )]
+    
+    tool_count += 1
+    if tool_names is not None:
+        tool_names.append("sprint_health")
+    
+    # Tool 13: batch_sprint_health
+    @server.call_tool()
+    async def batch_sprint_health(arguments: dict[str, Any]) -> list[TextContent]:
+        """
+        Get health metrics for multiple sprints in batch.
+        
+        Args:
+            sprint_ids (required): List of sprint IDs
+            project_id (required): Project ID
+        
+        Returns:
+            Dictionary keyed by sprint_id with health metrics for each sprint
+        """
+        try:
+            sprint_ids = arguments.get("sprint_ids")
+            if not sprint_ids:
+                return [TextContent(
+                    type="text",
+                    text="Error: sprint_ids is required (list of sprint IDs)"
+                )]
+            
+            if not isinstance(sprint_ids, list):
+                return [TextContent(
+                    type="text",
+                    text="Error: sprint_ids must be a list"
+                )]
+            
+            project_id = arguments.get("project_id")
+            if not project_id:
+                return [TextContent(
+                    type="text",
+                    text="Error: project_id is required for batch_sprint_health. "
+                         "Please provide both project_id and sprint_ids."
+                )]
+            
+            logger.info(f"batch_sprint_health called: sprint_ids={sprint_ids}, project_id={project_id}")
+            
+            # Parse project_id to get provider_id (format: provider_id:project_id)
+            provider_id = None
+            actual_project_id = project_id
+            if ":" in project_id:
+                provider_id, actual_project_id = project_id.split(":", 1)
+            
+            # Get provider instance
+            providers = pm_handler._get_active_providers()
+            if not providers:
+                return [TextContent(
+                    type="text",
+                    text="Error: No active providers found"
+                )]
+            
+            # Find the provider
+            provider_connection = None
+            if provider_id:
+                for p in providers:
+                    if str(p.id) == provider_id:
+                        provider_connection = p
+                        break
+            else:
+                # If no provider_id in project_id, use first provider (single provider mode)
+                provider_connection = providers[0]
+            
+            if not provider_connection:
+                return [TextContent(
+                    type="text",
+                    text=f"Error: Could not find provider for project {project_id}"
+                )]
+            
+            # Create provider instance
+            provider = pm_handler._create_provider_instance(provider_connection)
+            
+            # Create analytics adapter and service
+            from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
+            from src.analytics.service import AnalyticsService
+            
+            adapter = PMProviderAnalyticsAdapter(provider)
+            analytics_service = AnalyticsService(adapter)
+            
+            # Process each sprint
+            results = {}
+            for sprint_id in sprint_ids:
+                try:
+                    # Get sprint report
+                    # Use actual_project_id (without provider prefix) for analytics service
+                    sprint_report = await analytics_service.get_sprint_report(str(sprint_id), actual_project_id)
+                    
+                    # Extract health metrics
+                    health_metrics = {
+                        "sprint_id": sprint_report.sprint_id,
+                        "sprint_name": sprint_report.sprint_name,
+                        "status": sprint_report.metadata.get("status", "unknown"),
+                        "velocity": sprint_report.team_performance.get("velocity", 0),
+                        "completion_rate": sprint_report.commitment.get("completion_rate", 0),
+                        "scope_changes": {
+                            "added": sprint_report.scope_changes.get("added", 0),
+                            "removed": sprint_report.scope_changes.get("removed", 0),
+                            "net_change": sprint_report.scope_changes.get("net_change", 0),
+                            "scope_stability": sprint_report.scope_changes.get("scope_stability", 1.0)
+                        },
+                        "capacity_utilization": sprint_report.team_performance.get("capacity_utilized", 0),
+                        "team_size": sprint_report.team_performance.get("team_size", 0),
+                        "highlights": sprint_report.highlights,
+                        "concerns": sprint_report.concerns,
+                        "risks": sprint_report.concerns
+                    }
+                    
+                    # Get burndown data
+                    try:
+                        burndown = await analytics_service.get_burndown_chart(
+                            project_id=actual_project_id,
+                            sprint_id=str(sprint_id),
+                            scope_type="story_points"
+                        )
+                        health_metrics["burndown"] = {
+                            "on_track": burndown.metadata.get("on_track", False),
+                            "completion_percentage": burndown.metadata.get("completion_percentage", 0),
+                            "remaining": burndown.metadata.get("remaining", 0),
+                            "completed": burndown.metadata.get("completed", 0)
+                        }
+                    except Exception as e:
+                        logger.warning(f"Could not fetch burndown data for sprint {sprint_id}: {e}")
+                        health_metrics["burndown"] = {
+                            "on_track": None,
+                            "error": "Burndown data unavailable"
+                        }
+                    
+                    results[str(sprint_id)] = health_metrics
+                    
+                except Exception as e:
+                    logger.error(f"Error processing sprint {sprint_id}: {e}", exc_info=True)
+                    results[str(sprint_id)] = {
+                        "error": str(e)
+                    }
+            
+            # Format output
+            import json
+            output = json.dumps(results, indent=2, default=str)
+            
+            return [TextContent(
+                type="text",
+                text=output
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in batch_sprint_health: {e}", exc_info=True)
+            return [TextContent(
+                type="text",
+                text=f"Error getting batch sprint health: {str(e)}"
+            )]
+    
+    tool_count += 1
+    if tool_names is not None:
+        tool_names.append("batch_sprint_health")
+    
     logger.info(f"Registered {tool_count} analytics tools")
     return tool_count
 

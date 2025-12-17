@@ -20,12 +20,27 @@ logger = logging.getLogger(__name__)
 # Global PM handler instance - will be set by conversation flow manager
 _pm_handler = None
 
+# Global current project - will be set by pm_chat_stream endpoint
+_current_project_id = None
+
 
 def set_pm_handler(handler):
     """Set the PM handler instance for tools to use"""
     global _pm_handler
     _pm_handler = handler
     logger.info(f"PM handler set for tools: {handler.__class__.__name__}")
+
+
+def set_current_project(project_id: str):
+    """Set the current project ID selected by the user in the UI"""
+    global _current_project_id
+    _current_project_id = project_id
+    logger.info(f"Current project set: {project_id}")
+
+
+def get_current_project_id() -> Optional[str]:
+    """Get the current project ID selected by the user"""
+    return _current_project_id
 
 
 def _ensure_pm_handler():
@@ -44,6 +59,88 @@ async def _call_handler_method(method, *args, **kwargs):
     if asyncio.iscoroutine(result):
         return await result
     return result
+
+
+@tool
+async def get_current_project() -> str:
+    """Get the currently selected project and provider from the UI.
+    
+    **IMPORTANT**: Call this tool FIRST before any other PM tool if you need project context.
+    This returns the project that the user has selected in the UI header.
+    
+    The project_id is in the format "provider_id:project_id" which includes:
+    - provider_id: UUID of the PM provider connection (OpenProject, JIRA, etc.)
+    - project_id: The actual project ID within that provider
+    
+    Returns:
+        JSON string with current project info:
+        - project_id: The full composite ID (provider_id:project_id) - USE THIS for all tool calls
+        - provider_id: The PM provider UUID (extracted from project_id)
+        - actual_project_id: The project ID within the provider (extracted from project_id)
+        - project_name: The project name
+        - provider_type: Type of provider (openproject, jira, etc.)
+        - has_project: Whether a project is selected
+        
+    If no project is selected, you may need to ask the user to select one,
+    or call list_projects to show available projects.
+    """
+    try:
+        composite_project_id = get_current_project_id()
+        
+        if not composite_project_id:
+            return json.dumps({
+                "success": True,
+                "has_project": False,
+                "project_id": None,
+                "provider_id": None,
+                "actual_project_id": None,
+                "project_name": None,
+                "provider_type": None,
+                "message": "No project is currently selected. Please ask the user to select a project from the header dropdown, or use list_projects to show available projects."
+            }, indent=2)
+        
+        # Parse composite ID (format: provider_id:project_id)
+        provider_id = None
+        actual_project_id = composite_project_id
+        
+        if ":" in composite_project_id:
+            parts = composite_project_id.split(":", 1)
+            provider_id = parts[0]
+            actual_project_id = parts[1]
+        
+        # Try to get project details
+        project_name = "Unknown"
+        provider_type = "unknown"
+        try:
+            handler = _ensure_pm_handler()
+            project = await _call_handler_method(handler.get_project, composite_project_id)
+            if isinstance(project, dict):
+                project_name = project.get("name", "Unknown")
+                provider_type = project.get("provider_type", "unknown")
+        except Exception as e:
+            logger.warning(f"[PM-TOOLS] get_current_project: Could not fetch project details: {e}")
+        
+        # Return structured JSON that the agent can easily parse
+        result_json = {
+            "success": True,
+            "has_project": True,
+            "project_id": composite_project_id,  # Use this in all subsequent tool calls
+            "provider_id": provider_id,
+            "actual_project_id": actual_project_id,
+            "project_name": project_name,
+            "provider_type": provider_type,
+            "message": f"Current project: {project_name} (ID: {composite_project_id}). Use project_id='{composite_project_id}' in your next tool call. Do NOT call get_current_project again."
+        }
+        
+        return json.dumps(result_json, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Error getting current project: {e}")
+        return json.dumps({
+            "success": False,
+            "error": str(e),
+            "has_project": False
+        }, indent=2)
 
 
 @tool
@@ -101,6 +198,92 @@ async def list_projects() -> str:
             "success": False,
             "error": str(e)
         })
+
+
+@tool
+async def get_current_project_details() -> str:
+    """Get the description and details of the currently selected project from the UI.
+    
+    **IMPORTANT**: This tool automatically gets the current project and returns its full details including description.
+    You do NOT need to call `get_current_project` first - this tool handles that internally.
+    
+    Returns:
+        JSON string with current project details including:
+        - id, name, description, status, priority
+        - start_date, end_date, owner_id
+        - created_at, updated_at
+        - project_id: The full composite ID (provider_id:project_id)
+        - provider_id: The PM provider UUID
+        - provider_type: Type of provider (openproject, jira, etc.)
+        
+    If no project is currently selected, returns an error message asking the user to select a project.
+    """
+    try:
+        # First, get the current project ID
+        composite_project_id = get_current_project_id()
+        
+        if not composite_project_id:
+            return json.dumps({
+                "success": False,
+                "error": "No project is currently selected. Please select a project from the header dropdown.",
+                "has_project": False
+            }, indent=2)
+        
+        # Now get the full project details
+        handler = _ensure_pm_handler()
+        
+        # Handle provider_id:project_id format for multi-provider mode
+        if ":" in composite_project_id:
+            parts = composite_project_id.split(":", 1)
+            provider_id = parts[0]
+            actual_project_id = parts[1]
+        else:
+            actual_project_id = composite_project_id
+            provider_id = None
+        
+        # Try to get project from provider directly
+        project = None
+        if handler.single_provider:
+            project_obj = await handler.single_provider.get_project(actual_project_id)
+            if project_obj:
+                project = {
+                    "id": str(project_obj.id),
+                    "name": project_obj.name,
+                    "description": project_obj.description or "",
+                    "status": str(project_obj.status) if project_obj.status else None,
+                    "priority": str(project_obj.priority) if project_obj.priority else None,
+                    "start_date": project_obj.start_date.isoformat() if project_obj.start_date else None,
+                    "end_date": project_obj.end_date.isoformat() if project_obj.end_date else None,
+                    "owner_id": str(project_obj.owner_id) if project_obj.owner_id else None,
+                    "created_at": project_obj.created_at.isoformat() if project_obj.created_at else None,
+                    "updated_at": project_obj.updated_at.isoformat() if project_obj.updated_at else None,
+                    "project_id": composite_project_id,
+                    "provider_id": provider_id,
+                    "provider_type": handler.single_provider.provider_type if hasattr(handler.single_provider, 'provider_type') else "unknown"
+                }
+        else:
+            # List all and find matching
+            projects = await handler.list_all_projects()
+            project = next((p for p in projects if p.get('id') == composite_project_id), None)
+            if project:
+                project["project_id"] = composite_project_id
+                project["provider_id"] = provider_id
+        
+        if not project:
+            return json.dumps({
+                "success": False,
+                "error": f"Project not found: {composite_project_id}",
+                "project_id": composite_project_id
+            }, indent=2)
+        
+        return json.dumps(project, indent=2, default=str)
+        
+    except Exception as e:
+        logger.error(f"Error getting current project details: {e}")
+        return json.dumps({
+            "success": False,
+            "error": str(e)
+        }, indent=2)
 
 
 @tool
@@ -875,6 +1058,8 @@ def get_pm_tools() -> List:
         List of PM tool instances
     """
     return [
+        get_current_project,  # FIRST: Get current project context
+        get_current_project_details,  # Get current project details including description (calls get_current_project internally)
         list_projects,
         get_project,
         list_tasks,

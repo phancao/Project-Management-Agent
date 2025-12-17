@@ -65,6 +65,10 @@ export const useStore = create<{
   researchBlockTypes: Map<string, ResearchBlockType>; // Track block type for each research
   ongoingResearchId: string | null;
   openResearchId: string | null;
+  // Phase 2: Separate tracking for ReAct vs Planner
+  reactResearchIds: string[]; // Track ReAct agent research sessions
+  plannerResearchIds: string[]; // Track Planner research sessions
+  reactToPlannerEscalation: Map<string, string>; // Map: reactResearchId -> plannerResearchId
 
   appendMessage: (message: Message) => void;
   updateMessage: (message: Message) => void;
@@ -84,6 +88,10 @@ export const useStore = create<{
   researchBlockTypes: new Map<string, ResearchBlockType>(),
   ongoingResearchId: null,
   openResearchId: null,
+  // Phase 2: Separate tracking for ReAct vs Planner
+  reactResearchIds: [],
+  plannerResearchIds: [],
+  reactToPlannerEscalation: new Map<string, string>(),
 
   appendMessage(message: Message) {
     set((state) => {
@@ -742,6 +750,23 @@ function appendMessage(message: Message) {
       return;
     }
     
+    // Phase 2: Track planner research ID
+    if (!state.plannerResearchIds.includes(message.id)) {
+      useStore.setState({
+        plannerResearchIds: [...state.plannerResearchIds, message.id],
+      });
+    }
+    
+    // Phase 2: Check for ReAct escalation
+    // If there's an ongoing ReAct research, link it to this planner research
+    if (state.ongoingResearchId && state.reactResearchIds.includes(state.ongoingResearchId)) {
+      const reactResearchId = state.ongoingResearchId;
+      console.log(`[Store] 🔄 ReAct escalation detected: linking reactResearchId=${reactResearchId} to plannerResearchId=${message.id}`);
+      useStore.setState({
+        reactToPlannerEscalation: new Map(state.reactToPlannerEscalation).set(reactResearchId, message.id),
+      });
+    }
+    
     // Planner creates the research block
     appendResearch(message.id, "planner");
     openResearch(message.id);
@@ -760,6 +785,41 @@ function appendMessage(message: Message) {
     message.agent === "react_agent"
   ) {
     const state = useStore.getState();
+    
+    // CRITICAL: For react_agent, only create research block if this is a PM analysis
+    // Normal conversation (greetings, small talk) should NOT show the analysis box
+    if (message.agent === "react_agent") {
+      const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
+      const hasPMIntent = message.content && (
+        message.content.toLowerCase().includes("sprint") ||
+        message.content.toLowerCase().includes("task") ||
+        message.content.toLowerCase().includes("project") ||
+        message.content.toLowerCase().includes("user") ||
+        message.content.toLowerCase().includes("epic") ||
+        message.content.toLowerCase().includes("backlog") ||
+        message.content.toLowerCase().includes("list") ||
+        message.content.toLowerCase().includes("show") ||
+        message.content.toLowerCase().includes("get") ||
+        message.content.toLowerCase().includes("analyze")
+      );
+      const isNormalConversation = !hasToolCalls && !hasPMIntent;
+      
+      // For normal conversation, just append the message without creating a research block
+      if (isNormalConversation) {
+        console.log(`[Store] 💬 Normal conversation from react_agent (no PM intent), skipping research block: ${message.id}`);
+        useStore.getState().appendMessage(message);
+        return;
+      }
+      
+      // Phase 2: Track ReAct research IDs separately (only for PM analysis)
+      if (!state.reactResearchIds.includes(message.id)) {
+        useStore.setState({
+          reactResearchIds: [...state.reactResearchIds, message.id],
+        });
+        console.log(`[Store] ⚡ ReAct research tracked: reactResearchId=${message.id}`);
+      }
+    }
+    
     const blockType = getBlockTypeForAgent(message.agent);
     
     // Check if this message already belongs to a research block

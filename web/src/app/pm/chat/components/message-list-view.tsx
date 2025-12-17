@@ -50,7 +50,9 @@ import {
 import { parseJSON } from "~/core/utils";
 import { cn } from "~/lib/utils";
 
-import { AnalysisBlock } from "./analysis-block";
+import { PlannerAnalysisBlock } from "./analysis-block";
+import { ReActAnalysisBlock } from "./react-analysis-block";
+import { HandoverIndicator } from "./handover-indicator";
 
 export function MessageListView({
   className,
@@ -185,34 +187,51 @@ function MessageListItem({
     ) {
       let content: React.ReactNode;
       
-      // Priority 1: If this is the start of research, show AnalysisBlock (includes plan)
+      // Priority 1: If this is the start of research, route to correct component based on agent
       if (startOfResearch && message?.id) {
         const state = useStore.getState();
-        const researchPlanIds = state.researchPlanIds;
-        const planId = researchPlanIds.get(message.id);
-        const allResearchIds = state.researchIds;
+        const isReactAgent = message.agent === "react_agent";
+        const isPlanner = message.agent === "planner";
+        const escalationLink = state.reactToPlannerEscalation.get(message.id);
         
-        // CRITICAL DEBUG: Verify researchId is actually in researchIds
-        const researchIdInList = allResearchIds.includes(message.id);
-        console.log(`[DEBUG-RENDER] 📦 Rendering AnalysisBlock for message ${message.id} (agent: ${message.agent}, startOfResearch: ${startOfResearch})`, {
-          researchId: message.id,
-          researchIdInList,
-          planId,
-          allResearchIds: Array.from(allResearchIds),
-          allPlanIds: Array.from(researchPlanIds.entries()),
-          ongoingResearchId: state.ongoingResearchId,
-          timestamp: new Date().toISOString(),
-          stack: new Error().stack
-        });
-        
-        // Use AnalysisBlock for inline display of steps and report
-        // This works for both planner (full pipeline) and react_agent (fast path)
-        // The AnalysisBlock will display the plan content, so we don't show PlanCard separately
-        content = (
-          <div className="w-full px-4">
-            <AnalysisBlock researchId={message.id} />
-          </div>
-        );
+        // Phase 4: Route based on agent type and escalation
+        if (isReactAgent && escalationLink) {
+          // Escalation: Show both ReAct (left) and Planner (right) side-by-side with handover indicator
+          console.log(`[DEBUG-RENDER] 🔄 Rendering escalation: ReAct=${message.id} → Planner=${escalationLink}`);
+          content = (
+            <div className="w-full px-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ReActAnalysisBlock researchId={message.id} />
+                <PlannerAnalysisBlock researchId={escalationLink} />
+              </div>
+              <HandoverIndicator className="mt-4" />
+            </div>
+          );
+        } else if (isReactAgent) {
+          // ReAct agent: Use ReActAnalysisBlock (token-by-token streaming)
+          console.log(`[DEBUG-RENDER] ⚡ Rendering ReActAnalysisBlock for message ${message.id}`);
+          content = (
+            <div className="w-full px-4">
+              <ReActAnalysisBlock researchId={message.id} />
+            </div>
+          );
+        } else if (isPlanner) {
+          // Planner agent: Use PlannerAnalysisBlock (JSON plan parsing)
+          console.log(`[DEBUG-RENDER] 📋 Rendering PlannerAnalysisBlock for message ${message.id}`);
+          content = (
+            <div className="w-full px-4">
+              <PlannerAnalysisBlock researchId={message.id} />
+            </div>
+          );
+        } else {
+          // Fallback: Use PlannerAnalysisBlock for other agents (backward compatibility)
+          console.log(`[DEBUG-RENDER] 📋 Rendering PlannerAnalysisBlock (fallback) for message ${message.id}, agent=${message.agent}`);
+          content = (
+            <div className="w-full px-4">
+              <PlannerAnalysisBlock researchId={message.id} />
+            </div>
+          );
+        }
       } else if (message.agent === "planner") {
         console.log(`[DEBUG-RENDER] 📋 Rendering PlanCard for message ${message.id} (standalone planner)`, new Error().stack);
         // Show PlanCard for standalone planner messages (not in research)

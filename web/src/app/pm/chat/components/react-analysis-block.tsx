@@ -1,14 +1,13 @@
-// Copyright (c) 2025
+// Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
 /**
- * PlannerAnalysisBlock Component (formerly AnalysisBlock)
+ * ReActAnalysisBlock Component
  * 
- * Displays Planner agent analysis results with JSON plan parsing:
- * - Waits for complete JSON plan before displaying
- * - Shows structured plan with steps
- * - Green color scheme to differentiate from ReAct
- * - Actions: copy, download, edit
+ * Displays ReAct agent analysis results with token-by-token streaming:
+ * - No JSON parsing wait - content streams immediately
+ * - Real-time thoughts and tool calls display
+ * - Blue/cyan color scheme to differentiate from Planner
  */
 
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,78 +19,79 @@ import {
   Download, 
   Pencil, 
   Undo2,
-  Brain,
+  Zap,
   Sparkles,
   Loader2
 } from "lucide-react";
-import { useTranslations } from "next-intl";
 import React, { useCallback, useMemo, useState } from "react";
 
 import { LoadingAnimation } from "~/components/deer-flow/loading-animation";
 import { Markdown } from "~/components/deer-flow/markdown";
-import { RainbowText } from "~/components/deer-flow/rainbow-text";
 import { Tooltip } from "~/components/deer-flow/tooltip";
 import ReportEditor from "~/components/editor";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { useReplay } from "~/core/replay";
 import { useMessage, useStore } from "~/core/store";
-import { parseJSON } from "~/core/utils";
 import { cn } from "~/lib/utils";
 
 import { StepBox } from "./step-box";
 import { ThoughtBox } from "./thought-box";
-import { plannerTheme } from "./analysis-themes";
+import { reactTheme } from "./analysis-themes";
 import { useResearchThoughts } from "../hooks/use-research-thoughts";
 
-interface PlannerAnalysisBlockProps {
+interface ReActAnalysisBlockProps {
   className?: string;
   researchId: string;
 }
 
-export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisBlockProps) {
+export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlockProps) {
   const { isReplay } = useReplay();
   
   // Get research data from store
-  const plannerResearchIds = useStore((state) => state.plannerResearchIds);
-  const researchIds = useStore((state) => state.researchIds);
+  const reactResearchIds = useStore((state) => state.reactResearchIds);
   const reportId = useStore((state) => state.researchReportIds.get(researchId));
   const activityIds = useStore((state) => state.researchActivityIds.get(researchId)) ?? [];
-  const planMessageId = useStore((state) => state.researchPlanIds.get(researchId));
   const ongoing = useStore((state) => state.ongoingResearchId === researchId);
   const messages = useStore((state) => state.messages) ?? new Map();
   
+  // Check if ReAct escalated to Planner
+  const escalationLink = useStore((state) => state.reactToPlannerEscalation.get(researchId));
+  const hasEscalated = !!escalationLink;
+  
+  // For ReAct: Get the main message (not plan message - ReAct doesn't use JSON plans)
+  const reactMessage = useMessage(researchId);
   const reportMessage = useMessage(reportId ?? "");
-  const planMessage = useMessage(planMessageId ?? "");
   
   const hasReport = reportId !== undefined && reportMessage?.content;
   const isGeneratingReport = reportMessage?.isStreaming ?? false;
   
-  // Get title and plan content from plan
-  const planData = useMemo(() => {
-    if (planMessage?.content) {
-      return parseJSON(planMessage.content, { title: "", thought: "", steps: [] });
+  // Get title from ReAct message content or default
+  const title = useMemo(() => {
+    // ReAct doesn't have a plan, so get title from message content or default
+    if (reactMessage?.content) {
+      // Try to extract title from first line of content
+      const firstLine = reactMessage.content.split('\n')[0]?.trim();
+      if (firstLine && firstLine.length < 100 && !firstLine.startsWith('Thought:')) {
+        return firstLine.replace(/^#+\s*/, "");
+      }
     }
     if (reportMessage?.content) {
       const firstLine = reportMessage.content.split('\n')[0]?.trim();
       if (firstLine && firstLine.length < 100) {
-        return { title: firstLine.replace(/^#+\s*/, ""), thought: "", steps: [] };
+        return firstLine.replace(/^#+\s*/, "");
       }
     }
     if (reportId || activityIds.length > 0) {
-      return { title: "Analysis", thought: "", steps: [] };
+      return reactTheme.name;
     }
-    return { title: "", thought: "", steps: [] };
-  }, [planMessage?.content, reportMessage?.content, reportId, activityIds.length]);
-  
-  const title = planData.title;
+    return reactTheme.name;
+  }, [reactMessage?.content, reportMessage?.content, reportId, activityIds.length]);
   
   // Determine if block should be shown
-  const validResearchIds = researchIds.filter(id => id != null && id !== undefined);
-  const hasPlannerResearchId = plannerResearchIds.includes(researchId);
-  const hasResearchId = validResearchIds.includes(researchId);
-  const hasContent = title || reportId || activityIds.length > 0 || ongoing || planMessageId;
-  const shouldShow = hasPlannerResearchId || hasResearchId || hasContent;
+  const hasResearchId = reactResearchIds.includes(researchId);
+  const hasContent = title || reportId || activityIds.length > 0 || ongoing || reactMessage;
+  const shouldShow = hasResearchId || hasContent;
   
   if (!shouldShow) {
     return null;
@@ -99,8 +99,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
   
   const isLoading = hasResearchId && !hasContent;
   
-  // Collect all tool calls from activities - now reactive to messages changes
-  // Also track which agent each tool call came from
+  // Collect all tool calls from activities
   const toolCalls = useMemo(() => {
     const calls: Array<{ 
       id: string; 
@@ -124,7 +123,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
           }
           calls.push({
             ...tc,
-            agent: message.agent, // Include agent info
+            agent: message.agent,
           });
         }
       }
@@ -133,18 +132,8 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
     return calls;
   }, [activityIds, messages]);
   
-  // Cursor-style: Collect thoughts using the dedicated hook
-  // Extracts from plan steps and pm_agent/react_agent reactThoughts
+  // Collect thoughts using the dedicated hook
   const thoughts = useResearchThoughts(researchId);
-  
-  // DEBUG: Log thoughts and tool calls for debugging
-  const renderTimestamp = new Date().toISOString();
-  console.log(`[AnalysisBlock] 📋 [${renderTimestamp}] Rendering: researchId=${researchId}`, {
-    thoughtsCount: thoughts.length,
-    toolCallsCount: toolCalls.length,
-    thoughts: thoughts.map(t => ({ step_index: t.step_index, agent: t.agent, thought: t.thought.substring(0, 50) })),
-    toolCalls: toolCalls.map(tc => ({ id: tc.id, name: tc.name, hasResult: !!tc.result })),
-  });
   
   // UI state
   const [stepsExpanded, setStepsExpanded] = useState(true);
@@ -153,19 +142,21 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
   
   // Handlers
   const handleCopy = useCallback(() => {
-    if (!reportMessage?.content) return;
-    void navigator.clipboard.writeText(reportMessage.content);
+    const contentToCopy = reportMessage?.content || reactMessage?.content || "";
+    if (!contentToCopy) return;
+    void navigator.clipboard.writeText(contentToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 1000);
-  }, [reportMessage?.content]);
+  }, [reportMessage?.content, reactMessage?.content]);
   
   const handleDownload = useCallback(() => {
-    if (!reportMessage?.content) return;
+    const contentToDownload = reportMessage?.content || reactMessage?.content || "";
+    if (!contentToDownload) return;
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
-    const filename = `analysis-${timestamp}.md`;
-    const blob = new Blob([reportMessage.content], { type: 'text/markdown' });
+    const filename = `react-analysis-${timestamp}.md`;
+    const blob = new Blob([contentToDownload], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -176,7 +167,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }, 0);
-  }, [reportMessage?.content]);
+  }, [reportMessage?.content, reactMessage?.content]);
   
   const handleEdit = useCallback(() => {
     setEditing((prev) => !prev);
@@ -188,16 +179,26 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
       useStore.setState({
         messages: new Map(useStore.getState().messages).set(reportMessage.id, reportMessage),
       });
+    } else if (reactMessage) {
+      reactMessage.content = markdown;
+      useStore.setState({
+        messages: new Map(useStore.getState().messages).set(reactMessage.id, reactMessage),
+      });
     }
-  }, [reportMessage]);
+  }, [reportMessage, reactMessage]);
   
   // Status text
   const statusText = useMemo(() => {
+    if (hasEscalated) return "Escalated to Planner";
     if (hasReport && !isGeneratingReport) return "Analysis complete";
     if (isGeneratingReport) return "Generating insights...";
-    if (ongoing) return "Analyzing...";
+    if (ongoing && !hasEscalated) return "Analyzing...";
     return "Processing...";
-  }, [hasReport, isGeneratingReport, ongoing]);
+  }, [hasReport, isGeneratingReport, ongoing, hasEscalated]);
+  
+  // Get streaming content from ReAct message (token-by-token)
+  const reactContent = reactMessage?.content || "";
+  const isStreamingContent = reactMessage?.isStreaming ?? false;
 
   return (
     <motion.div
@@ -209,8 +210,8 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
     >
       <Card className={cn(
         "overflow-hidden overflow-x-hidden w-full border-2",
-        plannerTheme.border,
-        plannerTheme.background
+        reactTheme.border,
+        reactTheme.background
       )} style={{ minWidth: 0, maxWidth: '100%', overflowX: 'hidden' }}>
         {/* Header */}
         <CardHeader className="pb-2">
@@ -218,23 +219,23 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
             <div className="flex items-center gap-3">
               <div className={cn(
                 "p-2 rounded-lg bg-gradient-to-br",
-                plannerTheme.iconBg
+                reactTheme.iconBg
               )}>
-                <Brain size={20} className={cn(plannerTheme.text)} />
+                <Zap size={20} className={cn(reactTheme.text)} />
               </div>
               <div>
                 <div className={cn(
                   "text-lg font-semibold",
-                  plannerTheme.text
+                  reactTheme.text
                 )}>
-                  {title || plannerTheme.name}
+                  {title}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  {(ongoing || isGeneratingReport) && (
+                  {(ongoing || isGeneratingReport || isStreamingContent) && (
                     <Loader2 size={12} className="animate-spin" />
                   )}
-                  {!ongoing && !isGeneratingReport && hasReport && (
-                    <Sparkles size={12} className="text-green-500" />
+                  {!ongoing && !isGeneratingReport && !isStreamingContent && hasReport && (
+                    <Sparkles size={12} className="text-blue-500" />
                   )}
                   <span>{statusText}</span>
                 </div>
@@ -242,7 +243,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
             </div>
             
             {/* Actions */}
-            {hasReport && !isGeneratingReport && (
+            {(hasReport || reactContent) && !isGeneratingReport && !isStreamingContent && (
               <div className="flex items-center gap-1">
                 <Tooltip title={editing ? "Cancel edit" : "Edit"}>
                   <Button
@@ -288,36 +289,21 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
             </div>
           )}
           
-          {/* Plan Content Section - Show planner thought and full plan JSON */}
-          {planMessage?.content && (
+          {/* ReAct Content Section - Stream token-by-token (no JSON parsing) */}
+          {reactContent && (
             <div className="mb-4 pb-4 border-b break-words [word-break:break-word] [overflow-wrap:anywhere]">
-              {/* Show planner's thought if available */}
-              {planData.thought && (
-                <div className="mb-3">
-                  <div className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere]">
-                    <Markdown animated={false}>
-                      {planData.thought}
-                    </Markdown>
-                  </div>
-                </div>
-              )}
-              
-              {/* Show full plan JSON in a collapsible code block */}
-              <details className="mt-2">
-                <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  📋 View Full Plan JSON
-                </summary>
-                <div className="mt-2 p-3 bg-muted rounded-md overflow-x-auto">
-                  <pre className="text-xs font-mono whitespace-pre-wrap break-words">
-                    {planMessage.content}
-                  </pre>
-                </div>
-              </details>
-              {/* NOTE: Step descriptions are extracted and shown in ThoughtBox in Steps section */}
+              <div className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere]">
+                <Markdown animated={isStreamingContent} checkLinkCredibility>
+                  {reactContent}
+                </Markdown>
+                {isStreamingContent && (
+                  <LoadingAnimation className="my-4" />
+                )}
+              </div>
             </div>
           )}
           
-          {/* Steps Section - Collapsible (FIRST) */}
+          {/* Steps Section - Collapsible */}
           {(toolCalls.length > 0 || thoughts.length > 0) && (
             <div className="mb-4">
               <button
@@ -342,28 +328,24 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                     style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                   >
                     <div className="flex flex-col gap-0.5 pt-0.5 max-h-[600px] overflow-y-auto overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                      {/* Cursor-style: Interleave thoughts and tool calls - thoughts appear BEFORE their tool call */}
+                      {/* Interleave thoughts and tool calls */}
                       {(() => {
-                        // Create a combined list of thoughts and tool calls
-                        // Thoughts should appear BEFORE the tool call at the same step_index
                         const combinedSteps: Array<{
                           type: 'thought' | 'tool';
                           data: any;
-                          sortKey: number; // Used for sorting - lower appears first
+                          sortKey: number;
                         }> = [];
                         
-                        // Add thoughts - use step_index as sort key, but subtract 0.5 so they appear BEFORE tools
+                        // Add thoughts
                         thoughts.forEach((thought) => {
                           combinedSteps.push({
                             type: 'thought',
                             data: thought,
-                            // Thoughts appear BEFORE tools at the same index
-                            // Use step_index - 0.5 so thought at index 0 appears before tool at index 0
                             sortKey: thought.step_index - 0.5,
                           });
                         });
                         
-                        // Add tool calls - use their index as sort key
+                        // Add tool calls
                         toolCalls.forEach((toolCall, toolIndex) => {
                           combinedSteps.push({
                             type: 'tool',
@@ -372,7 +354,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                           });
                         });
                         
-                        // Sort by sortKey to maintain order (thoughts before tools at same index)
+                        // Sort by sortKey
                         combinedSteps.sort((a, b) => a.sortKey - b.sortKey);
                         
                         const totalSteps = combinedSteps.length;
@@ -385,7 +367,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                                 thought={step.data.thought}
                                 stepNumber={displayIndex + 1}
                                 totalSteps={totalSteps}
-                                defaultExpanded={true}  // Always show thoughts expanded so users can see AI thinking
+                                defaultExpanded={true}
                               />
                             );
                           } else {
@@ -408,7 +390,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
             </div>
           )}
           
-          {/* Report/Insights Section - Inline (BELOW steps) */}
+          {/* Report/Insights Section */}
           {(hasReport || isGeneratingReport) && (
             <div className={cn((toolCalls.length > 0 || thoughts.length > 0) ? "border-t pt-4" : "", "break-words [word-break:break-word] [overflow-wrap:anywhere]")}>
               <div className="flex items-center gap-2 mb-3">
@@ -438,3 +420,4 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
     </motion.div>
   );
 }
+

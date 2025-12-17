@@ -1354,17 +1354,41 @@ async def _stream_graph_events(
                                     )
                                     # CRITICAL FIX: Store thoughts in cache for AIMessageChunk processing
                                     # Find the message ID from messages in node_update
+                                    message_id_for_thoughts = None
                                     if "messages" in node_update:
                                         for msg in node_update.get("messages", []):
                                             if isinstance(msg, AIMessage) and hasattr(msg, 'id') and msg.id:
+                                                message_id_for_thoughts = msg.id
                                                 _react_thoughts_cache[msg.id] = node_react_thoughts
                                                 logger.info(
                                                     f"[{safe_thread_id}] ✅ Cached {len(node_react_thoughts)} react_thoughts for message {msg.id} "
                                                     f"for AIMessageChunk processing"
                                                 )
                                                 break
+                                    
+                                    # CRITICAL: Stream thoughts event immediately for ReAct agent (token-by-token display)
+                                    # This allows the frontend to display thoughts as they arrive, not wait for tool calls
+                                    if message_id_for_thoughts:
+                                        logger.info(
+                                            f"[{safe_thread_id}] 💭 Streaming thoughts event for {actual_agent_name}: "
+                                            f"messageId={message_id_for_thoughts}, count={len(node_react_thoughts)}"
+                                        )
+                                        yield _make_event(
+                                            "thoughts",
+                                            {
+                                                "thread_id": thread_id,
+                                                "agent": actual_agent_name,
+                                                "id": message_id_for_thoughts,
+                                                "role": "assistant",
+                                                "react_thoughts": node_react_thoughts,
+                                            }
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"[{safe_thread_id}] ⚠️ Could not find message ID for thoughts streaming in {actual_agent_name} node_update"
+                                        )
                                     logger.debug(
-                                        f"[{safe_thread_id}] 💭 Thoughts will be attached to agent message when it's streamed"
+                                        f"[{safe_thread_id}] 💭 Thoughts cached and streamed for {actual_agent_name}"
                                     )
                                 else:
                                     logger.warning(
@@ -3223,6 +3247,14 @@ async def pm_chat_stream(request: Request):
         model_provider = body.get("model_provider")
         model_name = body.get("model_name")
         
+        # Extract project_id from request (sent as separate field, not injected into message)
+        selected_project_id = body.get("project_id")
+        if selected_project_id:
+            # Store in pm_tools module for get_current_project tool to access
+            from src.tools.pm_tools import set_current_project
+            set_current_project(selected_project_id)
+            logger.info(f"[PM-CHAT] Selected project_id set: {selected_project_id}")
+        
         thread_id = body.get("thread_id", str(uuid.uuid4()))
         
         logger.info(f"[PM-CHAT] Received message with {len(conversation_history)} history messages")
@@ -3259,31 +3291,44 @@ async def pm_chat_stream(request: Request):
                 logger.info("[PM-CHAT-TIMING] generate_stream started")
                     
                 try:
-                    # Option 2: Route everything to DeerFlow (skip PM plan generation)
-                    # This avoids project ID errors for research queries
-                    # All queries go through DeerFlow agents which decide what tools to use
-                    needs_research = True  # Always route to DeerFlow with Option 2
+                    # Check if this is a Project Management (PM) related query
+                    # CRITICAL: Extract only the FIRST LINE to avoid matching metadata like "project_id: xxx"
+                    # The frontend appends "\n\nproject_id: xxx" to messages, which would falsely trigger PM intent
+                    user_message_first_line = user_message.strip().split('\n')[0].strip().lower()
+                    pm_keywords = ["sprint", "task", "project", "user", "epic", "backlog", "burndown", "velocity", "assign", "assignee", "team member", "work package", "version", "milestone", "status", "priority", "due date", "story point", "scrum", "kanban", "board", "list", "show", "get", "analyze", "report", "health", "dashboard", "description"]
+                    # Only check first line for PM intent to avoid false positives from context/metadata
+                    has_pm_intent = any(keyword in user_message_first_line for keyword in pm_keywords)
                     
-                    logger.info(
-                        f"[PM-CHAT-TIMING] Routing to DeerFlow (Option 2) - "
-                        f"{time.time() - api_start:.2f}s"
-                    )
-                        
-                    # Route all queries to DeerFlow
-                    if needs_research:
+                    # Debug: Log what's being checked
+                    if user_message_first_line in ["hi", "hello", "hey"]:
+                        matching_keywords = [kw for kw in pm_keywords if kw in user_message_first_line]
+                        logger.warning(f"[PM-CHAT] 🔍 DEBUG: user_message_first_line='{user_message_first_line}', has_pm_intent={has_pm_intent}, matching_keywords={matching_keywords}")
+                    
+                    # Determine routing: PM queries go to coordinator → ReAct, non-PM queries go to DeerFlow
+                    needs_research = not has_pm_intent
+                    
+                    if has_pm_intent:
+                        # PM-related query - route to coordinator → ReAct agent
+                        logger.info(f"[PM-CHAT] 📊 PM intent detected: '{user_message}' - routing to PM graph (coordinator → ReAct)")
                         initial_chunk = {
                             "id": str(uuid.uuid4()),
                             "thread_id": thread_id,
                             "agent": "coordinator",
                             "role": "assistant",
                             "content": (
-                                "🦌 **Starting DeerFlow research...**\n\n"
+                                "🔍 **Processing your request...**\n\n"
                             ),
                             "finish_reason": None
                         }
                         yield "event: message_chunk\n"
                         yield f"data: {json.dumps(initial_chunk)}\n\n"
-                            
+                    else:
+                        # Not PM-related (greetings, weather, news, etc.) - route to DeerFlow
+                        logger.info(f"[PM-CHAT] 💬 No PM intent detected: '{user_message}' - routing to DeerFlow")
+                    
+                    # Route queries based on intent
+                    if needs_research:
+                        # Non-PM query - route to DeerFlow (research flow)
                         try:
                             # Ensure PM handler is set for tools before agents run
                             if fm.pm_handler:
@@ -3405,13 +3450,69 @@ async def pm_chat_stream(request: Request):
                             import traceback
                             logger.error(traceback.format_exc())
                         
-                        # Option 2: All queries handled by DeerFlow, skip process_message
-                        # This avoids project ID errors for research queries
-                        logger.info(
-                            "[PM-CHAT-TIMING] Skipping process_message - "
-                            "DeerFlow handled the query"
-                        )
                         # DeerFlow already streamed all responses, so we're done
+                    else:
+                        # PM query - route to PM graph (coordinator → ReAct)
+                        logger.info(f"[PM-CHAT-TIMING] Routing PM query to PM graph (coordinator → ReAct)")
+                        try:
+                            # Ensure PM handler is set for tools before agents run
+                            if fm.pm_handler:
+                                from src.tools.pm_tools import set_pm_handler
+                                set_pm_handler(fm.pm_handler)
+                                logger.info("[PM-CHAT-TIMING] PM handler set for PM graph agents")
+                            
+                            # Set current project if provided
+                            if project_id:
+                                from src.tools.pm_tools import set_current_project
+                                set_current_project(project_id)
+                                logger.info(f"[PM-CHAT] Set current project: {project_id}")
+                            
+                            # Build messages for PM graph
+                            workflow_messages = []
+                            if conversation_history:
+                                for msg in conversation_history:
+                                    if msg.get("role") == "user":
+                                        workflow_messages.append({"role": "user", "content": msg.get("content", "")})
+                                    elif msg.get("role") == "assistant":
+                                        workflow_messages.append({"role": "assistant", "content": msg.get("content", "")})
+                            
+                            # Add current user message
+                            workflow_messages.append({"role": "user", "content": user_message})
+                            
+                            # Use default MCP settings to ensure PM tools are available
+                            pm_mcp_settings = get_default_mcp_settings()
+                            logger.info(f"[PM-CHAT] Using default MCP settings with servers: {list(pm_mcp_settings.get('servers', {}).keys())}")
+                            
+                            # Route to PM graph using _astream_workflow_generator
+                            # The coordinator will detect PM intent and route to ReAct
+                            async for event in _astream_workflow_generator(
+                                workflow_messages,
+                                thread_id,
+                                resources=[],
+                                max_plan_iterations=1,
+                                max_step_num=3,
+                                max_search_results=3,
+                                auto_accepted_plan=False,
+                                interrupt_feedback="",
+                                mcp_settings=pm_mcp_settings,
+                                enable_background_investigation=False,
+                                report_style=ReportStyle.ACADEMIC,
+                                enable_deep_thinking=False,
+                                enable_clarification=False,
+                                max_clarification_rounds=3,
+                                locale="en-US",
+                                interrupt_before_tools=None,
+                                model_provider=model_provider,
+                                model_name=model_name,
+                            ):
+                                # Yield formatted PM graph events directly
+                                yield event
+                            
+                            logger.info("[PM-CHAT-TIMING] PM graph query completed")
+                        except Exception as pm_error:
+                            logger.error(f"PM graph streaming failed: {pm_error}")
+                            import traceback
+                            logger.error(traceback.format_exc())
                         
                     logger.info(
                         f"[PM-CHAT-TIMING] Total response time: "

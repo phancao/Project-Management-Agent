@@ -115,16 +115,9 @@ export async function* chatStream(
     // Determine which endpoint to use based on current path
     const isPMChat = typeof window !== "undefined" && window.location.pathname.startsWith("/pm/chat");
 
-    // Extract project context from URL if present
+    // Extract project context from URL if present (sent as separate field, NOT injected into message)
     const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
     const projectId = urlParams.get('project');
-
-    // Add project context to the message if we're in a project-specific chat
-    let enhancedMessage = userMessage;
-    if (projectId) {
-      // Add project_id explicitly in a way the LLM will extract it
-      enhancedMessage = `${userMessage}\n\nproject_id: ${projectId}`;
-    }
 
     // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
     const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
@@ -137,13 +130,16 @@ export async function* chatStream(
       messages.push(...params.conversation_history);
     }
     
-    // Add current user message
-    messages.push({ role: "user", content: enhancedMessage });
+    // Add current user message (clean, without injected context)
+    messages.push({ role: "user", content: userMessage });
     
     const stream = fetchStream(resolveServiceURL(endpoint), {
       body: JSON.stringify({
         messages,
         locale,
+        // Send project_id as separate field (not injected into message)
+        // The backend will make this available via get_current_project tool
+        project_id: projectId || undefined,
         ...params,
       }),
       signal: options.abortSignal,

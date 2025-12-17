@@ -197,7 +197,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         "thread_id": thread_id,
                         "agent": "coordinator",
                         "role": "assistant",
-                        "content": "🦌 **Starting DeerFlow research...**\n\n",
+                        "content": "🔍 **Processing your request...**\n\n",
                         "finish_reason": None
                     }
                     yield "event: message_chunk\n"

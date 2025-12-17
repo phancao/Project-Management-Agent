@@ -104,6 +104,9 @@ function getToolDisplayName(toolName: string): string {
     crawl_tool: "Read Page",
     python_repl_tool: "Run Python",
     thought: "Thought",  // Cursor-style: Thought display
+    backend_api_call: "Internal API",
+    get_current_project: "Get Current Project",
+    optimize_context: "Optimize Context",
   };
   return nameMap[toolName] ?? toolName.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }

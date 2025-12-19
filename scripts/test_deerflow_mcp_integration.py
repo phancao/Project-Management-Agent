@@ -22,7 +22,7 @@ async def test_pm_mcp_tools_import():
     print("=" * 60)
     
     try:
-        from src.tools import (
+        from backend.tools import (
             configure_pm_mcp_client,
             get_pm_mcp_tools,
             is_pm_mcp_configured,
@@ -43,7 +43,7 @@ async def test_pm_mcp_configuration():
     print("=" * 60)
     
     try:
-        from src.tools import (
+        from backend.tools import (
             configure_pm_mcp_client,
             is_pm_mcp_configured,
             get_pm_mcp_config,
@@ -103,7 +103,7 @@ async def test_backward_compatibility():
     print("=" * 60)
     
     try:
-        from src.tools import get_pm_tools, set_pm_handler
+        from backend.tools import get_pm_tools, set_pm_handler
         
         print("✅ Existing PM tools can still be imported")
         print("   - get_pm_tools() still available")
@@ -149,7 +149,7 @@ async def main():
         print("      uv run python scripts/run_pm_mcp_server.py --transport sse --port 8080")
         print("\n   2. Test with actual tool loading:")
         print("      # In Python:")
-        print("      from src.tools import configure_pm_mcp_client, get_pm_mcp_tools")
+        print("      from backend.tools import configure_pm_mcp_client, get_pm_mcp_tools")
         print("      configure_pm_mcp_client(transport='sse', url='http://localhost:8080')")
         print("      tools = await get_pm_mcp_tools()")
         print("      print(f'Loaded {len(tools)} tools')")

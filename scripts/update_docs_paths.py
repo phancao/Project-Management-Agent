@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Script to update markdown documentation files with new directory structure
-Replaces old paths (src/, src.mcp_servers, etc.) with new paths (backend/, mcp_server/, etc.)
+Replaces old paths (src/, mcp_server, etc.) with new paths (backend/, mcp_server/, etc.)
 """
 
 import os

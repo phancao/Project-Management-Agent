@@ -11,7 +11,7 @@ from langchain_core.messages import (
     ToolMessageChunk,
 )
 
-from src.llms import llm as llm_module
+from backend.llms import llm as llm_module
 from backend.llms.providers import dashscope as dashscope_module
 from backend.llms.providers.dashscope import (
     ChatDashscope,

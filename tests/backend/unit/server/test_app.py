@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessageChunk, ToolMessage
 from langgraph.types import Command
 
-from backend.config.report_style import ReportStyle
+from shared.config.report_style import ReportStyle
 from backend.server.app import _astream_workflow_generator, _make_event, app
 
 

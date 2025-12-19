@@ -6,7 +6,7 @@ This helps reduce noise in logs and focus on specific areas when debugging.
 
 Usage:
     # Enable debug for specific modules
-    from src.config.debug_config import DebugConfig
+    from shared.config.debug_config import DebugConfig
     debug_config = DebugConfig(
         deerflow=True,
         pm_provider=True,
@@ -145,7 +145,7 @@ class DebugConfig:
         module_loggers = {
             # Core modules
             "deerflow": ["src.workflow", "src.graph", "src.agents"],
-            "pm_provider": ["src.pm_providers", "src.server.pm_handler", "src.mcp_servers.pm_server"],
+            "pm_provider": ["pm_providers", "src.server.pm_handler", "mcp_server"],
             "analytics": ["src.analytics"],
             "conversation": ["src.conversation"],
             "tools": ["src.tools"],
@@ -153,8 +153,8 @@ class DebugConfig:
             "crawler": ["src.crawler"],
             
             # Sub-modules
-            "pm_providers": ["src.pm_providers"],
-            "pm_mcp_server": ["src.mcp_servers.pm_server"],
+            "pm_providers": ["pm_providers"],
+            "pm_mcp_server": ["mcp_server"],
             "pm_handler": ["src.server.pm_handler"],
             "analytics_service": ["src.analytics.service"],
             "analytics_adapters": ["src.analytics.adapters"],
@@ -165,7 +165,7 @@ class DebugConfig:
             "search_tools": ["src.tools.search", "src.tools.tavily_search"],
             "pm_tools": ["src.tools.pm_tools", "src.tools.pm_mcp_tools"],
             "analytics_tools": ["src.tools.analytics_tools"],
-            "mcp": ["src.server.mcp_utils", "src.mcp_servers"],
+            "mcp": ["src.server.mcp_utils", "mcp_server"],
         }
         
         enabled_modules = []
@@ -223,7 +223,7 @@ def reset_debug_config() -> None:
     # Reset all module loggers to INFO
     for logger_name in [
         "src.workflow", "src.graph", "src.agents",
-        "src.pm_providers", "src.server.pm_handler", "src.mcp_servers.pm_server",
+        "pm_providers", "src.server.pm_handler", "mcp_server",
         "src.analytics", "src.conversation", "src.tools", "src.rag", "src.crawler",
     ]:
         logging.getLogger(logger_name).setLevel(logging.INFO)

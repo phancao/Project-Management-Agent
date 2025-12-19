@@ -163,7 +163,7 @@ class TestValidateAndFixPlanStepTypeRepair:
             ]
         }
 
-        with patch("src.graph.nodes.logger") as mock_logger:
+        with patch("backend.graph.nodes.logger") as mock_logger:
             validate_and_fix_plan(plan)
             # Should log repair operation
             mock_logger.info.assert_called()

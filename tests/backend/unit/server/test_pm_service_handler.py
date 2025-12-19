@@ -5,7 +5,7 @@ Unit tests for Backend PMServiceHandler
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.server.pm_service_client import PMServiceHandler, get_pm_service_handler
+from backend.server.pm_service_client import PMServiceHandler, get_pm_service_handler
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-from backend.config.report_style import ReportStyle
+from shared.config.report_style import ReportStyle
 from backend.prompt_enhancer.graph.state import PromptEnhancerState
 
 

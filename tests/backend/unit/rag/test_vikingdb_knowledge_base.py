@@ -38,9 +38,9 @@ class MockDocument:
 @pytest.fixture(autouse=True)
 def patch_imports():
     with (
-        patch("src.rag.vikingdb_knowledge_base.Resource", MockResource),
-        patch("src.rag.vikingdb_knowledge_base.Chunk", MockChunk),
-        patch("src.rag.vikingdb_knowledge_base.Document", MockDocument),
+        patch("backend.rag.vikingdb_knowledge_base.Resource", MockResource),
+        patch("backend.rag.vikingdb_knowledge_base.Chunk", MockChunk),
+        patch("backend.rag.vikingdb_knowledge_base.Document", MockDocument),
     ):
         yield
 
@@ -236,7 +236,7 @@ class TestVikingDBKnowledgeBaseProviderSignature:
         assert "host:example.com" in canonical_request
         assert signed_headers == "content-type;host"
 
-    @patch("src.rag.vikingdb_knowledge_base.datetime")
+    @patch("backend.rag.vikingdb_knowledge_base.datetime")
     def test_create_signature(self, mock_datetime, provider):
         """Test signature creation"""
         # Mock datetime
@@ -260,7 +260,7 @@ class TestVikingDBKnowledgeBaseProviderSignature:
         assert "Authorization" in result
         assert "HMAC-SHA256" in result["Authorization"]
 
-    @patch("src.rag.vikingdb_knowledge_base.requests.request")
+    @patch("backend.rag.vikingdb_knowledge_base.requests.request")
     def test_make_signed_request_success(self, mock_request, provider):
         """Test successful signed request"""
         mock_response = MagicMock()
@@ -280,7 +280,7 @@ class TestVikingDBKnowledgeBaseProviderSignature:
         assert call_args[1]["url"] == f"https://{provider.api_url}/api/test"
         assert call_args[1]["timeout"] == 30
 
-    @patch("src.rag.vikingdb_knowledge_base.requests.request")
+    @patch("backend.rag.vikingdb_knowledge_base.requests.request")
     def test_make_signed_request_with_exception(self, mock_request, provider):
         """Test signed request with exception"""
         mock_request.side_effect = Exception("Network error")

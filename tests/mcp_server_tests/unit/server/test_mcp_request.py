@@ -4,7 +4,7 @@
 import pytest
 from pydantic import ValidationError
 
-from src.server.mcp_request import MCPServerMetadataRequest, MCPServerMetadataResponse
+from backend.server.mcp_request import MCPServerMetadataRequest, MCPServerMetadataResponse
 
 
 def test_mcp_server_metadata_request_required_fields():

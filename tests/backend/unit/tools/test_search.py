@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.config.tools import SearchEngine
+from shared.config.tools import SearchEngine
 from backend.tools.search import get_web_search_tool
 
 

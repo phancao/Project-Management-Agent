@@ -38,7 +38,7 @@ def test_with_local_postgres_db():
 
 def test_with_local_mongo_db():
     """Ensure the ChatStreamManager can be initialized with a local MongoDB."""
-    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
+    with patch("backend.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
@@ -84,7 +84,7 @@ def test_process_stream_partial_buffer_postgres(monkeypatch):
 
 def test_process_stream_partial_buffer_mongo():
     """Partial chunks should be buffered; Use mongomock instead of real MongoDB."""
-    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
+    with patch("backend.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
@@ -160,7 +160,7 @@ def test_persist_not_attempted_when_saver_disabled():
 
 def test_persist_mongodb_local_db():
     """Ensure that the ChatStreamManager can persist to a mocked MongoDB."""
-    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
+    with patch("backend.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
@@ -250,7 +250,7 @@ def test_unsupported_db_uri_scheme():
 
 def test_process_stream_with_interrupt_finish_reason():
     """Test that 'interrupt' finish_reason triggers persistence like 'stop'."""
-    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
+    with patch("backend.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
@@ -406,7 +406,7 @@ def test_multiple_threads_isolation():
 
 def test_mongodb_insert_and_update_paths():
     """Exercise MongoDB insert, update, and exception branches using mongomock."""
-    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
+    with patch("backend.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
@@ -604,7 +604,7 @@ def test_init_mongodb_success_and_failure(monkeypatch):
     """MongoDB init should succeed with mongomock and fail gracefully with errors."""
 
     # Success path with mongomock
-    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
+    with patch("backend.graph.checkpoint.MongoClient") as mock_mongo_client:
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
 
@@ -612,7 +612,7 @@ def test_init_mongodb_success_and_failure(monkeypatch):
         assert manager.mongo_db is not None
 
     # Failure path
-    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
+    with patch("backend.graph.checkpoint.MongoClient") as mock_mongo_client:
         mock_mongo_client.side_effect = RuntimeError("Connection failed")
 
         manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=MONGO_URL)

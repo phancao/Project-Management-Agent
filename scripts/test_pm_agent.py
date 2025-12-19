@@ -29,8 +29,8 @@ async def test_pm_agent_creation():
     print("=" * 60)
     
     try:
-        from src.agents import create_agent
-        from src.tools import (
+        from backend.agents import create_agent
+        from backend.tools import (
             configure_pm_mcp_client,
             get_pm_mcp_tools,
             is_pm_mcp_configured
@@ -46,7 +46,7 @@ async def test_pm_agent_creation():
         
         if not is_pm_mcp_configured():
             print("⚠️  PM MCP client not configured. Using direct PM tools fallback...")
-            from src.tools import get_pm_tools
+            from backend.tools import get_pm_tools
             pm_tools = get_pm_tools()
         else:
             print("✅ PM MCP client configured")
@@ -55,7 +55,7 @@ async def test_pm_agent_creation():
             except (ConnectionError, RuntimeError, BaseExceptionGroup) as e:
                 print(f"⚠️  PM MCP server not available: {e}")
                 print("   Falling back to direct PM tools...")
-                from src.tools import get_pm_tools
+                from backend.tools import get_pm_tools
                 pm_tools = get_pm_tools()
         
         print(f"✅ Loaded {len(pm_tools)} PM tools")
@@ -146,7 +146,7 @@ async def test_pm_agent_node():
         from langchain_core.runnables import RunnableConfig
         
         # Configure PM MCP client
-        from src.tools import configure_pm_mcp_client
+        from backend.tools import configure_pm_mcp_client
         configure_pm_mcp_client(
             transport="sse",
             url="http://localhost:8080"
@@ -183,7 +183,7 @@ async def test_pm_tools_availability():
     print("=" * 60)
     
     try:
-        from src.tools import (
+        from backend.tools import (
             configure_pm_mcp_client,
             get_pm_mcp_tools,
             is_pm_mcp_configured
@@ -202,7 +202,7 @@ async def test_pm_tools_availability():
             except (ConnectionError, RuntimeError, BaseExceptionGroup) as e:
                 print(f"⚠️  PM MCP server not available: {e}")
                 print("   Using direct PM tools...")
-                from src.tools import get_pm_tools
+                from backend.tools import get_pm_tools
                 tools = get_pm_tools()
                 print(f"✅ Direct PM tools available: {len(tools)} tools")
             
@@ -217,7 +217,7 @@ async def test_pm_tools_availability():
             
         else:
             print("⚠️  PM MCP not configured, falling back to direct tools...")
-            from src.tools import get_pm_tools
+            from backend.tools import get_pm_tools
             tools = get_pm_tools()
             print(f"✅ Direct PM tools available: {len(tools)} tools")
         

@@ -49,8 +49,7 @@ CREATE TABLE pm_provider_connections (
     created_by UUID REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_sync_at TIMESTAMP,
-    backend_provider_id UUID UNIQUE -- Backend provider ID - used to map backend provider IDs to PM Service provider IDs
+    last_sync_at TIMESTAMP
 );
 
 CREATE INDEX idx_pm_provider_connections_created_by ON pm_provider_connections(created_by);

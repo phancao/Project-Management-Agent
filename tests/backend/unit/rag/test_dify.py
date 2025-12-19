@@ -32,7 +32,7 @@ class DummyDocument:
 # Patch imports in dify.py to use dummy classes
 @pytest.fixture(autouse=True)
 def patch_imports(monkeypatch):
-    import src.rag.dify as dify
+    import backend.rag.dify as dify
 
     dify.Resource = DummyResource
     dify.Chunk = DummyChunk
@@ -71,7 +71,7 @@ def test_init_missing_env(monkeypatch):
         DifyProvider()
 
 
-@patch("src.rag.dify.requests.post")
+@patch("backend.rag.dify.requests.post")
 def test_query_relevant_documents_success(mock_post, monkeypatch):
     monkeypatch.setenv("DIFY_API_URL", "http://api")
     monkeypatch.setenv("DIFY_API_KEY", "key")
@@ -103,7 +103,7 @@ def test_query_relevant_documents_success(mock_post, monkeypatch):
     assert docs[0].chunks[0].similarity == 0.9
 
 
-@patch("src.rag.dify.requests.post")
+@patch("backend.rag.dify.requests.post")
 def test_query_relevant_documents_error(mock_post, monkeypatch):
     monkeypatch.setenv("DIFY_API_URL", "http://api")
     monkeypatch.setenv("DIFY_API_KEY", "key")
@@ -117,7 +117,7 @@ def test_query_relevant_documents_error(mock_post, monkeypatch):
         provider.query_relevant_documents("query", [resource])
 
 
-@patch("src.rag.dify.requests.get")
+@patch("backend.rag.dify.requests.get")
 def test_list_resources_success(mock_get, monkeypatch):
     monkeypatch.setenv("DIFY_API_URL", "http://api")
     monkeypatch.setenv("DIFY_API_KEY", "key")
@@ -141,7 +141,7 @@ def test_list_resources_success(mock_get, monkeypatch):
     assert resources[1].description == "desc2"
 
 
-@patch("src.rag.dify.requests.get")
+@patch("backend.rag.dify.requests.get")
 def test_list_resources_error(mock_get, monkeypatch):
     monkeypatch.setenv("DIFY_API_URL", "http://api")
     monkeypatch.setenv("DIFY_API_KEY", "key")

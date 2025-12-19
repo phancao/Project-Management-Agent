@@ -8,9 +8,9 @@ from typing import Any, Optional
 
 from langchain_core.runnables import RunnableConfig
 
-from src.config.loader import get_bool_env, get_int_env, get_str_env
-from src.config.report_style import ReportStyle
-from src.rag.retriever import Resource
+from shared.config.loader import get_bool_env, get_int_env, get_str_env
+from shared.config.report_style import ReportStyle
+from backend.rag.retriever import Resource
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,7 @@ class Configuration:
     max_plan_iterations: int = 1  # Maximum number of plan iterations
     max_step_num: int = 3  # Maximum number of steps in a plan
     max_search_results: int = 3  # Maximum number of search results
+    search_provider: Optional[str] = None  # Search provider ID (e.g., "duckduckgo", "tavily")
     mcp_settings: dict = None  # MCP settings, including dynamic loaded tools
     report_style: str = ReportStyle.ACADEMIC.value  # Report style
     enable_deep_thinking: bool = False  # Whether to enable deep thinking

@@ -9,8 +9,8 @@ import logging
 from typing import Optional
 
 from .provider_manager import ProviderManager
-from src.analytics.service import AnalyticsService
-from src.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
+from backend.analytics.service import AnalyticsService
+from backend.analytics.adapters.pm_adapter import PMProviderAnalyticsAdapter
 
 logger = logging.getLogger(__name__)
 

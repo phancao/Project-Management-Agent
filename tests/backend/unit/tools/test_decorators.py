@@ -55,7 +55,7 @@ class TestLoggedToolMixin:
         LoggedTool = create_logged_tool(MockBaseTool)
         tool = LoggedTool()
 
-        with patch("src.tools.decorators.logger.debug") as mock_debug:
+        with patch("backend.tools.decorators.logger.debug") as mock_debug:
             tool._run("test_arg")
 
             # Verify debug log was called with correct message
@@ -79,7 +79,7 @@ class TestLoggedToolMixin:
         LoggedTool = create_logged_tool(MockBaseTool)
         tool = LoggedTool()
 
-        with patch("src.tools.decorators.logger.debug") as mock_debug:
+        with patch("backend.tools.decorators.logger.debug") as mock_debug:
             tool._log_operation = Mock()
 
             result = tool._run()
@@ -110,7 +110,7 @@ class TestLoggedToolMixin:
         LoggedTool = create_logged_tool(MockBaseTool)
         tool = LoggedTool()
 
-        with patch("src.tools.decorators.logger.debug") as mock_debug:
+        with patch("backend.tools.decorators.logger.debug") as mock_debug:
             tool._run()
 
             # Verify the logged class name has 'Logged' prefix removed

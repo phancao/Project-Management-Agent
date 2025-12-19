@@ -1,6 +1,18 @@
 """
 Unit tests for MCP Server ToolContext
 """
+import sys
+import os
+print("[DEBUG] CWD:", os.getcwd())
+print("[DEBUG] sys.path:", sys.path)
+try:
+    import backend
+    print("[DEBUG] backend:", backend)
+    print("[DEBUG] backend file:", backend.__file__)
+    import backend.analytics
+    print("[DEBUG] backend.analytics:", backend.analytics)
+except ImportError as e:
+    print("[DEBUG] Import Error:", e)
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -157,5 +169,3 @@ class TestToolContextAnalyticsManager:
         
         # Analytics manager should have access to provider manager
         assert context.analytics_manager is not None
-
-

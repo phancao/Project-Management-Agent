@@ -36,13 +36,14 @@ class Plan:
 # This avoids the cascade of imports that would normally happen
 def load_state_class():
     # Get the absolute path to the types.py file
-    src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-    types_path = os.path.join(src_dir, "graph", "types.py")
+    # Get the absolute path to the types.py file
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    types_path = os.path.join(project_root, "backend", "graph", "types.py")
 
     # Create a namespace for the module
     import types
 
-    module_name = "src.graph.types_direct"
+    module_name = "backend.graph.types_direct"
     spec = types.ModuleType(module_name)
 
     # Add the module to sys.modules to avoid import loops

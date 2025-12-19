@@ -20,7 +20,7 @@ from langchain_core.tools import tool
 
 from backend.agents.agents import create_agent
 from backend.agents.tool_interceptor import ToolInterceptor, wrap_tools_with_interceptor
-from backend.config.configuration import Configuration
+from shared.config.configuration import Configuration
 from backend.server.chat_request import ChatRequest
 
 
@@ -42,8 +42,8 @@ class TestToolInterceptorIntegration:
         tools = [search_tool, db_tool]
 
         # Create agent with interrupts on db_tool only
-        with patch("src.agents.agents.create_react_agent") as mock_create, \
-             patch("src.agents.agents.get_llm_by_type") as mock_llm:
+        with patch("backend.agents.agents.create_react_agent") as mock_create, \
+             patch("backend.agents.agents.get_llm_by_type") as mock_llm:
             mock_create.return_value = MagicMock()
             mock_llm.return_value = MagicMock()
             
@@ -125,7 +125,7 @@ class TestToolInterceptorIntegration:
         # Wrap all tools
         wrapped_tools = wrap_tools_with_interceptor(tools, ["tool_b"])
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             # tool_a should not interrupt
             mock_interrupt.return_value = "approved"
             result_a = wrapped_tools[0].invoke("test")
@@ -147,7 +147,7 @@ class TestToolInterceptorIntegration:
             """A sensitive tool."""
             return f"Executed: {action}"
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             mock_interrupt.return_value = "approved"
 
             interceptor = ToolInterceptor(["sensitive_tool"])
@@ -165,7 +165,7 @@ class TestToolInterceptorIntegration:
             """A sensitive tool."""
             return f"Executed: {action}"
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             mock_interrupt.return_value = "rejected"
 
             interceptor = ToolInterceptor(["sensitive_tool"])
@@ -185,7 +185,7 @@ class TestToolInterceptorIntegration:
             """Database query tool."""
             return f"Query result: {query}"
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             mock_interrupt.return_value = "approved"
 
             interceptor = ToolInterceptor(["db_query_tool"])
@@ -247,7 +247,7 @@ class TestToolInterceptorIntegration:
             tools, ["tool_one", "tool_two"]
         )
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             mock_interrupt.return_value = "approved"
 
             # First interrupt
@@ -275,7 +275,7 @@ class TestToolInterceptorIntegration:
 
         wrapped_tools = wrap_tools_with_interceptor([test_tool], [])
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             wrapped_tools[0].invoke("test")
             mock_interrupt.assert_not_called()
 
@@ -288,7 +288,7 @@ class TestToolInterceptorIntegration:
 
         wrapped_tools = wrap_tools_with_interceptor([test_tool], None)
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             wrapped_tools[0].invoke("test")
             mock_interrupt.assert_not_called()
 
@@ -302,7 +302,7 @@ class TestToolInterceptorIntegration:
         interceptor_lower = ToolInterceptor(["mytool"])
         interceptor_exact = ToolInterceptor(["MyTool"])
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             mock_interrupt.return_value = "approved"
 
             # Case mismatch - should NOT interrupt
@@ -322,7 +322,7 @@ class TestToolInterceptorIntegration:
             """A tool that raises an error."""
             raise ValueError(f"Intentional error: {x}")
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             mock_interrupt.return_value = "approved"
 
             interceptor = ToolInterceptor(["error_tool"])
@@ -385,7 +385,7 @@ class TestToolInterceptorIntegration:
             """A tool with complex input."""
             return f"Processed: {data}"
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             mock_interrupt.return_value = "approved"
 
             interceptor = ToolInterceptor(["complex_tool"])
@@ -418,7 +418,7 @@ class TestToolInterceptorIntegration:
 
     def test_tool_interceptor_initialization_logging(self):
         """Test that ToolInterceptor initialization is logged."""
-        with patch("src.agents.tool_interceptor.logger") as mock_logger:
+        with patch("backend.agents.tool_interceptor.logger") as mock_logger:
             interceptor = ToolInterceptor(["tool_a", "tool_b"])
             mock_logger.info.assert_called()
 
@@ -429,7 +429,7 @@ class TestToolInterceptorIntegration:
             """Test."""
             return x
 
-        with patch("src.agents.tool_interceptor.logger") as mock_logger:
+        with patch("backend.agents.tool_interceptor.logger") as mock_logger:
             wrapped = wrap_tools_with_interceptor([test_tool], ["test_tool"])
             # Check that at least one info log was called
             assert mock_logger.info.called or mock_logger.debug.called
@@ -441,7 +441,7 @@ class TestToolInterceptorIntegration:
             """Test."""
             return f"Result: {x}"
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             mock_interrupt.return_value = ""
 
             interceptor = ToolInterceptor(["test_tool"])
@@ -460,7 +460,7 @@ class TestToolInterceptorIntegration:
             """Test."""
             return f"Result: {x}"
 
-        with patch("src.agents.tool_interceptor.interrupt") as mock_interrupt:
+        with patch("backend.agents.tool_interceptor.interrupt") as mock_interrupt:
             mock_interrupt.return_value = None
 
             interceptor = ToolInterceptor(["test_tool"])

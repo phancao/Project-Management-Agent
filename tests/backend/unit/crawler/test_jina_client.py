@@ -9,7 +9,7 @@ from backend.crawler.jina_client import JinaClient
 
 
 class TestJinaClient:
-    @patch("src.crawler.jina_client.requests.post")
+    @patch("backend.crawler.jina_client.requests.post")
     def test_crawl_success(self, mock_post):
         # Arrange
         mock_response = Mock()
@@ -26,7 +26,7 @@ class TestJinaClient:
         assert result == "<html><body>Test</body></html>"
         mock_post.assert_called_once()
 
-    @patch("src.crawler.jina_client.requests.post")
+    @patch("backend.crawler.jina_client.requests.post")
     def test_crawl_http_error(self, mock_post):
         # Arrange
         mock_response = Mock()
@@ -42,7 +42,7 @@ class TestJinaClient:
 
         assert "status 500" in str(exc_info.value)
 
-    @patch("src.crawler.jina_client.requests.post")
+    @patch("backend.crawler.jina_client.requests.post")
     def test_crawl_empty_response(self, mock_post):
         # Arrange
         mock_response = Mock()
@@ -58,7 +58,7 @@ class TestJinaClient:
 
         assert "empty response" in str(exc_info.value)
 
-    @patch("src.crawler.jina_client.requests.post")
+    @patch("backend.crawler.jina_client.requests.post")
     def test_crawl_whitespace_only_response(self, mock_post):
         # Arrange
         mock_response = Mock()
@@ -74,7 +74,7 @@ class TestJinaClient:
 
         assert "empty response" in str(exc_info.value)
 
-    @patch("src.crawler.jina_client.requests.post")
+    @patch("backend.crawler.jina_client.requests.post")
     def test_crawl_not_found(self, mock_post):
         # Arrange
         mock_response = Mock()
@@ -91,7 +91,7 @@ class TestJinaClient:
         assert "status 404" in str(exc_info.value)
 
     @patch.dict("os.environ", {}, clear=True)
-    @patch("src.crawler.jina_client.requests.post")
+    @patch("backend.crawler.jina_client.requests.post")
     def test_crawl_without_api_key_logs_warning(self, mock_post):
         # Arrange
         mock_response = Mock()

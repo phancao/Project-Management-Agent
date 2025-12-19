@@ -55,7 +55,7 @@ class TestBuildGraph:
 
     def test_build_graph_returns_compiled_graph(self):
         """Test that build_graph returns a compiled graph object."""
-        with patch("src.prompt_enhancer.graph.builder.StateGraph") as mock_state_graph:
+        with patch("backend.prompt_enhancer.graph.builder.StateGraph") as mock_state_graph:
             mock_builder = MagicMock()
             mock_compiled_graph = MagicMock()
 

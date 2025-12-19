@@ -125,10 +125,10 @@ def test_build_graph_without_memory(mock_build_base_graph):
 
 def test_graph_is_compiled():
     # The graph object should be the result of build_graph()
-    with patch("src.graph.builder._build_base_graph") as mock_base:
+    with patch("backend.graph.builder._build_base_graph") as mock_base:
         mock_builder = MagicMock()
         mock_base.return_value = mock_builder
         mock_builder.compile.return_value = "compiled_graph"
         # reload the module to re-run the graph assignment
-        importlib.reload(sys.modules["src.graph.builder"])
+        importlib.reload(sys.modules["backend.graph.builder"])
         assert builder_mod.graph is not None

@@ -200,7 +200,7 @@ services:
     volumes:
       - openproject_data_v13:/var/openproject/assets
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost/api/v3/status" ]
+      test: [ "CMD", "curl", "-f", "http://localhost/health_check" ]
       interval: 30s
       timeout: 10s
       retries: 10
@@ -259,6 +259,7 @@ services:
       - ./scripts:/app/scripts
       - ./logs:/app/logs
       - ./src:/app/src
+      - ./backend:/app/backend
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
       interval: 30s
@@ -295,7 +296,7 @@ services:
     volumes:
       - ./pm_service:/app/pm_service
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8001/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -4,7 +4,7 @@
 import sys
 import types
 
-from backend.config.configuration import Configuration
+from shared.config.configuration import Configuration
 
 # Patch sys.path so relative import works
 
@@ -13,7 +13,7 @@ mock_resource = type("Resource", (), {})
 
 # Patch src.rag.retriever.Resource for import
 
-module_name = "src.rag.retriever"
+module_name = "backend.rag.retriever"
 if module_name not in sys.modules:
     retriever_mod = types.ModuleType(module_name)
     retriever_mod.Resource = mock_resource
@@ -92,21 +92,21 @@ def test_from_runnable_config_with_no_config():
 
 
 def test_get_recursion_limit_default():
-    from backend.config.configuration import get_recursion_limit
+    from shared.config.configuration import get_recursion_limit
 
     result = get_recursion_limit()
     assert result == 25
 
 
 def test_get_recursion_limit_custom_default():
-    from backend.config.configuration import get_recursion_limit
+    from shared.config.configuration import get_recursion_limit
 
     result = get_recursion_limit(50)
     assert result == 50
 
 
 def test_get_recursion_limit_from_env(monkeypatch):
-    from backend.config.configuration import get_recursion_limit
+    from shared.config.configuration import get_recursion_limit
 
     monkeypatch.setenv("AGENT_RECURSION_LIMIT", "100")
     result = get_recursion_limit()
@@ -114,7 +114,7 @@ def test_get_recursion_limit_from_env(monkeypatch):
 
 
 def test_get_recursion_limit_invalid_env_value(monkeypatch):
-    from backend.config.configuration import get_recursion_limit
+    from shared.config.configuration import get_recursion_limit
 
     monkeypatch.setenv("AGENT_RECURSION_LIMIT", "invalid")
     result = get_recursion_limit()
@@ -122,7 +122,7 @@ def test_get_recursion_limit_invalid_env_value(monkeypatch):
 
 
 def test_get_recursion_limit_negative_env_value(monkeypatch):
-    from backend.config.configuration import get_recursion_limit
+    from shared.config.configuration import get_recursion_limit
 
     monkeypatch.setenv("AGENT_RECURSION_LIMIT", "-5")
     result = get_recursion_limit()
@@ -130,7 +130,7 @@ def test_get_recursion_limit_negative_env_value(monkeypatch):
 
 
 def test_get_recursion_limit_zero_env_value(monkeypatch):
-    from backend.config.configuration import get_recursion_limit
+    from shared.config.configuration import get_recursion_limit
 
     monkeypatch.setenv("AGENT_RECURSION_LIMIT", "0")
     result = get_recursion_limit()

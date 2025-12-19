@@ -15,7 +15,7 @@ class TestEnhancedTavilySearchAPIWrapper:
     @pytest.fixture
     def wrapper(self):
         with patch(
-            "src.tools.tavily_search.tavily_search_api_wrapper.OriginalTavilySearchAPIWrapper"
+            "backend.tools.tavily_search.tavily_search_api_wrapper.OriginalTavilySearchAPIWrapper"
         ):
             wrapper = EnhancedTavilySearchAPIWrapper(tavily_api_key="dummy-key")
             # The parent class is mocked, so initialization won't fail
@@ -116,7 +116,7 @@ class TestEnhancedTavilySearchAPIWrapper:
         mock_session_cm.__aexit__ = AsyncMock(return_value=None)
 
         with patch(
-            "src.tools.tavily_search.tavily_search_api_wrapper.aiohttp.ClientSession",
+            "backend.tools.tavily_search.tavily_search_api_wrapper.aiohttp.ClientSession",
             return_value=mock_session_cm,
         ):
             result = await wrapper.raw_results_async("test query")
@@ -144,7 +144,7 @@ class TestEnhancedTavilySearchAPIWrapper:
         mock_session_cm.__aexit__ = AsyncMock(return_value=None)
 
         with patch(
-            "src.tools.tavily_search.tavily_search_api_wrapper.aiohttp.ClientSession",
+            "backend.tools.tavily_search.tavily_search_api_wrapper.aiohttp.ClientSession",
             return_value=mock_session_cm,
         ):
             with pytest.raises(Exception, match="Error 400: Bad Request"):

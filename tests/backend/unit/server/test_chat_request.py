@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 import backend.server.mcp_utils as mcp_utils  # Assuming mcp_utils is the module to test
-from backend.config.report_style import ReportStyle
+from shared.config.report_style import ReportStyle
 from backend.rag.retriever import Resource
 from backend.server.chat_request import (
     ChatMessage,

@@ -248,56 +248,51 @@ CREATE TABLE project_sync_mappings (
     UNIQUE(internal_project_id, provider_connection_id)
 );
 
--- Mock provider persistence tables
-CREATE TABLE IF NOT EXISTS mock_projects (
-    id VARCHAR(64) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
+-- AI Provider API Keys
+-- Stores API keys for different AI/LLM providers (OpenAI, Anthropic, Google, etc.)
+CREATE TABLE IF NOT EXISTS ai_provider_api_keys (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    provider_id VARCHAR(50) NOT NULL UNIQUE, -- 'openai', 'anthropic', 'google', etc.
+    provider_name VARCHAR(255) NOT NULL,
+    api_key VARCHAR(1000), -- Encrypted or plain (depending on security requirements)
+    base_url VARCHAR(500), -- Optional custom base URL
+    model_name VARCHAR(255), -- Optional default model
+    additional_config JSONB, -- Additional provider-specific config
+    is_active BOOLEAN DEFAULT true,
+    created_by UUID REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS mock_users (
-    id VARCHAR(64) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255),
-    role VARCHAR(100),
-    avatar_url VARCHAR(512),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- Trigger to update updated_at
+CREATE TRIGGER update_ai_provider_api_keys_updated_at BEFORE UPDATE ON ai_provider_api_keys
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Search Provider API Keys
+-- Stores API keys for different search providers (Tavily, Brave Search, etc.)
+CREATE TABLE IF NOT EXISTS search_provider_api_keys (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    provider_id VARCHAR(50) NOT NULL UNIQUE, -- 'tavily', 'brave_search', 'duckduckgo', etc.
+    provider_name VARCHAR(255) NOT NULL,
+    api_key VARCHAR(1000), -- Encrypted or plain (depending on security requirements)
+    base_url VARCHAR(500), -- Optional custom base URL (e.g., for Searx)
+    additional_config JSONB, -- Additional provider-specific config (e.g., include_domains for Tavily)
+    is_active BOOLEAN DEFAULT true,
+    is_default BOOLEAN DEFAULT false, -- Only one provider can be default
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS mock_sprints (
-    id VARCHAR(64) PRIMARY KEY,
-    project_id VARCHAR(64) REFERENCES mock_projects(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    status VARCHAR(32) NOT NULL,
-    start_date DATE,
-    end_date DATE,
-    goal TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- Trigger to update updated_at
+CREATE TRIGGER update_search_provider_api_keys_updated_at BEFORE UPDATE ON search_provider_api_keys
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TABLE IF NOT EXISTS mock_epics (
-    id VARCHAR(64) PRIMARY KEY,
-    project_id VARCHAR(64) REFERENCES mock_projects(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    status VARCHAR(32),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- Ensure only one default provider
+CREATE UNIQUE INDEX IF NOT EXISTS search_provider_api_keys_default_unique 
+    ON search_provider_api_keys (is_default) 
+    WHERE is_default = true;
 
-CREATE TABLE IF NOT EXISTS mock_tasks (
-    id VARCHAR(64) PRIMARY KEY,
-    project_id VARCHAR(64) REFERENCES mock_projects(id) ON DELETE CASCADE,
-    sprint_id VARCHAR(64) REFERENCES mock_sprints(id) ON DELETE SET NULL,
-    epic_id VARCHAR(64) REFERENCES mock_epics(id) ON DELETE SET NULL,
-    assignee_id VARCHAR(64) REFERENCES mock_users(id) ON DELETE SET NULL,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    status VARCHAR(32) NOT NULL DEFAULT 'todo',
-    priority VARCHAR(32) NOT NULL DEFAULT 'medium',
-    estimated_hours DECIMAL(10,2),
-    start_date DATE,
     due_date DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

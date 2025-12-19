@@ -26,7 +26,7 @@ from uuid import uuid4
 
 import pytest
 
-import src.rag.milvus as milvus_mod
+import backend.rag.milvus as milvus_mod
 from backend.rag.milvus import MilvusProvider
 from backend.rag.retriever import Resource
 

@@ -44,7 +44,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   const { mappings } = useProviders();
   const [regeneratingMockData, setRegeneratingMockData] = useState(false);
   const [projectComboboxOpen, setProjectComboboxOpen] = useState(false);
-  
+
   const selectedProjectId = propSelectedProjectId || new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('project');
 
   // Helper to get provider type from project ID
@@ -82,23 +82,23 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   // Group real projects by provider (using provider_id as key, base_url for display)
   const projectsByProvider = useMemo(() => {
     const grouped = new Map<string, { baseUrl: string; projects: typeof projects }>();
-    
+
     projects.forEach(project => {
       if (project.id?.startsWith("mock:")) return; // Skip mock projects
-      
+
       const providerId = extractProviderId(project.id);
       if (!providerId || providerId === "mock") return;
-      
+
       // Get base URL from mappings, or use a fallback if not found
       // This allows projects to show even if provider mapping isn't loaded yet
       const baseUrl = mappings.urlMap.get(providerId) || `Provider ${providerId.substring(0, 8)}...`;
-      
+
       if (!grouped.has(providerId)) {
         grouped.set(providerId, { baseUrl, projects: [] });
       }
       grouped.get(providerId)!.projects.push(project);
     });
-    
+
     return grouped;
   }, [projects, mappings.urlMap]);
 
@@ -197,6 +197,16 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                 Project Management
               </Button>
             </Link>
+            <Link href="/meeting">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <span className="sm:mr-2">🎙️</span>
+                <span className="sm:inline hidden">Meeting</span>
+              </Button>
+            </Link>
           </div>
 
           {/* Project Selector - Only show on Project Management page */}
@@ -276,9 +286,8 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                                 <span>Mock Project (Demo Data)</span>
                               </div>
                               <Check
-                                className={`ml-2 h-4 w-4 ${
-                                  selectedProject === project.id ? "opacity-100" : "opacity-0"
-                                }`}
+                                className={`ml-2 h-4 w-4 ${selectedProject === project.id ? "opacity-100" : "opacity-0"
+                                  }`}
                               />
                             </CommandItem>
                           ))}
@@ -302,9 +311,8 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                                   <span>{project.name}</span>
                                 </div>
                                 <Check
-                                  className={`ml-2 h-4 w-4 ${
-                                    selectedProject === project.id ? "opacity-100" : "opacity-0"
-                                  }`}
+                                  className={`ml-2 h-4 w-4 ${selectedProject === project.id ? "opacity-100" : "opacity-0"
+                                    }`}
                                 />
                               </CommandItem>
                             );

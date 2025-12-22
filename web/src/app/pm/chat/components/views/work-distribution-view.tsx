@@ -17,7 +17,7 @@ export function WorkDistributionView() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project");
   const [activeDimension, setActiveDimension] = useState<Dimension>("assignee");
-  
+
   const { data: chartData, isLoading: loading, error } = useWorkDistributionChart(projectId, activeDimension);
 
   const distributionData = chartData?.series[0]?.data.map((point) => ({
@@ -76,7 +76,7 @@ export function WorkDistributionView() {
                 Unable to Load Work Distribution Chart
               </h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                {error.message.includes("503") || error.message.includes("NotImplementedError")
                   ? "Work distribution chart is not available for this project type."
                   : "There was an error loading the work distribution chart. Please try again later."}
               </p>
@@ -112,17 +112,17 @@ export function WorkDistributionView() {
           {/* Pie Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* By Count */}
-            <Card className="p-6">
+            <Card className="p-6 overflow-hidden">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Distribution by Count</h3>
-              <ResponsiveContainer width="100%" height={400}>
+              <ResponsiveContainer width="100%" height={420}>
                 <PieChart>
                   <Pie
                     data={distributionData}
                     cx="50%"
-                    cy="45%"
+                    cy="40%"
                     labelLine={false}
                     label={false}
-                    outerRadius={120}
+                    outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
                   >
@@ -130,18 +130,18 @@ export function WorkDistributionView() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
                     formatter={(value: number, name: string, props: any) => [
                       `${value} items (${props.payload.percentage}%)`,
                       props.payload.name
                     ]}
                   />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={100}
+                  <Legend
+                    verticalAlign="bottom"
+                    height={140}
                     iconType="circle"
-                    wrapperStyle={{ paddingTop: '30px' }}
+                    wrapperStyle={{ overflow: 'hidden', maxHeight: '140px' }}
                     formatter={(value, entry: any) => `${value} (${entry.payload.percentage?.toFixed(1) || 0}%)`}
                   />
                 </PieChart>
@@ -149,17 +149,17 @@ export function WorkDistributionView() {
             </Card>
 
             {/* By Story Points */}
-            <Card className="p-6">
+            <Card className="p-6 overflow-hidden">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Distribution by Story Points</h3>
-              <ResponsiveContainer width="100%" height={400}>
+              <ResponsiveContainer width="100%" height={420}>
                 <PieChart>
                   <Pie
                     data={distributionData}
                     cx="50%"
-                    cy="45%"
+                    cy="40%"
                     labelLine={false}
                     label={false}
-                    outerRadius={120}
+                    outerRadius={100}
                     fill="#8884d8"
                     dataKey="storyPoints"
                   >
@@ -167,18 +167,18 @@ export function WorkDistributionView() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
                     formatter={(value: number, name: string, props: any) => [
                       `${value} points (${props.payload.pointsPercentage}%)`,
                       props.payload.name
                     ]}
                   />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={100}
+                  <Legend
+                    verticalAlign="bottom"
+                    height={140}
                     iconType="circle"
-                    wrapperStyle={{ paddingTop: '30px' }}
+                    wrapperStyle={{ overflow: 'hidden', maxHeight: '140px' }}
                     formatter={(value, entry: any) => `${value} (${entry.payload.pointsPercentage?.toFixed(1) || 0}%)`}
                   />
                 </PieChart>
@@ -206,8 +206,8 @@ export function WorkDistributionView() {
                     <tr key={index} className="border-b border-gray-100 dark:border-gray-800">
                       <td className="py-3">
                         <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
+                          <div
+                            className="w-3 h-3 rounded-full"
                             style={{ backgroundColor: item.color }}
                           ></div>
                           <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>

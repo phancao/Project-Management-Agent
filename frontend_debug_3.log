@@ -1,0 +1,12 @@
+
+> deer-flow-web@0.1.0 dev
+> dotenv -f ../.env -- next dev --turbo
+
+ ⚠ Port 3000 is in use by process 55363, using available port 3002 instead.
+   ▲ Next.js 15.5.6 (Turbopack)
+   - Local:        http://localhost:3002
+   - Network:      http://192.168.69.113:3002
+
+ ✓ Starting...
+ ✓ Ready in 985ms
+[?25h

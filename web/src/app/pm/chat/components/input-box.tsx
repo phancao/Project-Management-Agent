@@ -123,7 +123,7 @@ export function InputBox({
   return (
     <div
       className={cn(
-        "bg-card relative flex h-full w-full flex-col rounded-[24px] border",
+        "bg-card/85 dark:bg-card/45 relative flex h-full w-full flex-col rounded-2xl md:rounded-3xl border border-border/60 shadow-xl backdrop-blur-md transition-all duration-300 focus-within:border-brand/40 focus-within:ring-1 focus-within:ring-brand/10",
         className,
       )}
       ref={containerRef}
@@ -133,61 +133,62 @@ export function InputBox({
           {feedback && (
             <motion.div
               ref={feedbackRef}
-              className="bg-background border-brand absolute top-0 left-0 mt-2 ml-4 flex items-center justify-center gap-1 rounded-2xl border px-2 py-0.5"
-              initial={{ opacity: 0, scale: 0 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="bg-background/80 absolute top-0 left-0 z-30 mt-3 ml-5 flex items-center justify-center gap-2 rounded-full border border-brand/30 px-3 py-1 shadow-sm backdrop-blur-md"
+              initial={{ opacity: 0, scale: 0.8, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: -10 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
             >
-              <div className="text-brand flex h-full w-full items-center justify-center text-sm opacity-90">
+              <div className="text-brand flex h-full w-full items-center justify-center text-xs font-semibold uppercase tracking-wider opacity-90">
                 {feedback.option.text}
               </div>
               <X
-                className="cursor-pointer opacity-60"
-                size={16}
+                className="cursor-pointer text-brand/60 transition-colors hover:text-brand"
+                size={14}
                 onClick={onRemoveFeedback}
               />
             </motion.div>
           )}
           {isEnhanceAnimating && (
             <motion.div
-              className="pointer-events-none absolute inset-0 z-20"
+              className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[32px]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.4 }}
             >
               <div className="relative h-full w-full">
-                {/* Sparkle effect overlay */}
+                {/* Refined Sparkle effect overlay */}
                 <motion.div
-                  className="absolute inset-0 rounded-[24px] bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-blue-500/10"
+                  className="absolute inset-0 bg-gradient-to-r from-brand/5 via-purple-500/5 to-brand/5"
                   animate={{
                     background: [
-                      "linear-gradient(45deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1), rgba(59, 130, 246, 0.1))",
-                      "linear-gradient(225deg, rgba(147, 51, 234, 0.1), rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1))",
-                      "linear-gradient(45deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1), rgba(59, 130, 246, 0.1))",
+                      "linear-gradient(45deg, rgba(var(--brand), 0.05), rgba(147, 51, 234, 0.05), rgba(var(--brand), 0.05))",
+                      "linear-gradient(225deg, rgba(147, 51, 234, 0.05), rgba(var(--brand), 0.05), rgba(147, 51, 234, 0.05))",
+                      "linear-gradient(45deg, rgba(var(--brand), 0.05), rgba(147, 51, 234, 0.05), rgba(var(--brand), 0.05))",
                     ],
                   }}
-                  transition={{ duration: 2, repeat: Infinity }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                 />
-                {/* Floating sparkles */}
-                {[...Array(6)].map((_, i) => (
+                {/* Floating refined sparkles */}
+                {[...Array(8)].map((_, i) => (
                   <motion.div
                     key={i}
-                    className="absolute h-2 w-2 rounded-full bg-blue-400"
+                    className="absolute h-1.5 w-1.5 rounded-full bg-brand/30 blur-[1px]"
                     style={{
-                      left: `${20 + i * 12}%`,
-                      top: `${30 + (i % 2) * 40}%`,
+                      left: `${15 + i * 10}%`,
+                      top: `${20 + (i % 3) * 25}%`,
                     }}
                     animate={{
-                      y: [-10, -20, -10],
-                      opacity: [0, 1, 0],
-                      scale: [0.5, 1, 0.5],
+                      y: [-15, -30, -15],
+                      opacity: [0, 0.8, 0],
+                      scale: [0.3, 1.2, 0.3],
                     }}
                     transition={{
-                      duration: 1.5,
+                      duration: 2.5,
                       repeat: Infinity,
-                      delay: i * 0.2,
+                      delay: i * 0.15,
+                      ease: "easeInOut",
                     }}
                   />
                 ))}
@@ -197,8 +198,8 @@ export function InputBox({
         </AnimatePresence>
         <MessageInput
           className={cn(
-            "h-24 px-4 pt-5",
-            feedback && "pt-9",
+            "h-28 px-6 pt-6 text-base tracking-tight",
+            feedback && "pt-12",
             isEnhanceAnimating && "transition-all duration-500",
           )}
           ref={inputRef}
@@ -208,8 +209,8 @@ export function InputBox({
           onChange={setCurrentPrompt}
         />
       </div>
-      <div className="flex items-center px-4 py-2">
-        <div className="flex grow items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3 px-6 py-4 min-h-fit mt-auto border-t border-border/30">
+        <div className="flex flex-wrap grow items-center gap-2.5">
           {config?.models?.reasoning && config.models.reasoning.length > 0 && (
             <Tooltip
               className="max-w-60"
@@ -230,77 +231,82 @@ export function InputBox({
             >
               <Button
                 className={cn(
-                  "rounded-2xl",
-                  enableDeepThinking && "!border-brand !text-brand",
+                  "rounded-full shrink-0 h-9 px-4 text-xs font-semibold transition-all duration-300",
+                  enableDeepThinking ? "bg-brand/10 border-brand/50 text-brand shadow-sm shadow-brand/10" : "bg-muted-foreground/5 border-transparent hover:bg-muted-foreground/10",
                 )}
                 variant="outline"
                 onClick={() => {
                   setEnableDeepThinking(!enableDeepThinking);
                 }}
               >
-                <Lightbulb /> {t("deepThinking")}
+                <Lightbulb size={14} className={cn("mr-1.5", enableDeepThinking && "animate-pulse")} /> {t("deepThinking")}
               </Button>
             </Tooltip>
           )}
 
           <AgentSelector />
-          
+
           {/* Context Token Indicator */}
-          <ContextTokenIndicator className="ml-auto" />
+          <ContextTokenIndicator className="ml-auto sm:ml-2 opacity-60 hover:opacity-100 transition-opacity" />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-3 ml-auto sm:ml-0">
           <Tooltip title={t("enhancePrompt")}>
             <Button
               variant="ghost"
               size="icon"
               className={cn(
-                "hover:bg-accent h-10 w-10",
+                "h-10 w-10 rounded-full bg-muted-foreground/5 hover:bg-brand/10 border border-transparent transition-all duration-300",
                 isEnhancing && "animate-pulse",
+                !isEnhancing && currentPrompt.trim() !== "" && "hover:border-brand/30"
               )}
               onClick={handleEnhancePrompt}
               disabled={isEnhancing || currentPrompt.trim() === ""}
             >
               {isEnhancing ? (
                 <div className="flex h-10 w-10 items-center justify-center">
-                  <div className="bg-foreground h-3 w-3 animate-bounce rounded-full opacity-70" />
+                  <div className="bg-brand/70 h-3 w-3 animate-bounce rounded-full" />
                 </div>
               ) : (
-                <MagicWandIcon className="text-brand" />
+                <MagicWandIcon className={cn("transition-colors", currentPrompt.trim() !== "" ? "text-brand" : "text-muted-foreground/40")} />
               )}
             </Button>
           </Tooltip>
           <Tooltip title={responding ? tCommon("stop") : tCommon("send")}>
             <Button
-              variant="outline"
+              variant={currentPrompt.trim() !== "" || responding ? "default" : "outline"}
               size="icon"
-              className={cn("h-10 w-10 rounded-full")}
+              className={cn(
+                "h-10 w-10 rounded-full transition-all duration-500",
+                currentPrompt.trim() !== "" && !responding && "bg-brand hover:bg-brand/90 text-white scale-110 shadow-lg shadow-brand/20",
+                responding && "bg-destructive hover:bg-destructive/90 text-white shadow-lg shadow-destructive/20"
+              )}
               onClick={() => inputRef.current?.submit()}
             >
               {responding ? (
                 <div className="flex h-10 w-10 items-center justify-center">
-                  <div className="bg-foreground h-4 w-4 rounded-sm opacity-70" />
+                  <div className="bg-white h-3 w-3 rounded-sm" />
                 </div>
               ) : (
-                <ArrowUp />
+                <ArrowUp className={cn("transition-all", currentPrompt.trim() !== "" ? "scale-110" : "opacity-40")} />
               )}
             </Button>
           </Tooltip>
         </div>
       </div>
       {isEnhancing && (
-        <>
+        <div className="absolute inset-0 pointer-events-none rounded-[32px] overflow-hidden">
           <BorderBeam
-            duration={5}
-            size={250}
-            className="from-transparent via-red-500 to-transparent"
+            duration={4}
+            size={300}
+            className="from-transparent via-brand/50 to-transparent"
           />
           <BorderBeam
-            duration={5}
-            delay={3}
-            size={250}
-            className="from-transparent via-blue-500 to-transparent"
+            duration={4}
+            delay={2}
+            size={300}
+            className="from-transparent via-purple-500/50 to-transparent"
           />
-        </>
+        </div>
       )}
     </div>
   );

@@ -230,13 +230,12 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId, 
   const isHovered = hoveredColumnId === column.id;
 
   return (
-    <div ref={setNodeRef} style={columnStyle} data-order-id={orderId} className="w-80 shrink-0">
+    <div ref={setNodeRef} style={columnStyle} data-order-id={orderId} className="w-[280px] sm:w-80 shrink-0">
       <div
-        className={`flex items-center justify-between px-3 py-2 rounded-t-lg border-b ${
-          isActive
+        className={`flex items-center justify-between px-3 py-2 rounded-t-lg border-b ${isActive
             ? "bg-blue-100 dark:bg-blue-900 border-blue-400 dark:border-blue-500"
             : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-        }`}
+          }`}
       >
         <div className="flex items-center gap-2">
           <div
@@ -253,13 +252,12 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId, 
       </div>
       <div
         ref={setColumnDropRef}
-        className={`rounded-b-lg border-l border-r border-b ${
-          isHovered
+        className={`rounded-b-lg border-l border-r border-b ${isHovered
             ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-400 dark:ring-blue-500"
             : isActive
-            ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30"
-            : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
-        } p-3 space-y-2 min-h-24 transition-all`}
+              ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30"
+              : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+          } p-3 space-y-2 min-h-24 transition-all`}
       >
         <SortableContext items={tasks.map((task) => String(task.id))} strategy={verticalListSortingStrategy}>
           {tasks.length === 0 ? (
@@ -884,11 +882,11 @@ export function SprintBoardView() {
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
       const { over, active } = event;
-      
+
       // Track which column is being hovered for visual feedback
       if (over && active) {
         const dragInfo = detectDragType(event, columnOrderIds, taskIdsSet);
-        
+
         if (dragInfo.type === "task") {
           // Extract the target column from the over element
           const extraction = extractTargetColumn(
@@ -899,7 +897,7 @@ export function SprintBoardView() {
             availableStatuses ?? [],
             tasks
           );
-          
+
           if (extraction.statusId) {
             setHoveredColumnId(String(extraction.statusId));
           } else {

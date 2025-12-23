@@ -12,9 +12,11 @@ import { Suspense } from "react";
 import { toast } from "sonner";
 
 import { Button } from "~/components/ui/button";
-import { RefreshCw, ChevronDown, Check } from "lucide-react";
+import { cn } from "~/lib/utils";
+import { RefreshCw, ChevronDown, Check, Menu } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "~/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandInput as CommandInputBase, CommandItem, CommandList } from "~/components/ui/command";
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { useProviders } from "~/core/api/hooks/pm/use-providers";
@@ -44,6 +46,17 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   const { mappings } = useProviders();
   const [regeneratingMockData, setRegeneratingMockData] = useState(false);
   const [projectComboboxOpen, setProjectComboboxOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const selectedProjectId = propSelectedProjectId || new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('project');
 
@@ -172,53 +185,125 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
     }
   };
 
+  const NavButtons = ({ vertical = false }: { vertical?: boolean }) => (
+    <div className={`flex ${vertical ? 'flex-col gap-2 w-full' : 'items-center gap-3 border-r border-border/40 pr-6'}`}>
+      <Link href="/pm/overview" className={vertical ? 'w-full' : ''}>
+        <Button
+          variant={isOverview ? "default" : "ghost"}
+          size="sm"
+          className={cn(
+            "rounded-xl font-medium transition-all duration-300",
+            isOverview ? "bg-brand text-white shadow-lg shadow-brand/25 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
+            vertical ? "w-full justify-start text-base py-6" : "px-5"
+          )}
+        >
+          Overview
+        </Button>
+      </Link>
+      <Link href={`/pm/chat${selectedProject ? `?project=${selectedProject}` : ''}`} className={vertical ? 'w-full' : ''}>
+        <Button
+          variant={isChat ? "default" : "ghost"}
+          size="sm"
+          className={cn(
+            "rounded-xl font-medium transition-all duration-300",
+            isChat ? "bg-brand text-white shadow-lg shadow-brand/25 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
+            vertical ? "w-full justify-start text-base py-6" : "px-5"
+          )}
+        >
+          Project Management
+        </Button>
+      </Link>
+      <Link href="/meeting" className={vertical ? 'w-full' : ''}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "rounded-xl font-medium transition-all duration-300 hover:bg-brand/5 hover:text-brand",
+            vertical ? "w-full justify-start text-base py-6" : "px-5"
+          )}
+        >
+          <span className="mr-2">🎙️</span>
+          <span>Meeting</span>
+        </Button>
+      </Link>
+    </div>
+  );
+
+  const RightActions = ({ vertical = false }: { vertical?: boolean }) => (
+    <div className={`flex ${vertical ? 'flex-col gap-3 w-full mt-4 pt-6 border-t border-border/40' : 'items-center gap-3'}`}>
+      <Tooltip title="Provider Management">
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "rounded-xl transition-all duration-300 hover:bg-brand/5 hover:text-brand",
+            vertical ? "w-full justify-start text-base py-6" : "px-4"
+          )}
+          onClick={() => {
+            const event = new CustomEvent("pm_show_providers");
+            window.dispatchEvent(event);
+          }}
+        >
+          <span className="mr-2 text-base">🔌</span>
+          Provider
+        </Button>
+      </Tooltip>
+      <div className={cn("flex items-center", vertical ? "justify-between px-2" : "")}>
+        {vertical && <span className="text-sm font-medium text-muted-foreground">Appearance</span>}
+        <ThemeToggle />
+      </div>
+      <Suspense>
+        <SettingsDialog />
+      </Suspense>
+    </div>
+  );
+
   return (
     <>
       <ProviderManagementDialog />
-      <header className="fixed top-0 left-0 flex h-16 w-full items-center justify-between px-6 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 z-50">
-        <div className="flex items-center gap-4 flex-1">
-          {/* Navigation Tabs */}
-          <div className="flex items-center gap-2 border-r border-gray-200 dark:border-gray-700 pr-4">
-            <Link href="/pm/overview">
-              <Button
-                variant={isOverview ? "default" : "ghost"}
-                size="sm"
-                className={isOverview ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}
-              >
-                Overview
-              </Button>
-            </Link>
-            <Link href={`/pm/chat${selectedProject ? `?project=${selectedProject}` : ''}`}>
-              <Button
-                variant={isChat ? "default" : "ghost"}
-                size="sm"
-                className={isChat ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}
-              >
-                Project Management
-              </Button>
-            </Link>
-            <Link href="/meeting">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                <span className="sm:mr-2">🎙️</span>
-                <span className="sm:inline hidden">Meeting</span>
-              </Button>
-            </Link>
-          </div>
+      <header className="fixed top-0 left-0 flex h-16 w-full items-center justify-between px-4 sm:px-6 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 z-50">
+        <div className="flex items-center gap-4 flex-1 overflow-hidden">
+          {/* Mobile Menu Trigger */}
+          {isMobile && (
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="shrink-0">
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-80">
+                <SheetHeader className="mb-6">
+                  <SheetTitle className="flex items-center gap-2">
+                    <span className="text-xl">🦌</span> DeerFlow
+                  </SheetTitle>
+                </SheetHeader>
+                <NavButtons vertical />
+                <RightActions vertical />
+              </SheetContent>
+            </Sheet>
+          )}
 
-          {/* Project Selector - Only show on Project Management page */}
+          {/* Logo / Title (Hidden on small mobile if no room, but usually stays) */}
+          {!isMobile && (
+            <div className="flex items-center gap-3 shrink-0 mr-4">
+              <span className="text-2xl filter drop-shadow-sm">🦌</span>
+              <span className="font-semibold text-lg tracking-tight text-foreground/90 hidden sm:inline-block">DeerFlow</span>
+            </div>
+          )}
+
+          {/* Navigation Tabs - Hidden on mobile */}
+          {!isMobile && <NavButtons />}
+
+          {/* Project Selector - Responsive width */}
           {!isOverview && (
-            <div className="flex items-center gap-2 min-w-[200px]">
+            <div className="flex items-center gap-3 flex-1 max-w-[440px] ml-4">
               <Popover open={projectComboboxOpen} onOpenChange={setProjectComboboxOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     role="combobox"
                     aria-expanded={projectComboboxOpen}
-                    className="w-full justify-between"
+                    className="w-full justify-between overflow-hidden rounded-xl border-border/60 hover:border-brand/40 bg-background/50 backdrop-blur-sm transition-all shadow-sm"
                     disabled={projectsLoading || projects.length === 0}
                   >
                     {selectedProject ? (
@@ -229,37 +314,36 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                           const isMockProject = selectedProject.startsWith("mock:");
                           if (!project) {
                             return (
-                              <span className="text-gray-500">No project selected</span>
+                              <span className="text-muted-foreground italic">No project selected</span>
                             );
                           }
                           if (isMockProject) {
                             return (
                               <>
-                                <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                                <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
                                   DEMO
                                 </span>
-                                <span className="truncate">Mock Project (Demo Data)</span>
+                                <span className="truncate font-medium">{project.name}</span>
                               </>
                             );
                           }
                           return (
                             <>
                               {getProviderBadge(providerType)}
-                              <span className="truncate">{project.name}</span>
+                              <span className="truncate font-medium">{project.name}</span>
                             </>
                           );
                         })()}
                       </div>
                     ) : (
-                      <span className="text-gray-500">Loading projects...</span>
+                      <span className="text-muted-foreground truncate italic">Select Project...</span>
                     )}
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-40 group-hover:opacity-100 transition-opacity" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[400px] p-0" align="start">
+                <PopoverContent className="w-[320px] sm:w-[440px] p-0 rounded-2xl shadow-2xl border-border/40" align="start">
                   <Command
                     filter={(value, search) => {
-                      // Use exact substring matching (case-insensitive)
                       const searchLower = search.toLowerCase();
                       const valueLower = value.toLowerCase();
                       return valueLower.includes(searchLower) ? 1 : 0;
@@ -283,7 +367,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                                 <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
                                   DEMO
                                 </span>
-                                <span>Mock Project (Demo Data)</span>
+                                <span>Mock Project</span>
                               </div>
                               <Check
                                 className={`ml-2 h-4 w-4 ${selectedProject === project.id ? "opacity-100" : "opacity-0"
@@ -323,7 +407,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                   </Command>
                 </PopoverContent>
               </Popover>
-              {isMockProjectSelected ? (
+              {!isMobile && isMockProjectSelected && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -332,33 +416,15 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                   className="whitespace-nowrap"
                 >
                   <RefreshCw className={`mr-2 h-4 w-4 ${regeneratingMockData ? "animate-spin" : ""}`} />
-                  {regeneratingMockData ? "Regenerating..." : "Regenerate mock data"}
+                  Regenerate
                 </Button>
-              ) : null}
+              )}
             </div>
           )}
         </div>
 
-        {/* Right side: Provider | DarkMode | Setting */}
-        <div className="flex items-center gap-2">
-          <Tooltip title="Provider Management">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const event = new CustomEvent("pm_show_providers");
-                window.dispatchEvent(event);
-              }}
-            >
-              <span className="mr-2">🔌</span>
-              Provider
-            </Button>
-          </Tooltip>
-          <ThemeToggle />
-          <Suspense>
-            <SettingsDialog />
-          </Suspense>
-        </div>
+        {/* Right side: Provider | DarkMode | Setting - Hidden on mobile */}
+        {!isMobile && <RightActions />}
       </header>
     </>
   );

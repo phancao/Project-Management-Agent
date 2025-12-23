@@ -35,45 +35,45 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
       {/* Navigation Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="flex items-center justify-between px-4 py-2">
-          <Tabs value={activeView} onValueChange={(v) => setActiveView(v as PMView)} className="flex-1">
-            <TabsList className="w-full justify-start h-auto bg-transparent p-0 gap-1">
-            <TabsTrigger 
-              value="backlog"
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
-            >
-              <CheckSquare className="w-4 h-4" />
-              Backlog
-            </TabsTrigger>
-            <TabsTrigger 
-              value="board"
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
-            >
-              <FolderKanban className="w-4 h-4" />
-              Board
-            </TabsTrigger>
-            <TabsTrigger 
-              value="charts"
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
-            >
-              <LineChart className="w-4 h-4" />
-              Charts
-            </TabsTrigger>
-            <TabsTrigger 
-              value="timeline"
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
-            >
-              <Calendar className="w-4 h-4" />
-              Timeline
-            </TabsTrigger>
-            <TabsTrigger 
-              value="team"
-              className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
-            >
-              <Users className="w-4 h-4" />
-              Team
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+          <Tabs value={activeView} onValueChange={(v) => setActiveView(v as PMView)} className="flex-1 overflow-hidden">
+            <TabsList className="w-full justify-start h-auto bg-transparent p-0 gap-1 overflow-x-auto no-scrollbar scroll-smooth py-1">
+              <TabsTrigger
+                value="backlog"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Backlog
+              </TabsTrigger>
+              <TabsTrigger
+                value="board"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+              >
+                <FolderKanban className="w-4 h-4" />
+                Board
+              </TabsTrigger>
+              <TabsTrigger
+                value="charts"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+              >
+                <LineChart className="w-4 h-4" />
+                Charts
+              </TabsTrigger>
+              <TabsTrigger
+                value="timeline"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+              >
+                <Calendar className="w-4 h-4" />
+                Timeline
+              </TabsTrigger>
+              <TabsTrigger
+                value="team"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+              >
+                <Users className="w-4 h-4" />
+                Team
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
           <Button
             variant="outline"
             size="sm"

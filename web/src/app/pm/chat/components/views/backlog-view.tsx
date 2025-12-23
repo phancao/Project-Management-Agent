@@ -4,18 +4,18 @@
 "use client";
 
 import type { DragEndEvent, DragOverEvent, DragStartEvent, DraggableAttributes } from "@dnd-kit/core";
-import { 
-  DndContext, 
-  DragOverlay, 
-  PointerSensor, 
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
   closestCorners,
-  useDroppable, 
-  useSensor, 
-  useSensors 
+  useDroppable,
+  useSensor,
+  useSensors
 } from "@dnd-kit/core";
-import { 
-  SortableContext, 
-  useSortable, 
+import {
+  SortableContext,
+  useSortable,
   verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 
 import { Button } from "~/components/ui/button";
+import { cn } from "~/lib/utils";
 import { Card } from "~/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
@@ -201,7 +202,7 @@ type SprintPlaceholderState = {
 // Helper function to get status badge color classes
 function getStatusColorClasses(status: string): string {
   const statusLower = status.toLowerCase().replace(/[\s_-]/g, '_');
-  
+
   // Map common status names to color classes
   if (statusLower.includes('done') || statusLower.includes('completed') || statusLower.includes('closed') || statusLower.includes('resolved')) {
     return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
@@ -221,19 +222,19 @@ function getStatusColorClasses(status: string): string {
   if (statusLower.includes('backlog')) {
     return 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200';
   }
-  
+
   // Default color
   return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
 }
 
-function TaskCard({ 
-  task, 
-  onClick, 
+function TaskCard({
+  task,
+  onClick,
   epic,
-  isDragging 
-}: { 
-  task: Task; 
-  onClick: () => void; 
+  isDragging
+}: {
+  task: Task;
+  onClick: () => void;
   epic?: Epic;
   isDragging?: boolean;
 }) {
@@ -264,26 +265,25 @@ function TaskCard({
       <div className="flex-1 min-w-0" onClick={onClick}>
         <div className="flex items-start justify-between gap-2 mb-1">
           <div className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 flex-1">
-          {task.title}
+            {task.title}
           </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        {task.status && (
-          <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColorClasses(task.status)}`}>
-            {task.status}
-            </span>
-          )}
-      {task.priority && (
-            <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-          task.priority === "high" || task.priority === "highest" || task.priority === "critical"
-            ? "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
-            : task.priority === "medium"
-            ? "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200"
-            : "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
-        }`}>
-          {task.priority}
-        </span>
-      )}
-      </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {task.status && (
+              <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColorClasses(task.status)}`}>
+                {task.status}
+              </span>
+            )}
+            {task.priority && (
+              <span className={`px-2 py-0.5 text-xs font-medium rounded ${task.priority === "high" || task.priority === "highest" || task.priority === "critical"
+                ? "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
+                : task.priority === "medium"
+                  ? "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200"
+                  : "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                }`}>
+                {task.priority}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {epic && (
@@ -307,16 +307,16 @@ function TaskCard({
  * EPIC CARD (Droppable)
  * ========================================================================= */
 
-function EpicCard({ 
-  epic, 
-  isSelected, 
-  taskCount, 
+function EpicCard({
+  epic,
+  isSelected,
+  taskCount,
   onClick,
-  isOver 
-}: { 
-  epic: Epic; 
-  isSelected: boolean; 
-  taskCount: number; 
+  isOver
+}: {
+  epic: Epic;
+  isSelected: boolean;
+  taskCount: number;
   onClick: () => void;
   isOver?: boolean;
 }) {
@@ -329,13 +329,12 @@ function EpicCard({
     <button
       ref={setNodeRef}
       onClick={onClick}
-      className={`w-full text-left p-2 rounded transition-colors ${
-        isSelected
-          ? "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" 
-          : isOver
+      className={`w-full text-left p-2 rounded transition-colors ${isSelected
+        ? "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+        : isOver
           ? "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 ring-2 ring-green-400"
           : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-      }`}
+        }`}
     >
       <div className="flex items-center gap-2 mb-1">
         {epic.color && <div className={`w-3 h-3 rounded ${epic.color} shrink-0`}></div>}
@@ -350,22 +349,25 @@ function EpicCard({
  * EPIC SIDEBAR
  * ========================================================================= */
 
-function EpicSidebar({ 
-  onEpicSelect, 
+function EpicSidebar({
+  onEpicSelect,
   selectedEpic,
   tasks,
   projectId,
   onEpicCreate,
-  overEpicId
-}: { 
+  overEpicId,
+  isMobile
+}: {
   onEpicSelect: (epicId: string | null) => void;
   selectedEpic: string | null;
   tasks: Task[];
   projectId: string | null | undefined;
   onEpicCreate?: () => void;
   overEpicId?: string | null;
+  isMobile?: boolean;
 }) {
   const { epics, loading: epicsLoading } = useEpics(projectId);
+  const [isOpen, setIsOpen] = useState(false);
 
   const epicCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -387,65 +389,90 @@ function EpicSidebar({
   });
 
   return (
-    <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">EPICS</h3>
-        <CreateEpicDialog projectId={projectId} onEpicCreated={onEpicCreate} />
-      </div>
-      
-      <div className="flex-1 overflow-y-auto p-2">
-        <button
-          onClick={() => onEpicSelect(null)}
-          className={`w-full text-left p-2 rounded mb-1 transition-colors ${
-            selectedEpic === null
-              ? "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" 
-              : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">All issues</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">{tasks.length}</span>
-          </div>
-        </button>
-
-        {epicsLoading ? (
-          <div className="p-2 text-sm text-gray-500 dark:text-gray-400">
-            Loading epics...
-          </div>
-        ) : epics.length > 0 ? (
-          <div className="space-y-1">
-            {epics.map((epic) => (
-              <EpicCard
-            key={epic.id}
-                epic={epic}
-            isSelected={selectedEpic === epic.id}
-                taskCount={epicCounts.get(epic.id) || 0}
-                onClick={() => onEpicSelect(epic.id)}
-                isOver={overEpicId === epic.id}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="p-2 text-sm text-gray-500 dark:text-gray-400">
-            No epics found
-          </div>
+    <div className={`${isMobile ? 'w-full border-b' : 'w-64 border-r'} bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden`}>
+      <div
+        className="p-4 flex items-center justify-between cursor-pointer lg:cursor-default"
+        onClick={() => isMobile && setIsOpen(!isOpen)}
+      >
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+          {isMobile && (isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)}
+          EPICS
+        </h3>
+        {!isMobile && <CreateEpicDialog projectId={projectId} onEpicCreated={onEpicCreate} />}
+        {isMobile && !isOpen && (
+          <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
+            {epics.length} epics
+          </span>
         )}
-
-        {tasksWithoutEpic > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div 
-              ref={setNoEpicRef}
-              className={`p-2 text-sm rounded transition-colors ${
-                overEpicId === 'no-epic'
-                  ? "bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 ring-2 ring-orange-400"
-                  : "text-gray-500 dark:text-gray-400"
-              }`}
-            >
-              {tasksWithoutEpic} {tasksWithoutEpic === 1 ? 'issue' : 'issues'} without epic
       </div>
+
+      {(isOpen || !isMobile) && (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {isMobile && (
+            <div className="px-4 pb-2 border-b border-gray-100 dark:border-gray-800">
+              <CreateEpicDialog projectId={projectId} onEpicCreated={onEpicCreate} />
+            </div>
+          )}
+          <div className="flex-1 overflow-y-auto p-2">
+            <button
+              onClick={() => onEpicSelect(null)}
+              className={`w-full text-left p-2.5 rounded-xl mb-2 transition-all duration-200 ${selectedEpic === null
+                ? "bg-blue-600 shadow-md shadow-blue-500/20 text-white"
+                : "hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300"
+                }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">All issues</span>
+                <span className={cn("text-xs px-2 py-0.5 rounded-full",
+                  selectedEpic === null ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"
+                )}>
+                  {tasks.length}
+                </span>
+              </div>
+            </button>
+
+            {epicsLoading ? (
+              <div className="p-2 text-sm text-gray-500 dark:text-gray-400">
+                Loading epics...
+              </div>
+            ) : epics.length > 0 ? (
+              <div className="space-y-1">
+                {epics.map((epic) => (
+                  <EpicCard
+                    key={epic.id}
+                    epic={epic}
+                    isSelected={selectedEpic === epic.id}
+                    taskCount={epicCounts.get(epic.id) || 0}
+                    onClick={() => onEpicSelect(epic.id)}
+                    isOver={overEpicId === epic.id}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="p-2 text-sm text-gray-500 dark:text-gray-400">
+                No epics found
+              </div>
+            )}
+
+            {tasksWithoutEpic > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
+                <div
+                  ref={setNoEpicRef}
+                  className={`p-3 text-xs rounded-xl transition-all duration-200 flex items-center gap-2 ${overEpicId === 'no-epic'
+                    ? "bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 ring-2 ring-orange-400/30"
+                    : "bg-gray-50/50 dark:bg-gray-900/30 text-gray-500 dark:text-gray-400"
+                    }`}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                  <span className="font-medium">
+                    {tasksWithoutEpic} {tasksWithoutEpic === 1 ? 'issue' : 'issues'} without epic
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
-      </div>
     </div>
   );
 }
@@ -469,10 +496,10 @@ interface SprintSectionProps {
   onAddTask?: (sprintId: string) => void;
 }
 
-function SprintSection({ 
-  sprint, 
-  tasks, 
-  onTaskClick, 
+function SprintSection({
+  sprint,
+  tasks,
+  onTaskClick,
   epicsMap,
   isOver,
   draggedTaskId,
@@ -483,29 +510,28 @@ function SprintSection({
   const isActive = sprint.status === "active";
   const isClosed = sprint.status === "closed";
   const isFuture = sprint.status === "future";
-  
+
   // Closed sprints should be collapsed by default
   const [isExpanded, setIsExpanded] = useState(!isClosed);
-  
-  const { setNodeRef } = useDroppable({ 
+
+  const { setNodeRef } = useDroppable({
     id: `sprint-${sprint.id}`,
     data: { type: 'sprint', sprintId: sprint.id }
   });
 
   const taskIds = useMemo(() => tasks.map((t: Task) => `task-${t.id}`), [tasks]);
-  
+
   return (
     <div className={`mb-4 ${isSorting ? "opacity-80" : ""}`}>
-      <div 
-        className={`p-3 rounded-t-lg border ${
-        isActive 
-          ? "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800" 
+      <div
+        className={`p-3 rounded-t-lg border ${isActive
+          ? "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800"
           : isClosed
             ? "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700"
-          : isFuture
-          ? "bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800"
-          : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700"
-        }`}
+            : isFuture
+              ? "bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800"
+              : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700"
+          }`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -528,22 +554,22 @@ function SprintSection({
               {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
             <h3 className="font-semibold text-gray-900 dark:text-white truncate">{sprint.name}</h3>
-              {isActive && (
+            {isActive && (
               <span className="px-2 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 shrink-0">
-                  Active
-                </span>
-              )}
-              {isClosed && (
+                Active
+              </span>
+            )}
+            {isClosed && (
               <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 shrink-0">
-                  Closed
-                </span>
-              )}
-              {isFuture && (
+                Closed
+              </span>
+            )}
+            {isFuture && (
               <span className="px-2 py-0.5 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 shrink-0">
-                  Future
-                </span>
-              )}
-            </div>
+                Future
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3 shrink-0">
             {sprint.start_date && sprint.end_date && (
               <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
@@ -551,30 +577,29 @@ function SprintSection({
                 <span>{new Date(sprint.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 <span>-</span>
                 <span>{new Date(sprint.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-          </div>
+              </div>
             )}
             <span className="px-2 py-1 bg-white dark:bg-gray-800 rounded text-xs font-medium text-gray-700 dark:text-gray-300">
               {tasks.length}
-          </span>
+            </span>
+          </div>
         </div>
       </div>
-      </div>
-      
+
       {isExpanded && (
-      <div 
-        ref={setNodeRef}
-          className={`p-3 rounded-b-lg border-x border-b transition-colors ${
-          isOver 
-              ? "border-blue-400 bg-blue-50/50 dark:bg-blue-950/50 border-2" 
-              : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
-        }`}
-      >
-        {tasks.length === 0 ? (
+        <div
+          ref={setNodeRef}
+          className={`p-3 rounded-b-lg border-x border-b transition-colors ${isOver
+            ? "border-blue-400 bg-blue-50/50 dark:bg-blue-950/50 border-2"
+            : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+            }`}
+        >
+          {tasks.length === 0 ? (
             <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
               {isOver ? (
                 <div className="border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 text-blue-600 dark:text-blue-300 font-medium">
                   Drop task here
-              </div>
+                </div>
               ) : (
                 <>
                   <p className="mb-2">No tasks in this sprint</p>
@@ -587,24 +612,24 @@ function SprintSection({
                     Add task
                   </Button>
                 </>
-            )}
-          </div>
-        ) : (
+              )}
+            </div>
+          ) : (
             <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-          <div className="space-y-2">
+              <div className="space-y-2">
                 {tasks.map((task, index) => (
-              <TaskCard 
-                key={task.id} 
-                task={task} 
-                onClick={() => onTaskClick(task)} 
-                epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onClick={() => onTaskClick(task)}
+                    epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
                     isDragging={draggedTaskId === task.id}
-              />
-            ))}
-          </div>
+                  />
+                ))}
+              </div>
             </SortableContext>
-        )}
-      </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -614,28 +639,28 @@ function SprintSection({
  * BACKLOG SECTION
  * ========================================================================= */
 
-function BacklogSection({ 
-  tasks, 
-  onTaskClick, 
+function BacklogSection({
+  tasks,
+  onTaskClick,
   epicsMap,
   isOver,
   draggedTaskId
-}: { 
-  tasks: Task[]; 
-  onTaskClick: (task: Task) => void; 
+}: {
+  tasks: Task[];
+  onTaskClick: (task: Task) => void;
   epicsMap?: Map<string, Epic>;
   isOver?: boolean;
   draggedTaskId?: string | null;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
-  
-  const { setNodeRef } = useDroppable({ 
+
+  const { setNodeRef } = useDroppable({
     id: "backlog",
     data: { type: 'backlog' }
   });
 
   const taskIds = useMemo(() => tasks.map((t: Task) => `task-${t.id}`), [tasks]);
-  
+
   return (
     <div className="mb-4">
       <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-t-lg border border-gray-300 dark:border-gray-600">
@@ -647,49 +672,48 @@ function BacklogSection({
             >
               {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
-          <h3 className="font-semibold text-gray-900 dark:text-white">Backlog</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-white">Backlog</h3>
           </div>
           <span className="px-2 py-1 bg-white dark:bg-gray-700 rounded text-xs font-medium text-gray-700 dark:text-gray-300">
             {tasks.length}
           </span>
         </div>
       </div>
-      
+
       {isExpanded && (
-      <div 
-        ref={setNodeRef}
-          className={`p-3 rounded-b-lg border-x border-b transition-colors min-h-[200px] ${
-          isOver 
-              ? "border-blue-400 bg-blue-50/50 dark:bg-blue-950/50 border-2" 
-              : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900"
-        }`}
-      >
-        {tasks.length === 0 ? (
+        <div
+          ref={setNodeRef}
+          className={`p-3 rounded-b-lg border-x border-b transition-colors min-h-[200px] ${isOver
+            ? "border-blue-400 bg-blue-50/50 dark:bg-blue-950/50 border-2"
+            : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900"
+            }`}
+        >
+          {tasks.length === 0 ? (
             <div className="text-center py-12 text-sm text-gray-500 dark:text-gray-400">
               {isOver ? (
                 <div className="border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/40 rounded-lg p-6 text-blue-600 dark:text-blue-300 font-medium">
                   Drop here to remove from sprint
-          </div>
-        ) : (
+                </div>
+              ) : (
                 <p>No tasks in backlog</p>
               )}
             </div>
           ) : (
             <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-          <div className="space-y-2">
-            {tasks.map((task) => (
-              <TaskCard 
-                key={task.id} 
-                task={task} 
-                onClick={() => onTaskClick(task)} 
-                epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
+              <div className="space-y-2">
+                {tasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onClick={() => onTaskClick(task)}
+                    epic={task.epic_id && epicsMap ? epicsMap.get(task.epic_id) : undefined}
                     isDragging={draggedTaskId === task.id}
-              />
-            ))}
-          </div>
+                  />
+                ))}
+              </div>
             </SortableContext>
-        )}
-      </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -731,17 +755,29 @@ export function BacklogView() {
   const lastSprintCategoryRef = useRef<SprintStatusCategory | null>(null);
   const { activeProjectId, activeProject, projectIdForData: projectIdForSprints } = useProjectData();
   const { state: loadingState, setTasksState } = usePMLoading();
-  
+
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   useEffect(() => {
     setSearchQuery("");
     setStatusFilter("all");
     setPriorityFilter("all");
     setSelectedEpic(null);
   }, [activeProject?.id, projectIdForSprints]);
-  
+
   const shouldLoadTasks = loadingState.canLoadTasks && projectIdForSprints;
   const { tasks: allTasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
-  
+
   const normalizedTasksForFiltering = useMemo<Task[]>(() => {
     if (!allTasks) return [];
     return allTasks.map((task) => ({
@@ -749,7 +785,7 @@ export function BacklogView() {
       sprint_id: task.sprint_id ?? null,
     })) as Task[];
   }, [allTasks]);
-  
+
   useEffect(() => {
     if (shouldLoadTasks) {
       setTasksState({ loading, error, data: allTasks });
@@ -757,14 +793,14 @@ export function BacklogView() {
       setTasksState({ loading: false, error: null, data: null });
     }
   }, [shouldLoadTasks, loading, error, allTasks, setTasksState, projectIdForSprints]);
-  
+
   const { tasks } = useTaskFiltering({
     allTasks: normalizedTasksForFiltering,
     projectId: projectIdForSprints,
     activeProject,
     loading,
   });
-  
+
   const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
 
   useEffect(() => {
@@ -793,13 +829,13 @@ export function BacklogView() {
   const { statuses: availableStatusesFromBackend } = useStatuses(projectIdForSprints ?? undefined, "task");
   const { priorities: availablePrioritiesFromBackend } = usePriorities(projectIdForSprints ?? undefined);
   const [sprintOrder, setSprintOrder] = useState<SprintOrderState>(() => createEmptySprintOrder());
-  
+
   const epicsMap = useMemo(() => {
     const map = new Map<string, Epic>();
     epics.forEach(epic => map.set(epic.id, epic));
     return map;
   }, [epics]);
-  
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -813,28 +849,28 @@ export function BacklogView() {
 
   const handleUpdateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
     if (!projectIdForSprints) throw new Error("Project ID is required");
-      
-      const url = new URL(resolveServiceURL(`pm/tasks/${taskId}`));
-      url.searchParams.set('project_id', projectIdForSprints);
-      
-      const response = await fetch(url.toString(), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[handleUpdateTask] Error response:', errorText);
-        throw new Error(errorText || `Failed to update task: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (selectedTask && selectedTask.id === taskId) {
+
+    const url = new URL(resolveServiceURL(`pm/tasks/${taskId}`));
+    url.searchParams.set('project_id', projectIdForSprints);
+
+    const response = await fetch(url.toString(), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[handleUpdateTask] Error response:', errorText);
+      throw new Error(errorText || `Failed to update task: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask({ ...selectedTask, ...result });
     }
-    
+
     // Trigger full refresh using the same event as sprint assignment
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
     return result;
@@ -842,19 +878,19 @@ export function BacklogView() {
 
   const handleAssignTaskToSprint = useCallback(async (taskId: string, sprintId: string) => {
     if (!projectIdForSprints) throw new Error('No project selected');
-    
-      const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/assign-sprint`);
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sprint_id: sprintId }),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
+
+    const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/assign-sprint`);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sprint_id: sprintId }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
       throw new Error(errorText || `Failed to assign task: ${response.status}`);
     }
-    
+
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
   }, [projectIdForSprints]);
 
@@ -979,7 +1015,7 @@ export function BacklogView() {
           sprint_id: createTaskSprintId,
         }),
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `Failed to create task (status ${response.status})`);
@@ -1010,18 +1046,18 @@ export function BacklogView() {
 
   const handleMoveTaskToBacklog = useCallback(async (taskId: string) => {
     if (!projectIdForSprints) throw new Error('No project selected');
-    
-      const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/move-to-backlog`);
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
+
+    const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/move-to-backlog`);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
       throw new Error(errorText || `Failed to move to backlog: ${response.status}`);
     }
-    
+
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
   }, [projectIdForSprints]);
 
@@ -1030,7 +1066,7 @@ export function BacklogView() {
   const filteredTasks = useMemo(() => {
     if (loading && (!tasks || tasks.length === 0)) return [];
     if (!tasks || tasks.length === 0) return [];
-    
+
     let filtered = [...tasks];
 
     const trimmedQuery = (searchQuery ?? "").trim();
@@ -1055,7 +1091,7 @@ export function BacklogView() {
 
     return filtered;
   }, [tasks, searchQuery, statusFilter, priorityFilter, loading]);
-  
+
   const epicFilteredTasks = useMemo(() => {
     if (loading && (!filteredTasks || filteredTasks.length === 0)) return [];
     if (!filteredTasks || filteredTasks.length === 0) return [];
@@ -1271,7 +1307,7 @@ export function BacklogView() {
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const activeId = String(active.id);
-    
+
     if (activeId.startsWith('task-')) {
       const taskId = activeId.replace('task-', '');
       const task = tasks.find(t => String(t.id) === taskId);
@@ -1286,17 +1322,17 @@ export function BacklogView() {
       // Removed debug logging
       setDragState({ type: 'sprint', id: sprintId });
       lastSprintHoverIdRef.current = sprintId;
-    const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
-    const sprint = reference.find((item) => String(item.id) === sprintId);
-    const initialCategory = sprint ? resolveSprintCategory(sprint) : null;
-    lastSprintCategoryRef.current = initialCategory;
-    setOverSprintCategory(initialCategory);
-    setSprintPlaceholder({
-      category: initialCategory,
-      targetSprintId: null,
-      position: "after",
-      atEnd: true,
-    });
+      const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
+      const sprint = reference.find((item) => String(item.id) === sprintId);
+      const initialCategory = sprint ? resolveSprintCategory(sprint) : null;
+      lastSprintCategoryRef.current = initialCategory;
+      setOverSprintCategory(initialCategory);
+      setSprintPlaceholder({
+        category: initialCategory,
+        targetSprintId: null,
+        position: "after",
+        atEnd: true,
+      });
     }
   };
 
@@ -1408,7 +1444,7 @@ export function BacklogView() {
             false,
             targetRect
           );
-    } else {
+        } else {
           setOverSprintCategory(null);
           applyPlaceholder(null, null, false);
         }
@@ -1491,7 +1527,7 @@ export function BacklogView() {
     }
 
     const overId = String(over.id);
-    
+
     // Epic drop zone
     if (overId.startsWith('epic-')) {
       setOverEpicId(overId.replace('epic-', ''));
@@ -1500,7 +1536,7 @@ export function BacklogView() {
       // Removed debug logging
       return;
     }
-    
+
     // No epic drop zone
     if (overId === 'no-epic') {
       setOverEpicId('no-epic');
@@ -1509,7 +1545,7 @@ export function BacklogView() {
       // Removed debug logging
       return;
     }
-    
+
     // Direct drop zone
     if (overId.startsWith('sprint-')) {
       setOverSprintId(overId.replace('sprint-', ''));
@@ -1518,7 +1554,7 @@ export function BacklogView() {
       // Removed debug logging
       return;
     }
-    
+
     if (overId === 'backlog') {
       setOverSprintId('backlog');
       setOverTaskId(null);
@@ -1526,26 +1562,26 @@ export function BacklogView() {
       // Removed debug logging
       return;
     }
-    
+
     // If hovering over a task, find which sprint it belongs to
     if (overId.startsWith('task-')) {
       const taskId = overId.replace('task-', '');
       const task = tasks.find(t => String(t.id) === taskId);
-      
+
       if (task) {
         setOverTaskId(taskId);
         setOverEpicId(null);
         if (task.sprint_id) {
           setOverSprintId(String(task.sprint_id));
           // Removed debug logging
-      } else {
+        } else {
           setOverSprintId('backlog');
           // Removed debug logging
         }
         return;
       }
     }
-    
+
     setOverSprintId(null);
     setOverTaskId(null);
     setOverEpicId(null);
@@ -1688,7 +1724,7 @@ export function BacklogView() {
         activeSortable.containerId === overSortable.containerId;
 
       setSprintOrder((previous) => {
-      const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
+        const reference = (orderedSprints.length > 0 ? orderedSprints : sprints) ?? [];
         const categoryLists: Record<SprintStatusCategory, string[]> = {
           active: [],
           future: [],
@@ -1725,7 +1761,7 @@ export function BacklogView() {
             const targetIndex = filteredList.indexOf(placeholderTargetSprintId);
             if (targetIndex === -1) {
               newIndex = filteredList.length;
-      } else {
+            } else {
               newIndex = placeholderPosition === "before" ? targetIndex : targetIndex + 1;
             }
           } else if (targetSprint && filteredList.includes(targetSprint.id)) {
@@ -1862,7 +1898,7 @@ export function BacklogView() {
     if (overId.startsWith("epic-")) {
       const epicId = overId.replace("epic-", "");
       if (String(draggedTask.epic_id) === epicId) return; // Already in this epic
-      
+
       try {
         await handleUpdateTask(taskId, { epic_id: epicId });
         toast.success("Task assigned to epic", {
@@ -1883,32 +1919,32 @@ export function BacklogView() {
       if (!draggedTask.epic_id) {
         return; // Already has no epic
       }
-      
+
       try {
         // Use dedicated remove-epic endpoint
         const url = resolveServiceURL(`pm/projects/${projectIdForSprints}/tasks/${taskId}/remove-epic`);
-        
+
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           console.error('[handleDragEnd] Remove epic error:', errorText);
           throw new Error(errorText || `Failed to remove epic: ${response.status}`);
         }
-        
+
         await response.json();
-        
+
         toast.success("Epic removed from task", {
           description: `${draggedTask.title} is no longer assigned to an epic.`
         });
-        
+
         // Trigger full refresh
         window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
-        } catch (error) {
-          console.error("Failed to remove task from epic:", error);
+      } catch (error) {
+        console.error("Failed to remove task from epic:", error);
         toast.error("Failed to remove epic from task", {
           description: error instanceof Error ? error.message : "Unknown error"
         });
@@ -1941,7 +1977,7 @@ export function BacklogView() {
           description: `${draggedTask.title} has been moved to the backlog.`
         });
         // Removed debug logging
-        } catch (error) {
+      } catch (error) {
         console.error("Failed to move task to backlog:", error);
         toast.error("Failed to move task to backlog", {
           description: error instanceof Error ? error.message : "Unknown error"
@@ -1960,8 +1996,8 @@ export function BacklogView() {
         description: `${draggedTask.title} has been assigned to ${targetSprint?.name || 'sprint'}.`
       });
       // Removed debug logging
-      } catch (error) {
-        console.error("Failed to assign task to sprint:", error);
+    } catch (error) {
+      console.error("Failed to assign task to sprint:", error);
       toast.error("Failed to assign task to sprint", {
         description: error instanceof Error ? error.message : "Unknown error"
       });
@@ -1969,7 +2005,7 @@ export function BacklogView() {
   };
 
   const isLoading = loadingState.filterData.loading || (shouldLoadTasks && loading);
-  
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -1987,6 +2023,7 @@ export function BacklogView() {
     );
   }
 
+
   return (
     <DndContext
       sensors={sensors}
@@ -1995,9 +2032,9 @@ export function BacklogView() {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full">
+      <div className={`flex h-full ${isMobile ? 'flex-col' : 'flex-row'}`}>
         {/* Left Sidebar - Epics */}
-        <EpicSidebar 
+        <EpicSidebar
           onEpicSelect={setSelectedEpic}
           selectedEpic={selectedEpic}
           tasks={tasks}
@@ -2006,13 +2043,14 @@ export function BacklogView() {
             window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
           }}
           overEpicId={overEpicId}
+          isMobile={isMobile}
         />
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
           {/* Top Header with Filters */}
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-    <div className="mb-4">
+            <div className="mb-4">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Backlog</h2>
             </div>
 
@@ -2031,35 +2069,35 @@ export function BacklogView() {
                 </div>
               </div>
               {(availableStatuses.length > 0 || availablePriorities.length > 0) && (
-              <div className="flex gap-2">
+                <div className="flex gap-2">
                   {availableStatuses.length > 0 && (
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                   <SelectTrigger className="w-[140px]">
-                     <Filter className="w-4 h-4 mr-2" />
-                     <SelectValue placeholder="Status" />
-                   </SelectTrigger>
-                   <SelectContent>
-                     <SelectItem value="all">All Status</SelectItem>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-[140px]">
+                        <Filter className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
                         {availableStatuses.map(({ value, label }) => (
                           <SelectItem key={value} value={value}>{label}</SelectItem>
                         ))}
-                   </SelectContent>
-                 </Select>
+                      </SelectContent>
+                    </Select>
                   )}
                   {availablePriorities.length > 0 && (
-                 <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                   <SelectTrigger className="w-[140px]">
-                     <SelectValue placeholder="Priority" />
-                   </SelectTrigger>
-                   <SelectContent>
-                     <SelectItem value="all">All Priority</SelectItem>
+                    <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Priority</SelectItem>
                         {availablePriorities.map(({ value, label }) => (
                           <SelectItem key={value} value={value}>{label}</SelectItem>
                         ))}
-                   </SelectContent>
-                 </Select>
+                      </SelectContent>
+                    </Select>
                   )}
-              </div>
+                </div>
               )}
             </div>
           </div>
@@ -2108,7 +2146,7 @@ export function BacklogView() {
                     ) : null}
                   </div>
                 )}
-                
+
                 {/* Future sprints */}
                 {(futureSprints.length > 0 || isSprintDragging) && (
                   <div className="mb-6">
@@ -2137,7 +2175,7 @@ export function BacklogView() {
                     ) : null}
                   </div>
                 )}
-                
+
                 {/* Backlog */}
                 <div className="mb-6">
                   <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-1">
@@ -2145,13 +2183,13 @@ export function BacklogView() {
                   </h2>
                   <BacklogSection
                     tasks={backlogTasks}
-                          onTaskClick={handleTaskClick}
-                          epicsMap={epicsMap}
+                    onTaskClick={handleTaskClick}
+                    epicsMap={epicsMap}
                     isOver={overSprintId === 'backlog'}
                     draggedTaskId={draggedTaskId}
-                        />
-                  </div>
-                
+                  />
+                </div>
+
                 {/* Closed sprints */}
                 {(closedSprints.length > 0 || isSprintDragging) && (
                   <div className="mb-6">

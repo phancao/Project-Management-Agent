@@ -63,7 +63,7 @@ export function MessagesBlock({ className }: { className?: string }) {
       } catch (error) {
         // Only log non-abort errors (abort is expected when user cancels)
         // Check for various abort error types and patterns
-        const isAbortError = 
+        const isAbortError =
           (error instanceof Error && error.name === 'AbortError') ||
           (error instanceof DOMException && error.name === 'AbortError') ||
           (error instanceof Error && (
@@ -72,7 +72,7 @@ export function MessagesBlock({ className }: { className?: string }) {
             error.message?.toLowerCase().includes('bodystreambuffer')
           )) ||
           (abortControllerRef.current?.signal.aborted === true);
-        
+
         if (!isAbortError) {
           console.error('Failed to send message:', error);
         }
@@ -90,7 +90,7 @@ export function MessagesBlock({ className }: { className?: string }) {
       abortControllerRef.current?.abort();
     } catch (error) {
       // Suppress abort errors - they're expected when user cancels
-      const isAbortError = 
+      const isAbortError =
         (error instanceof Error && error.name === 'AbortError') ||
         (error instanceof DOMException && error.name === 'AbortError') ||
         (error instanceof Error && (
@@ -98,7 +98,7 @@ export function MessagesBlock({ className }: { className?: string }) {
           error.message?.toLowerCase().includes('aborted') ||
           error.message?.toLowerCase().includes('bodystreambuffer')
         ));
-      
+
       if (!isAbortError) {
         // Only log non-abort errors
         console.error('Error during cancel:', error);
@@ -126,29 +126,37 @@ export function MessagesBlock({ className }: { className?: string }) {
     fastForwardReplay(!fastForwarding);
   }, [fastForwarding]);
   return (
-    <div className={cn("flex h-full flex-col", className)}>
-      {/* Always show MessageListView - AnalysisBlock displays inline */}
-      <MessageListView
-        className="flex grow"
-        onFeedback={handleFeedback}
-        onSendMessage={handleSend}
-      />
-      {!isReplay ? (
-        <div className="relative flex h-42 shrink-0 pb-4">
-          {!responding && messageCount === 0 && (
+    <div className={cn("flex h-full w-full flex-col relative", className)}>
+      <div className="flex grow overflow-hidden relative">
+        {/* Always show MessageListView - AnalysisBlock displays inline */}
+        <MessageListView
+          className="flex h-full w-full"
+          onFeedback={handleFeedback}
+          onSendMessage={handleSend}
+        />
+
+        {!isReplay && !responding && messageCount === 0 && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-start bg-app/50 backdrop-blur-sm overflow-y-auto pt-10 md:pt-20">
             <ConversationStarter
-              className="absolute top-[-218px] left-0"
+              className="w-full max-w-none"
               onSend={handleSend}
             />
-          )}
-          <InputBox
-            className="h-full w-full"
-            responding={responding}
-            feedback={feedback}
-            onSend={handleSend}
-            onCancel={handleCancel}
-            onRemoveFeedback={handleRemoveFeedback}
-          />
+          </div>
+        )}
+      </div>
+
+      {!isReplay ? (
+        <div className="flex w-full shrink-0 flex-col px-4 pb-4 pt-0">
+          <div className="relative min-h-[120px] h-auto w-full">
+            <InputBox
+              className="h-full w-full"
+              responding={responding}
+              feedback={feedback}
+              onSend={handleSend}
+              onCancel={handleCancel}
+              onRemoveFeedback={handleRemoveFeedback}
+            />
+          </div>
         </div>
       ) : (
         <>

@@ -91,7 +91,7 @@ export function AgentSelector() {
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [searchProviders, setSearchProviders] = useState<SearchProviderConfig[]>([]);
   const [loadingSearchProviders, setLoadingSearchProviders] = useState(true);
-  
+
   const backgroundInvestigation = useSettingsStore(
     (state) => state.general.enableBackgroundInvestigation,
   );
@@ -192,24 +192,24 @@ export function AgentSelector() {
   const providers = !configLoading && !loadingProviders && configuredAIProviders.length > 0
     ? allProviders.filter((p: ModelProvider) => configuredAIProviders.includes(p.id))
     : allProviders; // Show all providers while loading or if none configured
-  
+
   const currentProvider = providers.find((p: ModelProvider) => p.id === modelProvider);
   const currentModel = currentProvider?.models.find((m) => m === modelName) || currentProvider?.models[0];
 
   const handleModelChange = async (value: string) => {
     // Format: "providerId:modelName" or just "providerId"
     const [providerId, selectedModel] = value.includes(":") ? value.split(":") : [value, undefined];
-    
+
     // Update local state immediately
     setModelProvider(providerId, selectedModel);
-    
+
     // Also update the default model in the database for this provider
     if (providerId && selectedModel) {
       try {
         // Get the current provider configuration
         const providers = await listAIProviders();
         const existingProvider = providers.find((p) => p.provider_id === providerId);
-        
+
         if (existingProvider) {
           // Update the provider's default model in the database
           await saveAIProvider({
@@ -247,20 +247,34 @@ export function AgentSelector() {
     }
   };
 
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   const CurrentIcon = currentPreset.icon;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
       <Select value={currentPreset.id} onValueChange={handlePresetChange}>
         <SelectTrigger
           className={cn(
-            "rounded-2xl w-auto min-w-[140px] h-8 text-xs",
+            "rounded-2xl w-auto h-8 text-xs shrink-0",
+            isMobile ? "px-2 min-w-[80px]" : "min-w-[140px]",
             "!border-brand !text-brand",
           )}
         >
           <div className="flex items-center gap-1.5">
             <CurrentIcon className="h-3.5 w-3.5 shrink-0" />
-            <span className="font-normal text-xs">{currentPreset.name}</span>
+            <span className="font-normal text-[10px] sm:text-xs truncate">
+              {isMobile ? currentPreset.name.split(' ')[0] : currentPreset.name}
+            </span>
           </div>
         </SelectTrigger>
         <SelectContent className="w-[280px]">
@@ -303,28 +317,29 @@ export function AgentSelector() {
       </Select>
 
       {/* Always show AI provider selector - it will show providers from config even if database call fails */}
-        <Select
-          value={modelProvider && currentModel ? `${modelProvider}:${currentModel}` : modelProvider || ""}
-          onValueChange={handleModelChange}
+      <Select
+        value={modelProvider && currentModel ? `${modelProvider}:${currentModel}` : modelProvider || ""}
+        onValueChange={handleModelChange}
         disabled={configLoading || (loadingProviders && allProviders.length === 0)}
+      >
+        <SelectTrigger
+          className={cn(
+            "rounded-2xl w-auto h-8 text-xs shrink-0",
+            isMobile ? "px-2 min-w-[80px]" : "min-w-[140px]",
+            "!border-brand !text-brand",
+          )}
         >
-          <SelectTrigger
-            className={cn(
-              "rounded-2xl w-auto min-w-[140px] h-8 text-xs",
-              "!border-brand !text-brand",
-            )}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm shrink-0">{currentProvider?.icon || "🤖"}</span>
-              <span className="font-normal text-xs">
-                {currentProvider?.name || "Model"}
-                {currentModel && ` - ${currentModel}`}
-              </span>
-            </div>
-          </SelectTrigger>
-          <SelectContent className="w-[280px]">
-            {providers.length > 0 ? (
-              providers.map((provider: ModelProvider) => (
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm shrink-0">{currentProvider?.icon || "🤖"}</span>
+            <span className="font-normal text-[10px] sm:text-xs truncate">
+              {currentProvider?.name || "Model"}
+              {!isMobile && currentModel && ` - ${currentModel}`}
+            </span>
+          </div>
+        </SelectTrigger>
+        <SelectContent className="w-[280px]">
+          {providers.length > 0 ? (
+            providers.map((provider: ModelProvider) => (
               <div key={provider.id}>
                 <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
                   {provider.icon} {provider.name}
@@ -345,16 +360,16 @@ export function AgentSelector() {
                   );
                 })}
               </div>
-              ))
-            ) : (
-              <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                {configLoading || loadingProviders 
-                  ? "Loading providers..." 
-                  : "No providers available. Please configure providers in Settings."}
-              </div>
-            )}
-          </SelectContent>
-        </Select>
+            ))
+          ) : (
+            <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+              {configLoading || loadingProviders
+                ? "Loading providers..."
+                : "No providers available. Please configure providers in Settings."}
+            </div>
+          )}
+        </SelectContent>
+      </Select>
 
       {/* Search Provider Selector */}
       <Select
@@ -363,15 +378,16 @@ export function AgentSelector() {
       >
         <SelectTrigger
           className={cn(
-            "rounded-2xl w-auto min-w-[120px] h-8 text-xs",
+            "rounded-2xl w-auto h-8 text-xs shrink-0",
+            isMobile ? "px-2 min-w-[70px]" : "min-w-[120px]",
             "!border-brand !text-brand",
           )}
         >
           <div className="flex items-center gap-1.5">
             <Search className="h-3.5 w-3.5 shrink-0" />
-            <span className="font-normal text-xs">
-              {searchProviders.find((p) => p.provider_id === searchProvider)?.provider_name || 
-               (searchProvider === "duckduckgo" ? "DuckDuckGo" : "Search")}
+            <span className="font-normal text-[10px] sm:text-xs truncate">
+              {searchProviders.find((p) => p.provider_id === searchProvider)?.provider_name ||
+                (searchProvider === "duckduckgo" ? "DuckDuckGo" : "Search")}
             </span>
           </div>
         </SelectTrigger>

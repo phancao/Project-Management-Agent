@@ -1,0 +1,44 @@
+
+> deer-flow-web@0.1.0 dev
+> dotenv -f ../.env -- next dev --turbo
+
+ ⚠ Port 3000 is in use by process 55363, using available port 3001 instead.
+   ▲ Next.js 15.5.6 (Turbopack)
+   - Local:        http://localhost:3001
+   - Network:      http://192.168.69.113:3001
+
+ ✓ Starting...
+ ✓ Ready in 1020ms
+ ○ Compiling /meeting ...
+ ✓ Compiled /meeting in 1764ms
+ ⨯ ./src/app/meeting/components/meeting-upload.tsx:4:1
+Module not found: Can't resolve 'react-dropzone'
+[0m [90m 2 |[39m
+ [90m 3 |[39m [36mimport[39m { useState[33m,[39m useCallback } [36mfrom[39m [32m'react'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 4 |[39m [36mimport[39m { useDropzone } [36mfrom[39m [32m'react-dropzone'[39m[33m;[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36minterface[39m [33mMeetingUploadProps[39m {
+ [90m 7 |[39m     onUploadComplete[33m:[39m (meetingId[33m:[39m string) [33m=>[39m [36mvoid[39m[33m;[39m[0m
+
+
+
+Import traces:
+  Client Component Browser:
+    ./src/app/meeting/components/meeting-upload.tsx [Client Component Browser]
+    ./src/app/meeting/page.tsx [Client Component Browser]
+    ./src/app/meeting/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/meeting/components/meeting-upload.tsx [Client Component SSR]
+    ./src/app/meeting/page.tsx [Client Component SSR]
+    ./src/app/meeting/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 670ms
+ GET /meeting 500 in 2566ms
+ ✓ Compiled in 93ms
+[?25h

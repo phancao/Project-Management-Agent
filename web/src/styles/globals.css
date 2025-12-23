@@ -10,21 +10,25 @@
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 
   --animate-fade-in: fade-in 1s;
+
   @keyframes fade-in {
     0% {
       opacity: 0;
     }
+
     100% {
       opacity: 1;
     }
   }
 
   --animate-spotlight: spotlight 2s ease 0.75s 1 forwards;
+
   @keyframes spotlight {
     0% {
       opacity: 0;
       transform: translate(-72%, -62%) scale(0.5);
     }
+
     to {
       opacity: 1;
       transform: translate(-50%, -40%) scale(1);
@@ -71,36 +75,45 @@
   --color-app: var(--app-background);
   --color-brand: var(--brand);
   --animate-aurora: aurora 8s ease-in-out infinite alternate;
+
   @keyframes aurora {
     0% {
       background-position: 0% 50%;
       transform: rotate(-5deg) scale(0.9);
     }
+
     25% {
       background-position: 50% 100%;
       transform: rotate(5deg) scale(1.1);
     }
+
     50% {
       background-position: 100% 50%;
       transform: rotate(-3deg) scale(0.95);
     }
+
     75% {
       background-position: 50% 0%;
       transform: rotate(3deg) scale(1.05);
     }
+
     100% {
       background-position: 0% 50%;
       transform: rotate(-5deg) scale(0.9);
     }
   }
+
   --animate-shine: shine var(--duration) infinite linear;
+
   @keyframes shine {
     0% {
       background-position: 0% 0%;
     }
+
     50% {
       background-position: 100% 100%;
     }
+
     to {
       background-position: 0% 0%;
     }
@@ -128,11 +141,17 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --chart-1: #C6007E;
+  /* Pantone 233 CP */
+  --chart-2: #009CDC;
+  /* Pantone 2382 CP */
+  --chart-3: #DA291C;
+  /* Pantone 485 CP */
+  --chart-4: #00A98F;
+  /* Pantone 2400 CP */
+  --chart-5: #FE5000;
+  /* Pantone Orange 021 CP */
+
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -141,7 +160,22 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --brand: #007aff;
+  --brand: #162B75;
+  /* Pantone Blue 072 CP */
+  --brand-magenta: #C6007E;
+  /* Pantone 233 CP */
+  --brand-cyan: #009CDC;
+  /* Pantone 2382 CP */
+  --brand-red: #DA291C;
+  /* Pantone 485 CP */
+  --brand-teal: #00A98F;
+  /* Pantone 2400 CP */
+  --brand-orange: #FE5000;
+  /* Pantone Orange 021 CP */
+  --brand-lime: #84BD00;
+  /* Pantone 376 CP */
+  --brand-gray: #B1B3B3;
+  /* Pantone Cool Gray 5 C */
 
   --novel-highlight-default: #ffffff;
   --novel-highlight-purple: #f6f3f8;
@@ -187,7 +221,7 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-  --brand: rgb(17, 103, 234);
+  --brand: #162B75;
 
   --novel-highlight-default: #000000;
   --novel-highlight-purple: #3f2c4b;
@@ -204,6 +238,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }

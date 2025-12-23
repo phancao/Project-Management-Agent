@@ -32,7 +32,7 @@ export default async function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const locale = await getLocale();
   const messages = await getMessages();
-  
+
   return (
     <html lang={locale} className={`${geist.variable}`} suppressHydrationWarning>
       <head>
@@ -48,7 +48,7 @@ export default async function RootLayout({
           `}
         </Script>
       </head>
-      <body className="bg-app">
+      <body className="bg-app" suppressHydrationWarning>
         <NextIntlClientProvider messages={messages}>
           <PMMCPAutoConfig />
           <ThemeProviderWrapper>{children}</ThemeProviderWrapper>

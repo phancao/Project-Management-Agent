@@ -265,8 +265,7 @@ export function AgentSelector() {
       <Select value={currentPreset.id} onValueChange={handlePresetChange}>
         <SelectTrigger
           className={cn(
-            "rounded-2xl w-auto h-8 text-xs shrink-0",
-            isMobile ? "px-2 min-w-[80px]" : "min-w-[140px]",
+            "rounded-2xl w-auto h-8 text-xs shrink-0 px-3",
             "!border-brand !text-brand",
           )}
         >
@@ -324,8 +323,7 @@ export function AgentSelector() {
       >
         <SelectTrigger
           className={cn(
-            "rounded-2xl w-auto h-8 text-xs shrink-0",
-            isMobile ? "px-2 min-w-[80px]" : "min-w-[140px]",
+            "rounded-2xl w-auto h-8 text-xs shrink-0 px-3",
             "!border-brand !text-brand",
           )}
         >
@@ -378,8 +376,7 @@ export function AgentSelector() {
       >
         <SelectTrigger
           className={cn(
-            "rounded-2xl w-auto h-8 text-xs shrink-0",
-            isMobile ? "px-2 min-w-[70px]" : "min-w-[120px]",
+            "rounded-2xl w-auto h-8 text-xs shrink-0 px-3",
             "!border-brand !text-brand",
           )}
         >

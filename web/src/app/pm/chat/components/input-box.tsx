@@ -249,7 +249,7 @@ export function InputBox({
           {/* Context Token Indicator */}
           <ContextTokenIndicator className="ml-auto sm:ml-2 opacity-60 hover:opacity-100 transition-opacity" />
         </div>
-        <div className="flex shrink-0 items-center gap-3 ml-auto sm:ml-0">
+        <div className="flex shrink-0 items-center gap-3 ml-auto">
           <Tooltip title={t("enhancePrompt")}>
             <Button
               variant="ghost"

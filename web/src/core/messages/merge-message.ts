@@ -17,7 +17,7 @@ import type { Message } from "./types";
 export function mergeMessage(message: Message, event: ChatEvent) {
   const mergeTimestamp = new Date().toISOString();
   console.log(`[mergeMessage] 🚪 [${mergeTimestamp}] ENTRY: messageId=${message.id}, agent=${message.agent}, eventType=${event.type}`);
-  
+
   // DEBUG: Log function entry for reporter messages
   if (message.agent === "reporter") {
     const contentBefore = message.content?.length ?? 0;
@@ -29,7 +29,7 @@ export function mergeMessage(message: Message, event: ChatEvent) {
     }
     console.trace(`[DEBUG-MERGE-ENTRY] Stack trace for mergeMessage entry`);
   }
-  
+
   if (event.type === "message_chunk") {
     mergeTextMessage(message, event);
   } else if (event.type === "tool_calls" || event.type === "tool_call_chunks") {
@@ -61,7 +61,7 @@ export function mergeMessage(message: Message, event: ChatEvent) {
               const startBracket = argsString.indexOf("[");
               let start = -1;
               let endChar = "";
-              
+
               if (startBrace >= 0 && (startBracket < 0 || startBrace < startBracket)) {
                 start = startBrace;
                 endChar = "}";
@@ -69,34 +69,34 @@ export function mergeMessage(message: Message, event: ChatEvent) {
                 start = startBracket;
                 endChar = "]";
               }
-              
+
               if (start >= 0) {
                 // Find matching end by counting braces/brackets
                 let depth = 0;
                 let inString = false;
                 let escapeNext = false;
                 let end = -1;
-                
+
                 for (let i = start; i < argsString.length; i++) {
                   const char = argsString[i];
-                  
+
                   if (escapeNext) {
                     escapeNext = false;
                     continue;
                   }
-                  
+
                   if (char === "\\") {
                     escapeNext = true;
                     continue;
                   }
-                  
+
                   if (char === '"') {
                     inString = !inString;
                     continue;
                   }
-                  
+
                   if (inString) continue;
-                  
+
                   if (char === "{" || char === "[") {
                     depth++;
                   } else if (char === "}" || char === "]") {
@@ -107,7 +107,7 @@ export function mergeMessage(message: Message, event: ChatEvent) {
                     }
                   }
                 }
-                
+
                 if (end > start) {
                   const extracted = argsString.substring(start, end + 1);
                   toolCall.args = JSON.parse(extracted);
@@ -129,7 +129,7 @@ export function mergeMessage(message: Message, event: ChatEvent) {
       });
     }
   }
-  
+
   // DEBUG: Log function exit for reporter messages
   if (message.agent === "reporter") {
     const contentAfter = message.content?.length ?? 0;
@@ -140,7 +140,7 @@ export function mergeMessage(message: Message, event: ChatEvent) {
       console.log(`[DEBUG-MERGE-EXIT] 📝 Last 50 chars: "${lastCharsAfter}"`);
     }
   }
-  
+
   return deepClone(message);
 }
 
@@ -156,18 +156,18 @@ function mergeTextMessage(message: Message, event: MessageChunkEvent) {
     }
     console.trace(`[DEBUG-MERGE-TEXT-ENTRY] Stack trace for mergeTextMessage entry`);
   }
-  
+
   if (event.data.content) {
     const contentBefore = message.content?.length ?? 0;
     const chunksBefore = message.contentChunks?.length ?? 0;
     const lastCharsBefore = message.content?.slice(-50) ?? "";
-    
+
     // Ensure content is initialized as string (not undefined/null)
     message.content = (message.content ?? "") + event.data.content;
     // Ensure contentChunks is initialized
     message.contentChunks = message.contentChunks ?? [];
     message.contentChunks.push(event.data.content);
-    
+
     // DEBUG: Log for reporter messages
     if (message.agent === "reporter") {
       const contentAfter = message.content?.length ?? 0;
@@ -179,7 +179,7 @@ function mergeTextMessage(message: Message, event: MessageChunkEvent) {
       }
       console.log(`[DEBUG-MERGE-TEXT] 📝 Last 50 chars after: "${lastCharsAfter}"`);
       console.log(`[DEBUG-MERGE-TEXT] 📝 New chunk: "${event.data.content.substring(0, 50)}${event.data.content.length > 50 ? '...' : ''}"`);
-      
+
       // Check for content loss
       if (contentBefore > 0 && contentAfter === 0) {
         console.error(`[DEBUG-MERGE-TEXT] ❌ CONTENT LOST in mergeTextMessage! messageId=${message.id}, before=${contentBefore}, after=${contentAfter}`);
@@ -187,7 +187,7 @@ function mergeTextMessage(message: Message, event: MessageChunkEvent) {
       }
     }
   }
-  
+
   // DEBUG: Log function exit for reporter messages
   if (message.agent === "reporter") {
     const contentAfter = message.content?.length ?? 0;
@@ -205,7 +205,10 @@ function mergeTextMessage(message: Message, event: MessageChunkEvent) {
   }
   // Add react_thoughts if available
   if (event.data.react_thoughts) {
-    message.reactThoughts = event.data.react_thoughts;
+    message.reactThoughts = event.data.react_thoughts.map(t => ({
+      ...t,
+      before_tool: t.before_tool ?? false,
+    }));
   }
 }
 function convertToolChunkArgs(args: string) {
@@ -219,30 +222,34 @@ function mergeToolCallMessage(
 ) {
   const mergeToolCallTimestamp = new Date().toISOString();
   console.log(`[mergeToolCallMessage] 🔧 [${mergeToolCallTimestamp}] Called: messageId=${message.id}, agent=${message.agent}, eventType=${event.type}`, {
-    hasReactThoughts: !!event.data.react_thoughts,
-    reactThoughtsCount: event.data.react_thoughts?.length ?? 0,
-    toolCallsCount: event.data.tool_calls?.length ?? 0,
+    hasReactThoughts: !!(event.data as any).react_thoughts,
+    reactThoughtsCount: (event.data as any).react_thoughts?.length ?? 0,
+    toolCallsCount: (event.data as any).tool_calls?.length ?? 0,
     eventDataKeys: Object.keys(event.data),
   });
-  
+
   // Initialize toolCalls array if not present
   message.toolCalls ??= [];
-  
+
   // Extract react_thoughts from tool_calls event if present
-  if (event.data.react_thoughts) {
+  const data = event.data as any;
+  if (data.react_thoughts) {
     const thoughtTimestamp = new Date().toISOString();
-    console.log(`[mergeToolCallMessage] 💭 [${thoughtTimestamp}] Found react_thoughts: count=${event.data.react_thoughts.length}`, {
-      thoughts: event.data.react_thoughts.map((t: any) => ({ step_index: t.step_index, thought: t.thought?.substring(0, 50) })),
+    console.log(`[mergeToolCallMessage] 💭 [${thoughtTimestamp}] Found react_thoughts: count=${data.react_thoughts.length}`, {
+      thoughts: data.react_thoughts.map((t: any) => ({ step_index: t.step_index, thought: t.thought?.substring(0, 50) })),
     });
-    message.reactThoughts = event.data.react_thoughts;
+    message.reactThoughts = data.react_thoughts.map((t: any) => ({
+      ...t,
+      before_tool: t.before_tool ?? false,
+    }));
   }
-  
+
   if (event.type === "tool_calls" && event.data.tool_calls?.length) {
     // MERGE tool calls instead of replacing - backend may send multiple tool_calls events
     // for parallel tool calls
     for (const raw of event.data.tool_calls) {
       if (!raw.name || !raw.id) continue; // Skip tool calls without names or IDs
-      
+
       // Check if this tool call already exists (by ID)
       const existingIndex = message.toolCalls.findIndex(tc => tc.id === raw.id);
       if (existingIndex >= 0) {
@@ -258,10 +265,10 @@ function mergeToolCallMessage(
       } else {
         // Add new tool call
         message.toolCalls.push({
-      id: raw.id,
-      name: raw.name,
-      args: raw.args,
-      result: undefined,
+          id: raw.id,
+          name: raw.name,
+          args: raw.args,
+          result: undefined,
         });
       }
     }
@@ -295,17 +302,17 @@ function mergeThoughtsMessage(
 ) {
   const mergeThoughtsTimestamp = new Date().toISOString();
   console.log(`[mergeThoughtsMessage] 💭 [${mergeThoughtsTimestamp}] Called: messageId=${message.id}, agent=${message.agent}, count=${event.data.react_thoughts?.length ?? 0}`);
-  
+
   // Merge thoughts instead of replace to handle incremental updates
   const existingThoughts = message.reactThoughts ?? [];
   const thoughtsMap = new Map<string, typeof existingThoughts[0]>();
-  
+
   // Add existing thoughts to map (keyed by step_index + thought content)
   existingThoughts.forEach(thought => {
     const key = `${thought.step_index}:${thought.thought}`;
     thoughtsMap.set(key, thought);
   });
-  
+
   // Add new thoughts from event
   if (event.data.react_thoughts) {
     event.data.react_thoughts.forEach((thought) => {
@@ -319,10 +326,10 @@ function mergeThoughtsMessage(
       }
     });
   }
-  
+
   // Convert map back to array and sort by step_index
   message.reactThoughts = Array.from(thoughtsMap.values()).sort((a, b) => a.step_index - b.step_index);
-  
+
   console.log(`[mergeThoughtsMessage] 💭 [${mergeThoughtsTimestamp}] Merged thoughts: messageId=${message.id}, totalCount=${message.reactThoughts.length}`);
 }
 

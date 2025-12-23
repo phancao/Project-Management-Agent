@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
         const file = formData.get('file') as File;
         const title = formData.get('title') as string || 'Untitled Meeting';
         const participants = formData.get('participants') as string || '';
+        const projectId = formData.get('projectId') as string || null;
 
         if (!file) {
             return NextResponse.json(
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
             filePath,
             status: 'pending',
             createdAt: new Date().toISOString(),
+            projectId,
         };
 
         // In production, would call MCP meeting server to register the meeting

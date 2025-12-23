@@ -5,9 +5,10 @@ import { useDropzone } from 'react-dropzone';
 
 interface MeetingUploadProps {
     onUploadComplete: (meetingId: string) => void;
+    projectId?: string | null;
 }
 
-export default function MeetingUpload({ onUploadComplete }: MeetingUploadProps) {
+export default function MeetingUpload({ onUploadComplete, projectId }: MeetingUploadProps) {
     const [uploading, setUploading] = useState(false);
     const [processing, setProcessing] = useState(false);
     const [title, setTitle] = useState('');
@@ -17,10 +18,11 @@ export default function MeetingUpload({ onUploadComplete }: MeetingUploadProps) 
     const [progress, setProgress] = useState<string>('');
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
-        if (acceptedFiles.length > 0) {
-            setSelectedFile(acceptedFiles[0]);
+        const file = acceptedFiles[0];
+        if (file) {
+            setSelectedFile(file);
             // Auto-set title from filename
-            const filename = acceptedFiles[0].name.replace(/\.[^/.]+$/, '');
+            const filename = file.name.replace(/\.[^/.]+$/, '');
             if (!title) {
                 setTitle(filename);
             }
@@ -53,6 +55,10 @@ export default function MeetingUpload({ onUploadComplete }: MeetingUploadProps) 
             formData.append('file', selectedFile);
             formData.append('title', title || 'Untitled Meeting');
             formData.append('participants', participants);
+
+            if (projectId) {
+                formData.append('projectId', projectId);
+            }
 
             // Upload to backend
             const uploadRes = await fetch('/api/meetings/upload', {
@@ -108,6 +114,19 @@ export default function MeetingUpload({ onUploadComplete }: MeetingUploadProps) 
     return (
         <div className="max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-white mb-6">Upload Meeting Recording</h2>
+
+            {!projectId && (
+                <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-sm flex items-start gap-3">
+                    <span className="text-xl">⚠️</span>
+                    <div>
+                        <p className="font-medium">No Project Selected</p>
+                        <p className="mt-1 opacity-80">
+                            Please select a project from the top header to associate this meeting with project data.
+                            Uploading without a project will create an orphaned meeting.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* Dropzone */}
             <div

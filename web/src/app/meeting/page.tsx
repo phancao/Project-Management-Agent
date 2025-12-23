@@ -20,15 +20,31 @@ const queryClient = new QueryClient({
     },
 });
 
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+
 function MeetingPageContent() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const pathname = usePathname();
+    const selectedProjectId = searchParams?.get('project');
+
     const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'upload' | 'list' | 'summary' | 'actions'>('upload');
+
+    const handleProjectChange = (projectId: string) => {
+        const params = new URLSearchParams(searchParams?.toString());
+        params.set('project', projectId);
+        router.push(`${pathname}?${params.toString()}`);
+    };
 
     return (
         <QueryClientProvider client={queryClient}>
             <PMLoadingProvider>
                 <PMLoadingManager />
-                <PMHeader />
+                <PMHeader
+                    selectedProjectId={selectedProjectId}
+                    onProjectChange={handleProjectChange}
+                />
                 <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 pt-20 pb-12">
                     <div className="container mx-auto px-4">
                         {/* Header */}
@@ -74,6 +90,7 @@ function MeetingPageContent() {
                         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4 sm:p-6 shadow-2xl">
                             {activeTab === 'upload' && (
                                 <MeetingUpload
+                                    projectId={selectedProjectId}
                                     onUploadComplete={(meetingId) => {
                                         setSelectedMeetingId(meetingId);
                                         setActiveTab('summary');
@@ -83,6 +100,7 @@ function MeetingPageContent() {
 
                             {activeTab === 'list' && (
                                 <MeetingList
+                                    projectId={selectedProjectId}
                                     onSelectMeeting={(meetingId: string) => {
                                         setSelectedMeetingId(meetingId);
                                         setActiveTab('summary');

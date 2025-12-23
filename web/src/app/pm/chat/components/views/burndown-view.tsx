@@ -16,7 +16,7 @@ export function BurndownView() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  
+
   const projectId = searchParams?.get("project");
   const sprintParam = searchParams?.get("sprint");
 
@@ -152,7 +152,7 @@ export function BurndownView() {
     <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📊 What is a Burndown Chart?</h3>
       <p className="text-sm text-gray-700 dark:text-gray-300">
-        A burndown chart tracks the amount of work remaining in a sprint over time. The <strong>ideal line</strong> shows the expected 
+        A burndown chart tracks the amount of work remaining in a sprint over time. The <strong>ideal line</strong> shows the expected
         progress if work is completed at a steady pace, while the <strong>actual line</strong> shows real progress. Use this chart to:
       </p>
       <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
@@ -179,7 +179,7 @@ export function BurndownView() {
                 Unable to Load Burndown Chart
               </h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                {error.message.includes("503") || error.message.includes("NotImplementedError")
                   ? "Burndown chart is not available for this project type."
                   : "There was an error loading the burndown chart. Please try again later."}
               </p>
@@ -212,12 +212,12 @@ export function BurndownView() {
                   normalizedStatus === "active"
                     ? "Active"
                     : normalizedStatus === "future"
-                    ? "Planned"
-                    : normalizedStatus === "planning"
-                    ? "Planning"
-                    : normalizedStatus === "closed" || normalizedStatus === "completed"
-                    ? "Completed"
-                    : sprint.status || "Unknown";
+                      ? "Planned"
+                      : normalizedStatus === "planning"
+                        ? "Planning"
+                        : normalizedStatus === "closed" || normalizedStatus === "completed"
+                          ? "Completed"
+                          : sprint.status || "Unknown";
 
                 return (
                   <SelectItem key={sprint.id} value={sprint.id}>
@@ -272,35 +272,35 @@ export function BurndownView() {
           <AreaChart data={burndownData}>
             <defs>
               <linearGradient id="colorIdeal" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#8884d8" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#8884d8" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#82ca9d" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#82ca9d" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="day" stroke="#666" />
             <YAxis stroke="#666" />
-            <Tooltip 
+            <Tooltip
               contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
-              formatter={(value: number) => `${value.toFixed(1)}h`}
+              formatter={(value: any) => `${Number(value).toFixed(1)}h`}
             />
             <Legend />
-            <Area 
-              type="monotone" 
-              dataKey="ideal" 
-              stroke="#8884d8" 
+            <Area
+              type="monotone"
+              dataKey="ideal"
+              stroke="#8884d8"
               fillOpacity={1}
               fill="url(#colorIdeal)"
               name="Ideal Burndown"
               strokeWidth={2}
             />
-            <Area 
-              type="monotone" 
-              dataKey="actual" 
-              stroke="#82ca9d" 
+            <Area
+              type="monotone"
+              dataKey="actual"
+              stroke="#82ca9d"
               fillOpacity={1}
               fill="url(#colorActual)"
               name="Actual Burndown"

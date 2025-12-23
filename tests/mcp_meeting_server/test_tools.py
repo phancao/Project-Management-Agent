@@ -4,12 +4,14 @@ Integration tests for MCP Meeting Server tools.
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from meeting_agent.models import (
+from datetime import datetime
+
+# Import ORM models for mocking
+from database.orm_models import (
     Meeting,
-    MeetingStatus,
     MeetingSummary,
-    ActionItem,
-    ActionItemPriority,
+    MeetingActionItem,
+    MeetingParticipant
 )
 
 
@@ -19,7 +21,8 @@ class MockMCPServer:
     def __init__(self):
         self.config = MagicMock()
         self.config.upload_dir = "/tmp/test_uploads"
-    
+        self.db_session = MagicMock()
+        
     def get_upload_dir(self):
         from pathlib import Path
         return Path(self.config.upload_dir)
@@ -29,6 +32,9 @@ class MockMCPServer:
         handler.execute = AsyncMock()
         handler.process_from_text = AsyncMock()
         return handler
+        
+    def get_db_session(self):
+        return self.db_session
 
 
 class TestMCPMeetingTools:
@@ -43,9 +49,11 @@ class TestMCPMeetingTools:
         """Test the analyze_transcript tool"""
         from mcp_meeting_server.tools import _handle_analyze_transcript
         from shared.handlers import HandlerResult
+        from meeting_agent.models import MeetingSummary as PydanticSummary
+        from meeting_agent.models import ActionItem, ActionItemPriority
         
-        # Setup mock handler
-        mock_summary = MeetingSummary(
+        # Setup mock handler result (Pydantic model)
+        mock_pydantic_summary = PydanticSummary(
             meeting_id="mtg_test",
             executive_summary="Test summary",
             key_points=["Point 1"],
@@ -59,7 +67,7 @@ class TestMCPMeetingTools:
             ],
         )
         
-        mock_result = HandlerResult.success(mock_summary, meeting_id="mtg_test")
+        mock_result = HandlerResult.success(mock_pydantic_summary, meeting_id="mtg_test")
         mock_server.get_meeting_handler().process_from_text = AsyncMock(
             return_value=mock_result
         )
@@ -71,64 +79,57 @@ class TestMCPMeetingTools:
             "participants": ["Alice", "Bob"],
         })
         
-        # Verify
+        # Verify DB calls
+        # Should add Meeting, Participants, Transcript, Summary, ActionItems
+        assert mock_server.db_session.add.call_count >= 1
+        assert mock_server.db_session.commit.call_count >= 1
+        
+        # Verify result
         assert len(result) == 1
         assert result[0]["type"] == "text"
-        assert "analyzed" in result[0]["text"].lower() or "Test summary" in result[0]["text"]
+        assert "analyzed" in result[0]["text"].lower() or "summary" in result[0]["text"].lower()
 
     @pytest.mark.asyncio
     async def test_list_meetings_tool(self, mock_server):
         """Test the list_meetings tool"""
-        from mcp_meeting_server.tools import _handle_list_meetings, _meetings_store
+        from mcp_meeting_server.tools import _handle_list_meetings
         
-        # Add some mock meetings
-        _meetings_store["mtg_001"] = {
-            "id": "mtg_001",
-            "title": "Meeting 1",
-            "status": "completed",
-        }
-        _meetings_store["mtg_002"] = {
-            "id": "mtg_002",
-            "title": "Meeting 2",
-            "status": "pending",
-        }
+        # Mock DB query
+        mock_query = mock_server.db_session.query.return_value
+        mock_query.order_by.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        
+        mock_meetings = [
+            Meeting(id="mtg_001", title="Meeting 1", status="completed"),
+            Meeting(id="mtg_002", title="Meeting 2", status="pending")
+        ]
+        mock_query.limit.return_value.all.return_value = mock_meetings
         
         # Call tool
         result = await _handle_list_meetings(mock_server, {"status": "all"})
         
         # Verify
         assert len(result) == 1
-        assert "Meeting 1" in result[0]["text"] or "Meeting 2" in result[0]["text"]
-        
-        # Cleanup
-        _meetings_store.clear()
+        assert "Meeting 1" in result[0]["text"]
+        assert "Meeting 2" in result[0]["text"]
 
     @pytest.mark.asyncio
     async def test_list_action_items_tool(self, mock_server):
         """Test the list_action_items tool"""
-        from mcp_meeting_server.tools import _handle_list_action_items, _summaries_store
+        from mcp_meeting_server.tools import _handle_list_action_items
         
-        # Add mock summary with action items
-        _summaries_store["mtg_test"] = MeetingSummary(
-            meeting_id="mtg_test",
-            executive_summary="Test",
-            action_items=[
-                ActionItem(
-                    id="ai_1",
-                    meeting_id="mtg_test",
-                    description="Complete documentation",
-                    assignee_name="Alice",
-                    priority=ActionItemPriority.HIGH,
-                ),
-                ActionItem(
-                    id="ai_2",
-                    meeting_id="mtg_test",
-                    description="Review code",
-                    assignee_name="Bob",
-                    priority=ActionItemPriority.MEDIUM,
-                ),
-            ],
-        )
+        # Mock DB query
+        mock_query = mock_server.db_session.query.return_value
+        mock_query.filter.return_value = mock_query
+        
+        mock_items = [
+            MeetingActionItem(
+                description="Complete documentation",
+                assignee_name="Alice",
+                status="pending"
+            )
+        ]
+        mock_query.all.return_value = mock_items
         
         # Call tool
         result = await _handle_list_action_items(mock_server, {
@@ -139,9 +140,6 @@ class TestMCPMeetingTools:
         assert len(result) == 1
         assert "Complete documentation" in result[0]["text"]
         assert "Alice" in result[0]["text"]
-        
-        # Cleanup
-        _summaries_store.clear()
 
 
 class TestMCPServerCreation:
@@ -157,7 +155,9 @@ class TestMCPServerCreation:
             port=8082,
         )
         
-        server = MeetingMCPServer(config=config)
+        # Patch recursive mkdir to avoid permission errors
+        with patch("pathlib.Path.mkdir"):
+            server = MeetingMCPServer(config=config)
         
         assert server.config.transport == "http"
         assert server.config.port == 8082

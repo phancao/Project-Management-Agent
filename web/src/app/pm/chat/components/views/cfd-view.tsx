@@ -19,7 +19,7 @@ export function CFDView() {
     const dataPoint: any = {
       date: point.label || new Date(point.date!).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     };
-    
+
     // Add each series data
     chartData?.series.forEach((series) => {
       if (series.data && series.data[index]) {
@@ -52,7 +52,7 @@ export function CFDView() {
     <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📈 What is a Cumulative Flow Diagram (CFD)?</h3>
       <p className="text-sm text-gray-700 dark:text-gray-300">
-        A CFD shows the cumulative count of work items in each status over time. Each colored band represents a workflow stage, 
+        A CFD shows the cumulative count of work items in each status over time. Each colored band represents a workflow stage,
         and the width of the band shows how many items are in that stage. Use this chart to:
       </p>
       <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
@@ -79,7 +79,7 @@ export function CFDView() {
                 Unable to Load CFD Chart
               </h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                {error.message.includes("503") || error.message.includes("NotImplementedError")
                   ? "CFD chart is not available for this project type."
                   : "There was an error loading the Cumulative Flow Diagram. Please try again later."}
               </p>
@@ -135,17 +135,17 @@ export function CFDView() {
             <defs>
               {chartData?.series.map((series, index) => (
                 <linearGradient key={index} id={`color${series.name.replace(/\s/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={series.color || "#8884d8"} stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor={series.color || "#8884d8"} stopOpacity={0.3}/>
+                  <stop offset="5%" stopColor={series.color || "#8884d8"} stopOpacity={0.8} />
+                  <stop offset="95%" stopColor={series.color || "#8884d8"} stopOpacity={0.3} />
                 </linearGradient>
               ))}
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="date" stroke="#666" />
             <YAxis stroke="#666" label={{ value: 'Cumulative Items', angle: -90, position: 'insideLeft' }} />
-            <Tooltip 
+            <Tooltip
               contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
-              formatter={(value: number) => value.toFixed(0)}
+              formatter={(value: any) => Number(value).toFixed(0)}
             />
             <Legend />
             {chartData?.series.map((series, index) => (
@@ -178,7 +178,7 @@ export function CFDView() {
                 "In Progress": "bg-orange-500",
                 "To Do": "bg-gray-400"
               };
-              
+
               return (
                 <div key={status}>
                   <div className="flex justify-between text-sm mb-1">
@@ -186,7 +186,7 @@ export function CFDView() {
                     <span className="font-semibold text-gray-900 dark:text-white">{countNum} ({percentage.toFixed(0)}%)</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
+                    <div
                       className={`h-2 rounded-full ${colors[status] || 'bg-gray-500'}`}
                       style={{ width: `${percentage}%` }}
                     ></div>
@@ -225,7 +225,7 @@ export function CFDView() {
                 </div>
               </div>
             )}
-            
+
             <div className="flex items-start gap-3">
               <div className="w-2 h-2 rounded-full bg-blue-500 mt-2"></div>
               <div>
@@ -237,7 +237,7 @@ export function CFDView() {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-3">
               <div className="w-2 h-2 rounded-full bg-purple-500 mt-2"></div>
               <div>
@@ -249,7 +249,7 @@ export function CFDView() {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-3">
               <div className="w-2 h-2 rounded-full bg-green-500 mt-2"></div>
               <div>

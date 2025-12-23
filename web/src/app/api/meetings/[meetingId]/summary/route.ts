@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 interface RouteParams {
-    params: { meetingId: string };
+    params: Promise<{ meetingId: string }>;
 }
 
 /**
@@ -10,8 +10,9 @@ interface RouteParams {
  */
 export async function GET(
     request: NextRequest,
-    { params }: RouteParams
+    props: RouteParams
 ) {
+    const params = await props.params;
     const { meetingId } = params;
 
     try {

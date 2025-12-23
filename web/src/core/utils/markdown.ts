@@ -14,44 +14,44 @@ function wrapCSVContent(markdown: string): string {
   // Matches "CSV Export" or "CSV Export (snippet)" followed by CSV-like content
   // Captures until blank line, new section header, or end
   const csvExportPattern = /(CSV\s+Export\s*(?:\([^)]+\))?\s*:?\s*\n)([\s\S]*?)(?=\n\n|\n(?=[A-Z][a-z]+\s*:)|$)/gi;
-  
-  return markdown.replace(csvExportPattern, (match, prefix, csvData) => {
+
+  return markdown.replace(csvExportPattern, (match: string, prefix: string, csvData: string) => {
     // Check if already wrapped in code block
     if (match.includes('```')) {
       return match;
     }
-    
+
     // Clean up the CSV data and reconstruct rows broken across lines
-    const lines = csvData.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const lines = csvData.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
     if (lines.length < 2) {
       return match; // Not enough content
     }
-    
+
     // Find header row (first line with commas)
-    const headerIndex = lines.findIndex(line => line.includes(','));
+    const headerIndex = lines.findIndex((line: string) => line.includes(','));
     if (headerIndex === -1) {
       return match; // No header found
     }
-    
-    const header = lines[headerIndex];
+
+    const header = lines[headerIndex]!;
     const expectedCommas = (header.match(/,/g) || []).length;
-    
+
     const reconstructed: string[] = [header];
     let currentRow = '';
-    
+
     // Process data rows (after header)
     for (let i = headerIndex + 1; i < lines.length; i++) {
-      const line = lines[i];
+      const line = lines[i]!;
       const commaCount = (line.match(/,/g) || []).length;
       const nextLine = i + 1 < lines.length ? lines[i + 1] : null;
-      
+
       // Check if next line looks like start of new CSV row (starts with capital letter or number)
       const nextLineIsNewRow = nextLine && (
         /^[A-Z][^,]*,\d+/.test(nextLine) ||  // Name,ID pattern
         /^\d+,/.test(nextLine) ||            // ID, pattern
         (nextLine.match(/,/g) || []).length === expectedCommas && /^[A-Z]/.test(nextLine)
       );
-      
+
       // If line has expected commas but next line doesn't look like new row, it might be incomplete
       if (commaCount === expectedCommas && nextLine && !nextLineIsNewRow && !/^https?:\/\//.test(nextLine)) {
         // Check if current line ends with something that suggests continuation
@@ -63,7 +63,7 @@ function wrapCSVContent(markdown: string): string {
           continue;
         }
       }
-      
+
       // If line has the expected number of commas, it's likely a complete row
       if (commaCount === expectedCommas) {
         if (currentRow) {
@@ -88,26 +88,26 @@ function wrapCSVContent(markdown: string): string {
         currentRow = line;
       }
     }
-    
+
     // Add the last row if any
     if (currentRow) {
       reconstructed.push(currentRow.trim());
     }
-    
+
     const finalCSV = reconstructed.join('\n');
-    
+
     // Verify it looks like CSV
     const csvLines = finalCSV.split('\n').filter(l => l.trim().length > 0);
     if (csvLines.length < 2) {
       return match;
     }
-    
+
     // Check if most lines contain commas
     const linesWithCommas = csvLines.filter(line => line.includes(',')).length;
     if (linesWithCommas < csvLines.length * 0.5) {
       return match;
     }
-    
+
     // Wrap in code block
     return `${prefix}\`\`\`csv\n${finalCSV}\n\`\`\``;
   });
@@ -159,17 +159,17 @@ function unescapeMarkdownSpecialChars(text: string): string {
  */
 export function normalizeMathForEditor(markdown: string): string {
   let normalized = markdown;
-  
+
   // Convert display math - handle double backslash first to avoid conflicts
   normalized = normalized
     .replace(/\\\\\[([^\]]*)\\\\\]/g, (_match, content) => `$$${content}$$`)  // \\[...\\] → $$...$$
     .replace(/\\\[([^\]]*)\\\]/g, (_match, content) => `$$${content}$$`);  // \[...\] → $$...$$
-  
+
   // Convert inline math - handle double backslash first to avoid conflicts
   normalized = normalized
     .replace(/\\\\\(([^)]*)\\\\\)/g, (_match, content) => `$${content}$`)  // \\(...\\) → $...$
     .replace(/\\\(([^)]*)\\\)/g, (_match, content) => `$${content}$`);    // \(...\) → $...$
-  
+
   // Replace double backslashes with single in math contexts
   // For inline math: $...$
   normalized = normalized.replace(
@@ -178,7 +178,7 @@ export function normalizeMathForEditor(markdown: string): string {
       return `$${mathContent.replace(/\\\\/g, '\\')}$`;
     }
   );
-  
+
   // For display math: $$...$$
   normalized = normalized.replace(
     /\$\$([\s\S]+?)\$\$/g,
@@ -197,7 +197,7 @@ export function normalizeMathForEditor(markdown: string): string {
  */
 export function normalizeMathForDisplay(markdown: string): string {
   let normalized = markdown;
-  
+
   // Convert all LaTeX-style delimiters to $$
   // Both display and inline math use $$ for display component (remarkMath handles both)
   // Handle double backslash first to avoid conflicts
@@ -206,7 +206,7 @@ export function normalizeMathForDisplay(markdown: string): string {
     .replace(/\\\[([^\]]*)\\\]/g, (_match, content) => `$$${content}$$`)      // \[...\] → $$...$$
     .replace(/\\\\\(([^)]*)\\\\\)/g, (_match, content) => `$$${content}$$`)   // \\(...\\) → $$...$$
     .replace(/\\\(([^)]*)\\\)/g, (_match, content) => `$$${content}$$`);       // \(...\) → $$...$$
-  
+
   // Replace double backslashes with single in math contexts
   // For inline math: $...$
   normalized = normalized.replace(
@@ -215,7 +215,7 @@ export function normalizeMathForDisplay(markdown: string): string {
       return `$${mathContent.replace(/\\\\/g, '\\')}$`;
     }
   );
-  
+
   // For display math: $$...$$
   normalized = normalized.replace(
     /\$\$([\s\S]+?)\$\$/g,
@@ -223,7 +223,7 @@ export function normalizeMathForDisplay(markdown: string): string {
       return `$$${mathContent.replace(/\\\\/g, '\\')}$$`;
     }
   );
-    
+
   return normalized;
 }
 

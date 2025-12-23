@@ -439,3 +439,154 @@ class AIProviderAPIKey(Base):  # type: ignore
 
     # Relationships
     user = relationship("User", backref="mcp_api_keys")
+
+
+class Meeting(Base):  # type: ignore
+    """Meeting model"""
+    __tablename__ = "meetings"
+
+    id = Column(String(50), primary_key=True)  # 'mtg_' prefix
+    title = Column(String(255), nullable=False)
+    description = Column(Text)
+    
+    # Timing
+    scheduled_start = Column(DateTime, nullable=True)
+    scheduled_end = Column(DateTime, nullable=True)
+    actual_start = Column(DateTime, nullable=True)
+    actual_end = Column(DateTime, nullable=True)
+    duration_minutes = Column(Float, nullable=True)
+    
+    # Status
+    status = Column(String(50), default='pending', nullable=False)
+    error_message = Column(Text, nullable=True)
+    
+    # File info
+    file_path = Column(String(500), nullable=True)
+    file_size_bytes = Column(Integer, nullable=True)
+    audio_format = Column(String(50), nullable=True)
+    
+    # Integration
+    project_id = Column(String(50), nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    processed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    participants = relationship("MeetingParticipant", back_populates="meeting", cascade="all, delete-orphan")
+    transcript = relationship("Transcript", uselist=False, back_populates="meeting", cascade="all, delete-orphan")
+    action_items = relationship("MeetingActionItem", back_populates="meeting", cascade="all, delete-orphan")
+    decisions = relationship("MeetingDecision", back_populates="meeting", cascade="all, delete-orphan")
+    summaries = relationship("MeetingSummary", back_populates="meeting", cascade="all, delete-orphan")
+
+
+class MeetingParticipant(Base):  # type: ignore
+    """Meeting participant model"""
+    __tablename__ = "meeting_participants"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    meeting_id = Column(String(50), ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True)
+    role = Column(String(50), default='participant')
+    speaking_time_seconds = Column(Float, nullable=True)
+    pm_user_id = Column(String(255), nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    meeting = relationship("Meeting", back_populates="participants")
+
+
+class Transcript(Base):  # type: ignore
+    """Meeting transcript model"""
+    __tablename__ = "transcripts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    meeting_id = Column(String(50), ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, unique=True)
+    language = Column(String(10), default='en')
+    full_text = Column(Text, nullable=True)
+    word_count = Column(Integer, nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    meeting = relationship("Meeting", back_populates="transcript")
+    segments = relationship("TranscriptSegment", back_populates="transcript", cascade="all, delete-orphan")
+
+
+class TranscriptSegment(Base):  # type: ignore
+    """Transcript segment model"""
+    __tablename__ = "transcript_segments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    transcript_id = Column(UUID(as_uuid=True), ForeignKey("transcripts.id", ondelete="CASCADE"), nullable=False)
+    segment_index = Column(Integer, nullable=False)
+    speaker = Column(String(255), nullable=True)
+    speaker_id = Column(UUID(as_uuid=True), ForeignKey("meeting_participants.id", ondelete="SET NULL"), nullable=True)
+    text = Column(Text, nullable=False)
+    start_time = Column(Float, nullable=False)
+    end_time = Column(Float, nullable=False)
+    confidence = Column(Float, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    transcript = relationship("Transcript", back_populates="segments")
+
+
+class MeetingActionItem(Base):  # type: ignore
+    """Meeting action item model"""
+    __tablename__ = "meeting_action_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    meeting_id = Column(String(50), ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False)
+    description = Column(Text, nullable=False)
+    status = Column(String(50), default='pending')
+    
+    assignee_name = Column(String(255), nullable=True)
+    assignee_id = Column(UUID(as_uuid=True), ForeignKey("meeting_participants.id", ondelete="SET NULL"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    
+    pm_task_id = Column(String(255), nullable=True)
+    original_text = Column(String(500), nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    meeting = relationship("Meeting", back_populates="action_items")
+
+
+class MeetingDecision(Base):  # type: ignore
+    """Meeting decision model"""
+    __tablename__ = "meeting_decisions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    meeting_id = Column(String(50), ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False)
+    description = Column(Text, nullable=False)
+    context = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    meeting = relationship("Meeting", back_populates="decisions")
+
+
+class MeetingSummary(Base):  # type: ignore
+    """Meeting summary model"""
+    __tablename__ = "meeting_summaries"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    meeting_id = Column(String(50), ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False)
+    summary_type = Column(String(50), default='executive')
+    content = Column(Text, nullable=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    meeting = relationship("Meeting", back_populates="summaries")
+

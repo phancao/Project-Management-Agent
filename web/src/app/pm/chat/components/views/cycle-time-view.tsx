@@ -96,7 +96,7 @@ export function CycleTimeView() {
                 Unable to Load Cycle Time Chart
               </h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                {error.message.includes("503") || error.message.includes("NotImplementedError")
                   ? "Cycle time chart is not available for this project type."
                   : "There was an error loading the cycle time chart. Please try again later."}
               </p>
@@ -153,61 +153,61 @@ export function CycleTimeView() {
         <ResponsiveContainer width="100%" height={400}>
           <ScatterChart>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-            <XAxis 
-              dataKey="date" 
+            <XAxis
+              dataKey="date"
               type="number"
               domain={['dataMin', 'dataMax']}
               tickFormatter={(timestamp) => new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               stroke="#666"
             />
-            <YAxis 
+            <YAxis
               stroke="#666"
               label={{ value: 'Cycle Time (days)', angle: -90, position: 'insideLeft' }}
             />
             <ZAxis range={[50, 50]} />
-            <Tooltip 
+            <Tooltip
               contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
-              formatter={(value: any, name: string) => {
+              formatter={(value: any, name: any) => {
                 if (name === 'cycleTime') return [`${value} days`, 'Cycle Time'];
                 return [value, name];
               }}
               labelFormatter={(label) => new Date(label).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             />
             <Legend />
-            
+
             {/* Percentile Lines */}
-            <Line 
+            <Line
               data={combinedData}
-              type="monotone" 
-              dataKey="p50" 
-              stroke="#10b981" 
+              type="monotone"
+              dataKey="p50"
+              stroke="#10b981"
               strokeWidth={2}
               name="50th Percentile"
               dot={false}
             />
-            <Line 
+            <Line
               data={combinedData}
-              type="monotone" 
-              dataKey="p85" 
-              stroke="#f59e0b" 
+              type="monotone"
+              dataKey="p85"
+              stroke="#f59e0b"
               strokeWidth={2}
               name="85th Percentile"
               dot={false}
             />
-            <Line 
+            <Line
               data={combinedData}
-              type="monotone" 
-              dataKey="p95" 
-              stroke="#ef4444" 
+              type="monotone"
+              dataKey="p95"
+              stroke="#ef4444"
               strokeWidth={2}
               name="95th Percentile"
               dot={false}
             />
-            
+
             {/* Scatter Points */}
-            <Scatter 
+            <Scatter
               data={combinedData}
-              fill="#3b82f6" 
+              fill="#3b82f6"
               name="Cycle Time"
               shape="circle"
             />

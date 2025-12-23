@@ -132,7 +132,7 @@ export function WorkDistributionView() {
                   </Pie>
                   <Tooltip
                     contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
-                    formatter={(value: number, name: string, props: any) => [
+                    formatter={(value: any, name: any, props: any) => [
                       `${value} items (${props.payload.percentage}%)`,
                       props.payload.name
                     ]}
@@ -169,7 +169,7 @@ export function WorkDistributionView() {
                   </Pie>
                   <Tooltip
                     contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
-                    formatter={(value: number, name: string, props: any) => [
+                    formatter={(value: any, name: any, props: any) => [
                       `${value} points (${props.payload.pointsPercentage}%)`,
                       props.payload.name
                     ]}

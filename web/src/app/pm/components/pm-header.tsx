@@ -133,13 +133,15 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
 
   const isOverview = pathname?.includes('/overview') ?? false;
   const isChat = pathname?.includes('/chat') ?? false;
+  const isMeeting = pathname?.includes('/meeting') ?? false;
 
   // Auto-select first project if no project is selected (only on Project Management page)
   useEffect(() => {
-    if (!isOverview && !selectedProjectId && projects.length > 0 && selectedProject) {
+    // Don't auto-redirect if we're on overview or meeting page
+    if (!isOverview && !isMeeting && !selectedProjectId && projects.length > 0 && selectedProject) {
       router.push(`/pm/chat?project=${selectedProject}`);
     }
-  }, [projects.length, selectedProject, selectedProjectId, router, isOverview]);
+  }, [projects.length, selectedProject, selectedProjectId, router, isOverview, isMeeting]);
 
   const handleProjectChange = (projectId: string) => {
     if (onProjectChange) {

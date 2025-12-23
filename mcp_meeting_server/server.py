@@ -47,6 +47,15 @@ class MeetingMCPServer:
         try:
             from mcp.server import Server
             
+            # Initialize database
+            try:
+                from database.connection import init_db
+                init_db()
+                logger.info("Database initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize database: {e}")
+                # We don't raise here to allow server to start, but tools might fail
+            
             self._server = Server(self.config.server_name)
             self._register_tools()
             
@@ -129,6 +138,11 @@ class MeetingMCPServer:
         )
         return MeetingHandler(config=config)
     
+    def get_db_session(self):
+        """Get a database session"""
+        from database.connection import SessionLocal
+        return SessionLocal()
+        
     def get_upload_dir(self) -> Path:
         """Get the upload directory path"""
         return Path(self.config.upload_dir)

@@ -45,7 +45,7 @@ export function VelocityView() {
     <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">⚡ What is a Velocity Chart?</h3>
       <p className="text-sm text-gray-700 dark:text-gray-300">
-        Velocity measures how much work a team completes in each sprint. It compares <strong>committed points</strong> (planned work) 
+        Velocity measures how much work a team completes in each sprint. It compares <strong>committed points</strong> (planned work)
         with <strong>completed points</strong> (actual delivery). Use this chart to:
       </p>
       <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
@@ -72,7 +72,7 @@ export function VelocityView() {
                 Unable to Load Velocity Chart
               </h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                {error.message.includes("503") || error.message.includes("NotImplementedError")
                   ? "Velocity chart is not available for this project type."
                   : "There was an error loading the velocity chart. Please try again later."}
               </p>
@@ -141,20 +141,20 @@ export function VelocityView() {
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="sprint" stroke="#666" />
             <YAxis stroke="#666" label={{ value: 'Story Points', angle: -90, position: 'insideLeft' }} />
-            <Tooltip 
+            <Tooltip
               contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
-              formatter={(value: number) => `${value.toFixed(1)} pts`}
+              formatter={(value: any) => `${Number(value).toFixed(1)} pts`}
             />
             <Legend />
-            <Bar 
-              dataKey="committed" 
-              fill="#94a3b8" 
+            <Bar
+              dataKey="committed"
+              fill="#94a3b8"
               name="Committed"
               radius={[4, 4, 0, 0]}
             />
-            <Bar 
-              dataKey="completed" 
-              fill="#10b981" 
+            <Bar
+              dataKey="completed"
+              fill="#10b981"
               name="Completed"
               radius={[4, 4, 0, 0]}
             />
@@ -178,7 +178,7 @@ export function VelocityView() {
             <div className="w-2 h-2 rounded-full bg-green-500 mt-2"></div>
             <div>
               <p className="text-sm text-gray-700 dark:text-gray-300">
-                <span className="font-semibold">Predictability score:</span> {(predictabilityScore * 100).toFixed(0)}% 
+                <span className="font-semibold">Predictability score:</span> {(predictabilityScore * 100).toFixed(0)}%
                 {predictabilityScore >= 0.8 ? " (Excellent)" : predictabilityScore >= 0.6 ? " (Good)" : " (Needs Improvement)"}
               </p>
             </div>

@@ -13,20 +13,27 @@ interface Meeting {
 
 interface MeetingListProps {
     onSelectMeeting: (meetingId: string) => void;
+    projectId?: string | null;
 }
 
-export default function MeetingList({ onSelectMeeting }: MeetingListProps) {
+export default function MeetingList({ onSelectMeeting, projectId }: MeetingListProps) {
     const [meetings, setMeetings] = useState<Meeting[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'completed' | 'pending'>('all');
 
     useEffect(() => {
         fetchMeetings();
-    }, []);
+    }, [projectId]);
 
     const fetchMeetings = async () => {
         try {
-            const res = await fetch('/api/meetings');
+            setLoading(true);
+            const params = new URLSearchParams();
+            if (projectId) {
+                params.append('projectId', projectId);
+            }
+
+            const res = await fetch(`/api/meetings?${params.toString()}`);
             if (res.ok) {
                 const data = await res.json();
                 setMeetings(data.meetings || []);
@@ -99,7 +106,7 @@ export default function MeetingList({ onSelectMeeting }: MeetingListProps) {
                     <div className="text-4xl mb-4">📭</div>
                     <p className="text-slate-400">No meetings found</p>
                     <p className="text-slate-500 text-sm mt-1">
-                        Upload a meeting recording to get started
+                        {projectId ? "Upload a recording for this project" : "Upload a recording to get started"}
                     </p>
                 </div>
             ) : (

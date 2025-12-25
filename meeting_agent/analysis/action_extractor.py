@@ -54,6 +54,8 @@ class ActionExtractor:
         self,
         meeting: Meeting,
         participant_mapping: Optional[Dict[str, str]] = None,
+        project_context: Optional[Dict[str, Any]] = None,
+        api_key: Optional[str] = None,
     ) -> tuple[List[ActionItem], List[Decision], List[FollowUp]]:
         """
         Extract action items, decisions, and follow-ups from a meeting.
@@ -61,6 +63,7 @@ class ActionExtractor:
         Args:
             meeting: The meeting to analyze
             participant_mapping: Optional mapping of names to PM user IDs
+            project_context: Optional context about the project
             
         Returns:
             Tuple of (action_items, decisions, follow_ups)
@@ -75,12 +78,13 @@ class ActionExtractor:
         prompt = self._build_extraction_prompt(
             meeting, 
             transcript_text,
-            participants, 
+            participants,
+            project_context,
         )
         
         # Call LLM
         try:
-            response = await self._call_llm(prompt)
+            response = await self._call_llm(prompt, api_key)
             parsed = self._parse_response(response)
             
             # Convert to models
@@ -115,16 +119,25 @@ class ActionExtractor:
         meeting: Meeting,
         transcript_text: str,
         participants: List[str],
+        project_context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build the extraction prompt"""
         participants_str = ", ".join(participants) if participants else "Unknown"
+        project_info = ""
+        if project_context:
+            project_info = f"""
+## Project Context
+- Project: {project_context.get('name', 'Unknown')}
+- Description: {project_context.get('description', '')}
+- Known Project Participants: {', '.join([p['name'] for p in project_context.get('participants', [])]) if project_context.get('participants') else 'Unknown'}
+"""
         
         prompt = f"""Analyze the following meeting transcript and extract action items, decisions, and follow-ups.
 
 ## Meeting Information
 - Title: {meeting.title}
 - Participants: {participants_str}
-
+{project_info}
 ## Transcript
 {transcript_text[:50000]}
 
@@ -181,13 +194,13 @@ Return ONLY the JSON, no additional text."""
 
         return prompt
     
-    async def _call_llm(self, prompt: str) -> str:
+    async def _call_llm(self, prompt: str, api_key: Optional[str] = None) -> str:
         """Call the LLM with the prompt"""
         try:
             from openai import AsyncOpenAI
             import os
             
-            client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            client = AsyncOpenAI(api_key=api_key)
             
             response = await client.chat.completions.create(
                 model=self.config.model,

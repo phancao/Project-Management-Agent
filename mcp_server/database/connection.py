@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 _engine = None
 _session_factory = None
 
+# Main DB globals
+_main_engine = None
+_main_session_factory = None
+
 
 def init_mcp_db(config: PMServerConfig | None = None) -> None:
     """
@@ -99,6 +103,66 @@ def get_mcp_db_engine():
 
 
 
+def init_main_db(config: PMServerConfig | None = None) -> None:
+    """
+    Initialize Main Database (Project Management) connection.
+    Used for accessing shared tables like AIProviderAPIKey.
+    """
+    global _main_engine, _main_session_factory
+    
+    if config is None:
+        from ..config import PMServerConfig
+        config = PMServerConfig.from_env()
+    
+    database_url = config.main_database_url
+    
+    if not database_url:
+        logger.warning("MAIN_DATABASE_URL not set, cannot connect to Project Management DB")
+        return
+        
+    logger.info(f"Initializing Main database connection: {database_url.split('@')[-1] if '@' in database_url else database_url}")
+    
+    _main_engine = create_engine(
+        database_url,
+        poolclass=NullPool,
+        echo=False,
+        future=True,
+    )
+    
+    _main_session_factory = sessionmaker(
+        bind=_main_engine,
+        autocommit=False,
+        autoflush=False,
+        expire_on_commit=False,
+    )
+    logger.info("Main database connection initialized")
+
+
+def get_main_db_session() -> Generator[Session, None, None]:
+    """
+    Get Main Database (Project Management) session.
+    
+    Yields:
+        SQLAlchemy Session for Main database
+    """
+    global _main_session_factory
+    
+    if _main_session_factory is None:
+        # Try to init
+        init_main_db()
+        
+    if _main_session_factory is None:
+        raise RuntimeError("Main database not configured (MAIN_DATABASE_URL missing)")
+    
+    db = _main_session_factory()
+    try:
+        yield db
+    except Exception as e:
+        logger.error(f"Main database session error: {e}", exc_info=True)
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 

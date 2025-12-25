@@ -9,11 +9,11 @@
  */
 
 import { motion } from "framer-motion";
-import { 
-  CheckCircle2, 
-  ChevronDown, 
-  ChevronRight, 
-  Clock, 
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock,
   AlertCircle,
   Loader2,
   Wrench,
@@ -43,7 +43,7 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   get_project: <FolderKanban size={12} />,
   create_project: <FolderKanban size={12} />,
   project_health: <BarChart3 size={12} />,
-  
+
   // Task tools
   list_tasks: <ListTodo size={12} />,
   list_tasks_by_assignee: <ListTodo size={12} />,
@@ -52,7 +52,7 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   get_task: <ListTodo size={12} />,
   create_task: <ListTodo size={12} />,
   update_task: <ListTodo size={12} />,
-  
+
   // Sprint tools
   list_sprints: <GitBranch size={12} />,
   get_sprint: <GitBranch size={12} />,
@@ -63,14 +63,14 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   cycle_time_chart: <BarChart3 size={12} />,
   work_distribution_chart: <BarChart3 size={12} />,
   issue_trend_chart: <BarChart3 size={12} />,
-  
+
   // User tools
   list_users: <Users size={12} />,
   get_user: <Users size={12} />,
-  
+
   // Cursor-style: Thought (reasoning)
   thought: <Brain size={12} />,
-  
+
   // Default
   default: <Wrench size={12} />,
 };
@@ -114,49 +114,49 @@ function getToolDisplayName(toolName: string): string {
 // Get friendly name and color for agent
 function getAgentDisplayInfo(agent?: string): { name: string; color: string; bgColor: string } {
   const agentMap: Record<string, { name: string; color: string; bgColor: string }> = {
-    pm_agent: { 
-      name: "PM Agent", 
-      color: "text-blue-600 dark:text-blue-400", 
-      bgColor: "bg-blue-100 dark:bg-blue-900/30" 
+    pm_agent: {
+      name: "PM Agent",
+      color: "text-blue-600 dark:text-blue-400",
+      bgColor: "bg-blue-100 dark:bg-blue-900/30"
     },
-    researcher: { 
-      name: "Researcher", 
-      color: "text-purple-600 dark:text-purple-400", 
-      bgColor: "bg-purple-100 dark:bg-purple-900/30" 
+    researcher: {
+      name: "Researcher",
+      color: "text-purple-600 dark:text-purple-400",
+      bgColor: "bg-purple-100 dark:bg-purple-900/30"
     },
-    coder: { 
-      name: "Coder", 
-      color: "text-green-600 dark:text-green-400", 
-      bgColor: "bg-green-100 dark:bg-green-900/30" 
+    coder: {
+      name: "Coder",
+      color: "text-green-600 dark:text-green-400",
+      bgColor: "bg-green-100 dark:bg-green-900/30"
     },
-    planner: { 
-      name: "Planner", 
-      color: "text-orange-600 dark:text-orange-400", 
-      bgColor: "bg-orange-100 dark:bg-orange-900/30" 
+    planner: {
+      name: "Planner",
+      color: "text-orange-600 dark:text-orange-400",
+      bgColor: "bg-orange-100 dark:bg-orange-900/30"
     },
-    reporter: { 
-      name: "Reporter", 
-      color: "text-amber-600 dark:text-amber-400", 
-      bgColor: "bg-amber-100 dark:bg-amber-900/30" 
+    reporter: {
+      name: "Reporter",
+      color: "text-amber-600 dark:text-amber-400",
+      bgColor: "bg-amber-100 dark:bg-amber-900/30"
     },
   };
-  
+
   if (agent && agent in agentMap) {
     return agentMap[agent]!;
   }
-  
+
   // Default for unknown agents
-  return { 
-    name: agent ? agent.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Agent", 
-    color: "text-gray-600 dark:text-gray-400", 
-    bgColor: "bg-gray-100 dark:bg-gray-900/30" 
+  return {
+    name: agent ? agent.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Agent",
+    color: "text-gray-600 dark:text-gray-400",
+    bgColor: "bg-gray-100 dark:bg-gray-900/30"
   };
 }
 
 // Parse result to get summary
 function getResultSummary(toolName: string, result: string | undefined): string {
   if (!result) return "Running...";
-  
+
   try {
     // Use a more defensive approach - catch any errors from parseJSON
     let parsed: unknown = null;
@@ -167,7 +167,7 @@ function getResultSummary(toolName: string, result: string | undefined): string 
       console.debug(`[StepBox] Failed to parse result for ${toolName}:`, parseError);
       parsed = null;
     }
-    
+
     if (parsed === null) {
       // Plain text result
       if (result.length > 100) {
@@ -175,48 +175,48 @@ function getResultSummary(toolName: string, result: string | undefined): string 
       }
       return result;
     }
-    
+
     // Handle different result structures
     if (Array.isArray(parsed)) {
       return `Found ${parsed.length} item${parsed.length !== 1 ? "s" : ""}`;
     }
-    
+
     if (typeof parsed === "object" && parsed !== null) {
       const obj = parsed as Record<string, unknown>;
-      
+
       if (typeof obj.total === "number") {
         return `Found ${obj.total} item${obj.total !== 1 ? "s" : ""}`;
       }
-      
+
       if (Array.isArray(obj.sprints)) {
         return `Found ${obj.sprints.length} sprint${obj.sprints.length !== 1 ? "s" : ""}`;
       }
-      
+
       if (Array.isArray(obj.tasks)) {
         return `Found ${obj.tasks.length} task${obj.tasks.length !== 1 ? "s" : ""}`;
       }
-      
+
       if (Array.isArray(obj.projects)) {
         return `Found ${obj.projects.length} project${obj.projects.length !== 1 ? "s" : ""}`;
       }
-      
+
       if (typeof obj.name === "string") {
         return obj.name;
       }
-      
+
       if (typeof obj.title === "string") {
         return obj.title;
       }
-      
+
       if (typeof obj.message === "string") {
         return obj.message;
       }
-      
+
       if (typeof obj.error === "string") {
         return `Error: ${obj.error}`;
       }
     }
-    
+
     return "Completed";
   } catch (error) {
     // Final fallback - return truncated result
@@ -234,9 +234,9 @@ interface StepBoxProps {
   agent?: string;
 }
 
-export function StepBox({ 
-  toolCall, 
-  stepNumber, 
+export function StepBox({
+  toolCall,
+  stepNumber,
   totalSteps,
   className,
   defaultExpanded = false,
@@ -244,16 +244,16 @@ export function StepBox({
 }: StepBoxProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const { resolvedTheme } = useTheme();
-  
+
   const isRunning = toolCall.result === undefined;
-  const hasError = toolCall.result?.startsWith("Error") || 
-                   toolCall.result?.includes('"error"');
-  
+  const hasError = toolCall.result?.startsWith("Error") ||
+    toolCall.result?.includes('"error"');
+
   const icon = TOOL_ICONS[toolCall.name] ?? TOOL_ICONS.default;
   const displayName = getToolDisplayName(toolCall.name);
   const summary = getResultSummary(toolCall.name, toolCall.result);
   const agentInfo = getAgentDisplayInfo(agent);
-  
+
   // Parse args for display
   const argsDisplay = useMemo(() => {
     if (!toolCall.args) return null;
@@ -271,7 +271,7 @@ export function StepBox({
       className={cn("w-full", className)}
       style={{ minWidth: 0, maxWidth: '100%' }}
     >
-      <Card 
+      <Card
         className={cn(
           "overflow-hidden transition-all duration-200 py-0 gap-0 w-full",
           isRunning && "border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20",
@@ -296,20 +296,20 @@ export function StepBox({
               <CheckCircle2 size={12} className="text-green-500" />
             )}
           </div>
-          
+
           {/* Tool icon and name */}
           <div className="flex items-center gap-1 shrink-0 text-muted-foreground">
             {icon}
             <span className="font-medium text-xs">{displayName}</span>
           </div>
-          
+
           {/* Step number */}
           {stepNumber !== undefined && (
             <span className="text-[10px] text-muted-foreground bg-accent px-1.5 py-px rounded-full shrink-0">
               {totalSteps !== undefined ? `${stepNumber}/${totalSteps}` : `#${stepNumber}`}
             </span>
           )}
-          
+
           {/* Agent badge */}
           {agent && (
             <span className={cn(
@@ -320,18 +320,18 @@ export function StepBox({
               {agentInfo.name}
             </span>
           )}
-          
+
           {/* Summary */}
           <span className="text-xs text-muted-foreground truncate min-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {summary}
           </span>
-          
+
           {/* Expand icon */}
           <div className="shrink-0 text-muted-foreground">
             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </div>
         </button>
-        
+
         {/* Expanded content */}
         {isExpanded && (
           <motion.div
@@ -349,10 +349,10 @@ export function StepBox({
                 </div>
               </div>
             )}
-            
+
             {/* Result */}
             {toolCall.result && (
-              <div className="p-2 max-h-[300px] overflow-y-auto overflow-x-hidden" style={{ minWidth: 0, maxWidth: '100%' }}>
+              <div className="p-2 overflow-x-hidden" style={{ minWidth: 0, maxWidth: '100%' }}>
                 <SyntaxHighlighter
                   language="json"
                   style={resolvedTheme === "dark" ? dark : docco}
@@ -374,7 +374,7 @@ export function StepBox({
                 </SyntaxHighlighter>
               </div>
             )}
-            
+
             {/* Loading state */}
             {isRunning && (
               <div className="px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
@@ -409,7 +409,7 @@ interface StepBoxListProps {
 
 export function StepBoxList({ toolCalls, className }: StepBoxListProps) {
   if (!toolCalls || toolCalls.length === 0) return null;
-  
+
   return (
     <div className={cn("flex flex-col gap-0.5", className)}>
       {toolCalls.map((toolCall, index) => (

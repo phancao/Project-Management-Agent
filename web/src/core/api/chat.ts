@@ -22,14 +22,14 @@ function buildConversationHistory(
   maxMessages = 20
 ): Array<{ role: string; content: string }> {
   const history: Array<{ role: string; content: string }> = [];
-  
+
   // Get recent messages (skip the current message which will be sent separately)
   const recentIds = messageIds.slice(-maxMessages - 1, -1);
-  
+
   for (const id of recentIds) {
     const msg = messages.get(id);
     if (!msg) continue;
-    
+
     // Only include user and assistant messages with content
     if (msg.role === "user" && msg.content) {
       history.push({ role: "user", content: msg.content });
@@ -39,7 +39,7 @@ function buildConversationHistory(
       history.push({ role, content: msg.content });
     }
   }
-  
+
   return history;
 }
 
@@ -82,7 +82,7 @@ export async function* chatStream(
     interrupt_feedback?: string;
     enable_deep_thinking?: boolean;
     enable_background_investigation: boolean;
-    report_style?: "academic" | "popular_science" | "news" | "social_media" | "strategic_investment";
+    report_style?: "generic" | "project_management";
     mcp_settings?: {
       servers: Record<
         string,
@@ -121,18 +121,18 @@ export async function* chatStream(
 
     // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
     const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
-    
+
     // Build messages array with conversation history
     const messages: Array<{ role: string; content: string }> = [];
-    
+
     // Add conversation history if provided (for context continuity)
     if (params.conversation_history && params.conversation_history.length > 0) {
       messages.push(...params.conversation_history);
     }
-    
+
     // Add current user message (clean, without injected context)
     messages.push({ role: "user", content: userMessage });
-    
+
     const stream = fetchStream(resolveServiceURL(endpoint), {
       body: JSON.stringify({
         messages,

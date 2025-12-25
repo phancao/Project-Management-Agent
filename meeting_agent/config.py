@@ -54,6 +54,7 @@ class MeetingAgentConfig:
     default_pm_provider_id: Optional[str] = None
     default_project_id: Optional[str] = None
     auto_create_tasks: bool = False  # Require confirmation by default
+    openai_api_key: Optional[str] = None
     
     # Storage
     upload_dir: str = "./uploads/meetings"

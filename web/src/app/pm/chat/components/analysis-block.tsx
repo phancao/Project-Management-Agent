@@ -12,13 +12,13 @@
  */
 
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Check, 
-  ChevronDown, 
-  ChevronUp, 
-  Copy, 
-  Download, 
-  Pencil, 
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  Pencil,
   Undo2,
   Brain,
   Sparkles,
@@ -51,7 +51,7 @@ interface PlannerAnalysisBlockProps {
 
 export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisBlockProps) {
   const { isReplay } = useReplay();
-  
+
   // Get research data from store
   const plannerResearchIds = useStore((state) => state.plannerResearchIds);
   const researchIds = useStore((state) => state.researchIds);
@@ -60,13 +60,13 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
   const planMessageId = useStore((state) => state.researchPlanIds.get(researchId));
   const ongoing = useStore((state) => state.ongoingResearchId === researchId);
   const messages = useStore((state) => state.messages) ?? new Map();
-  
+
   const reportMessage = useMessage(reportId ?? "");
   const planMessage = useMessage(planMessageId ?? "");
-  
+
   const hasReport = reportId !== undefined && reportMessage?.content;
   const isGeneratingReport = reportMessage?.isStreaming ?? false;
-  
+
   // Get title and plan content from plan
   const planData = useMemo(() => {
     if (planMessage?.content) {
@@ -83,37 +83,37 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
     }
     return { title: "", thought: "", steps: [] };
   }, [planMessage?.content, reportMessage?.content, reportId, activityIds.length]);
-  
+
   const title = planData.title;
-  
+
   // Determine if block should be shown
   const validResearchIds = researchIds.filter(id => id != null && id !== undefined);
   const hasPlannerResearchId = plannerResearchIds.includes(researchId);
   const hasResearchId = validResearchIds.includes(researchId);
   const hasContent = title || reportId || activityIds.length > 0 || ongoing || planMessageId;
   const shouldShow = hasPlannerResearchId || hasResearchId || hasContent;
-  
+
   if (!shouldShow) {
     return null;
   }
-  
+
   const isLoading = hasResearchId && !hasContent;
-  
+
   // Collect all tool calls from activities - now reactive to messages changes
   // Also track which agent each tool call came from
   const toolCalls = useMemo(() => {
-    const calls: Array<{ 
-      id: string; 
-      name: string; 
-      args: Record<string, unknown>; 
+    const calls: Array<{
+      id: string;
+      name: string;
+      args: Record<string, unknown>;
       result?: string;
       agent?: string;
     }> = [];
-    
+
     if (!messages || !activityIds || activityIds.length === 0) {
       return calls;
     }
-    
+
     for (const activityId of activityIds) {
       const message = messages.get(activityId);
       if (message?.toolCalls) {
@@ -129,14 +129,14 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
         }
       }
     }
-    
+
     return calls;
   }, [activityIds, messages]);
-  
+
   // Cursor-style: Collect thoughts using the dedicated hook
   // Extracts from plan steps and pm_agent/react_agent reactThoughts
   const thoughts = useResearchThoughts(researchId);
-  
+
   // DEBUG: Log thoughts and tool calls for debugging
   const renderTimestamp = new Date().toISOString();
   console.log(`[AnalysisBlock] 📋 [${renderTimestamp}] Rendering: researchId=${researchId}`, {
@@ -145,12 +145,12 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
     thoughts: thoughts.map(t => ({ step_index: t.step_index, agent: t.agent, thought: t.thought.substring(0, 50) })),
     toolCalls: toolCalls.map(tc => ({ id: tc.id, name: tc.name, hasResult: !!tc.result })),
   });
-  
+
   // UI state
   const [stepsExpanded, setStepsExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
-  
+
   // Handlers
   const handleCopy = useCallback(() => {
     if (!reportMessage?.content) return;
@@ -158,7 +158,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
     setCopied(true);
     setTimeout(() => setCopied(false), 1000);
   }, [reportMessage?.content]);
-  
+
   const handleDownload = useCallback(() => {
     if (!reportMessage?.content) return;
     const now = new Date();
@@ -177,11 +177,11 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
       URL.revokeObjectURL(url);
     }, 0);
   }, [reportMessage?.content]);
-  
+
   const handleEdit = useCallback(() => {
     setEditing((prev) => !prev);
   }, []);
-  
+
   const handleMarkdownChange = useCallback((markdown: string) => {
     if (reportMessage) {
       reportMessage.content = markdown;
@@ -190,7 +190,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
       });
     }
   }, [reportMessage]);
-  
+
   // Status text
   const statusText = useMemo(() => {
     if (hasReport && !isGeneratingReport) return "Analysis complete";
@@ -240,7 +240,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                 </div>
               </div>
             </div>
-            
+
             {/* Actions */}
             {hasReport && !isGeneratingReport && (
               <div className="flex items-center gap-1">
@@ -279,7 +279,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
             )}
           </div>
         </CardHeader>
-        
+
         <CardContent className="pt-0 overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
           {/* Loading indicator when no tool calls yet */}
           {toolCalls.length === 0 && thoughts.length === 0 && ongoing && (
@@ -287,7 +287,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
               <LoadingAnimation />
             </div>
           )}
-          
+
           {/* Plan Content Section - Show planner thought and full plan JSON */}
           {planMessage?.content && (
             <div className="mb-4 pb-4 border-b break-words [word-break:break-word] [overflow-wrap:anywhere]">
@@ -301,7 +301,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                   </div>
                 </div>
               )}
-              
+
               {/* Show full plan JSON in a collapsible code block */}
               <details className="mt-2">
                 <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -316,7 +316,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
               {/* NOTE: Step descriptions are extracted and shown in ThoughtBox in Steps section */}
             </div>
           )}
-          
+
           {/* Steps Section - Collapsible (FIRST) */}
           {(toolCalls.length > 0 || thoughts.length > 0) && (
             <div className="mb-4">
@@ -330,7 +330,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                   {toolCalls.length + thoughts.length}
                 </span>
               </button>
-              
+
               <AnimatePresence>
                 {stepsExpanded && (
                   <motion.div
@@ -341,7 +341,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                     className="overflow-hidden overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]"
                     style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                   >
-                    <div className="flex flex-col gap-0.5 pt-0.5 max-h-[600px] overflow-y-auto overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                    <div className="flex flex-col gap-0.5 pt-0.5 overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       {/* Cursor-style: Interleave thoughts and tool calls - thoughts appear BEFORE their tool call */}
                       {(() => {
                         // Create a combined list of thoughts and tool calls
@@ -351,7 +351,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                           data: any;
                           sortKey: number; // Used for sorting - lower appears first
                         }> = [];
-                        
+
                         // Add thoughts - use step_index as sort key, but subtract 0.5 so they appear BEFORE tools
                         thoughts.forEach((thought) => {
                           combinedSteps.push({
@@ -362,7 +362,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                             sortKey: thought.step_index - 0.5,
                           });
                         });
-                        
+
                         // Add tool calls - use their index as sort key
                         toolCalls.forEach((toolCall, toolIndex) => {
                           combinedSteps.push({
@@ -371,12 +371,12 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                             sortKey: toolIndex,
                           });
                         });
-                        
+
                         // Sort by sortKey to maintain order (thoughts before tools at same index)
                         combinedSteps.sort((a, b) => a.sortKey - b.sortKey);
-                        
+
                         const totalSteps = combinedSteps.length;
-                        
+
                         return combinedSteps.map((step, displayIndex) => {
                           if (step.type === 'thought') {
                             return (
@@ -407,7 +407,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
               </AnimatePresence>
             </div>
           )}
-          
+
           {/* Report/Insights Section - Inline (BELOW steps) */}
           {(hasReport || isGeneratingReport) && (
             <div className={cn((toolCalls.length > 0 || thoughts.length > 0) ? "border-t pt-4" : "", "break-words [word-break:break-word] [overflow-wrap:anywhere]")}>
@@ -415,7 +415,7 @@ export function PlannerAnalysisBlock({ className, researchId }: PlannerAnalysisB
                 <Sparkles size={16} className="text-amber-500" />
                 <span className="font-medium text-sm">Insights</span>
               </div>
-              
+
               {!isReplay && hasReport && !isGeneratingReport && editing ? (
                 <ReportEditor
                   content={reportMessage?.content}

@@ -3,7 +3,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { Check, FileText, Newspaper, Users, GraduationCap, TrendingUp } from "lucide-react";
+import { Check, Globe, Briefcase } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -21,34 +21,16 @@ import { Tooltip } from "./tooltip";
 
 const REPORT_STYLES = [
   {
-    value: "academic" as const,
-    labelKey: "academic",
-    descriptionKey: "academicDesc",
-    icon: GraduationCap,
+    value: "generic" as const,
+    label: "Generic",
+    description: "Web research and general queries",
+    icon: Globe,
   },
   {
-    value: "popular_science" as const,
-    labelKey: "popularScience",
-    descriptionKey: "popularScienceDesc",
-    icon: FileText,
-  },
-  {
-    value: "news" as const,
-    labelKey: "news",
-    descriptionKey: "newsDesc",
-    icon: Newspaper,
-  },
-  {
-    value: "social_media" as const,
-    labelKey: "socialMedia",
-    descriptionKey: "socialMediaDesc",
-    icon: Users,
-  },
-  {
-    value: "strategic_investment" as const,
-    labelKey: "strategicInvestment",
-    descriptionKey: "strategicInvestmentDesc",
-    icon: TrendingUp,
+    value: "project_management" as const,
+    label: "Project Management",
+    description: "PM tasks, analytics, and data queries",
+    icon: Briefcase,
   },
 ];
 
@@ -58,7 +40,7 @@ export function ReportStyleDialog() {
   const currentStyle = useSettingsStore((state) => state.general.reportStyle);
 
   const handleStyleChange = (
-    style: "academic" | "popular_science" | "news" | "social_media" | "strategic_investment",
+    style: "generic" | "project_management",
   ) => {
     setReportStyle(style);
     setOpen(false);
@@ -76,9 +58,9 @@ export function ReportStyleDialog() {
         title={
           <div>
             <h3 className="mb-2 font-bold">
-              {t("writingStyle")}: {t(currentStyleConfig.labelKey)}
+              Agent Mode: {currentStyleConfig.label}
             </h3>
-            <p>{t("chooseDesc")}</p>
+            <p>{currentStyleConfig.description}</p>
           </div>
         }
       >
@@ -87,14 +69,14 @@ export function ReportStyleDialog() {
             className="!border-brand !text-brand rounded-2xl"
             variant="outline"
           >
-            <CurrentIcon className="h-4 w-4" /> {t(currentStyleConfig.labelKey)}
+            <CurrentIcon className="h-4 w-4" /> {currentStyleConfig.label}
           </Button>
         </DialogTrigger>
       </Tooltip>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>{t("chooseTitle")}</DialogTitle>
-          <DialogDescription>{t("chooseDesc")}</DialogDescription>
+          <DialogTitle>Choose Agent Mode</DialogTitle>
+          <DialogDescription>Select how the agent should process your queries</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 py-4">
           {REPORT_STYLES.map((style) => {
@@ -113,11 +95,11 @@ export function ReportStyleDialog() {
                 <Icon className="mt-0.5 h-5 w-5 shrink-0" />
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
-                    <h4 className="font-medium">{t(style.labelKey)}</h4>
+                    <h4 className="font-medium">{style.label}</h4>
                     {isSelected && <Check className="text-primary h-4 w-4" />}
                   </div>
                   <p className="text-muted-foreground text-sm">
-                    {t(style.descriptionKey)}
+                    {style.description}
                   </p>
                 </div>
               </button>

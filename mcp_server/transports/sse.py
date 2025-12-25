@@ -464,4 +464,122 @@ def create_sse_app(context: ToolContext, config: PMServerConfig, mcp_server_inst
             logger.error(f"Error listing tools: {e}", exc_info=True)
             return {"tools": [], "error": str(e)}
     
+    @app.post("/tools/call")
+    async def call_tool_http(request: Request):
+        """
+        Execute an MCP tool via HTTP POST.
+        Expected body: {"name": "tool_name", "arguments": { ... }}
+        """
+        try:
+            body = await request.json()
+            tool_name = body.get("name")
+            arguments = body.get("arguments", {})
+            
+            mcp_server = app.state.mcp_server
+            if not mcp_server:
+                raise HTTPException(status_code=503, detail="MCP server not available")
+                
+            if tool_name not in mcp_server._tool_functions:
+                 raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
+            
+            func = mcp_server._tool_functions[tool_name]
+            
+            # Execute tool
+            try:
+                # The stored function expects (tool_name, arguments)
+                result = await func(tool_name, arguments)
+                return result
+            except Exception as e:
+                logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)
+                return {"error": str(e), "status": "failed"}
+                
+        except Exception as e:
+            logger.error(f"Error in /tools/call: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/meetings")
+    async def list_meetings_http(status: str = "all", limit: int = 20, projectId: str = None):
+        """
+        List meetings via HTTP (convenience endpoint calling list_meetings tool).
+        """
+        try:
+            mcp_server = app.state.mcp_server
+            if not mcp_server:
+                 raise HTTPException(status_code=503, detail="MCP server not available")
+            
+            tool_name = "list_meetings"
+            if tool_name not in mcp_server._tool_functions:
+                 raise HTTPException(status_code=404, detail="list_meetings tool not available")
+            
+            func = mcp_server._tool_functions[tool_name]
+            
+            args = {"status": status, "limit": limit}
+            if projectId:
+                args["project_id"] = projectId
+                
+            result = await func(tool_name, args)
+            
+            # fast-track: check if result is containing JSON
+            if result and isinstance(result, list) and len(result) > 0:
+                text = getattr(result[0], "text", "")
+                # Try parsing as JSON
+                try:
+                    import json
+                    return json.loads(text)
+                except:
+                    pass
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in /meetings: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in /meetings: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/users")
+    async def list_users_http(projectId: str = None, limit: int = 100):
+        """
+        List users via HTTP (convenience endpoint calling list_users tool).
+        """
+        try:
+            mcp_server = app.state.mcp_server
+            if not mcp_server:
+                 raise HTTPException(status_code=503, detail="MCP server not available")
+            
+            # The tool name is "list_users" as defined in mcp_server.tools.pm_service_tools.users
+            tool_name = "list_users"
+            if tool_name not in mcp_server._tool_functions:
+                 # Try with prefix if namespaced? No, decorator name is "list_users"
+                 # Let's log available tools if not found
+                 logger.warning(f"Tool {tool_name} not found. Available: {list(mcp_server._tool_functions.keys())[:5]}...")
+                 raise HTTPException(status_code=404, detail="list_users tool not available")
+            
+            func = mcp_server._tool_functions[tool_name]
+            
+            args = {"limit": limit}
+            if projectId:
+                args["project_id"] = projectId
+                
+            result = await func(tool_name, args)
+            
+            # Check if result is TextContent list containing JSON
+            if result and isinstance(result, list) and len(result) > 0:
+                text = getattr(result[0], "text", "")
+                try:
+                    import json
+                    return json.loads(text)
+                except:
+                    pass
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in /users: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
     return app

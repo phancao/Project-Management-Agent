@@ -11,13 +11,13 @@
  */
 
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Check, 
-  ChevronDown, 
-  ChevronUp, 
-  Copy, 
-  Download, 
-  Pencil, 
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  Pencil,
   Undo2,
   Zap,
   Sparkles,
@@ -47,25 +47,25 @@ interface ReActAnalysisBlockProps {
 
 export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlockProps) {
   const { isReplay } = useReplay();
-  
+
   // Get research data from store
   const reactResearchIds = useStore((state) => state.reactResearchIds);
   const reportId = useStore((state) => state.researchReportIds.get(researchId));
   const activityIds = useStore((state) => state.researchActivityIds.get(researchId)) ?? [];
   const ongoing = useStore((state) => state.ongoingResearchId === researchId);
   const messages = useStore((state) => state.messages) ?? new Map();
-  
+
   // Check if ReAct escalated to Planner
   const escalationLink = useStore((state) => state.reactToPlannerEscalation.get(researchId));
   const hasEscalated = !!escalationLink;
-  
+
   // For ReAct: Get the main message (not plan message - ReAct doesn't use JSON plans)
   const reactMessage = useMessage(researchId);
   const reportMessage = useMessage(reportId ?? "");
-  
+
   const hasReport = reportId !== undefined && reportMessage?.content;
   const isGeneratingReport = reportMessage?.isStreaming ?? false;
-  
+
   // Get title from ReAct message content or default
   const title = useMemo(() => {
     // ReAct doesn't have a plan, so get title from message content or default
@@ -87,32 +87,32 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
     }
     return reactTheme.name;
   }, [reactMessage?.content, reportMessage?.content, reportId, activityIds.length]);
-  
+
   // Determine if block should be shown
   const hasResearchId = reactResearchIds.includes(researchId);
   const hasContent = title || reportId || activityIds.length > 0 || ongoing || reactMessage;
   const shouldShow = hasResearchId || hasContent;
-  
+
   if (!shouldShow) {
     return null;
   }
-  
+
   const isLoading = hasResearchId && !hasContent;
-  
+
   // Collect all tool calls from activities
   const toolCalls = useMemo(() => {
-    const calls: Array<{ 
-      id: string; 
-      name: string; 
-      args: Record<string, unknown>; 
+    const calls: Array<{
+      id: string;
+      name: string;
+      args: Record<string, unknown>;
       result?: string;
       agent?: string;
     }> = [];
-    
+
     if (!messages || !activityIds || activityIds.length === 0) {
       return calls;
     }
-    
+
     for (const activityId of activityIds) {
       const message = messages.get(activityId);
       if (message?.toolCalls) {
@@ -128,18 +128,18 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
         }
       }
     }
-    
+
     return calls;
   }, [activityIds, messages]);
-  
+
   // Collect thoughts using the dedicated hook
   const thoughts = useResearchThoughts(researchId);
-  
+
   // UI state
   const [stepsExpanded, setStepsExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
-  
+
   // Handlers
   const handleCopy = useCallback(() => {
     const contentToCopy = reportMessage?.content || reactMessage?.content || "";
@@ -148,7 +148,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
     setCopied(true);
     setTimeout(() => setCopied(false), 1000);
   }, [reportMessage?.content, reactMessage?.content]);
-  
+
   const handleDownload = useCallback(() => {
     const contentToDownload = reportMessage?.content || reactMessage?.content || "";
     if (!contentToDownload) return;
@@ -168,11 +168,11 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
       URL.revokeObjectURL(url);
     }, 0);
   }, [reportMessage?.content, reactMessage?.content]);
-  
+
   const handleEdit = useCallback(() => {
     setEditing((prev) => !prev);
   }, []);
-  
+
   const handleMarkdownChange = useCallback((markdown: string) => {
     if (reportMessage) {
       reportMessage.content = markdown;
@@ -186,7 +186,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
       });
     }
   }, [reportMessage, reactMessage]);
-  
+
   // Status text
   const statusText = useMemo(() => {
     if (hasEscalated) return "Escalated to Planner";
@@ -195,7 +195,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
     if (ongoing && !hasEscalated) return "Analyzing...";
     return "Processing...";
   }, [hasReport, isGeneratingReport, ongoing, hasEscalated]);
-  
+
   // Get streaming content from ReAct message (token-by-token)
   const reactContent = reactMessage?.content || "";
   const isStreamingContent = reactMessage?.isStreaming ?? false;
@@ -241,7 +241,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                 </div>
               </div>
             </div>
-            
+
             {/* Actions */}
             {(hasReport || reactContent) && !isGeneratingReport && !isStreamingContent && (
               <div className="flex items-center gap-1">
@@ -280,7 +280,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
             )}
           </div>
         </CardHeader>
-        
+
         <CardContent className="pt-0 overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
           {/* Loading indicator when no tool calls yet */}
           {toolCalls.length === 0 && thoughts.length === 0 && ongoing && (
@@ -288,7 +288,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
               <LoadingAnimation />
             </div>
           )}
-          
+
           {/* ReAct Content Section - Stream token-by-token (no JSON parsing) */}
           {reactContent && (
             <div className="mb-4 pb-4 border-b break-words [word-break:break-word] [overflow-wrap:anywhere]">
@@ -302,7 +302,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
               </div>
             </div>
           )}
-          
+
           {/* Steps Section - Collapsible */}
           {(toolCalls.length > 0 || thoughts.length > 0) && (
             <div className="mb-4">
@@ -316,7 +316,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                   {toolCalls.length + thoughts.length}
                 </span>
               </button>
-              
+
               <AnimatePresence>
                 {stepsExpanded && (
                   <motion.div
@@ -327,7 +327,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                     className="overflow-hidden overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]"
                     style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                   >
-                    <div className="flex flex-col gap-0.5 pt-0.5 max-h-[600px] overflow-y-auto overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                    <div className="flex flex-col gap-0.5 pt-0.5 overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       {/* Interleave thoughts and tool calls */}
                       {(() => {
                         const combinedSteps: Array<{
@@ -335,7 +335,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                           data: any;
                           sortKey: number;
                         }> = [];
-                        
+
                         // Add thoughts
                         thoughts.forEach((thought) => {
                           combinedSteps.push({
@@ -344,7 +344,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                             sortKey: thought.step_index - 0.5,
                           });
                         });
-                        
+
                         // Add tool calls
                         toolCalls.forEach((toolCall, toolIndex) => {
                           combinedSteps.push({
@@ -353,12 +353,12 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                             sortKey: toolIndex,
                           });
                         });
-                        
+
                         // Sort by sortKey
                         combinedSteps.sort((a, b) => a.sortKey - b.sortKey);
-                        
+
                         const totalSteps = combinedSteps.length;
-                        
+
                         return combinedSteps.map((step, displayIndex) => {
                           if (step.type === 'thought') {
                             return (
@@ -389,7 +389,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
               </AnimatePresence>
             </div>
           )}
-          
+
           {/* Report/Insights Section */}
           {(hasReport || isGeneratingReport) && (
             <div className={cn((toolCalls.length > 0 || thoughts.length > 0) ? "border-t pt-4" : "", "break-words [word-break:break-word] [overflow-wrap:anywhere]")}>
@@ -397,7 +397,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                 <Sparkles size={16} className="text-amber-500" />
                 <span className="font-medium text-sm">Insights</span>
               </div>
-              
+
               {!isReplay && hasReport && !isGeneratingReport && editing ? (
                 <ReportEditor
                   content={reportMessage?.content}

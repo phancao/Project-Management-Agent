@@ -114,7 +114,7 @@ export function MessageListView({
         <div className="flex h-8 w-full shrink-0"></div>
       </ul>
       {responding && (noOngoingResearch || !ongoingResearchIsOpen) && (
-        <LoadingAnimation className="ml-4" />
+        <LoadingAnimation className="w-full" />
       )}
     </ScrollContainer>
   );
@@ -155,27 +155,27 @@ function MessageListItem({
     }
     return isStart;
   }, [researchIds, messageId]);
-  
+
   // Safety check: ensure message exists before rendering
   if (!message) {
     return null;
   }
-  
+
   if (message) {
     // Check if this planner message is part of a research block
     // If so, don't render it separately - it will be shown in AnalysisBlock
     const researchPlanIds = useStore((state) => state.researchPlanIds);
-    const isPlannerInResearch = message.agent === "planner" && 
-      researchPlanIds && 
+    const isPlannerInResearch = message.agent === "planner" &&
+      researchPlanIds &&
       Array.from(researchPlanIds.values()).includes(message.id);
-    
+
     // Skip rendering planner messages that are part of research blocks
     // They will be shown in AnalysisBlock instead
     if (isPlannerInResearch) {
       console.log(`[DEBUG-RENDER] 🚫 Skipping planner message ${message.id} (part of research block)`, new Error().stack);
       return null;
     }
-    
+
     if (
       message.role === "user" ||
       message.agent === "coordinator" ||
@@ -186,14 +186,14 @@ function MessageListItem({
       // Note: reporter is NOT included here - report is shown inside AnalysisBlock
     ) {
       let content: React.ReactNode;
-      
+
       // Priority 1: If this is the start of research, route to correct component based on agent
       if (startOfResearch && message?.id) {
         const state = useStore.getState();
         const isReactAgent = message.agent === "react_agent";
         const isPlanner = message.agent === "planner";
         const escalationLink = state.reactToPlannerEscalation.get(message.id);
-        
+
         // Phase 4: Route based on agent type and escalation
         if (isReactAgent && escalationLink) {
           // Escalation: Show both ReAct (left) and Planner (right) side-by-side with handover indicator
@@ -269,7 +269,7 @@ function MessageListItem({
                 <Markdown
                   className={cn(
                     message.role === "user" &&
-                      "prose-invert not-dark:text-secondary dark:text-inherit",
+                    "prose-invert not-dark:text-secondary dark:text-inherit",
                   )}
                 >
                   {message?.content}
@@ -477,7 +477,7 @@ function ThoughtBlock({
             )}
           >
             <CardContent>
-              <div className="flex max-h-[400px] w-full overflow-y-auto">
+              <div className="flex w-full">
                 <ScrollContainer
                   className={cn(
                     "flex h-full w-full flex-col overflow-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]",
@@ -597,16 +597,15 @@ function PlanCard({
             <CardHeader>
               <CardTitle>
                 <Markdown animated={false}>
-                  {`### ${
-                    plan.title !== undefined && plan.title !== ""
-                      ? plan.title
-                      : t("deepResearch")
-                  }`}
+                  {`### ${plan.title !== undefined && plan.title !== ""
+                    ? plan.title
+                    : t("deepResearch")
+                    }`}
                 </Markdown>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="max-h-[500px] overflow-y-auto break-words [word-break:break-word] [overflow-wrap:anywhere]">
+              <div className="break-words [word-break:break-word] [overflow-wrap:anywhere]">
                 <Markdown className="opacity-80" animated={false}>
                   {plan.thought}
                 </Markdown>

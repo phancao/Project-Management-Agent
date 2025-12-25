@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS: SettingsState = {
     maxPlanIterations: 1,
     maxStepNum: 3,
     maxSearchResults: 3,
-    reportStyle: "academic",
+    reportStyle: "generic",
     modelProvider: undefined,
     modelName: undefined,
     searchProvider: undefined, // Search provider ID (e.g., "duckduckgo", "tavily")
@@ -37,7 +37,7 @@ export type SettingsState = {
     maxPlanIterations: number;
     maxStepNum: number;
     maxSearchResults: number;
-    reportStyle: "academic" | "popular_science" | "news" | "social_media" | "strategic_investment";
+    reportStyle: "generic" | "project_management";
     modelProvider?: string; // Provider ID (e.g., "openai", "anthropic")
     modelName?: string; // Model name (e.g., "gpt-4o", "claude-3-5-sonnet-20241022")
     searchProvider?: string; // Search provider ID (e.g., "duckduckgo", "tavily", "brave_search")
@@ -90,14 +90,14 @@ export const saveSettings = () => {
 export const getChatStreamSettings = () => {
   let mcpSettings:
     | {
-        servers: Record<
-          string,
-          MCPServerMetadata & {
-            enabled_tools: string[];
-            add_to_agents: string[];
-          }
-        >;
-      }
+      servers: Record<
+        string,
+        MCPServerMetadata & {
+          enabled_tools: string[];
+          add_to_agents: string[];
+        }
+      >;
+    }
     | undefined = undefined;
   const { mcp, general } = useSettingsStore.getState();
   const mcpServers = mcp.servers.filter((server) => server.enabled);
@@ -145,7 +145,7 @@ export const getChatStreamSettings = () => {
 };
 
 export function setReportStyle(
-  value: "academic" | "popular_science" | "news" | "social_media" | "strategic_investment",
+  value: "generic" | "project_management",
 ) {
   useSettingsStore.setState((state) => ({
     general: {

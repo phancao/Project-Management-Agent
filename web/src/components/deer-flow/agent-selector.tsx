@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useTranslations } from "next-intl";
-import { ChevronDown, GraduationCap, FileText, Newspaper, Users, TrendingUp } from "lucide-react";
-import { Detective } from "~/components/deer-flow/icons/detective";
+import { ChevronDown, Globe, Briefcase } from "lucide-react";
 import { cn } from "~/lib/utils";
 import {
   Select,
@@ -20,7 +19,7 @@ import type { ModelProvider } from "~/core/config/types";
 import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 
-export type ReportStyle = "academic" | "popular_science" | "news" | "social_media" | "strategic_investment";
+export type ReportStyle = "generic" | "project_management";
 
 export type AgentPreset = {
   id: string;
@@ -31,55 +30,23 @@ export type AgentPreset = {
   reportStyle: ReportStyle;
 };
 
-// Agent presets will be created with translations in the component
+// Simplified agent modes: Generic (web research) and Project Management
 const getAgentPresets = (t: (key: string) => string): AgentPreset[] => [
   {
-    id: "academic_researcher",
-    name: t("agentSelector.academicResearcher"),
-    description: t("agentSelector.academicResearcherDesc"),
-    icon: GraduationCap,
+    id: "generic",
+    name: "Generic",
+    description: "Web research and general queries",
+    icon: Globe,
     investigation: true,
-    reportStyle: "academic",
+    reportStyle: "generic",
   },
   {
-    id: "academic_analyst",
-    name: t("agentSelector.academicAnalyst"),
-    description: t("agentSelector.academicAnalystDesc"),
-    icon: GraduationCap,
+    id: "project_management",
+    name: "Project Management",
+    description: "PM tasks, analytics, and data queries",
+    icon: Briefcase,
     investigation: false,
-    reportStyle: "academic",
-  },
-  {
-    id: "news_investigator",
-    name: t("agentSelector.newsInvestigator"),
-    description: t("agentSelector.newsInvestigatorDesc"),
-    icon: Newspaper,
-    investigation: true,
-    reportStyle: "news",
-  },
-  {
-    id: "popular_science_writer",
-    name: t("agentSelector.popularScienceWriter"),
-    description: t("agentSelector.popularScienceWriterDesc"),
-    icon: FileText,
-    investigation: true,
-    reportStyle: "popular_science",
-  },
-  {
-    id: "strategic_analyst",
-    name: t("agentSelector.strategicAnalyst"),
-    description: t("agentSelector.strategicAnalystDesc"),
-    icon: TrendingUp,
-    investigation: true,
-    reportStyle: "strategic_investment",
-  },
-  {
-    id: "social_media_creator",
-    name: t("agentSelector.socialMediaCreator"),
-    description: t("agentSelector.socialMediaCreatorDesc"),
-    icon: Users,
-    investigation: true,
-    reportStyle: "social_media",
+    reportStyle: "project_management",
   },
 ];
 
@@ -266,7 +233,7 @@ export function AgentSelector() {
         <SelectTrigger
           className={cn(
             "rounded-2xl w-auto h-8 text-xs shrink-0 px-3",
-            "!border-brand !text-brand",
+            "!border-brand !text-white",
           )}
         >
           <div className="flex items-center gap-1.5">
@@ -296,15 +263,9 @@ export function AgentSelector() {
                       {preset.description}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
-                      {preset.investigation && (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <Detective className="h-3 w-3" />
-                          Investigation
-                        </span>
-                      )}
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                         <Icon className="h-3 w-3" />
-                        {tReportStyle(preset.reportStyle === "popular_science" ? "popularScience" : preset.reportStyle === "social_media" ? "socialMedia" : preset.reportStyle === "strategic_investment" ? "strategicInvestment" : preset.reportStyle)}
+                        {preset.reportStyle === "generic" ? "Generic" : "Project Management"}
                       </span>
                     </div>
                   </div>
@@ -324,7 +285,7 @@ export function AgentSelector() {
         <SelectTrigger
           className={cn(
             "rounded-2xl w-auto h-8 text-xs shrink-0 px-3",
-            "!border-brand !text-brand",
+            "!border-brand !text-white",
           )}
         >
           <div className="flex items-center gap-1.5">
@@ -377,7 +338,7 @@ export function AgentSelector() {
         <SelectTrigger
           className={cn(
             "rounded-2xl w-auto h-8 text-xs shrink-0 px-3",
-            "!border-brand !text-brand",
+            "!border-brand !text-white",
           )}
         >
           <div className="flex items-center gap-1.5">

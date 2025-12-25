@@ -26,6 +26,7 @@ from .tools.tasks_v2.register import register_task_tools_v2
 from .tools.sprints_v2.register import register_sprint_tools_v2
 from .tools.epics_v2.register import register_epic_tools_v2
 from .tools.pm_service_tools.register import register_pm_service_user_tools
+from mcp_meeting_server.tools import register_meeting_tools
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,9 @@ class PMMCPServer:
             ("tasks_v2", register_task_tools_v2),  # Task tools (hybrid)
             ("sprints_v2", register_sprint_tools_v2),  # Sprint tools (hybrid)
             ("epics_v2", register_epic_tools_v2),  # Epic tools (hybrid)
+            ("epics_v2", register_epic_tools_v2),  # Epic tools (hybrid)
             ("pm_service_users", register_pm_service_user_tools),  # PM Service user tools (new pattern)
+            ("meeting_tools", register_meeting_tools), # Meeting tools (adapted)
         ]
         
         for module_name, register_func in tool_modules:

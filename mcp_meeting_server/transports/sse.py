@@ -81,5 +81,78 @@ def create_sse_app(mcp_server) -> FastAPI:
             "id": body.get("id"),
             "result": {"status": "ok"}
         }
+
+    # HTTP Tool Access (Hybrid Mode)
+    from mcp_meeting_server.transports.http import ToolCallRequest, ToolCallResponse
     
+    @app.post("/tools/call", response_model=ToolCallResponse)
+    async def call_tool(request: ToolCallRequest):
+        """Call a tool by name (HTTP override)"""
+        try:
+            from mcp_meeting_server.tools import (
+                _handle_upload_meeting,
+                _handle_process_meeting,
+                _handle_analyze_transcript,
+                _handle_get_summary,
+                _handle_list_action_items,
+                _handle_create_tasks,
+                _handle_list_meetings,
+            )
+            
+            handlers = {
+                "upload_meeting": _handle_upload_meeting,
+                "process_meeting": _handle_process_meeting,
+                "analyze_transcript": _handle_analyze_transcript,
+                "get_meeting_summary": _handle_get_summary,
+                "list_action_items": _handle_list_action_items,
+                "create_tasks_from_meeting": _handle_create_tasks,
+                "list_meetings": _handle_list_meetings,
+            }
+            
+            if request.name not in handlers:
+                return ToolCallResponse(
+                    success=False,
+                    error=f"Unknown tool: {request.name}"
+                )
+            
+            handler = handlers[request.name]
+            result = await handler(mcp_server, request.arguments)
+            
+            return ToolCallResponse(success=True, result=result)
+            
+        except Exception as e:
+            logger.exception(f"Tool call failed: {e}")
+            return ToolCallResponse(success=False, error=str(e))
+
+    @app.get("/meetings")
+    async def list_meetings(status: str = "all", limit: int = 20, projectId: str = None):
+        """List all meetings"""
+        from mcp_meeting_server.tools import _handle_list_meetings
+        
+        args = {
+            "status": status,
+            "limit": limit,
+        }
+        if projectId:
+            args["project_id"] = projectId
+
+        result = await _handle_list_meetings(mcp_server, args)
+        
+        # Ensure result has matching key 'meetings' or wrap it
+        return result if "meetings" in result else {"meetings": result}
+
+    @app.get("/users")
+    async def list_users(projectId: str = None, limit: int = 100):
+        """List users from PM tools"""
+        from mcp_meeting_server.tools import _handle_list_users
+        
+        args = {
+            "limit": limit
+        }
+        if projectId:
+            args["project_id"] = projectId
+            
+        result = await _handle_list_users(mcp_server, args)
+        return result
+
     return app

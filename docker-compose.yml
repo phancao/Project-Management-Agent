@@ -37,9 +37,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://pm_user:pm_password@postgres:5432/project_management
       - REDIS_URL=redis://redis:6379
-      # OpenAI API Key - use environment variable or conf.yaml
-      # NOTE: Set OPENAI_API_KEY in .env file or use conf.yaml
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # OpenAI API Key - removed, use ProviderManager
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ENVIRONMENT=production
       # PM MCP Server connection (use Docker service name for internal communication)
       - PM_MCP_SERVER_URL=http://pm_mcp_server:8080/sse
@@ -58,11 +57,12 @@ services:
       # LLM Configuration via environment variables (alternative to conf.yaml)
       - BASIC_MODEL__base_url=https://api.openai.com/v1
       - BASIC_MODEL__model=gpt-4o-mini
-      - BASIC_MODEL__api_key=${OPENAI_API_KEY} # Use environment variable from .env file
+      # - BASIC_MODEL__api_key=${OPENAI_API_KEY} # Removed: Use ProviderManager via MCP
       # Agent Configuration
       - AGENT_RECURSION_LIMIT=100 # Increase from default 25 to handle complex workflows
       # PM Service URL for direct PM provider access
       - PM_SERVICE_URL=http://pm-service:8001
+      - PYTHONPATH=/app
     ports:
       - "8000:8000"
     depends_on:
@@ -105,6 +105,7 @@ services:
     volumes:
       - ./web:/app
       - /app/node_modules
+      - ./uploads:/app/uploads
     command: pnpm run dev
 
   # Vector Database (Pinecone alternative - using local Qdrant)
@@ -179,6 +180,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      default:
+        aliases:
+          - openproject-db-v13
 
   # OpenProject Application v13.4.1
   openproject_v13:
@@ -189,6 +194,8 @@ services:
       OPENPROJECT_DB_USERNAME: openproject
       OPENPROJECT_DB_PASSWORD: openproject
       OPENPROJECT_DB_DATABASE: openproject
+      # Explicitly set DATABASE_URL to override any default local connection
+      DATABASE_URL: postgres://openproject:openproject@openproject-db-v13:5432/openproject
       OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY_V13:-development-secret-key-v13-change-in-production}
       OPENPROJECT_HOST__NAME: localhost:8083
       OPENPROJECT_HTTPS: "false"
@@ -234,6 +241,7 @@ services:
       dockerfile: Dockerfile.mcp-server
     environment:
       - DATABASE_URL=postgresql://mcp_user:mcp_password@mcp-postgres:5432/mcp_server
+      - MAIN_DATABASE_URL=postgresql://pm_user:pm_password@postgres:5432/project_management
       - LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
       - ENABLE_AUTH=${MCP_ENABLE_AUTH:-false}
       - ENABLE_RBAC=${MCP_ENABLE_RBAC:-false}
@@ -241,8 +249,12 @@ services:
       - MCP_TRANSPORT=${MCP_TRANSPORT:-sse}
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8080
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8080
+      - MCP_PORT=8080
       # PM Service URL for new tools
       - PM_SERVICE_URL=http://pm-service:8001
+      - WHISPER_LANGUAGE=vi
     ports:
       - "8080:8080" # SSE/HTTP transport
     depends_on:
@@ -252,10 +264,13 @@ services:
         condition: service_healthy
     volumes:
       - ./mcp_server:/app/mcp_server
+      - ./mcp_meeting_server:/app/mcp_meeting_server
+      - ./meeting_agent:/app/meeting_agent
       - ./pm_providers:/app/pm_providers
       - ./pm_service:/app/pm_service
       - ./shared:/app/shared
       - ./database:/app/database
+      - ./uploads:/app/uploads
       - ./scripts:/app/scripts
       - ./logs:/app/logs
       - ./src:/app/src

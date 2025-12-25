@@ -50,7 +50,7 @@ class Configuration:
     max_search_results: int = 3  # Maximum number of search results
     search_provider: Optional[str] = None  # Search provider ID (e.g., "duckduckgo", "tavily")
     mcp_settings: dict = None  # MCP settings, including dynamic loaded tools
-    report_style: str = ReportStyle.ACADEMIC.value  # Report style
+    report_style: str = ReportStyle.GENERIC.value  # Report style (generic or project_management)
     enable_deep_thinking: bool = False  # Whether to enable deep thinking
     enforce_web_search: bool = (
         False  # Enforce at least one web search step in every plan

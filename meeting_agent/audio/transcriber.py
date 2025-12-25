@@ -73,11 +73,11 @@ class WhisperTranscriber(BaseTranscriber):
             model: Whisper model to use
         """
         import os
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key
         self.model = model
         
         if not self.api_key:
-            logger.warning("No OpenAI API key found")
+            logger.warning("No OpenAI API key provided to Transcriber")
     
     async def transcribe(
         self,

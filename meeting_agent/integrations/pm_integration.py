@@ -261,6 +261,59 @@ class MeetingPMIntegration:
                 for p in projects
             ])
             
+            
         except Exception as e:
             logger.exception(f"Failed to list projects: {e}")
             return HandlerResult.failure(f"Failed to list projects: {str(e)}")
+
+    async def get_project_context(
+        self,
+        project_id: str,
+        provider_id: Optional[str] = None,
+    ) -> HandlerResult[Dict[str, Any]]:
+        """
+        Get context for a project (goals, description, etc).
+        
+        Args:
+            project_id: Project identifier
+            provider_id: Optional provider ID
+            
+        Returns:
+            HandlerResult with dictionary of context
+        """
+        pm_service = await self.get_pm_service()
+        if not pm_service:
+            return HandlerResult.failure("PM service not available")
+            
+        try:
+            if ":" in project_id and not provider_id:
+                provider_id, project_key = project_id.split(":", 1)
+            else:
+                project_key = project_id
+                provider_id = provider_id or "openproject"
+                
+            provider = await pm_service.get_provider(provider_id)
+            if not provider:
+                return HandlerResult.failure(f"Provider not found: {provider_id}")
+                
+            # Fetch project details
+            # Note: providers might return different objects, we try to standardize
+            projects = await provider.list_projects() # Inefficient but generic
+            project = next((p for p in projects if str(p.id) == str(project_key)), None)
+            
+            context = {
+                "id": project_key,
+                "provider": provider_id,
+                "name": getattr(project, "name", "Unknown Project"),
+                "description": getattr(project, "description", ""),
+            }
+            
+            # TODO: Fetch goals if supported
+            # goals = await provider.get_goals(project_key)
+            
+            return HandlerResult.success(context)
+            
+        except Exception as e:
+            logger.warning(f"Failed to get project context: {e}")
+            # Don't fail the whole process, just return empty context
+            return HandlerResult.success({})

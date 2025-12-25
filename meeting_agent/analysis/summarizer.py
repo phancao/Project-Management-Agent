@@ -47,6 +47,8 @@ class MeetingSummarizer:
         self,
         meeting: Meeting,
         existing_summary: Optional[MeetingSummary] = None,
+        project_context: Optional[Dict[str, Any]] = None,
+        api_key: Optional[str] = None,
     ) -> MeetingSummary:
         """
         Generate a summary for a meeting.
@@ -54,6 +56,7 @@ class MeetingSummarizer:
         Args:
             meeting: The meeting to summarize
             existing_summary: Optional existing summary to update
+            project_context: Optional context about the project
             
         Returns:
             MeetingSummary with analysis
@@ -64,11 +67,11 @@ class MeetingSummarizer:
         transcript_text = meeting.transcript.to_plain_text()
         
         # Build prompt
-        prompt = self._build_summary_prompt(meeting, transcript_text)
+        prompt = self._build_summary_prompt(meeting, transcript_text, project_context)
         
         # Call LLM
         try:
-            response = await self._call_llm(prompt)
+            response = await self._call_llm(prompt, api_key)
             parsed = self._parse_response(response)
             
             summary = MeetingSummary(
@@ -95,9 +98,18 @@ class MeetingSummarizer:
         self,
         meeting: Meeting,
         transcript_text: str,
+        project_context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build the summarization prompt"""
         participants = ", ".join([p.name for p in meeting.participants]) if meeting.participants else "Unknown"
+        project_info = ""
+        if project_context:
+            project_info = f"""
+## Project Context
+- Project: {project_context.get('name', 'Unknown')}
+- Description: {project_context.get('description', '')}
+- Project Participants: {', '.join([p['name'] for p in project_context.get('participants', [])]) if project_context.get('participants') else 'Unknown'}
+"""
         
         prompt = f"""Analyze the following meeting transcript and provide a comprehensive summary.
 
@@ -105,6 +117,8 @@ class MeetingSummarizer:
 - Title: {meeting.title}
 - Participants: {participants}
 - Duration: {meeting.duration_minutes or 'Unknown'} minutes
+{project_info}
+## Transcript
 
 ## Transcript
 {transcript_text[:50000]}  # Truncate if too long
@@ -143,13 +157,13 @@ Return ONLY the JSON, no additional text."""
 
         return prompt
     
-    async def _call_llm(self, prompt: str) -> str:
+    async def _call_llm(self, prompt: str, api_key: Optional[str] = None) -> str:
         """Call the LLM with the prompt"""
         try:
             from openai import AsyncOpenAI
             import os
             
-            client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            client = AsyncOpenAI(api_key=api_key)
             
             response = await client.chat.completions.create(
                 model=self.config.model,

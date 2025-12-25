@@ -75,6 +75,35 @@ class ListTasksTool(ReadTool):
                 actual_sprint_id = sprint_id.split(":", 1)[1]
             else:
                 actual_sprint_id = sprint_id
+            
+            # SMART RESOLUTION: If sprint_id is 1-2 digits, it's likely a sprint NUMBER not ID
+            # Sprint IDs in OpenProject are typically 3+ digits (like 613, 615)
+            # Sprint numbers are 1-2 digits (like "4", "6")
+            if actual_sprint_id.isdigit() and len(actual_sprint_id) <= 2 and project_id:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"[list_tasks] Smart resolution: sprint_id '{actual_sprint_id}' looks like a sprint number, resolving to actual ID")
+                try:
+                    # Parse project_id to get provider
+                    provider_id, actual_project_id = self._parse_project_id(project_id)
+                    provider = await self.context.provider_manager.get_provider(provider_id)
+                    
+                    # Fetch sprints and find matching one by name
+                    sprints = await provider.list_sprints(project_id=actual_project_id)
+                    for sprint in sprints:
+                        sprint_dict = self._to_dict(sprint) if not isinstance(sprint, dict) else sprint
+                        sprint_name = sprint_dict.get("name", "")
+                        # Match if name ends with the number (e.g., "Sprint 6" matches "6")
+                        if sprint_name.lower().endswith(f"sprint {actual_sprint_id}") or sprint_name == f"Sprint {actual_sprint_id}":
+                            resolved_id = str(sprint_dict.get("id", ""))
+                            logger.info(f"[list_tasks] Smart resolution: Resolved sprint '{sprint_name}' (number {actual_sprint_id}) to ID {resolved_id}")
+                            actual_sprint_id = resolved_id
+                            break
+                    else:
+                        logger.warning(f"[list_tasks] Smart resolution: Could not find sprint with number {actual_sprint_id}")
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).warning(f"[list_tasks] Smart resolution failed: {e}")
         
         # Parse project_id if provided
         if project_id:

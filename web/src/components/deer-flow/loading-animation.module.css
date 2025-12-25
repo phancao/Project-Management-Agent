@@ -7,14 +7,16 @@
 
 .loadingAnimation {
   display: flex;
+  justify-content: center;
+  padding: 16px 0;
 }
 
 .loadingAnimation > div {
-  width: 8px;
-  height: 8px;
-  margin: 2px 4px;
+  width: 10px;
+  height: 10px;
+  margin: 2px 6px;
   border-radius: 50%;
-  background-color: #a3a1a1;
+  background-color: #8b5cf6;
   opacity: 1;
   animation: bouncing-animation 0.5s infinite alternate;
 }

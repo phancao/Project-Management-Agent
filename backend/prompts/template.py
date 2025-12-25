@@ -47,7 +47,7 @@ def get_prompt_template(prompt_name: str, locale: str = "en-US") -> str:
 
 
 def apply_prompt_template(
-    prompt_name: str, state: AgentState, configurable: Configuration = None, locale: str = "en-US"
+    prompt_name: str, state: AgentState, configurable: Configuration = None, locale: str = "en-US", **kwargs
 ) -> list:
     """
     Apply template variables to a prompt template and return formatted messages.
@@ -57,6 +57,7 @@ def apply_prompt_template(
         state: Current agent state containing variables to substitute
         configurable: Configuration object with additional variables
         locale: Language locale for template selection (e.g., en-US, zh-CN)
+        **kwargs: Additional variables to pass to the template renderer
 
     Returns:
         List of messages with the system prompt as the first message
@@ -70,6 +71,10 @@ def apply_prompt_template(
     # Add configurable variables
     if configurable:
         state_vars.update(dataclasses.asdict(configurable))
+        
+    # Add kwargs
+    if kwargs:
+        state_vars.update(kwargs)
 
     try:
         # Normalize locale format

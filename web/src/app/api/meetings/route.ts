@@ -4,46 +4,31 @@ import { NextRequest, NextResponse } from 'next/server';
  * GET /api/meetings
  * List all meetings
  */
+// This would ideally come from env, but for internal docker comms:
+const MCP_SERVER_URL = process.env.PM_MCP_SERVER_HTTP_URL || 'http://pm-mcp-server:8080';
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const projectId = searchParams.get('projectId');
 
-        // In production, fetch from MCP Meeting Server
-        // For now, return demo data
-        const allMeetings = [
-            {
-                id: 'mtg_demo001',
-                title: 'Weekly Standup',
-                status: 'completed',
-                createdAt: new Date().toISOString(),
-                participantsCount: 5,
-                actionItemsCount: 3,
-                projectId: 'mock-proj-1',
-            },
-            {
-                id: 'mtg_demo002',
-                title: 'Project Planning',
-                status: 'pending',
-                createdAt: new Date(Date.now() - 86400000).toISOString(),
-                participantsCount: 3,
-                projectId: 'mock-proj-1',
-            },
-            {
-                id: 'mtg_demo003',
-                title: 'Marketing Sync',
-                status: 'completed',
-                createdAt: new Date(Date.now() - 172800000).toISOString(),
-                participantsCount: 4,
-                projectId: 'mock-proj-2',
-            }
-        ];
+        // Construct MCP server URL with params
+        const mcpUrl = new URL(`${MCP_SERVER_URL}/meetings`);
+        if (projectId) {
+            mcpUrl.searchParams.append('projectId', projectId);
+        }
 
-        // Filter by projectId if provided, otherwise return all
-        // In a real app, you might want to only show meetings unrelated to any project if no project is selected
-        const meetings = projectId
-            ? allMeetings.filter(m => m.projectId === projectId || !m.projectId)
-            : allMeetings;
+        const res = await fetch(mcpUrl.toString(), {
+            // propagate cache control or revalidate
+            next: { revalidate: 0 }
+        });
+
+        if (!res.ok) {
+            throw new Error(`MCP Server error: ${res.statusText}`);
+        }
+
+        const data = await res.json();
+        const meetings = data.meetings || data.result?.meetings || [];
 
         return NextResponse.json({ meetings });
     } catch (error) {

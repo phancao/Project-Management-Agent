@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
+import path from 'path';
 import { v4 as uuid } from 'uuid';
 
-const UPLOAD_DIR = process.env.MEETING_UPLOAD_DIR || './uploads/meetings';
+const UPLOAD_DIR = process.env.MEETING_UPLOAD_DIR || './uploads'; // Mounts to /app/uploads in Docker
+const MCP_SERVER_URL = process.env.PM_MCP_SERVER_HTTP_URL || 'http://pm-mcp-server:8080';
 
-/**
- * POST /api/meetings/upload
- * Upload a meeting recording
- */
 export async function POST(request: NextRequest) {
     try {
         const formData = await request.formData();
@@ -24,35 +21,64 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Generate meeting ID
-        const meetingId = `mtg_${uuid().replace(/-/g, '').slice(0, 12)}`;
+        // Generate ID / Filename
+        const ext = file.name.split('.').pop() || 'mp3';
+        const sanitizedParams = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const meetingId = `${Date.now()}-${uuid().slice(0, 8)}-${sanitizedParams}`;
 
         // Ensure upload directory exists
-        await mkdir(UPLOAD_DIR, { recursive: true });
+        // In local logic, this path is relative to CWD. In Docker, CWD is /app.
+        // So './uploads' -> '/app/uploads' which is the shared volume.
+        const uploadDir = path.join(process.cwd(), 'uploads');
+        await mkdir(uploadDir, { recursive: true });
 
         // Save file
-        const ext = file.name.split('.').pop() || 'mp3';
-        const filePath = join(UPLOAD_DIR, `${meetingId}.${ext}`);
+        const filePath = path.join(uploadDir, meetingId);
         const bytes = await file.arrayBuffer();
         await writeFile(filePath, Buffer.from(bytes));
 
-        // Store meeting metadata (in production, save to database)
-        const meeting = {
-            id: meetingId,
-            title,
-            participants: participants.split(',').map(p => p.trim()).filter(Boolean),
-            filePath,
-            status: 'pending',
-            createdAt: new Date().toISOString(),
-            projectId,
-        };
+        // Call MCP Tool: upload_meeting (metadata only)
+        // We tell it the internal path inside the container: /app/uploads/<filename>
+        const internalPath = `/app/uploads/${meetingId}`;
 
-        // In production, would call MCP meeting server to register the meeting
+        const response = await fetch(`${MCP_SERVER_URL}/tools/call`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: 'upload_meeting',
+                arguments: {
+                    file_path: internalPath,
+                    filename: file.name,
+                    title: title,
+                    participants: participants.split(',').map(p => p.trim()).filter(Boolean),
+                    project_id: projectId
+                }
+            })
+        });
+
+        let mcpMeetingId = null;
+        if (!response.ok) {
+            console.error("MCP upload registration failed", await response.text());
+        } else {
+            const toolRes = await response.json();
+            // toolRes is expected to be [{"type": "text", "text": "JSON_STRING"}]
+            if (Array.isArray(toolRes) && toolRes.length > 0 && toolRes[0].text) {
+                try {
+                    const data = JSON.parse(toolRes[0].text);
+                    if (data.meeting_id) {
+                        mcpMeetingId = data.meeting_id;
+                    }
+                } catch (e) {
+                    console.warn("Failed to parse MCP response as JSON:", toolRes[0].text);
+                }
+            }
+        }
 
         return NextResponse.json({
-            meetingId: meeting.id,
-            title: meeting.title,
+            meetingId: mcpMeetingId || meetingId, // Prefer MCP ID, fallback to filename
+            title: title,
             message: 'File uploaded successfully',
+            projectId
         });
     } catch (error) {
         console.error('Upload failed:', error);

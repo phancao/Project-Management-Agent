@@ -438,7 +438,7 @@ function PythonToolCall({ toolCall }: { toolCall: ToolCallRuntime }) {
         </RainbowText>
       </div>
       <div>
-        <div className="bg-accent mt-2 max-h-[400px] max-w-[calc(100%-120px)] overflow-y-auto rounded-md p-2 text-sm">
+        <div className="bg-accent mt-2 max-w-[calc(100%-120px)] rounded-md p-2 text-sm">
           <SyntaxHighlighter
             language="python"
             style={resolvedTheme === "dark" ? dark : docco}
@@ -487,7 +487,7 @@ function PythonToolCallResult({ result }: { result: string }) {
       <div className="mt-4 font-medium italic">
         {hasError ? t("errorExecutingCode") : t("executionOutput")}
       </div>
-      <div className="bg-accent mt-2 max-h-[400px] max-w-[calc(100%-120px)] overflow-y-auto rounded-md p-2 text-sm">
+      <div className="bg-accent mt-2 max-w-[calc(100%-120px)] rounded-md p-2 text-sm">
         <SyntaxHighlighter
           language="plaintext"
           style={resolvedTheme === "dark" ? dark : docco}
@@ -507,11 +507,11 @@ function PythonToolCallResult({ result }: { result: string }) {
 
 function ContextOptimizationToolCall({ toolCall }: { toolCall: ToolCallRuntime }) {
   const { resolvedTheme } = useTheme();
-  
+
   // Extract optimization details from tool call args or result
   const args = (toolCall.args as Record<string, unknown>) || {};
   const result = (toolCall.result as string) || "";
-  
+
   const originalTokens = (typeof args.original_tokens === 'number' ? args.original_tokens : 0);
   const compressedTokens = (typeof args.compressed_tokens === 'number' ? args.compressed_tokens : 0);
   const compressionRatio = (typeof args.compression_ratio === 'number' ? args.compression_ratio : 1.0);
@@ -520,10 +520,10 @@ function ContextOptimizationToolCall({ toolCall }: { toolCall: ToolCallRuntime }
   const compressedCount = (typeof args.compressed_message_count === 'number' ? args.compressed_message_count : 0);
   const reductionPct = (1.0 - compressionRatio) * 100;
   const wasCompressed = compressionRatio < 1.0;
-  
+
   return (
     <section className="mt-4 pl-4">
-      <div className="w-fit overflow-y-auto rounded-md py-0">
+      <div className="w-fit rounded-md py-0">
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="context-optimization">
             <AccordionTrigger className="py-2">
@@ -600,7 +600,7 @@ function MCPToolCall({ toolCall }: { toolCall: ToolCallRuntime }) {
   const { resolvedTheme } = useTheme();
   return (
     <section className="mt-4 pl-4">
-      <div className="w-fit overflow-y-auto rounded-md py-0">
+      <div className="w-fit rounded-md py-0">
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="item-1">
             <AccordionTrigger>
@@ -618,7 +618,7 @@ function MCPToolCall({ toolCall }: { toolCall: ToolCallRuntime }) {
             </AccordionTrigger>
             <AccordionContent>
               {toolCall.result && (
-                <div className="bg-accent max-h-[400px] max-w-[560px] overflow-y-auto rounded-md text-sm">
+                <div className="bg-accent max-w-[560px] rounded-md text-sm">
                   <SyntaxHighlighter
                     language="json"
                     style={resolvedTheme === "dark" ? dark : docco}

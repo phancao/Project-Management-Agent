@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 
 interface MeetingUploadProps {
@@ -28,6 +28,21 @@ export default function MeetingUpload({ onUploadComplete, projectId }: MeetingUp
             }
         }
     }, [title]);
+
+    // Fetch participants when project changes
+    useEffect(() => {
+        if (projectId) {
+            fetch(`/api/users?projectId=${projectId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.users && Array.isArray(data.users)) {
+                        const names = data.users.map((u: any) => u.name).join(', ');
+                        setParticipants(names);
+                    }
+                })
+                .catch(err => console.error('Failed to fetch users:', err));
+        }
+    }, [projectId]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,

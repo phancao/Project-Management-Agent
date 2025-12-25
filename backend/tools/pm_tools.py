@@ -10,11 +10,16 @@ project management data (projects, tasks, sprints, epics, etc.).
 import json
 import logging
 import asyncio
+import datetime
 from typing import Annotated, Optional, List, Dict, Any
 
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
+
+# Helper to get timestamp
+def get_ts():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
 # Global PM handler instance - will be set by conversation flow manager
@@ -124,12 +129,11 @@ async def get_current_project() -> str:
         result_json = {
             "success": True,
             "has_project": True,
-            "project_id": composite_project_id,  # Use this in all subsequent tool calls
+            "project_id": composite_project_id,  # CRITICAL: Use this ID
+            "name": project_name,
             "provider_id": provider_id,
-            "actual_project_id": actual_project_id,
-            "project_name": project_name,
             "provider_type": provider_type,
-            "message": f"Current project: {project_name} (ID: {composite_project_id}). Use project_id='{composite_project_id}' in your next tool call. Do NOT call get_current_project again."
+            "note": "Use the 'project_id' field value for any tool requiring a project_id."
         }
         
         return json.dumps(result_json, indent=2)
@@ -225,7 +229,7 @@ async def get_current_project_details() -> str:
         if not composite_project_id:
             return json.dumps({
                 "success": False,
-                "error": "No project is currently selected. Please select a project from the header dropdown.",
+                "error": "No project is currently selected. You MUST ask the user to provide a project ID or select one from the UI.",
                 "has_project": False
             }, indent=2)
         
@@ -246,21 +250,39 @@ async def get_current_project_details() -> str:
         if handler.single_provider:
             project_obj = await handler.single_provider.get_project(actual_project_id)
             if project_obj:
+                # Helper to safely get attribute or dict key
+                def get_attr(obj, attr, default=None):
+                    if isinstance(obj, dict):
+                        return obj.get(attr, default)
+                    return getattr(obj, attr, default)
+                
+                p_id = get_attr(project_obj, "id")
+                p_name = get_attr(project_obj, "name")
+                p_desc = get_attr(project_obj, "description") or ""
+                p_status = get_attr(project_obj, "status")
+                p_priority = get_attr(project_obj, "priority")
+                p_start = get_attr(project_obj, "start_date")
+                p_end = get_attr(project_obj, "end_date")
+                p_owner = get_attr(project_obj, "owner_id")
+                p_created = get_attr(project_obj, "created_at")
+                p_updated = get_attr(project_obj, "updated_at")
+                
                 project = {
-                    "id": str(project_obj.id),
-                    "name": project_obj.name,
-                    "description": project_obj.description or "",
-                    "status": str(project_obj.status) if project_obj.status else None,
-                    "priority": str(project_obj.priority) if project_obj.priority else None,
-                    "start_date": project_obj.start_date.isoformat() if project_obj.start_date else None,
-                    "end_date": project_obj.end_date.isoformat() if project_obj.end_date else None,
-                    "owner_id": str(project_obj.owner_id) if project_obj.owner_id else None,
-                    "created_at": project_obj.created_at.isoformat() if project_obj.created_at else None,
-                    "updated_at": project_obj.updated_at.isoformat() if project_obj.updated_at else None,
+                    "id": str(p_id) if p_id else None,
+                    "name": p_name,
+                    "description": p_desc,
+                    "status": str(p_status) if p_status else None,
+                    "priority": str(p_priority) if p_priority else None,
+                    "start_date": p_start.isoformat() if hasattr(p_start, 'isoformat') else str(p_start) if p_start else None,
+                    "end_date": p_end.isoformat() if hasattr(p_end, 'isoformat') else str(p_end) if p_end else None,
+                    "owner_id": str(p_owner) if p_owner else None,
+                    "created_at": p_created.isoformat() if hasattr(p_created, 'isoformat') else str(p_created) if p_created else None,
+                    "updated_at": p_updated.isoformat() if hasattr(p_updated, 'isoformat') else str(p_updated) if p_updated else None,
                     "project_id": composite_project_id,
                     "provider_id": provider_id,
-                    "provider_type": handler.single_provider.provider_type if hasattr(handler.single_provider, 'provider_type') else "unknown"
+                    "provider_type": getattr(handler.single_provider, 'provider_type', "unknown")
                 }
+                logger.info(f"[PM-TOOLS] 🔍 DEBUG: Found project details: {project['name']} ({project['id']})")
         else:
             # List all and find matching
             projects = await handler.list_all_projects()
@@ -377,9 +399,20 @@ async def list_tasks(
         actual_project_id = None
         if project_id and ":" in project_id:
             actual_project_id = project_id.split(":", 1)[1]
-        elif project_id:
+        if project_id:
             actual_project_id = project_id
+        else:
+            # Auto-detect project ID if not provided, needed for Smart Resolution
+            composite_project_id = get_current_project_id()
+            if composite_project_id:
+                if ":" in composite_project_id:
+                    actual_project_id = composite_project_id.split(":", 1)[1]
+                else:
+                    actual_project_id = composite_project_id
         
+        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks ENTER - project_id='{project_id}', assignee_id='{assignee_id}', sprint_id='{sprint_id}'")
+        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks detected/actual project_id='{actual_project_id}'")
+
         # Extract sprint ID from composite format (e.g., "project_id:sprint_id" -> "sprint_id")
         actual_sprint_id = None
         if sprint_id:
@@ -389,6 +422,59 @@ async def list_tasks(
                 actual_sprint_id = parts[-1]  # Get last part (sprint_id)
             else:
                 actual_sprint_id = sprint_id
+        
+        # Smart Resolution: If sprint_id looks like a name (e.g. "Sprint 4") or index (e.g. "4"), try to resolve it to an ID
+        # Heuristic: Real IDs are usually 3+ digits.
+        is_ambiguous = False
+        if actual_sprint_id:
+            if actual_sprint_id.isdigit() and len(actual_sprint_id) < 3:
+                is_ambiguous = True # It's a small number like "4"
+            elif not actual_sprint_id.isdigit():
+                is_ambiguous = True # It's a string like "Sprint 4" (assuming real IDs are numeric strings in OpenProject)
+        
+        if is_ambiguous and actual_sprint_id and hasattr(handler, 'list_project_sprints') and actual_project_id:
+            try:
+                # Fetch sprints to resolve the name/index
+                project_for_sprints = actual_project_id
+                if ":" in project_for_sprints:
+                   project_for_sprints = project_for_sprints.split(":", 1)[1]
+                
+                logger.info(f"[PM-TOOLS] Smart Resolution: Resolving ambiguous sprint_id='{actual_sprint_id}' for project='{project_for_sprints}'")
+                sprints = await handler.list_project_sprints(project_for_sprints)
+                
+                resolved_id = None
+                # Strategy 1: Exact Name Match (Case Insensitive)
+                for s in sprints:
+                    if s.get("name") and s.get("name").lower() == actual_sprint_id.lower():
+                        resolved_id = str(s.get("id"))
+                        logger.info(f"[PM-TOOLS] Smart Resolution: Matched Name '{s.get('name')}' -> ID {resolved_id}")
+                        break
+                
+                # Strategy 2: "Sprint X" Pattern Match (if input is "4", look for "Sprint 4")
+                if not resolved_id and actual_sprint_id.isdigit():
+                    target_name = f"Sprint {actual_sprint_id}"
+                    for s in sprints:
+                        if s.get("name") and s.get("name").lower() == target_name.lower():
+                            resolved_id = str(s.get("id"))
+                            logger.info(f"[PM-TOOLS] Smart Resolution: Matched Pattern '{target_name}' -> ID {resolved_id}")
+                            break
+
+                if resolved_id:
+                    actual_sprint_id = resolved_id
+                else:
+                    logger.warning(f"[PM-TOOLS] Smart Resolution: Could not resolve '{actual_sprint_id}'")
+            except Exception as e:
+                logger.warning(f"[PM-TOOLS] Smart Resolution Failed: {e}")
+
+        if actual_sprint_id and actual_sprint_id.isdigit() and len(actual_sprint_id) < 3:
+             # Heuristic: IDs are usually 3+ digits. Sprint numbers are 1-2 digits.
+             # This prevents the agent from hallucinating IDs.
+             return json.dumps({
+                 "success": False,
+                 "error": f"Invalid sprint_id '{actual_sprint_id}'. It appears to be a sprint number, not an ID. Please call 'list_sprints' first to find the real ID (e.g. '613') and use that."
+             })
+
+        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks: Filter strategy check - sprint_id='{actual_sprint_id}', project_id='{actual_project_id}'")
         
         # If sprint_id is provided, try to use a more efficient method
         # Check if handler has a method to get tasks by sprint directly
@@ -491,22 +577,24 @@ async def list_tasks(
                     f"{original_count} → {len(tasks)} tasks"
                 )
         
+        
+        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks: Returning {len(tasks)} tasks")
+        if tasks:
+            task_ids = [t.get("id") for t in tasks]
+            logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks: Task IDs: {task_ids}")
+            # Log first task for debugging
+            logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks: First task sample: {json.dumps(tasks[0], default=str)[:200]}...")
+            
         result = json.dumps({
             "success": True,
             "tasks": tasks,
             "count": len(tasks)
         }, indent=2, default=str)
         
-        # CRITICAL: Truncate large results to prevent token overflow in ReAct agent scratchpad
-        from backend.utils.json_utils import sanitize_tool_response
-        max_chars = 4000  # 1000 tokens * 4 chars/token
-        if len(result) > max_chars:
-            logger.warning(
-                f"[PM-TOOLS] list_tasks returned {len(result):,} chars "
-                f"(≈{len(result)//4:,} tokens). Truncating to {max_chars:,} chars."
-            )
-            result = sanitize_tool_response(result, max_length=max_chars, compress_arrays=True)
-            logger.info(f"[PM-TOOLS] ✅ list_tasks truncated to {len(result):,} chars (≈{len(result)//4:,} tokens)")
+        # LAZY OPTIMIZATION: Do NOT truncate at tool level.
+        # Let the context manager at reporter level handle limits ONLY if exceeded.
+        # This preserves full task data for simple queries.
+        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks returning {len(result):,} chars (≈{len(result)//4:,} tokens) - NO TRUNCATION at tool level")
         
         return result
     except Exception as e:
@@ -635,34 +723,53 @@ async def get_task(task_id: Annotated[str, "The task ID to retrieve"]) -> str:
 
 @tool
 async def list_sprints(
-    project_id: Annotated[Optional[str], "Optional project ID to filter sprints"] = None
+    project_id: Annotated[Optional[str], "Optional project ID. If not provided, uses the currently selected project."] = None
 ) -> str:
     """List sprints from the PM provider.
     
+    If `project_id` is not provided, it will automatically use the currently selected project.
+    
     Args:
-        project_id: Optional project ID to filter sprints by project
+        project_id: Optional. The ID of the project to list sprints for.
         
     Returns:
-        JSON string with list of sprints, each containing:
-        - id, name, project_id, status
-        - start_date, end_date
-        - capacity_hours, planned_hours
-        - goal, created_at, updated_at
+        JSON string with list of sprints.
     """
     try:
         handler = _ensure_pm_handler()
         
+        # Auto-detect project ID if not provided
+        if not project_id:
+            project_id = get_current_project_id()
+            if not project_id:
+                 return json.dumps({
+                    "success": False,
+                    "error": "No project selected. Please provide a project_id or select a project."
+                })
+        
         # Extract actual project ID if in provider_id:project_id format
-        actual_project_id = None
+        actual_project_id = project_id
         if project_id and ":" in project_id:
             actual_project_id = project_id.split(":", 1)[1]
-        elif project_id:
-            actual_project_id = project_id
+            
+        logger.info(f"[PM-TOOLS] 🔍 DEBUG: list_sprints ENTER - project_id='{project_id}', actual_project_id='{actual_project_id}'")
         
         # Use handler method if available, otherwise use provider directly
         sprints = []
         handler_type = handler.__class__.__name__
         logger.info(f"[PM-TOOLS] list_sprints: Using handler type: {handler_type}, project_id: {actual_project_id}")
+
+        import time
+        start_time = time.time()
+        
+        # Use handler method which handles both single and multi-provider modes
+        if handler.single_provider:
+             sprints = await handler.single_provider.list_project_sprints(actual_project_id)
+        else:
+             sprints = await handler.list_all_sprints(project_id=actual_project_id)
+             
+        duration = time.time() - start_time
+        logger.info(f"[PM-TOOLS] ⏱️ END list_sprints - took {duration:.2f}s, found {len(sprints)} sprints")
         
         if hasattr(handler, 'list_all_sprints'):
             logger.info(f"[PM-TOOLS] list_sprints: Calling handler.list_all_sprints(project_id={actual_project_id})")

@@ -16,7 +16,9 @@
       "post": {
         "summary": "Stream chat responses",
         "description": "Initiates a streaming chat session with the research agent. Returns server-sent events with message chunks, tool calls, and intermediate results.",
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -52,7 +54,9 @@
       "post": {
         "summary": "Convert text to speech",
         "description": "Converts text to speech using Volcengine TTS API. Requires VOLCENGINE_TTS_APPID and VOLCENGINE_TTS_ACCESS_TOKEN environment variables.",
-        "tags": ["Text-to-Speech"],
+        "tags": [
+          "Text-to-Speech"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -94,7 +98,9 @@
       "post": {
         "summary": "Generate podcast from content",
         "description": "Generates an audio podcast from the provided text content",
-        "tags": ["Content Generation"],
+        "tags": [
+          "Content Generation"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -127,7 +133,9 @@
       "post": {
         "summary": "Generate PowerPoint presentation",
         "description": "Generates a PowerPoint presentation from the provided content",
-        "tags": ["Content Generation"],
+        "tags": [
+          "Content Generation"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -160,7 +168,9 @@
       "post": {
         "summary": "Generate prose content",
         "description": "Generates prose content with streaming output based on the provided prompt and option",
-        "tags": ["Content Generation"],
+        "tags": [
+          "Content Generation"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -193,7 +203,9 @@
       "post": {
         "summary": "Enhance user prompts",
         "description": "Enhances and refines user prompts with specified report style and context",
-        "tags": ["Prompt"],
+        "tags": [
+          "Prompt"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -231,7 +243,9 @@
       "post": {
         "summary": "Get MCP server metadata",
         "description": "Retrieves metadata and available tools from a Model Context Protocol (MCP) server. Requires ENABLE_MCP_SERVER_CONFIGURATION=true.",
-        "tags": ["MCP"],
+        "tags": [
+          "MCP"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -266,7 +280,9 @@
       "get": {
         "summary": "Get RAG configuration",
         "description": "Returns the current RAG (Retrieval-Augmented Generation) provider configuration",
-        "tags": ["RAG"],
+        "tags": [
+          "RAG"
+        ],
         "responses": {
           "200": {
             "description": "RAG configuration",
@@ -285,7 +301,9 @@
       "get": {
         "summary": "Get RAG resources",
         "description": "Retrieves available resources from the RAG system based on optional query parameter",
-        "tags": ["RAG"],
+        "tags": [
+          "RAG"
+        ],
         "parameters": [
           {
             "name": "query",
@@ -315,7 +333,9 @@
       "get": {
         "summary": "Get server configuration",
         "description": "Returns the complete server configuration including RAG settings and available models",
-        "tags": ["Configuration"],
+        "tags": [
+          "Configuration"
+        ],
         "responses": {
           "200": {
             "description": "Server configuration",
@@ -398,8 +418,11 @@
           },
           "report_style": {
             "type": "string",
-            "enum": ["ACADEMIC", "POPULAR_SCIENCE", "NEWS", "SOCIAL_MEDIA", "STRATEGIC_INVESTMENT"],
-            "default": "ACADEMIC",
+            "enum": [
+              "GENERIC",
+              "PROJECT_MANAGEMENT"
+            ],
+            "default": "GENERIC",
             "description": "The style of the report"
           },
           "enable_deep_thinking": {
@@ -421,11 +444,17 @@
       },
       "ChatMessage": {
         "type": "object",
-        "required": ["role", "content"],
+        "required": [
+          "role",
+          "content"
+        ],
         "properties": {
           "role": {
             "type": "string",
-            "enum": ["user", "assistant"],
+            "enum": [
+              "user",
+              "assistant"
+            ],
             "description": "The role of the message sender"
           },
           "content": {
@@ -447,7 +476,9 @@
       },
       "ContentItem": {
         "type": "object",
-        "required": ["type"],
+        "required": [
+          "type"
+        ],
         "properties": {
           "type": {
             "type": "string",
@@ -471,7 +502,9 @@
       },
       "TTSRequest": {
         "type": "object",
-        "required": ["text"],
+        "required": [
+          "text"
+        ],
         "properties": {
           "text": {
             "type": "string",
@@ -485,7 +518,10 @@
           "encoding": {
             "type": "string",
             "default": "mp3",
-            "enum": ["mp3", "wav"],
+            "enum": [
+              "mp3",
+              "wav"
+            ],
             "description": "The audio encoding format"
           },
           "speed_ratio": {
@@ -509,7 +545,10 @@
           "text_type": {
             "type": "string",
             "default": "plain",
-            "enum": ["plain", "ssml"],
+            "enum": [
+              "plain",
+              "ssml"
+            ],
             "description": "Text type"
           },
           "with_frontend": {
@@ -526,7 +565,9 @@
       },
       "GeneratePodcastRequest": {
         "type": "object",
-        "required": ["content"],
+        "required": [
+          "content"
+        ],
         "properties": {
           "content": {
             "type": "string",
@@ -536,7 +577,9 @@
       },
       "GeneratePPTRequest": {
         "type": "object",
-        "required": ["content"],
+        "required": [
+          "content"
+        ],
         "properties": {
           "content": {
             "type": "string",
@@ -546,7 +589,10 @@
       },
       "GenerateProseRequest": {
         "type": "object",
-        "required": ["prompt", "option"],
+        "required": [
+          "prompt",
+          "option"
+        ],
         "properties": {
           "prompt": {
             "type": "string",
@@ -565,7 +611,9 @@
       },
       "EnhancePromptRequest": {
         "type": "object",
-        "required": ["prompt"],
+        "required": [
+          "prompt"
+        ],
         "properties": {
           "prompt": {
             "type": "string",
@@ -578,19 +626,30 @@
           },
           "report_style": {
             "type": "string",
-            "default": "academic",
-            "enum": ["academic", "ACADEMIC", "popular_science", "POPULAR_SCIENCE", "news", "NEWS", "social_media", "SOCIAL_MEDIA", "strategic_investment", "STRATEGIC_INVESTMENT"],
+            "default": "generic",
+            "enum": [
+              "generic",
+              "GENERIC",
+              "project_management",
+              "PROJECT_MANAGEMENT"
+            ],
             "description": "The style of the report"
           }
         }
       },
       "MCPServerMetadataRequest": {
         "type": "object",
-        "required": ["transport"],
+        "required": [
+          "transport"
+        ],
         "properties": {
           "transport": {
             "type": "string",
-            "enum": ["stdio", "sse", "streamable_http"],
+            "enum": [
+              "stdio",
+              "sse",
+              "streamable_http"
+            ],
             "description": "The type of MCP server connection"
           },
           "command": {
@@ -636,7 +695,9 @@
       },
       "MCPServerMetadataResponse": {
         "type": "object",
-        "required": ["transport"],
+        "required": [
+          "transport"
+        ],
         "properties": {
           "transport": {
             "type": "string",
@@ -704,7 +765,9 @@
       },
       "RAGResourcesResponse": {
         "type": "object",
-        "required": ["resources"],
+        "required": [
+          "resources"
+        ],
         "properties": {
           "resources": {
             "type": "array",
@@ -717,7 +780,10 @@
       },
       "ConfigResponse": {
         "type": "object",
-        "required": ["rag", "models"],
+        "required": [
+          "rag",
+          "models"
+        ],
         "properties": {
           "rag": {
             "$ref": "#/components/schemas/RAGConfigResponse",

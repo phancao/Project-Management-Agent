@@ -1,0 +1,18 @@
+
+> deer-flow-web@0.1.0 dev
+> dotenv -f ../.env -- next dev --turbo
+
+   ▲ Next.js 15.5.9 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.69.113:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 1089ms
+ ○ Compiling /pm/chat ...
+ ✓ Compiled /pm/chat in 5.8s
+ GET /pm/chat 200 in 6938ms
+ GET /pm/chat?project=e6890ea6-0c3c-4a83-aa05-41b223df3284%3A487 200 in 75ms
+ GET /pm/chat 200 in 252ms
+ GET /pm/chat?project=e6890ea6-0c3c-4a83-aa05-41b223df3284%3A487 200 in 87ms
+ GET /pm/chat?project=e6890ea6-0c3c-4a83-aa05-41b223df3284%3A478 200 in 94ms

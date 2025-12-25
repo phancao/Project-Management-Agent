@@ -194,7 +194,7 @@ async def health_check():
 # Add CORS middleware
 # It's recommended to load the allowed origins from an environment variable
 # for better security and flexibility across different environments.
-allowed_origins_str = get_str_env("ALLOWED_ORIGINS", "http://localhost:3000")
+allowed_origins_str = get_str_env("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
 logger.info(f"Allowed origins: {allowed_origins}")
@@ -309,7 +309,7 @@ async def chat_stream(request: ChatRequest):
             request.interrupt_feedback or "",
             mcp_settings_to_use,
             request.enable_background_investigation or True,
-            request.report_style or ReportStyle.ACADEMIC,
+            request.report_style or ReportStyle.GENERIC,
             request.enable_deep_thinking or False,
             request.enable_clarification or False,
             request.max_clarification_rounds or 3,
@@ -1908,6 +1908,7 @@ async def _astream_workflow_generator(
     interrupt_before_tools: Optional[List[str]] = None,
     model_provider: Optional[str] = None,
     model_name: Optional[str] = None,
+    project_id: Optional[str] = None,  # Added: Current project ID for PM tools
 ):
     # Set model selection in context for LLM initialization
     if model_provider or model_name:
@@ -1975,6 +1976,7 @@ async def _astream_workflow_generator(
         "enable_clarification": enable_clarification,
         "max_clarification_rounds": max_clarification_rounds,
         "locale": locale,
+        "project_id": project_id,  # Added: Pass project_id to graph state
     }
 
     if not auto_accepted_plan and interrupt_feedback:
@@ -2299,20 +2301,17 @@ async def enhance_prompt(request: EnhancePromptRequest):
             try:
                 # Handle both uppercase and lowercase input
                 style_mapping = {
-                    "ACADEMIC": ReportStyle.ACADEMIC,
-                    "POPULAR_SCIENCE": ReportStyle.POPULAR_SCIENCE,
-                    "NEWS": ReportStyle.NEWS,
-                    "SOCIAL_MEDIA": ReportStyle.SOCIAL_MEDIA,
-                    "STRATEGIC_INVESTMENT": ReportStyle.STRATEGIC_INVESTMENT,
+                    "GENERIC": ReportStyle.GENERIC,
+                    "PROJECT_MANAGEMENT": ReportStyle.PROJECT_MANAGEMENT,
                 }
                 report_style = style_mapping.get(
-                    request.report_style.upper(), ReportStyle.ACADEMIC
+                    request.report_style.upper(), ReportStyle.GENERIC
                 )
             except Exception:
-                # If invalid style, default to ACADEMIC
-                report_style = ReportStyle.ACADEMIC
+                # If invalid style, default to GENERIC
+                report_style = ReportStyle.GENERIC
         else:
-            report_style = ReportStyle.ACADEMIC
+            report_style = ReportStyle.GENERIC
 
         workflow = build_prompt_enhancer_graph()
         final_state = workflow.invoke(
@@ -3289,6 +3288,7 @@ async def pm_chat_stream(request: Request):
                 """Generate SSE stream of chat responses with progress."""
                 api_start = time.time()
                 logger.info("[PM-CHAT-TIMING] generate_stream started")
+                logger.info("[PM-CHAT] 🔍 DEBUG: generate_stream generator initialized and running")
                     
                 try:
                     # Check if this is a Project Management (PM) related query
@@ -3299,13 +3299,14 @@ async def pm_chat_stream(request: Request):
                     # Only check first line for PM intent to avoid false positives from context/metadata
                     has_pm_intent = any(keyword in user_message_first_line for keyword in pm_keywords)
                     
-                    # Debug: Log what's being checked
                     if user_message_first_line in ["hi", "hello", "hey"]:
                         matching_keywords = [kw for kw in pm_keywords if kw in user_message_first_line]
                         logger.warning(f"[PM-CHAT] 🔍 DEBUG: user_message_first_line='{user_message_first_line}', has_pm_intent={has_pm_intent}, matching_keywords={matching_keywords}")
                     
                     # Determine routing: PM queries go to coordinator → ReAct, non-PM queries go to DeerFlow
                     needs_research = not has_pm_intent
+                    
+                    logger.info(f"[PM-CHAT] 🔍 DEBUG: Intent detection result: has_pm_intent={has_pm_intent}, needs_research={needs_research}")
                     
                     if has_pm_intent:
                         # PM-related query - route to coordinator → ReAct agent
@@ -3383,7 +3384,7 @@ async def pm_chat_stream(request: Request):
                                 interrupt_feedback="",
                                 mcp_settings=pm_mcp_settings,
                                 enable_background_investigation=True,
-                                report_style=ReportStyle.ACADEMIC,
+                                report_style=ReportStyle.PROJECT_MANAGEMENT,
                                 enable_deep_thinking=False,
                                 enable_clarification=False,
                                 max_clarification_rounds=3,
@@ -3391,6 +3392,7 @@ async def pm_chat_stream(request: Request):
                                 interrupt_before_tools=None,
                                 model_provider=model_provider,
                                 model_name=model_name,
+                                project_id=selected_project_id,  # Pass project_id to graph state
                             ):
                                 # Yield formatted DeerFlow events directly
                                 yield event
@@ -3462,10 +3464,11 @@ async def pm_chat_stream(request: Request):
                                 logger.info("[PM-CHAT-TIMING] PM handler set for PM graph agents")
                             
                             # Set current project if provided
-                            if project_id:
+                            # Set current project if provided
+                            if selected_project_id:
                                 from backend.tools.pm_tools import set_current_project
-                                set_current_project(project_id)
-                                logger.info(f"[PM-CHAT] Set current project: {project_id}")
+                                set_current_project(selected_project_id)
+                                logger.info(f"[PM-CHAT] Set current project: {selected_project_id}")
                             
                             # Build messages for PM graph
                             workflow_messages = []
@@ -3492,11 +3495,11 @@ async def pm_chat_stream(request: Request):
                                 max_plan_iterations=1,
                                 max_step_num=3,
                                 max_search_results=3,
-                                auto_accepted_plan=False,
+                                auto_accepted_plan=True,  # Auto-execute PM query plans (Fix: was False, causing stuck on human_feedback)
                                 interrupt_feedback="",
                                 mcp_settings=pm_mcp_settings,
                                 enable_background_investigation=False,
-                                report_style=ReportStyle.ACADEMIC,
+                                report_style=ReportStyle.PROJECT_MANAGEMENT,
                                 enable_deep_thinking=False,
                                 enable_clarification=False,
                                 max_clarification_rounds=3,
@@ -3504,6 +3507,7 @@ async def pm_chat_stream(request: Request):
                                 interrupt_before_tools=None,
                                 model_provider=model_provider,
                                 model_name=model_name,
+                                project_id=selected_project_id,  # Pass project_id to graph state
                             ):
                                 # Yield formatted PM graph events directly
                                 yield event

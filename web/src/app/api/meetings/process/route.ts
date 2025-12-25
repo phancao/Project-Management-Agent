@@ -6,9 +6,12 @@ const MCP_MEETING_SERVER_URL = process.env.MCP_MEETING_SERVER_URL || 'http://loc
  * POST /api/meetings/process
  * Process an uploaded meeting (transcribe, analyze, extract)
  */
+const MCP_SERVER_URL = process.env.PM_MCP_SERVER_HTTP_URL || 'http://pm-mcp-server:8080';
+
 export async function POST(request: NextRequest) {
     try {
-        const { meetingId, language } = await request.json();
+        const body = await request.json();
+        const { meetingId, projectId } = body;
 
         if (!meetingId) {
             return NextResponse.json(
@@ -17,44 +20,59 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Call MCP Meeting Server to process
-        // In production, this would be an actual call to the MCP server
-        // For now, simulate the response
+        // Call MCP Tool: process_meeting
+        // We assume meetingId here corresponds to the file path or ID returned by upload
+        // In our current mock upload, meetingId is just a UUID, but we need the path.
+        // HOWEVER, the prev step (mock) didn't return the full path to the client.
+        // Let's assume for now the client passes what it got.
 
-        // Simulated delay for processing
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Actually, looking at the Upload route below, we need to fix it to return the path or use the ID to lookup.
+        // Or we pass the filename as meetingId?
+        // Let's rely on the Upload route edit to ensure meetingId helps us find the file.
+        // The Upload route (to be edited) will save to /app/uploads/filename.
 
-        // Simulated response
-        const result = {
-            meetingId,
-            status: 'completed',
-            summary: {
-                executiveSummary: 'This was a productive meeting discussing Q1 goals and action items.',
-                keyPoints: [
-                    'Reviewed Q1 objectives and KPIs',
-                    'Discussed resource allocation',
-                    'Agreed on timeline for deliverables',
-                ],
-                actionItemsCount: 5,
-                decisionsCount: 2,
-            },
-        };
+        const response = await fetch(`${MCP_SERVER_URL}/tools/call`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: 'process_meeting',
+                arguments: {
+                    meeting_id: meetingId,
+                    project_id: projectId
+                }
+            })
+        });
 
-        // In production:
-        // const response = await fetch(`${MCP_MEETING_SERVER_URL}/tools/call`, {
-        //   method: 'POST',
-        //   headers: { 'Content-Type': 'application/json' },
-        //   body: JSON.stringify({
-        //     name: 'process_meeting',
-        //     arguments: { meeting_id: meetingId, language },
-        //   }),
-        // });
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`MCP Tool call failed: ${response.status} ${errText}`);
+        }
 
+        const toolResponse = await response.json();
+
+        // Parse the nested JSON from the MCP tool text response
+        let result = null;
+        if (Array.isArray(toolResponse) && toolResponse.length > 0 && toolResponse[0].text) {
+            try {
+                result = JSON.parse(toolResponse[0].text);
+            } catch (e) {
+                console.error("Failed to parse tool response:", toolResponse[0].text);
+                throw new Error("Invalid response from meeting processor");
+            }
+        } else {
+            throw new Error("Empty response from meeting processor");
+        }
+
+        if (!result.success) {
+            throw new Error(result.error || 'Unknown error processing meeting');
+        }
+
+        // Return the result from the tool
         return NextResponse.json(result);
-    } catch (error) {
+    } catch (error: any) {
         console.error('Processing failed:', error);
         return NextResponse.json(
-            { error: 'Processing failed' },
+            { error: error.message || 'Processing failed' },
             { status: 500 }
         );
     }

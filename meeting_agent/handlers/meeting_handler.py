@@ -47,6 +47,7 @@ class MeetingHandler(BaseHandler[MeetingSummary]):
         config: Optional[MeetingAgentConfig] = None,
         pm_handler: Optional[Any] = None,  # BasePMHandler
         database_url: Optional[str] = None,
+        provider_manager: Optional[Any] = None,
     ):
         """
         Initialize meeting handler.
@@ -55,9 +56,11 @@ class MeetingHandler(BaseHandler[MeetingSummary]):
             config: Meeting agent configuration
             pm_handler: Optional PM handler for task creation
             database_url: Database URL for persistence
+            provider_manager: Optional ProviderManager for fetching AI keys
         """
         self.config = config or MeetingAgentConfig()
         self.pm_handler = pm_handler
+        self.provider_manager = provider_manager
         
         # Initialize components
         self.audio_processor = AudioProcessor(work_dir=self.config.upload_dir + "/tmp")
@@ -126,40 +129,151 @@ class MeetingHandler(BaseHandler[MeetingSummary]):
                 meeting.metadata.file_size_bytes = audio_info.file_size_bytes
                 meeting.metadata.audio_format = audio_info.format
             
-            # Prepare audio for transcription
+            # Prepare audio for transcription with soft limit
             prepared_path = await self.audio_processor.prepare_for_transcription(
-                audio_path
+                audio_path,
+                enforce_limit=False 
             )
             
-            # Step 2: Transcribe
+            # Resolve OpenAI API Key (STRICT MODE: DB Only)
+            api_key = None
+            if self.provider_manager:
+                try:
+                    # Look for openai provider in AI Providers (Main DB)
+                    if hasattr(self.provider_manager, 'get_ai_provider'):
+                        openai_data = self.provider_manager.get_ai_provider('openai')
+                        if openai_data and openai_data.get('api_key'):
+                            api_key = openai_data['api_key']
+                            logger.info("Using OpenAI API key from ProviderManager (AI Provider)")
+
+                    # Fallback: Look in PM Providers (MCP DB) if not found in AI Providers
+                    if not api_key:
+                        providers = self.provider_manager.get_active_providers()
+                        openai_provider = next((p for p in providers if p.provider_type == 'openai'), None)
+                        if openai_provider and openai_provider.api_key:
+                            api_key = openai_provider.api_key
+                            logger.info("Using OpenAI API key from ProviderManager (PM Provider)")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch OpenAI key from provider manager: {e}")
+            
+            if not api_key:
+                raise ValueError("OpenAI provider not configured. Please add the 'openai' provider in Settings > AI Providers.")
+
+            # Step 2: Transcribe (with Chunking Support)
             logger.info(f"Transcribing: {prepared_path}")
-            transcription_result = await self.transcriber.transcribe(
-                prepared_path,
-                language=self.config.whisper_language,
-            )
             
-            if not transcription_result.success:
-                meeting.status = MeetingStatus.FAILED
-                meeting.error_message = transcription_result.error
-                return HandlerResult.failure(
-                    f"Transcription failed: {transcription_result.error}"
+            # Update transcriber key if we found one
+            if api_key and hasattr(self.transcriber, '_transcriber'):
+                 if hasattr(self.transcriber._transcriber, 'api_key'):
+                     self.transcriber._transcriber.api_key = api_key
+            
+            # Check file size
+            file_size = Path(prepared_path).stat().st_size
+            limit_bytes = 25 * 1024 * 1024 # 25MB
+            
+            if file_size > limit_bytes:
+                logger.info(f"File size ({file_size/1024/1024:.2f}MB) exceeds limit, splitting into chunks...")
+                chunks = self.audio_processor.split_audio(prepared_path)
+                logger.info(f"Split into {len(chunks)} chunks")
+                
+                full_text_parts = []
+                all_segments = []
+                
+                for i, chunk_path in enumerate(chunks):
+                    logger.info(f"Transcribing chunk {i+1}/{len(chunks)}: {chunk_path}")
+                    chunk_result = await self.transcriber.transcribe(
+                        chunk_path,
+                        language=self.config.whisper_language,
+                    )
+                    
+                    if not chunk_result.success:
+                        logger.error(f"Chunk {i+1} failed: {chunk_result.error}")
+                        # Continue with what we have? Or fail?
+                        # Let's fail for now to ensure quality
+                        return HandlerResult.failure(f"Transcription failed on chunk {i+1}: {chunk_result.error}")
+                        
+                    if chunk_result.transcript:
+                        full_text_parts.append(chunk_result.transcript.full_text)
+                        # Adjust segment timestamps? For now simple append
+                        all_segments.extend(chunk_result.transcript.segments)
+                
+                # Merge transcripts
+                merged_text = "\n\n".join(full_text_parts)
+                # Recalculate word count
+                word_count = len(merged_text.split())
+                
+                # Create merged transcript object
+                meeting.transcript = Transcript(
+                    meeting_id=meeting.id,
+                    full_text=merged_text,
+                    word_count=word_count,
+                    segments=all_segments
                 )
+                
+                # Cleanup chunks
+                try:
+                    for c in chunks:
+                        Path(c).unlink(missing_ok=True)
+                except:
+                    pass
+                    
+            else:
+                # Single file transcription
+                transcription_result = await self.transcriber.transcribe(
+                    prepared_path,
+                    language=self.config.whisper_language,
+                )
+                
+                if not transcription_result.success:
+                    meeting.status = MeetingStatus.FAILED
+                    meeting.error_message = transcription_result.error
+                    return HandlerResult.failure(
+                        f"Transcription failed: {transcription_result.error}"
+                    )
+                
+                # Attach transcript to meeting
+                meeting.transcript = transcription_result.transcript
+                meeting.transcript.meeting_id = meeting.id
             
-            # Attach transcript to meeting
-            meeting.transcript = transcription_result.transcript
-            meeting.transcript.meeting_id = meeting.id
+            # Fetch project context
+            project_context = {}
+            if meeting.project_id and self.pm_integration:
+                logger.info(f"Fetching context for project: {meeting.project_id}")
+                ctx_result = await self.pm_integration.get_project_context(meeting.project_id)
+                if ctx_result.is_success:
+                    project_context = ctx_result.data
+                
+                # Fetch project participants
+                users_result = await self.pm_integration.get_project_users(meeting.project_id)
+                if users_result.is_success:
+                    project_context["participants"] = users_result.data
             
-            # Step 3: Analyze
+            # Analyze
             logger.info(f"Analyzing meeting: {meeting.id}")
             meeting.status = MeetingStatus.ANALYZING
             
+            # Pass API key to analysis tools via config or direct argument?
+            # Looking at Summarizer/ActionExtractor, they use config or env.
+            # We need to update them to accept key in method or init.
+            # For now, let's assume we can inject it into their config if they expose it, 
+            # OR we pass it in invoke. But the signature doesn't support it yet.
+            # We will update Summarizer/Extractor signature separately.
+            # For now, let's just stick to the plan of injecting to config logic if possible.
+            # Actually, simpler to pass it to the methods.
+            
             # Get summary
-            summary = await self.summarizer.summarize(meeting)
+            summary = await self.summarizer.summarize(
+                meeting, 
+                project_context=project_context,
+                api_key=api_key
+            )
             
             # Extract action items
             action_items, decisions, follow_ups = await self.action_extractor.extract(
                 meeting,
                 participant_mapping=self._build_participant_mapping(meeting),
+                project_context=project_context,
+                api_key=api_key
             )
             
             # Add to summary
@@ -284,9 +398,19 @@ class MeetingHandler(BaseHandler[MeetingSummary]):
         meeting.transcript.meeting_id = meeting.id
         
         try:
+            # Fetch project context
+            project_context = {}
+            if meeting.project_id and self.pm_integration:
+                ctx_result = await self.pm_integration.get_project_context(meeting.project_id)
+                if ctx_result.is_success:
+                    project_context = ctx_result.data
+
             # Analyze
-            summary = await self.summarizer.summarize(meeting)
-            action_items, decisions, follow_ups = await self.action_extractor.extract(meeting)
+            summary = await self.summarizer.summarize(meeting, project_context=project_context)
+            action_items, decisions, follow_ups = await self.action_extractor.extract(
+                meeting,
+                project_context=project_context
+            )
             
             summary.action_items = action_items
             summary.decisions = decisions

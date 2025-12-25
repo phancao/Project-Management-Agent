@@ -25,6 +25,10 @@ class PMServerConfig:
             "postgresql://postgres:postgres@localhost:5432/pm_agent"
         )
     )
+    # Main Database (Project Management DB) for accessing shared tables (e.g. AI Provider Keys)
+    main_database_url: str | None = field(
+        default_factory=lambda: os.getenv("MAIN_DATABASE_URL")
+    )
     
     # Transport
     transport: Literal["stdio", "sse", "http"] = "stdio"
@@ -71,6 +75,7 @@ class PMServerConfig:
         return cls(
             server_name=os.getenv("MCP_SERVER_NAME", "pm-server"),
             database_url=os.getenv("DATABASE_URL", default_db_url),
+            main_database_url=os.getenv("MAIN_DATABASE_URL"),
             transport=os.getenv("MCP_TRANSPORT", "stdio"),
             host=os.getenv("MCP_HOST", "localhost"),
             port=int(os.getenv("MCP_PORT", "8080")),

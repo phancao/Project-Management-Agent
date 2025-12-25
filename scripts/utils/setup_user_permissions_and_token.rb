@@ -21,8 +21,8 @@ if role.nil?
   exit 1
 end
 
-# Get all projects
-projects = Project.all
+# Get all projects (unscoped)
+projects = Project.unscoped.all
 total_projects = projects.count
 puts "Total projects: #{total_projects}"
 

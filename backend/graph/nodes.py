@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import time
+import inspect
 from functools import partial
 from typing import Annotated, Any, Literal
 
@@ -29,7 +30,9 @@ from backend.tools import (
     backend_api_call,
     get_retriever_tool,
     get_web_search_tool,
+    get_web_search_tool,
     python_repl_tool,
+    pm_tools,
 )
 from backend.tools.search import LoggedTavilySearch
 from backend.utils.context_manager import ContextManager, validate_message_content
@@ -483,6 +486,35 @@ def background_investigation_node(state: State, config: RunnableConfig):
     }
 
 
+def get_formatted_tool_definitions() -> str:
+    """Get formatted definitions of available PM tools."""
+    definitions = []
+    
+    # Helper to check if object is a LangChain tool
+    def is_tool(obj):
+        return hasattr(obj, "name") and hasattr(obj, "description") and not hasattr(obj, "__class__") or (hasattr(obj, "__class__") and "Tool" in obj.__class__.__name__)
+
+    # Tools from pm_tools.py
+    for name, obj in inspect.getmembers(pm_tools):
+        # Check for tools (LangChain tools)
+        if hasattr(obj, "name") and hasattr(obj, "description") and not name.startswith("_"):
+             # Format: - **name**: description
+             desc = obj.description.strip().split('\n')[0] if obj.description else ""
+             definitions.append(f"- **{obj.name}**: {desc}")
+    
+    # Add special abstract step types that are NOT tools but handled by nodes
+    # definitions.append("- **research**: Research a topic using DeerFlow (web search)")
+    # definitions.append("- **create_report**: Generate project reports")
+    # definitions.append("- **gantt_chart**: Create timeline/Gantt chart")
+    
+    # Add list_tasks_in_sprint explicit mapping if needed, or rely on list_tasks description.
+    # The prompt has the 2-step rule separately.
+    # Ideally, we let list_tasks description handle it.
+    
+    definitions.sort()
+    return "\n".join(definitions)
+
+
 def planner_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["human_feedback", "reporter"]]:
@@ -593,9 +625,41 @@ def planner_node(
         logger.info(
             f"Clarification mode: Using clarified research topic: {state['clarified_research_topic']}"
         )
+
     else:
         # Normal mode: use full conversation history
-        messages = apply_prompt_template(prompt_template, state, configurable, state.get("locale", "en-US"))
+        # Inject tool definitions into valid context
+        tool_defs = get_formatted_tool_definitions()
+        messages = apply_prompt_template(
+            prompt_template, 
+            state, 
+            configurable, 
+            state.get("locale", "en-US"), 
+            tool_definitions=tool_defs
+        )
+    
+    # CRITICAL: Inject project context into planner messages so LLM knows the actual project_id
+    if project_id:
+        project_context_msg = {
+            "role": "system",
+            "content": f"""CURRENT PROJECT CONTEXT:
+- Project ID: {project_id}
+- When generating step descriptions that reference project_id, USE THE ACTUAL ID "{project_id}" instead of placeholder like [project_id].
+- Example: 'Call list_sprints(project_id="{project_id}")' NOT 'Call list_sprints(project_id=[project_id])'
+- The user has already selected this project - do NOT ask for project_id."""
+        }
+        # Insert project context as second message (after system prompt but before user message)
+        if len(messages) > 1:
+            messages.insert(1, project_context_msg)
+        else:
+            messages.append(project_context_msg)
+        logger.info(f"[PLANNER] 💉 Injected project context: {project_id}")
+        
+        # Enforce JSON output with a final system message (recency bias)
+        messages.append({
+            "role": "system", 
+            "content": "CRITICAL: You MUST return ONLY valid JSON. Do not use markdown blocks key. Do not explain your plan. Just output the JSON."
+        })
 
     if state.get("enable_background_investigation") and state.get(
         "background_investigation_results"
@@ -988,7 +1052,7 @@ User Feedback:
 The user indicated the quick answer was not sufficient. 
 Create a comprehensive plan that addresses their need for more detailed analysis.
 """
-                
+                logger.info(f"[COORDINATOR] 🔍 DEBUG: Routing decision - Target: 'planner', Reason: Escalation requested")
                 return Command(
                     update={
                         "routing_mode": "user_escalated",
@@ -1089,15 +1153,20 @@ Create a comprehensive plan that addresses their need for more detailed analysis
             # PM-related query - route to ReAct agent (it will decide whether to use PM tools)
             logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 2.5 - PM intent detected: '{user_message_first_line}' - routing to ReAct agent")
             logger.info(f"[COORDINATOR] 📊 PM intent detected: '{user_message_first_line}' - routing to ReAct agent")
+            logger.info(f"[COORDINATOR] 🔍 DEBUG: Routing decision - Target: 'react_agent', Reason: PM intent detected (Legacy Mode)")
             # Don't call LLM - just route directly to ReAct agent
-            # CRITICAL: Clear previous_result and routing_mode for NEW PM queries (not escalations)
+            # CRITICAL: Clear previous_result, routing_mode, and final_report for NEW PM queries (not escalations)
             # This ensures ReAct is called for new queries, not skipped due to stale state
+            # Clearing final_report allows reporter to execute for follow-up PM queries
+            import datetime
+            logger.info(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] [COORDINATOR] Clearing final_report and previous_result for new PM query")
             return Command(
                 update={
                     "locale": state.get("locale", "en-US"),
                     "research_topic": state.get("research_topic", ""),
                     "previous_result": None,  # Clear previous_result for new PM queries
                     "routing_mode": "",  # Clear routing_mode for new PM queries
+                    "final_report": "",  # CRITICAL: Clear final_report to allow reporter to execute
                     "goto": "react_agent"
                 },
                 goto="react_agent"
@@ -1141,12 +1210,15 @@ Create a comprehensive plan that addresses their need for more detailed analysis
             # PM query detected - route to ReAct agent
             # ReAct will handle it or escalate to Planner if too complex
             logger.info(f"[COORDINATOR] ⚡ PM intent detected in clarification mode - routing to ReAct agent")
+            import datetime
+            logger.info(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] [COORDINATOR] Clearing final_report and previous_result for new PM query (clarification mode)")
             return Command(
                 update={
                     "locale": state.get("locale", "en-US"),
                     "research_topic": state.get("research_topic", ""),
                     "previous_result": None,
                     "routing_mode": "",
+                    "final_report": "",  # CRITICAL: Clear final_report to allow reporter to execute
                     "goto": "react_agent"
                 },
                 goto="react_agent"
@@ -1492,14 +1564,22 @@ def reporter_node(state: State, config: RunnableConfig):
     logger.info(f"[DEBUG-NODES] [NODE-REPORTER-1] Reporter node entered")
     """Reporter node that write a final report."""
     
-    # CRITICAL: Check if reporter already completed (prevent infinite loop)
-    if state.get("final_report"):
-        logger.warning("[REPORTER] 🚨 CRITICAL: Reporter already completed (final_report exists). Skipping execution to prevent duplicate reports.")
-        # Return the existing report without re-executing
-        return Command(
-            update={},  # No state changes
-            goto="__end__"  # Route to END to stop the workflow
-        )
+    # Check if we already have a final_report from React Agent
+    existing_report = state.get("final_report")
+    if existing_report:
+        logger.info(f"[REPORTER] Using existing final_report from React Agent ({len(existing_report)} chars)")
+        # Stream the existing report without re-invoking LLM
+        # Create an AIMessage to stream to frontend
+        from langchain_core.messages import AIMessage
+        response = AIMessage(content=existing_report)
+        if not hasattr(response, 'response_metadata') or not response.response_metadata:
+            response.response_metadata = {}
+        response.response_metadata["finish_reason"] = "stop"
+        
+        return {
+            "messages": [response],
+            "final_report": existing_report,  # Keep the report
+        }
     
     logger.info("Reporter write final report")
     configurable = Configuration.from_runnable_config(config)
@@ -1552,9 +1632,14 @@ def reporter_node(state: State, config: RunnableConfig):
         ],
         "locale": state.get("locale", "en-US"),
     }
+    # Use PM-specific reporter for PM routes, generic reporter otherwise
+    # PM routes come from React Agent with routing_mode="react_first"
+    reporter_template = "pm_reporter" if is_from_react else "reporter"
+    logger.info(f"[REPORTER] Using template: {reporter_template}")
+    
     # Get system prompt only (first message from apply_prompt_template)
     # Don't include all messages from state - that causes token overflow!
-    all_template_messages = apply_prompt_template("reporter", input_, configurable, input_.get("locale", "en-US"))
+    all_template_messages = apply_prompt_template(reporter_template, input_, configurable, input_.get("locale", "en-US"))
     # Only take the system prompt (first message), not the rest
     invoke_messages = [all_template_messages[0]] if all_template_messages else []
     observations = state.get("observations", [])
@@ -1671,31 +1756,8 @@ def reporter_node(state: State, config: RunnableConfig):
             else:
                 logger.warning("Reporter: Failed to extract observations from ReAct intermediate steps")
 
-    # CRITICAL: Detect if this is a simple query (list/show/get) that doesn't need comprehensive analysis
-    # Simple queries should just present the data directly, not generate comprehensive project analysis
-    is_simple_query = False
-    if is_from_react:
-        # Check if the query is a simple list/show/get query
-        query_lower = plan_title.lower()
-        simple_keywords = [
-            "list users", "show users", "list all users", "show all users",
-            "list projects", "show projects", "list all projects",
-            "list sprints", "show sprints", "list all sprints",
-            "list tasks", "show tasks", "list all tasks",
-            "list epics", "show epics", "list all epics",
-            "get user", "get project", "get sprint", "get task", "get epic",
-            "current user", "who am i", "show me all users", "show me users"
-        ]
-        is_simple_query = any(keyword in query_lower for keyword in simple_keywords)
-        if is_simple_query:
-            logger.info(f"[REPORTER] 🎯 Simple query detected - will format as simple list/table, not comprehensive analysis")
-    
-    # Add a reminder about the new report format, citation style, and table usage
+    # Add format instructions for report structure and table usage
     format_instructions = "IMPORTANT: Structure your report according to the format in the prompt. Remember to include:\n\n1. Key Points - A bulleted list of the most important findings\n2. Overview - A brief introduction to the topic\n3. Detailed Analysis - Organized into logical sections\n4. Survey Note (optional) - For more comprehensive reports\n5. Key Citations - List all references at the end\n\nFor citations, DO NOT include inline citations in the text. Instead, place all citations in the 'Key Citations' section at the end using the format: `- [Source Title](URL)`. Include an empty line between each citation for better readability.\n\nPRIORITIZE USING MARKDOWN TABLES for data presentation and comparison. Use tables whenever presenting comparative data, statistics, features, or options. Structure tables with clear headers and aligned columns. Example table format:\n\n| Feature | Description | Pros | Cons |\n|---------|-------------|------|------|\n| Feature 1 | Description 1 | Pros 1 | Cons 1 |\n| Feature 2 | Description 2 | Pros 2 | Cons 2 |"
-    
-    # For simple queries, add special instruction to NOT generate comprehensive analysis
-    if is_simple_query:
-        format_instructions += "\n\n🔴 CRITICAL FOR SIMPLE QUERIES: This is a simple list/show/get query. DO NOT generate a comprehensive project analysis report with all 10 analytics sections (Executive Summary, Sprint Overview, Burndown Chart, Velocity Chart, CFD, Cycle Time, Work Distribution, Issue Trend, Task Statistics, Key Insights). Instead, simply present the requested data in a clear, organized format (preferably using tables). For example, if the user asked to 'list users', just show the users in a table with their details. Keep it simple and direct - no need for comprehensive analytics sections."
     
     invoke_messages.append(
         HumanMessage(
@@ -1809,40 +1871,62 @@ def reporter_node(state: State, config: RunnableConfig):
     all_messages_to_compress = invoke_messages + observation_messages
     
     # DEBUG: Log what we're compressing
+    import datetime
+    def get_ts():
+        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    
     logger.info(
-        f"Reporter: Compressing {len(invoke_messages)} invoke messages + {len(observation_messages)} observation messages = {len(all_messages_to_compress)} total"
+        f"[{get_ts()}] Reporter: Preparing {len(invoke_messages)} invoke messages + {len(observation_messages)} observation messages = {len(all_messages_to_compress)} total"
     )
     
     # Count original tokens for logging
     original_token_count = context_manager.count_tokens(all_messages_to_compress, model=model_name)
     logger.info(
-        f"Reporter: Original token count: {original_token_count:,} tokens "
+        f"[{get_ts()}] Reporter: Original token count: {original_token_count:,} tokens "
         f"(invoke: {len(invoke_messages)} msgs, observations: {len(observation_messages)} msgs)"
     )
     
-    # Compress all messages together to fit in token budget
-    compressed_state = context_manager.compress_messages(
-        {"messages": all_messages_to_compress}
-    )
+    # LAZY OPTIMIZATION: Only compress when actually over 90% of limit
+    # For simple queries under 90%, skip compression to preserve data
+    # If over 90%, always compress regardless of query type
     optimization_messages = []
-    if isinstance(compressed_state, dict):
-        compressed_messages = compressed_state.get("messages", [])
-        optimization_metadata = compressed_state.get("_context_optimization")
-        
-        # Create context optimization tool call messages
-        if optimization_metadata:
-            optimization_messages = _add_context_optimization_tool_call(state, "reporter", optimization_metadata)
-    else:
-        compressed_messages = all_messages_to_compress
+    threshold_tokens = int(llm_token_limit * 0.90)  # 90% threshold for compression
     
-    # Log compression results for debugging
-    compressed_token_count = context_manager.count_tokens(compressed_messages, model=model_name)
-    if compressed_token_count < original_token_count:
-        reduction_pct = ((original_token_count - compressed_token_count) / original_token_count) * 100
+    if original_token_count > threshold_tokens:
+        # Over 90% threshold - APPLY compression regardless of query type
         logger.info(
-            f"Reporter: All messages compressed from {original_token_count} to {compressed_token_count} tokens "
-            f"({reduction_pct:.1f}% reduction)"
+            f"[{get_ts()}] [APPLY-COMPRESSION] Over 90% threshold - applying context optimization. "
+            f"Token count: {original_token_count:,}, Threshold: {threshold_tokens:,}, Limit: {llm_token_limit:,}"
         )
+        compressed_state = context_manager.compress_messages(
+            {"messages": all_messages_to_compress}
+        )
+        if isinstance(compressed_state, dict):
+            compressed_messages = compressed_state.get("messages", [])
+            optimization_metadata = compressed_state.get("_context_optimization")
+            
+            # Create context optimization tool call messages ONLY if compression occurred
+            if optimization_metadata and optimization_metadata.get("compression_ratio", 1.0) < 1.0:
+                optimization_messages = _add_context_optimization_tool_call(state, "reporter", optimization_metadata)
+        else:
+            compressed_messages = all_messages_to_compress
+        
+        # Log compression results for debugging
+        compressed_token_count = context_manager.count_tokens(compressed_messages, model=model_name)
+        if compressed_token_count < original_token_count:
+            reduction_pct = ((original_token_count - compressed_token_count) / original_token_count) * 100
+            logger.info(
+                f"[{get_ts()}] Reporter: All messages compressed from {original_token_count:,} to {compressed_token_count:,} tokens "
+                f"({reduction_pct:.1f}% reduction)"
+            )
+    else:
+        # Under 90% threshold - no compression needed, preserve data
+        logger.info(
+            f"[{get_ts()}] [SKIP-COMPRESSION] Under 90% threshold - no compression needed. "
+            f"Token count: {original_token_count:,}, Threshold: {threshold_tokens:,}, Limit: {llm_token_limit:,}"
+        )
+        compressed_messages = all_messages_to_compress
+        compressed_token_count = original_token_count
     
     # Use compressed messages (includes system prompt + task + observations)
     invoke_messages = compressed_messages
@@ -3429,7 +3513,8 @@ async def _setup_and_execute_agent_step(
         def compress_with_tracking(state_dict):
             compressed = context_manager.compress_messages(state_dict)
             optimization_metadata = compressed.get("_context_optimization") if isinstance(compressed, dict) else None
-            if optimization_metadata:
+            # Only create tool call if actual compression occurred (ratio < 1.0)
+            if optimization_metadata and optimization_metadata.get("compression_ratio", 1.0) < 1.0:
                 opt_messages = _add_context_optimization_tool_call(state, agent_type, optimization_metadata)
                 if opt_messages:
                     state["_optimization_messages"] = opt_messages
@@ -3456,7 +3541,8 @@ async def _setup_and_execute_agent_step(
             def compress_with_tracking_default(state_dict):
                 compressed = context_manager_default.compress_messages(state_dict)
                 optimization_metadata = compressed.get("_context_optimization") if isinstance(compressed, dict) else None
-                if optimization_metadata:
+                # Only create tool call if actual compression occurred (ratio < 1.0)
+                if optimization_metadata and optimization_metadata.get("compression_ratio", 1.0) < 1.0:
                     opt_messages = _add_context_optimization_tool_call(state, agent_type, optimization_metadata)
                     if opt_messages:
                         state["_optimization_messages"] = opt_messages
@@ -4378,19 +4464,60 @@ async def react_agent_node(
         f"and with realistic tool accumulation ({total_with_realistic_tools:,}) < limit ({effective_limit:,})"
     )
     
-    # Create context optimization tool call messages
+    # Create context optimization tool call messages ONLY if compression actually occurred
+    # Don't show the tool at low token counts where no compression was needed
     optimization_messages = []
-    if optimization_metadata:
-        optimization_messages = _add_context_optimization_tool_call(state, "react_agent", optimization_metadata)
-        logger.info(f"[REACT-AGENT] 🔍 DEBUG: Created {len(optimization_messages)} optimization messages")
+    if optimization_metadata and optimization_metadata.get("compressed", False):
+        # Only show optimize_context tool when actual compression happened
+        compression_ratio = optimization_metadata.get("compression_ratio", 1.0)
+        if compression_ratio < 1.0:
+            optimization_messages = _add_context_optimization_tool_call(state, "react_agent", optimization_metadata)
+            logger.info(f"[REACT-AGENT] 🔍 DEBUG: Created {len(optimization_messages)} optimization messages (compression applied)")
+        else:
+            logger.info(f"[REACT-AGENT] 🔍 DEBUG: No optimization messages - no compression needed")
     
     logger.info(f"[REACT-AGENT] 🔍 DEBUG: Created LLM instance: {type(llm).__name__}")
     
+    # Get user_id from config (not configurable object)
+    user_id = config.get("configurable", {}).get("user_id") if isinstance(config, dict) else None
+    
+    # Inject current project context DIRECTLY from graph state (not PM handler - it may not be initialized yet)
+    project_context_str = ""
+    try:
+        # DEBUG: Log state info to understand why project_id might not be found
+        logger.info(f"[REACT-AGENT] 🔍 DEBUG STATE: type={type(state).__name__}, is_dict={isinstance(state, dict)}")
+        if isinstance(state, dict):
+            logger.info(f"[REACT-AGENT] 🔍 DEBUG STATE keys: {list(state.keys())}")
+        elif hasattr(state, "keys"):
+            logger.info(f"[REACT-AGENT] 🔍 DEBUG STATE keys (via hasattr): {list(state.keys())}")
+        
+        # Get project_id from state - this is set from the frontend URL parameter
+        # Try multiple access methods since state may be TypedDict or other class
+        current_pid = None
+        if isinstance(state, dict):
+            current_pid = state.get("project_id")
+        elif hasattr(state, "get"):
+            current_pid = state.get("project_id")
+        elif hasattr(state, "__getitem__"):
+            try:
+                current_pid = state["project_id"]
+            except (KeyError, TypeError):
+                pass
+        
+        logger.info(f"[REACT-AGENT] 🔍 DEBUG project_id value: {current_pid}")
+        
+        if current_pid:
+            project_context_str = f"\n\nCURRENT PROJECT CONTEXT:\n- ID: {current_pid}\n- YOU MUST USE THIS PROJECT ID immediately for any tools requiring 'project_id'.\n- Do NOT call get_current_project or get_current_project_details first - you already have the project ID!"
+            logger.info(f"[REACT-AGENT] 💉 Injected project context from state: {current_pid}")
+        else:
+            logger.info(f"[REACT-AGENT] ⚠️ No project_id in state after all access methods attempted")
+    except Exception as e:
+        logger.warning(f"[REACT-AGENT] Failed to inject project context: {e}")
+
     react_prompt_template = """You are a helpful PM assistant with access to project management tools and web search.
+""" + project_context_str + """
 
 **CRITICAL: You MUST include your reasoning in the message content BEFORE calling tools!**
-
-Even when using structured tool calls, you MUST write your thinking process in the message content. This helps users understand your reasoning.
 
 **WORKFLOW:**
 1. **Understand the Request**: Read the user's question carefully
@@ -4402,6 +4529,14 @@ Even when using structured tool calls, you MUST write your thinking process in t
 3. **Plan Your Approach**: Think about which tools to use and in what order
 4. **Execute**: Call the appropriate tools to get the data
 5. **Analyze & Answer**: Process the data and provide a comprehensive answer
+
+**CRITICAL: TOOL SELECTION RULES**
+- **SPRINTS**: If the user asks for SPRINTS, call `list_sprints()` IMMEDIATELY. Sprints are iterations, NOT tasks.
+- **TASKS**: If the user asks for TASKS, use `list_tasks` (for project tasks) or `list_my_tasks` (for user's tasks).
+- If `get_current_project` returns a project ID, proceed IMMEDIATELY to your original goal using that ID. Do NOT ask for the project ID again.
+
+
+
 
 **CRITICAL: Tool Name Format**
 - Tool names do NOT have parentheses: use `list_sprints` NOT `list_sprints()`
@@ -5949,7 +6084,7 @@ DO NOT respond with text before calling tools. CALL TOOLS IMMEDIATELY."""
         
         update_dict = {
             "messages": return_messages,
-            "final_report": output,
+            "final_report": output,  # Restored - needed for reporter to get output
             "react_intermediate_steps": intermediate_steps,
             "react_thoughts": thoughts,  # Cursor-style: Store thoughts for UI display (also in state for backend streaming)
             "routing_mode": "react_first",  # Mark that we used ReAct first
@@ -6099,11 +6234,17 @@ async def pm_agent_node(
     """
     logger.info(f"[DEBUG-NODES] [NODE-PM-AGENT-1] PM Agent node entered")
     import sys
-    sys.stderr.write("\n🚨🚨🚨 PM_AGENT_NODE CALLED 🚨🚨🚨\n")
+    import datetime
+    
+    # Helper to get timestamp
+    def get_ts():
+        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        
+    sys.stderr.write(f"\n[{get_ts()}] 🚨🚨🚨 PM_AGENT_NODE CALLED 🚨🚨🚨\n")
     sys.stderr.flush()
-    logger.error("🚨🚨🚨 PM_AGENT_NODE CALLED - THIS SHOULD APPEAR IN LOGS! 🚨🚨🚨")
-    logger.info("PM Agent node is analyzing project management data.")
-    logger.debug(f"[pm_agent_node] Starting PM agent with PM tools only")
+    logger.error(f"[{get_ts()}] 🚨🚨🚨 PM_AGENT_NODE CALLED - THIS SHOULD APPEAR IN LOGS! 🚨🚨🚨")
+    logger.info(f"[{get_ts()}] PM Agent node is analyzing project management data.")
+    logger.debug(f"[{get_ts()}] [pm_agent_node] Starting PM agent with PM tools only")
     
     # PM Agent has NO web search or code execution tools
     # It ONLY has access to PM tools which are loaded via MCP configuration

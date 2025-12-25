@@ -127,10 +127,17 @@ class PMServiceHandler:
             result = await client.list_tasks(assignee_id=self.user_id)
         return result.get("items", [])
     
-    async def list_all_tasks(self) -> list[dict[str, Any]]:
+    async def list_all_tasks(
+        self,
+        project_id: Optional[str] = None,
+        assignee_id: Optional[str] = None
+    ) -> list[dict[str, Any]]:
         """List all tasks from all providers."""
         async with self._client as client:
-            result = await client.list_tasks()
+            result = await client.list_tasks(
+                project_id=project_id,
+                assignee_id=assignee_id
+            )
         return result.get("items", [])
     
     async def get_task(self, task_id: str) -> Optional[dict[str, Any]]:
@@ -234,11 +241,19 @@ class PMServiceHandler:
         # Use state if provided (for backward compatibility)
         sprint_status = state or status
         logger.info(f"[PMServiceHandler] list_sprints called: project_id={project_id}, status={sprint_status}")
+        
+        import time
+        start_time = time.time()
+        
         async with self._client as client:
             result = await client.list_sprints(
                 project_id=project_id,
                 status=sprint_status
             )
+            
+        duration = time.time() - start_time
+        logger.info(f"[PMServiceHandler] ⏱️ UPSTREAM list_sprints call took {duration:.2f}s")
+        
         items = result.get("items", [])
         total = result.get("total", len(items))
         returned = result.get("returned", len(items))

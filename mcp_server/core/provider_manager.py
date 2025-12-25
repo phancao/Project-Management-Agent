@@ -259,8 +259,54 @@ class ProviderManager:
             "type": type(error).__name__
         })
         
-        # Keep only last 10 errors
         if len(self._last_provider_errors) > 10:
             self._last_provider_errors = self._last_provider_errors[-10:]
+
+    def get_ai_provider(self, provider_id: str) -> Optional[dict]:
+        """
+        Get AI provider credentials from Main DB.
+        
+        Args:
+            provider_id: 'openai', 'anthropic', etc.
+            
+        Returns:
+            Dict with api_key, or None
+        """
+        try:
+            from ..database.connection import get_main_db_session
+            # Import from SHARED database models (mapped to /app/database)
+            from database.orm_models import AIProviderAPIKey
+            
+            # Create a generator
+            db_gen = get_main_db_session()
+            try:
+                db = next(db_gen)
+            except RuntimeError:
+                logger.warning("Main database not configured, cannot fetch AI provider")
+                return None
+            
+            try:
+                provider = db.query(AIProviderAPIKey).filter(
+                    AIProviderAPIKey.provider_id == provider_id,
+                    AIProviderAPIKey.is_active.is_(True)
+                ).first()
+                
+                if provider:
+                    return {
+                        "provider_id": provider.provider_id,
+                        "api_key": provider.api_key,
+                        "base_url": provider.base_url,
+                        "model_name": provider.model_name
+                    }
+                return None
+            finally:
+                db.close()
+                
+        except ImportError:
+            logger.warning("Could not import AIProviderAPIKey or get_main_db_session.")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching AI provider {provider_id}: {e}")
+            return None
 
 

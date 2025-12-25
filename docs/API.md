@@ -37,7 +37,8 @@ Initiates a streaming chat session with the research agent. Returns Server-Sent 
   "max_step_num": 3,
   "max_search_results": 3,
   "auto_accepted_plan": false,
-  "report_style": "ACADEMIC",
+  "auto_accepted_plan": false,
+  "report_style": "GENERIC",
   "enable_background_investigation": true,
   "enable_deep_thinking": false,
   "enable_clarification": false
@@ -55,7 +56,7 @@ Initiates a streaming chat session with the research agent. Returns Server-Sent 
 - `interrupt_feedback` (optional, string): User feedback on the plan
 - `mcp_settings` (optional, object): MCP settings (requires `ENABLE_MCP_SERVER_CONFIGURATION=true`)
 - `enable_background_investigation` (optional, boolean, default: true): Get background investigation before plan
-- `report_style` (optional, enum): Style of the report - `ACADEMIC`, `POPULAR_SCIENCE`, `NEWS`, `SOCIAL_MEDIA`, `STRATEGIC_INVESTMENT`
+- `report_style` (optional, enum): Style of the report - `GENERIC`, `PROJECT_MANAGEMENT`
 - `enable_deep_thinking` (optional, boolean, default: false): Enable deep thinking
 - `enable_clarification` (optional, boolean): Enable multi-turn clarification
 - `max_clarification_rounds` (optional, integer): Maximum clarification rounds
@@ -402,11 +403,9 @@ Returns the complete server configuration including RAG settings and available m
 ```
 
 ### ReportStyle Enum
-- `ACADEMIC`
-- `POPULAR_SCIENCE`
-- `NEWS`
-- `SOCIAL_MEDIA`
-- `STRATEGIC_INVESTMENT`
+### ReportStyle Enum
+- `GENERIC`
+- `PROJECT_MANAGEMENT`
 
 ---
 
@@ -500,7 +499,7 @@ curl -X POST http://localhost:8000/api/chat/stream \
     "messages": [{"role": "user", "content": "What are the latest AI trends?"}],
     "thread_id": "conversation_1",
     "max_search_results": 5,
-    "report_style": "POPULAR_SCIENCE"
+    "report_style": "GENERIC"
   }'
 ```
 
@@ -523,7 +522,7 @@ curl -X POST http://localhost:8000/api/prompt/enhance \
   -d '{
     "prompt": "Tell me about space",
     "context": "For kids aged 8-10",
-    "report_style": "POPULAR_SCIENCE"
+    "report_style": "GENERIC"
   }'
 ```
 

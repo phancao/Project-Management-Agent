@@ -221,7 +221,8 @@ export function StepBox({
 
   const argsDisplay = useMemo(() => {
     if (!toolCall.args) return null;
-    const args = toolCall.args;
+    if (typeof toolCall.args === 'string') return toolCall.args;
+    const args = toolCall.args as Record<string, unknown>;
     const entries = Object.entries(args).filter(([_, v]) => v !== undefined && v !== null);
     if (entries.length === 0) return null;
     return entries.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ");

@@ -12,7 +12,7 @@ import { mergeMessage } from "../messages";
 import { parseJSON } from "../utils";
 
 import { getChatStreamSettings } from "./settings-store";
-import { 
+import {
   type ResearchBlockType,
   getBlockTypeForAgent,
 } from "./research-store";
@@ -27,27 +27,27 @@ function buildConversationHistory(
   maxMessages = 20
 ): Array<{ role: string; content: string }> {
   const history: Array<{ role: string; content: string }> = [];
-  
+
   // Get recent messages (excluding the very last one which is the current user message)
   const recentIds = messageIds.slice(Math.max(0, messageIds.length - maxMessages - 1), -1);
-  
+
   for (const id of recentIds) {
     const msg = messages.get(id);
     if (!msg) continue;
-    
+
     // Only include user and assistant messages with actual content
     if (msg.role === "user" && msg.content?.trim()) {
       history.push({ role: "user", content: msg.content });
     } else if (msg.role === "assistant" && msg.content?.trim()) {
       // Include assistant responses (reporter, coordinator, etc.)
       // Truncate very long responses to save tokens
-      const content = msg.content.length > 2000 
+      const content = msg.content.length > 2000
         ? msg.content.substring(0, 2000) + "... [truncated]"
         : msg.content;
       history.push({ role: "assistant", content });
     }
   }
-  
+
   return history;
 }
 
@@ -69,6 +69,9 @@ export const useStore = create<{
   reactResearchIds: string[]; // Track ReAct agent research sessions
   plannerResearchIds: string[]; // Track Planner research sessions
   reactToPlannerEscalation: Map<string, string>; // Map: reactResearchId -> plannerResearchId
+  // Progressive thoughts update counter - increments every time a thoughts event is processed
+  // This forces useResearchThoughts hook to recompute even when messages Map reference doesn't change
+  thoughtsUpdateCounter: number;
 
   appendMessage: (message: Message) => void;
   updateMessage: (message: Message) => void;
@@ -92,6 +95,9 @@ export const useStore = create<{
   reactResearchIds: [],
   plannerResearchIds: [],
   reactToPlannerEscalation: new Map<string, string>(),
+  // Progressive thoughts update counter - starts at 0
+  thoughtsUpdateCounter: 0,
+
 
   appendMessage(message: Message) {
     set((state) => {
@@ -124,14 +130,14 @@ export const useStore = create<{
       }
       console.trace(`[DEBUG-UPDATE-ENTRY] Stack trace for updateMessage entry`);
     }
-    
+
     set((state) => {
       const existing = state.messages.get(message.id);
       const existingContentLen = existing?.content?.length ?? 0;
       const newContentLen = message.content?.length ?? 0;
       const existingChunksLen = existing?.contentChunks?.length ?? 0;
       const newChunksLen = message.contentChunks?.length ?? 0;
-      
+
       if (message.agent === "reporter") {
         const existingLastChars = existing?.content?.slice(-50) ?? "";
         const newLastChars = message.content?.slice(-50) ?? "";
@@ -144,7 +150,7 @@ export const useStore = create<{
         }
         console.trace(`[DEBUG-REPORTER-UPDATE] Stack trace for updateMessage call`);
       }
-      
+
       if (existingContentLen > 0 && newContentLen === 0 && message.agent === "reporter" && existing) {
         console.error(`[DEBUG-REPORTER-UPDATE] ❌ REPORTER CONTENT LOSS! messageId=${message.id}, existingContentLen=${existingContentLen}, newContentLen=${newContentLen}, isStreaming=${message.isStreaming}, finishReason=${message.finishReason}`);
         console.trace("Stack trace for content loss");
@@ -153,12 +159,12 @@ export const useStore = create<{
         message.contentChunks = existing.contentChunks ?? [];
         console.log(`[DEBUG-REPORTER-UPDATE] ✅ Preserved existing content: contentLen=${message.content?.length ?? 0}, chunksLen=${message.contentChunks?.length ?? 0}`);
       }
-      
+
       const updatedMessage = { ...message };
       const result = {
         messages: new Map(state.messages).set(message.id, updatedMessage),
       };
-      
+
       // DEBUG: Log function exit for reporter messages
       if (message.agent === "reporter") {
         const finalContentLen = updatedMessage.content?.length ?? 0;
@@ -169,7 +175,7 @@ export const useStore = create<{
           console.log(`[DEBUG-UPDATE-EXIT] 📝 Final last 50 chars: "${finalLastChars}"`);
         }
       }
-      
+
       return result;
     });
   },
@@ -187,13 +193,13 @@ export const useStore = create<{
       });
       console.trace(`[DEBUG-BATCH-ENTRY] Stack trace for updateMessages entry`);
     }
-    
+
     set((state) => {
       const newMessages = new Map(state.messages);
       if (reporterMessages.length > 0) {
         console.log(`[DEBUG-REPORTER-BATCH] 📦 updateMessages: processing ${reporterMessages.length} reporter messages`);
       }
-      
+
       messages.forEach((m) => {
         // Debug logging for reporter messages
         if (m.agent === "reporter") {
@@ -204,7 +210,7 @@ export const useStore = create<{
           const newChunksLen = m.contentChunks?.length ?? 0;
           const existingLastChars = existing?.content?.slice(-50) ?? "";
           const newLastChars = m.content?.slice(-50) ?? "";
-          
+
           console.log(`[DEBUG-REPORTER-BATCH] 🔄 messageId=${m.id}, existingLen=${existingContentLen}→${newContentLen}, existingChunks=${existingChunksLen}→${newChunksLen}, finishReason=${m.finishReason}`);
           if (existingContentLen > 0) {
             console.log(`[DEBUG-REPORTER-BATCH] 📝 Existing last 50 chars: "${existingLastChars}"`);
@@ -212,7 +218,7 @@ export const useStore = create<{
           if (newContentLen > 0) {
             console.log(`[DEBUG-REPORTER-BATCH] 📝 New last 50 chars: "${newLastChars}"`);
           }
-          
+
           if (existingContentLen > 0 && newContentLen === 0 && existing) {
             console.error(`[DEBUG-REPORTER-BATCH] ❌ REPORTER CONTENT LOSS in batch update! messageId=${m.id}, existingContentLen=${existingContentLen}, newContentLen=${newContentLen}`);
             console.trace("Stack trace for batch content loss");
@@ -224,7 +230,7 @@ export const useStore = create<{
         }
         newMessages.set(m.id, m);
       });
-      
+
       // DEBUG: Log function exit for reporter messages
       if (reporterMessages.length > 0) {
         reporterMessages.forEach(m => {
@@ -238,7 +244,7 @@ export const useStore = create<{
           }
         });
       }
-      
+
       return { messages: newMessages };
     });
   },
@@ -276,7 +282,7 @@ export async function sendMessage(
   }
 
   const settings = getChatStreamSettings();
-  
+
   // Build conversation history from existing messages for context continuity
   const state = useStore.getState();
   const conversationHistory = buildConversationHistory(
@@ -284,7 +290,7 @@ export async function sendMessage(
     state.messageIds,
     20 // Max 20 previous messages for context
   );
-  
+
   const stream = chatStream(
     content ?? "[REPLAY]",
     {
@@ -336,7 +342,7 @@ export async function sendMessage(
         }
         const messagesToUpdate = Array.from(pendingUpdates.values());
         useStore.getState().updateMessages(messagesToUpdate);
-        
+
         // DEBUG: Log after updateMessages call
         if (reporterUpdates.length > 0) {
           console.log(`[DEBUG-SCHEDULE-EXIT] 🚪 scheduleUpdate EXIT: updated ${reporterUpdates.length} reporter messages`);
@@ -352,7 +358,7 @@ export async function sendMessage(
             }
           });
         }
-        
+
         pendingUpdates.clear();
       }
     }, 16); // ~60fps
@@ -362,28 +368,35 @@ export async function sendMessage(
     for await (const event of stream) {
       const eventReceivedTimestamp = new Date().toISOString();
       const { type, data } = event;
+
+      // DEBUG: Log ALL event types to see if thoughts events are received
+      console.log(`[Store] 📥 [${eventReceivedTimestamp}] SSE Event: type="${type}", hasData=${!!data}, keys=${data ? Object.keys(data).join(',') : 'N/A'}`);
+      if (type === "thoughts") {
+        console.log(`[Store] 🎉 THOUGHTS EVENT RECEIVED! data=`, JSON.stringify(data, null, 2));
+      }
+
       console.log(`[Store] 📥 [${eventReceivedTimestamp}] Event received from stream: type=${type}, messageId=${data.id}, agent=${data.agent}`);
-      
+
       // DEBUG: Log all events to see what's being received
       // Check if this is a message_chunk event with reporter agent
       if (type === "message_chunk" && (data.agent === "reporter" || (data as { agent?: string }).agent === "reporter")) {
         const messageData = data as { content?: string; agent?: string; id: string; finish_reason?: string };
         console.log(`[DEBUG-REPORTER-EVENT] 📨 Event received: type=${type}, agent=${messageData.agent}, id=${messageData.id}, hasContent=${!!messageData.content}, contentLen=${messageData.content?.length ?? 0}, finishReason=${messageData.finish_reason}`);
       }
-      
+
       // Handle PM refresh events to update PM views
       // Type assertion needed because ChatEvent type doesn't include pm_refresh
       if ((type as string) === "pm_refresh") {
         if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("pm_refresh", { 
-            detail: { type: "pm_refresh", data } 
+          window.dispatchEvent(new CustomEvent("pm_refresh", {
+            detail: { type: "pm_refresh", data }
           }));
         }
         continue;
       }
-      
+
       let message: Message | undefined;
-      
+
       // DEBUG: Log tool_calls events to see if they're being received
       if (type === "tool_calls") {
         const timestamp = new Date().toISOString();
@@ -394,13 +407,13 @@ export async function sendMessage(
           eventDataKeys: Object.keys(data),
         });
       }
-      
+
       // Handle thoughts events: stream thoughts separately to Analysis Block
       if (type === "thoughts") {
         const timestamp = new Date().toISOString();
         const thoughtsData = data as { react_thoughts?: Array<{ thought: string; before_tool?: boolean; step_index: number }> };
         console.log(`[Store] 💭 [${timestamp}] thoughts event received: messageId=${data.id}, agent=${data.agent}, count=${thoughtsData.react_thoughts?.length ?? 0}`);
-        
+
         // Find or create message for thoughts
         messageId = data.id;
         if (!existsMessage(messageId)) {
@@ -421,16 +434,35 @@ export async function sendMessage(
         } else {
           message = getMessage(messageId);
         }
-        
+
         if (message && thoughtsData.react_thoughts) {
           // Merge thoughts into message
           message = mergeMessage(message, event);
           console.log(`[Store] 🔄 [${timestamp}] Merged thoughts into message: messageId=${message.id}, count=${message.reactThoughts?.length ?? 0}`);
           updateMessage(message);
+
+          // FIX: Add thoughts message to researchActivityIds so useResearchThoughts hook can find it
+          const ongoingResearchId = useStore.getState().ongoingResearchId;
+          if (ongoingResearchId) {
+            const researchActivityIds = useStore.getState().researchActivityIds;
+            const current = researchActivityIds.get(ongoingResearchId) ?? [];
+            if (!current.includes(message.id)) {
+              useStore.setState({
+                researchActivityIds: new Map(researchActivityIds).set(ongoingResearchId, [...current, message.id]),
+              });
+              console.log(`[Store] 📋 [${timestamp}] Added thoughts message to researchActivityIds: researchId=${ongoingResearchId}, messageId=${message.id}`);
+            }
+          }
+
+          // FIX: Increment thoughtsUpdateCounter to force useResearchThoughts hook to recompute
+          // This enables PROGRESSIVE display of thoughts as they stream in
+          const currentCount = useStore.getState().thoughtsUpdateCounter;
+          useStore.setState({ thoughtsUpdateCounter: currentCount + 1 });
+          console.log(`[Store] 🔢 [${timestamp}] Incremented thoughtsUpdateCounter: ${currentCount} -> ${currentCount + 1}`);
         }
         continue; // Skip the rest of the loop for thoughts events
       }
-      
+
       // Handle tool_call_result specially: use the message that contains the tool call
       if (type === "tool_call_result") {
         console.log(`[Store] tool_call_result event received: tool_call_id=${data.tool_call_id}`);
@@ -447,12 +479,12 @@ export async function sendMessage(
       } else {
         // For other event types, use data.id
         messageId = data.id;
-        
+
         // Generate ID if missing (backend should provide it, but handle gracefully)
         if (!messageId) {
           messageId = `run--${nanoid(32)}`;
         }
-        
+
         if (!existsMessage(messageId)) {
           const createTimestamp = new Date().toISOString();
           message = {
@@ -476,26 +508,26 @@ export async function sendMessage(
           appendMessage(message);
         }
       }
-      
+
       message ??= getMessage(messageId);
       if (message) {
         const previousIsStreaming = message.isStreaming;
         const contentBeforeMerge = message.content?.length ?? 0;
         const chunksBeforeMerge = message.contentChunks?.length ?? 0;
         const lastCharsBefore = message.content?.slice(-50) ?? "";
-        
+
         // DEBUG: Log when reporter content starts streaming
         if (message.agent === "reporter" && type === "message_chunk" && data.content) {
           console.log(`[DEBUG-REPORTER-STREAM] 📥 Reporter chunk received: messageId=${message.id}, chunkLen=${data.content.length}, contentBefore=${contentBeforeMerge}, chunkText="${data.content.substring(0, 50)}..."`);
         }
-        
+
         const mergeTimestamp = new Date().toISOString();
         console.log(`[Store] 🔄 [${mergeTimestamp}] Calling mergeMessage: messageId=${message.id}, agent=${message.agent}, eventType=${type}`);
         message = mergeMessage(message, event);
         const contentAfterMerge = message.content?.length ?? 0;
         const chunksAfterMerge = message.contentChunks?.length ?? 0;
         const lastCharsAfter = message.content?.slice(-50) ?? "";
-        
+
         // Comprehensive debug logging for reporter messages
         if (message.agent === "reporter") {
           console.log(`[DEBUG-REPORTER-MERGE] 🔄 mergeMessage: messageId=${message.id}, eventType=${type}, contentBefore=${contentBeforeMerge}→${contentAfterMerge}, chunksBefore=${chunksBeforeMerge}→${chunksAfterMerge}, hasFinishReason=${!!event.data.finish_reason}`);
@@ -513,7 +545,7 @@ export async function sendMessage(
             console.warn(`[DEBUG-REPORTER-MERGE] ⚠️ Content reduced during merge! messageId=${message.id}, before=${contentBeforeMerge}, after=${contentAfterMerge}, eventType=${type}`);
           }
         }
-        
+
         // If finish_reason is present, apply update immediately to ensure UI updates quickly
         // This is especially important for reporter messages to show the final report
         if (event.data.finish_reason && previousIsStreaming) {
@@ -536,7 +568,7 @@ export async function sendMessage(
         }
       }
     }
-    
+
     // Stream completed successfully - ensure all messages are marked as not streaming
     // Process any remaining pending updates
     if (updateTimer) clearTimeout(updateTimer);
@@ -550,15 +582,15 @@ export async function sendMessage(
       useStore.getState().updateMessages(Array.from(pendingUpdates.values()));
       pendingUpdates.clear();
     }
-    
+
     // Ensure all messages with finish_reason are marked as not streaming
     // CRITICAL: Process reporter messages LAST so they can find the researchId from ongoingResearchId
     const state = useStore.getState();
     const finishedMessages: Message[] = [];
     const reporterMessages: Message[] = [];
-    
+
     console.log(`[Store] Cleanup loop starting: checking ${state.messages.size} messages`);
-    
+
     // Collect all finished messages, separating reporter messages
     // NOTE: After immediate update, isStreaming is already false, so we check finishReason only
     for (const [id, msg] of state.messages.entries()) {
@@ -583,14 +615,14 @@ export async function sendMessage(
         }
       }
     }
-    
+
     console.log(`[Store] Cleanup loop: found ${reporterMessages.length} reporter messages, ${finishedMessages.length} other finished messages`);
-    
+
     // Process non-reporter messages first
     for (const msg of finishedMessages) {
       useStore.getState().updateMessage(msg);
     }
-    
+
     // Process reporter messages LAST - this ensures ongoingResearchId is still available
     // updateMessage will clear ongoingResearchId when reporter finishes
     if (reporterMessages.length > 0) {
@@ -610,14 +642,14 @@ export async function sendMessage(
   } catch (error) {
     // Extract error message
     const errorMessage = error instanceof Error ? error.message : "An error occurred while generating the response. Please try again.";
-    
+
     // Check if it's a provider configuration error
-    const isAIProviderError = errorMessage.toLowerCase().includes("no ai providers configured") || 
-                              errorMessage.toLowerCase().includes("ai provider");
-    const isPMProviderError = errorMessage.toLowerCase().includes("no pm providers configured") || 
-                              (errorMessage.toLowerCase().includes("pm provider") && 
-                               !errorMessage.toLowerCase().includes("ai provider"));
-    
+    const isAIProviderError = errorMessage.toLowerCase().includes("no ai providers configured") ||
+      errorMessage.toLowerCase().includes("ai provider");
+    const isPMProviderError = errorMessage.toLowerCase().includes("no pm providers configured") ||
+      (errorMessage.toLowerCase().includes("pm provider") &&
+        !errorMessage.toLowerCase().includes("ai provider"));
+
     if (isAIProviderError) {
       // Don't log AI provider errors to console - we show a user-friendly toast instead
       // Show error toast with action button to open Provider Management
@@ -629,8 +661,8 @@ export async function sendMessage(
           onClick: () => {
             // Trigger the Provider Management dialog and open AI Providers tab
             if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("pm_show_providers", { 
-                detail: { tab: "ai" } 
+              window.dispatchEvent(new CustomEvent("pm_show_providers", {
+                detail: { tab: "ai" }
               }));
             }
           },
@@ -647,8 +679,8 @@ export async function sendMessage(
           onClick: () => {
             // Trigger the Provider Management dialog and open PM Providers tab
             if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("pm_show_providers", { 
-                detail: { tab: "pm" } 
+              window.dispatchEvent(new CustomEvent("pm_show_providers", {
+                detail: { tab: "pm" }
               }));
             }
           },
@@ -660,7 +692,7 @@ export async function sendMessage(
       // Show regular error toast
       toast.error(errorMessage);
     }
-    
+
     // Update message status.
     // TODO: const isAborted = (error as Error).name === "AbortError";
     if (messageId != null) {
@@ -678,7 +710,7 @@ export async function sendMessage(
     if (pendingUpdates.size > 0) {
       useStore.getState().updateMessages(Array.from(pendingUpdates.values()));
     }
-    
+
     // CRITICAL FIX: Clear ongoingResearchId when stream ends (in finally block to ensure it always runs)
     // This handles cases where the stream completes but finishReason wasn't explicitly sent
     const finalState = useStore.getState();
@@ -721,7 +753,7 @@ function getMessage(id: string) {
 
 function findMessageByToolCallId(toolCallId: string) {
   const allMessages = Array.from(useStore.getState().messages.values());
-  
+
   return allMessages
     .reverse()
     .find((message) => {
@@ -740,23 +772,23 @@ function appendMessage(message: Message) {
       useStore.getState().appendMessage(message);
       return;
     }
-    
+
     const state = useStore.getState();
-    
+
     // Check if this planner message already has a block
     if (state.researchIds.includes(message.id)) {
       appendResearchActivity(message);
       useStore.getState().appendMessage(message);
       return;
     }
-    
+
     // Phase 2: Track planner research ID
     if (!state.plannerResearchIds.includes(message.id)) {
       useStore.setState({
         plannerResearchIds: [...state.plannerResearchIds, message.id],
       });
     }
-    
+
     // Phase 2: Check for ReAct escalation
     // If there's an ongoing ReAct research, link it to this planner research
     if (state.ongoingResearchId && state.reactResearchIds.includes(state.ongoingResearchId)) {
@@ -766,7 +798,7 @@ function appendMessage(message: Message) {
         reactToPlannerEscalation: new Map(state.reactToPlannerEscalation).set(reactResearchId, message.id),
       });
     }
-    
+
     // Planner creates the research block
     appendResearch(message.id, "planner");
     openResearch(message.id);
@@ -775,7 +807,7 @@ function appendMessage(message: Message) {
     useStore.getState().appendMessage(message);
     return;
   }
-  
+
   // Track research activities for execution agents (they reuse planner's block)
   if (
     message.agent === "coder" ||
@@ -785,7 +817,7 @@ function appendMessage(message: Message) {
     message.agent === "react_agent"
   ) {
     const state = useStore.getState();
-    
+
     // CRITICAL: For react_agent, only create research block if this is a PM analysis
     // Normal conversation (greetings, small talk) should NOT show the analysis box
     if (message.agent === "react_agent") {
@@ -803,14 +835,14 @@ function appendMessage(message: Message) {
         message.content.toLowerCase().includes("analyze")
       );
       const isNormalConversation = !hasToolCalls && !hasPMIntent;
-      
+
       // For normal conversation, just append the message without creating a research block
       if (isNormalConversation) {
         console.log(`[Store] 💬 Normal conversation from react_agent (no PM intent), skipping research block: ${message.id}`);
         useStore.getState().appendMessage(message);
         return;
       }
-      
+
       // Phase 2: Track ReAct research IDs separately (only for PM analysis)
       if (!state.reactResearchIds.includes(message.id)) {
         useStore.setState({
@@ -819,12 +851,12 @@ function appendMessage(message: Message) {
         console.log(`[Store] ⚡ ReAct research tracked: reactResearchId=${message.id}`);
       }
     }
-    
+
     const blockType = getBlockTypeForAgent(message.agent);
-    
+
     // Check if this message already belongs to a research block
     let existingBlockForThisMessage: string | null = null;
-    
+
     if (state.researchIds.includes(message.id)) {
       existingBlockForThisMessage = message.id;
     } else {
@@ -835,7 +867,7 @@ function appendMessage(message: Message) {
         }
       }
     }
-    
+
     // If message already belongs to a block, reuse it
     // ROOT CAUSE FIX: Don't call appendResearchActivity if message is already in activityIds
     // This prevents duplicate entries in activityIds which causes duplicate tool calls
@@ -848,10 +880,10 @@ function appendMessage(message: Message) {
       useStore.getState().appendMessage(message);
       return;
     }
-    
+
     // Reuse ongoing research block if it exists
     let blockToUse: string | null = null;
-    
+
     if (state.ongoingResearchId) {
       blockToUse = state.ongoingResearchId;
     } else {
@@ -864,7 +896,7 @@ function appendMessage(message: Message) {
           break;
         }
       }
-      
+
       // Fallback: Find most recent block of same type
       if (!blockToUse) {
         for (const researchId of reversedIds.slice(0, 5)) {
@@ -876,7 +908,7 @@ function appendMessage(message: Message) {
         }
       }
     }
-    
+
     if (blockToUse) {
       if (state.ongoingResearchId !== blockToUse) {
         useStore.getState().setOngoingResearch(blockToUse);
@@ -905,7 +937,7 @@ function updateMessage(message: Message) {
     }
     console.trace(`[DEBUG-HELPER-ENTRY] Stack trace for helper updateMessage entry`);
   }
-  
+
   if (message.agent === "reporter" && !message.isStreaming) {
     const contentLen = message.content?.length ?? 0;
     const chunksLen = message.contentChunks?.length ?? 0;
@@ -915,13 +947,13 @@ function updateMessage(message: Message) {
       console.log(`[DEBUG-REPORTER-HELPER] 📝 Last 50 chars: "${lastChars}"`);
     }
     console.trace(`[DEBUG-REPORTER-HELPER] Stack trace for helper updateMessage call`);
-    
+
     let researchId = getOngoingResearchId();
-    
+
     // Find the research that has this reporter message
     if (!researchId) {
       const state = useStore.getState();
-      
+
       for (const [rId, reportId] of state.researchReportIds.entries()) {
         if (reportId === message.id) {
           researchId = rId;
@@ -937,18 +969,18 @@ function updateMessage(message: Message) {
         }
       }
     }
-    
+
     if (researchId) {
       const currentReportId = useStore.getState().researchReportIds.get(researchId);
       console.log(`[Store.updateMessage helper] Setting researchReportIds: researchId=${researchId}, currentReportId=${currentReportId}, newReportId=${message.id}, contentLen=${contentLen}`);
-      
+
       // Only set reportId if:
       // 1. No current reportId exists (first time), OR
       // 2. New message has content (even if different from current), OR
       // 3. Same message ID (updating existing message)
       // DO NOT overwrite existing reportId with empty message
       const shouldSetReportId = !currentReportId || contentLen > 0 || currentReportId === message.id;
-      
+
       if (shouldSetReportId && (!currentReportId || currentReportId !== message.id)) {
         // WARNING: If we're setting a report with empty content when there's an existing one, log it
         if (contentLen === 0 && currentReportId) {
@@ -968,10 +1000,10 @@ function updateMessage(message: Message) {
         const currentContentLen = currentMsg?.content?.length ?? 0;
         console.warn(`[Store.updateMessage helper] 🛑 PREVENTED overwriting reportId with empty message: researchId=${researchId}, keeping oldReportId=${currentReportId} (contentLen=${currentContentLen}), rejecting newReportId=${message.id} (contentLen=0)`);
       }
-      
+
       // Auto-open the research when report finishes
       useStore.getState().openResearch(researchId);
-      
+
       // Clear ongoingResearchId when report finishes (has finishReason and not streaming)
       if (message.finishReason && !message.isStreaming) {
         const currentOngoing = useStore.getState().ongoingResearchId;
@@ -987,9 +1019,9 @@ function updateMessage(message: Message) {
         if (activityIds.includes(message.id)) {
           const currentReportId = state.researchReportIds.get(rId);
           const contentLen = message.content?.length ?? 0;
-          
+
           console.log(`[Store.updateMessage helper] 🔍 Fallback found researchId via activityIds: researchId=${rId}, currentReportId=${currentReportId}, newReportId=${message.id}, contentLen=${contentLen}`);
-          
+
           // Only set reportId if no existing one OR new message has content
           if (!currentReportId || contentLen > 0) {
             if (contentLen === 0 && currentReportId) {
@@ -1001,7 +1033,7 @@ function updateMessage(message: Message) {
               researchReportIds: new Map(state.researchReportIds).set(rId, message.id),
             });
             useStore.getState().openResearch(rId);
-            
+
             // Clear ongoingResearchId when report finishes (has finishReason and not streaming)
             if (message.finishReason && !message.isStreaming) {
               const currentOngoing = useStore.getState().ongoingResearchId;
@@ -1020,7 +1052,7 @@ function updateMessage(message: Message) {
       }
     }
   }
-  
+
   // DEBUG: Log before calling store's updateMessage
   if (message.agent === "reporter") {
     const contentLen = message.content?.length ?? 0;
@@ -1031,9 +1063,9 @@ function updateMessage(message: Message) {
       console.log(`[DEBUG-HELPER-BEFORE-UPDATE] 📝 Last 50 chars: "${lastChars}"`);
     }
   }
-  
+
   useStore.getState().updateMessage(message);
-  
+
   // DEBUG: Log after calling store's updateMessage
   if (message.agent === "reporter") {
     const state = useStore.getState();
@@ -1058,13 +1090,13 @@ function appendResearch(researchId: string, blockType: ResearchBlockType) {
   if (!researchId) {
     return;
   }
-  
+
   // Check if this research already exists
   const state = useStore.getState();
   if (state.researchIds.includes(researchId)) {
     return;
   }
-  
+
   let planMessage: Message | undefined;
   const reversedMessageIds = [...state.messageIds].reverse();
   for (const messageId of reversedMessageIds) {
@@ -1074,10 +1106,10 @@ function appendResearch(researchId: string, blockType: ResearchBlockType) {
       break;
     }
   }
-  
+
   const messageIds = [researchId];
   const newResearchIds = [...useStore.getState().researchIds, researchId];
-  
+
   // Add planner message if it exists (may not exist for ReAct fast path)
   if (planMessage?.id) {
     messageIds.unshift(planMessage.id);
@@ -1116,11 +1148,11 @@ function appendResearch(researchId: string, blockType: ResearchBlockType) {
 
 function appendResearchActivity(message: Message) {
   const researchId = getOngoingResearchId();
-  
+
   if (researchId) {
     const researchActivityIds = useStore.getState().researchActivityIds;
     const current = researchActivityIds.get(researchId);
-    
+
     // Initialize or add to activity ids
     if (!current) {
       useStore.setState({
@@ -1134,7 +1166,7 @@ function appendResearchActivity(message: Message) {
         ]),
       });
     }
-    
+
     // Set reportId for reporter messages
     // CRITICAL: Only set if message has content OR no existing reportId exists
     // This prevents empty reporter messages (from tool_calls) from overwriting full reports
@@ -1142,10 +1174,10 @@ function appendResearchActivity(message: Message) {
       const state = useStore.getState();
       const currentReportId = state.researchReportIds.get(researchId);
       const contentLen = message.content?.length ?? 0;
-      
+
       // Only set reportId if: no existing one OR new message has content OR same message ID
       const shouldSetReportId = !currentReportId || contentLen > 0 || currentReportId === message.id;
-      
+
       if (shouldSetReportId && (!currentReportId || currentReportId !== message.id)) {
         if (contentLen === 0 && currentReportId) {
           const currentMsg = state.messages.get(currentReportId);
@@ -1274,10 +1306,10 @@ export function useRenderableMessageIds() {
           return false;
         }
         seen.add(messageId);
-        
+
         const message = state.messages.get(messageId);
         if (!message) return false;
-        
+
         // Only include messages that match MessageListItem rendering conditions
         // These are the same conditions checked in MessageListItem component
         // Note: reporter is NOT included - report is shown inside AnalysisBlock

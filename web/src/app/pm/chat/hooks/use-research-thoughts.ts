@@ -48,7 +48,9 @@ export function useResearchThoughts(researchId: string): Thought[] {
   const activityIds = useStore((state) => state.researchActivityIds.get(researchId)) ?? [];
   const planMessageId = useStore((state) => state.researchPlanIds.get(researchId));
   const messageIds = useStore((state) => state.messageIds);
-  
+  // FIX: Subscribe to thoughtsUpdateCounter to trigger recomputation when thoughts update progressively
+  const thoughtsUpdateCounter = useStore((state) => state.thoughtsUpdateCounter);
+
   return useMemo(() => {
     const timestamp = new Date().toISOString();
     console.log(`[useResearchThoughts] 🔍 [${timestamp}] Collecting thoughts for researchId=${researchId}`, {
@@ -56,21 +58,72 @@ export function useResearchThoughts(researchId: string): Thought[] {
       activityIds: activityIds.length,
       totalMessages: messages.size,
     });
-    
+
     const thoughts: Thought[] = [];
     const seenThoughts = new Set<string>();
-    
+
+    // Helper to check if content should be filtered out entirely
+    // We filter TOOL_CALL and TOOL_RESULT because they're already shown in StepBox
+    // But we KEEP DECISION content - that's the AI's reasoning!
+    const shouldFilterThought = (content: string): boolean => {
+      const trimmed = content.trim();
+      // Filter out TOOL_CALL, TOOL_RESULT - these are duplicated in StepBox
+      // We do NOT filter TOOL_CALL/TOOL_RESULT anymore because they are internal steps of the PM Agent
+      // that are NOT exposed as separate messages, so they must be shown as thoughts.
+      /*
+      if (trimmed.startsWith('TOOL_CALL:') || trimmed.startsWith('🔧 TOOL_CALL:')) return true;
+      if (trimmed.startsWith('TOOL_RESULT:') || trimmed.startsWith('📋 TOOL_RESULT:')) return true;
+      */
+
+      // Filter out empty or very short content
+      if (trimmed.length < 5) return true;
+      // Filter out content that's just JSON-like args
+      if (trimmed.startsWith('({') || trimmed.startsWith('{}')) return true;
+      return false;
+    };
+
+    // Helper to clean up thought content (remove prefixes for cleaner display)
+    const cleanThoughtContent = (content: string): string => {
+      let cleaned = content.trim();
+      // Remove common prefixes for cleaner display
+      const prefixes = [
+        '✅ DECISION:', '🔄 DECISION:', 'DECISION:',
+        '🧠 THINKING:', 'THINKING:',
+        '💭 Thought:', 'Thought:',
+        '🧠 Reasoning:', 'Reasoning:',
+      ];
+      for (const prefix of prefixes) {
+        if (cleaned.startsWith(prefix)) {
+          cleaned = cleaned.substring(prefix.length).trim();
+          break;
+        }
+      }
+      return cleaned;
+    };
+
     // Helper to add a thought with deduplication
     const addThought = (thought: Thought) => {
-      if (seenThoughts.has(thought.thought)) {
-        console.log(`[useResearchThoughts] ⏭️ Skipping duplicate thought: "${thought.thought.substring(0, 50)}..."`);
+      // Skip filtered content (TOOL_CALL, TOOL_RESULT)
+      if (shouldFilterThought(thought.thought)) {
+        console.log(`[useResearchThoughts] ⏭️ Filtering out: "${thought.thought.substring(0, 50)}..."`);
         return;
       }
-      seenThoughts.add(thought.thought);
-      thoughts.push(thought);
-      console.log(`[useResearchThoughts] ✅ Added thought: step_index=${thought.step_index}, agent=${thought.agent}, thought="${thought.thought.substring(0, 50)}..."`);
+
+      // Clean up the thought content
+      const cleanedThought = cleanThoughtContent(thought.thought);
+
+      if (seenThoughts.has(cleanedThought)) {
+        console.log(`[useResearchThoughts] ⏭️ Skipping duplicate thought: "${cleanedThought.substring(0, 50)}..."`);
+        return;
+      }
+      seenThoughts.add(cleanedThought);
+      thoughts.push({
+        ...thought,
+        thought: cleanedThought,  // Use cleaned content
+      });
+      console.log(`[useResearchThoughts] ✅ Added thought: step_index=${thought.step_index}, agent=${thought.agent}, thought="${cleanedThought.substring(0, 50)}..."`);
     };
-    
+
     // PRIORITY 1: Extract thoughts from plan steps IMMEDIATELY
     // These are available before any tool calls execute
     if (planMessageId) {
@@ -95,7 +148,7 @@ export function useResearchThoughts(researchId: string): Thought[] {
           // Failed to parse plan, continue to other sources
         }
       }
-      
+
       // Also check plan message's reactThoughts
       if (planMsg?.reactThoughts) {
         for (const t of planMsg.reactThoughts) {
@@ -107,12 +160,12 @@ export function useResearchThoughts(researchId: string): Thought[] {
         }
       }
     }
-    
+
     // PRIORITY 2: Collect from activity messages
     for (const activityId of activityIds) {
       const msg = messages.get(activityId);
       if (!msg?.reactThoughts) continue;
-      
+
       for (const t of msg.reactThoughts) {
         addThought({
           ...t,
@@ -121,19 +174,19 @@ export function useResearchThoughts(researchId: string): Thought[] {
         });
       }
     }
-    
+
     // PRIORITY 3: Check recent pm_agent/react_agent/planner messages not yet in activityIds
     const recentIds = messageIds.slice(-30);
     for (const msgId of recentIds) {
       if (activityIds.includes(msgId)) continue;
       if (planMessageId === msgId) continue;
-      
+
       const msg = messages.get(msgId);
       if (!msg) continue;
       // Include planner agent for overall plan thoughts
       if (msg.agent !== "pm_agent" && msg.agent !== "react_agent" && msg.agent !== "planner") continue;
       if (!msg.reactThoughts || msg.reactThoughts.length === 0) continue;
-      
+
       for (const t of msg.reactThoughts) {
         addThought({
           ...t,
@@ -142,17 +195,19 @@ export function useResearchThoughts(researchId: string): Thought[] {
         });
       }
     }
-    
+
     // Sort by step_index
     thoughts.sort((a, b) => a.step_index - b.step_index);
-    
+
     const finalTimestamp = new Date().toISOString();
     console.log(`[useResearchThoughts] 📊 [${finalTimestamp}] Final thoughts count: ${thoughts.length}`, {
       thoughts: thoughts.map(t => ({ step_index: t.step_index, agent: t.agent, thought: t.thought.substring(0, 50) })),
     });
-    
+
     return thoughts;
-  }, [messages, activityIds, planMessageId, messageIds.length, researchId]);
+    // Include thoughtsUpdateCounter in dependencies to enable progressive thought updates
+    // This counter increments every time a thoughts event is processed by the store
+  }, [messages, activityIds, planMessageId, messageIds.length, researchId, thoughtsUpdateCounter]);
 }
 
 /**

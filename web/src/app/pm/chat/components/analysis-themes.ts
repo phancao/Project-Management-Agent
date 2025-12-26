@@ -3,6 +3,7 @@
 
 /**
  * Color themes for different analysis block types
+ * Updated with Brand Guideline Pantone Colors
  */
 
 export interface AnalysisTheme {
@@ -16,25 +17,36 @@ export interface AnalysisTheme {
   name: string;
 }
 
+// Brand Colors (Hex approx from Pantone)
+// Pantone Blue 072 CP: #162B75
+// Pantone 233 CP (Magenta): #CE007C
+// Pantone 2382 CP (Cyan): #009CDF
+// Pantone 485 CP (Red): #DA291C
+// Pantone 2400 CP (Teal): #009682
+// Pantone Orange 021 CP: #FE5000
+// Pantone 376 CP (Green): #84BD00
+// Pantone Cool Gray 5 C: #B1B3B3
+
 export const reactTheme: AnalysisTheme = {
-  primary: "yellow",
-  gradient: "from-yellow-500 to-amber-500",
-  border: "border-yellow-500",
-  background: "bg-yellow-50 dark:bg-yellow-950",
-  text: "text-yellow-700 dark:text-yellow-300",
-  iconBg: "from-yellow-500/20 to-amber-500/20",
+  // Using Pantone Blue 072 CP as primary
+  primary: "#162B75",
+  gradient: "from-[#162B75] to-[#009CDF]",
+  border: "border-[#162B75]",
+  background: "bg-white dark:bg-[#162B75]/20",
+  text: "text-[#162B75] dark:text-[#009CDF]",
+  iconBg: "from-[#162B75]/20 to-[#009CDF]/20",
   icon: "⚡",
   name: "ReAct Analysis",
 };
 
 export const plannerTheme: AnalysisTheme = {
-  primary: "blue",
-  gradient: "from-blue-500 to-cyan-500",
-  border: "border-blue-500",
-  background: "bg-blue-50 dark:bg-blue-950",
-  text: "text-blue-700 dark:text-blue-300",
-  iconBg: "from-blue-500/20 to-cyan-500/20",
+  // Using Pantone 2400 CP (Teal) as primary
+  primary: "#009682",
+  gradient: "from-[#009682] to-[#84BD00]",
+  border: "border-[#009682]",
+  background: "bg-white dark:bg-[#009682]/20",
+  text: "text-[#009682] dark:text-[#84BD00]",
+  iconBg: "from-[#009682]/20 to-[#84BD00]/20",
   icon: "📋",
   name: "Planner Analysis",
 };
-

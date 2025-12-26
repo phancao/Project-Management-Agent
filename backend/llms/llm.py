@@ -191,6 +191,10 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
     # Add max_retries to handle rate limit errors
     if "max_retries" not in merged_conf:
         merged_conf["max_retries"] = 3
+    
+    # Enable streaming for LangGraph message streaming to capture tokens
+    if "streaming" not in merged_conf:
+        merged_conf["streaming"] = True
 
     # Handle SSL verification settings
     verify_ssl = merged_conf.pop("verify_ssl", True)

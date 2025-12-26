@@ -135,7 +135,7 @@ Think through this briefly, then proceed to call the appropriate tool."""
         
         self.steps.append(AgentStep(
             type="thinking",
-            content=thinking[:500],  # Truncate for logging
+            content=thinking[:5000],  # Increased truncation for UI
             metadata={"full_length": len(thinking)}
         ))
         
@@ -185,7 +185,7 @@ Think through this briefly, then proceed to call the appropriate tool."""
         
         self.steps.append(AgentStep(
             type="tool_result",
-            content=result_str[:500],  # Truncate for logging
+            content=result_str[:5000],  # Increased specific truncation limit for UI display
             metadata={"tool": tool_name, "length": len(result_str)}
         ))
         
@@ -257,6 +257,13 @@ Be concise and actionable."""
             step_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             logger.info(f"[{step_ts}] [PM-AGENT] 📍 Step {step + 1}/{self.max_steps}")
             
+            # THINK: Initial reasoning before first action
+            # This captures the agent's analysis and planning for the UI
+            if step == 0:
+                think_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                logger.info(f"[{think_ts}] [PM-AGENT] 🧠 Starting initial thinking phase...")
+                await self._think(user_query, conversation)
+            
             # ACT: Try to call a tool
             act_result = await self._act(user_query, conversation)
             
@@ -321,7 +328,7 @@ Be concise and actionable."""
             }.get(step.type, "•")
             
             thoughts.append({
-                "thought": f"{emoji} {step.type.upper()}: {step.content[:200]}",
+                "thought": f"{emoji} {step.type.upper()}: {step.content[:5000]}",
                 "before_tool": step.type in ["thinking", "tool_call"],
                 "step_index": i,
                 "step_type": step.type,

@@ -51,7 +51,7 @@ import { parseJSON } from "~/core/utils";
 import { cn } from "~/lib/utils";
 
 import { PlannerAnalysisBlock } from "./analysis-block";
-import { ReActAnalysisBlock } from "./react-analysis-block";
+import { ReActAnalysisBlockV2 } from "./react-analysis-block";
 import { HandoverIndicator } from "./handover-indicator";
 
 export function MessageListView({
@@ -199,27 +199,27 @@ function MessageListItem({
           // Escalation: Show both ReAct (left) and Planner (right) side-by-side with handover indicator
           console.log(`[DEBUG-RENDER] 🔄 Rendering escalation: ReAct=${message.id} → Planner=${escalationLink}`);
           content = (
-            <div className="w-full px-4">
+            <div className="w-full px-4 min-w-0">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ReActAnalysisBlock researchId={message.id} />
+                <ReActAnalysisBlockV2 researchId={message.id} />
                 <PlannerAnalysisBlock researchId={escalationLink} />
               </div>
               <HandoverIndicator className="mt-4" />
             </div>
           );
-        } else if (isReactAgent) {
-          // ReAct agent: Use ReActAnalysisBlock (token-by-token streaming)
-          console.log(`[DEBUG-RENDER] ⚡ Rendering ReActAnalysisBlock for message ${message.id}`);
+        } else if (isReactAgent || message.agent === "pm_agent") {
+          // ReAct agent: Use ReActAnalysisBlockV2 (token-by-token streaming)
+          console.log(`[DEBUG-RENDER] ⚡ Rendering ReActAnalysisBlockV2 for message ${message.id}`);
           content = (
-            <div className="w-full px-4">
-              <ReActAnalysisBlock researchId={message.id} />
+            <div className="w-full px-4 min-w-0">
+              <ReActAnalysisBlockV2 researchId={message.id} />
             </div>
           );
         } else if (isPlanner) {
           // Planner agent: Use PlannerAnalysisBlock (JSON plan parsing)
           console.log(`[DEBUG-RENDER] 📋 Rendering PlannerAnalysisBlock for message ${message.id}`);
           content = (
-            <div className="w-full px-4">
+            <div className="w-full px-4 min-w-0">
               <PlannerAnalysisBlock researchId={message.id} />
             </div>
           );
@@ -227,7 +227,7 @@ function MessageListItem({
           // Fallback: Use PlannerAnalysisBlock for other agents (backward compatibility)
           console.log(`[DEBUG-RENDER] 📋 Rendering PlannerAnalysisBlock (fallback) for message ${message.id}, agent=${message.agent}`);
           content = (
-            <div className="w-full px-4">
+            <div className="w-full px-4 min-w-0">
               <PlannerAnalysisBlock researchId={message.id} />
             </div>
           );

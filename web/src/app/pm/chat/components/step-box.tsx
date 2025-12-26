@@ -1,4 +1,4 @@
-// Copyright (c) 2025
+// Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
 /**
@@ -6,6 +6,7 @@
  * 
  * Displays individual tool call steps inline in the chat.
  * Shows tool name, status, and result in a collapsible card.
+ * Updated with Brand Colors.
  */
 
 import { motion } from "framer-motion";
@@ -17,12 +18,11 @@ import {
   AlertCircle,
   Loader2,
   Wrench,
-  Database,
+  FolderKanban,
   BarChart3,
   ListTodo,
-  FolderKanban,
-  Users,
   GitBranch,
+  Users,
   Brain
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
@@ -103,7 +103,7 @@ function getToolDisplayName(toolName: string): string {
     web_search: "Web Search",
     crawl_tool: "Read Page",
     python_repl_tool: "Run Python",
-    thought: "Thought",  // Cursor-style: Thought display
+    thought: "Thought",
     backend_api_call: "Internal API",
     get_current_project: "Get Current Project",
     optimize_context: "Optimize Context",
@@ -116,28 +116,28 @@ function getAgentDisplayInfo(agent?: string): { name: string; color: string; bgC
   const agentMap: Record<string, { name: string; color: string; bgColor: string }> = {
     pm_agent: {
       name: "PM Agent",
-      color: "text-blue-600 dark:text-blue-400",
-      bgColor: "bg-blue-100 dark:bg-blue-900/30"
+      color: "text-[#162B75] dark:text-[#009CDF]",
+      bgColor: "bg-[#162B75]/10 dark:bg-[#162B75]/30"
     },
     researcher: {
       name: "Researcher",
-      color: "text-purple-600 dark:text-purple-400",
-      bgColor: "bg-purple-100 dark:bg-purple-900/30"
+      color: "text-[#CE007C] dark:text-[#CE007C]",
+      bgColor: "bg-[#CE007C]/10 dark:bg-[#CE007C]/30"
     },
     coder: {
       name: "Coder",
-      color: "text-green-600 dark:text-green-400",
-      bgColor: "bg-green-100 dark:bg-green-900/30"
+      color: "text-[#84BD00] dark:text-[#84BD00]",
+      bgColor: "bg-[#84BD00]/10 dark:bg-[#84BD00]/30"
     },
     planner: {
       name: "Planner",
-      color: "text-orange-600 dark:text-orange-400",
-      bgColor: "bg-orange-100 dark:bg-orange-900/30"
+      color: "text-[#009682] dark:text-[#009682]",
+      bgColor: "bg-[#009682]/10 dark:bg-[#009682]/30"
     },
     reporter: {
       name: "Reporter",
-      color: "text-amber-600 dark:text-amber-400",
-      bgColor: "bg-amber-100 dark:bg-amber-900/30"
+      color: "text-[#DA291C] dark:text-[#DA291C]",
+      bgColor: "bg-[#DA291C]/10 dark:bg-[#DA291C]/30"
     },
   };
 
@@ -145,7 +145,7 @@ function getAgentDisplayInfo(agent?: string): { name: string; color: string; bgC
     return agentMap[agent]!;
   }
 
-  // Default for unknown agents
+  // Default
   return {
     name: agent ? agent.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Agent",
     color: "text-gray-600 dark:text-gray-400",
@@ -158,68 +158,34 @@ function getResultSummary(toolName: string, result: string | undefined): string 
   if (!result) return "Running...";
 
   try {
-    // Use a more defensive approach - catch any errors from parseJSON
     let parsed: unknown = null;
     try {
       parsed = parseJSON<unknown>(result, null);
     } catch (parseError) {
-      // If parseJSON throws (shouldn't happen, but be defensive), treat as plain text
       console.debug(`[StepBox] Failed to parse result for ${toolName}:`, parseError);
       parsed = null;
     }
 
     if (parsed === null) {
-      // Plain text result
-      if (result.length > 100) {
-        return result.substring(0, 100) + "...";
-      }
+      if (result.length > 100) return result.substring(0, 100) + "...";
       return result;
     }
 
-    // Handle different result structures
-    if (Array.isArray(parsed)) {
-      return `Found ${parsed.length} item${parsed.length !== 1 ? "s" : ""}`;
-    }
+    if (Array.isArray(parsed)) return `Found ${parsed.length} item${parsed.length !== 1 ? "s" : ""}`;
 
     if (typeof parsed === "object" && parsed !== null) {
       const obj = parsed as Record<string, unknown>;
-
-      if (typeof obj.total === "number") {
-        return `Found ${obj.total} item${obj.total !== 1 ? "s" : ""}`;
-      }
-
-      if (Array.isArray(obj.sprints)) {
-        return `Found ${obj.sprints.length} sprint${obj.sprints.length !== 1 ? "s" : ""}`;
-      }
-
-      if (Array.isArray(obj.tasks)) {
-        return `Found ${obj.tasks.length} task${obj.tasks.length !== 1 ? "s" : ""}`;
-      }
-
-      if (Array.isArray(obj.projects)) {
-        return `Found ${obj.projects.length} project${obj.projects.length !== 1 ? "s" : ""}`;
-      }
-
-      if (typeof obj.name === "string") {
-        return obj.name;
-      }
-
-      if (typeof obj.title === "string") {
-        return obj.title;
-      }
-
-      if (typeof obj.message === "string") {
-        return obj.message;
-      }
-
-      if (typeof obj.error === "string") {
-        return `Error: ${obj.error}`;
-      }
+      if (typeof obj.total === "number") return `Found ${obj.total} item${obj.total !== 1 ? "s" : ""}`;
+      if (Array.isArray(obj.sprints)) return `Found ${obj.sprints.length} sprint${obj.sprints.length !== 1 ? "s" : ""}`;
+      if (Array.isArray(obj.tasks)) return `Found ${obj.tasks.length} task${obj.tasks.length !== 1 ? "s" : ""}`;
+      if (typeof obj.name === "string") return obj.name;
+      if (typeof obj.title === "string") return obj.title;
+      if (typeof obj.message === "string") return obj.message;
+      if (typeof obj.error === "string") return `Error: ${obj.error}`;
     }
 
     return "Completed";
   } catch (error) {
-    // Final fallback - return truncated result
     console.debug(`[StepBox] Error in getResultSummary for ${toolName}:`, error);
     return result.length > 100 ? result.substring(0, 100) + "..." : result;
   }
@@ -246,15 +212,13 @@ export function StepBox({
   const { resolvedTheme } = useTheme();
 
   const isRunning = toolCall.result === undefined;
-  const hasError = toolCall.result?.startsWith("Error") ||
-    toolCall.result?.includes('"error"');
+  const hasError = toolCall.result?.startsWith("Error") || toolCall.result?.includes('"error"');
 
   const icon = TOOL_ICONS[toolCall.name] ?? TOOL_ICONS.default;
   const displayName = getToolDisplayName(toolCall.name);
   const summary = getResultSummary(toolCall.name, toolCall.result);
   const agentInfo = getAgentDisplayInfo(agent);
 
-  // Parse args for display
   const argsDisplay = useMemo(() => {
     if (!toolCall.args) return null;
     const args = toolCall.args;
@@ -274,13 +238,16 @@ export function StepBox({
       <Card
         className={cn(
           "overflow-hidden transition-all duration-200 py-0 gap-0 w-full",
-          isRunning && "border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20",
-          hasError && "border-red-500/50 bg-red-50/50 dark:bg-red-950/20",
-          !isRunning && !hasError && "border-green-500/30 bg-green-50/30 dark:bg-green-950/10"
+          // Brand Colors:
+          // Running: Cyan #009CDF (White BG in light mode)
+          isRunning && "border-[#009CDF]/50 bg-white dark:bg-[#009CDF]/20",
+          // Error: Red #DA291C (White BG in light mode)
+          hasError && "border-[#DA291C]/50 bg-white dark:bg-[#DA291C]/20",
+          // Success: Green #84BD00 (White BG in light mode)
+          !isRunning && !hasError && "border-[#84BD00]/30 bg-white dark:bg-[#84BD00]/10"
         )}
         style={{ minWidth: 0, maxWidth: '100%' }}
       >
-        {/* Header - always visible */}
         <button
           className="grid w-full grid-cols-[auto_auto_auto_auto_1fr_auto] items-center gap-1 px-2 py-0.5 text-left hover:bg-accent/50 transition-colors"
           style={{ minWidth: 0 }}
@@ -289,23 +256,23 @@ export function StepBox({
           {/* Status icon */}
           <div className="shrink-0">
             {isRunning ? (
-              <Loader2 size={12} className="animate-spin text-blue-500" />
+              <Loader2 size={12} className="animate-spin text-[#009CDF]" />
             ) : hasError ? (
-              <AlertCircle size={12} className="text-red-500" />
+              <AlertCircle size={12} className="text-[#DA291C]" />
             ) : (
-              <CheckCircle2 size={12} className="text-green-500" />
+              <CheckCircle2 size={12} className="text-[#84BD00]" />
             )}
           </div>
 
           {/* Tool icon and name */}
-          <div className="flex items-center gap-1 shrink-0 text-muted-foreground">
+          <div className="flex items-center gap-1 shrink-0 text-foreground/80 dark:text-muted-foreground">
             {icon}
             <span className="font-medium text-xs">{displayName}</span>
           </div>
 
           {/* Step number */}
           {stepNumber !== undefined && (
-            <span className="text-[10px] text-muted-foreground bg-accent px-1.5 py-px rounded-full shrink-0">
+            <span className="text-[10px] text-foreground/70 dark:text-muted-foreground bg-accent px-1.5 py-px rounded-full shrink-0">
               {totalSteps !== undefined ? `${stepNumber}/${totalSteps}` : `#${stepNumber}`}
             </span>
           )}
@@ -322,7 +289,7 @@ export function StepBox({
           )}
 
           {/* Summary */}
-          <span className="text-xs text-muted-foreground truncate min-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span className="text-xs text-foreground/90 dark:text-muted-foreground truncate min-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {summary}
           </span>
 
@@ -332,7 +299,6 @@ export function StepBox({
           </div>
         </button>
 
-        {/* Expanded content */}
         {isExpanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
@@ -341,18 +307,16 @@ export function StepBox({
             transition={{ duration: 0.2 }}
             className="border-t"
           >
-            {/* Arguments */}
             {argsDisplay && (
               <div className="px-4 py-2 bg-accent/30">
-                <div className="text-xs text-muted-foreground font-mono">
+                <div className="text-xs text-foreground/80 dark:text-muted-foreground font-mono">
                   {toolCall.name}({argsDisplay})
                 </div>
               </div>
             )}
 
-            {/* Result */}
             {toolCall.result && (
-              <div className="p-2 overflow-x-hidden" style={{ minWidth: 0, maxWidth: '100%' }}>
+              <div className="p-2 overflow-x-auto w-full font-mono text-xs [&_pre]:!whitespace-pre-wrap [&_pre]:!break-all [&_pre]:!w-full [&_pre]:!max-w-full [&_code]:!whitespace-pre-wrap [&_code]:!break-all" style={{ minWidth: 0, maxWidth: '100%' }}>
                 <SyntaxHighlighter
                   language="json"
                   style={resolvedTheme === "dark" ? dark : docco}
@@ -360,24 +324,23 @@ export function StepBox({
                     background: "transparent",
                     border: "none",
                     boxShadow: "none",
-                    fontSize: "12px",
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    fontSize: "inherit",
                     margin: 0,
                     padding: "8px",
-                    wordBreak: "break-word",
-                    overflowWrap: "anywhere",
                     maxWidth: "100%",
                     width: "100%",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
                   }}
-                  wrapLongLines
                 >
                   {formatResult(toolCall.result)}
                 </SyntaxHighlighter>
               </div>
             )}
 
-            {/* Loading state */}
             {isRunning && (
-              <div className="px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="px-4 py-3 flex items-center gap-2 text-sm text-foreground/80 dark:text-muted-foreground">
                 <Clock size={14} />
                 <span>Waiting for response...</span>
               </div>
@@ -389,7 +352,6 @@ export function StepBox({
   );
 }
 
-// Format result for display
 function formatResult(result: string): string {
   try {
     const parsed = JSON.parse(result);
@@ -399,17 +361,8 @@ function formatResult(result: string): string {
   }
 }
 
-/**
- * StepBoxList - Renders a list of tool calls as StepBoxes
- */
-interface StepBoxListProps {
-  toolCalls: ToolCallRuntime[];
-  className?: string;
-}
-
-export function StepBoxList({ toolCalls, className }: StepBoxListProps) {
+export function StepBoxList({ toolCalls, className }: { toolCalls: ToolCallRuntime[]; className?: string; }) {
   if (!toolCalls || toolCalls.length === 0) return null;
-
   return (
     <div className={cn("flex flex-col gap-0.5", className)}>
       {toolCalls.map((toolCall, index) => (
@@ -423,4 +376,3 @@ export function StepBoxList({ toolCalls, className }: StepBoxListProps) {
     </div>
   );
 }
-

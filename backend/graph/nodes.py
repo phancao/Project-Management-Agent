@@ -1567,12 +1567,12 @@ Create a comprehensive plan that addresses their need for more detailed analysis
     )
 
 
-def reporter_node(state: State, config: RunnableConfig):
+async def reporter_node(state: State, config: RunnableConfig):
     import datetime
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     logger.info(f"[{ts}] [REPORTER-ENTRY] 📝 Reporter node entered")
     logger.info(f"[{ts}] [REPORTER-ENTRY] final_report exists: {bool(state.get('final_report'))}, routing_mode: {state.get('routing_mode', '')}")
-    """Reporter node that write a final report."""
+    """Reporter node that write a final report (async for streaming)."""
     
     # Check routing mode FIRST - PM routes need special handling
     routing_mode = state.get("routing_mode", "")
@@ -2227,9 +2227,29 @@ def reporter_node(state: State, config: RunnableConfig):
     
     # Wrap LLM invocation in try/except to catch errors and notify user/LLM
     try:
-        response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)
-        response_content = response.content
-        logger.info(f"reporter response: {response_content}")
+        # Use astream for TRUE token-by-token streaming
+        # LangGraph's stream_mode="messages" will capture each AIMessageChunk
+        llm = get_llm_by_type(AGENT_LLM_MAP["reporter"])
+        response_content = ""
+        response_chunks = []
+        
+        async for chunk in llm.astream(invoke_messages):
+            response_chunks.append(chunk)
+            if hasattr(chunk, 'content') and chunk.content:
+                response_content += chunk.content
+        
+        # Combine chunks into final response
+        if response_chunks:
+            # Use the last chunk as the base response (has final metadata)
+            response = response_chunks[-1]
+            # Set the full accumulated content
+            response.content = response_content
+        else:
+            # Fallback to ainvoke if streaming didn't work
+            response = await llm.ainvoke(invoke_messages)
+            response_content = response.content
+            
+        logger.info(f"reporter response ({len(response_content)} chars): {response_content[:200]}...")
 
         # Use the response directly instead of creating a new AIMessage
         # This prevents duplicate messages - LangGraph already streams the LLM response
@@ -4192,7 +4212,7 @@ async def react_agent_node(
                     }.get(step.type, "•")
                     
                     thoughts.append({
-                        "thought": f"{emoji} {step.type.upper()}: {step.content[:200]}",
+                        "thought": f"{emoji} {step.type.upper()}: {step.content[:50000]}",
                         "before_tool": step.type in ["thinking", "tool_call"],
                         "step_index": i,
                         "step_type": step.type,

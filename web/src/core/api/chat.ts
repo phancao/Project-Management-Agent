@@ -147,18 +147,27 @@ export async function* chatStream(
 
     for await (const event of stream) {
       try {
+        // DEBUG: Log ALL raw SSE events to trace thoughts events
+        console.log(`[chatStream] 📡 Raw SSE: event="${event.event}", hasData=${!!event.data}, dataLen=${event.data?.length ?? 0}`);
+        if (event.event === "thoughts") {
+          console.log(`[chatStream] 🎉 THOUGHTS SSE EVENT RECEIVED! data=${event.data}`);
+        }
+
         // Skip events with null or empty data
         if (!event.data || event.data === 'null') {
+          console.log(`[chatStream] ⏭️ Skipping empty event: type="${event.event}"`);
           continue;
         }
 
         const parsedData = JSON.parse(event.data);
+        console.log(`[chatStream] ✅ Yielding event: type="${event.event}", id=${parsedData.id}`);
         yield {
           type: event.event,
           data: parsedData,
         } as ChatEvent;
-      } catch {
-        // Skip events that fail to parse - continue processing other events
+      } catch (e) {
+        // Log parse errors to help debug
+        console.error(`[chatStream] ❌ Parse error for event type="${event.event}":`, e, "data=", event.data?.substring(0, 200));
       }
     }
   } catch (e) {

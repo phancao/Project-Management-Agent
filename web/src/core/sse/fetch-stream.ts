@@ -26,7 +26,7 @@ export async function* fetchStream(
     }
     throw error;
   }
-  
+
   if (response.status !== 200) {
     // Try to extract error message from response body
     let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
@@ -66,7 +66,7 @@ export async function* fetchStream(
         readResult = await reader.read();
       } catch (error) {
         // Handle abort errors gracefully - they're expected when user cancels
-        const isAbortError = 
+        const isAbortError =
           (error instanceof Error && error.name === 'AbortError') ||
           (error instanceof DOMException && error.name === 'AbortError') ||
           (error instanceof Error && (
@@ -74,7 +74,7 @@ export async function* fetchStream(
             error.message?.toLowerCase().includes('aborted') ||
             error.message?.toLowerCase().includes('bodystreambuffer')
           ));
-        
+
         if (isAbortError) {
           // Silently exit on abort - this is expected behavior
           break;
@@ -82,7 +82,7 @@ export async function* fetchStream(
         // Re-throw non-abort errors
         throw error;
       }
-      
+
       const { done, value } = readResult;
       if (done) {
         // Handle remaining buffer data
@@ -96,6 +96,8 @@ export async function* fetchStream(
       }
 
       buffer += value;
+      // DEBUG LOG
+      // console.log(`[SSE] 🕒 [${new Date().toISOString()}] Chunk +${value.length}b`);
 
       // Check buffer size to avoid memory overflow
       if (buffer.length > MAX_BUFFER_SIZE) {
@@ -114,6 +116,7 @@ export async function* fetchStream(
         if (chunk.trim()) {
           const event = parseEvent(chunk);
           if (event) {
+            console.log(`[SSE] 🕒 [${new Date().toISOString()}] Yielding event: ${event.event} (${event.data?.length ?? 0} chars)`);
             yield event;
           }
         }
@@ -121,7 +124,7 @@ export async function* fetchStream(
     }
   } catch (error) {
     // Handle abort errors gracefully - they're expected when user cancels
-    const isAbortError = 
+    const isAbortError =
       (error instanceof Error && error.name === 'AbortError') ||
       (error instanceof DOMException && error.name === 'AbortError') ||
       (error instanceof Error && (
@@ -129,7 +132,7 @@ export async function* fetchStream(
         error.message?.toLowerCase().includes('aborted') ||
         error.message?.toLowerCase().includes('bodystreambuffer')
       ));
-    
+
     if (!isAbortError) {
       // Re-throw non-abort errors
       throw error;

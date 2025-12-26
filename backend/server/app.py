@@ -78,6 +78,10 @@ _reasoning_content_cache: dict[str, str] = {}  # message_id -> accumulated_reaso
 _content_cache: dict[str, str] = {}  # message_id -> accumulated_content
 _previous_content_length: dict[str, int] = {}  # message_id -> previous accumulated content length (to detect NEW "Thought:")
 
+# PROGRESSIVE THOUGHTS: Step counter for generating incremental thoughts during streaming
+# Tracks step_index per thread_id so each thought gets a unique sequential index
+_progressive_step_counter: dict[str, int] = {}  # thread_id -> current step_index
+
 from backend.server.config_request import ConfigResponse
 from backend.server.ai_provider_request import (
     AIProviderAPIKeyRequest,
@@ -564,6 +568,82 @@ def _create_interrupt_event(thread_id, event_data):
     )
 
 
+def _extract_plan_data(current_plan, safe_thread_id: str) -> dict | None:
+    """Extract plan data from various plan formats (dict, object, string).
+    
+    Returns a dict with 'title' and 'steps' keys, or None if extraction fails.
+    """
+    if not current_plan:
+        return None
+    
+    plan_data = {}
+    plan_obj = None
+    
+    # Handle different types of current_plan
+    if isinstance(current_plan, str):
+        # Try to parse JSON string
+        try:
+            import json
+            plan_dict = json.loads(current_plan)
+            plan_obj = plan_dict
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"[{safe_thread_id}] Could not parse current_plan as JSON string")
+            return None
+    elif isinstance(current_plan, dict):
+        plan_obj = current_plan
+    else:
+        # Assume it's a Plan object with attributes
+        plan_obj = current_plan
+    
+    # Extract title and steps
+    if isinstance(plan_obj, dict):
+        plan_data["title"] = plan_obj.get("title", "")
+        steps = plan_obj.get("steps", [])
+        plan_data["steps"] = [
+            {
+                "title": step.get("title", "") if isinstance(step, dict) else getattr(step, "title", ""),
+                "description": step.get("description", "") if isinstance(step, dict) else getattr(step, "description", ""),
+                "step_type": (
+                    step.get("step_type", {}).get("value") if isinstance(step.get("step_type"), dict)
+                    else step.get("step_type") if isinstance(step, dict)
+                    else getattr(step.step_type, "value", None) if hasattr(getattr(step, "step_type", None), "value")
+                    else str(getattr(step, "step_type", "")) if hasattr(step, "step_type")
+                    else None
+                ),
+                "execution_res": (
+                    step.get("execution_res") if isinstance(step, dict)
+                    else getattr(step, "execution_res", None)
+                ),
+            }
+            for step in steps
+        ] if steps else []
+    elif hasattr(plan_obj, 'title'):
+        # Plan object with attributes
+        plan_data["title"] = plan_obj.title if not callable(plan_obj.title) else ""
+        if hasattr(plan_obj, 'steps'):
+            steps = plan_obj.steps if not callable(plan_obj.steps) else []
+            plan_data["steps"] = [
+                {
+                    "title": step.title if hasattr(step, 'title') and not callable(step.title) else "",
+                    "description": step.description if hasattr(step, 'description') and not callable(step.description) else "",
+                    "step_type": (
+                        step.step_type.value
+                        if hasattr(step, 'step_type') and hasattr(step.step_type, 'value')
+                        else str(step.step_type) if hasattr(step, 'step_type')
+                        else None
+                    ),
+                    "execution_res": (
+                        step.execution_res
+                        if hasattr(step, 'execution_res')
+                        else None
+                    ),
+                }
+                for step in steps
+            ] if steps else []
+    
+    return plan_data if plan_data else None
+
+
 def _process_initial_messages(message, thread_id):
     """Process initial messages and yield formatted events."""
     json_data = json.dumps(
@@ -613,9 +693,53 @@ async def _process_message_chunk(
                     message_chunk.additional_kwargs = {}
                 message_chunk.additional_kwargs["react_thoughts"] = cached_thoughts
 
+
     if isinstance(message_chunk, ToolMessage):
         # Tool Message - Return the result of the tool call
         event_stream_message["tool_call_id"] = message_chunk.tool_call_id
+        
+        # PROGRESSIVE THOUGHTS: Generate and stream TOOL_RESULT thought BEFORE tool_call_result event
+        # This ensures thoughts appear incrementally as each tool returns (not batched at end)
+        message_id = event_stream_message.get("id")
+        if message_id and agent_name in ["pm_agent", "react_agent"]:
+            # Get current step index for this thread
+            step_index = _progressive_step_counter.get(safe_thread_id, 0)
+            
+            # Get tool result preview (truncate if too long)
+            tool_result_content = getattr(message_chunk, 'content', '') or ''
+            result_preview = tool_result_content[:150]
+            if len(tool_result_content) > 150:
+                result_preview += "..."
+            
+            # Get tool name from the ToolMessage
+            tool_name = getattr(message_chunk, 'name', 'unknown') or 'tool'
+            
+            tool_result_thought = {
+                "thought": f"📋 TOOL_RESULT: {result_preview}",
+                "before_tool": False,
+                "step_index": step_index,
+                "step_type": "tool_result",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            tool_result_thoughts_event = {
+                "thread_id": thread_id,
+                "agent": agent_name,
+                "id": message_id,
+                "role": "assistant",
+                "react_thoughts": [tool_result_thought]
+            }
+            
+            logger.info(f"[{safe_thread_id}] 📋 [PROGRESSIVE] YIELDING TOOL_RESULT thought: step={step_index}, tool={tool_name}")
+            yield _make_event("thoughts", tool_result_thoughts_event)
+            
+            # Increment step counter
+            step_index += 1
+            _progressive_step_counter[safe_thread_id] = step_index
+            
+            # Small delay to ensure thought is processed before tool_call_result event
+            await asyncio.sleep(0.01)
+        
         yield _make_event("tool_call_result", event_stream_message)
         
     elif isinstance(message_chunk, AIMessageChunk):
@@ -742,18 +866,54 @@ async def _process_message_chunk(
             if processed_chunks:
                 event_stream_message["tool_call_chunks"] = processed_chunks
             
+            # PROGRESSIVE THOUGHTS: Generate and stream TOOL_CALL thought BEFORE tool_calls event
+            # This ensures thoughts appear incrementally as each step happens (not batched at end)
+            message_id = event_stream_message.get("id")
+            if message_id and agent_name in ["pm_agent", "react_agent"]:
+                # Get current step index for this thread
+                step_index = _progressive_step_counter.get(safe_thread_id, 0)
+                
+                # Generate a thought for EACH tool call (most PM queries have just 1)
+                for tc in message_chunk.tool_calls:
+                    tc_name = tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown')
+                    tc_args = tc.get('args', {}) if isinstance(tc, dict) else getattr(tc, 'args', {})
+                    
+                    # Format args nicely (truncate if too long)
+                    args_str = json.dumps(tc_args, ensure_ascii=False)[:100]
+                    if len(json.dumps(tc_args, ensure_ascii=False)) > 100:
+                        args_str += "..."
+                    
+                    tool_call_thought = {
+                        "thought": f"🔧 TOOL_CALL: {tc_name}({args_str})",
+                        "before_tool": True,
+                        "step_index": step_index,
+                        "step_type": "tool_call",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+                    tool_call_thoughts_event = {
+                        "thread_id": thread_id,
+                        "agent": agent_name,
+                        "id": message_id,
+                        "role": "assistant",
+                        "react_thoughts": [tool_call_thought]
+                    }
+                    
+                    logger.info(f"[{safe_thread_id}] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step={step_index}, tool={tc_name}")
+                    yield _make_event("thoughts", tool_call_thoughts_event)
+                    
+                    # Increment step counter
+                    step_index += 1
+                    _progressive_step_counter[safe_thread_id] = step_index
+                    
+                    # Small delay to ensure thought is processed before tool_calls event
+                    await asyncio.sleep(0.01)
+            
             timestamp_stream_toolcalls = datetime.now().isoformat()
             logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_stream_toolcalls}] [STREAM] YIELDING tool_calls event: tools={tool_names}, messageId={event_stream_message.get('id')}")
             yield _make_event("tool_calls", event_stream_message)
             timestamp_after_toolcalls = datetime.now().isoformat()
             logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_toolcalls}] [STREAM] tool_calls event yielded")
-            
-            # Process tool_call_chunks
-            processed_chunks = _process_tool_call_chunks(message_chunk.tool_call_chunks)
-            if processed_chunks:
-                event_stream_message["tool_call_chunks"] = processed_chunks
-            
-            yield _make_event("tool_calls", event_stream_message)
         elif message_chunk.tool_call_chunks:
             # Streaming tool call chunks
             processed_chunks = _process_tool_call_chunks(message_chunk.tool_call_chunks)
@@ -1354,41 +1514,17 @@ async def _stream_graph_events(
                                     )
                                     # CRITICAL FIX: Store thoughts in cache for AIMessageChunk processing
                                     # Find the message ID from messages in node_update
-                                    message_id_for_thoughts = None
                                     if "messages" in node_update:
                                         for msg in node_update.get("messages", []):
                                             if isinstance(msg, AIMessage) and hasattr(msg, 'id') and msg.id:
-                                                message_id_for_thoughts = msg.id
                                                 _react_thoughts_cache[msg.id] = node_react_thoughts
                                                 logger.info(
                                                     f"[{safe_thread_id}] ✅ Cached {len(node_react_thoughts)} react_thoughts for message {msg.id} "
                                                     f"for AIMessageChunk processing"
                                                 )
                                                 break
-                                    
-                                    # CRITICAL: Stream thoughts event immediately for ReAct agent (token-by-token display)
-                                    # This allows the frontend to display thoughts as they arrive, not wait for tool calls
-                                    if message_id_for_thoughts:
-                                        logger.info(
-                                            f"[{safe_thread_id}] 💭 Streaming thoughts event for {actual_agent_name}: "
-                                            f"messageId={message_id_for_thoughts}, count={len(node_react_thoughts)}"
-                                        )
-                                        yield _make_event(
-                                            "thoughts",
-                                            {
-                                                "thread_id": thread_id,
-                                                "agent": actual_agent_name,
-                                                "id": message_id_for_thoughts,
-                                                "role": "assistant",
-                                                "react_thoughts": node_react_thoughts,
-                                            }
-                                        )
-                                    else:
-                                        logger.warning(
-                                            f"[{safe_thread_id}] ⚠️ Could not find message ID for thoughts streaming in {actual_agent_name} node_update"
-                                        )
                                     logger.debug(
-                                        f"[{safe_thread_id}] 💭 Thoughts cached and streamed for {actual_agent_name}"
+                                        f"[{safe_thread_id}] 💭 Thoughts will be attached to agent message when it's streamed"
                                     )
                                 else:
                                     logger.warning(

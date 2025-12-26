@@ -45,7 +45,7 @@ interface ReActAnalysisBlockProps {
   researchId: string;
 }
 
-export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlockProps) {
+export function ReActAnalysisBlockV2({ className, researchId }: ReActAnalysisBlockProps) {
   const { isReplay } = useReplay();
 
   // Get research data from store
@@ -200,16 +200,21 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
   const reactContent = reactMessage?.content || "";
   const isStreamingContent = reactMessage?.isStreaming ?? false;
 
+  // Loading Logic: Stop spinning if report exists and not regenerating
+  const showSpinner = (ongoing || isGeneratingReport || isStreamingContent) && (!hasReport || isGeneratingReport);
+  // Show sparkles if complete
+  const showSparkles = !showSpinner && hasReport;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={cn("w-full", className)}
+      className={cn("w-full max-w-full overflow-hidden", className)}
       style={{ minWidth: 0, maxWidth: '100%' }}
     >
       <Card className={cn(
-        "overflow-hidden overflow-x-hidden w-full border-2",
+        "overflow-hidden overflow-x-hidden w-full border-2 max-w-full",
         reactTheme.border,
         reactTheme.background
       )} style={{ minWidth: 0, maxWidth: '100%', overflowX: 'hidden' }}>
@@ -230,12 +235,12 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                 )}>
                   {title}
                 </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  {(ongoing || isGeneratingReport || isStreamingContent) && (
+                <div className="flex items-center gap-2 text-sm text-foreground/80 dark:text-muted-foreground">
+                  {showSpinner && (
                     <Loader2 size={12} className="animate-spin" />
                   )}
-                  {!ongoing && !isGeneratingReport && !isStreamingContent && hasReport && (
-                    <Sparkles size={12} className="text-blue-500" />
+                  {showSparkles && (
+                    <Sparkles size={12} className="text-[#162B75]" />
                   )}
                   <span>{statusText}</span>
                 </div>
@@ -283,7 +288,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
 
         <CardContent className="pt-0 overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
           {/* Loading indicator when no tool calls yet */}
-          {toolCalls.length === 0 && thoughts.length === 0 && ongoing && (
+          {toolCalls.length === 0 && thoughts.length === 0 && ongoing && !reactContent && (
             <div className="py-4">
               <LoadingAnimation />
             </div>
@@ -292,7 +297,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
           {/* ReAct Content Section - Stream token-by-token (no JSON parsing) */}
           {reactContent && (
             <div className="mb-4 pb-4 border-b break-words [word-break:break-word] [overflow-wrap:anywhere]">
-              <div className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere]">
+              <div className="prose prose-sm dark:prose-invert max-w-none break-words [word-break:break-word] [overflow-wrap:anywhere] overflow-x-auto w-full">
                 <Markdown animated={isStreamingContent} checkLinkCredibility>
                   {reactContent}
                 </Markdown>
@@ -307,7 +312,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
           {(toolCalls.length > 0 || thoughts.length > 0) && (
             <div className="mb-4">
               <button
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full py-2"
+                className="flex items-center gap-2 text-sm text-foreground/80 dark:text-muted-foreground hover:text-foreground transition-colors w-full py-2"
                 onClick={() => setStepsExpanded(!stepsExpanded)}
               >
                 {stepsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -315,6 +320,8 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                 <span className="text-xs bg-accent px-2 py-0.5 rounded-full">
                   {toolCalls.length + thoughts.length}
                 </span>
+                {/* DEBUG MARKER */}
+                <span className="text-[10px] bg-red-500 text-white px-1 rounded">v2</span>
               </button>
 
               <AnimatePresence>
@@ -327,7 +334,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                     className="overflow-hidden overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]"
                     style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                   >
-                    <div className="flex flex-col gap-0.5 pt-0.5 overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere]" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                    <div className="flex flex-col gap-0.5 pt-0.5 overflow-x-hidden break-words [word-break:break-word] [overflow-wrap:anywhere] min-w-0" style={{ overflowX: 'hidden', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       {/* Interleave thoughts and tool calls */}
                       {(() => {
                         const combinedSteps: Array<{
@@ -359,7 +366,81 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
 
                         const totalSteps = combinedSteps.length;
 
-                        return combinedSteps.map((step, displayIndex) => {
+                        // DEBUG: Log combined steps
+                        console.log(`[ReActAnalysisBlock] 🕒 [${new Date().toISOString()}] Steps Analysis (v2):`, {
+                          total: combinedSteps.length,
+                          rawSteps: combinedSteps.map(s => ({
+                            type: s.type,
+                            index: s.data.step_index,
+                            content_preview: s.type === 'thought' ? s.data.thought.substring(0, 50) : s.data.name,
+                            has_tool_call: s.type === 'thought' ? s.data.thought.includes('TOOL_CALL:') : false,
+                            has_tool_result: s.type === 'thought' ? s.data.thought.includes('TOOL_RESULT:') : false
+                          }))
+                        });
+
+                        const finalSteps: Array<any> = [];
+                        const consumedIndices = new Set<number>();
+
+                        for (let i = 0; i < combinedSteps.length; i++) {
+                          if (consumedIndices.has(i)) continue;
+
+                          const step = combinedSteps[i];
+                          if (!step) continue;
+
+                          if (step.type === 'thought') {
+                            const content = step.data.thought;
+                            // Check for TOOL_CALL
+                            if (content.includes('TOOL_CALL:')) {
+                              // Parse name and args
+                              // Allow empty name: TOOL_CALL: ({}) -> name=""
+                              const match = content.match(/TOOL_CALL:\s*([^(]*)\(([\s\S]*)\)/);
+                              const name = match && match[1].trim() ? match[1].trim() : "tool";
+                              const args = match ? match[2].trim() : "{}";
+
+                              // Look ahead for TOOL_RESULT
+                              let result = "";
+                              // Scan up to 5 steps ahead to find the matching result, skipping garbage
+                              for (let j = i + 1; j < Math.min(i + 6, combinedSteps.length); j++) {
+                                if (consumedIndices.has(j)) continue;
+                                const nextStep = combinedSteps[j];
+                                if (!nextStep) continue;
+
+                                // If we hit another TOOL_CALL, stop scanning (current call has no result?)
+                                if (nextStep.type === 'thought' && nextStep.data.thought.includes('TOOL_CALL:')) {
+                                  break;
+                                }
+
+                                if (nextStep.type === 'thought' && nextStep.data.thought.includes('TOOL_RESULT:')) {
+                                  // Found result!
+                                  const resultContent = nextStep.data.thought;
+                                  result = resultContent.replace(/.*TOOL_RESULT:\s*/, '').trim();
+                                  consumedIndices.add(j); // Mark as consumed
+                                  break;
+                                }
+                              }
+
+                              finalSteps.push({
+                                type: 'synthetic_tool',
+                                data: {
+                                  id: `synthetic-${step.data.step_index}`,
+                                  name,
+                                  args,
+                                  result,
+                                  agent: step.data.agent
+                                },
+                                sortKey: step.sortKey
+                              });
+                            } else {
+                              // Normal thought
+                              finalSteps.push(step);
+                            }
+                          } else {
+                            // Tool call
+                            finalSteps.push(step);
+                          }
+                        }
+
+                        return finalSteps.map((step, displayIndex) => {
                           if (step.type === 'thought') {
                             return (
                               <ThoughtBox
@@ -370,6 +451,17 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                                 defaultExpanded={true}
                               />
                             );
+                          } else if (step.type === 'synthetic_tool') {
+                            return (
+                              <StepBox
+                                key={step.data.id}
+                                toolCall={step.data}
+                                stepNumber={displayIndex + 1}
+                                totalSteps={ongoing ? undefined : totalSteps}
+                                agent={step.data.agent}
+                                defaultExpanded={false} // Internal steps collapsed by default
+                              />
+                            );
                           } else {
                             return (
                               <StepBox
@@ -378,6 +470,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
                                 stepNumber={displayIndex + 1}
                                 totalSteps={ongoing ? undefined : totalSteps}
                                 agent={step.data.agent}
+                                defaultExpanded={true} // Main PM Agent box expanded
                               />
                             );
                           }
@@ -394,7 +487,7 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
           {(hasReport || isGeneratingReport) && (
             <div className={cn((toolCalls.length > 0 || thoughts.length > 0) ? "border-t pt-4" : "", "break-words [word-break:break-word] [overflow-wrap:anywhere]")}>
               <div className="flex items-center gap-2 mb-3">
-                <Sparkles size={16} className="text-amber-500" />
+                <Sparkles size={16} className="text-[#FE5000]" />
                 <span className="font-medium text-sm">Insights</span>
               </div>
 
@@ -420,4 +513,3 @@ export function ReActAnalysisBlock({ className, researchId }: ReActAnalysisBlock
     </motion.div>
   );
 }
-

@@ -248,6 +248,148 @@ TEST_CASES = [
         "expected_args": {"sprint_id": "4"},
         "description": "Sprint info request"
     },
+    
+    # -------------------------------------------------------------------------
+    # SPRINT ANALYSIS
+    # -------------------------------------------------------------------------
+    {
+        "id": "analyse_sprint_simple",
+        "query": "analyse sprint 6",
+        "expected_tool": "list_tasks",  # Needs tasks to analyze
+        "expected_args": {"sprint_id": "6"},
+        "description": "Analyze sprint performance - velocity, completion rate"
+    },
+    {
+        "id": "analyse_sprint_performance",
+        "query": "analyze sprint 4 performance",
+        "expected_tool": "list_tasks",
+        "expected_args": {"sprint_id": "4"},
+        "description": "Sprint performance metrics analysis"
+    },
+    {
+        "id": "sprint_burndown",
+        "query": "show burndown for sprint 6",
+        "expected_tool": "list_tasks",
+        "expected_args": {"sprint_id": "6"},
+        "description": "Sprint burndown chart data"
+    },
+    {
+        "id": "sprint_velocity",
+        "query": "what is the velocity in sprint 5?",
+        "expected_tool": "list_tasks",
+        "expected_args": {"sprint_id": "5"},
+        "description": "Sprint velocity calculation"
+    },
+    {
+        "id": "sprint_completion_rate",
+        "query": "how many tasks were completed in sprint 6?",
+        "expected_tool": "list_tasks",
+        "expected_args": {"sprint_id": "6"},
+        "description": "Task completion rate in sprint"
+    },
+    
+    # -------------------------------------------------------------------------
+    # EPIC ANALYSIS
+    # -------------------------------------------------------------------------
+    {
+        "id": "analyse_epic",
+        "query": "analyse the epics",
+        "expected_tool": "list_epics",
+        "expected_args": {},
+        "description": "Analyze all epics progress"
+    },
+    {
+        "id": "epic_progress",
+        "query": "show epic progress",
+        "expected_tool": "list_epics",
+        "expected_args": {},
+        "description": "Epic completion progress"
+    },
+    {
+        "id": "epic_breakdown",
+        "query": "break down tasks by epic",
+        "expected_tool": "list_epics",
+        "expected_args": {},
+        "description": "Task distribution across epics"
+    },
+    
+    # -------------------------------------------------------------------------
+    # PROJECT ANALYSIS
+    # -------------------------------------------------------------------------
+    {
+        "id": "analyse_project",
+        "query": "analyse this project",
+        "expected_tool": "get_current_project_details",
+        "expected_args": {},
+        "description": "Overall project analysis"
+    },
+    {
+        "id": "project_health",
+        "query": "what is the project health?",
+        "expected_tool": "get_current_project_details",
+        "expected_args": {},
+        "description": "Project health status"
+    },
+    {
+        "id": "project_status_summary",
+        "query": "give me a project status summary",
+        "expected_tool": "get_current_project_details",
+        "expected_args": {},
+        "description": "Project status overview"
+    },
+    {
+        "id": "project_metrics",
+        "query": "show project metrics",
+        "expected_tool": "get_current_project_details",
+        "expected_args": {},
+        "description": "Project performance metrics"
+    },
+    
+    # -------------------------------------------------------------------------
+    # RESOURCE ALLOCATION / WORKLOAD ANALYSIS
+    # -------------------------------------------------------------------------
+    {
+        "id": "resource_allocation",
+        "query": "analyse resource allocation",
+        "expected_tool": "list_tasks",  # Needs tasks to see assignments
+        "expected_args": {},
+        "description": "Resource allocation analysis"
+    },
+    {
+        "id": "workload_distribution",
+        "query": "show workload distribution",
+        "expected_tool": "list_tasks",
+        "expected_args": {},
+        "description": "Workload distribution across team"
+    },
+    {
+        "id": "who_is_overloaded",
+        "query": "who is overloaded?",
+        "expected_tool": "list_tasks",
+        "expected_args": {},
+        "description": "Identify overloaded team members"
+    },
+    {
+        "id": "team_capacity",
+        "query": "show team capacity",
+        "expected_tool": "list_users",
+        "expected_args": {},
+        "description": "Team capacity overview"
+    },
+    {
+        "id": "task_distribution_by_assignee",
+        "query": "show task distribution by assignee",
+        "expected_tool": "list_tasks",
+        "expected_args": {},
+        "description": "Tasks per team member"
+    },
+    {
+        "id": "unassigned_tasks",
+        "query": "are there any unassigned tasks?",
+        "expected_tool": "list_tasks",
+        "expected_args": {},
+        "description": "Find tasks without assignees"
+    },
 ]
 
 # ============================================================================

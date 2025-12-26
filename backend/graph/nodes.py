@@ -4123,10 +4123,12 @@ async def react_agent_node(
         pm_tools = get_pm_tools()
         
         # ==============================================
-        # CUSTOM PM AGENT: Direct LLM with tool_choice
+        # LLM-DRIVEN PM AGENT (ReAct Pattern)
         # ==============================================
-        # LangGraph's create_react_agent doesn't properly pass tool_choice to the model.
-        # For PM queries, we implement a custom agent loop that forces tool calling.
+        # No hardcoded rules - all decisions made by LLM
+        # Pattern: Think → Act → Observe → Decide → Repeat
+        
+        from backend.agents.pm_agent import run_pm_agent
         
         # Get project context
         project_id = state.get("project_id") or get_current_project_id() or ""
@@ -4142,109 +4144,82 @@ async def react_agent_node(
                 user_query = msg.get('content', '')
                 break
         
-        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📝 User query: {user_query[:100]}...")
-        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📝 Project ID: {project_id}")
+        logger.info(f"[{ts}] [PM-AGENT] 📝 User query: {user_query[:100]}...")
+        logger.info(f"[{ts}] [PM-AGENT] 📝 Project ID: {project_id}")
         
-        # Create LLM with tool_choice='required' to FORCE tool calling
+        # Create LLM
         from backend.llms.llm import get_llm_by_type
         llm = get_llm_by_type("basic")
         
-        # Bind tools with tool_choice='required' - this forces the model to call a tool
-        llm_with_tools = llm.bind_tools(pm_tools, tool_choice="required")
-        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 🔧 Bound {len(pm_tools)} tools with tool_choice='required'")
-        
-        # Create the prompt
-        from backend.prompts.template import get_prompt_template
-        system_prompt = get_prompt_template("pm_react_agent")
-        system_prompt += f"\n\n## CURRENT PROJECT CONTEXT\n\n**project_id:** `{project_id}`\n\nUse this project_id in ALL tool calls."
-        system_prompt += f"\n\n## USER REQUEST\n\n**{user_query}**\n\n→ CALL THE APPROPRIATE TOOL NOW."
-        
-        # Build messages for LLM
-        llm_messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_query)
-        ]
-        
-        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📤 Invoking LLM with tool_choice='required'...")
-        
         try:
-            # Invoke LLM - it MUST call a tool due to tool_choice='required'
-            response = await llm_with_tools.ainvoke(llm_messages)
+            # Run the LLM-driven agent
+            result = await run_pm_agent(
+                llm=llm,
+                tools=pm_tools,
+                user_query=user_query,
+                project_id=project_id,
+                max_steps=5
+            )
             
-            logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📥 LLM response received")
-            logger.info(f"[{ts}] [CUSTOM-PM-AGENT] Tool calls: {len(response.tool_calls) if hasattr(response, 'tool_calls') else 'None'}")
-            
-            if hasattr(response, 'tool_calls') and response.tool_calls:
-                # LLM called a tool! Execute it.
-                tool_call = response.tool_calls[0]  # Take first tool call
-                tool_name = tool_call['name']
-                tool_args = tool_call['args']
-                tool_call_id = tool_call['id']
+            if result.success and result.result:
+                logger.info(f"[{ts}] [PM-AGENT] ✅ Agent completed with {len(result.steps)} steps")
                 
-                logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 🔧 Tool call: {tool_name} with args: {tool_args}")
-                
-                # Find and execute the tool
-                tool_result = None
-                for tool in pm_tools:
-                    if tool.name == tool_name:
-                        # Inject project_id if not provided
-                        if 'project_id' not in tool_args or not tool_args.get('project_id'):
-                            tool_args['project_id'] = project_id
-                        
-                        tool_result = await tool.ainvoke(tool_args)
-                        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] ✅ Tool executed! Result length: {len(str(tool_result))} chars")
-                        break
-                
-                if tool_result is not None:
-                    # Create messages for state
-                    tool_call_msg = AIMessage(
-                        content="",
-                        name="react_agent",
-                        tool_calls=[{
-                            "id": tool_call_id,
-                            "name": tool_name,
-                            "args": tool_args
-                        }]
-                    )
-                    
-                    tool_result_msg = ToolMessage(
-                        content=str(tool_result),
-                        tool_call_id=tool_call_id,
-                        name=tool_name
-                    )
-                    
-                    thoughts = [{
-                        "thought": f"Called {tool_name} with args: {tool_args}",
-                        "before_tool": True,
-                        "step_index": 0
+                # Build messages for state
+                tool_call_msg = AIMessage(
+                    content="",
+                    name="react_agent",
+                    tool_calls=[{
+                        "id": f"agent_result_{ts}",
+                        "name": "pm_agent",
+                        "args": {"query": user_query}
                     }]
+                )
+                
+                tool_result_msg = ToolMessage(
+                    content=result.result,
+                    tool_call_id=f"agent_result_{ts}",
+                    name="pm_agent"
+                )
+                
+                # Convert agent steps to thoughts for UI
+                thoughts = []
+                for i, step in enumerate(result.steps):
+                    emoji = {
+                        "thinking": "🧠",
+                        "tool_call": "🔧",
+                        "tool_result": "📋",
+                        "decision": "✅" if step.metadata.get("action") == "done" else "🔄"
+                    }.get(step.type, "•")
                     
-                    logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📤 Returning result to reporter (bypassed LangGraph agent)")
-                    
-                    return Command(
-                        update={
-                            "messages": [tool_call_msg, tool_result_msg],
-                            "final_report": str(tool_result),
-                            "react_intermediate_steps": [({"tool": tool_name, "tool_input": tool_args}, tool_result)],
-                            "react_thoughts": thoughts,
-                            "routing_mode": "react_first",
-                            "goto": "reporter",
-                        },
-                        goto="reporter"
-                    )
-                else:
-                    logger.warning(f"[{ts}] [CUSTOM-PM-AGENT] ⚠️ Tool '{tool_name}' not found in pm_tools")
-            else:
-                logger.warning(f"[{ts}] [CUSTOM-PM-AGENT] ⚠️ LLM did not call any tools despite tool_choice='required'")
-                logger.warning(f"[{ts}] [CUSTOM-PM-AGENT] Response content: {response.content[:200] if response.content else 'None'}...")
+                    thoughts.append({
+                        "thought": f"{emoji} {step.type.upper()}: {step.content[:200]}",
+                        "before_tool": step.type in ["thinking", "tool_call"],
+                        "step_index": i,
+                        "step_type": step.type,
+                        "timestamp": step.timestamp
+                    })
+                
+                logger.info(f"[{ts}] [PM-AGENT] 📤 Returning to reporter with {len(thoughts)} steps")
+                
+                return Command(
+                    update={
+                        "messages": [tool_call_msg, tool_result_msg],
+                        "final_report": result.result,
+                        "react_intermediate_steps": [({"query": user_query}, result.result)],
+                        "react_thoughts": thoughts,
+                        "routing_mode": "react_first",
+                        "goto": "reporter",
+                    },
+                    goto="reporter"
+                )
         
         except Exception as e:
-            logger.error(f"[{ts}] [CUSTOM-PM-AGENT] ❌ Error in custom agent: {e}")
+            logger.error(f"[{ts}] [PM-AGENT] ❌ Agent error: {e}")
             import traceback
-            logger.error(f"[{ts}] [CUSTOM-PM-AGENT] Traceback: {traceback.format_exc()}")
+            logger.error(f"[{ts}] [PM-AGENT] Traceback: {traceback.format_exc()}")
         
-        # Fall through to LangGraph agent if custom agent failed
-        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] ⏭️ Falling through to LangGraph agent...")
+        # Fall through to LangGraph agent if PM agent failed
+        logger.info(f"[{ts}] [PM-AGENT] ⏭️ Falling through to LangGraph agent...")
         
         # Add web search tool for background investigation when needed
         search_tool = get_web_search_tool(

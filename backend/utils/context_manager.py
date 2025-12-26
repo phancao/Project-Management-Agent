@@ -344,6 +344,36 @@ class ContextManager:
         Returns:
             Compressed state with compressed messages and optimization metadata
         """
+        # 🔍 DEBUG: Print stack trace to find WHO is calling compress_messages
+        import traceback
+        logger.error(f"🔴🔴🔴 DEBUG: compress_messages CALLED - agent_type={self.agent_type}")
+        logger.error(f"🔴🔴🔴 Stack trace:\n{''.join(traceback.format_stack()[-8:])}")
+        
+        # 🚫🚫🚫 COMPRESSION DISABLED GLOBALLY 🚫🚫🚫
+        # PM queries need full data for task tables - compression truncates critical data
+        logger.info(f"[CONTEXT-MANAGER] 🚫 COMPRESSION DISABLED - returning original state unchanged")
+        
+        # Just add metadata saying no compression happened and return original state
+        if isinstance(state, dict) and "messages" in state:
+            messages = state["messages"]
+            try:
+                original_token_count = self.count_tokens(messages)
+            except:
+                original_token_count = len(messages) * 100  # rough estimate
+            
+            state["_context_optimization"] = {
+                "compressed": False,
+                "original_tokens": original_token_count,
+                "compressed_tokens": original_token_count,
+                "compression_ratio": 1.0,
+                "strategy": "disabled",
+                "agent_type": self.agent_type,
+                "original_message_count": len(messages),
+                "compressed_message_count": len(messages)
+            }
+        return state
+        
+        # ===== BELOW CODE IS DISABLED =====
         logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: compress_messages called - token_limit={self.token_limit}, agent_type={self.agent_type}, compression_mode={self.compression_mode}")
         
         # If not set token_limit, return original state

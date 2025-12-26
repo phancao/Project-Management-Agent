@@ -374,23 +374,29 @@ async def get_project(project_id: Annotated[str, "The project ID to retrieve"]) 
 
 @tool
 async def list_tasks(
-    project_id: Annotated[Optional[str], "Optional project ID to filter tasks"] = None,
-    assignee_id: Annotated[Optional[str], "Optional assignee ID to filter tasks"] = None,
-    sprint_id: Annotated[Optional[str], "Optional sprint ID to filter tasks by sprint"] = None
+    project_id: Annotated[Optional[str], "Project ID (use the project from context if not specified)"] = None,
+    assignee_id: Annotated[Optional[str], "Filter by assignee ID"] = None,
+    sprint_id: Annotated[Optional[str], "Sprint number or ID to filter tasks (e.g., '6' for Sprint 6)"] = None
 ) -> str:
-    """List tasks from the PM provider.
+    """Retrieve tasks from the project management system. USE THIS TOOL IMMEDIATELY when user asks about tasks.
+    
+    WHEN TO USE THIS TOOL:
+    - User asks "list tasks" or "show tasks" or "get tasks"
+    - User asks about tasks in a specific sprint (e.g., "tasks in sprint 6")
+    - User asks about task status, progress, or work items
+    - User asks "what tasks are there" or similar
+    
+    IMPORTANT: Call this tool directly with parameters. Do NOT ask for clarification.
+    The sprint_id can be a number like "6" - it will be resolved automatically.
+    If project_id is not provided, the current project context will be used.
     
     Args:
-        project_id: Optional project ID to filter tasks by project
-        assignee_id: Optional assignee ID to filter tasks by assignee
-        sprint_id: Optional sprint ID to filter tasks by sprint (e.g., "613" or "project_id:613")
+        project_id: Project ID from context (usually pre-filled)
+        assignee_id: Filter tasks by assignee
+        sprint_id: Sprint number or ID (e.g., "6" means Sprint 6)
         
     Returns:
-        JSON string with list of tasks, each containing:
-        - id, title, description, status, priority
-        - project_id, assignee_id, sprint_id, epic_id
-        - estimated_hours, actual_hours
-        - start_date, due_date, completed_at
+        JSON with task list including id, title, status, priority, assignee, dates
     """
     try:
         handler = _ensure_pm_handler()

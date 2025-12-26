@@ -358,6 +358,64 @@ def _compress_sprint_list(sprints: list) -> list:
     logger.info(f"Compressed sprint list: preserved id/name/status for all {len(compressed)} sprints (essential for searching)")
     return compressed
 
+def _compress_task_list(tasks: list) -> list:
+    """
+    Intelligently compress a list of tasks by preserving essential fields (id, title, status, assignee) for ALL tasks,
+    while dropping description and other heavy fields.
+    
+    This ensures the agent receives the FULL LIST of tasks (as requested by users) rather than a statistical summary.
+    
+    Args:
+        tasks: List of task dictionaries
+        
+    Returns:
+        Compressed list with essential fields preserved for all tasks
+    """
+    if not tasks:
+        return tasks
+    
+    compressed = []
+    # Essential fields to keep for EVERY task (keep it minimal to fit 100+ tasks)
+    essential_fields = ["id", "task_id", "title", "name", "status"]
+    # Optional but useful small fields
+    useful_fields = ["priority", "assigned_to", "assignee", "due_date", "end_date"]
+    
+    for task in tasks:
+        if isinstance(task, dict):
+            compressed_task = {}
+            
+            # Map common variations
+            # (e.g. handle task_id vs id, title vs name)
+            
+            # 1. ID
+            if "id" in task: compressed_task["id"] = task["id"]
+            elif "task_id" in task: compressed_task["id"] = task["task_id"]
+            
+            # 2. Title
+            if "title" in task: compressed_task["title"] = task["title"]
+            elif "name" in task: compressed_task["title"] = task["name"]
+            
+            # 3. Status
+            if "status" in task: compressed_task["status"] = task["status"]
+            
+            # 4. Assignee
+            if "assigned_to" in task: compressed_task["assignee"] = task["assigned_to"]
+            elif "assignee" in task: compressed_task["assignee"] = task["assignee"]
+            
+            # 5. Priority
+            if "priority" in task: compressed_task["priority"] = task["priority"]
+            
+            # 6. Date
+            if "due_date" in task: compressed_task["due_date"] = task["due_date"]
+            elif "end_date" in task: compressed_task["due_date"] = task["end_date"]
+            
+            compressed.append(compressed_task)
+        else:
+            compressed.append(task)
+            
+    logger.info(f"Compressed task list: preserved essential fields for all {len(compressed)} tasks")
+    return compressed
+
 
 def _compress_large_array(data: Any, max_items: int = 20) -> Any:
     """
@@ -418,10 +476,11 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
             )
             
             if is_task_list:
-                # Use intelligent task summarization
-                summary = _create_task_summary(data, max_items)
-                logger.info(f"Compressed task list from {len(data)} items to summary with {len(summary)} sections")
-                return summary
+                # CRITICAL CHANGE: Use intelligent task compression (list all) instead of summarization
+                # Users want to see the full list, not just stats
+                compressed = _compress_task_list(data)
+                logger.info(f"Compressed task list from {len(data)} items to {len(compressed)} items (preserved essential fields)")
+                return compressed
             else:
                 # For generic arrays, create category-based summary
                 # Group items by type or key characteristics

@@ -29,3 +29,5 @@ coverage.xml
 coverage/
 .env.bak
 logs/*.log
+uploads/*.sql
+uploads/*.sql.cleaned

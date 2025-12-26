@@ -3456,6 +3456,14 @@ async def pm_chat_stream(request: Request):
                     else:
                         # PM query - route to PM graph (coordinator → ReAct)
                         logger.info(f"[PM-CHAT-TIMING] Routing PM query to PM graph (coordinator → ReAct)")
+                        
+                        # CRITICAL FIX: Use unique thread_id for EACH PM query to avoid checkpointed state
+                        # The checkpointer was restoring stale state with final_report already set,
+                        # causing the graph to skip coordinator and go directly to reporter
+                        import uuid as uuid_module
+                        pm_thread_id = f"pm_{uuid_module.uuid4().hex[:16]}"
+                        logger.info(f"[PM-CHAT] 🔧 Using fresh thread_id for PM query: {pm_thread_id} (original: {thread_id})")
+                        
                         try:
                             # Ensure PM handler is set for tools before agents run
                             if fm.pm_handler:
@@ -3490,7 +3498,7 @@ async def pm_chat_stream(request: Request):
                             # The coordinator will detect PM intent and route to ReAct
                             async for event in _astream_workflow_generator(
                                 workflow_messages,
-                                thread_id,
+                                pm_thread_id,  # CRITICAL: Use fresh thread_id to avoid checkpointed state
                                 resources=[],
                                 max_plan_iterations=1,
                                 max_step_num=3,

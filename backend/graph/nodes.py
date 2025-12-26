@@ -67,6 +67,11 @@ def _add_context_optimization_tool_call(state: State, agent_name: str, optimizat
     Returns:
         List of messages (AIMessage with tool call + ToolMessage with result) to add to state
     """
+    # 🔍 DEBUG: Print stack trace to find WHO is calling this
+    import traceback
+    logger.error(f"🔍🔍🔍 DEBUG: _add_context_optimization_tool_call CALLED by agent={agent_name}")
+    logger.error(f"🔍🔍🔍 Stack trace:\n{''.join(traceback.format_stack())}")
+    
     # Always add tool call if optimization metadata exists (even if no compression happened)
     # This shows users that context optimization was attempted
     if not optimization_metadata:
@@ -980,8 +985,10 @@ def human_feedback_node(
 def coordinator_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["planner", "background_investigator", "coordinator", "react_agent", "__end__"]]:
-    logger.info(f"[DEBUG-NODES] [NODE-COORD-1] Coordinator node entered")
-    logger.info(f"[COORDINATOR] 🚀 COORDINATOR NODE CALLED - State keys: {list(state.keys())}")
+    import datetime
+    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    logger.info(f"[{ts}] [COORDINATOR-ENTRY] 🚀 Coordinator node entered - state keys: {list(state.keys())}")
+    logger.info(f"[{ts}] [COORDINATOR-ENTRY] final_report exists: {bool(state.get('final_report'))}, len={len(state.get('final_report', ''))}")
     """
     Adaptive coordinator that intelligently routes queries.
     
@@ -1561,15 +1568,68 @@ Create a comprehensive plan that addresses their need for more detailed analysis
 
 
 def reporter_node(state: State, config: RunnableConfig):
-    logger.info(f"[DEBUG-NODES] [NODE-REPORTER-1] Reporter node entered")
+    import datetime
+    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    logger.info(f"[{ts}] [REPORTER-ENTRY] 📝 Reporter node entered")
+    logger.info(f"[{ts}] [REPORTER-ENTRY] final_report exists: {bool(state.get('final_report'))}, routing_mode: {state.get('routing_mode', '')}")
     """Reporter node that write a final report."""
+    
+    # Check routing mode FIRST - PM routes need special handling
+    routing_mode = state.get("routing_mode", "")
+    react_steps = state.get("react_intermediate_steps", [])
+    
+    # IMPROVED PM ROUTE DETECTION: Check messages for PM tool calls
+    # Because routing_mode state propagation from Command is unreliable
+    messages = state.get("messages", [])
+    pm_tool_names = {"list_tasks", "list_sprints", "list_users", "get_project", "get_sprint", "get_task", "list_epics", "get_current_project"}
+    has_pm_tool_calls = False
+    
+    # Debug: log message types
+    msg_types = [type(m).__name__ for m in messages[-10:]]  # Last 10 messages
+    logger.info(f"[REPORTER] 🔍 DEBUG: Last 10 message types: {msg_types}")
+    
+    for msg in messages:
+        # Check 1: Direct tool_calls attribute
+        if hasattr(msg, 'tool_calls') and msg.tool_calls:
+            for tc in msg.tool_calls:
+                tool_name = tc.get('name', '') if isinstance(tc, dict) else getattr(tc, 'name', '')
+                if tool_name in pm_tool_names:
+                    has_pm_tool_calls = True
+                    logger.info(f"[REPORTER] 🔍 Found PM tool via tool_calls: {tool_name}")
+                    break
+        
+        # Check 2: additional_kwargs.tool_calls (some LLM responses store here)
+        if not has_pm_tool_calls and hasattr(msg, 'additional_kwargs'):
+            ak_tool_calls = msg.additional_kwargs.get('tool_calls', [])
+            for tc in ak_tool_calls:
+                tool_name = tc.get('function', {}).get('name', '') if isinstance(tc, dict) else ''
+                if tool_name in pm_tool_names:
+                    has_pm_tool_calls = True
+                    logger.info(f"[REPORTER] 🔍 Found PM tool via additional_kwargs: {tool_name}")
+                    break
+        
+        # Check 3: ToolMessage with PM tool name
+        if not has_pm_tool_calls and hasattr(msg, 'name') and msg.name in pm_tool_names:
+            has_pm_tool_calls = True
+            logger.info(f"[REPORTER] 🔍 Found PM tool via ToolMessage name: {msg.name}")
+        
+        if has_pm_tool_calls:
+            break
+    
+    # Use either routing_mode OR presence of PM tool calls
+    is_from_react = routing_mode == "react_first" or has_pm_tool_calls
+    
+    logger.info(f"[REPORTER] 🔍 STATE CHECK: routing_mode='{routing_mode}', is_from_react={is_from_react}, has_pm_tool_calls={has_pm_tool_calls}, has_final_report={bool(state.get('final_report'))}, react_intermediate_steps={len(react_steps)}")
     
     # Check if we already have a final_report from React Agent
     existing_report = state.get("final_report")
-    if existing_report:
-        logger.info(f"[REPORTER] Using existing final_report from React Agent ({len(existing_report)} chars)")
+    
+    # CRITICAL: For PM routes, do NOT use the existing report shortcut
+    # We need to regenerate using pm_reporter with raw task data from react_intermediate_steps
+    # The existing report was generated by React Agent using compressed context
+    if existing_report and not is_from_react:
+        logger.info(f"[REPORTER] Using existing final_report (non-PM route) ({len(existing_report)} chars)")
         # Stream the existing report without re-invoking LLM
-        # Create an AIMessage to stream to frontend
         from langchain_core.messages import AIMessage
         response = AIMessage(content=existing_report)
         if not hasattr(response, 'response_metadata') or not response.response_metadata:
@@ -1578,9 +1638,12 @@ def reporter_node(state: State, config: RunnableConfig):
         
         return {
             "messages": [response],
-            "final_report": existing_report,  # Keep the report
+            "final_report": existing_report,
         }
+    elif existing_report and is_from_react:
+        logger.info(f"[REPORTER-PM] 🔧 PM route detected (has_pm_tool_calls={has_pm_tool_calls}) - SKIPPING existing report shortcut to regenerate with raw data")
     
+
     logger.info("Reporter write final report")
     configurable = Configuration.from_runnable_config(config)
     current_plan = state.get("current_plan")
@@ -1588,8 +1651,7 @@ def reporter_node(state: State, config: RunnableConfig):
     # CRITICAL: If this is coming from React Agent (not planner), use the actual user query
     # React Agent routes to reporter with routing_mode="react_first" and doesn't create a plan
     # In this case, we should use the research_topic or the actual user query instead of plan title
-    routing_mode = state.get("routing_mode", "")
-    is_from_react = routing_mode == "react_first"
+    # (is_from_react already set at top of function)
     
     if is_from_react:
         # Coming from React Agent - use the actual user query
@@ -1642,119 +1704,123 @@ def reporter_node(state: State, config: RunnableConfig):
     all_template_messages = apply_prompt_template(reporter_template, input_, configurable, input_.get("locale", "en-US"))
     # Only take the system prompt (first message), not the rest
     invoke_messages = [all_template_messages[0]] if all_template_messages else []
-    observations = state.get("observations", [])
-    
-    # CRITICAL: PRIORITIZE step execution results over ReAct intermediate steps
-    # Step execution results contain the actual data from the planner flow
-    # ReAct intermediate steps are only used as fallback if no plan steps exist
-    step_observations = []
-    has_completed_steps = False
-    
-    if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps') and current_plan.steps:
-        # Get token limit for reporter's model to adjust compression
-        reporter_llm_type = AGENT_LLM_MAP.get("reporter", "basic")
-        token_limit = get_llm_token_limit_by_type(reporter_llm_type)
-        
-        # Calculate compression limits based on model's token limit
-        # Reserve 40% for prompt overhead (system messages, instructions, etc.)
-        # Use remaining 60% for observations
-        if token_limit:
-            chars_per_token = 4
-            reserved_tokens = int(token_limit * 0.4)  # Reserve 40% for prompt
-            available_tokens = token_limit - reserved_tokens
-            available_chars = available_tokens * chars_per_token
-            
-            # Distribute available chars across steps
-            num_steps = len([s for s in current_plan.steps if s.execution_res])
-            if num_steps > 0:
-                max_length_per_step = min(available_chars // max(num_steps, 1), 30000)
-                # Adjust max_items based on token limit
-                if token_limit >= 100000:
-                    max_items = 20
-                elif token_limit >= 32000:
-                    max_items = 15
-                else:
-                    max_items = 10
-            else:
-                max_length_per_step = 10000
-                max_items = 10
-        else:
-            # Fallback to conservative defaults
-            max_length_per_step = 10000
-            max_items = 10
-        
-        logger.debug(f"[reporter_node] Token limit: {token_limit}, max_length_per_step: {max_length_per_step}, max_items: {max_items}")
-        
-        for idx, step in enumerate(current_plan.steps):
-            if step.execution_res:
-                execution_res = step.execution_res
-                
-                # Compress execution result if it's too large
-                if len(str(execution_res)) > max_length_per_step:
-                    try:
-                        # Try to compress JSON arrays in the result
-                        parsed = json.loads(str(execution_res))
-                        from backend.utils.json_utils import _compress_large_array
-                        compressed = _compress_large_array(parsed, max_items=max_items)
-                        execution_res = json.dumps(compressed, ensure_ascii=False)
-                        logger.info(f"[reporter_node] Compressed step {idx + 1} ('{step.title}') from {len(str(step.execution_res))} to {len(execution_res)} chars")
-                    except (json.JSONDecodeError, TypeError):
-                        # Not JSON, just truncate
-                        execution_res = str(execution_res)[:max_length_per_step] + f"\n\n... (truncated, original length: {len(str(step.execution_res))} chars) ..."
-                        logger.warning(f"[reporter_node] Truncated step {idx + 1} ('{step.title}') from {len(str(step.execution_res))} to {len(execution_res)} chars")
-                
-                # Include step title for context
-                step_obs = f"## Step {idx + 1}: {step.title}\n\n{execution_res}"
-                step_observations.append(step_obs)
-                has_completed_steps = True
-                logger.info(f"Reporter: Collected observation from step {idx + 1}: {step.title} ({len(str(execution_res))} chars)")
-        
-        # Use step observations if we have completed steps (PRIORITY)
-        if step_observations and has_completed_steps:
-            logger.info(f"Reporter: Using step execution results ({len(step_observations)} steps) - PRIORITY over state observations")
-            observations = step_observations
-        elif step_observations:
-            # Merge step observations with state observations if no completed steps
-            if len(step_observations) > len(observations):
-                logger.info(f"Reporter: Using step observations ({len(step_observations)}) instead of state observations ({len(observations)})")
-                observations = step_observations
-            else:
-                # Merge both sources, avoiding duplicates
-                all_observations = list(observations)
-                for step_obs in step_observations:
-                    if step_obs not in all_observations:
-                        all_observations.append(step_obs)
-                observations = all_observations
-    
-    # FALLBACK: Extract observations from ReAct agent's intermediate steps ONLY if no step observations
-    # ReAct agent stores tool calls/results in react_intermediate_steps, not observations
-    if not observations or not has_completed_steps:
+    # CRITICAL FOR PM ROUTES: Extract RAW tool results from react_intermediate_steps
+    # This is the ONLY way to get uncompressed task data for detailed tables
+    # The compressed context (observations) will have truncated the task list
+    if is_from_react:
         react_intermediate_steps = state.get("react_intermediate_steps", [])
+        logger.info(f"[REPORTER-PM] PM Route detected - extracting RAW data from react_intermediate_steps ({len(react_intermediate_steps)} steps)")
+        
         if react_intermediate_steps:
-            logger.info(f"Reporter: No step observations found, extracting from ReAct intermediate steps ({len(react_intermediate_steps)} steps)")
             react_observations = []
             for step_idx, step in enumerate(react_intermediate_steps):
-                logger.debug(f"Reporter: Processing ReAct step {step_idx + 1}: type={type(step)}")
+                logger.debug(f"[REPORTER-PM] Processing step {step_idx + 1}: type={type(step)}")
                 if isinstance(step, (list, tuple)) and len(step) >= 2:
                     action = step[0]  # Tool call (AgentAction object)
-                    observation = step[1]  # Tool result
+                    observation = step[1]  # Tool result (RAW, uncompressed!)
                     
                     # Extract tool name and input from AgentAction
                     tool_name = getattr(action, 'tool', None) or (action.tool if hasattr(action, 'tool') else str(action))
                     tool_input = getattr(action, 'tool_input', None) or (action.tool_input if hasattr(action, 'tool_input') else {})
                     
-                    # Format as observation string
-                    obs_text = f"Tool: {tool_name}\nInput: {tool_input}\nResult: {observation}"
+                    # Keep the RAW observation - DO NOT truncate for PM data queries
+                    obs_text = f"## Tool: {tool_name}\n**Input:** {tool_input}\n\n**Result:**\n{observation}"
                     react_observations.append(obs_text)
-                    logger.info(f"Reporter: Extracted observation {step_idx + 1}: {tool_name} -> {len(str(observation))} chars")
+                    logger.info(f"[REPORTER-PM] Extracted RAW observation {step_idx + 1}: {tool_name} -> {len(str(observation))} chars (UNCOMPRESSED)")
                 else:
-                    logger.warning(f"Reporter: ReAct step {step_idx + 1} has unexpected structure: {type(step)}")
+                    logger.warning(f"[REPORTER-PM] Step {step_idx + 1} has unexpected structure: {type(step)}")
             
             if react_observations:
                 observations = react_observations
-                logger.info(f"Reporter: Extracted {len(observations)} observations from ReAct steps (FALLBACK)")
+                logger.info(f"[REPORTER-PM] ✅ Using {len(observations)} RAW observations from react_intermediate_steps (bypassing compression)")
             else:
-                logger.warning("Reporter: Failed to extract observations from ReAct intermediate steps")
+                logger.warning("[REPORTER-PM] ⚠️ No observations extracted from react_intermediate_steps, falling back to state observations")
+                observations = state.get("observations", [])
+        else:
+            logger.warning("[REPORTER-PM] ⚠️ No react_intermediate_steps found, falling back to state observations")
+            observations = state.get("observations", [])
+    else:
+        # Non-PM routes: Use the existing plan-based or fallback logic
+        if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps') and current_plan.steps:
+            # Get token limit for reporter's model to adjust compression
+            reporter_llm_type = AGENT_LLM_MAP.get("reporter", "basic")
+            token_limit = get_llm_token_limit_by_type(reporter_llm_type)
+            
+            # Calculate compression limits based on model's token limit
+            if token_limit:
+                chars_per_token = 4
+                reserved_tokens = int(token_limit * 0.4)
+                available_tokens = token_limit - reserved_tokens
+                available_chars = available_tokens * chars_per_token
+                
+                num_steps = len([s for s in current_plan.steps if s.execution_res])
+                if num_steps > 0:
+                    max_length_per_step = min(available_chars // max(num_steps, 1), 30000)
+                    if token_limit >= 100000:
+                        max_items = 20
+                    elif token_limit >= 32000:
+                        max_items = 15
+                    else:
+                        max_items = 10
+                else:
+                    max_length_per_step = 10000
+                    max_items = 10
+            else:
+                max_length_per_step = 10000
+                max_items = 10
+            
+            logger.debug(f"[reporter_node] Token limit: {token_limit}, max_length_per_step: {max_length_per_step}, max_items: {max_items}")
+            
+            step_observations = []
+            has_completed_steps = False
+            for idx, step in enumerate(current_plan.steps):
+                if step.execution_res:
+                    execution_res = step.execution_res
+                    
+                    if len(str(execution_res)) > max_length_per_step:
+                        try:
+                            parsed = json.loads(str(execution_res))
+                            from backend.utils.json_utils import _compress_large_array
+                            compressed = _compress_large_array(parsed, max_items=max_items)
+                            execution_res = json.dumps(compressed, ensure_ascii=False)
+                            logger.info(f"[reporter_node] Compressed step {idx + 1} ('{step.title}') from {len(str(step.execution_res))} to {len(execution_res)} chars")
+                        except (json.JSONDecodeError, TypeError):
+                            execution_res = str(execution_res)[:max_length_per_step] + f"\n\n... (truncated, original length: {len(str(step.execution_res))} chars) ..."
+                            logger.warning(f"[reporter_node] Truncated step {idx + 1} ('{step.title}') from {len(str(step.execution_res))} to {len(execution_res)} chars")
+                    
+                    step_obs = f"## Step {idx + 1}: {step.title}\n\n{execution_res}"
+                    step_observations.append(step_obs)
+                    has_completed_steps = True
+                    logger.info(f"Reporter: Collected observation from step {idx + 1}: {step.title} ({len(str(execution_res))} chars)")
+            
+            if step_observations and has_completed_steps:
+                logger.info(f"Reporter: Using step execution results ({len(step_observations)} steps)")
+                observations = step_observations
+            elif step_observations:
+                if len(step_observations) > len(observations):
+                    observations = step_observations
+                else:
+                    all_observations = list(observations)
+                    for step_obs in step_observations:
+                        if step_obs not in all_observations:
+                            all_observations.append(step_obs)
+                    observations = all_observations
+        else:
+            # Fallback for non-plan flows
+            react_intermediate_steps = state.get("react_intermediate_steps", [])
+            if react_intermediate_steps:
+                logger.info(f"Reporter: No plan steps, extracting from ReAct intermediate steps ({len(react_intermediate_steps)} steps)")
+                react_observations = []
+                for step_idx, step in enumerate(react_intermediate_steps):
+                    if isinstance(step, (list, tuple)) and len(step) >= 2:
+                        action = step[0]
+                        observation = step[1]
+                        tool_name = getattr(action, 'tool', None) or str(action)
+                        tool_input = getattr(action, 'tool_input', None) or {}
+                        obs_text = f"Tool: {tool_name}\nInput: {tool_input}\nResult: {observation}"
+                        react_observations.append(obs_text)
+                if react_observations:
+                    observations = react_observations
 
     # Add format instructions for report structure and table usage
     format_instructions = "IMPORTANT: Structure your report according to the format in the prompt. Remember to include:\n\n1. Key Points - A bulleted list of the most important findings\n2. Overview - A brief introduction to the topic\n3. Detailed Analysis - Organized into logical sections\n4. Survey Note (optional) - For more comprehensive reports\n5. Key Citations - List all references at the end\n\nFor citations, DO NOT include inline citations in the text. Instead, place all citations in the 'Key Citations' section at the end using the format: `- [Source Title](URL)`. Include an empty line between each citation for better readability.\n\nPRIORITIZE USING MARKDOWN TABLES for data presentation and comparison. Use tables whenever presenting comparative data, statistics, features, or options. Structure tables with clear headers and aligned columns. Example table format:\n\n| Feature | Description | Pros | Cons |\n|---------|-------------|------|------|\n| Feature 1 | Description 1 | Pros 1 | Cons 1 |\n| Feature 2 | Description 2 | Pros 2 | Cons 2 |"
@@ -1777,9 +1843,15 @@ def reporter_node(state: State, config: RunnableConfig):
 
     # Log observations for debugging (especially for PM data queries)
     logger.info(f"Reporter: Received {len(observations)} observations (from state and/or completed steps)")
+    logger.info(f"Reporter: PM Route Detection: is_from_react={is_from_react}, routing_mode='{routing_mode}'")
+    
     for idx, obs in enumerate(observations):
-        obs_preview = str(obs)[:200] if len(str(obs)) > 200 else str(obs)
-        logger.debug(f"Observation {idx + 1}: {obs_preview}")
+        # Increase preview size for debugging
+        obs_str = str(obs)
+        obs_preview = obs_str[:2000] if len(obs_str) > 2000 else obs_str
+        logger.info(f"Observation {idx + 1} (Total {len(obs_str)} chars):\n{obs_preview}")
+        if len(obs_str) > 2000:
+             logger.info(f"... (remaining {len(obs_str) - 2000} chars) ...")
 
     # 🔴 VALIDATION: Check if observations contain real data (not just errors)
     has_real_data = False
@@ -1886,47 +1958,15 @@ def reporter_node(state: State, config: RunnableConfig):
         f"(invoke: {len(invoke_messages)} msgs, observations: {len(observation_messages)} msgs)"
     )
     
-    # LAZY OPTIMIZATION: Only compress when actually over 90% of limit
-    # For simple queries under 90%, skip compression to preserve data
-    # If over 90%, always compress regardless of query type
+    # 🚫 PM QUERIES: NEVER COMPRESS - we need full data for task tables
+    # Compression was truncating task data making tables useless
+    logger.info(
+        f"[{get_ts()}] [COMPRESSION-DISABLED] PM queries keep full data. "
+        f"Token count: {original_token_count:,}, Limit: {llm_token_limit:,}"
+    )
+    compressed_messages = all_messages_to_compress
+    compressed_token_count = original_token_count
     optimization_messages = []
-    threshold_tokens = int(llm_token_limit * 0.90)  # 90% threshold for compression
-    
-    if original_token_count > threshold_tokens:
-        # Over 90% threshold - APPLY compression regardless of query type
-        logger.info(
-            f"[{get_ts()}] [APPLY-COMPRESSION] Over 90% threshold - applying context optimization. "
-            f"Token count: {original_token_count:,}, Threshold: {threshold_tokens:,}, Limit: {llm_token_limit:,}"
-        )
-        compressed_state = context_manager.compress_messages(
-            {"messages": all_messages_to_compress}
-        )
-        if isinstance(compressed_state, dict):
-            compressed_messages = compressed_state.get("messages", [])
-            optimization_metadata = compressed_state.get("_context_optimization")
-            
-            # Create context optimization tool call messages ONLY if compression occurred
-            if optimization_metadata and optimization_metadata.get("compression_ratio", 1.0) < 1.0:
-                optimization_messages = _add_context_optimization_tool_call(state, "reporter", optimization_metadata)
-        else:
-            compressed_messages = all_messages_to_compress
-        
-        # Log compression results for debugging
-        compressed_token_count = context_manager.count_tokens(compressed_messages, model=model_name)
-        if compressed_token_count < original_token_count:
-            reduction_pct = ((original_token_count - compressed_token_count) / original_token_count) * 100
-            logger.info(
-                f"[{get_ts()}] Reporter: All messages compressed from {original_token_count:,} to {compressed_token_count:,} tokens "
-                f"({reduction_pct:.1f}% reduction)"
-            )
-    else:
-        # Under 90% threshold - no compression needed, preserve data
-        logger.info(
-            f"[{get_ts()}] [SKIP-COMPRESSION] Under 90% threshold - no compression needed. "
-            f"Token count: {original_token_count:,}, Threshold: {threshold_tokens:,}, Limit: {llm_token_limit:,}"
-        )
-        compressed_messages = all_messages_to_compress
-        compressed_token_count = original_token_count
     
     # Use compressed messages (includes system prompt + task + observations)
     invoke_messages = compressed_messages
@@ -4064,19 +4104,147 @@ async def react_agent_node(
     
     This is the optimistic fast path for 80% of queries.
     """
-    logger.info("[REACT-AGENT] 🚀 Starting fast ReAct agent")
+    import datetime
+    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    logger.info(f"[{ts}] [REACT-AGENT-ENTRY] 🚀 React Agent node entered")
+    logger.info(f"[{ts}] [REACT-AGENT-ENTRY] State keys: {list(state.keys())}, messages count: {len(state.get('messages', []))}")
     
     configurable = Configuration.from_runnable_config(config)
     
     # Load PM tools + web_search for background investigation
     try:
-        from backend.tools.pm_tools import get_pm_tools
+        from backend.tools.pm_tools import get_pm_tools, get_current_project_id
         from backend.tools.search import get_web_search_tool
         from backend.utils.json_utils import sanitize_tool_response
         from langchain_core.tools import BaseTool
+        from langchain_core.messages import AIMessage, ToolMessage, HumanMessage, SystemMessage
         
         # Get PM tools (synchronous function, no config needed)
         pm_tools = get_pm_tools()
+        
+        # ==============================================
+        # CUSTOM PM AGENT: Direct LLM with tool_choice
+        # ==============================================
+        # LangGraph's create_react_agent doesn't properly pass tool_choice to the model.
+        # For PM queries, we implement a custom agent loop that forces tool calling.
+        
+        # Get project context
+        project_id = state.get("project_id") or get_current_project_id() or ""
+        
+        # Get user query
+        messages = state.get("messages", [])
+        user_query = ""
+        for msg in reversed(messages):
+            if hasattr(msg, 'type') and msg.type == 'human':
+                user_query = getattr(msg, 'content', '')
+                break
+            elif isinstance(msg, dict) and msg.get('role') == 'user':
+                user_query = msg.get('content', '')
+                break
+        
+        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📝 User query: {user_query[:100]}...")
+        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📝 Project ID: {project_id}")
+        
+        # Create LLM with tool_choice='required' to FORCE tool calling
+        from backend.llms.llm import get_llm_by_type
+        llm = get_llm_by_type("basic")
+        
+        # Bind tools with tool_choice='required' - this forces the model to call a tool
+        llm_with_tools = llm.bind_tools(pm_tools, tool_choice="required")
+        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 🔧 Bound {len(pm_tools)} tools with tool_choice='required'")
+        
+        # Create the prompt
+        from backend.prompts.template import get_prompt_template
+        system_prompt = get_prompt_template("pm_react_agent")
+        system_prompt += f"\n\n## CURRENT PROJECT CONTEXT\n\n**project_id:** `{project_id}`\n\nUse this project_id in ALL tool calls."
+        system_prompt += f"\n\n## USER REQUEST\n\n**{user_query}**\n\n→ CALL THE APPROPRIATE TOOL NOW."
+        
+        # Build messages for LLM
+        llm_messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_query)
+        ]
+        
+        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📤 Invoking LLM with tool_choice='required'...")
+        
+        try:
+            # Invoke LLM - it MUST call a tool due to tool_choice='required'
+            response = await llm_with_tools.ainvoke(llm_messages)
+            
+            logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📥 LLM response received")
+            logger.info(f"[{ts}] [CUSTOM-PM-AGENT] Tool calls: {len(response.tool_calls) if hasattr(response, 'tool_calls') else 'None'}")
+            
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                # LLM called a tool! Execute it.
+                tool_call = response.tool_calls[0]  # Take first tool call
+                tool_name = tool_call['name']
+                tool_args = tool_call['args']
+                tool_call_id = tool_call['id']
+                
+                logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 🔧 Tool call: {tool_name} with args: {tool_args}")
+                
+                # Find and execute the tool
+                tool_result = None
+                for tool in pm_tools:
+                    if tool.name == tool_name:
+                        # Inject project_id if not provided
+                        if 'project_id' not in tool_args or not tool_args.get('project_id'):
+                            tool_args['project_id'] = project_id
+                        
+                        tool_result = await tool.ainvoke(tool_args)
+                        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] ✅ Tool executed! Result length: {len(str(tool_result))} chars")
+                        break
+                
+                if tool_result is not None:
+                    # Create messages for state
+                    tool_call_msg = AIMessage(
+                        content="",
+                        name="react_agent",
+                        tool_calls=[{
+                            "id": tool_call_id,
+                            "name": tool_name,
+                            "args": tool_args
+                        }]
+                    )
+                    
+                    tool_result_msg = ToolMessage(
+                        content=str(tool_result),
+                        tool_call_id=tool_call_id,
+                        name=tool_name
+                    )
+                    
+                    thoughts = [{
+                        "thought": f"Called {tool_name} with args: {tool_args}",
+                        "before_tool": True,
+                        "step_index": 0
+                    }]
+                    
+                    logger.info(f"[{ts}] [CUSTOM-PM-AGENT] 📤 Returning result to reporter (bypassed LangGraph agent)")
+                    
+                    return Command(
+                        update={
+                            "messages": [tool_call_msg, tool_result_msg],
+                            "final_report": str(tool_result),
+                            "react_intermediate_steps": [({"tool": tool_name, "tool_input": tool_args}, tool_result)],
+                            "react_thoughts": thoughts,
+                            "routing_mode": "react_first",
+                            "goto": "reporter",
+                        },
+                        goto="reporter"
+                    )
+                else:
+                    logger.warning(f"[{ts}] [CUSTOM-PM-AGENT] ⚠️ Tool '{tool_name}' not found in pm_tools")
+            else:
+                logger.warning(f"[{ts}] [CUSTOM-PM-AGENT] ⚠️ LLM did not call any tools despite tool_choice='required'")
+                logger.warning(f"[{ts}] [CUSTOM-PM-AGENT] Response content: {response.content[:200] if response.content else 'None'}...")
+        
+        except Exception as e:
+            logger.error(f"[{ts}] [CUSTOM-PM-AGENT] ❌ Error in custom agent: {e}")
+            import traceback
+            logger.error(f"[{ts}] [CUSTOM-PM-AGENT] Traceback: {traceback.format_exc()}")
+        
+        # Fall through to LangGraph agent if custom agent failed
+        logger.info(f"[{ts}] [CUSTOM-PM-AGENT] ⏭️ Falling through to LangGraph agent...")
         
         # Add web search tool for background investigation when needed
         search_tool = get_web_search_tool(
@@ -4339,12 +4507,29 @@ async def react_agent_node(
         )
     except Exception as e:
         logger.warning(f"[REACT-AGENT] 🔍 DEBUG: Failed to count tokens before compression: {e}")
+        pre_compression_tokens = 0
+        is_over = False
     
-    compressed_state = context_manager.compress_messages(state)
+    # 🚨 PM QUERIES: NEVER COMPRESS - we need full data for task tables
+    # The reporter will access raw tool results from react_intermediate_steps
+    # Compression would truncate the task list making it useless
+    logger.info(
+        f"[REACT-AGENT] 🚫 COMPRESSION DISABLED FOR PM QUERIES: "
+        f"Keeping full data ({pre_compression_tokens:,} tokens). "
+        f"Reporter will use raw data from react_intermediate_steps."
+    )
     
-    # Extract compressed messages (CRITICAL FIX: Actually use the compressed state!)
-    compressed_messages = compressed_state.get("messages", [])
-    optimization_metadata = compressed_state.get("_context_optimization")
+    # NEVER compress - use original messages
+    compressed_messages = all_messages
+    optimization_metadata = {
+        "compressed": False,
+        "original_tokens": pre_compression_tokens,
+        "compressed_tokens": pre_compression_tokens,
+        "compression_ratio": 1.0,
+        "strategy": "pm_no_compression",
+        "original_message_count": len(all_messages),
+        "compressed_message_count": len(all_messages),
+    }
     
     logger.info(
         f"[REACT-AGENT] 🔍 DEBUG: Context compression complete. "
@@ -4859,43 +5044,46 @@ Question: {input}
     # The LLM should use tool calls directly, not "Action: tool_name" text format.
     # We need a simpler system prompt that doesn't confuse the LLM.
     def react_prompt_func(state: dict):
-        """Prompt function for LangGraph - returns simple system prompt for tool calling."""
-        # LangGraph handles tool calling automatically, so we just need a simple system prompt
-        # NOTE: Coordinator already handles greetings - if a message reaches ReAct, it's a PM query
-        system_prompt = f"""You are a PM assistant. Your job is to EXECUTE PM queries by calling tools, not to have conversations.
-
-**CRITICAL RULES:**
-1. DO NOT respond with greetings, questions, or conversational text
-2. DO NOT ask "What would you like to do?" - the user's request is clear
-3. IMMEDIATELY call the appropriate tools to answer the user's question
-4. If the user says "this project", call `get_current_project` first to get the project_id
-5. Then use that project_id in other tool calls (e.g., `get_project(project_id="...")`)
-
-**Tool Usage:**
-- Tool names do NOT have parentheses: use `get_current_project` NOT `get_current_project()`
-- Always use actual IDs from tool results, not placeholder strings
-
-Available PM tools:
-{chr(10).join([f"- {tool.name}: {tool.description}" for tool in tools])}
-
-**Example for "what is the description of this project?":**
-Step 1: Call `get_current_project` (no parameters needed)
-  → Response will be JSON like: {{"success": true, "project_id": "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478", ...}}
-  → Extract the "project_id" value: "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478"
-
-Step 2: IMMEDIATELY call `get_project(project_id="d7e300c6-d6c0-4c08-bc8d-e41967458d86:478")`
-  → This will return the project description
-
-**CRITICAL RULES:**
-- After calling `get_current_project` ONCE, you MUST call `get_project` with the extracted project_id
-- DO NOT call `get_current_project` again - you already have the project_id from the first call
-- The JSON response from `get_current_project` has a "project_id" field - use that exact value in `get_project`
-- If you see a JSON response with "project_id", extract it and immediately call `get_project` with that value
-
-DO NOT respond with text before calling tools. CALL TOOLS IMMEDIATELY."""
+        """Prompt function for LangGraph - loads system prompt from pm_react_agent.md."""
+        from backend.prompts.template import get_prompt_template
+        from langchain_core.messages import SystemMessage, HumanMessage
+        import datetime
         
-        # Return as SystemMessage (LangGraph expects list of messages to prepend)
-        from langchain_core.messages import SystemMessage
+        ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        logger.info(f"[{ts}] [REACT-PROMPT] Building prompt for react_agent")
+        
+        # Load prompt from markdown file (not hardcoded!)
+        system_prompt = get_prompt_template("pm_react_agent")
+        
+        # Add project context
+        project_id = state.get("project_id", "")
+        if not project_id:
+            # Try to get from pm_tools
+            from backend.tools.pm_tools import get_current_project_id
+            project_id = get_current_project_id() or ""
+        
+        if project_id:
+            system_prompt += f"\n\n---\n\n## CURRENT PROJECT CONTEXT\n\n**project_id:** `{project_id}`\n\nUse this project_id in ALL tool calls."
+            logger.info(f"[{ts}] [REACT-PROMPT] Added project_id context: {project_id}")
+        else:
+            logger.warning(f"[{ts}] [REACT-PROMPT] NO project_id found in state!")
+        
+        # Get user message from state to include in context
+        messages = state.get("messages", [])
+        user_message = ""
+        for msg in reversed(messages):
+            if hasattr(msg, 'type') and msg.type == 'human':
+                user_message = getattr(msg, 'content', '')
+                break
+            elif isinstance(msg, dict) and msg.get('role') == 'user':
+                user_message = msg.get('content', '')
+                break
+        
+        if user_message:
+            system_prompt += f"\n\n---\n\n## USER REQUEST\n\n**{user_message}**\n\n→ CALL THE APPROPRIATE TOOL NOW. DO NOT ASK QUESTIONS."
+            logger.info(f"[{ts}] [REACT-PROMPT] Added user request: {user_message[:50]}...")
+        
+        logger.info(f"[{ts}] [REACT-PROMPT] Final prompt length: {len(system_prompt)} chars")
         return [SystemMessage(content=system_prompt)]
     
     # CRITICAL: Use LangGraph's native pre_model_hook with Cursor-style context tracking
@@ -4945,47 +5133,17 @@ DO NOT respond with text before calling tools. CALL TOOLS IMMEDIATELY."""
             # Record usage in tracker
             needs_optimize, reason = tracker.record_usage("react_agent", token_count, messages)
             
-            # Check if we should optimize
-            should_optimize, optimize_reason = tracker.should_optimize()
+            # 🚫 PM QUERIES: NEVER COMPRESS - we need full data for task tables
+            # Compression was truncating task data making it useless
+            logger.info(
+                f"[REACT-AGENT] 🚫 COMPRESSION DISABLED: Token count={token_count:,}. "
+                f"Keeping full data for PM queries."
+            )
             
-            if should_optimize:
-                logger.info(
-                    f"[REACT-AGENT] 🔄 Cursor-style auto-optimization triggered: {optimize_reason}"
-                )
-                # Perform optimization
-                opt_metadata = tracker.optimize(context_manager)
-                logger.info(
-                    f"[REACT-AGENT] ✅ Optimization complete - "
-                    f"Freed {opt_metadata.get('freed_tokens', 0):,} tokens, "
-                    f"Usage: {opt_metadata.get('usage_percentage', 0):.0%}"
-                )
-                
-                # Compress messages after optimization
-                compressed_state = context_manager.compress_messages({"messages": messages})
-                if isinstance(compressed_state, dict):
-                    compressed_messages = compressed_state.get("messages", [])
-                    if compressed_messages:
-                        logger.debug(
-                            f"[REACT-AGENT] 🔍 pre_model_hook: Compressed {len(messages)} → {len(compressed_messages)} messages "
-                            f"({token_count:,} → {context_manager.count_tokens(compressed_messages, model=actual_model_name):,} tokens)"
-                        )
-                        state["messages"] = compressed_messages
-            else:
-                # Normal compression (if over limit)
-                if context_manager.is_over_limit(messages):
-                    compressed_state = context_manager.compress_messages({"messages": messages})
-                    if isinstance(compressed_state, dict):
-                        compressed_messages = compressed_state.get("messages", [])
-                        if compressed_messages:
-                            logger.debug(
-                                f"[REACT-AGENT] 🔍 pre_model_hook: Compressed {len(messages)} → {len(compressed_messages)} messages"
-                            )
-                            state["messages"] = compressed_messages
-                
-                # Log usage status
-                usage_pct = tracker.get_total_usage_percentage()
-                if usage_pct > 0.5:  # Log if usage > 50%
-                    logger.debug(
+            # Just log usage - no compression            
+            usage_pct = tracker.get_total_usage_percentage()
+            if usage_pct > 0.5:
+                logger.debug(
                         f"[REACT-AGENT] 📊 Context usage: {usage_pct:.0%} "
                         f"({tracker.total_used:,}/{tracker.total_limit:,} tokens)"
                     )
@@ -4995,6 +5153,9 @@ DO NOT respond with text before calling tools. CALL TOOLS IMMEDIATELY."""
             # Continue with original messages if tracking fails
         
         return state
+    
+    # Note: Tried model_kwargs['tool_choice']='required' but LangGraph's create_react_agent
+    # binds tools internally and doesn't pass model_kwargs. Need to investigate proper method.
     
     agent_graph = create_react_agent(
         model=llm,
@@ -5067,7 +5228,8 @@ DO NOT respond with text before calling tools. CALL TOOLS IMMEDIATELY."""
             # Invoke LangGraph agent (returns state dict, not executor result)
             # Use recursion_limit to prevent infinite loops (NOT timeout - that's a bad workaround)
             # recursion_limit controls max iterations, which is the proper way to limit ReAct loops
-            recursion_limit = 8  # Same as our escalation threshold - allows complex queries but prevents loops
+            # For PM queries with 1 tool call: 3 iterations (think → call → done)
+            recursion_limit = 3  # Reduced from 8 - PM queries need only 1 tool call
             logger.info(f"[REACT-AGENT] 🔍 Starting LangGraph agent.ainvoke() with recursion_limit={recursion_limit}")
             
             # Use astream to capture state incrementally so we can log what happened even if recursion limit is hit
@@ -6051,10 +6213,10 @@ DO NOT respond with text before calling tools. CALL TOOLS IMMEDIATELY."""
                     
                     logger.debug(f"[REACT-AGENT] 🔧 Created tool call message pair: {tool_name} (id={tool_call_id})")
         
-        # Include optimization messages if they exist
+        # DO NOT include optimization messages in return - they clutter the PM UI
+        # Context optimization still happens internally, just not shown to user
         return_messages = []
-        if optimization_messages:
-            return_messages.extend(optimization_messages)
+        # REMOVED: optimization_messages - user doesn't want to see "Optimize Context" step
         
         # Add tool call messages (AIMessage + ToolMessage pairs)
         return_messages.extend(tool_call_messages)

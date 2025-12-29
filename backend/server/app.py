@@ -81,6 +81,9 @@ _previous_content_length: dict[str, int] = {}  # message_id -> previous accumula
 # PROGRESSIVE THOUGHTS: Step counter for generating incremental thoughts during streaming
 # Tracks step_index per thread_id so each thought gets a unique sequential index
 _progressive_step_counter: dict[str, int] = {}  # thread_id -> current step_index
+# Deduplication: track which tool names have been streamed per thread to avoid duplicates
+# This prevents _decide() and _act() from both streaming the same tool call thought
+_streamed_tool_calls: dict[str, set[str]] = {}  # thread_id -> set of tool_names already streamed
 
 # Import new streaming state module
 from backend.utils import streaming_state
@@ -837,14 +840,34 @@ async def _process_message_chunk(
             # This ensures thoughts appear incrementally as each step happens (not batched at end)
             # Skip if called from "updates" stream (thoughts already streamed from "messages" stream)
             message_id = event_stream_message.get("id")
+            has_new_tool_calls = False  # Track if any tool call is new (not duplicate)
+            
             if message_id and agent_name in ["pm_agent", "react_agent"] and not skip_progressive_thoughts:
                 # Get current step index for this thread
                 step_index = _progressive_step_counter.get(safe_thread_id, 0)
+                
+                # Initialize deduplication set for this thread if needed
+                if safe_thread_id not in _streamed_tool_calls:
+                    _streamed_tool_calls[safe_thread_id] = set()
                 
                 # Generate a thought for EACH tool call (most PM queries have just 1)
                 for tc in message_chunk.tool_calls:
                     tc_name = tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown')
                     tc_args = tc.get('args', {}) if isinstance(tc, dict) else getattr(tc, 'args', {})
+                    
+                    # Skip tool calls with empty name - they shouldn't create UI elements
+                    if not tc_name or tc_name == 'unknown':
+                        continue
+                    
+                    # DEDUPLICATION: Skip if we've already streamed this tool name for this thread
+                    # This prevents _decide() and _act() from both streaming the same tool call
+                    if tc_name in _streamed_tool_calls[safe_thread_id]:
+                        logger.info(f"[{safe_thread_id}] 🔧 [PROGRESSIVE] SKIPPING duplicate tool_call thought: {tc_name}")
+                        continue
+                    
+                    # Mark this tool as streamed and flag that we have new tools
+                    _streamed_tool_calls[safe_thread_id].add(tc_name)
+                    has_new_tool_calls = True
                     
                     # Format args nicely (truncate if too long)
                     args_str = json.dumps(tc_args, ensure_ascii=False)[:100]
@@ -876,8 +899,15 @@ async def _process_message_chunk(
                     
                     # Small delay to ensure thought is processed before tool_calls event
                     await asyncio.sleep(0.01)
+            else:
+                # Not doing progressive thoughts, so all tool calls are "new" for event purposes
+                has_new_tool_calls = True
             
-            yield _make_event("tool_calls", event_stream_message)
+            # Only yield tool_calls event if there are new (non-duplicate) tool calls
+            if has_new_tool_calls:
+                yield _make_event("tool_calls", event_stream_message)
+            else:
+                logger.info(f"[{safe_thread_id}] 🔧 [PROGRESSIVE] SKIPPING duplicate tool_calls event")
         elif message_chunk.tool_call_chunks:
             # Streaming tool call chunks
             processed_chunks = _process_tool_call_chunks(message_chunk.tool_call_chunks)
@@ -1788,25 +1818,13 @@ async def _stream_graph_events_core(
                                         ):
                                             yield event
                                 
-                                # Process AIMessage with tool_calls (stream tool_calls event WITHOUT thoughts)
-                                # NOTE: Thoughts are already streamed from "messages" stream
+                                # SKIP: Process AIMessage with tool_calls
+                                # NOTE: tool_calls already streamed from "messages" stream, don't duplicate
                                 if tool_call_ai_message:
                                     logger.info(
-                                        f"[{safe_thread_id}] 🔧 Streaming AIMessage with tool_calls: "
-                                        f"{len(tool_call_ai_message.tool_calls)} calls"
+                                        f"[{safe_thread_id}] 🔧 SKIPPING AIMessage with tool_calls from updates stream: "
+                                        f"{len(tool_call_ai_message.tool_calls)} calls (already streamed from messages)"
                                     )
-                                    msg_metadata = {
-                                        "langgraph_node": node_name,
-                                        "finish_reason": "tool_calls"
-                                    }
-                                    async for event in _process_message_chunk(
-                                        tool_call_ai_message,
-                                        msg_metadata,
-                                        thread_id,
-                                        (node_name,),
-                                        skip_progressive_thoughts=True,  # Already streamed from "messages" stream
-                                    ):
-                                        yield event
                                 
                                 # Process the final AIMessage (with content)
                                 if final_ai_message:

@@ -42,7 +42,6 @@ def _convert_delta_to_message_chunk(
 
     # DEBUG: Log delta_dict keys to see what's available (always log for debugging)
     delta_keys = list(delta_dict.keys()) if delta_dict else []
-    logger.info(f"[DEBUG-DELTA] Delta keys: {delta_keys}, has_reasoning_content={'reasoning_content' in delta_dict}, delta_dict={str(delta_dict)[:200]}")
 
     # Extract tool calls if present
     tool_call_chunks = []
@@ -64,9 +63,7 @@ def _convert_delta_to_message_chunk(
         reasoning_content = delta_dict.get("reasoning_content")
         if reasoning_content:
             additional_kwargs["reasoning_content"] = reasoning_content
-            logger.info(f"[DEBUG-DELTA] ✅ Found reasoning_content in delta: length={len(reasoning_content) if isinstance(reasoning_content, str) else 'N/A'}")
     else:
-        logger.info(f"[DEBUG-DELTA] ⚠️ reasoning_content NOT in delta_dict keys")
 
     # Return appropriate message chunk based on role
     if role == "user" or default_class == HumanMessageChunk:
@@ -110,13 +107,11 @@ def _convert_chunk_to_generation_chunk(
     # DEBUG: Log chunk structure to see what we're receiving
     chunk_type = chunk.get("type")
     chunk_keys = list(chunk.keys())
-    logger.info(f"[DEBUG-CHUNK] Chunk type: {chunk_type}, keys: {chunk_keys}, chunk_preview: {str(chunk)[:300]}")
     
     # DEBUG: Check for reasoning_text events (OpenAI's format for reasoning)
     # OpenAI uses response.reasoning_text.done events for reasoning content
     if chunk_type == "response.reasoning_text.done":
         reasoning_text = chunk.get("text", "")
-        logger.info(f"[DEBUG-CHUNK] ✅ Found reasoning_text.done event: length={len(reasoning_text) if reasoning_text else 0}")
         # Create a special chunk with reasoning content
         if reasoning_text:
             additional_kwargs = {"reasoning_content": reasoning_text}
@@ -279,7 +274,6 @@ class ChatOpenAIReasoning(ChatOpenAI):
                     logger = logging.getLogger(__name__)
                     chunk_type_raw = chunk.get("type")
                     if chunk_type_raw or "reasoning" in str(chunk).lower():
-                        logger.info(f"[DEBUG-RAW-CHUNK] Raw chunk type: {chunk_type_raw}, keys: {list(chunk.keys())}, preview: {str(chunk)[:400]}")
 
                     generation_chunk = _convert_chunk_to_generation_chunk(
                         chunk,

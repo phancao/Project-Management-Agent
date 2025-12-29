@@ -91,28 +91,23 @@ class ToolInterceptor:
         """
         original_func = tool.func
         safe_tool_name = sanitize_tool_name(tool.name)
-        logger.debug(f"Wrapping tool '{safe_tool_name}' with interrupt capability")
 
         def intercepted_func(*args: Any, **kwargs: Any) -> Any:
             """Execute the tool with interrupt check."""
             tool_name = tool.name
             safe_tool_name_local = sanitize_tool_name(tool_name)
-            logger.debug(f"[ToolInterceptor] Executing tool: {safe_tool_name_local}")
             
             # Format tool input for display
             tool_input = args[0] if args else kwargs
             tool_input_repr = ToolInterceptor._format_tool_input(tool_input)
             safe_tool_input = sanitize_log_input(tool_input_repr, max_length=100)
-            logger.debug(f"[ToolInterceptor] Tool input: {safe_tool_input}")
 
             should_interrupt = interceptor.should_interrupt(tool_name)
-            logger.debug(f"[ToolInterceptor] should_interrupt={should_interrupt} for tool '{safe_tool_name_local}'")
             
             if should_interrupt:
                 logger.info(
                     f"[ToolInterceptor] Interrupting before tool '{safe_tool_name_local}'"
                 )
-                logger.debug(
                     f"[ToolInterceptor] Interrupt message: About to execute tool '{safe_tool_name_local}' with input: {safe_tool_input}..."
                 )
                 
@@ -122,12 +117,10 @@ class ToolInterceptor:
                         f"About to execute tool: '{tool_name}'\n\nInput:\n{tool_input_repr}\n\nApprove execution?"
                     )
                     safe_feedback = sanitize_feedback(feedback)
-                    logger.debug(f"[ToolInterceptor] Interrupt returned with feedback: {f'{safe_feedback[:100]}...' if safe_feedback and len(safe_feedback) > 100 else safe_feedback if safe_feedback else 'None'}")
                 except Exception as e:
                     logger.error(f"[ToolInterceptor] Error during interrupt: {str(e)}")
                     raise
 
-                logger.debug(f"[ToolInterceptor] Processing feedback approval for '{safe_tool_name_local}'")
                 
                 # Check if user approved
                 is_approved = ToolInterceptor._parse_approval(feedback)
@@ -145,11 +138,9 @@ class ToolInterceptor:
 
             # Execute the original tool
             try:
-                logger.debug(f"[ToolInterceptor] Calling original function for tool '{safe_tool_name_local}'")
                 result = original_func(*args, **kwargs)
                 logger.info(f"[ToolInterceptor] Tool '{safe_tool_name_local}' execution completed successfully")
                 result_len = len(str(result))
-                logger.debug(f"[ToolInterceptor] Tool result length: {result_len}")
                 return result
             except Exception as e:
                 logger.error(f"[ToolInterceptor] Error executing tool '{safe_tool_name_local}': {str(e)}")
@@ -157,7 +148,6 @@ class ToolInterceptor:
 
         # Replace the function and update the tool
         # Use object.__setattr__ to bypass Pydantic validation
-        logger.debug(f"Attaching intercepted function to tool '{safe_tool_name}'")
         object.__setattr__(tool, "func", intercepted_func)
         return tool
 
@@ -215,7 +205,6 @@ def wrap_tools_with_interceptor(
         List[BaseTool]: List of wrapped tools
     """
     if not interrupt_before_tools:
-        logger.debug("No tool interrupts configured, returning tools as-is")
         return tools
 
     logger.info(
@@ -228,7 +217,6 @@ def wrap_tools_with_interceptor(
         try:
             wrapped_tool = ToolInterceptor.wrap_tool(tool, interceptor)
             wrapped_tools.append(wrapped_tool)
-            logger.debug(f"Wrapped tool: {tool.name}")
         except Exception as e:
             logger.error(f"Failed to wrap tool {tool.name}: {str(e)}")
             # Add original tool if wrapping fails

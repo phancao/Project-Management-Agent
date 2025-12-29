@@ -254,7 +254,6 @@ class MilvusRetriever(Retriever):
                         )
 
                     loaded_count += 1
-                    logger.debug("Loaded example markdown: %s", md_file.name)
 
                 except Exception as e:
                     logger.warning("Error loading %s: %s", md_file.name, e)

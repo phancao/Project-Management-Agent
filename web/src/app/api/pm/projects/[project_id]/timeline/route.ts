@@ -14,7 +14,6 @@ export async function GET(
   const { project_id: projectId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/timeline`;
-  console.log('[API Proxy] Fetching timeline from:', url);
   
   try {
     const controller = new AbortController();

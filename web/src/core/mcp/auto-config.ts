@@ -41,7 +41,6 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
   );
 
   if (existingPMServer) {
-    console.log("[PM MCP] Server already configured:", existingPMServer.name);
     return existingPMServer;
   }
 
@@ -52,7 +51,6 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
 
     if (isAvailable) {
       // Server is running in Docker with SSE transport
-      console.log("[PM MCP] Server available via SSE at", PM_MCP_SERVER_URL);
 
       try {
         // Query metadata via SSE transport
@@ -89,8 +87,6 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
         // Save to localStorage
         saveSettings();
 
-        console.log("[PM MCP] Auto-configured via SSE:", pmServer.name);
-        console.log(`[PM MCP] Tools available: ${pmServer.tools.length}`);
 
         return pmServer;
       } catch (sseError) {
@@ -138,15 +134,12 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
       // Save to localStorage
       saveSettings();
 
-      console.log("[PM MCP] Auto-configured via stdio:", pmServer.name);
-      console.log(`[PM MCP] Tools available: ${pmServer.tools.length}`);
 
       return pmServer;
     } catch (stdioError) {
       console.warn("[PM MCP] stdio configuration also failed:", stdioError);
       // PM MCP server is auto-injected by the backend for PM chat
       // If both SSE and stdio fail, backend will handle it
-      console.log("[PM MCP] Skipping frontend auto-configuration - backend will auto-inject for PM chat");
       return null;
     }
   } catch (error) {

@@ -151,7 +151,6 @@ function MessageListItem({
     // CRITICAL: Filter out undefined/null researchIds to prevent bugs
     const validResearchIds = researchIds.filter(id => id != null && id !== undefined);
     const isStart = validResearchIds.includes(messageId);
-    // DEBUG: Log when startOfResearch changes
 
     return isStart;
   }, [researchIds, messageId]);

@@ -15,7 +15,6 @@ export async function GET(
   // URL decode the project_id in case it's encoded
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/tasks`;
-  console.log('[API Proxy] Fetching tasks from:', url);
   
   try {
     const controller = new AbortController();
@@ -41,7 +40,6 @@ export async function GET(
     }
 
     const data = await response.json();
-    console.log('[API Proxy] Successfully fetched tasks:', data.length);
     return NextResponse.json(data);
   } catch (error) {
     console.error('[API Proxy] Error fetching tasks:', error);
@@ -69,7 +67,6 @@ export async function POST(
   const { project_id: projectId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/tasks`;
-  console.log('[API Proxy] Creating task at:', url);
   
   try {
     const body = await request.json();

@@ -1983,7 +1983,6 @@ class ConversationFlowManager:
         context: ConversationContext
     ) -> Dict[str, Any]:
         """Handle BURNDOWN_CHART intent - Generate burndown chart and velocity data"""
-        logger.info("Handling BURNDOWN_CHART intent")
         
         try:
             from datetime import datetime, timedelta

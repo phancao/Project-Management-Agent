@@ -50,13 +50,11 @@ class LoggedToolMixin:
         params = ", ".join(
             [*(str(arg) for arg in args), *(f"{k}={v}" for k, v in kwargs.items())]
         )
-        logger.debug(f"Tool {tool_name}.{method_name} called with parameters: {params}")
 
     def _run(self, *args: Any, **kwargs: Any) -> Any:
         """Override _run method to add logging."""
         self._log_operation("_run", *args, **kwargs)
         result = super()._run(*args, **kwargs)
-        logger.debug(
             f"Tool {self.__class__.__name__.replace('Logged', '')} returned: {result}"
         )
         return result

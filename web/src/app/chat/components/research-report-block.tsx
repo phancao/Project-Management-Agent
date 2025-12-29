@@ -29,7 +29,6 @@ export function ResearchReportBlock({
       const contentLen = message.content?.length ?? 0;
       const chunksLen = message.contentChunks?.length ?? 0;
       const chunksTotalLen = message.contentChunks?.join("").length ?? 0;
-      console.log(`[ResearchReportBlock] messageId=${messageId}, contentLen=${contentLen}, chunksLen=${chunksLen}, chunksTotalLen=${chunksTotalLen}, isStreaming=${message.isStreaming}, finishReason=${message.finishReason}`);
       if (contentLen === 0 && chunksTotalLen > 0) {
         console.warn(`[ResearchReportBlock] ⚠️ Content is empty but chunks have data! messageId=${messageId}`);
       }
@@ -57,35 +56,26 @@ export function ResearchReportBlock({
   const isCompleted = message?.isStreaming === false && message?.content !== "";
   // Reconstruct content from chunks if main content is empty but chunks exist
   const displayContent = useMemo(() => {
-    // DEBUG: Log useMemo entry for reporter messages
     if (messageId && message) {
       const contentLen = message.content?.length ?? 0;
       const chunksLen = message.contentChunks?.length ?? 0;
       const chunksTotalLen = message.contentChunks?.join("").length ?? 0;
-      console.log(`[DEBUG-DISPLAY-ENTRY] 🚪 displayContent useMemo ENTRY: messageId=${messageId}, contentLen=${contentLen}, chunksLen=${chunksLen}, chunksTotalLen=${chunksTotalLen}`);
-      console.trace(`[DEBUG-DISPLAY-ENTRY] Stack trace for displayContent useMemo entry`);
     }
     
     if (message?.content) {
       const result = message.content;
-      // DEBUG: Log useMemo exit
       if (messageId && message) {
-        console.log(`[DEBUG-DISPLAY-EXIT] 🚪 displayContent useMemo EXIT (from content): messageId=${messageId}, resultLen=${result.length}`);
       }
       return result;
     }
     // Fallback: reconstruct from contentChunks if content is empty
     if (message?.contentChunks && message.contentChunks.length > 0) {
       const reconstructed = message.contentChunks.join("");
-      // DEBUG: Log useMemo exit
       if (messageId && message) {
-        console.log(`[DEBUG-DISPLAY-EXIT] 🚪 displayContent useMemo EXIT (from chunks): messageId=${messageId}, reconstructedLen=${reconstructed.length}`);
       }
       return reconstructed;
     }
-    // DEBUG: Log useMemo exit (empty)
     if (messageId && message) {
-      console.log(`[DEBUG-DISPLAY-EXIT] 🚪 displayContent useMemo EXIT (empty): messageId=${messageId}, resultLen=0`);
     }
     return "";
   }, [messageId, message?.content, message?.contentChunks]);

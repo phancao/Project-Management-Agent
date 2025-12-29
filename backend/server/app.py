@@ -274,7 +274,6 @@ def get_default_mcp_settings() -> dict:
 
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
-    print(f"[FLOW-TRACE] Backend : API : /api/chat/stream : start : thread_id={request.thread_id}", flush=True)
 
     """Stream chat responses for research tasks"""
     # Check if AI providers are configured
@@ -357,10 +356,8 @@ def _validate_tool_call_chunks(tool_call_chunks):
         name = chunk.get("name", "")
         has_args = "args" in chunk
         
-        logger.debug(
-            f"Chunk {i}: index={index}, id={tool_id}, name={name}, "
-            f"has_args={has_args}, type={chunk.get('type')}"
-        )
+        if index is not None:
+            pass
         
         if index is not None:
             indices_seen.add(index)
@@ -368,10 +365,7 @@ def _validate_tool_call_chunks(tool_call_chunks):
             tool_ids_seen.add(tool_id)
     
     if len(indices_seen) > 1:
-        logger.debug(
-            f"Multiple indices detected: {sorted(indices_seen)} - "
-            f"This may indicate consecutive tool calls"
-        )
+        pass
 
 
 def _process_tool_call_chunks(tool_call_chunks):
@@ -453,10 +447,7 @@ def _process_tool_call_chunks(tool_call_chunks):
         chunk_data = chunk_by_index[index]
         chunk_data["args"] = sanitize_args(chunk_data["args"])
         chunks.append(chunk_data)
-        logger.debug(
-            f"Processed tool call: index={index}, name={chunk_data['name']}, "
-            f"id={chunk_data['id']}"
-        )
+        chunks.append(chunk_data)
     
     return chunks
 
@@ -690,7 +681,6 @@ async def _process_message_chunk(
         f"[{safe_thread_id}] ⏰ [{timestamp_process_start}] [PROCESS-MESSAGE] _process_message_chunk started for "
         f"agent={safe_agent_name}, message_type={type(message_chunk).__name__}"
     )
-    logger.debug(f"[{safe_thread_id}] Extracted agent_name: {safe_agent_name} (from message.name={getattr(message_chunk, 'name', 'N/A')}, agent={agent}, metadata={message_metadata.get('langgraph_node', 'N/A')})")
     
     event_stream_message = _create_event_stream_message(
         message_chunk, message_metadata, thread_id, agent_name
@@ -844,7 +834,7 @@ async def _process_message_chunk(
                         logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_check}] [MESSAGES-STREAM] Found react_thoughts in cache: {len(chunk_thoughts) if isinstance(chunk_thoughts, list) else 'N/A'} thoughts")
                 
                 if not chunk_thoughts:
-                    logger.debug(f"[{safe_thread_id}] ⏰ [{timestamp_check}] [MESSAGES-STREAM] No react_thoughts found for agent={agent_name} (agent should set them in nodes.py)")
+                    pass
                 
                 # Stream thoughts from ANY agent that has them
                 if chunk_thoughts:
@@ -873,7 +863,6 @@ async def _process_message_chunk(
                         logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_delay}] [STREAM] Delay complete, now yielding tool_calls event...")
                 else:
                     timestamp_no_thoughts = datetime.now().isoformat()
-                    logger.debug(f"[{safe_thread_id}] ⏰ [{timestamp_no_thoughts}] [MESSAGES-STREAM] No thoughts to stream for agent={agent_name}, proceeding with tool_calls only")
             
             # Process tool_call_chunks
             processed_chunks = _process_tool_call_chunks(message_chunk.tool_call_chunks)
@@ -1064,10 +1053,7 @@ async def _process_message_chunk(
             
             # For planner agent, try to extract and stream thought progressively
             if agent_name == "planner" and message_chunk.content:
-                logger.debug(
-                    f"[{safe_thread_id}] 💭 [PLANNER-STREAM] Processing planner content chunk: "
-                    f"messageId={event_stream_message.get('id')}, content_length={len(message_chunk.content)}"
-                )
+                pass
                 message_id = event_stream_message.get("id")
                 if message_id:
                     # Accumulate content
@@ -1170,10 +1156,6 @@ async def _stream_graph_events(
     - debug: Streams structured debug events for server-side observability
     """
     safe_thread_id = sanitize_thread_id(thread_id)
-    logger.debug(
-        f"[{safe_thread_id}] Starting graph event stream with "
-        f"latest LangGraph features"
-    )
     try:
         event_count = 0
         debug_event_count = 0
@@ -1232,20 +1214,13 @@ async def _stream_graph_events(
                                 f"(id={task_id}, step={step})"
                             )
                     elif event_type == "checkpoint":
-                        # State checkpoint created
-                        logger.debug(
-                            f"[{safe_thread_id}] 💾 Checkpoint created "
-                            f"(step={step}, timestamp={timestamp})"
-                        )
+                        pass
                 
                 # Debug events are not streamed to client (too verbose)
                 continue
             
             # Process messages and updates for client streaming
-            logger.debug(
-                f"[{safe_thread_id}] Graph event #{event_count} received "
-                f"from agent: {safe_agent}, type: {stream_type}"
-            )
+            pass
             
             if stream_type == "messages":
                 # Process message chunks (agent responses, tool calls)
@@ -1274,7 +1249,6 @@ async def _stream_graph_events(
                     ):
                         timestamp_event_yield = datetime.now().isoformat()
                         event_type = event.split('\n')[0] if '\n' in event else event[:50]
-                        logger.debug(f"[{safe_thread_id}] ⏰ [{timestamp_event_yield}] [MESSAGES-STREAM] Yielding event: {event_type}...")
                         yield event
                     timestamp_after_process = datetime.now().isoformat()
                     logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_process}] [MESSAGES-STREAM] Finished processing message chunk")
@@ -1317,10 +1291,7 @@ async def _stream_graph_events(
                             and hasattr(interrupt_data[0].value, '__len__')
                             else 'unknown'
                         )
-                        logger.debug(
-                            f"[{safe_thread_id}] Processing interrupt event: "
-                            f"ns={ns_value}, value_len={value_len}"
-                        )
+                        pass
                         yield _create_interrupt_event(thread_id, event_data)
                     
                     # Process node-specific state updates
@@ -1519,10 +1490,7 @@ async def _stream_graph_events(
                         
                         # Debug: Log node_update keys for pm_agent/react_agent nodes
                         if node_name in ["react_agent", "pm_agent", "agent"]:
-                            logger.debug(
-                                f"[{safe_thread_id}] 🔍 Checking node_update for {node_name}: "
-                                f"keys={list(node_update.keys())}, has_react_thoughts={'react_thoughts' in node_update}"
-                            )
+                            pass
                         
                         # Check if react_thoughts exist in node_update
                         if "react_thoughts" in node_update:
@@ -1555,16 +1523,12 @@ async def _stream_graph_events(
                                                     f"for AIMessageChunk processing"
                                                 )
                                                 break
-                                    logger.debug(
-                                        f"[{safe_thread_id}] 💭 Thoughts will be attached to agent message when it's streamed"
-                                    )
+                                            pass
                                 else:
                                     logger.warning(
                                         f"[{safe_thread_id}] ⚠️ react_thoughts key exists but is empty for {actual_agent_name} (node: {node_name})"
                                     )
-                                logger.debug(
-                                    f"[{safe_thread_id}] 🔍 react_thoughts found but actual_agent_name={actual_agent_name} not in [react_agent, pm_agent]"
-                                )
+                                    pass
                         
                         # Solution 6A (fallback): Process ToolMessages from updates stream
                         # This emits tool_call_result events for inner tools when pm_agent returns
@@ -1765,10 +1729,7 @@ async def _stream_graph_events(
                                         if already_streamed_step_index is None or thought_step_index != already_streamed_step_index:
                                             thoughts_to_stream.append(thought)
                                         else:
-                                            logger.debug(
-                                                f"[{safe_thread_id}] ⏭️ Skipping thought for step {thought_step_index} "
-                                                f"(already streamed progressively)"
-                                            )
+                                            pass
                                     
                                     # Stream remaining thoughts (if any) - these are thoughts from previous steps or all steps
                                     if thoughts_to_stream:
@@ -1785,11 +1746,6 @@ async def _stream_graph_events(
                                         if not message_id:
                                             message_id = f"run--{uuid4().hex}"
                                         
-                                        logger.info(
-                                            f"[{safe_thread_id}] 💭 Streaming {len(thoughts_to_stream)} additional thoughts "
-                                            f"for {actual_agent_name} (node: {node_name}, messageId={message_id})"
-                                        )
-                                        
                                         thoughts_event = {
                                             "thread_id": thread_id,
                                             "agent": actual_agent_name,
@@ -1803,9 +1759,7 @@ async def _stream_graph_events(
                                         import asyncio
                                         await asyncio.sleep(0.01)  # 10ms delay before tool_calls
                                     else:
-                                        logger.debug(
-                                            f"[{safe_thread_id}] ⏭️ All thoughts already streamed progressively, skipping batch stream"
-                                        )
+                                        pass
                         
                         # Only stream non-reporter messages from state updates.
                         # For planner: still stream the message from state updates to ensure it's stored,
@@ -1816,14 +1770,11 @@ async def _stream_graph_events(
                             if messages:
                                 # Get the latest message
                                 import sys
-                                sys.stderr.write(f"\n🔍 CHECKING MESSAGES: node_name='{node_name}', messages_count={len(messages)}\n")
                                 for msg in messages:
                                     msg_type = type(msg).__name__
                                     msg_name = getattr(msg, 'name', 'N/A')
                                     is_ai = isinstance(msg, AIMessage)
                                     name_match = msg_name == node_name
-                                    sys.stderr.write(f"🔍 Message: type={msg_type}, name={msg_name}, is_AIMessage={is_ai}, name_matches={name_match}\n")
-                                sys.stderr.flush()
                                 
                                 # Find the LAST AIMessage with content (that's the final response)
                                 # Earlier messages might be tool-calling messages with empty content
@@ -1890,8 +1841,6 @@ async def _stream_graph_events(
                                 if final_ai_message:
                                     msg = final_ai_message
                                     import sys
-                                    sys.stderr.write(f"\n✨ STREAMING MESSAGE: node_name='{node_name}', content_len={len(msg.content)}\n")
-                                    sys.stderr.flush()
                                     
                                     # Log message content preview for planner messages
                                     content_preview = ""
@@ -1948,7 +1897,6 @@ async def _stream_graph_events(
                                         logger.info(f"[{safe_thread_id}] ✅ Found react_thoughts in node_update for {node_name}: {len(react_thoughts) if react_thoughts else 0} thoughts")
                                     
                                     # Debug: Log what we're checking
-                                    logger.info(f"[{safe_thread_id}] 🔍 Checking for thoughts: node_update_keys={list(node_update.keys())}, msg_has_additional_kwargs={hasattr(msg, 'additional_kwargs')}, additional_kwargs={msg.additional_kwargs if hasattr(msg, 'additional_kwargs') else 'N/A'}")
                                     
                                     if react_thoughts:
                                         # Store thoughts in both additional_kwargs and response_metadata for maximum compatibility
@@ -1994,10 +1942,7 @@ async def _stream_graph_events(
                                     ):
                                         yield event
                     
-                    logger.debug(
-                        f"[{safe_thread_id}] Processed state update from "
-                        f"{safe_agent}"
-                    )
+                    pass
         
         logger.info(
             f"[{safe_thread_id}] ✅ Streaming completed: {event_count} events, "
@@ -2109,46 +2054,25 @@ async def _astream_workflow_generator(
     safe_feedback = (
         sanitize_log_input(interrupt_feedback) if interrupt_feedback else ""
     )
-    logger.debug(
-        f"[{safe_thread_id}] _astream_workflow_generator starting: "
-        f"messages_count={len(messages)}, "
-        f"auto_accepted_plan={auto_accepted_plan}, "
-        f"interrupt_feedback={safe_feedback}, "
-        f"interrupt_before_tools={interrupt_before_tools}, "
-        f"model_provider={model_provider}, model_name={model_name}"
-    )
+    pass
 
     # Process initial messages
-    logger.debug(
-        f"[{safe_thread_id}] Processing {len(messages)} initial messages"
-    )
     for message in messages:
         if isinstance(message, dict) and "content" in message:
-            safe_content = sanitize_user_content(message.get('content', ''))
-            logger.debug(
-                f"[{safe_thread_id}] Sending initial message to client: "
-                f"{safe_content}"
-            )
             _process_initial_messages(message, thread_id)
 
-    logger.debug(
-        f"[{safe_thread_id}] Reconstructing clarification history"
-    )
+    pass
     clarification_history = reconstruct_clarification_history(messages)
 
-    logger.debug(
-        f"[{safe_thread_id}] Building clarified topic from history"
-    )
+    pass
     clarified_topic, clarification_history = (
         build_clarified_topic_from_history(clarification_history)
     )
     latest_message_content = messages[-1]["content"] if messages else ""
     clarified_research_topic = clarified_topic or latest_message_content
     safe_topic = sanitize_user_content(clarified_research_topic)
-    logger.debug(f"[{safe_thread_id}] Clarified research topic: {safe_topic}")
 
     # Prepare workflow input
-    logger.debug(f"[{safe_thread_id}] Preparing workflow input")
     workflow_input = {
         "messages": messages,
         "plan_iterations": 0,
@@ -2167,26 +2091,16 @@ async def _astream_workflow_generator(
     }
 
     if not auto_accepted_plan and interrupt_feedback:
-        logger.debug(
-            f"[{safe_thread_id}] Creating resume command with "
-            f"interrupt_feedback: {safe_feedback}"
-        )
+        pass
         resume_msg = f"[{interrupt_feedback}]"
         if messages:
             resume_msg += f" {messages[-1]['content']}"
         workflow_input = Command(resume=resume_msg)  # type: ignore
 
     # Prepare workflow config
-    logger.debug(
-        f"[{safe_thread_id}] Preparing workflow config: "
-        f"max_plan_iterations={max_plan_iterations}, "
-        f"max_step_num={max_step_num}, "
-        f"report_style={report_style.value}, "
-        f"enable_deep_thinking={enable_deep_thinking}"
-    )
+    pass
     # FORCE FIX: Ensure pm_agent is in add_to_agents for pm-server
     # This overrides any incorrect frontend configuration
-    logger.info(f"[{safe_thread_id}] DEBUG: mcp_settings type={type(mcp_settings)}, value={mcp_settings}")
     if mcp_settings and "servers" in mcp_settings:
         for server_name, server_config in mcp_settings["servers"].items():
             if server_name == "pm-server" or "pm" in server_name.lower():
@@ -2217,11 +2131,7 @@ async def _astream_workflow_generator(
     checkpoint_saver = get_bool_env("LANGGRAPH_CHECKPOINT_SAVER", False)
     checkpoint_url = get_str_env("LANGGRAPH_CHECKPOINT_DB_URL", "")
     
-    logger.debug(
-        f"[{safe_thread_id}] Checkpoint configuration: "
-        f"saver_enabled={checkpoint_saver}, "
-        f"url_configured={bool(checkpoint_url)}"
-    )
+    pass
     
     # Handle checkpointer if configured
     connection_kwargs = {
@@ -2230,81 +2140,43 @@ async def _astream_workflow_generator(
         "prepare_threshold": 0,
     }
     if checkpoint_saver and checkpoint_url != "":
-        if checkpoint_url.startswith("postgresql://"):
             logger.info(
                 f"[{safe_thread_id}] Starting async postgres checkpointer"
-            )
-            logger.debug(
-                f"[{safe_thread_id}] Setting up PostgreSQL connection pool"
             )
             async with AsyncConnectionPool(
                 checkpoint_url, kwargs=connection_kwargs
             ) as conn:
-                logger.debug(
-                    f"[{safe_thread_id}] Initializing AsyncPostgresSaver"
-                )
                 checkpointer = AsyncPostgresSaver(conn)  # type: ignore
                 await checkpointer.setup()
-                logger.debug(
-                    f"[{safe_thread_id}] Attaching checkpointer to graph"
-                )
                 graph.checkpointer = checkpointer
                 graph.store = in_memory_store
-                logger.debug(
-                    f"[{safe_thread_id}] Starting to stream graph events"
-                )
                 async for event in _stream_graph_events(
                     graph, workflow_input, workflow_config, thread_id
                 ):
                     yield event
-                logger.debug(
-                    f"[{safe_thread_id}] Graph event streaming completed"
-                )
 
-        if checkpoint_url.startswith("mongodb://"):
             logger.info(
                 f"[{safe_thread_id}] Starting async mongodb checkpointer"
-            )
-            logger.debug(
-                f"[{safe_thread_id}] Setting up MongoDB connection"
             )
             async with AsyncMongoDBSaver.from_conn_string(
                 checkpoint_url
             ) as mongo_checkpointer:  # type: ignore[assignment]
                 # Type ignore: MongoDB checkpointer is compatible
                 # with graph.checkpointer interface
-                logger.debug(
-                    f"[{safe_thread_id}] Attaching MongoDB checkpointer "
-                    f"to graph"
-                )
                 # Type ignore: MongoDB checkpointer compatible interface
                 # type: ignore[assignment]
                 graph.checkpointer = mongo_checkpointer
                 graph.store = in_memory_store
-                logger.debug(
-                    f"[{safe_thread_id}] Starting to stream graph events"
-                )
                 async for event in _stream_graph_events(
                     graph, workflow_input, workflow_config, thread_id
                 ):
                     yield event
-                logger.debug(
-                    f"[{safe_thread_id}] Graph event streaming completed"
-                )
     else:
-        logger.debug(
-            f"[{safe_thread_id}] No checkpointer configured, "
-            f"using in-memory graph"
-        )
-        # Use graph without MongoDB checkpointer
-        logger.debug(
-            f"[{safe_thread_id}] Starting to stream graph events"
-        )
+        # Use graph without checkpointer
         async for event in _stream_graph_events(
             graph, workflow_input, workflow_config, thread_id
         ):
             yield event
-        logger.debug(f"[{safe_thread_id}] Graph event streaming completed")
 
 
 def _make_event(event_type: str, data: dict[str, Any]):
@@ -2414,7 +2286,6 @@ async def text_to_speech(request: TTSRequest):
 async def generate_podcast(request: GeneratePodcastRequest):
     try:
         report_content = request.content
-        print(report_content)
         workflow = build_podcast_graph()
         final_state = workflow.invoke({"input": report_content})
         audio_bytes = final_state["output"]
@@ -2430,7 +2301,6 @@ async def generate_podcast(request: GeneratePodcastRequest):
 async def generate_ppt(request: GeneratePPTRequest):
     try:
         report_content = request.content
-        print(report_content)
         workflow = build_ppt_graph()
         final_state = workflow.invoke({"input": report_content})
         generated_file_path = final_state["generated_file_path"]
@@ -3391,8 +3261,8 @@ async def pm_chat_stream(request: Request):
     except HTTPException:
         raise
     except Exception as e:
+        pass
         # If check fails, log but continue (might be using conf.yaml/env vars)
-        logger.debug(f"[pm_chat_stream] AI provider check failed (non-fatal): {e}")
     
     # Check if PM providers are configured
     try:
@@ -3407,8 +3277,8 @@ async def pm_chat_stream(request: Request):
     except HTTPException:
         raise
     except Exception as e:
+        pass
         # If check fails, log but continue (might have providers configured elsewhere)
-        logger.debug(f"[pm_chat_stream] PM provider check failed (non-fatal): {e}")
     
     try:
         from backend.conversation.flow_manager import ConversationFlowManager
@@ -3475,7 +3345,6 @@ async def pm_chat_stream(request: Request):
                 """Generate SSE stream of chat responses with progress."""
                 api_start = time.time()
                 logger.info("[PM-CHAT-TIMING] generate_stream started")
-                logger.info("[PM-CHAT] 🔍 DEBUG: generate_stream generator initialized and running")
                     
                 try:
                     # Check if this is a Project Management (PM) related query
@@ -3488,12 +3357,10 @@ async def pm_chat_stream(request: Request):
                     
                     if user_message_first_line in ["hi", "hello", "hey"]:
                         matching_keywords = [kw for kw in pm_keywords if kw in user_message_first_line]
-                        logger.warning(f"[PM-CHAT] 🔍 DEBUG: user_message_first_line='{user_message_first_line}', has_pm_intent={has_pm_intent}, matching_keywords={matching_keywords}")
                     
                     # Determine routing: PM queries go to coordinator → ReAct, non-PM queries go to DeerFlow
                     needs_research = not has_pm_intent
                     
-                    logger.info(f"[PM-CHAT] 🔍 DEBUG: Intent detection result: has_pm_intent={has_pm_intent}, needs_research={needs_research}")
                     
                     if has_pm_intent:
                         # PM-related query - route to coordinator → ReAct agent
@@ -4541,7 +4408,6 @@ async def list_ai_providers():
         db = next(db_gen)
         
         try:
-            logger.debug("[list_ai_providers] Database session obtained, querying providers")
             providers = db.query(AIProviderAPIKey).filter(
                 AIProviderAPIKey.is_active.is_(True)
             ).all()
@@ -4576,7 +4442,6 @@ async def list_ai_providers():
             return result
         finally:
             db.close()
-            logger.debug("[list_ai_providers] Database session closed")
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
@@ -5098,7 +4963,6 @@ async def get_burndown_chart(
     scope_type: str = "story_points"
 ):
     """Get burndown chart for a project/sprint"""
-    logger.info(f"[get_burndown_chart] ========== BURNDOWN REQUEST START ==========")
     logger.info(f"[get_burndown_chart] project_id={project_id}, sprint_id={sprint_id}, scope_type={scope_type}")
     try:
         from database.connection import get_db_session

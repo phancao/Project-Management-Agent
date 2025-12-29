@@ -15,7 +15,6 @@ export interface Project {
 
 const fetchProjects = async (): Promise<Project[]> => {
   const url = resolveServiceURL("pm/projects");
-  console.log('[useProjects] Fetching projects from:', url);
   
   try {
     const response = await fetch(url, {
@@ -32,7 +31,6 @@ const fetchProjects = async (): Promise<Project[]> => {
       throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
     }
     const data = await response.json();
-    console.log('[useProjects] Projects loaded:', data.length, data);
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {

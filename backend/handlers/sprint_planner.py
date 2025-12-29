@@ -446,7 +446,6 @@ class SprintPlanner:
                 response_text = str(response)
             
             logger.info(f"LLM response received (length: {len(response_text)})")
-            logger.debug(f"LLM response: {response_text[:1000]}")
             
             # Try to extract JSON structure
             import json
@@ -481,7 +480,6 @@ class SprintPlanner:
                             break
             
             logger.error("Could not find valid JSON in LLM response")
-            logger.debug(f"Response text (first 1000 chars): {response_text[:1000]}")
             raise ValueError("No valid JSON found in LLM response")
                 
         except Exception as e:

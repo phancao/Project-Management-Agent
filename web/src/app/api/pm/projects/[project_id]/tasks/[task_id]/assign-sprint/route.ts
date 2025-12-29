@@ -15,7 +15,6 @@ export async function POST(
   const decodedProjectId = decodeURIComponent(projectId);
   const decodedTaskId = decodeURIComponent(taskId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/tasks/${encodeURIComponent(decodedTaskId)}/assign-sprint`;
-  console.log('[API Proxy] Assigning sprint to task at:', url);
   
   try {
     const body = await request.json();

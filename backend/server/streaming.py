@@ -115,7 +115,6 @@ def validate_tool_call_chunks(tool_call_chunks: list) -> None:
     if not tool_call_chunks:
         return
     
-    logger.debug(f"Validating tool_call_chunks: count={len(tool_call_chunks)}")
     
     indices_seen = set()
     for i, chunk in enumerate(tool_call_chunks):
@@ -124,7 +123,6 @@ def validate_tool_call_chunks(tool_call_chunks: list) -> None:
             indices_seen.add(index)
     
     if len(indices_seen) > 1:
-        logger.debug(f"Multiple indices detected: {sorted(indices_seen)}")
 
 
 def process_tool_call_chunks(tool_call_chunks: list) -> list:

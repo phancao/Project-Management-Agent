@@ -102,7 +102,6 @@ class ContextManager:
                 if hasattr(temp_llm, 'get_num_tokens_from_messages'):
                     return temp_llm.get_num_tokens_from_messages(messages)
             except (ImportError, AttributeError, Exception) as e:
-                logger.debug(f"LangChain token counting not available: {e}, using manual counting")
             
             # Manual counting: format messages like OpenAI API expects
             # Use tiktoken.encoding_for_model() for accurate model-specific encoding
@@ -374,7 +373,6 @@ class ContextManager:
         return state
         
         # ===== BELOW CODE IS DISABLED =====
-        logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: compress_messages called - token_limit={self.token_limit}, agent_type={self.agent_type}, compression_mode={self.compression_mode}")
         
         # If not set token_limit, return original state
         if self.token_limit is None:
@@ -386,7 +384,6 @@ class ContextManager:
             return state
 
         messages = state["messages"]
-        logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Found {len(messages)} messages in state")
         
         # Count tokens - try with model if available, otherwise without
         try:
@@ -405,11 +402,9 @@ class ContextManager:
         )
 
         is_over = self.is_over_limit(messages)
-        logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: is_over_limit returned: {is_over}")
         
         if not is_over:
             # No compression needed, but still return metadata
-            logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Messages are within limit, no compression needed")
             state["_context_optimization"] = {
                 "compressed": False,
                 "original_tokens": original_token_count,
@@ -420,11 +415,9 @@ class ContextManager:
                 "original_message_count": len(messages),
                 "compressed_message_count": len(messages)
             }
-            logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Returning metadata (no compression): {state.get('_context_optimization')}")
             return state
 
         # 2. Compress messages
-        logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Messages exceed limit, starting compression with mode: {self.compression_mode}")
         compressed_messages = self._compress_messages(messages)
         
         try:
@@ -478,7 +471,6 @@ class ContextManager:
             "original_message_count": len(messages),
             "compressed_message_count": len(compressed_messages)
         }
-        logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Returning metadata (compressed): {state.get('_context_optimization')}")
         return state
 
     def _score_message_importance(self, message: BaseMessage, position: int, total: int) -> float:
@@ -539,23 +531,16 @@ class ContextManager:
         Returns:
             Compressed message list
         """
-        logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: _compress_messages called - mode={self.compression_mode}, messages={len(messages)}")
         
         if self.compression_mode == "hierarchical":
-            logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Using hierarchical compression")
             result = self._hierarchical_compress(messages)
-            logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Hierarchical compression result: {len(result)} messages")
             return result
         elif self.compression_mode == "importance_based":
-            logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Using importance-based compression")
             result = self._importance_based_compress(messages)
-            logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Importance-based compression result: {len(result)} messages")
             return result
         else:
             # Default: Original simple compression
-            logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Using simple compression (default)")
             result = self._simple_compress(messages)
-            logger.info(f"[CONTEXT-MANAGER] 🔍 DEBUG: Simple compression result: {len(result)} messages")
             return result
     
     def _simple_compress(self, messages: List[BaseMessage]) -> List[BaseMessage]:
@@ -936,12 +921,10 @@ def validate_message_content(messages: List[BaseMessage], max_content_length: in
             
             # Handle complex content types (convert to JSON)
             elif isinstance(msg.content, (list, dict)):
-                logger.debug(f"Message {i} ({type(msg).__name__}) has complex content type {type(msg.content).__name__}, converting to JSON")
                 msg.content = json.dumps(msg.content, ensure_ascii=False)
             
             # Handle other non-string types
             elif not isinstance(msg.content, str):
-                logger.debug(f"Message {i} ({type(msg).__name__}) has non-string content type {type(msg.content).__name__}, converting to string")
                 msg.content = str(msg.content)
             
             # Validate content length

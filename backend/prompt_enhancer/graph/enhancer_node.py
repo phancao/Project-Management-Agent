@@ -44,7 +44,6 @@ def prompt_enhancer_node(state: PromptEnhancerState):
 
         # Extract content from response
         response_content = response.content.strip()
-        logger.debug(f"Response content: {response_content}")
 
         # Try to extract content from XML tags first
         xml_match = re.search(
@@ -54,7 +53,6 @@ def prompt_enhancer_node(state: PromptEnhancerState):
         if xml_match:
             # Extract content from XML tags and clean it up
             enhanced_prompt = xml_match.group(1).strip()
-            logger.debug("Successfully extracted enhanced prompt from XML tags")
         else:
             # Fallback to original logic if no XML tags found
             enhanced_prompt = response_content
@@ -76,7 +74,6 @@ def prompt_enhancer_node(state: PromptEnhancerState):
                     break
 
         logger.info("Prompt enhancement completed successfully")
-        logger.debug(f"Enhanced prompt: {enhanced_prompt}")
         return {"output": enhanced_prompt}
     except Exception as e:
         logger.error(f"Error in prompt enhancement: {str(e)}")

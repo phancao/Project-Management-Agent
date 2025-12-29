@@ -165,7 +165,6 @@ Research the typical work breakdown structure for a {domain} project:
                 response_text = str(response)
             
             logger.info(f"LLM response received (length: {len(response_text)})")
-            logger.debug(f"LLM response: {response_text[:500]}")
             
             # Try to extract JSON structure
             import json
@@ -202,7 +201,6 @@ Research the typical work breakdown structure for a {domain} project:
                             break
             
             logger.warning("Could not find valid JSON in response, using template")
-            logger.debug(f"Response text (first 1000 chars): {response_text[:1000]}")
             return self._generate_template_wbs(project_name, project_description)
                 
         except Exception as e:

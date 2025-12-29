@@ -108,7 +108,6 @@ def calculate_agent_token_limit(agent_type: str, model_context_limit: int) -> in
     # Ensure reasonable bounds
     final_limit = max(1000, min(calculated_limit, model_context_limit))
     
-    logger.debug(
         f"[ADAPTIVE-CONTEXT] {agent_type}: "
         f"model_limit={model_context_limit}, percent={token_percent}, "
         f"calculated={final_limit}"
@@ -155,7 +154,6 @@ def get_adaptive_context_manager(
     
     # Calculate agent-specific limit as percentage of model context
     agent_limit = calculate_agent_token_limit(agent_type, model_context_limit)
-    logger.info(f"[ADAPTIVE-CONTEXT] 🔍 DEBUG: Calculated agent_limit: {agent_limit:,} tokens")
     
     strategy = get_agent_strategy(agent_type)
     logger.info(
@@ -173,18 +171,15 @@ def get_adaptive_context_manager(
         agent_type=agent_type,
         summary_model=model_name
     )
-    logger.info(f"[ADAPTIVE-CONTEXT] 🔍 DEBUG: Initial context manager created - token_limit={initial_cm.token_limit}")
     
     # Adjust for frontend history if provided
     if frontend_history_messages:
-        logger.info(f"[ADAPTIVE-CONTEXT] 🔍 DEBUG: Adjusting for frontend history ({len(frontend_history_messages)} messages)")
         budget = get_token_budget_for_model(model_name)
         adjusted_limit = budget.get_adjusted_limit_for_agent(
             agent_type,
             frontend_history_messages,
             initial_cm
         )
-        logger.info(f"[ADAPTIVE-CONTEXT] 🔍 DEBUG: Adjusted limit: {adjusted_limit:,} tokens (was {agent_limit:,})")
         
         # Return new context manager with adjusted limit
         adjusted_cm = ContextManager(
@@ -194,9 +189,7 @@ def get_adaptive_context_manager(
             agent_type=agent_type,
             summary_model=model_name
         )
-        logger.info(f"[ADAPTIVE-CONTEXT] 🔍 DEBUG: Returning adjusted context manager - token_limit={adjusted_cm.token_limit}")
         return adjusted_cm
     
-    logger.info(f"[ADAPTIVE-CONTEXT] 🔍 DEBUG: Returning initial context manager - token_limit={initial_cm.token_limit}")
     return initial_cm
 

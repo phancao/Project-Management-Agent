@@ -15,7 +15,6 @@ export async function GET(
   // URL decode the project_id in case it's encoded
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/users`;
-  console.log('[API Proxy] Fetching users from:', url);
   
   try {
     const controller = new AbortController();
@@ -41,7 +40,6 @@ export async function GET(
     }
 
     const data = await response.json();
-    console.log('[API Proxy] Successfully fetched users:', data.length);
     return NextResponse.json(data);
   } catch (error) {
     console.error('[API Proxy] Error fetching users:', error);

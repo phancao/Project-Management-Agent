@@ -34,18 +34,13 @@ export function ResearchBlock({
   const reportMessage = useMessage(reportId);
   const reportStreaming = reportMessage?.isStreaming ?? false;
   
-  // DEBUG: Log report display state
   useEffect(() => {
     if (researchId) {
       const allReportIds = Array.from(researchReportIds.entries());
       const allMessages = useStore.getState().messages;
       const reporterMessages = Array.from(allMessages.values()).filter(m => m.agent === "reporter");
-      console.log(`[DEBUG-RESEARCH-BLOCK] researchId=${researchId}, reportId=${reportId}, hasReport=${hasReport}, reportStreaming=${reportStreaming}`);
-      console.log(`[DEBUG-RESEARCH-BLOCK] researchReportIds entries:`, allReportIds);
-      console.log(`[DEBUG-RESEARCH-BLOCK] reporter messages in store:`, reporterMessages.map(m => ({ id: m.id, contentLen: m.content?.length ?? 0, finishReason: m.finishReason })));
       if (reportId) {
         const msg = allMessages.get(reportId);
-        console.log(`[DEBUG-RESEARCH-BLOCK] report message:`, msg ? { id: msg.id, agent: msg.agent, contentLen: msg.content?.length ?? 0, chunksLen: msg.contentChunks?.length ?? 0, finishReason: msg.finishReason, isStreaming: msg.isStreaming } : 'NOT FOUND');
       }
     }
   }, [researchId, reportId, hasReport, reportStreaming, researchReportIds]);

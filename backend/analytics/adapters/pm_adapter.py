@@ -100,7 +100,6 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             # e.g., "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478:613" -> "613"
             # e.g., "478:613" -> "613"
             result = sprint_id.rsplit(":", 1)[-1]
-            logger.debug(
                 f"[PMProviderAnalyticsAdapter] _extract_sprint_key: '{sprint_id}' -> '{result}'"
             )
             return result
@@ -131,7 +130,6 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         # Extract sprint key from composite ID
         # This handles formats like "provider_id:project_id:sprint_id" or "project_id:sprint_id"
         sprint_key = self._extract_sprint_key(sprint_id)
-        logger.debug(
             f"[PMProviderAnalyticsAdapter] _resolve_sprint_id: sprint_id='{sprint_id}', "
             f"project_key='{project_key}', extracted sprint_key='{sprint_key}'"
         )
@@ -318,7 +316,6 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         scope_type: str = "story_points"
     ) -> Dict[str, Any]:
         """Fetch burndown data from PM provider"""
-        logger.info(f"[PMProviderAnalyticsAdapter] ========== FETCHING BURNDOWN DATA ==========")
         logger.info(f"[PMProviderAnalyticsAdapter] project={project_id}, sprint={sprint_id}")
         
         project_key = self._extract_project_key(project_id)
@@ -375,7 +372,6 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             all_tasks = await self.provider.list_tasks(project_id=project_key)
             
             # Debug logging - ALWAYS log this
-            logger.info(f"[PMProviderAnalyticsAdapter] ===== BURNDOWN DEBUG START =====")
             logger.info(f"[PMProviderAnalyticsAdapter] Project: {project_key}, Sprint ID: {sprint_id} (type: {type(sprint_id).__name__})")
             logger.info(f"[PMProviderAnalyticsAdapter] Found {len(all_tasks)} total tasks in project")
             
@@ -424,10 +420,8 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                 
                 if matches:
                     sprint_tasks.append(t)
-                    logger.debug(f"[PMProviderAnalyticsAdapter] Task {t.id} matched: task.sprint_id={t.sprint_id} (type: {type(t.sprint_id).__name__}) == sprint_id={sprint_id} (type: {type(sprint_id).__name__})")
             
             logger.info(f"[PMProviderAnalyticsAdapter] Found {len(sprint_tasks)} tasks matching sprint {sprint_id}")
-            logger.info(f"[PMProviderAnalyticsAdapter] ===== BURNDOWN DEBUG END =====")
             
             # If no tasks found, log more details
             if len(sprint_tasks) == 0 and len(all_tasks) > 0:

@@ -53,7 +53,6 @@ export function useResearchThoughts(researchId: string): Thought[] {
 
   return useMemo(() => {
     const timestamp = new Date().toISOString();
-    console.log(`[useResearchThoughts] 🔍 [${timestamp}] Collecting thoughts for researchId=${researchId}`, {
       planMessageId,
       activityIds: activityIds.length,
       totalMessages: messages.size,
@@ -105,7 +104,6 @@ export function useResearchThoughts(researchId: string): Thought[] {
     const addThought = (thought: Thought) => {
       // Skip filtered content (TOOL_CALL, TOOL_RESULT)
       if (shouldFilterThought(thought.thought)) {
-        console.log(`[useResearchThoughts] ⏭️ Filtering out: "${thought.thought.substring(0, 50)}..."`);
         return;
       }
 
@@ -113,7 +111,6 @@ export function useResearchThoughts(researchId: string): Thought[] {
       const cleanedThought = cleanThoughtContent(thought.thought);
 
       if (seenThoughts.has(cleanedThought)) {
-        console.log(`[useResearchThoughts] ⏭️ Skipping duplicate thought: "${cleanedThought.substring(0, 50)}..."`);
         return;
       }
       seenThoughts.add(cleanedThought);
@@ -121,7 +118,6 @@ export function useResearchThoughts(researchId: string): Thought[] {
         ...thought,
         thought: cleanedThought,  // Use cleaned content
       });
-      console.log(`[useResearchThoughts] ✅ Added thought: step_index=${thought.step_index}, agent=${thought.agent}, thought="${cleanedThought.substring(0, 50)}..."`);
     };
 
     // PRIORITY 1: Extract thoughts from plan steps IMMEDIATELY
@@ -200,7 +196,6 @@ export function useResearchThoughts(researchId: string): Thought[] {
     thoughts.sort((a, b) => a.step_index - b.step_index);
 
     const finalTimestamp = new Date().toISOString();
-    console.log(`[useResearchThoughts] 📊 [${finalTimestamp}] Final thoughts count: ${thoughts.length}`, {
       thoughts: thoughts.map(t => ({ step_index: t.step_index, agent: t.agent, thought: t.thought.substring(0, 50) })),
     });
 

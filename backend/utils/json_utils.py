@@ -95,7 +95,6 @@ def _extract_json_from_content(content: str) -> str:
     if last_valid_end > 0:
         truncated = content[:last_valid_end + 1]
         if truncated != content:
-            logger.debug(f"Truncated content from {len(content)} to {len(truncated)} chars")
         return truncated
     
     return content
@@ -134,7 +133,6 @@ def repair_json_output(content: str) -> str:
             return content
         content = json.dumps(repaired_content, ensure_ascii=False)
     except Exception as e:
-        logger.debug(f"JSON repair failed: {e}")
 
     return content
 
@@ -531,15 +529,10 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
                 try:
                     sprint_names = [s.get("name", "N/A") for s in compressed_sprints if isinstance(s, dict)]
                     sprint_ids = [s.get("id", "N/A") for s in compressed_sprints if isinstance(s, dict)]
-                    logger.info(f"[DEBUG] Compressed sprint names: {sprint_names}")
-                    logger.info(f"[DEBUG] Compressed sprint IDs (first 3): {sprint_ids[:3]}")
-                    logger.info(f"[DEBUG] Total sprints in compressed data: {len(compressed_sprints)}")
                     
                     # Check if "Sprint 4" or "4" is in any sprint name
                     sprint_4_found = any("4" in str(s.get("name", "")).lower() or "sprint 4" in str(s.get("name", "")).lower() for s in compressed_sprints if isinstance(s, dict))
-                    logger.info(f"[DEBUG] Sprint 4 found in compressed data: {sprint_4_found}")
                 except Exception as e:
-                    logger.warning(f"[DEBUG] Error printing sprint data: {e}")
                 
                 # Add helpful note for agents on how to search for sprints
                 result = {
@@ -553,14 +546,11 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
                 # DEBUG: Print the final JSON structure
                 try:
                     result_json = json.dumps(result, indent=2, default=str)
-                    logger.info(f"[DEBUG] Final compressed sprint response (first 2000 chars):\n{result_json[:2000]}")
                     
                     # Also log a sample sprint structure for debugging
                     if compressed_sprints and len(compressed_sprints) > 0:
                         sample_sprint = compressed_sprints[0] if isinstance(compressed_sprints[0], dict) else {}
-                        logger.info(f"[DEBUG] Sample sprint structure: {json.dumps(sample_sprint, indent=2, default=str)[:500]}")
                 except Exception as e:
-                    logger.warning(f"[DEBUG] Error printing final JSON: {e}")
                 
                 return result
         

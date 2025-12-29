@@ -212,11 +212,9 @@ async def run_agent_workflow_stream(
     if debug:
         enable_debug_logging()
 
-    logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-1] Starting streaming workflow with user input: {user_input}")
 
     # Use provided initial_state or create a new one
     if initial_state is None:
-        logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-2] Creating initial state")
         initial_state = {
             # Runtime Variables
             "messages": [{"role": "user", "content": user_input}],
@@ -232,7 +230,6 @@ async def run_agent_workflow_stream(
 
         if max_clarification_rounds is not None:
             initial_state["max_clarification_rounds"] = max_clarification_rounds
-        logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-3] Initial state created: {list(initial_state.keys())}")
 
     config = {
         "configurable": {
@@ -268,15 +265,12 @@ async def run_agent_workflow_stream(
     import time
     start_time = time.time()
     
-    logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-4] About to call graph.astream with config keys: {list(config.get('configurable', {}).keys())}")
     try:
-        logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-5] Starting graph.astream iteration")
         state_iteration = 0
         async for s in graph.astream(
             input=initial_state, config=config, stream_mode="values"
         ):
             state_iteration += 1
-            logger.info(f"[DEBUG-WORKFLOW] [WF-STEP-6.{state_iteration}] Graph yielded state #{state_iteration}, type: {type(s)}")
             # Check timeout on each iteration
             elapsed = time.time() - start_time
             if elapsed > workflow_timeout:

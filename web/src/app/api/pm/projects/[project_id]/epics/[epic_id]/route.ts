@@ -15,7 +15,6 @@ export async function PUT(
   const decodedProjectId = decodeURIComponent(projectId);
   const decodedEpicId = decodeURIComponent(epicId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/epics/${encodeURIComponent(decodedEpicId)}`;
-  console.log('[API Proxy] Updating epic at:', url);
   
   try {
     const body = await request.json();
@@ -61,7 +60,6 @@ export async function DELETE(
   const decodedProjectId = decodeURIComponent(projectId);
   const decodedEpicId = decodeURIComponent(epicId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/epics/${encodeURIComponent(decodedEpicId)}`;
-  console.log('[API Proxy] Deleting epic at:', url);
   
   try {
     const controller = new AbortController();

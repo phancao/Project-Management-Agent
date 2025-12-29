@@ -14,7 +14,6 @@ export async function GET(
   const { project_id: projectId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/epics`;
-  console.log('[API Proxy] Fetching epics from:', url);
   
   try {
     const controller = new AbortController();
@@ -40,7 +39,6 @@ export async function GET(
     }
 
     const data = await response.json();
-    console.log('[API Proxy] Successfully fetched epics:', data.length);
     return NextResponse.json(data);
   } catch (error) {
     console.error('[API Proxy] Error fetching epics:', error);
@@ -67,7 +65,6 @@ export async function POST(
   const { project_id: projectId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/epics`;
-  console.log('[API Proxy] Creating epic at:', url);
   
   try {
     const body = await request.json();

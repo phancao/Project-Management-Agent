@@ -9,8 +9,6 @@ export async function* fetchStream(
   url: string,
   init: RequestInit,
 ): AsyncIterable<StreamEvent> {
-  // [FLOW-TRACE] Start of fetchStream
-  console.log(`[FLOW-TRACE] Frontend : FetchStream : init : url=${url}`);
 
   let response: Response;
   try {

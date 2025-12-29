@@ -37,11 +37,7 @@ def create_agent(
         A configured agent graph
     """
     import sys
-    sys.stderr.write(f"\n🤖 CREATE_AGENT: name='{agent_name}', type='{agent_type}', tools_count={len(tools)}, template='{prompt_template}'\n")
-    sys.stderr.write(f"🤖 Tool names: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in tools]}\n")
-    sys.stderr.flush()
     
-    logger.debug(
         f"Creating agent '{agent_name}' of type '{agent_type}' "
         f"with {len(tools)} tools and template '{prompt_template}'"
     )
@@ -52,11 +48,8 @@ def create_agent(
         logger.info(
             f"Creating agent '{agent_name}' with tool-specific interrupts: {interrupt_before_tools}"
         )
-        logger.debug(f"Wrapping {len(tools)} tools for agent '{agent_name}'")
         processed_tools = wrap_tools_with_interceptor(tools, interrupt_before_tools)
-        logger.debug(f"Agent '{agent_name}' tool wrapping completed")
     else:
-        logger.debug(f"Agent '{agent_name}' has no interrupt-before-tools configured")
 
     if agent_type not in AGENT_LLM_MAP:
         logger.warning(
@@ -65,16 +58,10 @@ def create_agent(
             "This may indicate a configuration issue."
         )
     llm_type = AGENT_LLM_MAP.get(agent_type, "basic")
-    logger.debug(f"Agent '{agent_name}' using LLM type: {llm_type}")
     
-    logger.debug(f"Creating ReAct agent '{agent_name}'")
     
     import sys
     llm = get_llm_by_type(llm_type)
-    sys.stderr.write(f"\n🔨 CREATING REACT AGENT: name='{agent_name}', llm_type='{llm_type}', llm_class={type(llm).__name__}\n")
-    sys.stderr.write(f"🔨 Tools being passed: {len(processed_tools)} tools\n")
-    sys.stderr.write(f"🔨 Tool names: {[t.name if hasattr(t, 'name') else str(t) for t in processed_tools]}\n")
-    sys.stderr.flush()
     
     agent = create_react_agent(
         name=agent_name,
@@ -86,8 +73,6 @@ def create_agent(
         pre_model_hook=pre_model_hook,
     )
     
-    sys.stderr.write(f"\n🔨 REACT AGENT CREATED: name='{agent_name}'\n")
-    sys.stderr.flush()
     
     logger.info(f"Agent '{agent_name}' created successfully")
     

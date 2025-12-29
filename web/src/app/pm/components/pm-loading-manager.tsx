@@ -60,7 +60,6 @@ export function PMLoadingManager() {
         .then((providers) => {
           clearTimeout(timeoutId);
           debug.state('Providers loaded', { count: providers.length });
-          console.log('[PMLoadingManager] Providers loaded:', providers);
           // Filter out providers without id and ensure id is always a string
           const validProviders = providers.filter((p): p is typeof p & { id: string } => !!p.id);
           setProvidersState({
@@ -68,7 +67,6 @@ export function PMLoadingManager() {
             error: null,
             data: validProviders,
           });
-          console.log('[PMLoadingManager] State updated, providers count:', providers.length);
         })
         .catch((error) => {
           clearTimeout(timeoutId);
@@ -115,7 +113,6 @@ export function PMLoadingManager() {
 
   // Sync projects state
   useEffect(() => {
-    console.log('[PMLoadingManager] Projects sync effect', {
       providersLoading: state.providers.loading,
       providersData: state.providers.data?.length,
       providersDataExists: !!state.providers.data,
@@ -126,7 +123,6 @@ export function PMLoadingManager() {
     });
     
     if (!state.providers.loading && state.providers.data) {
-      console.log('[PMLoadingManager] Syncing projects state', {
         loading: projectsLoading,
         count: projects.length,
         error: projectsError?.message,
@@ -137,9 +133,7 @@ export function PMLoadingManager() {
         data: projects,
       });
     } else if (state.providers.loading) {
-      console.log('[PMLoadingManager] Providers still loading, waiting...');
     } else if (!state.providers.data) {
-      console.log('[PMLoadingManager] No providers data yet', {
         loading: state.providers.loading,
         error: state.providers.error?.message,
         data: state.providers.data,

@@ -188,7 +188,6 @@ class ConversationMemory:
         if self.enable_summarization and len(self.messages) > self.short_term_limit * 2:
             self._maybe_summarize()
         
-        logger.debug(f"[ConversationMemory] Added {role} message, total: {len(self.messages)}")
         return message
     
     def _add_to_vector_store(self, message: ConversationMessage):
@@ -293,7 +292,6 @@ Summary:"""
                     )
                     relevant_messages.append(msg)
             
-            logger.debug(f"[ConversationMemory] Retrieved {len(relevant_messages)} relevant messages")
             return relevant_messages
             
         except Exception as e:
@@ -354,7 +352,6 @@ Summary:"""
         for msg in recent_messages:
             context_messages.append(msg.to_langchain_message())
         
-        logger.debug(
             f"[ConversationMemory] Built context: {len(context_messages)} messages "
             f"(summary: {bool(self.summary)}, recent: {len(recent_messages)})"
         )

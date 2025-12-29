@@ -17,7 +17,6 @@ const BACKEND_URL = getBackendUrl();
 
 export async function GET(request: NextRequest) {
   const url = `${BACKEND_URL}/api/pm/providers`;
-  console.log('[API Proxy] Fetching providers from:', url);
 
   try {
     const controller = new AbortController();
@@ -43,7 +42,6 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
-    console.log('[API Proxy] Successfully fetched providers:', data.length);
     return NextResponse.json(data);
   } catch (error) {
     console.error('[API Proxy] Error fetching providers:', error);

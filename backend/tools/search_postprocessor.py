@@ -106,7 +106,6 @@ class SearchResultPostProcessor:
 
             # Log if significant content was removed
             if len(cleaned_content) < len(original_content) * 0.8:
-                logger.debug(
                     f"Removed base64 images from search content: {result.get('url', 'unknown')}"
                 )
 
@@ -118,7 +117,6 @@ class SearchResultPostProcessor:
 
             # Log if significant content was removed
             if len(cleaned_raw_content) < len(original_raw_content) * 0.8:
-                logger.debug(
                     f"Removed base64 images from search raw content: {result.get('url', 'unknown')}"
                 )
 
@@ -139,12 +137,10 @@ class SearchResultPostProcessor:
                 if len(cleaned_image_url) == 0 or not cleaned_image_url.startswith(
                     "http"
                 ):
-                    logger.debug(
                         f"Removed base64 data from image_url and the cleaned_image_url is empty or not start with http, origin image_url: {result.get('image_url', 'unknown')}"
                     )
                     return {}
                 cleaned_result["image_url"] = cleaned_image_url
-                logger.debug(
                     f"Removed base64 data from image_url: {result.get('image_url', 'unknown')}"
                 )
 

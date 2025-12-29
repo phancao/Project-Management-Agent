@@ -23,7 +23,6 @@ export async function GET(
     url += `?state=${encodeURIComponent(state)}`;
   }
   
-  console.log('[API Proxy] Fetching sprints from:', url);
   
   try {
     const controller = new AbortController();
@@ -49,7 +48,6 @@ export async function GET(
     }
 
     const data = await response.json();
-    console.log('[API Proxy] Successfully fetched sprints:', data.length);
     return NextResponse.json(data);
   } catch (error) {
     console.error('[API Proxy] Error fetching sprints:', error);

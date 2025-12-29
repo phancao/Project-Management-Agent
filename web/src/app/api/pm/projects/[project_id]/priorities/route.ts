@@ -14,7 +14,6 @@ export async function GET(
   const { project_id: projectId } = await params;
   const decodedProjectId = decodeURIComponent(projectId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/priorities`;
-  console.log('[API Proxy] Fetching priorities from:', url);
   
   try {
     const controller = new AbortController();

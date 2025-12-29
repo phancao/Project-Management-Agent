@@ -15,7 +15,6 @@ export async function POST(
   const decodedProjectId = decodeURIComponent(projectId);
   const decodedTaskId = decodeURIComponent(taskId);
   const url = `${BACKEND_URL}/api/pm/projects/${encodeURIComponent(decodedProjectId)}/tasks/${encodeURIComponent(decodedTaskId)}/remove-epic`;
-  console.log('[API Proxy] Removing epic from task at:', url);
   
   try {
     const body = await request.json();

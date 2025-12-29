@@ -540,8 +540,6 @@ def planner_node(
         
         if project_id:
             import sys
-            sys.stderr.write(f"\n📌 EXTRACTED PROJECT_ID: {project_id}\n")
-            sys.stderr.flush()
 
     # Detect if this is a PM query (has project_id or PM-related keywords) for logging
     is_pm_query = False
@@ -1184,7 +1182,6 @@ Create a comprehensive plan that addresses their need for more detailed analysis
         clarified_topic, clarification_history = build_clarified_topic_from_history(
             clarification_history
         )
-        logger.debug("Clarification history rebuilt: %s", clarification_history)
 
         if clarification_history:
             initial_topic = clarification_history[0]
@@ -1357,8 +1354,7 @@ Create a comprehensive plan that addresses their need for more detailed analysis
         )
         # Log full response for debugging (only if response exists)
         if response_exists:
-            logger.debug(f"Coordinator response content: {response.content if hasattr(response, 'content') else 'N/A'}")
-            logger.debug(f"Coordinator response object: {response}")
+            pass
         # Fallback to planner to ensure workflow continues
         goto = "planner"
 
@@ -1642,7 +1638,6 @@ async def reporter_node(state: State, config: RunnableConfig):
                 max_length_per_step = 10000
                 max_items = 10
             
-            logger.debug(f"[reporter_node] Token limit: {token_limit}, max_length_per_step: {max_length_per_step}, max_items: {max_items}")
             
             step_observations = []
             has_completed_steps = False
@@ -2131,10 +2126,8 @@ async def reporter_node(state: State, config: RunnableConfig):
         }
     except Exception as e:
         import traceback
-        error_traceback = traceback.format_exc()
         error_message = f"Error in reporter node: {str(e)}"
         logger.error(f"[reporter_node] {error_message}", exc_info=True)
-        logger.error(f"Full traceback:\n{error_traceback}")
         
         # Check for context length errors specifically
         error_str = str(e)
@@ -2250,7 +2243,6 @@ def research_team_node(state: State):  # noqa: ARG001
         if all_complete:
             logger.info(f"[research_team_node] All {len(current_plan.steps)} steps completed! Conditional edge will route to validator.")
     
-    logger.debug("Entering research_team_node - coordinating research and coder agents")
 
 
 async def _execute_agent_step(
@@ -2258,10 +2250,7 @@ async def _execute_agent_step(
 ) -> Command[Literal["research_team"]]:
     """Helper function to execute a step using the specified agent."""
     import sys
-    sys.stderr.write(f"\n⚡ EXECUTE_AGENT_STEP: agent_name='{agent_name}'\n")
-    sys.stderr.flush()
     
-    logger.debug(f"[_execute_agent_step] Starting execution for agent: {agent_name}")
     
     current_plan = state.get("current_plan")
     if not current_plan or isinstance(current_plan, str):
@@ -2271,10 +2260,7 @@ async def _execute_agent_step(
     plan_title = current_plan.title
     observations = state.get("observations", [])
     
-    sys.stderr.write(f"\n📋 PLAN INFO: plan_title='{plan_title}'\n")
-    sys.stderr.flush()
     
-    logger.debug(f"[_execute_agent_step] Plan title: {plan_title}, observations count: {len(observations)}")
 
     # Find the first unexecuted step
     current_step = None
@@ -2288,7 +2274,6 @@ async def _execute_agent_step(
         if not step.execution_res:
             current_step = step
             current_step_idx = idx  # Store the index for later use
-            logger.debug(f"[_execute_agent_step] Found unexecuted step at index {idx}: {step.title}")
             break
         else:
             completed_steps.append(step)
@@ -2299,7 +2284,6 @@ async def _execute_agent_step(
         return Command(goto="reporter")
 
     logger.info(f"[_execute_agent_step] Executing step: {current_step.title}, agent: {agent_name}")
-    logger.debug(f"[_execute_agent_step] Completed steps so far: {len(completed_steps)}")
     step_start_time = time.time()
 
     # Get token limit for this agent's model to adjust compression dynamically
@@ -2426,8 +2410,6 @@ async def _execute_agent_step(
         )
 
     # Invoke the agent
-    sys.stderr.write(f"\n🎯 INVOKING AGENT: agent_name='{agent_name}', step='{current_step.title if current_step else 'N/A'}'\n")
-    sys.stderr.flush()
     
     default_recursion_limit = 25
     try:
@@ -2451,23 +2433,15 @@ async def _execute_agent_step(
         )
         recursion_limit = default_recursion_limit
 
-    sys.stderr.write(f"\n📥 AGENT INPUT: messages_count={len(agent_input.get('messages', []))}\n")
     if agent_input.get('messages'):
         first_msg = agent_input['messages'][0]
         msg_type = type(first_msg).__name__
         msg_content = str(first_msg.content) if hasattr(first_msg, 'content') else 'N/A'
         # Check if project_id is in content
         has_project_id = 'project_id' in msg_content.lower() or 'd7e300c6' in msg_content
-        sys.stderr.write(f"📥 First message type: {msg_type}\n")
-        sys.stderr.write(f"📥 Content length: {len(msg_content)}, has_project_id: {has_project_id}\n")
-    sys.stderr.flush()
     
     logger.info(f"Agent input: {agent_input}")
-    logger.debug(
-        f"[{agent_name}] Agent input details: "
-        f"messages_count={len(agent_input.get('messages', []))}, "
-        f"available_tools={[t.name if hasattr(t, 'name') else str(t) for t in agent_input.get('tools', [])]}"
-    )
+    
     
     # Validate message content before invoking agent
     try:
@@ -2601,7 +2575,6 @@ async def _execute_agent_step(
     if agent_name == "pm_agent" and token_limit:
         # Re-count tokens right before invocation (context may have grown)
         final_token_count = context_manager.count_tokens(agent_input["messages"], model=model_name)
-        logger.info(f"[{agent_name}] 🔍 Final token check before LLM: {final_token_count:,} tokens (limit: {token_limit:,}, message limit: {message_token_limit:,})")
         
         # If still over limit, apply emergency truncation
         if final_token_count > message_token_limit:
@@ -2694,19 +2667,12 @@ async def _execute_agent_step(
                 tool_calls_made = [tc.get('name', 'unknown') for tc in last_message.tool_calls]
             if hasattr(last_message, 'content'):
                 response_preview = str(last_message.content)[:300]
-        sys.stderr.write(f"\n✅ AGENT COMPLETED: agent_name='{agent_name}', tool_calls={tool_calls_made}\n")
-        sys.stderr.write(f"✅ Response preview: {response_preview}...\n")
-        sys.stderr.flush()
         
     except Exception as e:
         import traceback
-        sys.stderr.write(f"\n❌ AGENT ERROR: agent_name='{agent_name}', error={str(e)}\n")
-        sys.stderr.flush()
 
-        error_traceback = traceback.format_exc()
         error_message = f"Error executing {agent_name} agent for step '{current_step.title}': {str(e)}"
         logger.exception(error_message)
-        logger.error(f"Full traceback:\n{error_traceback}")
         
         # Enhanced error diagnostics for content-related errors
         if "Field required" in str(e) and "content" in str(e):
@@ -2797,7 +2763,6 @@ async def _execute_agent_step(
     tool_calls_info = []
     
     # Log all messages to debug tool call results
-    logger.debug(f"[{agent_name}] All messages in result: {len(result.get('messages', []))}")
     for i, msg in enumerate(result.get("messages", [])):
         msg_type = type(msg).__name__
         if msg_type == "ToolMessage":
@@ -2853,11 +2818,11 @@ async def _execute_agent_step(
                     if existing_thoughts:
                         logger.info(f"[{agent_name}] 💭 Found {len(existing_thoughts)} thoughts in OpenAI response (already attached)")
                     else:
-                        logger.debug(f"[{agent_name}] No thoughts found in OpenAI response - agent may not have included reasoning")
+                        pass
             else:
-                logger.debug(f"[{agent_name}] Message {i}: AIMessage - content={str(msg.content)[:200]}")
+                pass
         else:
-            logger.debug(f"[{agent_name}] Message {i}: {msg_type} - content={str(msg.content)[:200] if hasattr(msg, 'content') else 'N/A'}")
+            pass
     
     # Combine agent response with tool results
     if tool_results:
@@ -2884,7 +2849,6 @@ async def _execute_agent_step(
     )
     logger.info(f"[{agent_name}] Final execution result length: {len(combined_result)} chars (max={max_execution_result_length}, token_limit={token_limit})")
     
-    logger.debug(f"{agent_name.capitalize()} full response: {combined_result[:500]}...")
 
     # CRITICAL: Create new Step and Plan objects instead of mutating in place
     # Pydantic models and LangGraph state updates require creating new objects
@@ -2925,10 +2889,6 @@ async def _execute_agent_step(
     current_step_index = min(completed_count, len(updated_plan.steps) - 1)
     logger.info(f"Step progress: {completed_count}/{len(updated_plan.steps)} steps completed (current_step_index={current_step_index})")
 
-    sys.stderr.write(f"\n🔄 RETURNING RESULT: agent_name='{agent_name}', message_type='AIMessage', content_len={len(combined_result)}\n")
-    sys.stderr.write(f"🔄 Step '{current_step.title}' execution_res set: {bool(updated_step.execution_res)}\n")
-    sys.stderr.write(f"🔄 Updated plan has {completed_count} completed steps out of {len(updated_plan.steps)}\n")
-    sys.stderr.flush()
     
     pm_thoughts = []
     
@@ -2953,7 +2913,7 @@ async def _execute_agent_step(
                     break
     
     if not pm_thoughts:
-        logger.debug(f"[{agent_name}] No thoughts found in OpenAI response - agent may not have included reasoning")
+        pass
     
     # Include optimization messages if they exist
     final_message = AIMessage(
@@ -3307,9 +3267,6 @@ async def _setup_and_execute_agent_step(
                     )
             
             import sys
-            sys.stderr.write(f"\n🔧 [{agent_type}] TOOLS LOADED: {added_count} MCP tools added (total: {len(loaded_tools)})\n")
-            sys.stderr.write(f"🔧 [{agent_type}] Tool names: {[tool.name for tool in loaded_tools]}\n")
-            sys.stderr.flush()
             logger.info(
                 f"[{agent_type}] Added {added_count} MCP tools to agent "
                 f"(total tools: {len(loaded_tools)})"
@@ -3318,8 +3275,6 @@ async def _setup_and_execute_agent_step(
                 f"[{agent_type}] list_my_tasks tool added to agent: {list_my_tasks_added}"
             )
             if not list_my_tasks_added:
-                sys.stderr.write(f"\n❌ [{agent_type}] ERROR: list_my_tasks NOT ADDED!\n")
-                sys.stderr.flush()
                 logger.error(
                     f"[{agent_type}] ERROR: list_my_tasks tool was NOT added to agent! "
                     f"This means the tool was either not discovered or not in enabled_tools filter."
@@ -3519,15 +3474,12 @@ async def researcher_node(
 ) -> Command[Literal["research_team"]]:
     """Researcher node that do research"""
     logger.info("Researcher node is researching.")
-    logger.debug(f"[researcher_node] Starting researcher agent")
     
     configurable = Configuration.from_runnable_config(config)
-    logger.debug(f"[researcher_node] Max search results: {configurable.max_search_results}")
     
     tools = [get_web_search_tool(configurable.max_search_results, provider_id=configurable.search_provider), crawl_tool, backend_api_call]
     retriever_tool = get_retriever_tool(state.get("resources", []))
     if retriever_tool:
-        logger.debug(f"[researcher_node] Adding retriever tool to tools list")
         tools.insert(0, retriever_tool)
     
     # PM tools are loaded via MCP configuration in _setup_and_execute_agent_step
@@ -3548,12 +3500,10 @@ async def researcher_node(
     #     if analytics_tools:
     #         tools.extend(analytics_tools)
     #         logger.info(f"[researcher_node] Added {len(analytics_tools)} analytics tools to researcher agent")
-    #         logger.debug(f"[researcher_node] Analytics tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in analytics_tools]}")
     # except Exception as e:
     #     logger.warning(f"[researcher_node] Could not add analytics tools: {e}")
     
     logger.info(f"[researcher_node] Researcher tools count: {len(tools)}")
-    logger.debug(f"[researcher_node] Researcher tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in tools]}")
     
     return await _setup_and_execute_agent_step(
         state,
@@ -3568,7 +3518,6 @@ async def coder_node(
 ) -> Command[Literal["research_team"]]:
     """Coder node that do code analysis."""
     logger.info("Coder node is coding.")
-    logger.debug(f"[coder_node] Starting coder agent with python_repl_tool")
     
     tools = [python_repl_tool, backend_api_call]
     
@@ -3582,7 +3531,6 @@ async def coder_node(
     #     if analytics_tools:
     #         tools.extend(analytics_tools)
     #         logger.info(f"[coder_node] Added {len(analytics_tools)} analytics tools to coder agent")
-    #         logger.debug(f"[coder_node] Analytics tools: {[tool.name if hasattr(tool, 'name') else str(tool) for tool in analytics_tools]}")
     # except Exception as e:
     #     logger.warning(f"[coder_node] Could not add analytics tools: {e}")
     
@@ -4094,18 +4042,14 @@ async def react_agent_node(
                             tool_name = f"tool_{tool.name}"
                             needs_optimize, reason = tracker.record_usage(tool_name, estimated_tokens)
                             if needs_optimize:
-                                logger.debug(
-                                )
+                                pass
                         
                         if original_len > max_chars:
-                            logger.warning(
-                                f"(≈{estimated_tokens:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
+                            logger.info(
+                                f"[{agent_name}] Truncating tool result from {original_len:,} to {max_chars:,} chars"
                             )
                             result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                             final_len = len(result_str)
-                            logger.info(
-                                f"(≈{estimated_tokens:,} → ≈{final_len//4:,} tokens)"
-                            )
                         else:
                             pass
                         return result_str
@@ -4785,9 +4729,7 @@ Question: {input}
                     )
                     self.should_escalate = True
                 else:
-                    logger.debug(
-                        f"(limit: {self.max_scratchpad_tokens:,})"
-                    )
+                    pass
             except Exception as e:
                 logger.error(f"[PM-AGENT] ❌ Error monitoring scratchpad: {e}")
     
@@ -4902,9 +4844,7 @@ Question: {input}
             # Just log usage - no compression            
             usage_pct = tracker.get_total_usage_percentage()
             if usage_pct > 0.5:
-                logger.debug(
-                        f"({tracker.total_used:,}/{tracker.total_limit:,} tokens)"
-                    )
+                pass
                     
         except Exception as e:
             logger.warning(f"[PM-AGENT] ⚠️ pre_model_hook failed: {e}")
@@ -5905,7 +5845,6 @@ Question: {input}
                     )
                     tool_call_messages.append(tool_result_msg)
                     
-                    logger.debug(f"[PM-AGENT] 🔧 Created tool call message pair: {tool_name} (id={tool_call_id})")
         
         # DO NOT include optimization messages in return - they clutter the PM UI
         # Context optimization still happens internally, just not shown to user
@@ -6090,11 +6029,7 @@ async def pm_agent_node(
     def get_ts():
         return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         
-    sys.stderr.write(f"\n[{get_ts()}] 🚨🚨🚨 PM_AGENT_NODE CALLED 🚨🚨🚨\n")
-    sys.stderr.flush()
-    logger.error(f"[{get_ts()}] 🚨🚨🚨 PM_AGENT_NODE CALLED - THIS SHOULD APPEAR IN LOGS! 🚨🚨🚨")
     logger.info(f"[{get_ts()}] PM Agent node is analyzing project management data.")
-    logger.debug(f"[{get_ts()}] [pm_agent_node] Starting PM agent with PM tools only")
     
     # PM Agent has NO web search or code execution tools
     # It ONLY has access to PM tools which are loaded via MCP configuration

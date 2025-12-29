@@ -37,7 +37,6 @@ export function LanguageSwitcher() {
 
   const handleLanguageChange = (newLocale: string) => {
     startTransition(() => {
-      console.log(`updateing locale to ${newLocale}`)
       // Set locale in cookie
       document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000; SameSite=lax`;
       // Reload the page to apply the new locale

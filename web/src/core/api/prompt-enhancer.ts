@@ -29,7 +29,6 @@ export async function enhancePrompt(
   }
 
   const data = await response.json();
-  console.log("Raw API response:", data); // Debug log
 
   // The backend now returns the enhanced prompt directly in the result field
   let enhancedPrompt = data.result;
@@ -48,7 +47,6 @@ export async function enhancePrompt(
       }
     } catch {
       // If parsing fails, use the string as-is (which is what we want)
-      console.log("Using enhanced prompt as-is:", enhancedPrompt);
     }
   }
 

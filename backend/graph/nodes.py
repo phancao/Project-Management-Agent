@@ -99,7 +99,6 @@ def _add_context_optimization_tool_call(state: State, agent_name: str, optimizat
         )
     else:
         result_text = (
-            f"Context checked: {original_tokens:,} tokens (within limit, no compression needed)\n"
             f"Messages: {original_count}\n"
             f"Strategy: {strategy}"
         )
@@ -193,7 +192,6 @@ def detect_user_needs_more_detail(messages: list) -> bool:
     
     # Check for clear indicators
     if any(pattern in msg_lower for pattern in escalation_patterns):
-        logger.info(f"[COORDINATOR] User needs more detail (pattern match)")
         return True
     
     # Check message length - very short messages likely satisfied ("thanks", "ok")
@@ -226,7 +224,6 @@ Respond with ONLY one word: MORE or SATISFIED"""
         response = llm.invoke(prompt)
         
         result = "MORE" in response.content.upper()
-        logger.info(f"[COORDINATOR] LLM classification: {'MORE' if result else 'SATISFIED'}")
         return result
         
     except Exception as e:
@@ -261,7 +258,6 @@ def extract_project_id(text: str) -> str:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             project_id = match.group(1).strip()
-            logger.info(f"Extracted project_id: {project_id}")
             return project_id
     
     return ""
@@ -363,7 +359,6 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
             logger.warning(
                 f"[VALIDATOR] Plan title: {plan.get('title', 'N/A')}, "
                 f"Steps: {len(steps)}, "
-                f"Step types: {[s.get('step_type', 'N/A') for s in steps]}"
             )
             
             # Try to enhance the first pm_query step with missing tools
@@ -402,7 +397,6 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
             for idx, step in enumerate(steps):
                 if step.get("step_type") == "research":
                     step["need_search"] = True
-                    logger.info(f"Enforced web search on research step at index {idx}")
                     break
             else:
                 # Fallback: If no research step exists, convert the first step to a research step with web search enabled.
@@ -414,7 +408,6 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
                 )
         elif not has_search_step and not steps:
             # Add a default research step if no steps exist
-            logger.warning("Plan has no steps. Adding default research step.")
             plan["steps"] = [
                 {
                     "need_search": True,
@@ -529,9 +522,9 @@ def planner_node(
     
     # Check if this is a replanning iteration
     if reflection and plan_iterations > 0:
-        logger.info(f"[PLANNER] Replanning (iteration {plan_iterations}) with reflection context")
+        pass
     else:
-        logger.info("Planner generating full plan")
+        pass
 
     # Extract project_id from research topic or messages
     project_id = state.get("project_id", "")
@@ -608,10 +601,9 @@ def planner_node(
     # Log PM query detection for identification
     prompt_template = "planner"
     if is_pm_query:
-        logger.info(f"[PLANNER] 🔵 PM QUERY DETECTED - Indicators: {', '.join(pm_query_indicators)}")
-        logger.info(f"[PLANNER] Using 'planner' template (has built-in PM query handling)")
+        pass
     else:
-        logger.info(f"[PLANNER] 🔍 Research query detected - Using 'planner' template")
+        pass
     
     # For clarification feature: use the clarified research topic (complete history)
     if state.get("enable_clarification", False) and state.get(
@@ -656,7 +648,6 @@ def planner_node(
             messages.insert(1, project_context_msg)
         else:
             messages.append(project_context_msg)
-        logger.info(f"[PLANNER] 💉 Injected project context: {project_id}")
         
         # Enforce JSON output with a final system message (recency bias)
         messages.append({
@@ -715,7 +706,6 @@ Learn from the ReAct agent's attempts and create a better strategy.
             }
         ]
         
-        logger.info(f"[PLANNER] Added ReAct escalation context (reason: {escalation_reason})")
     
     # CRITICAL: Add reflection context if this is a replanning iteration
     if reflection and plan_iterations > 0:
@@ -781,7 +771,6 @@ Create a NEW plan that learns from these failures."""
     if configurable.enable_deep_thinking:
         # Deep thinking mode - use reasoning LLM
         llm = get_llm_by_type("reasoning")
-        logger.info("[PLANNER] 📨 Using reasoning LLM (LangGraph will stream)")
         response = llm.invoke(messages)
         full_response = response.content if hasattr(response, 'content') else str(response)
     else:
@@ -789,12 +778,10 @@ Create a NEW plan that learns from these failures."""
         # We DON'T use structured output here because it prevents streaming
         # Instead, we'll parse the JSON response manually
         llm = get_llm_by_type("basic")
-        logger.info("[PLANNER] 📨 Using basic LLM invoke (LangGraph will stream)")
         
         try:
             response = llm.invoke(messages)
             full_response = response.content if hasattr(response, 'content') else str(response)
-            logger.info(f"[PLANNER] 📨 LLM response received, length={len(full_response)}")
         except Exception as e:
             logger.error(f"[PLANNER] LLM invocation failed: {e}")
             if plan_iterations > 0:
@@ -802,7 +789,6 @@ Create a NEW plan that learns from these failures."""
             else:
                 return Command(goto="__end__")
     logger.debug(f"Current state messages: {state['messages']}")
-    logger.info(f"Planner response: {full_response}")
 
     try:
         curr_plan = json.loads(repair_json_output(full_response))
@@ -817,9 +803,6 @@ Create a NEW plan that learns from these failures."""
     if isinstance(curr_plan, dict) and "steps" in curr_plan:
         step_types = [step.get("step_type", "unknown") for step in curr_plan.get("steps", [])]
         need_search_flags = [step.get("need_search", False) for step in curr_plan.get("steps", [])]
-        logger.info(f"[PLANNER] 📋 Generated plan with {len(step_types)} steps")
-        logger.info(f"[PLANNER] Step types: {', '.join(step_types)}")
-        logger.info(f"[PLANNER] Need search flags: {need_search_flags}")
         
         # Identify if this is a PM plan or research plan
         has_pm_query = any(st == "pm_query" for st in step_types)
@@ -827,11 +810,11 @@ Create a NEW plan that learns from these failures."""
         has_web_search = any(need_search_flags)
         
         if has_pm_query:
-            logger.info(f"[PLANNER] ✅ PM PLAN DETECTED - Contains pm_query steps")
+            pass
         elif has_research or has_web_search:
-            logger.info(f"[PLANNER] 🔍 RESEARCH PLAN DETECTED - Contains research steps or web_search")
+            pass
         else:
-            logger.info(f"[PLANNER] ⚙️  PROCESSING PLAN DETECTED - Contains processing steps")
+            pass
 
     # Validate and fix plan to ensure web search requirements are met
     new_plan = None
@@ -841,7 +824,6 @@ Create a NEW plan that learns from these failures."""
         # Ensure required fields are present before validation
         if "locale" not in curr_plan:
             curr_plan["locale"] = state.get("locale", "en-US")
-            logger.info(f"[PLANNER] Added missing locale field: {curr_plan['locale']}")
         
         if "title" not in curr_plan:
             # Generate a default title from steps if available
@@ -849,7 +831,6 @@ Create a NEW plan that learns from these failures."""
                 curr_plan["title"] = curr_plan["steps"][0].get("title", "Execution Plan")
             else:
                 curr_plan["title"] = "Execution Plan"
-            logger.info(f"[PLANNER] Added missing title field: {curr_plan['title']}")
         
         # Validate plan structure (even if has_enough_context is False, we still need valid structure)
         try:
@@ -870,7 +851,6 @@ Create a NEW plan that learns from these failures."""
                 return Command(goto="reporter")
 
     if isinstance(curr_plan, dict) and curr_plan.get("has_enough_context") and new_plan:
-        logger.info("Planner response has enough context.")
         
         # Check if plan has steps that need execution (e.g., PM tool calls)
         # Even if has_enough_context is true, we need to execute steps first
@@ -893,7 +873,6 @@ Create a NEW plan that learns from these failures."""
             )
         else:
             # No steps to execute, can go directly to reporter
-            logger.info("Plan has no steps to execute. Routing directly to reporter.")
             return Command(
                 update={
                     "messages": [AIMessage(content=full_response, name="planner")],
@@ -933,7 +912,6 @@ def human_feedback_node(
 
         # if the feedback is not accepted, return the planner node
         if feedback_normalized.startswith("[PLANNER]"):
-            logger.info(f"Plan edit requested by user: {feedback}")
             return Command(
                 update={
                     "messages": [
@@ -943,7 +921,7 @@ def human_feedback_node(
                 goto="planner",
             )
         elif feedback_normalized.startswith("[ACCEPTED]"):
-            logger.info("Plan is accepted by user.")
+            pass
         else:
             logger.warning(f"Unsupported feedback format: {feedback}. Please use '[ACCEPTED]' to accept or '[PLANNER]' to edit.")
             return Command(goto="planner")
@@ -985,8 +963,6 @@ def coordinator_node(
 ) -> Command[Literal["planner", "background_investigator", "coordinator", "react_agent", "__end__"]]:
     import datetime
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-    logger.info(f"[{ts}] [COORDINATOR] 🚀 Coordinator node entered - state keys: {list(state.keys())}")
-    logger.info(f"[{ts}] [COORDINATOR] final_report exists: {bool(state.get('final_report'))}, len={len(state.get('final_report', ''))}")
     """
     Adaptive coordinator that intelligently routes queries.
     
@@ -1038,7 +1014,6 @@ def coordinator_node(
             needs_escalation = detect_user_needs_more_detail(messages)
             
             if needs_escalation:
-                logger.info("[COORDINATOR] 🔄 USER ESCALATION - User needs more detail, routing to planner")
                 
                 # Build context for planner
                 last_user_msg = get_message_content(messages[-1]) if messages else ""
@@ -1448,7 +1423,7 @@ Create a comprehensive plan that addresses their need for more detailed analysis
             pass
         
         if project_id:
-            logger.info(f"[COORDINATOR] 📌 Extracted project_id: {project_id}")
+            pass
     else:
         pass
     
@@ -1517,7 +1492,6 @@ async def reporter_node(state: State, config: RunnableConfig):
     import datetime
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     logger.info(f"[{ts}] [REPORTER] 📝 Reporter node entered")
-    logger.info(f"[{ts}] [REPORTER] final_report exists: {bool(state.get('final_report'))}, routing_mode: {state.get('routing_mode', '')}")
     """Reporter node that write a final report (async for streaming)."""
     
     # Check routing mode FIRST - PM routes need special handling
@@ -1730,7 +1704,6 @@ async def reporter_node(state: State, config: RunnableConfig):
                             execution_res = json.dumps(compressed, ensure_ascii=False)
                             logger.info(f"[reporter_node] Compressed step {idx + 1} ('{step.title}') from {len(str(step.execution_res))} to {len(execution_res)} chars")
                         except (json.JSONDecodeError, TypeError):
-                            execution_res = str(execution_res)[:max_length_per_step] + f"\n\n... (truncated, original length: {len(str(step.execution_res))} chars) ..."
                             logger.warning(f"[reporter_node] Truncated step {idx + 1} ('{step.title}') from {len(str(step.execution_res))} to {len(execution_res)} chars")
                     
                     step_obs = f"## Step {idx + 1}: {step.title}\n\n{execution_res}"
@@ -1787,7 +1760,6 @@ async def reporter_node(state: State, config: RunnableConfig):
         )
 
     # Log observations for debugging (especially for PM data queries)
-    logger.info(f"Reporter: Received {len(observations)} observations (from state and/or completed steps)")
     logger.info(f"Reporter: PM Route Detection: is_from_react={is_from_react}, routing_mode='{routing_mode}'")
     
     for idx, obs in enumerate(observations):
@@ -1986,15 +1958,10 @@ async def reporter_node(state: State, config: RunnableConfig):
                         original_content_len = len(content)
                         # Truncate if content is longer than max_chars (always truncate if over budget)
                         if len(content) > max_chars:
-                            truncated_msg["content"] = content[:max_chars] + "\n\n... (truncated due to context length limit) ..."
                             truncated = True
                             logger.info(f"Reporter: Truncated dict message {i} from {original_content_len} to {max_chars} chars (target: {max_for_this_msg} tokens)")
                 elif hasattr(truncated_msg, 'content') and isinstance(truncated_msg.content, str):
                     original_content_len = len(truncated_msg.content)
-                    if len(truncated_msg.content) > max_chars:
-                        truncated_msg.content = truncated_msg.content[:max_chars] + "\n\n... (truncated due to context length limit) ..."
-                        truncated = True
-                        logger.info(f"Reporter: Truncated message object {i} from {original_content_len} to {max_chars} chars (target: {max_for_this_msg} tokens)")
                 
                 truncated_messages.append(truncated_msg)
                 # Count tokens after truncation - use accurate counting
@@ -2047,12 +2014,10 @@ async def reporter_node(state: State, config: RunnableConfig):
                             original_len = len(content)
                             if len(content) > max_chars_per_msg:
                                 emergency_msg["content"] = content[:max_chars_per_msg] + "\n\n... (emergency truncation) ..."
-                                logger.info(f"Reporter: Emergency truncated dict message {i} from {original_len} to {max_chars_per_msg} chars")
                     elif hasattr(emergency_msg, 'content') and isinstance(emergency_msg.content, str):
                         original_len = len(emergency_msg.content)
                         if len(emergency_msg.content) > max_chars_per_msg:
                             emergency_msg.content = emergency_msg.content[:max_chars_per_msg] + "\n\n... (emergency truncation) ..."
-                            logger.info(f"Reporter: Emergency truncated message object {i} from {original_len} to {max_chars_per_msg} chars")
                     
                     emergency_messages.append(emergency_msg)
                 
@@ -2636,7 +2601,6 @@ async def _execute_agent_step(
                                     original_len = len(first_msg.content)
                                     first_msg.content = first_msg.content[:max_chars_for_first] + "\n\n... (truncated due to context length limit) ..."
                                     logger.info(
-                                        f"[{agent_name}] Aggressively truncated first message: {original_len:,} → {max_chars_for_first:,} chars"
                                     )
                                     
                                     # Recalculate token count
@@ -2686,7 +2650,7 @@ async def _execute_agent_step(
                                             goto="research_team",
                                         )
         else:
-            logger.info(f"[{agent_name}] Agent input within limit ({input_token_count:,} < {message_token_limit * 0.8:.0f}), no compression needed")
+            pass
     
     # CRITICAL: Final context check right before LLM invocation
     # This ensures we catch any context growth during agent execution
@@ -2712,7 +2676,6 @@ async def _execute_agent_step(
                         original_len = len(first_msg.content)
                         first_msg.content = first_msg.content[:emergency_max_chars] + "\n\n... (emergency truncation - context too large) ..."
                         logger.warning(
-                            f"[{agent_name}] 🚨 Emergency truncated first message: {original_len:,} → {emergency_max_chars:,} chars"
                         )
                         
                         # Recalculate after emergency truncation
@@ -2762,7 +2725,7 @@ async def _execute_agent_step(
                                 goto="research_team",
                             )
         else:
-            logger.info(f"[{agent_name}] ✅ Final token check passed: {final_token_count:,} tokens within limit")
+            pass
     
     try:
         invoke_start_time = time.time()
@@ -2962,7 +2925,6 @@ async def _execute_agent_step(
     else:
         combined_result = response_content
     
-    # Final sanitization pass on combined result to ensure it's within limits
     # Use model-aware max_length based on token limit
     # Reserve 30% for prompt, use remaining for execution result
     if token_limit:
@@ -3329,13 +3291,11 @@ async def _setup_and_execute_agent_step(
                         
                         if original_len > max_chars:
                             logger.warning(
-                                f"[{agent_type}] 🔍 MCP Tool '{tool.name}' returned {original_len:,} chars "
                                 f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                             )
                             result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                             final_len = len(result_str)
                             logger.info(
-                                f"[{agent_type}] ✅ MCP Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                                 f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
                             )
                         return result_str
@@ -3370,13 +3330,11 @@ async def _setup_and_execute_agent_step(
                         
                         if original_len > max_chars:
                             logger.warning(
-                                f"[{agent_type}] 🔍 MCP Tool '{tool.name}' returned {original_len:,} chars "
                                 f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                             )
                             result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                             final_len = len(result_str)
                             logger.info(
-                                f"[{agent_type}] ✅ MCP Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                                 f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
                             )
                         return result_str
@@ -3718,7 +3676,6 @@ def validator_node(state: State, config: RunnableConfig) -> Command:
     
     # CRITICAL: Check if reporter already completed (prevent infinite loop)
     if state.get("final_report"):
-        logger.info("[VALIDATOR] Reporter already completed (final_report exists). Workflow should end.")
         # Don't route anywhere - let the graph edge handle END
         return Command(
             update={
@@ -4064,7 +4021,6 @@ async def react_agent_node(
     import datetime
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     logger.info(f"[{ts}] [PM-AGENT] 🚀 React Agent node entered")
-    logger.info(f"[{ts}] [PM-AGENT] State keys: {list(state.keys())}, messages count: {len(state.get('messages', []))}")
     
     configurable = Configuration.from_runnable_config(config)
     
@@ -4101,7 +4057,6 @@ async def react_agent_node(
                 user_query = msg.get('content', '')
                 break
         
-        logger.info(f"[{ts}] [PM-AGENT] 📝 User query: {user_query[:100]}...")
         logger.info(f"[{ts}] [PM-AGENT] 📝 Project ID: {project_id}")
         
         # Create LLM
@@ -4119,7 +4074,6 @@ async def react_agent_node(
             )
             
             if result.success and result.result:
-                logger.info(f"[{ts}] [PM-AGENT] ✅ Agent completed with {len(result.steps)} steps")
                 
                 # Build messages for state
                 tool_call_msg = AIMessage(
@@ -4221,22 +4175,19 @@ async def react_agent_node(
                             needs_optimize, reason = tracker.record_usage(tool_name, estimated_tokens)
                             if needs_optimize:
                                 logger.debug(
-                                    f"[PM-AGENT] 🔍 Tool '{tool.name}' usage triggered optimization check: {reason}"
                                 )
                         
                         if original_len > max_chars:
                             logger.warning(
-                                f"[PM-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
                                 f"(≈{estimated_tokens:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                             )
                             result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                             final_len = len(result_str)
                             logger.info(
-                                f"[PM-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                                 f"(≈{estimated_tokens:,} → ≈{final_len//4:,} tokens)"
                             )
                         else:
-                            logger.debug(f"[PM-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                            pass
                         return result_str
                     tool.func = truncated_func
                 else:
@@ -4256,17 +4207,15 @@ async def react_agent_node(
                         
                         if original_len > max_chars:
                             logger.warning(
-                                f"[PM-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
                                 f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                             )
                             result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                             final_len = len(result_str)
                             logger.info(
-                                f"[PM-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                                 f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
                             )
                         else:
-                            logger.debug(f"[PM-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                            pass
                         return result_str
                     tool.func = truncated_func
             # Check if tool has _arun method (for BaseTool subclasses)
@@ -4288,17 +4237,15 @@ async def react_agent_node(
                     
                     if original_len > max_chars:
                         logger.warning(
-                            f"[PM-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
                             f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                         )
                         result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                         final_len = len(result_str)
                         logger.info(
-                            f"[PM-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                             f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
                         )
                     else:
-                        logger.debug(f"[PM-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                        pass
                     return result_str
                 tool._arun = truncated_arun
             # Check if tool has _run method (for BaseTool subclasses)
@@ -4320,17 +4267,15 @@ async def react_agent_node(
                     
                     if original_len > max_chars:
                         logger.warning(
-                            f"[PM-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
                             f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                         )
                         result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                         final_len = len(result_str)
                         logger.info(
-                            f"[PM-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                             f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
                         )
                     else:
-                        logger.debug(f"[PM-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                        pass
                     return result_str
                 tool._run = truncated_run
             else:
@@ -4613,7 +4558,6 @@ async def react_agent_node(
         
         if current_pid:
             project_context_str = f"\n\nCURRENT PROJECT CONTEXT:\n- ID: {current_pid}\n- YOU MUST USE THIS PROJECT ID immediately for any tools requiring 'project_id'.\n- Do NOT call get_current_project or get_current_project_details first - you already have the project ID!"
-            logger.info(f"[PM-AGENT] 💉 Injected project context from state: {current_pid}")
         else:
             logger.info(f"[PM-AGENT] ⚠️ No project_id in state after all access methods attempted")
     except Exception as e:

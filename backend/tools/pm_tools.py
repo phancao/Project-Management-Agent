@@ -747,22 +747,11 @@ async def list_sprints(
         if project_id and ":" in project_id:
             actual_project_id = project_id.split(":", 1)[1]
             
-        
-        # Use handler method if available, otherwise use provider directly
-        sprints = []
-        handler_type = handler.__class__.__name__
-
         import time
         start_time = time.time()
         
         # Use handler method which handles both single and multi-provider modes
-        if handler.single_provider:
-             sprints = await handler.single_provider.list_project_sprints(actual_project_id)
-        else:
-             sprints = await handler.list_all_sprints(project_id=actual_project_id)
-             
-        duration = time.time() - start_time
-        
+        sprints = []
         if hasattr(handler, 'list_all_sprints'):
             sprints = await handler.list_all_sprints(project_id=actual_project_id)
         elif handler.single_provider:
@@ -781,62 +770,17 @@ async def list_sprints(
                 }
                 for s in sprint_objs
             ]
-        elif project_id:
-            sprints = await handler.list_project_sprints(project_id)
-        
-        # INVESTIGATE: Check for duplicate sprint IDs to understand why list is doubled
-        sprint_ids = [s.get("id") if isinstance(s, dict) else str(getattr(s, "id", None)) for s in sprints]
-        unique_ids = set(sprint_ids)
-        if len(sprint_ids) != len(unique_ids):
-            duplicate_count = len(sprint_ids) - len(unique_ids)
-            logger.warning(
-                f"[PM-TOOLS] ⚠️ DUPLICATE SPRINTS DETECTED: {len(sprint_ids)} total sprints, "
-                f"{len(unique_ids)} unique IDs, {duplicate_count} duplicates found!"
-            )
-            # Log which IDs are duplicated
-            from collections import Counter
-            id_counts = Counter(sprint_ids)
-            duplicates = {id: count for id, count in id_counts.items() if count > 1}
-            # Log first few sprint IDs to see pattern
         else:
-            pass
-        
-        # TEMPORARY: Deduplicate sprints by ID to prevent duplicates from PM service
-        # TODO: Remove this once root cause is fixed
-        seen_ids = set()
-        deduplicated_sprints = []
-        for sprint in sprints:
-            sprint_id = sprint.get("id") if isinstance(sprint, dict) else None
-            if sprint_id and sprint_id not in seen_ids:
-                seen_ids.add(sprint_id)
-                deduplicated_sprints.append(sprint)
-            elif sprint_id:
-                pass
-        
-        if len(deduplicated_sprints) < len(sprints):
-            logger.warning(
-                f"[PM-TOOLS] ⚠️ Deduplicated sprints: {len(sprints)} → {len(deduplicated_sprints)} "
-                f"(removed {len(sprints) - len(deduplicated_sprints)} duplicates) - "
-                f"THIS IS A WORKAROUND, ROOT CAUSE NEEDS INVESTIGATION"
-            )
-        
-        sprints = deduplicated_sprints
+            sprints = await handler.list_project_sprints(actual_project_id)
+             
+        duration = time.time() - start_time
+        logger.info(f"[PM-TOOLS] list_sprints completed in {duration:.2f}s, returned {len(sprints)} sprints")
         
         result = json.dumps({
             "success": True,
             "sprints": sprints,
             "count": len(sprints)
         }, indent=2, default=str)
-        
-        # CRITICAL: Truncate large results to prevent token overflow in ReAct agent scratchpad
-        from backend.utils.json_utils import sanitize_tool_response
-        max_chars = 4000  # 1000 tokens * 4 chars/token
-        if len(result) > max_chars:
-            logger.warning(
-                f"[PM-TOOLS] list_sprints returned {len(result):,} chars "
-                f"(≈{len(result)//4:,} tokens). Truncating to {max_chars:,} chars."
-            )
-            result = sanitize_tool_response(result, max_length=max_chars, compress_arrays=True)
         
         return result
     except Exception as e:

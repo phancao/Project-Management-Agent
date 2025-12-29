@@ -656,9 +656,15 @@ def _process_initial_messages(message, thread_id):
 
 
 async def _process_message_chunk(
-    message_chunk, message_metadata, thread_id, agent
+    message_chunk, message_metadata, thread_id, agent, skip_progressive_thoughts: bool = False
 ):
-    """Process a single message chunk and yield appropriate events."""
+    """Process a single message chunk and yield appropriate events.
+    
+    Args:
+        skip_progressive_thoughts: If True, skip generating progressive TOOL_CALL thoughts.
+            Set to True when called from "updates" stream to avoid duplicates (thoughts already
+            streamed from "messages" stream).
+    """
 
     agent_name = _get_agent_name(agent, message_metadata, message_chunk)
     safe_agent_name = sanitize_agent_name(agent_name)
@@ -829,8 +835,9 @@ async def _process_message_chunk(
             
             # PROGRESSIVE THOUGHTS: Generate and stream TOOL_CALL thought BEFORE tool_calls event
             # This ensures thoughts appear incrementally as each step happens (not batched at end)
+            # Skip if called from "updates" stream (thoughts already streamed from "messages" stream)
             message_id = event_stream_message.get("id")
-            if message_id and agent_name in ["pm_agent", "react_agent"]:
+            if message_id and agent_name in ["pm_agent", "react_agent"] and not skip_progressive_thoughts:
                 # Get current step index for this thread
                 step_index = _progressive_step_counter.get(safe_thread_id, 0)
                 
@@ -1200,6 +1207,17 @@ async def _stream_graph_events_core(
                         chunk_content = str(message_chunk.content)[:50] if message_chunk.content else ""
                     chunk_name = getattr(message_chunk, 'name', 'N/A')
                     has_tool_calls = hasattr(message_chunk, 'tool_calls') and bool(message_chunk.tool_calls)
+                    
+                    # DEBUG: Log source of tool_calls to find duplicates
+                    if has_tool_calls:
+                        tool_names = [tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown') for tc in message_chunk.tool_calls]
+                        langgraph_node = message_metadata.get('langgraph_node', 'unknown')
+                        msg_id = getattr(message_chunk, 'id', 'no-id')
+                        logger.info(
+                            f"[{safe_thread_id}] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls={tool_names}, "
+                            f"node={langgraph_node}, msg_id={msg_id}, agent={agent}"
+                        )
+                    
                     async for event in _process_message_chunk(
                         message_chunk, message_metadata, thread_id, agent
                     ):
@@ -1771,7 +1789,7 @@ async def _stream_graph_events_core(
                                             yield event
                                 
                                 # Process AIMessage with tool_calls (stream tool_calls event WITHOUT thoughts)
-                                # NOTE: Thoughts are already streamed above before this block
+                                # NOTE: Thoughts are already streamed from "messages" stream
                                 if tool_call_ai_message:
                                     logger.info(
                                         f"[{safe_thread_id}] 🔧 Streaming AIMessage with tool_calls: "
@@ -1786,6 +1804,7 @@ async def _stream_graph_events_core(
                                         msg_metadata,
                                         thread_id,
                                         (node_name,),
+                                        skip_progressive_thoughts=True,  # Already streamed from "messages" stream
                                     ):
                                         yield event
                                 

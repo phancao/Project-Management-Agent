@@ -128,11 +128,6 @@ class CursorStyleContextTracker:
         total_usage_percentage = self.total_used / self.total_limit
         total_over = total_usage_percentage >= self.optimization_threshold
         
-            f"[CURSOR-CONTEXT] Usage recorded - '{name}': "
-            f"{tokens_used:,} tokens (total: {allocation.used_tokens:,}/{allocation.allocated_tokens:,}, "
-            f"{allocation.usage_percentage:.0%}), "
-            f"Global: {self.total_used:,}/{self.total_limit:,} ({total_usage_percentage:.0%})"
-        )
         
         # Determine if optimization is needed
         if total_over:

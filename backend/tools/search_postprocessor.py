@@ -106,8 +106,7 @@ class SearchResultPostProcessor:
 
             # Log if significant content was removed
             if len(cleaned_content) < len(original_content) * 0.8:
-                    f"Removed base64 images from search content: {result.get('url', 'unknown')}"
-                )
+                pass
 
         # Clean base64 images from raw content
         if "raw_content" in cleaned_result:
@@ -117,8 +116,7 @@ class SearchResultPostProcessor:
 
             # Log if significant content was removed
             if len(cleaned_raw_content) < len(original_raw_content) * 0.8:
-                    f"Removed base64 images from search raw content: {result.get('url', 'unknown')}"
-                )
+                pass
 
         return cleaned_result
 
@@ -137,12 +135,8 @@ class SearchResultPostProcessor:
                 if len(cleaned_image_url) == 0 or not cleaned_image_url.startswith(
                     "http"
                 ):
-                        f"Removed base64 data from image_url and the cleaned_image_url is empty or not start with http, origin image_url: {result.get('image_url', 'unknown')}"
-                    )
                     return {}
                 cleaned_result["image_url"] = cleaned_image_url
-                    f"Removed base64 data from image_url: {result.get('image_url', 'unknown')}"
-                )
 
         # Truncate very long image descriptions
         if "image_description" in cleaned_result and isinstance(

@@ -352,9 +352,6 @@ Summary:"""
         for msg in recent_messages:
             context_messages.append(msg.to_langchain_message())
         
-            f"[ConversationMemory] Built context: {len(context_messages)} messages "
-            f"(summary: {bool(self.summary)}, recent: {len(recent_messages)})"
-        )
         
         return context_messages
     

@@ -95,7 +95,7 @@ def _extract_json_from_content(content: str) -> str:
     if last_valid_end > 0:
         truncated = content[:last_valid_end + 1]
         if truncated != content:
-        return truncated
+            return truncated
     
     return content
 
@@ -133,6 +133,7 @@ def repair_json_output(content: str) -> str:
             return content
         content = json.dumps(repaired_content, ensure_ascii=False)
     except Exception as e:
+        pass
 
     return content
 
@@ -533,6 +534,7 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
                     # Check if "Sprint 4" or "4" is in any sprint name
                     sprint_4_found = any("4" in str(s.get("name", "")).lower() or "sprint 4" in str(s.get("name", "")).lower() for s in compressed_sprints if isinstance(s, dict))
                 except Exception as e:
+                    pass
                 
                 # Add helpful note for agents on how to search for sprints
                 result = {
@@ -551,6 +553,7 @@ def _compress_large_array(data: Any, max_items: int = 20) -> Any:
                     if compressed_sprints and len(compressed_sprints) > 0:
                         sample_sprint = compressed_sprints[0] if isinstance(compressed_sprints[0], dict) else {}
                 except Exception as e:
+                    pass
                 
                 return result
         

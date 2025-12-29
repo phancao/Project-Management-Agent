@@ -100,8 +100,6 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
             # e.g., "d7e300c6-d6c0-4c08-bc8d-e41967458d86:478:613" -> "613"
             # e.g., "478:613" -> "613"
             result = sprint_id.rsplit(":", 1)[-1]
-                f"[PMProviderAnalyticsAdapter] _extract_sprint_key: '{sprint_id}' -> '{result}'"
-            )
             return result
         return sprint_id
     
@@ -130,9 +128,6 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         # Extract sprint key from composite ID
         # This handles formats like "provider_id:project_id:sprint_id" or "project_id:sprint_id"
         sprint_key = self._extract_sprint_key(sprint_id)
-            f"[PMProviderAnalyticsAdapter] _resolve_sprint_id: sprint_id='{sprint_id}', "
-            f"project_key='{project_key}', extracted sprint_key='{sprint_key}'"
-        )
         
         # Handle 'current' - find active sprint
         if sprint_key.lower() == "current":

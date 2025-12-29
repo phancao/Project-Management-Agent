@@ -63,7 +63,7 @@ def _convert_delta_to_message_chunk(
         reasoning_content = delta_dict.get("reasoning_content")
         if reasoning_content:
             additional_kwargs["reasoning_content"] = reasoning_content
-    else:
+        pass
 
     # Return appropriate message chunk based on role
     if role == "user" or default_class == HumanMessageChunk:
@@ -272,8 +272,8 @@ class ChatOpenAIReasoning(ChatOpenAI):
                     # DEBUG: Log raw chunk before processing
                     import logging
                     logger = logging.getLogger(__name__)
-                    chunk_type_raw = chunk.get("type")
                     if chunk_type_raw or "reasoning" in str(chunk).lower():
+                        pass
 
                     generation_chunk = _convert_chunk_to_generation_chunk(
                         chunk,

@@ -123,6 +123,7 @@ def validate_tool_call_chunks(tool_call_chunks: list) -> None:
             indices_seen.add(index)
     
     if len(indices_seen) > 1:
+        pass
 
 
 def process_tool_call_chunks(tool_call_chunks: list) -> list:

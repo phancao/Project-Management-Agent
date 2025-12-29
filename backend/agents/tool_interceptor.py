@@ -108,8 +108,6 @@ class ToolInterceptor:
                 logger.info(
                     f"[ToolInterceptor] Interrupting before tool '{safe_tool_name_local}'"
                 )
-                    f"[ToolInterceptor] Interrupt message: About to execute tool '{safe_tool_name_local}' with input: {safe_tool_input}..."
-                )
                 
                 # Trigger interrupt and wait for user feedback
                 try:
@@ -140,7 +138,6 @@ class ToolInterceptor:
             try:
                 result = original_func(*args, **kwargs)
                 logger.info(f"[ToolInterceptor] Tool '{safe_tool_name_local}' execution completed successfully")
-                result_len = len(str(result))
                 return result
             except Exception as e:
                 logger.error(f"[ToolInterceptor] Error executing tool '{safe_tool_name_local}': {str(e)}")

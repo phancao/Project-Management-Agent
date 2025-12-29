@@ -108,10 +108,6 @@ def calculate_agent_token_limit(agent_type: str, model_context_limit: int) -> in
     # Ensure reasonable bounds
     final_limit = max(1000, min(calculated_limit, model_context_limit))
     
-        f"[ADAPTIVE-CONTEXT] {agent_type}: "
-        f"model_limit={model_context_limit}, percent={token_percent}, "
-        f"calculated={final_limit}"
-    )
     
     return final_limit
 

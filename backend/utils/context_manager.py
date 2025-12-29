@@ -102,6 +102,7 @@ class ContextManager:
                 if hasattr(temp_llm, 'get_num_tokens_from_messages'):
                     return temp_llm.get_num_tokens_from_messages(messages)
             except (ImportError, AttributeError, Exception) as e:
+                pass
             
             # Manual counting: format messages like OpenAI API expects
             # Use tiktoken.encoding_for_model() for accurate model-specific encoding

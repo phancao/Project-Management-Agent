@@ -36,11 +36,6 @@ def create_agent(
     Returns:
         A configured agent graph
     """
-    import sys
-    
-        f"Creating agent '{agent_name}' of type '{agent_type}' "
-        f"with {len(tools)} tools and template '{prompt_template}'"
-    )
     
     # Wrap tools with interrupt logic if specified
     processed_tools = tools
@@ -50,6 +45,7 @@ def create_agent(
         )
         processed_tools = wrap_tools_with_interceptor(tools, interrupt_before_tools)
     else:
+        pass
 
     if agent_type not in AGENT_LLM_MAP:
         logger.warning(
@@ -58,9 +54,6 @@ def create_agent(
             "This may indicate a configuration issue."
         )
     llm_type = AGENT_LLM_MAP.get(agent_type, "basic")
-    
-    
-    import sys
     llm = get_llm_by_type(llm_type)
     
     agent = create_react_agent(

@@ -180,8 +180,6 @@ function MessageListItem({
     if (
       message.role === "user" ||
       message.agent === "coordinator" ||
-      message.agent === "planner" ||
-      message.agent === "podcast" ||
       message.agent === "react_agent" ||
       startOfResearch
       // Note: reporter is NOT included here - report is shown inside AnalysisBlock
@@ -267,17 +265,13 @@ function MessageListItem({
         <div
           className={cn(
             "flex w-full px-4",
-            message.role === "user" && "justify-end",
             className,
           )}
         >
           <MessageBubble message={message}>
             <div className="flex w-full flex-col break-words">
               <Markdown
-                className={cn(
-                  message.role === "user" &&
-                  "prose-invert not-dark:text-secondary dark:text-inherit",
-                )}
+                className={cn()}
               >
                 {message?.content}
               </Markdown>

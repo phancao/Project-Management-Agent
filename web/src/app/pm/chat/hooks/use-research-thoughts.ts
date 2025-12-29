@@ -52,11 +52,6 @@ export function useResearchThoughts(researchId: string): Thought[] {
   const thoughtsUpdateCounter = useStore((state) => state.thoughtsUpdateCounter);
 
   return useMemo(() => {
-    const timestamp = new Date().toISOString();
-      planMessageId,
-      activityIds: activityIds.length,
-      totalMessages: messages.size,
-    });
 
     const thoughts: Thought[] = [];
     const seenThoughts = new Set<string>();
@@ -195,9 +190,6 @@ export function useResearchThoughts(researchId: string): Thought[] {
     // Sort by step_index
     thoughts.sort((a, b) => a.step_index - b.step_index);
 
-    const finalTimestamp = new Date().toISOString();
-      thoughts: thoughts.map(t => ({ step_index: t.step_index, agent: t.agent, thought: t.thought.substring(0, 50) })),
-    });
 
     return thoughts;
     // Include thoughtsUpdateCounter in dependencies to enable progressive thought updates

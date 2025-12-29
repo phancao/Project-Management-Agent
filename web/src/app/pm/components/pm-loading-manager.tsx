@@ -24,7 +24,7 @@ import { debug } from "../utils/debug";
 export function PMLoadingManager() {
   const searchParams = useSearchParams();
   const activeProjectId = searchParams.get('project');
-  
+
   const {
     state,
     setProvidersState,
@@ -40,7 +40,7 @@ export function PMLoadingManager() {
     // Only load if we're in loading state and don't have data yet
     if (state.providers.loading && !state.providers.data && !state.providers.error) {
       debug.state('Step 1: Loading providers...');
-      
+
       // Add timeout to prevent infinite loading
       const timeoutId = setTimeout(() => {
         debug.error('Provider loading timeout - resetting loading state');
@@ -55,7 +55,7 @@ export function PMLoadingManager() {
           duration: 10000,
         });
       }, 30000); // 30 second timeout
-      
+
       listProviders()
         .then((providers) => {
           clearTimeout(timeoutId);
@@ -73,20 +73,20 @@ export function PMLoadingManager() {
           debug.error('Failed to load providers', error);
           const errorMessage = error instanceof Error ? error.message : String(error);
           const errorObj = error instanceof Error ? error : new Error(String(error));
-          
+
           setProvidersState({
             loading: false,
             error: errorObj,
             data: null,
           });
-          
+
           // Show error toast to user
           toast.error("Failed to load providers", {
             description: errorMessage,
             duration: 10000, // Show for 10 seconds
           });
         });
-      
+
       return () => {
         clearTimeout(timeoutId);
       };
@@ -113,20 +113,7 @@ export function PMLoadingManager() {
 
   // Sync projects state
   useEffect(() => {
-      providersLoading: state.providers.loading,
-      providersData: state.providers.data?.length,
-      providersDataExists: !!state.providers.data,
-      providersError: state.providers.error?.message,
-      projectsLoading,
-      projectsCount: projects.length,
-      projectsError: projectsError?.message,
-    });
-    
     if (!state.providers.loading && state.providers.data) {
-        loading: projectsLoading,
-        count: projects.length,
-        error: projectsError?.message,
-      });
       setProjectsState({
         loading: projectsLoading,
         error: projectsError,
@@ -134,10 +121,6 @@ export function PMLoadingManager() {
       });
     } else if (state.providers.loading) {
     } else if (!state.providers.data) {
-        loading: state.providers.loading,
-        error: state.providers.error?.message,
-        data: state.providers.data,
-      });
     }
   }, [projects, projectsLoading, projectsError, state.providers.loading, state.providers.data, state.providers.error, setProjectsState]);
 

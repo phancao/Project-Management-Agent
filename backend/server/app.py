@@ -1239,7 +1239,7 @@ async def _stream_graph_events_core(
                                 "role": "assistant",
                                 "tool_call_id": item.get("tool_call_id"),
                                 "name": item.get("tool_name"),
-                                "content": item.get("result", "")[:5000],
+                                "content": item.get("result", ""),
                             }
                             yield _make_event("tool_call_result", tool_result_event)
                             
@@ -1515,7 +1515,7 @@ async def _stream_graph_events_core(
                                         "role": "assistant",
                                         "tool_call_id": tool_call_id,
                                         "name": tool_name,
-                                        "content": tool_content[:5000],
+                                        "content": tool_content,
                                     }
                                     yield _make_event("tool_call_result", tool_result_event)
 

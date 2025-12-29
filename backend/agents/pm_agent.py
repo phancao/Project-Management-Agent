@@ -189,13 +189,13 @@ Think through this briefly, then proceed to call the appropriate tool."""
         # PLAN 9: Call callback for real-time streaming
         if self.on_tool_result:
             try:
-                await self.on_tool_result(tool_name, tool_call_id, result_str[:5000])
+                await self.on_tool_result(tool_name, tool_call_id, result_str)
             except Exception as e:
                 logger.error(f"[PM-AGENT] Error in tool result callback: {e}")
         
         self.steps.append(AgentStep(
             type="tool_result",
-            content=result_str[:5000],
+            content=result_str,
             metadata={"tool": tool_name, "length": len(result_str), "id": tool_call_id}
         ))
         

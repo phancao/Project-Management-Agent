@@ -9,6 +9,9 @@ export async function* fetchStream(
   url: string,
   init: RequestInit,
 ): AsyncIterable<StreamEvent> {
+  // [FLOW-TRACE] Start of fetchStream
+  console.log(`[FLOW-TRACE] Frontend : FetchStream : init : url=${url}`);
+
   let response: Response;
   try {
     response = await fetch(url, {
@@ -96,8 +99,7 @@ export async function* fetchStream(
       }
 
       buffer += value;
-      // DEBUG LOG
-      // console.log(`[SSE] 🕒 [${new Date().toISOString()}] Chunk +${value.length}b`);
+
 
       // Check buffer size to avoid memory overflow
       if (buffer.length > MAX_BUFFER_SIZE) {
@@ -116,7 +118,6 @@ export async function* fetchStream(
         if (chunk.trim()) {
           const event = parseEvent(chunk);
           if (event) {
-            console.log(`[SSE] 🕒 [${new Date().toISOString()}] Yielding event: ${event.event} (${event.data?.length ?? 0} chars)`);
             yield event;
           }
         }

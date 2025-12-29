@@ -282,7 +282,6 @@ async def get_current_project_details() -> str:
                     "provider_id": provider_id,
                     "provider_type": getattr(handler.single_provider, 'provider_type', "unknown")
                 }
-                logger.info(f"[PM-TOOLS] 🔍 DEBUG: Found project details: {project['name']} ({project['id']})")
         else:
             # List all and find matching
             projects = await handler.list_all_projects()
@@ -758,7 +757,6 @@ async def list_sprints(
         if project_id and ":" in project_id:
             actual_project_id = project_id.split(":", 1)[1]
             
-        logger.info(f"[PM-TOOLS] 🔍 DEBUG: list_sprints ENTER - project_id='{project_id}', actual_project_id='{actual_project_id}'")
         
         # Use handler method if available, otherwise use provider directly
         sprints = []
@@ -1100,16 +1098,24 @@ async def list_users(
         users = []
         if handler.single_provider:
             user_objs = await handler.single_provider.list_users(project_id=actual_project_id)
-            users = [
-                {
-                    "id": str(u.id),
-                    "name": u.name,
-                    "email": u.email or "",
-                    "username": u.username or "",
-                    "avatar_url": u.avatar_url or "",
-                }
-                for u in user_objs
-            ]
+            # Handle both dict and object responses
+            for u in user_objs:
+                if isinstance(u, dict):
+                    users.append({
+                        "id": str(u.get("id", "")),
+                        "name": u.get("name", ""),
+                        "email": u.get("email", ""),
+                        "username": u.get("username", ""),
+                        "avatar_url": u.get("avatar_url", ""),
+                    })
+                else:
+                    users.append({
+                        "id": str(u.id),
+                        "name": u.name,
+                        "email": u.email or "",
+                        "username": u.username or "",
+                        "avatar_url": u.avatar_url or "",
+                    })
         
         return json.dumps({
             "success": True,

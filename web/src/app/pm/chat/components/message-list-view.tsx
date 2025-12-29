@@ -1,3 +1,5 @@
+"use client";
+
 // Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
@@ -50,9 +52,7 @@ import {
 import { parseJSON } from "~/core/utils";
 import { cn } from "~/lib/utils";
 
-import { PlannerAnalysisBlock } from "./analysis-block";
-import { ReActAnalysisBlockV2 } from "./react-analysis-block";
-import { HandoverIndicator } from "./handover-indicator";
+
 
 export function MessageListView({
   className,
@@ -68,7 +68,8 @@ export function MessageListView({
 }) {
   const scrollContainerRef = useRef<ScrollContainerRef>(null);
   // Use renderable message IDs to avoid React key warnings from duplicate or non-rendering messages
-  const messageIds = useRenderableMessageIds();
+  const messageIds = useStore((state) => state.messageIds);
+  const messages = useStore((state) => state.messages);
   const interruptMessage = useLastInterruptMessage();
   const waitingForFeedbackMessageId = useLastFeedbackMessageId();
   const responding = useStore((state) => state.responding);
@@ -100,10 +101,11 @@ export function MessageListView({
       ref={scrollContainerRef}
     >
       <ul className="flex flex-col">
-        {messageIds.map((messageId) => (
+        {messageIds.map((messageId, index) => (
           <MessageListItem
             key={messageId}
             messageId={messageId}
+            isLast={index === messageIds.length - 1}
             waitForFeedback={waitingForFeedbackMessageId === messageId}
             interruptMessage={interruptMessage}
             onFeedback={onFeedback}
@@ -123,6 +125,7 @@ export function MessageListView({
 function MessageListItem({
   className,
   messageId,
+  isLast,
   waitForFeedback,
   interruptMessage,
   onFeedback,
@@ -131,6 +134,7 @@ function MessageListItem({
 }: {
   className?: string;
   messageId: string;
+  isLast?: boolean;
   waitForFeedback?: boolean;
   onFeedback?: (feedback: { option: Option }) => void;
   interruptMessage?: Message | null;
@@ -141,18 +145,14 @@ function MessageListItem({
   onToggleResearch?: () => void;
 }) {
   const message = useMessage(messageId);
+
   const researchIds = useStore((state) => state.researchIds);
   const startOfResearch = useMemo(() => {
     // CRITICAL: Filter out undefined/null researchIds to prevent bugs
     const validResearchIds = researchIds.filter(id => id != null && id !== undefined);
     const isStart = validResearchIds.includes(messageId);
     // DEBUG: Log when startOfResearch changes
-    if (isStart) {
-      console.log(`[DEBUG-RENDER] ✅ startOfResearch=true for messageId: ${messageId}`, {
-        researchIds: Array.from(validResearchIds),
-        timestamp: new Date().toISOString()
-      });
-    }
+
     return isStart;
   }, [researchIds, messageId]);
 
@@ -172,20 +172,21 @@ function MessageListItem({
     // Skip rendering planner messages that are part of research blocks
     // They will be shown in AnalysisBlock instead
     if (isPlannerInResearch) {
-      console.log(`[DEBUG-RENDER] 🚫 Skipping planner message ${message.id} (part of research block)`, new Error().stack);
+
       return null;
     }
+
+    let content: React.ReactNode | null = null;
 
     if (
       message.role === "user" ||
       message.agent === "coordinator" ||
       message.agent === "planner" ||
       message.agent === "podcast" ||
-      message.agent === "react_agent" ||  // NEW: Handle ReAct agent messages
+      message.agent === "react_agent" ||
       startOfResearch
       // Note: reporter is NOT included here - report is shown inside AnalysisBlock
     ) {
-      let content: React.ReactNode;
 
       // Priority 1: If this is the start of research, route to correct component based on agent
       if (startOfResearch && message?.id) {
@@ -195,75 +196,29 @@ function MessageListItem({
         const escalationLink = state.reactToPlannerEscalation.get(message.id);
 
         // Phase 4: Route based on agent type and escalation
-        if (isReactAgent && escalationLink) {
-          // Escalation: Show both ReAct (left) and Planner (right) side-by-side with handover indicator
-          console.log(`[DEBUG-RENDER] 🔄 Rendering escalation: ReAct=${message.id} → Planner=${escalationLink}`);
+        if (isPlanner) {
+          // Planner agent: Use PlanCard (fallback)
+
           content = (
-            <div className="w-full px-4 min-w-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ReActAnalysisBlockV2 researchId={message.id} />
-                <PlannerAnalysisBlock researchId={escalationLink} />
-              </div>
-              <HandoverIndicator className="mt-4" />
-            </div>
-          );
-        } else if (isReactAgent || message.agent === "pm_agent") {
-          // ReAct agent: Use ReActAnalysisBlockV2 (token-by-token streaming)
-          console.log(`[DEBUG-RENDER] ⚡ Rendering ReActAnalysisBlockV2 for message ${message.id}`);
-          content = (
-            <div className="w-full px-4 min-w-0">
-              <ReActAnalysisBlockV2 researchId={message.id} />
-            </div>
-          );
-        } else if (isPlanner) {
-          // Planner agent: Use PlannerAnalysisBlock (JSON plan parsing)
-          console.log(`[DEBUG-RENDER] 📋 Rendering PlannerAnalysisBlock for message ${message.id}`);
-          content = (
-            <div className="w-full px-4 min-w-0">
-              <PlannerAnalysisBlock researchId={message.id} />
-            </div>
-          );
-        } else {
-          // Fallback: Use PlannerAnalysisBlock for other agents (backward compatibility)
-          console.log(`[DEBUG-RENDER] 📋 Rendering PlannerAnalysisBlock (fallback) for message ${message.id}, agent=${message.agent}`);
-          content = (
-            <div className="w-full px-4 min-w-0">
-              <PlannerAnalysisBlock researchId={message.id} />
+            <div className="w-full px-4">
+              <PlanCard
+                message={message}
+                waitForFeedback={waitForFeedback}
+                interruptMessage={interruptMessage}
+                onFeedback={onFeedback}
+                onSendMessage={onSendMessage}
+              />
             </div>
           );
         }
-      } else if (message.agent === "planner") {
-        console.log(`[DEBUG-RENDER] 📋 Rendering PlanCard for message ${message.id} (standalone planner)`, new Error().stack);
-        // Show PlanCard for standalone planner messages (not in research)
-        content = (
-          <div className="w-full px-4">
-            <PlanCard
-              message={message}
-              waitForFeedback={waitForFeedback}
-              interruptMessage={interruptMessage}
-              onFeedback={onFeedback}
-              onSendMessage={onSendMessage}
-            />
-          </div>
-        );
-      } else if (message.agent === "podcast") {
-        console.log(`[DEBUG-RENDER] 🎙️ Rendering PodcastCard for message ${message.id}`, new Error().stack);
-        content = (
-          <div className="w-full px-4">
-            <PodcastCard message={message} />
-          </div>
-        );
       } else {
-        console.log(`[DEBUG-RENDER] 💬 Rendering MessageBubble for message ${message.id} (agent: ${message.agent}, role: ${message.role})`, new Error().stack);
-        // Render if there's content OR if it's streaming (content may be accumulating)
-        content = (message.content || message.isStreaming) ? (
-          <div
-            className={cn(
-              "flex w-full px-4",
-              message.role === "user" && "justify-end",
-              className,
-            )}
-          >
+        // Fallback: Use MessageBubble for other agents
+
+        // EXTRACT TOOLS
+        const toolNames = message.toolCalls?.map((t) => t.name) || [];
+
+        content = (
+          <div className="w-full px-4">
             <MessageBubble message={message}>
               <div className="flex w-full flex-col break-words">
                 <Markdown
@@ -274,32 +229,89 @@ function MessageListItem({
                 >
                   {message?.content}
                 </Markdown>
+                {/* SHOW TOOLS AND RESULTS */}
+                {message.toolCalls && message.toolCalls.length > 0 && (
+                  <ToolsDisplay toolCalls={message.toolCalls} />
+                )}
               </div>
             </MessageBubble>
           </div>
-        ) : null;
-      }
-      if (content) {
-        return (
-          <motion.li
-            className="mt-10"
-            key={messageId}
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{ transition: "all 0.2s ease-out" }}
-            transition={{
-              duration: 0.2,
-              ease: "easeOut",
-            }}
-          >
-            {content}
-          </motion.li>
         );
       }
+    } else if (message.agent === "planner") {
+
+      // Show PlanCard for standalone planner messages (not in research)
+      content = (
+        <div className="w-full px-4">
+          <PlanCard
+            message={message}
+            waitForFeedback={waitForFeedback}
+            interruptMessage={interruptMessage}
+            onFeedback={onFeedback}
+            onSendMessage={onSendMessage}
+          />
+        </div>
+      );
+    } else if (message.agent === "podcast") {
+
+      content = (
+        <div className="w-full px-4">
+          <PodcastCard message={message} />
+        </div>
+      );
+    } else {
+
+      // Render if there's content OR if there are tool calls (require actual content, don't just rely on isStreaming)
+      const hasContent = message.content && message.content.trim().length > 0;
+      const hasTools = message.toolCalls && message.toolCalls.length > 0;
+      content = (hasContent || hasTools) ? (
+        <div
+          className={cn(
+            "flex w-full px-4",
+            message.role === "user" && "justify-end",
+            className,
+          )}
+        >
+          <MessageBubble message={message}>
+            <div className="flex w-full flex-col break-words">
+              <Markdown
+                className={cn(
+                  message.role === "user" &&
+                  "prose-invert not-dark:text-secondary dark:text-inherit",
+                )}
+              >
+                {message?.content}
+              </Markdown>
+              {/* SHOW TOOLS AND RESULTS for pm_agent and other agents */}
+              {hasTools && (
+                <ToolsDisplay toolCalls={message.toolCalls} />
+              )}
+            </div>
+          </MessageBubble>
+        </div>
+      ) : null;
     }
-    return null;
+    if (content) {
+      return (
+        <motion.li
+          className="mt-10"
+          key={messageId}
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ transition: "all 0.2s ease-out" }}
+          transition={{
+            duration: 0.2,
+            ease: "easeOut",
+          }}
+        >
+          {content}
+        </motion.li>
+      );
+    }
   }
+  return null;
 }
+
 
 function MessageBubble({
   className,
@@ -761,17 +773,42 @@ function PodcastCard({
   );
 }
 
-function ToolsDisplay({ tools }: { tools: string[] }) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1">
-      {tools.map((tool, index) => (
-        <span
-          key={index}
-          className="rounded-md bg-muted px-2 py-1 text-xs font-mono text-muted-foreground"
-        >
-          {tool}
-        </span>
-      ))}
-    </div>
-  );
+import type { ToolCallRuntime } from "~/core/messages/types";
+
+function ToolsDisplay({ tools, toolCalls }: { tools?: string[]; toolCalls?: ToolCallRuntime[] }) {
+  if (toolCalls && toolCalls.length > 0) {
+    return (
+      <div className="mt-2 flex flex-col gap-2">
+        {toolCalls.map((tool, index) => (
+          <div key={index} className="flex flex-col gap-1 rounded-md border bg-muted/50 p-2 text-xs">
+            <div className="font-mono font-semibold text-muted-foreground">
+              🔧 {tool.name} {!tool.result && <span className="text-orange-500">(waiting...)</span>}
+            </div>
+            {tool.result && (
+              <div className="font-mono text-muted-foreground/80 whitespace-pre-wrap pl-4 border-l-2 border-muted-foreground/20">
+                {tool.result}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (tools && tools.length > 0) {
+    return (
+      <div className="mt-2 flex flex-wrap gap-1">
+        {tools.map((tool, index) => (
+          <span
+            key={index}
+            className="rounded-md bg-muted px-2 py-1 text-xs font-mono text-muted-foreground"
+          >
+            {tool}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
 }

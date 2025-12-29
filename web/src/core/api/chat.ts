@@ -152,6 +152,11 @@ export async function* chatStream(
         if (event.event === "thoughts") {
           console.log(`[chatStream] 🎉 THOUGHTS SSE EVENT RECEIVED! data=${event.data}`);
         }
+        // [TOOL-RESULT-DEBUG] Step 8: Log when tool_call_result SSE is received
+        if (event.event === "tool_call_result") {
+          const ts = new Date().toISOString().slice(11, 23);
+          console.log(`[TOOL-RESULT-DEBUG][${ts}][chat.ts:SSE-received] tool_call_result event received! data=${event.data?.substring(0, 200)}...`);
+        }
 
         // Skip events with null or empty data
         if (!event.data || event.data === 'null') {

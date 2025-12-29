@@ -1,3 +1,5 @@
+"use client";
+
 // Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
@@ -147,19 +149,19 @@ function dropMarkdownQuote(markdown?: string | null): string | null {
   ];
 
   let result = markdown;
-  
+
   for (const { prefix, suffix, prefixLen } of patternsToRemove) {
     if (result.startsWith(prefix) && !result.endsWith(suffix)) {
       result = result.slice(prefixLen);
       break;  // remove prefix without suffix only once
     }
   }
-  
+
   let changed = true;
 
   while (changed) {
     changed = false;
-    
+
     for (const { prefix, suffix, prefixLen } of patternsToRemove) {
       let startIndex = 0;
       while ((startIndex = result.indexOf(prefix, startIndex)) !== -1) {
@@ -178,6 +180,6 @@ function dropMarkdownQuote(markdown?: string | null): string | null {
       }
     }
   }
-  
+
   return result;
 }

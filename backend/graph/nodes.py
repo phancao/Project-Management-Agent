@@ -193,7 +193,7 @@ def detect_user_needs_more_detail(messages: list) -> bool:
     
     # Check for clear indicators
     if any(pattern in msg_lower for pattern in escalation_patterns):
-        logger.info(f"[FEEDBACK-DETECT] User needs more detail (pattern match)")
+        logger.info(f"[COORDINATOR] User needs more detail (pattern match)")
         return True
     
     # Check message length - very short messages likely satisfied ("thanks", "ok")
@@ -226,11 +226,11 @@ Respond with ONLY one word: MORE or SATISFIED"""
         response = llm.invoke(prompt)
         
         result = "MORE" in response.content.upper()
-        logger.info(f"[FEEDBACK-DETECT] LLM classification: {'MORE' if result else 'SATISFIED'}")
+        logger.info(f"[COORDINATOR] LLM classification: {'MORE' if result else 'SATISFIED'}")
         return result
         
     except Exception as e:
-        logger.error(f"[FEEDBACK-DETECT] LLM classification failed: {e}")
+        logger.error(f"[COORDINATOR] LLM classification failed: {e}")
         # Conservative: don't escalate on error
         return False
 
@@ -352,16 +352,16 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
     
     if analysis_type and analysis_type != AnalysisType.UNKNOWN:
         logger.info(
-            f"[VALIDATION] Detected analysis type: {analysis_type.value} "
+            f"[VALIDATOR] Detected analysis type: {analysis_type.value} "
             f"(title: '{plan.get('title', 'N/A')}')"
         )
         
         if missing_tools:
             logger.warning(
-                f"[VALIDATION] {analysis_type.value.capitalize()} analysis plan missing {len(missing_tools)} required tools: {', '.join(missing_tools)}"
+                f"[VALIDATOR] {analysis_type.value.capitalize()} analysis plan missing {len(missing_tools)} required tools: {', '.join(missing_tools)}"
             )
             logger.warning(
-                f"[VALIDATION] Plan title: {plan.get('title', 'N/A')}, "
+                f"[VALIDATOR] Plan title: {plan.get('title', 'N/A')}, "
                 f"Steps: {len(steps)}, "
                 f"Step types: {[s.get('step_type', 'N/A') for s in steps]}"
             )
@@ -381,13 +381,13 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
                         )
                         step["description"] = enhanced_desc
                         logger.info(
-                            f"[VALIDATION] Enhanced step '{step.get('title', 'N/A')}' description "
+                            f"[VALIDATOR] Enhanced step '{step.get('title', 'N/A')}' description "
                             f"with missing tools reminder for {analysis_type.value} analysis"
                         )
                     break
         else:
             logger.info(
-                f"[VALIDATION] {analysis_type.value.capitalize()} analysis plan is complete - all required tools present"
+                f"[VALIDATOR] {analysis_type.value.capitalize()} analysis plan is complete - all required tools present"
             )
 
     # ============================================================
@@ -428,7 +428,6 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
 
 
 def background_investigation_node(state: State, config: RunnableConfig):
-    logger.info("background investigation node is running.")
     configurable = Configuration.from_runnable_config(config)
     query = state.get("clarified_research_topic") or state.get("research_topic")
     background_investigation_results: list[str] = []
@@ -523,7 +522,6 @@ def get_formatted_tool_definitions() -> str:
 def planner_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["human_feedback", "reporter"]]:
-    logger.info(f"[DEBUG-NODES] [NODE-PLANNER-1] Planner node entered")
     """Planner node that generate the full plan."""
     configurable = Configuration.from_runnable_config(config)
     plan_iterations = state["plan_iterations"] if state.get("plan_iterations", 0) else 0
@@ -934,7 +932,7 @@ def human_feedback_node(
         feedback_normalized = str(feedback).strip().upper()
 
         # if the feedback is not accepted, return the planner node
-        if feedback_normalized.startswith("[EDIT_PLAN]"):
+        if feedback_normalized.startswith("[PLANNER]"):
             logger.info(f"Plan edit requested by user: {feedback}")
             return Command(
                 update={
@@ -947,7 +945,7 @@ def human_feedback_node(
         elif feedback_normalized.startswith("[ACCEPTED]"):
             logger.info("Plan is accepted by user.")
         else:
-            logger.warning(f"Unsupported feedback format: {feedback}. Please use '[ACCEPTED]' to accept or '[EDIT_PLAN]' to edit.")
+            logger.warning(f"Unsupported feedback format: {feedback}. Please use '[ACCEPTED]' to accept or '[PLANNER]' to edit.")
             return Command(goto="planner")
 
     # if the plan is accepted, run the following node
@@ -987,8 +985,8 @@ def coordinator_node(
 ) -> Command[Literal["planner", "background_investigator", "coordinator", "react_agent", "__end__"]]:
     import datetime
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-    logger.info(f"[{ts}] [COORDINATOR-ENTRY] 🚀 Coordinator node entered - state keys: {list(state.keys())}")
-    logger.info(f"[{ts}] [COORDINATOR-ENTRY] final_report exists: {bool(state.get('final_report'))}, len={len(state.get('final_report', ''))}")
+    logger.info(f"[{ts}] [COORDINATOR] 🚀 Coordinator node entered - state keys: {list(state.keys())}")
+    logger.info(f"[{ts}] [COORDINATOR] final_report exists: {bool(state.get('final_report'))}, len={len(state.get('final_report', ''))}")
     """
     Adaptive coordinator that intelligently routes queries.
     
@@ -998,7 +996,6 @@ def coordinator_node(
     3. Background investigation enabled → Use that flow
     4. Clarification enabled → Use that flow
     """
-    logger.info("Coordinator talking.")
     configurable = Configuration.from_runnable_config(config)
     
     # ADAPTIVE ROUTING: Check if user wants more detail (follow-up escalation)
@@ -1006,11 +1003,9 @@ def coordinator_node(
     previous_result = state.get("previous_result", None)
     routing_mode = state.get("routing_mode", "")
     
-    logger.info(f"[COORDINATOR] 🔍 DEBUG: Adaptive routing check - previous_result={bool(previous_result)}, routing_mode='{routing_mode}'")
     
     if previous_result and routing_mode == "react_first":
         # We previously used ReAct fast path, check if user wants more
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 1 - Previous ReAct result exists, checking for escalation. previous_result length={len(str(previous_result))}, routing_mode='{routing_mode}'")
         
         # CRITICAL: Only check for escalation if the user's message explicitly requests more detail
         # Do NOT escalate for new PM queries - let ReAct handle them first
@@ -1036,15 +1031,13 @@ def coordinator_node(
         if is_new_pm_query:
             # This is a NEW PM query, not a follow-up on previous result
             # Clear previous_result and route to ReAct (will be done in PM intent branch below)
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 1.2 - New PM query detected (not escalation) - clearing previous_result and routing to ReAct")
             # Continue to PM intent detection below, which will clear previous_result
+            pass
         else:
             # This might be a follow-up or escalation request - check for escalation
             needs_escalation = detect_user_needs_more_detail(messages)
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: Escalation detection result: needs_escalation={needs_escalation}")
             
             if needs_escalation:
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 1.1 - User needs escalation, routing to planner")
                 logger.info("[COORDINATOR] 🔄 USER ESCALATION - User needs more detail, routing to planner")
                 
                 # Build context for planner
@@ -1059,7 +1052,6 @@ User Feedback:
 The user indicated the quick answer was not sufficient. 
 Create a comprehensive plan that addresses their need for more detailed analysis.
 """
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: Routing decision - Target: 'planner', Reason: Escalation requested")
                 return Command(
                     update={
                         "routing_mode": "user_escalated",
@@ -1072,13 +1064,12 @@ Create a comprehensive plan that addresses their need for more detailed analysis
             else:
                 # Not escalation, but also not a new PM query - might be a greeting or follow-up
                 # Continue to PM intent detection below
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 1.2.1 - Not escalation, not new PM query - continuing to PM intent detection")
+                pass
     else:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 1.3 - No previous_result or routing_mode != 'react_first', skipping adaptive routing check")
+        pass
 
     # Check if clarification is enabled
     enable_clarification = state.get("enable_clarification", False)
-    logger.info(f"[COORDINATOR] 🔍 DEBUG: Clarification enabled check - enable_clarification={enable_clarification}")
     initial_topic = state.get("research_topic", "")
     clarified_topic = initial_topic
     new_messages = []  # Initialize for direct responses (greetings)
@@ -1086,11 +1077,9 @@ Create a comprehensive plan that addresses their need for more detailed analysis
     # BRANCH 1: Clarification DISABLED (Legacy Mode)
     # ============================================================
     if not enable_clarification:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 2 - Clarification DISABLED (Legacy Mode)")
         # Check if this is a Project Management (PM) related query BEFORE calling LLM
         user_message = ""
         messages_list = state.get("messages", [])
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: Messages list length: {len(messages_list)}")
         if messages_list:
             # Find the last HumanMessage (user message), not just the last message
             from langchain_core.messages import HumanMessage
@@ -1103,21 +1092,19 @@ Create a comprehensive plan that addresses their need for more detailed analysis
                     break
             # Fallback to last message if no HumanMessage found
             if not user_message:
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 2.1 - No HumanMessage found, using last message as fallback")
                 last_msg = messages_list[-1]
                 if hasattr(last_msg, 'content'):
                     user_message = str(last_msg.content).strip().lower()
                 elif isinstance(last_msg, dict) and 'content' in last_msg:
                     user_message = str(last_msg['content']).strip().lower()
             else:
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 2.2 - Found HumanMessage, extracted user_message length={len(user_message)}")
+                pass
         else:
             logger.warning(f"[COORDINATOR] 🔍 DEBUG: BRANCH 2.3 - No messages_list, user_message will be empty")
         
         # Extract only the first line (user's actual message) to avoid matching context/metadata
         # This prevents "project_id: ..." from matching "project" keyword
         user_message_first_line = user_message.split('\n')[0].strip()
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: Extracted first line - user_message_first_line='{user_message_first_line}', full_user_message length={len(user_message)}")
         
         # PM intent detection - only route to PM tools if PM-related
         pm_keywords = ["sprint", "task", "project", "user", "epic", "backlog", "burndown", "velocity", "assign", "assignee", "team member", "work package", "version", "milestone", "status", "priority", "due date", "story point", "scrum", "kanban", "board", "list", "show", "get", "analyze", "report", "health", "dashboard", "description"]
@@ -1125,14 +1112,12 @@ Create a comprehensive plan that addresses their need for more detailed analysis
         
         # Find matching keywords for debug
         matching_keywords = [kw for kw in pm_keywords if kw in user_message_first_line]
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: PM intent detection - has_pm_intent={has_pm_intent}, matching_keywords={matching_keywords}")
         
         # Debug logging for greetings
         if user_message_first_line in ["hi", "hello", "hey"]:
             logger.warning(f"[COORDINATOR] 🔍 DEBUG: Greeting detected - user_message_first_line='{user_message_first_line}', full_user_message='{user_message[:100]}...', has_pm_intent={has_pm_intent}")
         
         if not has_pm_intent:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 2.4 - No PM intent detected, routing to conversational response (END)")
             # Not PM-related (greetings, weather, news, etc.) - call LLM WITHOUT binding tools
             logger.info(f"[COORDINATOR] 💬 No PM intent detected: '{user_message[:50]}...' - responding conversationally without tools")
             messages = apply_prompt_template("coordinator", state, locale=state.get("locale", "en-US"))
@@ -1158,9 +1143,7 @@ Create a comprehensive plan that addresses their need for more detailed analysis
             )
         else:
             # PM-related query - route to ReAct agent (it will decide whether to use PM tools)
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 2.5 - PM intent detected: '{user_message_first_line}' - routing to ReAct agent")
             logger.info(f"[COORDINATOR] 📊 PM intent detected: '{user_message_first_line}' - routing to ReAct agent")
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: Routing decision - Target: 'react_agent', Reason: PM intent detected (Legacy Mode)")
             # Don't call LLM - just route directly to ReAct agent
             # CRITICAL: Clear previous_result, routing_mode, and final_report for NEW PM queries (not escalations)
             # This ensures ReAct is called for new queries, not skipped due to stale state
@@ -1183,7 +1166,6 @@ Create a comprehensive plan that addresses their need for more detailed analysis
     # BRANCH 2: Clarification ENABLED (New Feature)
     # ============================================================
     else:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3 - Clarification ENABLED (New Feature)")
         
         # ============================================================
         # EARLY CHECK: PM queries should bypass clarification and go to ReAct
@@ -1211,7 +1193,6 @@ Create a comprehensive plan that addresses their need for more detailed analysis
         
         # Find matching keywords for debug
         matching_keywords = [kw for kw in pm_keywords if kw in user_message_first_line] if user_message_first_line else []
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: PM intent check in clarification mode - user_message_first_line='{user_message_first_line}', has_pm_intent={has_pm_intent}, matching_keywords={matching_keywords}")
         
         if has_pm_intent:
             # PM query detected - route to ReAct agent
@@ -1237,7 +1218,6 @@ Create a comprehensive plan that addresses their need for more detailed analysis
         clarification_history = list(state.get("clarification_history", []) or [])
         clarification_history = [item for item in clarification_history if item]
         max_clarification_rounds = state.get("max_clarification_rounds", 3)
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: Clarification state - rounds={clarification_rounds}/{max_clarification_rounds}, history_length={len(clarification_history)}")
 
         # Prepare the messages for the coordinator
         state_messages = list(state.get("messages", []))
@@ -1252,16 +1232,13 @@ Create a comprehensive plan that addresses their need for more detailed analysis
         logger.debug("Clarification history rebuilt: %s", clarification_history)
 
         if clarification_history:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.1 - Clarification history exists, length={len(clarification_history)}")
             initial_topic = clarification_history[0]
             latest_user_content = clarification_history[-1]
         else:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.2 - No clarification history")
             latest_user_content = ""
 
         # Add clarification status for first round
         if clarification_rounds == 0:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.3 - First clarification round (rounds=0)")
             messages.append(
                 {
                     "role": "system",
@@ -1289,7 +1266,6 @@ Create a comprehensive plan that addresses their need for more detailed analysis
 
         # Check if we've already reached max rounds
         if clarification_rounds >= max_clarification_rounds:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.4 - Max clarification rounds reached ({clarification_rounds} >= {max_clarification_rounds}), forcing handoff")
             # Max rounds reached - force handoff by adding system instruction
             logger.warning(
                 f"Max clarification rounds ({max_clarification_rounds}) reached. Forcing handoff to planner. Using prepared clarified topic: {clarified_topic}"
@@ -1324,13 +1300,10 @@ Create a comprehensive plan that addresses their need for more detailed analysis
         # No tool calls - LLM is asking a clarifying question
         has_tool_calls = hasattr(response, 'tool_calls') and response.tool_calls
         has_content = hasattr(response, 'content') and response.content
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: LLM response - has_tool_calls={has_tool_calls}, has_content={has_content}")
         
         if not has_tool_calls and has_content:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.5 - No tool calls, LLM asking clarifying question")
             # Check if we've reached max rounds - if so, force handoff to planner
             if clarification_rounds >= max_clarification_rounds:
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.5.1 - Max rounds reached in clarification, forcing handoff to planner")
                 logger.warning(
                     f"Max clarification rounds ({max_clarification_rounds}) reached. "
                     "LLM didn't call handoff tool, forcing handoff to planner."
@@ -1338,7 +1311,6 @@ Create a comprehensive plan that addresses their need for more detailed analysis
                 goto = "planner"
                 # Continue to final section instead of early return
             else:
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.5.2 - Continuing clarification process, incrementing rounds")
                 # Continue clarification process
                 clarification_rounds += 1
                 # Do NOT add LLM response to clarification_history - only user responses
@@ -1373,15 +1345,12 @@ Create a comprehensive plan that addresses their need for more detailed analysis
                     goto=goto,
                 )
         else:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.6 - LLM called tool or has no content")
             # LLM called a tool (handoff) or has no content - clarification complete
             if has_tool_calls:
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.6.1 - Tool calls detected, clarification complete")
                 logger.info(
                     f"Clarification completed after {clarification_rounds} rounds. LLM called handoff tool."
                 )
             else:
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 3.6.2 - No tool calls and no content")
                 logger.warning("LLM response has no content and no tool calls.")
             # goto will be set in the final section based on tool calls
 
@@ -1398,18 +1367,14 @@ Create a comprehensive plan that addresses their need for more detailed analysis
     # Only process if response exists (not early return path)
     response_exists = 'response' in locals() and response
     has_response_tool_calls = response_exists and hasattr(response, 'tool_calls') and response.tool_calls
-    logger.info(f"[COORDINATOR] 🔍 DEBUG: Tool call processing - response_exists={response_exists}, has_response_tool_calls={has_response_tool_calls}")
     
     if has_response_tool_calls:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 4 - Processing tool calls")
         try:
             for tool_call in response.tool_calls:
                 tool_name = tool_call.get("name", "")
                 tool_args = tool_call.get("args", {})
-                logger.info(f"[COORDINATOR] 🔍 DEBUG: Processing tool call - name='{tool_name}', args_keys={list(tool_args.keys())}")
 
                 if tool_name in ["handoff_to_planner", "handoff_after_clarification"]:
-                    logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 4.1 - Handoff tool detected: '{tool_name}'")
                     logger.info("Handing off to planner")
                     goto = "planner"
 
@@ -1417,16 +1382,13 @@ Create a comprehensive plan that addresses their need for more detailed analysis
                     locale = tool_args.get("locale", locale)
                     if not enable_clarification and tool_args.get("research_topic"):
                         research_topic = tool_args["research_topic"]
-                        logger.info(f"[COORDINATOR] 🔍 DEBUG: Extracted research_topic from tool_args: '{research_topic}'")
 
                     if enable_clarification:
-                        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 4.1.1 - Clarification enabled, using clarified topic")
                         logger.info(
                             "Using prepared clarified topic: %s",
                             clarified_topic or research_topic,
                         )
                     else:
-                        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 4.1.2 - Clarification disabled, using research topic")
                         logger.info(
                             "Using research topic for handoff: %s", research_topic
                         )
@@ -1439,7 +1401,6 @@ Create a comprehensive plan that addresses their need for more detailed analysis
             logger.error(f"Error processing tool calls: {e}")
             goto = "planner"
     else:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 4.4 - No tool calls detected, falling back to planner")
         # No tool calls detected - fallback to planner instead of ending
         logger.warning(
             "LLM didn't call any tools. This may indicate tool calling issues with the model. "
@@ -1455,51 +1416,41 @@ Create a comprehensive plan that addresses their need for more detailed analysis
 
     # Set default values for state variables (in case they're not defined in legacy mode)
     if not enable_clarification:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 5 - Clarification disabled, setting default values")
         clarification_rounds = 0
         clarification_history = []
     else:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 5.1 - Clarification enabled, using existing values")
+        pass
 
     clarified_research_topic_value = clarified_topic or research_topic
-    logger.info(f"[COORDINATOR] 🔍 DEBUG: Clarified research topic value: '{clarified_research_topic_value}'")
 
     # ============================================================
     # CRITICAL: Extract project_id BEFORE routing
     # ============================================================
     # Extract project_id from state or messages so ReAct agent can use it
     project_id = state.get("project_id", "")
-    logger.info(f"[COORDINATOR] 🔍 DEBUG: Initial project_id from state: '{project_id}'")
     if not project_id:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 6 - No project_id in state, attempting extraction")
         # Try to extract from research_topic
         project_id = extract_project_id(research_topic)
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 6.1 - Extracted from research_topic: '{project_id}'")
         
         # If not found, try from clarified_research_topic
         if not project_id:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 6.2 - Not found in research_topic, trying clarified_research_topic")
             project_id = extract_project_id(clarified_research_topic_value)
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: Extracted from clarified_research_topic: '{project_id}'")
         
         # If still not found, try from messages
         if not project_id:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 6.3 - Not found in topics, trying messages")
             for msg in state.get("messages", []):
                 content = get_message_content(msg)
                 if content:
                     project_id = extract_project_id(content)
                     if project_id:
-                        logger.info(f"[COORDINATOR] 🔍 DEBUG: Found project_id in message: '{project_id}'")
                         break
         else:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 6.4 - Project_id found, skipping message extraction")
+            pass
         
         if project_id:
-            logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 6.5 - Final project_id extracted: '{project_id}'")
             logger.info(f"[COORDINATOR] 📌 Extracted project_id: {project_id}")
     else:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 6.6 - Project_id already in state: '{project_id}'")
+        pass
     
     # ============================================================
     # ADAPTIVE ROUTING: Apply AFTER all tool call processing
@@ -1511,31 +1462,26 @@ Create a comprehensive plan that addresses their need for more detailed analysis
     # Note: ReAct agent is smart enough to handle greetings without calling tools
     # ============================================================
     escalation_reason = state.get("escalation_reason", "")
-    logger.info(f"[COORDINATOR] 🔍 DEBUG: Escalation check - escalation_reason='{escalation_reason}', previous_result={bool(previous_result)}")
     
     logger.info(f"[COORDINATOR] 🔍 Routing state: goto={goto}, escalation={bool(escalation_reason)}, previous_result={bool(previous_result)}, project_id={project_id if project_id else 'None'}")
     
     # NOTE: Early returns for non-PM and PM queries happen above in the "if not enable_clarification" branch
     # This adaptive routing code only executes for the clarification branch
     from langgraph.graph import END
-    logger.info(f"[COORDINATOR] 🔍 DEBUG: Final routing check - goto='{goto}', END={END}, '__end__'='__end__'")
     if goto == END or goto == "__end__":
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 7 - Routing to END (greeting/conversational)")
         logger.info("[COORDINATOR] 💬 Greeting handled - routing to END")
         # Don't override - already set correctly
     elif goto == "planner" and not escalation_reason and not previous_result:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 7.2 - Routing to planner (no escalation, no previous_result) - switching to ReAct")
         # First-time query → Use ReAct (fast), even for comprehensive queries
         # React Agent will auto-escalate to planner if it can't handle complexity
         logger.info("[COORDINATOR] ⚡ ADAPTIVE ROUTING - Using ReAct fast path (will escalate if needed)")
         goto = "react_agent"
     elif escalation_reason or previous_result:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 7.3 - Escalation or previous_result exists, using full pipeline")
         # Already tried React Agent or user requested escalation → Use full pipeline
         logger.info(f"[COORDINATOR] 📊 Using full pipeline: escalation={escalation_reason}, previous_result={bool(previous_result)}")
         goto = "planner"
     else:
-        logger.info(f"[COORDINATOR] 🔍 DEBUG: BRANCH 7.4 - Default case, keeping goto='{goto}'")
+        pass
     
     # Final routing decision
     logger.info(f"[COORDINATOR] 🎯 FINAL DECISION: {goto}")
@@ -1570,8 +1516,8 @@ Create a comprehensive plan that addresses their need for more detailed analysis
 async def reporter_node(state: State, config: RunnableConfig):
     import datetime
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-    logger.info(f"[{ts}] [REPORTER-ENTRY] 📝 Reporter node entered")
-    logger.info(f"[{ts}] [REPORTER-ENTRY] final_report exists: {bool(state.get('final_report'))}, routing_mode: {state.get('routing_mode', '')}")
+    logger.info(f"[{ts}] [REPORTER] 📝 Reporter node entered")
+    logger.info(f"[{ts}] [REPORTER] final_report exists: {bool(state.get('final_report'))}, routing_mode: {state.get('routing_mode', '')}")
     """Reporter node that write a final report (async for streaming)."""
     
     # Check routing mode FIRST - PM routes need special handling
@@ -1586,7 +1532,6 @@ async def reporter_node(state: State, config: RunnableConfig):
     
     # Debug: log message types
     msg_types = [type(m).__name__ for m in messages[-10:]]  # Last 10 messages
-    logger.info(f"[REPORTER] 🔍 DEBUG: Last 10 message types: {msg_types}")
     
     for msg in messages:
         # Check 1: Direct tool_calls attribute
@@ -1641,7 +1586,7 @@ async def reporter_node(state: State, config: RunnableConfig):
             "final_report": existing_report,
         }
     elif existing_report and is_from_react:
-        logger.info(f"[REPORTER-PM] 🔧 PM route detected (has_pm_tool_calls={has_pm_tool_calls}) - SKIPPING existing report shortcut to regenerate with raw data")
+        logger.info(f"[REPORTER] 🔧 PM route detected (has_pm_tool_calls={has_pm_tool_calls}) - SKIPPING existing report shortcut to regenerate with raw data")
     
 
     logger.info("Reporter write final report")
@@ -1709,12 +1654,12 @@ async def reporter_node(state: State, config: RunnableConfig):
     # The compressed context (observations) will have truncated the task list
     if is_from_react:
         react_intermediate_steps = state.get("react_intermediate_steps", [])
-        logger.info(f"[REPORTER-PM] PM Route detected - extracting RAW data from react_intermediate_steps ({len(react_intermediate_steps)} steps)")
+        logger.info(f"[REPORTER] PM Route detected - extracting RAW data from react_intermediate_steps ({len(react_intermediate_steps)} steps)")
         
         if react_intermediate_steps:
             react_observations = []
             for step_idx, step in enumerate(react_intermediate_steps):
-                logger.debug(f"[REPORTER-PM] Processing step {step_idx + 1}: type={type(step)}")
+                logger.debug(f"[REPORTER] Processing step {step_idx + 1}: type={type(step)}")
                 if isinstance(step, (list, tuple)) and len(step) >= 2:
                     action = step[0]  # Tool call (AgentAction object)
                     observation = step[1]  # Tool result (RAW, uncompressed!)
@@ -1726,18 +1671,18 @@ async def reporter_node(state: State, config: RunnableConfig):
                     # Keep the RAW observation - DO NOT truncate for PM data queries
                     obs_text = f"## Tool: {tool_name}\n**Input:** {tool_input}\n\n**Result:**\n{observation}"
                     react_observations.append(obs_text)
-                    logger.info(f"[REPORTER-PM] Extracted RAW observation {step_idx + 1}: {tool_name} -> {len(str(observation))} chars (UNCOMPRESSED)")
+                    logger.info(f"[REPORTER] Extracted RAW observation {step_idx + 1}: {tool_name} -> {len(str(observation))} chars (UNCOMPRESSED)")
                 else:
-                    logger.warning(f"[REPORTER-PM] Step {step_idx + 1} has unexpected structure: {type(step)}")
+                    logger.warning(f"[REPORTER] Step {step_idx + 1} has unexpected structure: {type(step)}")
             
             if react_observations:
                 observations = react_observations
-                logger.info(f"[REPORTER-PM] ✅ Using {len(observations)} RAW observations from react_intermediate_steps (bypassing compression)")
+                logger.info(f"[REPORTER] ✅ Using {len(observations)} RAW observations from react_intermediate_steps (bypassing compression)")
             else:
-                logger.warning("[REPORTER-PM] ⚠️ No observations extracted from react_intermediate_steps, falling back to state observations")
+                logger.warning("[REPORTER] ⚠️ No observations extracted from react_intermediate_steps, falling back to state observations")
                 observations = state.get("observations", [])
         else:
-            logger.warning("[REPORTER-PM] ⚠️ No react_intermediate_steps found, falling back to state observations")
+            logger.warning("[REPORTER] ⚠️ No react_intermediate_steps found, falling back to state observations")
             observations = state.get("observations", [])
     else:
         # Non-PM routes: Use the existing plan-based or fallback logic
@@ -2378,7 +2323,6 @@ The report generation encountered an error.
 
 
 def research_team_node(state: State):  # noqa: ARG001
-    logger.info(f"[DEBUG-NODES] [NODE-RESEARCH-TEAM-1] Research team node entered")
     """Research team node that routes to appropriate agent or reporter.
     
     NOTE: This node does NOT return a Command for routing. The routing is handled
@@ -2402,7 +2346,6 @@ async def _execute_agent_step(
 ) -> Command[Literal["research_team"]]:
     """Helper function to execute a step using the specified agent."""
     import sys
-    logger.info(f"[DEBUG-NODES] [EXEC-1] [{agent_name}] _execute_agent_step entered")
     sys.stderr.write(f"\n⚡ EXECUTE_AGENT_STEP: agent_name='{agent_name}'\n")
     sys.stderr.flush()
     
@@ -3303,17 +3246,14 @@ async def _setup_and_execute_agent_step(
                         f"[{agent_type}] Connection '{server_name}' dict contents: {json.dumps(connection, indent=2, default=str)}"
                     )
             loaded_tools = default_tools[:]
-            logger.info(f"[DEBUG-NODES] [MCP-5] [{agent_type}] About to call client.get_tools()...")
             
             # Add timeout to prevent hanging on MCP server connection
             mcp_timeout = 30  # 30 seconds timeout for MCP connection
             try:
-                logger.info(f"[DEBUG-NODES] [MCP-6] [{agent_type}] Calling asyncio.wait_for(client.get_tools(), timeout={mcp_timeout})")
                 all_tools = await asyncio.wait_for(
                     client.get_tools(),
                     timeout=mcp_timeout
                 )
-                logger.info(f"[DEBUG-NODES] [MCP-7] [{agent_type}] client.get_tools() completed successfully")
                 logger.info(
                     f"[{agent_type}] Retrieved {len(all_tools)} tools from MCP servers"
                 )
@@ -3681,7 +3621,6 @@ async def researcher_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["research_team"]]:
     """Researcher node that do research"""
-    logger.info(f"[DEBUG-NODES] [NODE-RESEARCHER-1] Researcher node entered")
     logger.info("Researcher node is researching.")
     logger.debug(f"[researcher_node] Starting researcher agent")
     
@@ -3794,14 +3733,12 @@ def validator_node(state: State, config: RunnableConfig) -> Command:
     if all_steps_complete:
         # CRITICAL: Check if reporter already completed BEFORE routing to reporter
         if state.get("final_report"):
-            logger.info(f"[VALIDATOR] 🔍 DEBUG: All {len(current_plan.steps)} steps complete, but reporter already finished. Routing to __end__.")
             return Command(
                 update={
                     "validation_results": state.get("validation_results", [])
                 },
                 goto="__end__"  # Don't route to reporter if it's already done
             )
-        logger.info(f"[VALIDATOR] 🔍 DEBUG: All {len(current_plan.steps)} steps already have execution_res. Routing directly to reporter.")
         return Command(
             update={
                 "validation_results": state.get("validation_results", [])
@@ -4126,8 +4063,8 @@ async def react_agent_node(
     """
     import datetime
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-    logger.info(f"[{ts}] [REACT-AGENT-ENTRY] 🚀 React Agent node entered")
-    logger.info(f"[{ts}] [REACT-AGENT-ENTRY] State keys: {list(state.keys())}, messages count: {len(state.get('messages', []))}")
+    logger.info(f"[{ts}] [PM-AGENT] 🚀 React Agent node entered")
+    logger.info(f"[{ts}] [PM-AGENT] State keys: {list(state.keys())}, messages count: {len(state.get('messages', []))}")
     
     configurable = Configuration.from_runnable_config(config)
     
@@ -4284,22 +4221,22 @@ async def react_agent_node(
                             needs_optimize, reason = tracker.record_usage(tool_name, estimated_tokens)
                             if needs_optimize:
                                 logger.debug(
-                                    f"[REACT-AGENT] 🔍 Tool '{tool.name}' usage triggered optimization check: {reason}"
+                                    f"[PM-AGENT] 🔍 Tool '{tool.name}' usage triggered optimization check: {reason}"
                                 )
                         
                         if original_len > max_chars:
                             logger.warning(
-                                f"[REACT-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
+                                f"[PM-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
                                 f"(≈{estimated_tokens:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                             )
                             result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                             final_len = len(result_str)
                             logger.info(
-                                f"[REACT-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                                f"[PM-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                                 f"(≈{estimated_tokens:,} → ≈{final_len//4:,} tokens)"
                             )
                         else:
-                            logger.debug(f"[REACT-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                            logger.debug(f"[PM-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
                         return result_str
                     tool.func = truncated_func
                 else:
@@ -4319,17 +4256,17 @@ async def react_agent_node(
                         
                         if original_len > max_chars:
                             logger.warning(
-                                f"[REACT-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
+                                f"[PM-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
                                 f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                             )
                             result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                             final_len = len(result_str)
                             logger.info(
-                                f"[REACT-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                                f"[PM-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                                 f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
                             )
                         else:
-                            logger.debug(f"[REACT-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                            logger.debug(f"[PM-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
                         return result_str
                     tool.func = truncated_func
             # Check if tool has _arun method (for BaseTool subclasses)
@@ -4351,17 +4288,17 @@ async def react_agent_node(
                     
                     if original_len > max_chars:
                         logger.warning(
-                            f"[REACT-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
+                            f"[PM-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
                             f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                         )
                         result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                         final_len = len(result_str)
                         logger.info(
-                            f"[REACT-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                            f"[PM-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                             f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
                         )
                     else:
-                        logger.debug(f"[REACT-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                        logger.debug(f"[PM-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
                     return result_str
                 tool._arun = truncated_arun
             # Check if tool has _run method (for BaseTool subclasses)
@@ -4383,21 +4320,21 @@ async def react_agent_node(
                     
                     if original_len > max_chars:
                         logger.warning(
-                            f"[REACT-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
+                            f"[PM-AGENT] 🔍 Tool '{tool.name}' returned {original_len:,} chars "
                             f"(≈{original_len//4:,} tokens). Truncating to {max_chars:,} chars (≈{max_tokens:,} tokens)."
                         )
                         result_str = sanitize_tool_response(result_str, max_length=max_chars, compress_arrays=True)
                         final_len = len(result_str)
                         logger.info(
-                            f"[REACT-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
+                            f"[PM-AGENT] ✅ Tool '{tool.name}' truncated: {original_len:,} → {final_len:,} chars "
                             f"(≈{original_len//4:,} → ≈{final_len//4:,} tokens)"
                         )
                     else:
-                        logger.debug(f"[REACT-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
+                        logger.debug(f"[PM-AGENT] Tool '{tool.name}' returned {original_len:,} chars (within limit)")
                     return result_str
                 tool._run = truncated_run
             else:
-                logger.warning(f"[REACT-AGENT] ⚠️ Tool '{tool.name}' has no func/_run/_arun attribute. Cannot wrap for truncation.")
+                logger.warning(f"[PM-AGENT] ⚠️ Tool '{tool.name}' has no func/_run/_arun attribute. Cannot wrap for truncation.")
             
             return tool
         
@@ -4408,9 +4345,9 @@ async def react_agent_node(
         wrapped_search_tool = wrap_tool_with_truncation(search_tool, max_tokens=1000)
         
         tools = wrapped_pm_tools + [wrapped_search_tool]
-        logger.info(f"[REACT-AGENT] Loaded {len(pm_tools)} PM tools + web_search (all wrapped with truncation)")
+        logger.info(f"[PM-AGENT] Loaded {len(pm_tools)} PM tools + web_search (all wrapped with truncation)")
     except Exception as e:
-        logger.error(f"[REACT-AGENT] Failed to load tools: {e}", exc_info=True)
+        logger.error(f"[PM-AGENT] Failed to load tools: {e}", exc_info=True)
         # Escalate if tools fail
         return Command(
             update={"escalation_reason": "tool_loading_failed"},
@@ -4426,16 +4363,16 @@ async def react_agent_node(
     for msg in reversed(messages):
         if isinstance(msg, HumanMessage) or (hasattr(msg, 'type') and msg.type == 'human') or (isinstance(msg, dict) and msg.get('role') == 'user'):
             user_query = get_message_content(msg)
-            logger.info(f"[REACT-AGENT] 🔍 Found user message: {user_query[:100]}...")
+            logger.info(f"[PM-AGENT] 🔍 Found user message: {user_query[:100]}...")
             break
     
     # Fallback to research_topic if no user message found
     if not user_query:
         user_query = state.get("research_topic") or (get_message_content(messages[-1]) if messages else "User query")
-        logger.info(f"[REACT-AGENT] ⚠️ No user message found, using fallback: {user_query[:100]}...")
+        logger.info(f"[PM-AGENT] ⚠️ No user message found, using fallback: {user_query[:100]}...")
     
-    logger.info(f"[REACT-AGENT] Query: {user_query[:100]}...")
-    logger.info(f"[REACT-AGENT] Available tools: {len(tools)}")
+    logger.info(f"[PM-AGENT] Query: {user_query[:100]}...")
+    logger.info(f"[PM-AGENT] Available tools: {len(tools)}")
     
     # CRITICAL: Apply ADAPTIVE context compression (based on model's context window)
     # ReAct was trying to send 331K tokens! Need to compress conversation history
@@ -4452,7 +4389,7 @@ async def react_agent_node(
     
     # Get adaptive context manager (uses 35% of model's context for ReAct)
     logger.info(
-        f"[REACT-AGENT] 🔍 DEBUG: Creating context manager - "
+        f"[PM-AGENT] 🔍 DEBUG: Creating context manager - "
         f"agent_type=react_agent, "
         f"model_context_limit={model_context_limit:,}, "
         f"frontend_messages={len(frontend_messages)}"
@@ -4464,7 +4401,7 @@ async def react_agent_node(
         frontend_history_messages=frontend_messages
     )
     logger.info(
-        f"[REACT-AGENT] 🔍 DEBUG: Context manager created - "
+        f"[PM-AGENT] 🔍 DEBUG: Context manager created - "
         f"token_limit={context_manager.token_limit}, "
         f"compression_mode={context_manager.compression_mode}, "
         f"preserve_prefix={context_manager.preserve_prefix_message_count}"
@@ -4480,28 +4417,22 @@ async def react_agent_node(
     except:
         actual_model_name = "gpt-3.5-turbo"
     
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Model name determined: {actual_model_name}")
     
     # Compress the state to fit in ReAct's budget
     # ReAct only needs: current query + recent context (not full history)
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Starting context compression. Original messages: {len(all_messages)}")
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: ContextManager token_limit: {context_manager.token_limit}")
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: ContextManager compression_mode: {context_manager.compression_mode}")
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: ContextManager agent_type: {context_manager.agent_type}")
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: State type: {type(state)}, has 'messages' key: {'messages' in state if isinstance(state, dict) else 'N/A'}")
     
     # Count tokens BEFORE compression to see if we're over limit
     try:
         pre_compression_tokens = context_manager.count_tokens(all_messages, model=actual_model_name)
         is_over = context_manager.is_over_limit(all_messages)
         logger.info(
-            f"[REACT-AGENT] 🔍 DEBUG: BEFORE compression - "
+            f"[PM-AGENT] 🔍 DEBUG: BEFORE compression - "
             f"Token count: {pre_compression_tokens:,}, "
             f"Token limit: {context_manager.token_limit:,}, "
             f"Is over limit: {is_over}"
         )
     except Exception as e:
-        logger.warning(f"[REACT-AGENT] 🔍 DEBUG: Failed to count tokens before compression: {e}")
+        logger.warning(f"[PM-AGENT] 🔍 DEBUG: Failed to count tokens before compression: {e}")
         pre_compression_tokens = 0
         is_over = False
     
@@ -4509,7 +4440,7 @@ async def react_agent_node(
     # The reporter will access raw tool results from react_intermediate_steps
     # Compression would truncate the task list making it useless
     logger.info(
-        f"[REACT-AGENT] 🚫 COMPRESSION DISABLED FOR PM QUERIES: "
+        f"[PM-AGENT] 🚫 COMPRESSION DISABLED FOR PM QUERIES: "
         f"Keeping full data ({pre_compression_tokens:,} tokens). "
         f"Reporter will use raw data from react_intermediate_steps."
     )
@@ -4527,14 +4458,13 @@ async def react_agent_node(
     }
     
     logger.info(
-        f"[REACT-AGENT] 🔍 DEBUG: Context compression complete. "
+        f"[PM-AGENT] 🔍 DEBUG: Context compression complete. "
         f"Original: {len(all_messages)} messages, "
         f"Compressed: {len(compressed_messages)} messages"
     )
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Optimization metadata: {optimization_metadata}")
     if optimization_metadata:
         logger.info(
-            f"[REACT-AGENT] 🔍 DEBUG: Compression details - "
+            f"[PM-AGENT] 🔍 DEBUG: Compression details - "
             f"Compressed: {optimization_metadata.get('compressed', False)}, "
             f"Original tokens: {optimization_metadata.get('original_tokens', 0):,}, "
             f"Compressed tokens: {optimization_metadata.get('compressed_tokens', 0):,}, "
@@ -4542,16 +4472,15 @@ async def react_agent_node(
             f"Strategy: {optimization_metadata.get('strategy', 'unknown')}"
         )
     else:
-        logger.error(f"[REACT-AGENT] 🚨 CRITICAL: No optimization metadata returned! This means compression didn't work!")
+        logger.error(f"[PM-AGENT] 🚨 CRITICAL: No optimization metadata returned! This means compression didn't work!")
     
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Using model: {actual_model_name}, Model limit: {model_context_limit:,} tokens")
     
     # Count tokens in compressed messages
     compressed_token_count = context_manager.count_tokens(compressed_messages, model=actual_model_name)
     original_token_count = context_manager.count_tokens(all_messages, model=actual_model_name)
     
     logger.info(
-        f"[REACT-AGENT] 🔍 DEBUG: Token counts - "
+        f"[PM-AGENT] 🔍 DEBUG: Token counts - "
         f"Original: {original_token_count:,} tokens, "
         f"Compressed: {compressed_token_count:,} tokens, "
         f"Model limit: {model_context_limit:,} tokens, "
@@ -4572,7 +4501,7 @@ async def react_agent_node(
     total_estimated_tokens = estimated_base_tokens + compressed_token_count
     
     logger.info(
-        f"[REACT-AGENT] 🔍 DEBUG: Token estimation - "
+        f"[PM-AGENT] 🔍 DEBUG: Token estimation - "
         f"Base (prompt+tools+query): ~{estimated_base_tokens:,} tokens, "
         f"With compressed messages: ~{total_estimated_tokens:,} tokens, "
         f"Model limit: {model_context_limit:,} tokens"
@@ -4607,7 +4536,7 @@ async def react_agent_node(
     base_token_threshold = int(effective_limit * 0.80)  # 80% of limit
     if total_estimated_tokens > base_token_threshold:
         logger.warning(
-            f"[REACT-AGENT] ⚠️ PRE-FLIGHT CHECK FAILED: "
+            f"[PM-AGENT] ⚠️ PRE-FLIGHT CHECK FAILED: "
             f"Base estimated tokens ({total_estimated_tokens:,}) exceed 80% of limit ({base_token_threshold:,}). "
             f"Escalating to planner."
         )
@@ -4624,7 +4553,7 @@ async def react_agent_node(
     total_with_realistic_tools = total_estimated_tokens + realistic_tool_accumulation
     if total_with_realistic_tools > effective_limit:
         logger.warning(
-            f"[REACT-AGENT] ⚠️ PRE-FLIGHT CHECK FAILED: "
+            f"[PM-AGENT] ⚠️ PRE-FLIGHT CHECK FAILED: "
             f"Estimated tokens ({total_estimated_tokens:,}) + realistic tool accumulation ({realistic_tool_accumulation:,}) = {total_with_realistic_tools:,} "
             f"exceeds effective limit ({effective_limit:,}). "
             f"Escalating to planner."
@@ -4639,7 +4568,7 @@ async def react_agent_node(
         )
     
     logger.info(
-        f"[REACT-AGENT] ✅ PRE-FLIGHT CHECK PASSED: "
+        f"[PM-AGENT] ✅ PRE-FLIGHT CHECK PASSED: "
         f"Base tokens ({total_estimated_tokens:,}) < 80% threshold ({base_token_threshold:,}), "
         f"and with realistic tool accumulation ({total_with_realistic_tools:,}) < limit ({effective_limit:,})"
     )
@@ -4652,11 +4581,9 @@ async def react_agent_node(
         compression_ratio = optimization_metadata.get("compression_ratio", 1.0)
         if compression_ratio < 1.0:
             optimization_messages = _add_context_optimization_tool_call(state, "react_agent", optimization_metadata)
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG: Created {len(optimization_messages)} optimization messages (compression applied)")
         else:
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG: No optimization messages - no compression needed")
+            pass
     
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Created LLM instance: {type(llm).__name__}")
     
     # Get user_id from config (not configurable object)
     user_id = config.get("configurable", {}).get("user_id") if isinstance(config, dict) else None
@@ -4665,11 +4592,10 @@ async def react_agent_node(
     project_context_str = ""
     try:
         # DEBUG: Log state info to understand why project_id might not be found
-        logger.info(f"[REACT-AGENT] 🔍 DEBUG STATE: type={type(state).__name__}, is_dict={isinstance(state, dict)}")
         if isinstance(state, dict):
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG STATE keys: {list(state.keys())}")
+            pass
         elif hasattr(state, "keys"):
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG STATE keys (via hasattr): {list(state.keys())}")
+            pass
         
         # Get project_id from state - this is set from the frontend URL parameter
         # Try multiple access methods since state may be TypedDict or other class
@@ -4684,15 +4610,14 @@ async def react_agent_node(
             except (KeyError, TypeError):
                 pass
         
-        logger.info(f"[REACT-AGENT] 🔍 DEBUG project_id value: {current_pid}")
         
         if current_pid:
             project_context_str = f"\n\nCURRENT PROJECT CONTEXT:\n- ID: {current_pid}\n- YOU MUST USE THIS PROJECT ID immediately for any tools requiring 'project_id'.\n- Do NOT call get_current_project or get_current_project_details first - you already have the project ID!"
-            logger.info(f"[REACT-AGENT] 💉 Injected project context from state: {current_pid}")
+            logger.info(f"[PM-AGENT] 💉 Injected project context from state: {current_pid}")
         else:
-            logger.info(f"[REACT-AGENT] ⚠️ No project_id in state after all access methods attempted")
+            logger.info(f"[PM-AGENT] ⚠️ No project_id in state after all access methods attempted")
     except Exception as e:
-        logger.warning(f"[REACT-AGENT] Failed to inject project context: {e}")
+        logger.warning(f"[PM-AGENT] Failed to inject project context: {e}")
 
     react_prompt_template = """You are a helpful PM assistant with access to project management tools and web search.
 """ + project_context_str + """
@@ -4972,8 +4897,6 @@ Question: {input}
     
     # DEBUG: Log tool names for verification
     tool_names_list = [tool.name for tool in tools]
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Available tool names: {tool_names_list}")
-    logger.info(f"[REACT-AGENT] 🔍 DEBUG: User query: {user_query}")
     
     # CRITICAL FIX: Monitor scratchpad token usage with callback
     # Callbacks can't modify prompts, but we can detect when scratchpad is too large
@@ -5010,17 +4933,17 @@ Question: {input}
                 
                 if prompt_tokens > self.max_scratchpad_tokens:
                     logger.error(
-                        f"[REACT-AGENT] 🚨 CRITICAL: Scratchpad too large: {prompt_tokens:,} tokens "
+                        f"[PM-AGENT] 🚨 CRITICAL: Scratchpad too large: {prompt_tokens:,} tokens "
                         f"(limit: {self.max_scratchpad_tokens:,}). Tool truncation is NOT working!"
                     )
                     self.should_escalate = True
                 else:
                     logger.debug(
-                        f"[REACT-AGENT] 🔍 Scratchpad token count: {prompt_tokens:,} tokens "
+                        f"[PM-AGENT] 🔍 Scratchpad token count: {prompt_tokens:,} tokens "
                         f"(limit: {self.max_scratchpad_tokens:,})"
                     )
             except Exception as e:
-                logger.error(f"[REACT-AGENT] ❌ Error monitoring scratchpad: {e}")
+                logger.error(f"[PM-AGENT] ❌ Error monitoring scratchpad: {e}")
     
     # Create callback to monitor scratchpad
     scratchpad_monitor = ScratchpadTokenMonitor(
@@ -5045,7 +4968,7 @@ Question: {input}
         import datetime
         
         ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        logger.info(f"[{ts}] [REACT-PROMPT] Building prompt for react_agent")
+        logger.info(f"[{ts}] [PM-AGENT] Building prompt for react_agent")
         
         # Load prompt from markdown file (not hardcoded!)
         system_prompt = get_prompt_template("pm_react_agent")
@@ -5059,9 +4982,9 @@ Question: {input}
         
         if project_id:
             system_prompt += f"\n\n---\n\n## CURRENT PROJECT CONTEXT\n\n**project_id:** `{project_id}`\n\nUse this project_id in ALL tool calls."
-            logger.info(f"[{ts}] [REACT-PROMPT] Added project_id context: {project_id}")
+            logger.info(f"[{ts}] [PM-AGENT] Added project_id context: {project_id}")
         else:
-            logger.warning(f"[{ts}] [REACT-PROMPT] NO project_id found in state!")
+            logger.warning(f"[{ts}] [PM-AGENT] NO project_id found in state!")
         
         # Get user message from state to include in context
         messages = state.get("messages", [])
@@ -5076,9 +4999,9 @@ Question: {input}
         
         if user_message:
             system_prompt += f"\n\n---\n\n## USER REQUEST\n\n**{user_message}**\n\n→ CALL THE APPROPRIATE TOOL NOW. DO NOT ASK QUESTIONS."
-            logger.info(f"[{ts}] [REACT-PROMPT] Added user request: {user_message[:50]}...")
+            logger.info(f"[{ts}] [PM-AGENT] Added user request: {user_message[:50]}...")
         
-        logger.info(f"[{ts}] [REACT-PROMPT] Final prompt length: {len(system_prompt)} chars")
+        logger.info(f"[{ts}] [PM-AGENT] Final prompt length: {len(system_prompt)} chars")
         return [SystemMessage(content=system_prompt)]
     
     # CRITICAL: Use LangGraph's native pre_model_hook with Cursor-style context tracking
@@ -5131,7 +5054,7 @@ Question: {input}
             # 🚫 PM QUERIES: NEVER COMPRESS - we need full data for task tables
             # Compression was truncating task data making it useless
             logger.info(
-                f"[REACT-AGENT] 🚫 COMPRESSION DISABLED: Token count={token_count:,}. "
+                f"[PM-AGENT] 🚫 COMPRESSION DISABLED: Token count={token_count:,}. "
                 f"Keeping full data for PM queries."
             )
             
@@ -5139,12 +5062,12 @@ Question: {input}
             usage_pct = tracker.get_total_usage_percentage()
             if usage_pct > 0.5:
                 logger.debug(
-                        f"[REACT-AGENT] 📊 Context usage: {usage_pct:.0%} "
+                        f"[PM-AGENT] 📊 Context usage: {usage_pct:.0%} "
                         f"({tracker.total_used:,}/{tracker.total_limit:,} tokens)"
                     )
                     
         except Exception as e:
-            logger.warning(f"[REACT-AGENT] ⚠️ pre_model_hook failed: {e}")
+            logger.warning(f"[PM-AGENT] ⚠️ pre_model_hook failed: {e}")
             # Continue with original messages if tracking fails
         
         return state
@@ -5161,7 +5084,7 @@ Question: {input}
         checkpointer=None,  # No checkpointing for fast path
     )
     
-    logger.info("[REACT-AGENT] ✅ Created LangGraph ReAct agent (better scratchpad control)")
+    logger.info("[PM-AGENT] ✅ Created LangGraph ReAct agent (better scratchpad control)")
     
     # Execute ReAct loop with proper iteration limits (NOT timeout - that's a bad workaround)
     # LangGraph's recursion_limit properly stops the agent after N iterations
@@ -5171,13 +5094,11 @@ Question: {input}
     incremental_thoughts = []  # Track thoughts as they're generated
     
     try:
-        logger.info(f"[REACT-AGENT] 🔍 DEBUG: Starting executor.ainvoke() with query: {user_query[:100]}...")
-        logger.info(f"[REACT-AGENT] 🔍 DEBUG: Using compressed messages: {len(compressed_messages)} messages ({compressed_token_count:,} tokens)")
         
         try:
             # DEBUG: Log what we're about to send
             logger.info(
-                f"[REACT-AGENT] 🔍 DEBUG: About to call executor.ainvoke() with:\n"
+                f"[PM-AGENT] 🔍 DEBUG: About to call executor.ainvoke() with:\n"
                 f"  - input: {user_query[:200]}...\n"
                 f"  - state messages count: {len(all_messages)}\n"
                 f"  - compressed messages count: {len(compressed_messages)}\n"
@@ -5202,7 +5123,7 @@ Question: {input}
                         # Check if this message matches the user query (allowing for slight variations)
                         if user_query.lower().strip() in msg_content.lower() or msg_content.lower() in user_query.lower():
                             user_query_found = True
-                            logger.info(f"[REACT-AGENT] 🔍 User query found in compressed messages: {msg_content[:100]}...")
+                            logger.info(f"[PM-AGENT] 🔍 User query found in compressed messages: {msg_content[:100]}...")
                             break
             
             if user_query_found and compressed_messages:
@@ -5216,22 +5137,20 @@ Question: {input}
                 agent_state = {
                     "messages": compressed_messages + [HumanMessage(content=user_query)]
                 }
-                logger.info(f"[REACT-AGENT] 🔍 Added user query explicitly to agent state: {user_query[:100]}...")
+                logger.info(f"[PM-AGENT] 🔍 Added user query explicitly to agent state: {user_query[:100]}...")
             
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG: Agent state messages count: {len(agent_state['messages'])}, last message: {agent_state['messages'][-1].content[:100] if agent_state['messages'] else 'N/A'}")
             
             # Invoke LangGraph agent (returns state dict, not executor result)
             # Use recursion_limit to prevent infinite loops (NOT timeout - that's a bad workaround)
             # recursion_limit controls max iterations, which is the proper way to limit ReAct loops
             # For PM queries with 1 tool call: 3 iterations (think → call → done)
             recursion_limit = 3  # Reduced from 8 - PM queries need only 1 tool call
-            logger.info(f"[REACT-AGENT] 🔍 Starting LangGraph agent.ainvoke() with recursion_limit={recursion_limit}")
+            logger.info(f"[PM-AGENT] 🔍 Starting LangGraph agent.ainvoke() with recursion_limit={recursion_limit}")
             
             # Use astream to capture state incrementally so we can log what happened even if recursion limit is hit
             result_state = {"messages": []}
             chunk_count = 0
             try:
-                logger.info(f"[REACT-AGENT] 🔍 DEBUG: Starting astream with agent_state: {list(agent_state.keys())}, messages count: {len(agent_state.get('messages', []))}")
                 async for chunk in agent_graph.astream(
                     agent_state, 
                     config={
@@ -5240,10 +5159,8 @@ Question: {input}
                     }
                 ):
                     chunk_count += 1
-                    logger.info(f"[REACT-AGENT] 🔍 DEBUG: Received chunk #{chunk_count}: {list(chunk.keys())}")
                     # Accumulate state from each chunk
                     for node_name, state_update in chunk.items():
-                        logger.info(f"[REACT-AGENT] 🔍 DEBUG: Processing node '{node_name}', state_update type: {type(state_update).__name__}")
                         
                         # LangGraph can return state_update as either:
                         # 1. A dict with "messages" key: {"messages": [...]}
@@ -5253,17 +5170,14 @@ Question: {input}
                         if isinstance(state_update, list):
                             # Direct list of messages
                             new_messages = state_update
-                            logger.info(f"[REACT-AGENT] 🔍 DEBUG: state_update is a list with {len(new_messages)} messages")
                         elif isinstance(state_update, dict):
                             if "messages" in state_update:
                                 new_messages = state_update["messages"]
-                                logger.info(f"[REACT-AGENT] 🔍 DEBUG: state_update is a dict with {len(new_messages)} messages")
                             else:
-                                logger.warning(f"[REACT-AGENT] 🔍 DEBUG: state_update is a dict but no 'messages' key. Keys: {list(state_update.keys())}")
+                                logger.warning(f"[PM-AGENT] 🔍 DEBUG: state_update is a dict but no 'messages' key. Keys: {list(state_update.keys())}")
                         
                         if new_messages:
                             result_state["messages"].extend(new_messages)
-                            logger.info(f"[REACT-AGENT] 🔍 DEBUG: Added {len(new_messages)} messages. Total messages now: {len(result_state['messages'])}")
                             
                             # Extract thoughts incrementally from new messages
                             # Extract thoughts from ALL AIMessages, not just those with tool_calls
@@ -5310,7 +5224,7 @@ Question: {input}
                                             "before_tool": True,
                                             "step_index": len(incremental_thoughts)
                                         })
-                                        logger.info(f"[REACT-AGENT] 💭 Extracted incremental thought: {thought_text[:100]}...")
+                                        logger.info(f"[PM-AGENT] 💭 Extracted incremental thought: {thought_text[:100]}...")
                                         
                                         # Add thought to message's additional_kwargs so it gets streamed
                                         if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
@@ -5323,24 +5237,21 @@ Question: {input}
                                 if key != "messages":
                                     result_state[key] = value
             except Exception as stream_error:
-                logger.error(f"[REACT-AGENT] ❌ Stream error: {stream_error}", exc_info=True)
+                logger.error(f"[PM-AGENT] ❌ Stream error: {stream_error}", exc_info=True)
                 # Re-raise to be caught by outer handler, but result_state now has partial data
                 raise
             
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG: Stream completed. Total chunks received: {chunk_count}")
             
             # Extract result from LangGraph state
             # LangGraph returns state with "messages" containing the final response
             result_messages = result_state.get("messages", [])
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG: LangGraph returned state with {len(result_messages)} messages")
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG: State keys: {list(result_state.keys())}")
             
             if chunk_count == 0:
-                logger.error(f"[REACT-AGENT] ❌ CRITICAL: No chunks received from astream! This means the agent graph didn't execute.")
-                logger.error(f"[REACT-AGENT] 🔍 DEBUG: agent_state keys: {list(agent_state.keys())}")
-                logger.error(f"[REACT-AGENT] 🔍 DEBUG: agent_state messages count: {len(agent_state.get('messages', []))}")
+                logger.error(f"[PM-AGENT] ❌ CRITICAL: No chunks received from astream! This means the agent graph didn't execute.")
+                logger.error(f"[PM-AGENT] 🔍 DEBUG: agent_state keys: {list(agent_state.keys())}")
+                logger.error(f"[PM-AGENT] 🔍 DEBUG: agent_state messages count: {len(agent_state.get('messages', []))}")
                 for i, msg in enumerate(agent_state.get('messages', [])):
-                    logger.error(f"[REACT-AGENT] 🔍 DEBUG: Message {i}: {type(msg).__name__}, content preview: {str(msg)[:100]}")
+                    logger.error(f"[PM-AGENT] 🔍 DEBUG: Message {i}: {type(msg).__name__}, content preview: {str(msg)[:100]}")
             
             if result_messages:
                 # Get the last AI message as the output
@@ -5357,7 +5268,6 @@ Question: {input}
             # Cursor-style: Extract "Thought" (reasoning) before tool calls
             intermediate_steps = []
             thoughts = []  # Store thoughts separately for Cursor-style display
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG: Extracting intermediate steps from {len(result_messages)} messages")
             
             # Debug: Log message types and extract Thought/Action/Observation (use INFO level so it shows up)
             iteration_count = 0
@@ -5384,7 +5294,7 @@ Question: {input}
                         action_input = action_input_match.group(1).strip() if action_input_match else "N/A"
                         
                         logger.info(
-                            f"[REACT-AGENT] 🔍 ITERATION {iteration_count} - AIMessage {i}:\n"
+                            f"[PM-AGENT] 🔍 ITERATION {iteration_count} - AIMessage {i}:\n"
                             f"  Thought: {thought[:300]}...\n"
                             f"  Action: {action}\n"
                             f"  Action Input: {action_input[:200]}..."
@@ -5396,7 +5306,7 @@ Question: {input}
                     tool_call_id = getattr(msg, 'tool_call_id', 'N/A')
                     obs_content = content[:500] if content else 'N/A'
                     logger.info(
-                        f"[REACT-AGENT] 🔍 OBSERVATION - ToolMessage {i}:\n"
+                        f"[PM-AGENT] 🔍 OBSERVATION - ToolMessage {i}:\n"
                         f"  Tool: {tool_name}\n"
                         f"  Tool Call ID: {tool_call_id}\n"
                         f"  Observation: {obs_content}..."
@@ -5405,7 +5315,7 @@ Question: {input}
                 # Check for reasoning_content in additional_kwargs (LangGraph might store it there)
                 reasoning = getattr(msg, 'additional_kwargs', {}).get('reasoning_content', '') if hasattr(msg, 'additional_kwargs') else ''
                 logger.info(
-                    f"[REACT-AGENT] 🔍 Message {i}: type={msg_type}, "
+                    f"[PM-AGENT] 🔍 Message {i}: type={msg_type}, "
                     f"has_tool_calls={has_tool_calls} ({tool_calls_count} calls), "
                     f"has_tool_call_id={has_tool_call_id}, "
                     f"content_len={len(content)}, "
@@ -5421,7 +5331,7 @@ Question: {input}
                     has_tool_calls = hasattr(msg, 'tool_calls') and bool(msg.tool_calls)
                     
                     if msg_type == "AIMessage":
-                        logger.info(f"[REACT-AGENT] 🔍 Processing AIMessage at index {i}, has_tool_calls={has_tool_calls}")
+                        logger.info(f"[PM-AGENT] 🔍 Processing AIMessage at index {i}, has_tool_calls={has_tool_calls}")
                         
                         # Cursor-style: Extract "Thought" from AIMessage content before tool calls
                         # LangGraph's structured tool calling may store reasoning in different places
@@ -5432,7 +5342,7 @@ Question: {input}
                             reasoning_content = msg.additional_kwargs.get('reasoning_content', '')
                             if reasoning_content and isinstance(reasoning_content, str):
                                 thought_text = reasoning_content.strip()
-                                logger.info(f"[REACT-AGENT] 💭 Found reasoning_content in additional_kwargs: {len(thought_text)} chars")
+                                logger.info(f"[PM-AGENT] 💭 Found reasoning_content in additional_kwargs: {len(thought_text)} chars")
                             
                             # Also check for react_thoughts that were added during streaming
                             react_thoughts_from_kwargs = msg.additional_kwargs.get('react_thoughts', [])
@@ -5445,7 +5355,7 @@ Question: {input}
                                     elif isinstance(last_thought, str):
                                         thought_text = last_thought
                                     if thought_text:
-                                        logger.info(f"[REACT-AGENT] 💭 Found react_thoughts in additional_kwargs: {len(thought_text)} chars")
+                                        logger.info(f"[PM-AGENT] 💭 Found react_thoughts in additional_kwargs: {len(thought_text)} chars")
                         
                         # Method 2: Check AIMessage content (text-based ReAct format or structured tool calling)
                         if not thought_text:
@@ -5458,7 +5368,7 @@ Question: {input}
                                     thought_match = msg_content.split("Thought:")[-1].split("Action:")[0].strip()
                                     if thought_match:
                                         thought_text = thought_match
-                                        logger.info(f"[REACT-AGENT] 💭 Extracted thought from 'Thought:' pattern: {len(thought_text)} chars")
+                                        logger.info(f"[PM-AGENT] 💭 Extracted thought from 'Thought:' pattern: {len(thought_text)} chars")
                                 elif msg_content and not msg_content.startswith("Question:"):
                                     # For structured tool calling, the content IS the reasoning
                                     # Only use it if it's not empty and not too long (avoid including tool call details)
@@ -5483,13 +5393,13 @@ Question: {input}
                                             thought_text = msg_content.strip()[:300]
                                             if len(msg_content.strip()) > 300:
                                                 thought_text += "..."
-                                            logger.info(f"[REACT-AGENT] 💭 Using message content as thought (reasoning detected): {len(thought_text)} chars")
+                                            logger.info(f"[PM-AGENT] 💭 Using message content as thought (reasoning detected): {len(thought_text)} chars")
                                         else:
-                                            logger.debug(f"[REACT-AGENT] 💭 Skipping content as thought: too long ({len(msg_content.strip())} chars)")
+                                            logger.debug(f"[PM-AGENT] 💭 Skipping content as thought: too long ({len(msg_content.strip())} chars)")
                                     elif is_greeting:
-                                        logger.debug(f"[REACT-AGENT] 💭 Skipping greeting as thought: '{msg_content.strip()[:50]}...'")
+                                        logger.debug(f"[PM-AGENT] 💭 Skipping greeting as thought: '{msg_content.strip()[:50]}...'")
                                     else:
-                                        logger.debug(f"[REACT-AGENT] 💭 Skipping content as thought: no reasoning indicators found")
+                                        logger.debug(f"[PM-AGENT] 💭 Skipping content as thought: no reasoning indicators found")
                         
                         # Method 3: Extract from content even if no tool_calls (for debugging why tools aren't called)
                         if not thought_text and not has_tool_calls:
@@ -5510,7 +5420,7 @@ Question: {input}
                                     thought_text = f"Agent response (no tools called): {msg_content[:200].strip()}"
                                     if len(msg_content) > 200:
                                         thought_text += "..."
-                                    logger.info(f"[REACT-AGENT] 💭 Extracted thought from AIMessage without tool_calls: {len(thought_text)} chars")
+                                    logger.info(f"[PM-AGENT] 💭 Extracted thought from AIMessage without tool_calls: {len(thought_text)} chars")
                         
                         # Method 4: Generate a descriptive thought based on tool being called (fallback)
                         if not thought_text and has_tool_calls and msg.tool_calls:
@@ -5534,7 +5444,7 @@ Question: {input}
                                         thought_text = f"I'll use {tool_name} to get the information I need."
                                 else:
                                     thought_text = f"I'll use {', '.join(tool_names)} to gather the required information."
-                                logger.info(f"[REACT-AGENT] 💭 Generated descriptive thought based on tool calls: {tool_names}")
+                                logger.info(f"[PM-AGENT] 💭 Generated descriptive thought based on tool calls: {tool_names}")
                         
                         if thought_text:
                             thoughts.append({
@@ -5542,9 +5452,9 @@ Question: {input}
                                 "before_tool": True,
                                 "step_index": len(intermediate_steps) if has_tool_calls else len(thoughts)
                             })
-                            logger.info(f"[REACT-AGENT] 💭 Extracted thought: {thought_text[:100]}...")
+                            logger.info(f"[PM-AGENT] 💭 Extracted thought: {thought_text[:100]}...")
                         elif has_tool_calls:
-                            logger.warning(f"[REACT-AGENT] 💭 No thought found in AIMessage {i} with tool_calls (content empty, no reasoning_content)")
+                            logger.warning(f"[PM-AGENT] 💭 No thought found in AIMessage {i} with tool_calls (content empty, no reasoning_content)")
                         elif not has_tool_calls:
                             # Even without tool_calls, extract thought from content to show what agent is thinking
                             msg_content = getattr(msg, 'content', '') or ''
@@ -5570,14 +5480,14 @@ Question: {input}
                                         "before_tool": True,
                                         "step_index": len(thoughts)
                                     })
-                                    logger.info(f"[REACT-AGENT] 💭 Extracted thought from AIMessage without tool_calls: {len(thought_text)} chars")
+                                    logger.info(f"[PM-AGENT] 💭 Extracted thought from AIMessage without tool_calls: {len(thought_text)} chars")
                         
                         # Process tool calls to build intermediate_steps
                         if has_tool_calls and msg.tool_calls:
                             for tool_call in msg.tool_calls:
                                 tool_call_id = tool_call.get('id') if isinstance(tool_call, dict) else getattr(tool_call, 'id', None)
                                 tool_name = tool_call.get('name') if isinstance(tool_call, dict) else getattr(tool_call, 'name', 'unknown')
-                                logger.debug(f"[REACT-AGENT] 🔍 Looking for tool result for call_id={tool_call_id}, tool={tool_name}")
+                                logger.debug(f"[PM-AGENT] 🔍 Looking for tool result for call_id={tool_call_id}, tool={tool_name}")
                                 
                                 # Find corresponding tool result in subsequent messages
                                 tool_result = None
@@ -5586,7 +5496,7 @@ Question: {input}
                                     result_tool_call_id = getattr(result_msg, 'tool_call_id', None)
                                     if result_tool_call_id == tool_call_id:
                                         tool_result = result_msg.content if hasattr(result_msg, 'content') else str(result_msg)
-                                        logger.debug(f"[REACT-AGENT] 🔍 Found tool result for {tool_name} at index {j}")
+                                        logger.debug(f"[PM-AGENT] 🔍 Found tool result for {tool_name} at index {j}")
                                         break
                                 
                                 if tool_result:
@@ -5600,13 +5510,13 @@ Question: {input}
                                     )
                                     intermediate_steps.append((action, tool_result))
                                 else:
-                                    logger.warning(f"[REACT-AGENT] ⚠️ No tool result found for {tool_name} (call_id={tool_call_id})")
+                                    logger.warning(f"[PM-AGENT] ⚠️ No tool result found for {tool_name} (call_id={tool_call_id})")
             
             # Store thoughts in result for frontend display
             if thoughts:
-                logger.info(f"[REACT-AGENT] 💭 Extracted {len(thoughts)} thought(s) for Cursor-style display")
+                logger.info(f"[PM-AGENT] 💭 Extracted {len(thoughts)} thought(s) for Cursor-style display")
             
-            logger.info(f"[REACT-AGENT] 🔍 Extracted {len(intermediate_steps)} intermediate steps")
+            logger.info(f"[PM-AGENT] 🔍 Extracted {len(intermediate_steps)} intermediate steps")
             
             # Create result dict compatible with existing code
             result = {
@@ -5619,7 +5529,7 @@ Question: {input}
             if scratchpad_monitor.should_escalate:
                 output = result.get("output", "")
                 logger.error(
-                    f"[REACT-AGENT] 🚨 Escalating to planner: Scratchpad exceeded token limit. "
+                    f"[PM-AGENT] 🚨 Escalating to planner: Scratchpad exceeded token limit. "
                     f"Max prompt tokens: {max(scratchpad_monitor.prompt_tokens) if scratchpad_monitor.prompt_tokens else 0:,}"
                 )
                 return Command(
@@ -5633,17 +5543,16 @@ Question: {input}
                     goto="planner"
                 )
             
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG: LangGraph agent.ainvoke() completed successfully")
             if scratchpad_monitor.prompt_tokens:
                 logger.info(
-                    f"[REACT-AGENT] 🔍 Scratchpad token usage: "
+                    f"[PM-AGENT] 🔍 Scratchpad token usage: "
                     f"min={min(scratchpad_monitor.prompt_tokens):,}, "
                     f"max={max(scratchpad_monitor.prompt_tokens):,}, "
                     f"avg={sum(scratchpad_monitor.prompt_tokens)//len(scratchpad_monitor.prompt_tokens):,}"
                 )
         except asyncio.TimeoutError:
             logger.error(
-                f"[REACT-AGENT] ⏱️ TIMEOUT: LangGraph agent.ainvoke() exceeded 60 second timeout. "
+                f"[PM-AGENT] ⏱️ TIMEOUT: LangGraph agent.ainvoke() exceeded 60 second timeout. "
                 f"Escalating to planner. This may indicate the agent is looping or taking too long."
             )
             
@@ -5692,12 +5601,12 @@ Question: {input}
                                     )
                                     partial_intermediate_steps.append((action, tool_result))
             except Exception as extract_error:
-                logger.warning(f"[REACT-AGENT] Failed to extract partial steps on timeout: {extract_error}")
+                logger.warning(f"[PM-AGENT] Failed to extract partial steps on timeout: {extract_error}")
             
             # Convert partial intermediate steps to messages for frontend display
             tool_call_messages = []
             if partial_intermediate_steps:
-                logger.info(f"[REACT-AGENT] 🔧 Converting {len(partial_intermediate_steps)} partial intermediate steps to tool call messages")
+                logger.info(f"[PM-AGENT] 🔧 Converting {len(partial_intermediate_steps)} partial intermediate steps to tool call messages")
                 import uuid
                 # AIMessage and ToolMessage are already imported at module level (line 14)
                 
@@ -5744,18 +5653,16 @@ Question: {input}
         output = result.get("output", "")
         intermediate_steps = result.get("intermediate_steps", [])
         
-        logger.info(f"[REACT-AGENT] Completed in {len(intermediate_steps)} iterations")
+        logger.info(f"[PM-AGENT] Completed in {len(intermediate_steps)} iterations")
         
         # DEBUG: Log intermediate steps structure and token counts with DETAILED analysis
         if intermediate_steps:
-            logger.info(f"[REACT-AGENT] 🔍 DEBUG: Intermediate steps structure: {len(intermediate_steps)} steps")
             total_obs_tokens = 0
             error_count = 0
             invalid_tool_count = 0
             placeholder_count = 0
             
             for idx, step in enumerate(intermediate_steps):
-                logger.info(f"[REACT-AGENT] 🔍 DEBUG: Step {idx + 1}: type={type(step)}, len={len(step) if isinstance(step, (list, tuple)) else 'N/A'}")
                 if isinstance(step, (list, tuple)) and len(step) >= 2:
                     action = step[0]
                     observation = step[1]
@@ -5775,19 +5682,19 @@ Question: {input}
                     # Check for invalid tool name (with parentheses)
                     if tool_name and "()" in tool_name:
                         invalid_tool_count += 1
-                        logger.error(f"[REACT-AGENT] ❌ ERROR: Step {idx + 1} - Invalid tool name with parentheses: {tool_name}")
+                        logger.error(f"[PM-AGENT] ❌ ERROR: Step {idx + 1} - Invalid tool name with parentheses: {tool_name}")
                     
                     # Check for placeholder values
                     if tool_input:
                         tool_input_str = str(tool_input)
                         if '"project_id": "project_id"' in tool_input_str or '"sprint_id": "sprint_id"' in tool_input_str:
                             placeholder_count += 1
-                            logger.error(f"[REACT-AGENT] ❌ ERROR: Step {idx + 1} - Placeholder values detected: {tool_input_str[:200]}")
+                            logger.error(f"[PM-AGENT] ❌ ERROR: Step {idx + 1} - Placeholder values detected: {tool_input_str[:200]}")
                     
                     # Check for errors in observation
                     if any(err in obs_lower for err in ["error", "failed", "exception", "invalid", "not found", "not a valid tool"]):
                         error_count += 1
-                        logger.warning(f"[REACT-AGENT] ⚠️ ERROR DETECTED in Step {idx + 1}: {obs_str[:300]}")
+                        logger.warning(f"[PM-AGENT] ⚠️ ERROR DETECTED in Step {idx + 1}: {obs_str[:300]}")
                     
                     action_str = str(action)[:200] if action else "None"
                     obs_len = len(obs_str)
@@ -5805,7 +5712,7 @@ Question: {input}
                         
                         # CRITICAL: Log observation size to verify truncation is working
                         logger.info(
-                            f"[REACT-AGENT] 🔍 Step {idx + 1} observation: "
+                            f"[PM-AGENT] 🔍 Step {idx + 1} observation: "
                             f"{obs_len:,} chars, {obs_tokens:,} tokens "
                             f"(tool: {tool_name or 'unknown'})"
                         )
@@ -5814,7 +5721,7 @@ Question: {input}
                         # If we see > 3000 tokens, the truncation wrapper might not be working
                         if obs_tokens > 3000:
                             logger.error(
-                                f"[REACT-AGENT] 🚨 CRITICAL: Step {idx + 1} observation has {obs_tokens:,} tokens "
+                                f"[PM-AGENT] 🚨 CRITICAL: Step {idx + 1} observation has {obs_tokens:,} tokens "
                                 f"(expected max 2000). Tool truncation may not be working! Escalating immediately."
                             )
                             return Command(
@@ -5827,21 +5734,21 @@ Question: {input}
                                 goto="planner"
                             )
                         logger.info(
-                            f"[REACT-AGENT] 🔍 DEBUG: Step {idx + 1} - "
+                            f"[PM-AGENT] 🔍 DEBUG: Step {idx + 1} - "
                             f"Tool: {tool_name if tool_name else 'N/A'}, "
                             f"Input: {str(tool_input)[:100] if tool_input else 'N/A'}, "
                             f"Observation: {obs_len:,} chars, {obs_tokens:,} tokens"
                         )
                     except Exception as e:
-                        logger.warning(f"[REACT-AGENT] Failed to count tokens in observation: {e}")
+                        logger.warning(f"[PM-AGENT] Failed to count tokens in observation: {e}")
                         # Estimate tokens as fallback
                         obs_tokens = obs_len // 4
                         total_obs_tokens += obs_tokens
-                        logger.info(f"[REACT-AGENT]   Action: {action_str}")
-                        logger.info(f"[REACT-AGENT]   Observation: {obs_str[:200]}...")
+                        logger.info(f"[PM-AGENT]   Action: {action_str}")
+                        logger.info(f"[PM-AGENT]   Observation: {obs_str[:200]}...")
             
             logger.info(
-                f"[REACT-AGENT] 🔍 DEBUG: Summary - "
+                f"[PM-AGENT] 🔍 DEBUG: Summary - "
                 f"Total steps: {len(intermediate_steps)}, "
                 f"Errors: {error_count}, "
                 f"Invalid tool names: {invalid_tool_count}, "
@@ -5854,7 +5761,7 @@ Question: {input}
             safe_obs_limit = 10000  # 10K tokens for all observations combined
             if total_obs_tokens > safe_obs_limit:
                 logger.error(
-                    f"[REACT-AGENT] 🚨 CRITICAL: Total observation tokens ({total_obs_tokens:,}) "
+                    f"[PM-AGENT] 🚨 CRITICAL: Total observation tokens ({total_obs_tokens:,}) "
                     f"exceed safe limit ({safe_obs_limit:,}). Escalating to prevent rate limit error."
                 )
                 return Command(
@@ -5870,7 +5777,7 @@ Question: {input}
             # Early escalation if we detect too many errors
             if invalid_tool_count >= 2 or placeholder_count >= 2:
                 logger.error(
-                    f"[REACT-AGENT] ❌ CRITICAL: Detected {invalid_tool_count} invalid tool names and {placeholder_count} placeholder values. "
+                    f"[PM-AGENT] ❌ CRITICAL: Detected {invalid_tool_count} invalid tool names and {placeholder_count} placeholder values. "
                     f"Escalating to planner immediately."
                 )
                 return Command(
@@ -5882,7 +5789,7 @@ Question: {input}
                     goto="planner"
                 )
         else:
-            logger.warning("[REACT-AGENT] ⚠️ No intermediate steps - agent may not have called any tools")
+            logger.warning("[PM-AGENT] ⚠️ No intermediate steps - agent may not have called any tools")
         
         # Check for escalation triggers
         
@@ -5893,11 +5800,11 @@ Question: {input}
             # Preserve thoughts from incremental_thoughts if available
             thoughts_to_preserve = incremental_thoughts if 'incremental_thoughts' in locals() and incremental_thoughts else (thoughts if 'thoughts' in locals() else [])
             logger.warning(
-                f"[REACT-AGENT] ⬆️ Too many iterations ({len(intermediate_steps)} >= 8) - escalating to planner. "
+                f"[PM-AGENT] ⬆️ Too many iterations ({len(intermediate_steps)} >= 8) - escalating to planner. "
                 f"This prevents infinite loops and token accumulation."
             )
             if thoughts_to_preserve:
-                logger.info(f"[REACT-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
+                logger.info(f"[PM-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
             return Command(
                 update={
                     "escalation_reason": f"max_iterations: {len(intermediate_steps)} iterations",
@@ -5923,11 +5830,11 @@ Question: {input}
             # Preserve thoughts from incremental_thoughts if available
             thoughts_to_preserve = incremental_thoughts if 'incremental_thoughts' in locals() and incremental_thoughts else (thoughts if 'thoughts' in locals() else [])
             logger.warning(
-                f"[REACT-AGENT] ⬆️ Multiple errors detected ({error_count} >= 2) - escalating to planner. "
+                f"[PM-AGENT] ⬆️ Multiple errors detected ({error_count} >= 2) - escalating to planner. "
                 f"Error details: {error_details}"
             )
             if thoughts_to_preserve:
-                logger.info(f"[REACT-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
+                logger.info(f"[PM-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
             return Command(
                 update={
                     "escalation_reason": f"repeated_errors: {error_count} errors detected",
@@ -5951,9 +5858,9 @@ Question: {input}
         if any(phrase in output.lower() for phrase in escalation_phrases):
             # Preserve thoughts from incremental_thoughts if available
             thoughts_to_preserve = incremental_thoughts if 'incremental_thoughts' in locals() and incremental_thoughts else (thoughts if 'thoughts' in locals() else [])
-            logger.info("[REACT-AGENT] ⬆️ Agent requested planning - escalating")
+            logger.info("[PM-AGENT] ⬆️ Agent requested planning - escalating")
             if thoughts_to_preserve:
-                logger.info(f"[REACT-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
+                logger.info(f"[PM-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
             return Command(
                 update={
                     "escalation_reason": "agent_requested_planning",
@@ -6016,7 +5923,7 @@ Question: {input}
             reporter_limit = int(model_limit * 0.85)  # Reporter uses 85%
             
             logger.info(
-                f"[REACT-AGENT] 🔍 DEBUG: Token check for reporter - "
+                f"[PM-AGENT] 🔍 DEBUG: Token check for reporter - "
                 f"output={output_tokens}, intermediate_steps={intermediate_tokens}, "
                 f"state={state_tokens}, total={total_estimated_tokens}, "
                 f"reporter_limit={reporter_limit}"
@@ -6028,12 +5935,12 @@ Question: {input}
                 # Preserve thoughts from incremental_thoughts if available
                 thoughts_to_preserve = incremental_thoughts if 'incremental_thoughts' in locals() and incremental_thoughts else (thoughts if 'thoughts' in locals() else [])
                 logger.warning(
-                    f"[REACT-AGENT] ⬆️ Data too large for reporter ({total_estimated_tokens:,} tokens > {reporter_limit:,} limit) - "
+                    f"[PM-AGENT] ⬆️ Data too large for reporter ({total_estimated_tokens:,} tokens > {reporter_limit:,} limit) - "
                     f"Intermediate steps alone: {intermediate_tokens:,} tokens. "
                     f"Escalating to full pipeline for incremental processing"
                 )
                 if thoughts_to_preserve:
-                    logger.info(f"[REACT-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
+                    logger.info(f"[PM-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
                 return Command(
                     update={
                         "escalation_reason": f"data_too_large_for_reporter ({total_estimated_tokens:,} tokens vs {reporter_limit:,} limit, intermediate_steps: {intermediate_tokens:,} tokens)",
@@ -6046,7 +5953,7 @@ Question: {input}
                 )
         except Exception as token_check_error:
             # If token checking fails, log but don't block the flow
-            logger.warning(f"[REACT-AGENT] ⚠️ Token check failed: {token_check_error}", exc_info=True)
+            logger.warning(f"[PM-AGENT] ⚠️ Token check failed: {token_check_error}", exc_info=True)
         
         # CRITICAL: Only escalate if agent failed to execute a PM request
         # Do NOT escalate for normal conversation (greetings, small talk)
@@ -6084,18 +5991,18 @@ Question: {input}
             output_start = output_lower[:300]
             if any(pattern in output_start for pattern in failure_patterns):
                 output_looks_like_failure = True
-                logger.info(f"[REACT-AGENT] 🔍 Output looks like failure/greeting: '{output[:100]}...'")
+                logger.info(f"[PM-AGENT] 🔍 Output looks like failure/greeting: '{output[:100]}...'")
             
             # If output is very short (< 50 chars) and no tools called, likely failed
             if len(output) < 50 and not intermediate_steps:
                 output_looks_like_failure = True
-                logger.info(f"[REACT-AGENT] 🔍 Output too short without tools: '{output}'")
+                logger.info(f"[PM-AGENT] 🔍 Output too short without tools: '{output}'")
         else:
             # No output at all is definitely a failure
             output_looks_like_failure = True
         
         # Log the decision
-        logger.info(f"[REACT-AGENT] 🔍 Escalation check: is_pm_request={is_pm_request}, output_looks_like_failure={output_looks_like_failure}, has_output={bool(output)}, has_tools={bool(intermediate_steps)}")
+        logger.info(f"[PM-AGENT] 🔍 Escalation check: is_pm_request={is_pm_request}, output_looks_like_failure={output_looks_like_failure}, has_output={bool(output)}, has_tools={bool(intermediate_steps)}")
         
         # Only escalate if:
         # 1. No output AND no steps (agent failed completely)
@@ -6118,13 +6025,13 @@ Question: {input}
             thoughts_to_preserve = []
             if 'incremental_thoughts' in locals() and incremental_thoughts:
                 thoughts_to_preserve = incremental_thoughts
-                logger.info(f"[REACT-AGENT] 💭 Preserving {len(thoughts_to_preserve)} incremental thoughts during escalation")
+                logger.info(f"[PM-AGENT] 💭 Preserving {len(thoughts_to_preserve)} incremental thoughts during escalation")
             elif 'thoughts' in locals() and thoughts:
                 thoughts_to_preserve = thoughts
-                logger.info(f"[REACT-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
+                logger.info(f"[PM-AGENT] 💭 Preserving {len(thoughts_to_preserve)} thoughts during escalation")
             
             logger.warning(
-                f"[REACT-AGENT] ⬆️ Escalating to planner: {escalation_reason}"
+                f"[PM-AGENT] ⬆️ Escalating to planner: {escalation_reason}"
             )
             return Command(
                 update={
@@ -6140,8 +6047,8 @@ Question: {input}
             )
         
         # Success - return result to user
-        logger.info(f"[REACT-AGENT] ✅ Success - returning answer ({len(output)} chars)")
-        logger.info(f"[REACT-AGENT] 💭 Including {len(thoughts)} thoughts in state update")
+        logger.info(f"[PM-AGENT] ✅ Success - returning answer ({len(output)} chars)")
+        logger.info(f"[PM-AGENT] 💭 Including {len(thoughts)} thoughts in state update")
         
         # Cursor-style: Include thoughts in state for UI display
         # Use incremental_thoughts if available (from streaming), otherwise extract from result
@@ -6149,10 +6056,10 @@ Question: {input}
         final_thoughts = []
         if 'incremental_thoughts' in locals() and incremental_thoughts:
             final_thoughts = incremental_thoughts
-            logger.info(f"[REACT-AGENT] 💭 Using incremental_thoughts: {len(final_thoughts)} thoughts")
+            logger.info(f"[PM-AGENT] 💭 Using incremental_thoughts: {len(final_thoughts)} thoughts")
         elif 'result' in locals() and result:
             final_thoughts = result.get("thoughts", [])
-            logger.info(f"[REACT-AGENT] 💭 Using thoughts from result: {len(final_thoughts)} thoughts")
+            logger.info(f"[PM-AGENT] 💭 Using thoughts from result: {len(final_thoughts)} thoughts")
         else:
             # Fallback: extract thoughts from result_messages if available
             if 'result_messages' in locals() and result_messages:
@@ -6161,16 +6068,16 @@ Question: {input}
                         msg_thoughts = msg.additional_kwargs.get("react_thoughts", [])
                         if msg_thoughts:
                             final_thoughts.extend(msg_thoughts)
-                            logger.info(f"[REACT-AGENT] 💭 Extracted {len(msg_thoughts)} thoughts from message additional_kwargs")
+                            logger.info(f"[PM-AGENT] 💭 Extracted {len(msg_thoughts)} thoughts from message additional_kwargs")
         
-        logger.info(f"[REACT-AGENT] 💭 Final thoughts count: {len(final_thoughts)}")
+        logger.info(f"[PM-AGENT] 💭 Final thoughts count: {len(final_thoughts)}")
         thoughts = final_thoughts
         
         # Convert intermediate_steps to AIMessage/ToolMessage pairs for frontend display
         # This allows tool calls to show up in the step box
         tool_call_messages = []
         if intermediate_steps:
-            logger.info(f"[REACT-AGENT] 🔧 Converting {len(intermediate_steps)} intermediate steps to tool call messages for frontend")
+            logger.info(f"[PM-AGENT] 🔧 Converting {len(intermediate_steps)} intermediate steps to tool call messages for frontend")
             import uuid
             # AIMessage and ToolMessage are already imported at module level (line 14)
             
@@ -6206,7 +6113,7 @@ Question: {input}
                     )
                     tool_call_messages.append(tool_result_msg)
                     
-                    logger.debug(f"[REACT-AGENT] 🔧 Created tool call message pair: {tool_name} (id={tool_call_id})")
+                    logger.debug(f"[PM-AGENT] 🔧 Created tool call message pair: {tool_name} (id={tool_call_id})")
         
         # DO NOT include optimization messages in return - they clutter the PM UI
         # Context optimization still happens internally, just not shown to user
@@ -6230,10 +6137,10 @@ Question: {input}
                 final_message.response_metadata = {}
             final_message.response_metadata["react_thoughts"] = thoughts
             
-            logger.info(f"[REACT-AGENT] 💭 Added {len(thoughts)} thoughts to final message (additional_kwargs + response_metadata) for streaming")
+            logger.info(f"[PM-AGENT] 💭 Added {len(thoughts)} thoughts to final message (additional_kwargs + response_metadata) for streaming")
         return_messages.append(final_message)
         
-        logger.info(f"[REACT-AGENT] 🔧 Returning {len(return_messages)} messages ({len(tool_call_messages)} tool call pairs + final output)")
+        logger.info(f"[PM-AGENT] 🔧 Returning {len(return_messages)} messages ({len(tool_call_messages)} tool call pairs + final output)")
         
         # CRITICAL: Only set previous_result for PM queries (has tool calls)
         # Normal conversation should NOT set previous_result, so next query goes to ReAct again
@@ -6252,9 +6159,9 @@ Question: {input}
         # This allows normal conversation to not block ReAct for the next query
         if is_pm_query:
             update_dict["previous_result"] = output
-            logger.info(f"[REACT-AGENT] 📌 Set previous_result (PM query with {len(intermediate_steps)} tool calls)")
+            logger.info(f"[PM-AGENT] 📌 Set previous_result (PM query with {len(intermediate_steps)} tool calls)")
         else:
-            logger.info(f"[REACT-AGENT] 💬 Normal conversation - NOT setting previous_result (allows ReAct for next query)")
+            logger.info(f"[PM-AGENT] 💬 Normal conversation - NOT setting previous_result (allows ReAct for next query)")
         
         return Command(
             update=update_dict,
@@ -6266,7 +6173,7 @@ Question: {input}
         error_msg = str(e)
         
         logger.error(
-            f"[REACT-AGENT] ❌ Error during execution: {error_type}: {error_msg}",
+            f"[PM-AGENT] ❌ Error during execution: {error_type}: {error_msg}",
             exc_info=True
         )
         
@@ -6275,7 +6182,7 @@ Question: {input}
             try:
                 # First, try to get messages from scratchpad monitor callback
                 if hasattr(scratchpad_monitor, 'captured_messages') and scratchpad_monitor.captured_messages:
-                    logger.warning(f"[REACT-AGENT] ⚠️ Hit recursion limit. Logging {len(scratchpad_monitor.captured_messages)} captured messages:")
+                    logger.warning(f"[PM-AGENT] ⚠️ Hit recursion limit. Logging {len(scratchpad_monitor.captured_messages)} captured messages:")
                     for i, (msg_type, msg_data) in enumerate(scratchpad_monitor.captured_messages):
                         if msg_type == "AIMessage":
                             content = getattr(msg_data, 'content', '') if hasattr(msg_data, 'content') else str(msg_data)
@@ -6284,7 +6191,7 @@ Question: {input}
                                 tool_names = [tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown') for tc in tool_calls]
                                 tool_args = [str(tc.get('args', {})) if isinstance(tc, dict) else str(getattr(tc, 'args', {})) for tc in tool_calls]
                                 logger.warning(
-                                    f"[REACT-AGENT] 🔍 ITERATION {i+1} (BEFORE LIMIT) - AIMessage:\n"
+                                    f"[PM-AGENT] 🔍 ITERATION {i+1} (BEFORE LIMIT) - AIMessage:\n"
                                     f"  Content: {str(content)[:500]}...\n"
                                     f"  Tool Calls: {tool_names}\n"
                                     f"  Tool Args: {tool_args}"
@@ -6293,7 +6200,7 @@ Question: {input}
                             tool_name = msg_data.get('name', 'unknown')
                             tool_output = msg_data.get('output', 'N/A')
                             logger.warning(
-                                f"[REACT-AGENT] 🔍 OBSERVATION (BEFORE LIMIT) - ToolMessage:\n"
+                                f"[PM-AGENT] 🔍 OBSERVATION (BEFORE LIMIT) - ToolMessage:\n"
                                 f"  Tool: {tool_name}\n"
                                 f"  Output: {str(tool_output)[:500]}..."
                             )
@@ -6301,7 +6208,7 @@ Question: {input}
                 # Extract messages from result_state (captured via astream)
                 result_messages = result_state.get("messages", []) if result_state else []
                 if result_messages:
-                    logger.warning(f"[REACT-AGENT] ⚠️ Hit recursion limit. Logging {len(result_messages)} messages from result_state:")
+                    logger.warning(f"[PM-AGENT] ⚠️ Hit recursion limit. Logging {len(result_messages)} messages from result_state:")
                     
                     # Log all messages to see what happened
                     iteration_count = 0
@@ -6329,14 +6236,14 @@ Question: {input}
                                     tool_names = [tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown') for tc in tool_calls]
                                     tool_args = [str(tc.get('args', {})) if isinstance(tc, dict) else str(getattr(tc, 'args', {})) for tc in tool_calls]
                                     logger.warning(
-                                        f"[REACT-AGENT] 🔍 ITERATION {iteration_count} (FROM RESULT_STATE) - AIMessage {i}:\n"
+                                        f"[PM-AGENT] 🔍 ITERATION {iteration_count} (FROM RESULT_STATE) - AIMessage {i}:\n"
                                         f"  Content: {content[:500]}...\n"
                                         f"  Tool Calls: {tool_names}\n"
                                         f"  Tool Args: {tool_args}"
                                     )
                                 else:
                                     logger.warning(
-                                        f"[REACT-AGENT] 🔍 ITERATION {iteration_count} (FROM RESULT_STATE) - AIMessage {i}:\n"
+                                        f"[PM-AGENT] 🔍 ITERATION {iteration_count} (FROM RESULT_STATE) - AIMessage {i}:\n"
                                         f"  Thought: {thought[:300]}...\n"
                                         f"  Action: {action}\n"
                                         f"  Action Input: {action_input[:200]}..."
@@ -6348,18 +6255,18 @@ Question: {input}
                             tool_call_id = getattr(msg, 'tool_call_id', 'N/A')
                             obs_content = content[:500] if content else 'N/A'
                             logger.warning(
-                                f"[REACT-AGENT] 🔍 OBSERVATION (FROM RESULT_STATE) - ToolMessage {i}:\n"
+                                f"[PM-AGENT] 🔍 OBSERVATION (FROM RESULT_STATE) - ToolMessage {i}:\n"
                                 f"  Tool: {tool_name}\n"
                                 f"  Tool Call ID: {tool_call_id}\n"
                                 f"  Observation: {obs_content}..."
                             )
             except Exception as log_error:
-                logger.error(f"[REACT-AGENT] Error logging partial execution: {log_error}")
+                logger.error(f"[PM-AGENT] Error logging partial execution: {log_error}")
         
         # Check if it's a rate limit error
         if "rate_limit" in error_msg.lower() or "429" in error_msg or "too large" in error_msg.lower():
             logger.error(
-                f"[REACT-AGENT] 🚨 RATE LIMIT ERROR DETECTED: {error_msg}. "
+                f"[PM-AGENT] 🚨 RATE LIMIT ERROR DETECTED: {error_msg}. "
                 f"This should have been caught by pre-flight check. "
                 f"Original tokens: {original_token_count:,}, "
                 f"Compressed tokens: {compressed_token_count:,}, "
@@ -6389,7 +6296,6 @@ async def pm_agent_node(
     This agent ONLY has access to PM tools (no web search) and is specifically
     designed to retrieve and analyze data from the connected PM system.
     """
-    logger.info(f"[DEBUG-NODES] [NODE-PM-AGENT-1] PM Agent node entered")
     import sys
     import datetime
     

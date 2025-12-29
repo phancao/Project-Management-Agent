@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo } from "react";
 import { useStore, useToolCalls } from "~/core/store";
 import { parseJSON } from "~/core/utils/json";

@@ -39,6 +39,7 @@ class AgentResult:
     result: str
     steps: List[AgentStep]
     tool_calls: List[Dict[str, Any]]
+    tool_results: List[Any]  # Added: Full tool outputs
     final_answer: str
 
 
@@ -54,12 +55,14 @@ class LLMDrivenPMAgent:
         llm,
         tools: List[BaseTool],
         project_id: str,
-        max_steps: int = 5
+        max_steps: int = 5,
+        on_tool_result: Optional[Any] = None  # Callback for real-time streaming
     ):
         self.llm = llm
         self.tools = tools
         self.project_id = project_id
         self.max_steps = max_steps
+        self.on_tool_result = on_tool_result  # PLAN 9: Callback for real-time tool result streaming
         self.steps: List[AgentStep] = []
         self.tool_results: List[Tuple[str, str, str]] = []  # (tool_name, args, result)
     
@@ -183,10 +186,17 @@ Think through this briefly, then proceed to call the appropriate tool."""
         
         result_str = str(tool_result)
         
+        # PLAN 9: Call callback for real-time streaming
+        if self.on_tool_result:
+            try:
+                await self.on_tool_result(tool_name, tool_call_id, result_str[:5000])
+            except Exception as e:
+                logger.error(f"[PM-AGENT] Error in tool result callback: {e}")
+        
         self.steps.append(AgentStep(
             type="tool_result",
-            content=result_str[:5000],  # Increased specific truncation limit for UI display
-            metadata={"tool": tool_name, "length": len(result_str)}
+            content=result_str[:5000],
+            metadata={"tool": tool_name, "length": len(result_str), "id": tool_call_id}
         ))
         
         self.tool_results.append((tool_name, json.dumps(tool_args), result_str))
@@ -252,6 +262,7 @@ Be concise and actionable."""
         
         final_result = ""
         all_tool_calls = []
+        all_tool_outputs = [] # Capture actual results
         
         for step in range(self.max_steps):
             step_ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
@@ -275,10 +286,9 @@ Be concise and actionable."""
             
             tool_name, tool_args, tool_result, tool_call_id = act_result
             all_tool_calls.append({
-                "name": tool_name,
-                "args": tool_args,
                 "result_length": len(tool_result)
             })
+            all_tool_outputs.append(tool_result)
             
             # Add tool call and result to conversation
             conversation.append(AIMessage(
@@ -313,6 +323,7 @@ Be concise and actionable."""
             result=final_result,
             steps=self.steps,
             tool_calls=all_tool_calls,
+            tool_results=all_tool_outputs,
             final_answer=final_result
         )
     
@@ -343,7 +354,8 @@ async def run_pm_agent(
     tools: List[BaseTool],
     user_query: str,
     project_id: str,
-    max_steps: int = 5
+    max_steps: int = 5,
+    on_tool_result: Optional[Any] = None  # PLAN 9: Callback for real-time streaming
 ) -> AgentResult:
     """
     Convenience function to run the PM agent.
@@ -354,6 +366,7 @@ async def run_pm_agent(
         user_query: User's question/request
         project_id: Current project ID
         max_steps: Maximum iterations
+        on_tool_result: Async callback for real-time tool result streaming
     
     Returns:
         AgentResult with success status, result, and steps
@@ -362,7 +375,9 @@ async def run_pm_agent(
         llm=llm,
         tools=tools,
         project_id=project_id,
-        max_steps=max_steps
+        max_steps=max_steps,
+        on_tool_result=on_tool_result
     )
     
     return await agent.run(user_query)
+

@@ -78,27 +78,6 @@ _reasoning_content_cache: dict[str, str] = {}  # message_id -> accumulated_reaso
 _content_cache: dict[str, str] = {}  # message_id -> accumulated_content
 _previous_content_length: dict[str, int] = {}  # message_id -> previous accumulated content length (to detect NEW "Thought:")
 
-# PROGRESSIVE THOUGHTS: Step counter for generating incremental thoughts during streaming
-# Tracks step_index per thread_id so each thought gets a unique sequential index
-_progressive_step_counter: dict[str, int] = {}  # thread_id -> current step_index
-
-# PLAN 9: Async queue registry for real-time inner tool result streaming
-# Each thread gets its own queue so pm_agent can push results during execution
-# The streaming loop consumes from this queue and emits SSE events immediately
-_tool_result_queues: dict[str, asyncio.Queue] = {}  # thread_id -> Queue[dict]
-
-def get_tool_result_queue(thread_id: str) -> asyncio.Queue:
-    """Get or create async queue for thread."""
-    if thread_id not in _tool_result_queues:
-        _tool_result_queues[thread_id] = asyncio.Queue()
-    return _tool_result_queues[thread_id]
-
-def cleanup_tool_result_queue(thread_id: str):
-    """Cleanup queue after streaming completes."""
-    if thread_id in _tool_result_queues:
-        del _tool_result_queues[thread_id]
-
-
 from backend.server.config_request import ConfigResponse
 from backend.server.ai_provider_request import (
     AIProviderAPIKeyRequest,
@@ -274,8 +253,6 @@ def get_default_mcp_settings() -> dict:
 
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
-    print(f"[FLOW-TRACE] Backend : API : /api/chat/stream : start : thread_id={request.thread_id}", flush=True)
-
     """Stream chat responses for research tasks"""
     # Check if AI providers are configured
     from backend.llms.llm import has_configured_ai_providers
@@ -712,53 +689,9 @@ async def _process_message_chunk(
                     message_chunk.additional_kwargs = {}
                 message_chunk.additional_kwargs["react_thoughts"] = cached_thoughts
 
-
     if isinstance(message_chunk, ToolMessage):
         # Tool Message - Return the result of the tool call
         event_stream_message["tool_call_id"] = message_chunk.tool_call_id
-        
-        # PROGRESSIVE THOUGHTS: Generate and stream TOOL_RESULT thought BEFORE tool_call_result event
-        # This ensures thoughts appear incrementally as each tool returns (not batched at end)
-        message_id = event_stream_message.get("id")
-        if message_id and agent_name in ["pm_agent", "react_agent"]:
-            # Get current step index for this thread
-            step_index = _progressive_step_counter.get(safe_thread_id, 0)
-            
-            # Get tool result preview (truncate if too long)
-            tool_result_content = getattr(message_chunk, 'content', '') or ''
-            result_preview = tool_result_content[:150]
-            if len(tool_result_content) > 150:
-                result_preview += "..."
-            
-            # Get tool name from the ToolMessage
-            tool_name = getattr(message_chunk, 'name', 'unknown') or 'tool'
-            
-            tool_result_thought = {
-                "thought": f"📋 TOOL_RESULT: {result_preview}",
-                "before_tool": False,
-                "step_index": step_index,
-                "step_type": "tool_result",
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            tool_result_thoughts_event = {
-                "thread_id": thread_id,
-                "agent": agent_name,
-                "id": message_id,
-                "role": "assistant",
-                "react_thoughts": [tool_result_thought]
-            }
-            
-            logger.info(f"[{safe_thread_id}] 📋 [PROGRESSIVE] YIELDING TOOL_RESULT thought: step={step_index}, tool={tool_name}")
-            yield _make_event("thoughts", tool_result_thoughts_event)
-            
-            # Increment step counter
-            step_index += 1
-            _progressive_step_counter[safe_thread_id] = step_index
-            
-            # Small delay to ensure thought is processed before tool_call_result event
-            await asyncio.sleep(0.01)
-        
         yield _make_event("tool_call_result", event_stream_message)
         
     elif isinstance(message_chunk, AIMessageChunk):
@@ -884,49 +817,6 @@ async def _process_message_chunk(
             processed_chunks = _process_tool_call_chunks(message_chunk.tool_call_chunks)
             if processed_chunks:
                 event_stream_message["tool_call_chunks"] = processed_chunks
-            
-            # PROGRESSIVE THOUGHTS: Generate and stream TOOL_CALL thought BEFORE tool_calls event
-            # This ensures thoughts appear incrementally as each step happens (not batched at end)
-            message_id = event_stream_message.get("id")
-            if message_id and agent_name in ["pm_agent", "react_agent"]:
-                # Get current step index for this thread
-                step_index = _progressive_step_counter.get(safe_thread_id, 0)
-                
-                # Generate a thought for EACH tool call (most PM queries have just 1)
-                for tc in message_chunk.tool_calls:
-                    tc_name = tc.get('name', 'unknown') if isinstance(tc, dict) else getattr(tc, 'name', 'unknown')
-                    tc_args = tc.get('args', {}) if isinstance(tc, dict) else getattr(tc, 'args', {})
-                    
-                    # Format args nicely (truncate if too long)
-                    args_str = json.dumps(tc_args, ensure_ascii=False)[:100]
-                    if len(json.dumps(tc_args, ensure_ascii=False)) > 100:
-                        args_str += "..."
-                    
-                    tool_call_thought = {
-                        "thought": f"🔧 TOOL_CALL: {tc_name}({args_str})",
-                        "before_tool": True,
-                        "step_index": step_index,
-                        "step_type": "tool_call",
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    
-                    tool_call_thoughts_event = {
-                        "thread_id": thread_id,
-                        "agent": agent_name,
-                        "id": message_id,
-                        "role": "assistant",
-                        "react_thoughts": [tool_call_thought]
-                    }
-                    
-                    logger.info(f"[{safe_thread_id}] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step={step_index}, tool={tc_name}")
-                    yield _make_event("thoughts", tool_call_thoughts_event)
-                    
-                    # Increment step counter
-                    step_index += 1
-                    _progressive_step_counter[safe_thread_id] = step_index
-                    
-                    # Small delay to ensure thought is processed before tool_calls event
-                    await asyncio.sleep(0.01)
             
             timestamp_stream_toolcalls = datetime.now().isoformat()
             logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_stream_toolcalls}] [STREAM] YIELDING tool_calls event: tools={tool_names}, messageId={event_stream_message.get('id')}")
@@ -1183,826 +1073,245 @@ async def _stream_graph_events(
         event_count = 0
         debug_event_count = 0
         
-        # Use latest LangGraph streaming with debug mode for observability
-        # debug events processed server-side only, not streamed to client
-        logger.info(f"[{safe_thread_id}] 🎬 Starting graph.astream with workflow_input keys: {list(workflow_input.keys()) if isinstance(workflow_input, dict) else 'Command object'}")
-        logger.info(f"[{safe_thread_id}] 🎬 Graph entry point should be: START → coordinator")
-        async for agent, stream_type, event_data in graph_instance.astream(
+        # Use astream_events for REAL token-by-token LLM streaming
+        # This captures on_chat_model_stream events containing individual tokens
+        # Unlike stream_mode=["messages"] which only captures complete node outputs
+        logger.info(f"[{safe_thread_id}] 🎬 Starting graph.astream_events (v2) with workflow_input keys: {list(workflow_input.keys()) if isinstance(workflow_input, dict) else 'Command object'}")
+        logger.info(f"[{safe_thread_id}] 🎬 Graph entry point should be: START → coordinator (using astream_events for LLM token streaming)")
+        
+        # Track message IDs for accumulating content per message
+        message_content_buffers: dict[str, str] = {}
+        
+        import sys
+        sys.stderr.write(f"\n\n🚀🚀🚀 [ASTREAM-EVENTS-DEBUG] Starting astream_events loop for thread {safe_thread_id} at {datetime.now().isoformat()} 🚀🚀🚀\n\n")
+        sys.stderr.flush()
+        
+        async for event in graph_instance.astream_events(
             workflow_input,
             config=workflow_config,
-            stream_mode=["messages", "updates", "debug"],  # Added debug mode
-            subgraphs=True,
-            debug=False,  # Set to True for verbose debug output
+            version="v2",  # Use v2 for better event formatting
         ):
-            # Log first few events to track entry point
-            if event_count < 5:
-                logger.info(f"[{safe_thread_id}] 🎯 Graph event #{event_count}: agent={agent}, stream_type={stream_type}")
-            event_count += 1
-            safe_agent = sanitize_agent_name(agent)
+            event_type = event.get("event", "unknown")
+            event_name = event.get("name", "unknown")
+            event_data = event.get("data", {})
+            event_metadata = event.get("metadata", {})
+            event_run_id = event.get("run_id", "")
             
-            # Process debug events for server-side observability
-            if stream_type == "debug":
-                debug_event_count += 1
-                if isinstance(event_data, dict):
-                    event_type = event_data.get("type", "unknown")
-                    step = event_data.get("step", 0)
-                    timestamp = event_data.get("timestamp", "")
-                    
-                    if event_type == "task":
-                        # Node task started
-                        payload = event_data.get("payload", {})
-                        task_name = payload.get("name", safe_agent)
-                        task_id = payload.get("id", "unknown")
-                        logger.info(
-                            f"[{safe_thread_id}] 🔵 Task started: {task_name} "
-                            f"(id={task_id}, step={step})"
-                        )
-                    elif event_type == "task_result":
-                        # Node task completed
-                        payload = event_data.get("payload", {})
-                        task_name = payload.get("name", safe_agent)
-                        task_id = payload.get("id", "unknown")
-                        error = payload.get("error")
-                        if error:
-                            logger.error(
-                                f"[{safe_thread_id}] ❌ Task failed: {task_name} "
-                                f"(id={task_id}, step={step}): {error}"
-                            )
-                            
-                            # Check if this is a quota error - we'll handle it in the main exception handler
-                            # since debug events don't stream to client
-                        else:
-                            logger.info(
-                                f"[{safe_thread_id}] ✅ Task completed: {task_name} "
-                                f"(id={task_id}, step={step})"
-                            )
-                    elif event_type == "checkpoint":
-                        # State checkpoint created
-                        logger.debug(
-                            f"[{safe_thread_id}] 💾 Checkpoint created "
-                            f"(step={step}, timestamp={timestamp})"
-                        )
+            # Log first few events for debugging
+            if event_count < 10:
+                logger.info(f"[{safe_thread_id}] 🎯 astream_events #{event_count}: event={event_type}, name={event_name}")
+            event_count += 1
+            
+            # === HANDLE LLM TOKEN STREAMING (on_chat_model_stream) ===
+            # This is the KEY for token-by-token streaming
+            if event_type == "on_chat_model_stream":
+                chunk = event_data.get("chunk")
+                # Debug: log every on_chat_model_stream event
+                import sys
+                sys.stderr.write(f"🔥 [on_chat_model_stream] chunk={type(chunk).__name__}, has_content={hasattr(chunk, 'content') if chunk else False}, content={chunk.content[:50] if chunk and hasattr(chunk, 'content') and chunk.content else 'EMPTY'}\n")
+                sys.stderr.flush()
                 
-                # Debug events are not streamed to client (too verbose)
+                if chunk:
+                    # Extract agent/node name from metadata
+                    langgraph_node = event_metadata.get("langgraph_node", "reporter")
+                    
+                    # Generate a stable message ID based on run_id
+                    message_id = f"run--{event_run_id[:32]}" if event_run_id else f"run--{langgraph_node}"
+                    
+                    # === EXTRACT AND STREAM THOUGHTS ===
+                    # Check for reasoning_content (o1 models with extended thinking)
+                    thoughts_to_stream = None
+                    if hasattr(chunk, 'additional_kwargs') and chunk.additional_kwargs:
+                        reasoning_content = chunk.additional_kwargs.get("reasoning_content")
+                        if reasoning_content:
+                            timestamp_reasoning = datetime.now().isoformat()
+                            logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_reasoning}] 💭 [LLM-TOKEN-STREAM] Found reasoning_content: node={langgraph_node}, len={len(reasoning_content)}")
+                            thoughts_to_stream = [{
+                                "thought": reasoning_content,
+                                "before_tool": True,
+                                "step_index": 0,
+                                "from_reasoning_content": True
+                            }]
+                    
+                    # Check for react_thoughts in response_metadata
+                    if not thoughts_to_stream and hasattr(chunk, 'response_metadata') and chunk.response_metadata:
+                        react_thoughts = chunk.response_metadata.get("react_thoughts")
+                        if react_thoughts:
+                            timestamp_react = datetime.now().isoformat()
+                            logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_react}] 💭 [LLM-TOKEN-STREAM] Found react_thoughts in response_metadata: node={langgraph_node}, count={len(react_thoughts) if isinstance(react_thoughts, list) else 'N/A'}")
+                            thoughts_to_stream = react_thoughts if isinstance(react_thoughts, list) else [react_thoughts]
+                    
+                    # Check for react_thoughts in additional_kwargs
+                    if not thoughts_to_stream and hasattr(chunk, 'additional_kwargs') and chunk.additional_kwargs:
+                        react_thoughts = chunk.additional_kwargs.get("react_thoughts")
+                        if react_thoughts:
+                            timestamp_react = datetime.now().isoformat()
+                            logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_react}] 💭 [LLM-TOKEN-STREAM] Found react_thoughts in additional_kwargs: node={langgraph_node}, count={len(react_thoughts) if isinstance(react_thoughts, list) else 'N/A'}")
+                            thoughts_to_stream = react_thoughts if isinstance(react_thoughts, list) else [react_thoughts]
+                    
+                    # Stream thoughts event BEFORE message_chunk (if not already streamed for this message)
+                    if thoughts_to_stream and message_id not in _react_thoughts_cache:
+                        thoughts_event = {
+                            "id": message_id,
+                            "thread_id": thread_id,
+                            "agent": langgraph_node,
+                            "role": "assistant",
+                            "react_thoughts": thoughts_to_stream
+                        }
+                        timestamp_thoughts = datetime.now().isoformat()
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_thoughts}] 💭 [LLM-TOKEN-STREAM] YIELDING thoughts event: node={langgraph_node}, messageId={message_id}, count={len(thoughts_to_stream)}")
+                        yield _make_event("thoughts", thoughts_event)
+                        _react_thoughts_cache[message_id] = thoughts_to_stream
+                        await asyncio.sleep(0.001)  # Small delay to ensure thoughts are processed first
+                    
+                    # Stream message_chunk for content
+                    if hasattr(chunk, 'content') and chunk.content:
+                        # Accumulate content for this message
+                        if message_id not in message_content_buffers:
+                            message_content_buffers[message_id] = ""
+                        message_content_buffers[message_id] += chunk.content
+                        
+                        # Create SSE event for this token chunk
+                        chunk_event = {
+                            "id": message_id,
+                            "thread_id": thread_id,
+                            "agent": langgraph_node,
+                            "role": "assistant",
+                            "content": chunk.content,  # Just the new chunk, not accumulated
+                        }
+                        
+                        timestamp_token = datetime.now().isoformat()
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_token}] [LLM-TOKEN-STREAM] node={langgraph_node}, token_len={len(chunk.content)}")
+                        yield _make_event("message_chunk", chunk_event)
                 continue
             
-            # Process messages and updates for client streaming
-            logger.debug(
-                f"[{safe_thread_id}] Graph event #{event_count} received "
-                f"from agent: {safe_agent}, type: {stream_type}"
-            )
+            # === HANDLE LLM COMPLETION (on_chat_model_end) ===
+            if event_type == "on_chat_model_end":
+                output = event_data.get("output")
+                if output:
+                    langgraph_node = event_metadata.get("langgraph_node", "unknown")
+                    message_id = f"run--{event_run_id[:32]}" if event_run_id else f"run--{langgraph_node}"
+                    
+                    # Send finish event
+                    finish_event = {
+                        "id": message_id,
+                        "thread_id": thread_id,
+                        "agent": langgraph_node,
+                        "role": "assistant",
+                        "content": "",
+                        "finish_reason": "stop",
+                    }
+                    yield _make_event("message_chunk", finish_event)
+                    logger.info(f"[{safe_thread_id}] ✅ LLM completed: node={langgraph_node}, message_id={message_id}")
+                continue
             
-            if stream_type == "messages":
-                # Process message chunks (agent responses, tool calls)
-                if isinstance(event_data, (list, tuple)) and len(event_data) > 0:
-                    timestamp_msg_arrival = datetime.now().isoformat()
-                    message_chunk, message_metadata = (
-                        event_data[0], 
-                        event_data[1] if len(event_data) > 1 else {}
-                    )
-                    # Log message type and agent for debugging
-                    msg_type = type(message_chunk).__name__
-                    chunk_content = ""
-                    if hasattr(message_chunk, 'content'):
-                        chunk_content = str(message_chunk.content)[:50] if message_chunk.content else ""
-                    chunk_name = getattr(message_chunk, 'name', 'N/A')
-                    has_tool_calls = hasattr(message_chunk, 'tool_calls') and bool(message_chunk.tool_calls)
-                    logger.info(
-                        f"[{safe_thread_id}] ⏰ [{timestamp_msg_arrival}] 📨 [MESSAGES-STREAM] Message chunk arrived: type={msg_type}, "
-                        f"agent_path={agent}, chunk_name={chunk_name}, has_tool_calls={has_tool_calls}, "
-                        f"content_preview=\"{chunk_content}...\""
-                    )
-                    timestamp_before_process = datetime.now().isoformat()
-                    logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_before_process}] [MESSAGES-STREAM] About to process message chunk...")
-                    async for event in _process_message_chunk(
-                        message_chunk, message_metadata, thread_id, agent
-                    ):
-                        timestamp_event_yield = datetime.now().isoformat()
-                        event_type = event.split('\n')[0] if '\n' in event else event[:50]
-                        logger.debug(f"[{safe_thread_id}] ⏰ [{timestamp_event_yield}] [MESSAGES-STREAM] Yielding event: {event_type}...")
-                        yield event
-                    timestamp_after_process = datetime.now().isoformat()
-                    logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_after_process}] [MESSAGES-STREAM] Finished processing message chunk")
-                    
-                    # PLAN 9: Drain queue for real-time tool results
-                    if thread_id in _tool_result_queues:
-                        queue = _tool_result_queues[thread_id]
-                        while not queue.empty():
-                            try:
-                                item = queue.get_nowait()
-                                tool_result_event = {
-                                    "thread_id": thread_id,
-                                    "agent": "pm_agent",
-                                    "role": "assistant",
-                                    "tool_call_id": item.get("tool_call_id"),
-                                    "name": item.get("tool_name"),
-                                    "content": item.get("result", "")[:5000],
-                                }
-                                yield _make_event("tool_call_result", tool_result_event)
-                            except asyncio.QueueEmpty:
-                                break
+            # === HANDLE TOOL CALLS (on_tool_start) ===
+            if event_type == "on_tool_start":
+                tool_name = event_name
+                tool_input = event_data.get("input", {})
+                langgraph_node = event_metadata.get("langgraph_node", "tool")
+                
+                # Generate tool call ID
+                tool_call_id = f"call--{event_run_id[:16]}" if event_run_id else f"call--{tool_name}"
+                
+                tool_event = {
+                    "id": f"run--{event_run_id[:32]}" if event_run_id else f"run--tool",
+                    "thread_id": thread_id,
+                    "agent": langgraph_node,
+                    "role": "assistant",
+                    "tool_calls": [{
+                        "id": tool_call_id,
+                        "name": tool_name,
+                        "args": tool_input if isinstance(tool_input, dict) else {"input": str(tool_input)[:500]},
+                        "type": "tool_call"
+                    }]
+                }
+                yield _make_event("tool_calls", tool_event)
+                logger.info(f"[{safe_thread_id}] 🔧 Tool started: {tool_name}")
+                continue
             
-            elif stream_type == "updates":
-                # Process state updates (plan updates, observations)
-                if isinstance(event_data, dict):
-                    # Check for interrupts first
-                    if "__interrupt__" in event_data:
-                        interrupt_data = event_data['__interrupt__']
-                        ns_value = (
-                            getattr(interrupt_data[0], 'ns', 'unknown')
-                            if isinstance(interrupt_data, (list, tuple))
-                            and len(interrupt_data) > 0
-                            else 'unknown'
-                        )
-                        value_len = (
-                            len(getattr(interrupt_data[0], 'value', ''))
-                            if isinstance(interrupt_data, (list, tuple))
-                            and len(interrupt_data) > 0
-                            and hasattr(interrupt_data[0], 'value')
-                            and hasattr(interrupt_data[0].value, '__len__')
-                            else 'unknown'
-                        )
-                        logger.debug(
-                            f"[{safe_thread_id}] Processing interrupt event: "
-                            f"ns={ns_value}, value_len={value_len}"
-                        )
-                        yield _create_interrupt_event(thread_id, event_data)
-                    
-                    # Process node-specific state updates
-                    # With stream_mode=["messages", "updates"], updates come as
-                    # dicts keyed by node name
-                    for node_name, node_update in event_data.items():
-                        if (
-                            not isinstance(node_update, dict)
-                            or node_name == "__interrupt__"
-                        ):
-                            continue
+            # === HANDLE TOOL RESULTS (on_tool_end) ===
+            if event_type == "on_tool_end":
+                tool_name = event_name
+                tool_output = event_data.get("output", "")
+                langgraph_node = event_metadata.get("langgraph_node", "tool")
+                
+                # Truncate large outputs
+                output_str = str(tool_output)[:2000] if tool_output else ""
+                
+                result_event = {
+                    "thread_id": thread_id,
+                    "agent": langgraph_node,
+                    "role": "assistant",
+                    "tool_call_id": f"call--{event_run_id[:16]}" if event_run_id else f"call--{tool_name}",
+                    "content": output_str,
+                }
+                yield _make_event("tool_call_result", result_event)
+                logger.info(f"[{safe_thread_id}] 🔧 Tool completed: {tool_name}, output_len={len(output_str)}")
+                continue
+            
+            # === HANDLE NODE COMPLETION WITH MESSAGES (on_chain_end) ===
+            if event_type == "on_chain_end":
+                output = event_data.get("output", {})
+                langgraph_node = event_metadata.get("langgraph_node", "unknown")
+                
+                # === EXTRACT react_thoughts FROM STATE OUTPUT ===
+                # PM Agent stores thoughts in state update dict under 'react_thoughts' key
+                if isinstance(output, dict):
+                    react_thoughts = output.get("react_thoughts")
+                    if react_thoughts:
+                        timestamp_thoughts = datetime.now().isoformat()
+                        logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_thoughts}] 💭 [on_chain_end] Found react_thoughts in state output: node={langgraph_node}, count={len(react_thoughts) if isinstance(react_thoughts, list) else 'N/A'}")
                         
-                        # DEBUG: Log all node updates for pm_agent/react_agent
-                        if node_name in ["pm_agent", "react_agent"]:
-                            logger.info(
-                                f"[{safe_thread_id}] 🔍 [DEBUG] Processing node_update for {node_name}: "
-                                f"keys={list(node_update.keys())}, "
-                                f"has_react_thoughts={'react_thoughts' in node_update}, "
-                                f"has_messages={'messages' in node_update}"
-                            )
+                        # Generate message_id for thoughts
+                        message_id = f"run--{event_run_id[:32]}" if event_run_id else f"run--{langgraph_node}"
                         
-                        # Stream plan updates
-                        if "current_plan" in node_update:
-                            current_plan = node_update.get("current_plan")
-                            if current_plan:
-                                # Extract plan information
-                                plan_data = {}
-                                
-                                # Handle different types of current_plan (string, dict, or Plan object)
-                                plan_obj = None
-                                if isinstance(current_plan, str):
-                                    # Try to parse JSON string
-                                    try:
-                                        import json
-                                        plan_dict = json.loads(current_plan)
-                                        plan_obj = plan_dict
-                                    except (json.JSONDecodeError, TypeError):
-                                        logger.warning(f"[{safe_thread_id}] Could not parse current_plan as JSON string")
-                                        plan_obj = None
-                                elif isinstance(current_plan, dict):
-                                    plan_obj = current_plan
-                                else:
-                                    # Assume it's a Plan object with attributes
-                                    plan_obj = current_plan
-                                
-                                # Extract title
-                                if isinstance(plan_obj, dict):
-                                    plan_data["title"] = plan_obj.get("title", "")
-                                    # Extract steps
-                                    steps = plan_obj.get("steps", [])
-                                    plan_data["steps"] = [
-                                        {
-                                            "title": step.get("title", "") if isinstance(step, dict) else getattr(step, "title", ""),
-                                            "description": step.get("description", "") if isinstance(step, dict) else getattr(step, "description", ""),
-                                            "step_type": (
-                                                step.get("step_type", {}).get("value") if isinstance(step.get("step_type"), dict)
-                                                else step.get("step_type") if isinstance(step, dict)
-                                                else getattr(step.step_type, "value", None) if hasattr(getattr(step, "step_type", None), "value")
-                                                else str(getattr(step, "step_type", "")) if hasattr(step, "step_type")
-                                                else None
-                                            ),
-                                            "execution_res": (
-                                                step.get("execution_res") if isinstance(step, dict)
-                                                else getattr(step, "execution_res", None)
-                                            ),
-                                        }
-                                        for step in steps
-                                    ] if steps else []
-                                elif hasattr(plan_obj, 'title'):
-                                    # Plan object with attributes
-                                    plan_data["title"] = plan_obj.title if not callable(plan_obj.title) else ""
-                                    if hasattr(plan_obj, 'steps'):
-                                        steps = plan_obj.steps if not callable(plan_obj.steps) else []
-                                        plan_data["steps"] = [
-                                            {
-                                                "title": step.title if hasattr(step, 'title') and not callable(step.title) else "",
-                                                "description": step.description if hasattr(step, 'description') and not callable(step.description) else "",
-                                                "step_type": (
-                                                    step.step_type.value
-                                                    if hasattr(step, 'step_type') and hasattr(step.step_type, 'value')
-                                                    else str(step.step_type) if hasattr(step, 'step_type')
-                                                    else None
-                                                ),
-                                                "execution_res": (
-                                                    step.execution_res
-                                                    if hasattr(step, 'execution_res')
-                                                    else None
-                                                ),
-                                            }
-                                            for step in steps
-                                        ] if steps else []
-                                
-                                # Debug current_plan structure
-                                try:
-                                    logger.info(f"[{safe_thread_id}] Inspecting current_plan: type={type(current_plan)}")
-                                    if hasattr(current_plan, 'title'):
-                                        logger.info(f"[{safe_thread_id}] current_plan.title type: {type(current_plan.title)}")
-                                    if hasattr(current_plan, 'steps'):
-                                        logger.info(f"[{safe_thread_id}] current_plan.steps type: {type(current_plan.steps)}")
-                                        if current_plan.steps:
-                                            first_step = current_plan.steps[0]
-                                            logger.info(f"[{safe_thread_id}] First step type: {type(first_step)}")
-                                            if hasattr(first_step, 'step_type'):
-                                                logger.info(f"[{safe_thread_id}] First step step_type type: {type(first_step.step_type)}")
-                                except Exception as e:
-                                    logger.error(f"[{safe_thread_id}] Error inspecting current_plan: {e}")
-
-                                try:
-                                    # Stream plan update event
-                                    logger.info(
-                                        f"[{safe_thread_id}] Streaming plan update "
-                                        f"from {node_name}: "
-                                        f"{len(plan_data.get('steps', []))} steps"
-                                    )
-                                    yield _make_event(
-                                        "plan_update",
-                                        {
-                                            "thread_id": thread_id,
-                                            "agent": node_name,
-                                            "role": "assistant",
-                                            "plan": plan_data,
-                                        }
-                                    )
-                                except Exception as e:
-                                    logger.error(f"[{safe_thread_id}] Error streaming plan_update: {e}")
-                                    # Try to identify non-serializable item
-                                    try:
-                                        json.dumps(plan_data)
-                                    except TypeError as json_err:
-                                        logger.error(f"[{safe_thread_id}] JSON serialization error in plan_data: {json_err}")
-                                
-                                # Also emit step_progress for current step
-                                # Emit progress for each step in the plan
-                                logger.info(f"[{safe_thread_id}] Checking for step_progress emission. current_plan type: {type(current_plan)}")
-                                if hasattr(current_plan, 'steps'):
-                                    logger.info(f"[{safe_thread_id}] current_plan has steps. Count: {len(current_plan.steps) if current_plan.steps else 0}")
-                                else:
-                                    logger.info(f"[{safe_thread_id}] current_plan does NOT have steps attribute")
-
-                                if hasattr(current_plan, 'steps') and current_plan.steps:
-                                    # Count completed steps to determine current step
-                                    completed_count = sum(
-                                        1 for step in current_plan.steps 
-                                        if hasattr(step, 'execution_res') and step.execution_res
-                                    )
-                                    # Current step is the first incomplete one, or the last one if all complete
-                                    current_step_idx = min(completed_count, len(current_plan.steps) - 1)
-                                    current_step = current_plan.steps[current_step_idx]
-                                    
-                                    logger.info(
-                                        f"[{safe_thread_id}] Streaming step progress: "
-                                        f"Step {current_step_idx + 1}/{len(current_plan.steps)}: {current_step.title}"
-                                    )
-                                    yield _make_event(
-                                        "step_progress",
-                                        {
-                                            "thread_id": thread_id,
-                                            "agent": node_name,
-                                            "role": "assistant",
-                                            "step_title": current_step.title,
-                                            "step_description": current_step.description if hasattr(current_step, 'description') else "",
-                                            "step_index": current_step_idx,
-                                            "total_steps": len(current_plan.steps),
-                                        }
-                                    )
-                        
-                        # Stream step execution updates
-                        if "observations" in node_update:
-                            observations = node_update.get("observations", [])
-                            if observations:
-                                # Get the latest observation (current step result)
-                                latest_observation = (
-                                    observations[-1] if observations else ""
-                                )
-                                logger.info(
-                                    f"[{safe_thread_id}] Streaming step "
-                                    f"execution update from {node_name}: "
-                                    f"{len(latest_observation)} chars"
-                                )
-                                yield _make_event(
-                                    "step_update",
-                                    {
-                                        "thread_id": thread_id,
-                                        "agent": node_name,
-                                        "role": "assistant",
-                                        "observation": latest_observation,
-                                        "step_index": len(observations) - 1,
-                                    }
-                                )
-                        
-                        # Cursor-style: Stream react_thoughts for ReAct agent and PM Agent
-                        # We need to stream thoughts even if message content is empty (tool calls only)
-                        # Note: node_name might be "agent" but we need to check messages to get actual agent name
-                        node_react_thoughts = None
-                        actual_agent_name = None
-                        
-                        # Debug: Log node_update keys for pm_agent/react_agent nodes
-                        if node_name in ["react_agent", "pm_agent", "agent"]:
-                            logger.debug(
-                                f"[{safe_thread_id}] 🔍 Checking node_update for {node_name}: "
-                                f"keys={list(node_update.keys())}, has_react_thoughts={'react_thoughts' in node_update}"
-                            )
-                        
-                        # Check if react_thoughts exist in node_update
-                        if "react_thoughts" in node_update:
-                            # Determine actual agent name from messages if node_name is generic "agent"
-                            if node_name == "agent" and "messages" in node_update:
-                                messages = node_update.get("messages", [])
-                                for msg in messages:
-                                    if isinstance(msg, AIMessage) and hasattr(msg, 'name') and msg.name:
-                                        actual_agent_name = msg.name
-                                        if actual_agent_name in ["react_agent", "pm_agent"]:
-                                            break
-                            elif node_name in ["react_agent", "pm_agent"]:
-                                actual_agent_name = node_name
-                            
-                            if actual_agent_name in ["react_agent", "pm_agent"]:
-                                node_react_thoughts = node_update.get("react_thoughts", [])
-                                if node_react_thoughts:
-                                    logger.info(
-                                        f"[{safe_thread_id}] 💭 Found react_thoughts in node_update for {actual_agent_name} (node: {node_name}): "
-                                        f"{len(node_react_thoughts)} thoughts: {[t.get('thought', '')[:50] if isinstance(t, dict) else str(t)[:50] for t in node_react_thoughts[:3]]}"
-                                    )
-                                    # CRITICAL FIX: Store thoughts in cache for AIMessageChunk processing
-                                    # Find the message ID from messages in node_update
-                                    if "messages" in node_update:
-                                        for msg in node_update.get("messages", []):
-                                            if isinstance(msg, AIMessage) and hasattr(msg, 'id') and msg.id:
-                                                _react_thoughts_cache[msg.id] = node_react_thoughts
-                                                logger.info(
-                                                    f"[{safe_thread_id}] ✅ Cached {len(node_react_thoughts)} react_thoughts for message {msg.id} "
-                                                    f"for AIMessageChunk processing"
-                                                )
-                                                break
-                                    logger.debug(
-                                        f"[{safe_thread_id}] 💭 Thoughts will be attached to agent message when it's streamed"
-                                    )
-                                else:
-                                    logger.warning(
-                                        f"[{safe_thread_id}] ⚠️ react_thoughts key exists but is empty for {actual_agent_name} (node: {node_name})"
-                                    )
-                                logger.debug(
-                                    f"[{safe_thread_id}] 🔍 react_thoughts found but actual_agent_name={actual_agent_name} not in [react_agent, pm_agent]"
-                                )
-                        
-                        # Solution 6A (fallback): Process ToolMessages from updates stream
-                        # This emits tool_call_result events for inner tools when pm_agent returns
-                        if "messages" in node_update and node_name in ["react_agent", "pm_agent", "agent"]:
-                            messages = node_update.get("messages", [])
-                            for msg in messages:
-                                if isinstance(msg, ToolMessage):
-                                    tool_call_id = getattr(msg, 'tool_call_id', None)
-                                    tool_name = getattr(msg, 'name', None)
-                                    tool_content = str(getattr(msg, 'content', ''))
-                                    tool_result_event = {
-                                        "thread_id": thread_id,
-                                        "agent": node_name,
-                                        "role": "assistant",
-                                        "tool_call_id": tool_call_id,
-                                        "name": tool_name,
-                                        "content": tool_content[:5000],
-                                    }
-                                    yield _make_event("tool_call_result", tool_result_event)
-
-                        
-                        # Stream step progress updates when current_step_index changes
-                        if "current_step_index" in node_update or "total_steps" in node_update:
-                            current_step_index = node_update.get("current_step_index")
-                            total_steps = node_update.get("total_steps")
-                            
-                            # Get current plan to extract step details
-                            current_plan = node_update.get("current_plan")
-                            if not current_plan:
-                                # Try to get from previous state if not in update
-                                try:
-                                    current_plan = event_data.get("current_plan")
-                                except:
-                                    pass
-                            
-                            if current_step_index is not None and total_steps is not None and current_plan:
-                                # Get the current step details
-                                step_title = f"Step {current_step_index + 1}"
-                                step_description = ""
-                                
-                                if hasattr(current_plan, 'steps') and current_plan.steps:
-                                    if current_step_index < len(current_plan.steps):
-                                        current_step = current_plan.steps[current_step_index]
-                                        step_title = current_step.title
-                                        step_description = current_step.description if hasattr(current_step, 'description') else ""
-                                
-                                logger.info(
-                                    f"[{safe_thread_id}] Streaming step progress: "
-                                    f"Step {current_step_index + 1}/{total_steps}: {step_title}"
-                                )
-                                
-                                yield _make_event(
-                                    "step_progress",
-                                    {
-                                        "thread_id": thread_id,
-                                        "agent": node_name,
-                                        "role": "assistant",
-                                        "step_title": step_title,
-                                        "step_description": step_description,
-                                        "step_index": current_step_index,
-                                        "total_steps": total_steps,
-                                    }
-                                )
-                        
-                        # Stream messages from state updates
-                        # (e.g., reporter's final report)
-                        # NOTE: For reporter messages, we DON'T stream from
-                        # state updates because they should already be streamed
-                        # in the "messages" stream. Streaming here would create
-                        # a duplicate message with a different ID, causing the
-                        # frontend to not recognize the finish_reason properly.
-                        # REAL PROGRESSIVE STREAMING: Stream step thoughts
-                        # This ensures the flow is: Planner Thought → Step Thought → Action (tool call) → Observation
-                        # NOTE: Planner's overall thought is streamed from the "messages" stream (progressive path),
-                        # not from state updates, to avoid duplicates. This is the same approach used for reporter messages.
-                        
-                        # 2. Stream thought for current step BEFORE agent execution
-                        # This triggers when PLANNER sets current_step_index, BEFORE pm_agent/react_agent executes
-                        current_step_thought = None
-                        if "current_plan" in node_update and "current_step_index" in node_update:
-                            current_plan = node_update.get("current_plan")
-                            current_step_index = node_update.get("current_step_index")
-                            
-                            # Only stream thought if this is from planner setting up a step for execution
-                            # Planner sends current_step_index when routing to research_team
-                            if current_plan and current_step_index is not None and node_name == "planner":
-                                logger.info(
-                                    f"[{safe_thread_id}] 💭 [PROGRESSIVE] Planner set current_step_index={current_step_index}, "
-                                    f"extracting thought for step BEFORE execution"
-                                )
-                                
-                                # Extract plan structure (handle different types: dict, object, string)
-                                plan_steps = None
-                                if isinstance(current_plan, dict):
-                                    plan_steps = current_plan.get("steps", [])
-                                elif hasattr(current_plan, 'steps'):
-                                    plan_steps = current_plan.steps
-                                
-                                if plan_steps and 0 <= current_step_index < len(plan_steps):
-                                    current_step = plan_steps[current_step_index]
-                                    step_description = None
-                                    step_type = None
-                                    
-                                    if isinstance(current_step, dict):
-                                        step_description = current_step.get("description", "")
-                                        step_type = current_step.get("step_type", "")
-                                    elif hasattr(current_step, 'description'):
-                                        step_description = getattr(current_step, 'description', '')
-                                        step_type = getattr(current_step, 'step_type', '')
-                                        if hasattr(step_type, 'value'):
-                                            step_type = step_type.value
-                                    
-                                    if step_description and step_description.strip():
-                                        # Determine agent based on step_type
-                                        # pm_agent handles: pm (project management), pm_api
-                                        # react_agent handles: research, code, etc.
-                                        agent_for_step = "pm_agent" if step_type in ["pm", "pm_api"] else "react_agent"
-                                        
-                                        current_step_thought = {
-                                            "thought": step_description.strip(),
-                                            "before_tool": True,
-                                            "step_index": current_step_index
-                                        }
-                                        logger.info(
-                                            f"[{safe_thread_id}] 💭 [PROGRESSIVE] Extracted thought for step {current_step_index} "
-                                            f"(type={step_type}, agent={agent_for_step}): {step_description[:50]}..."
-                                        )
-                                        
-                                        # Generate message ID for this thought
-                                        message_id = f"run--{uuid4().hex}"
-                                        
-                                        thoughts_event = {
-                                            "thread_id": thread_id,
-                                            "agent": agent_for_step,
-                                            "id": message_id,
-                                            "role": "assistant",
-                                            "react_thoughts": [current_step_thought]
-                                        }
-                                        logger.info(
-                                            f"[{safe_thread_id}] 💭 [PROGRESSIVE] Streaming thought for step {current_step_index} "
-                                            f"BEFORE execution by {agent_for_step} (messageId={message_id})"
-                                        )
-                                        yield _make_event("thoughts", thoughts_event)
-                                        
-                                        # Small delay to ensure thought is processed before tool calls
-                                        import asyncio
-                                        await asyncio.sleep(0.01)  # 10ms delay
-                                else:
-                                    logger.warning(
-                                        f"[{safe_thread_id}] ⚠️ [PROGRESSIVE] current_step_index={current_step_index} "
-                                        f"out of range for plan with {len(plan_steps) if plan_steps else 0} steps"
-                                    )
-                        
-                        # ROOT CAUSE FIX: Stream thoughts as separate events FIRST, before processing messages
-                        # Thoughts should have their own channel, not be attached to messages
-                        # Stream thoughts if they exist in node_update, regardless of whether messages exist
-                        # CRITICAL: node_name is the internal LangGraph node name (e.g., "agent", "tools", "pre_model_hook")
-                        # We need to extract the actual agent name from messages in node_update
-                        actual_agent_name = None
-                        if "react_thoughts" in node_update:
-                            # Try to determine agent name from messages
-                            if "messages" in node_update:
-                                messages = node_update.get("messages", [])
-                                for msg in messages:
-                                    if isinstance(msg, AIMessage) and hasattr(msg, 'name') and msg.name:
-                                        if msg.name in ["pm_agent", "react_agent"]:
-                                            actual_agent_name = msg.name
-                                            break
-                            
-                            # If node_name itself is the agent name, use it
-                            if not actual_agent_name and node_name in ["pm_agent", "react_agent"]:
-                                actual_agent_name = node_name
-                            
-                            logger.info(
-                                f"[{safe_thread_id}] 🔍 [DEBUG] Checking for thoughts streaming: node_name={node_name}, "
-                                f"actual_agent_name={actual_agent_name}, "
-                                f"has_react_thoughts={'react_thoughts' in node_update}, "
-                                f"node_update_keys={list(node_update.keys())}"
-                            )
-                            
-                            if actual_agent_name in ["pm_agent", "react_agent"]:
-                                node_thoughts = node_update.get("react_thoughts", [])
-                                logger.info(
-                                    f"[{safe_thread_id}] 🔍 [DEBUG] Found react_thoughts in node_update: count={len(node_thoughts) if node_thoughts else 0}"
-                                )
-                                if node_thoughts:
-                                    # Check if we've already streamed the current step's thought progressively
-                                    # If so, filter it out to avoid duplicates (frontend will deduplicate, but this is cleaner)
-                                    already_streamed_step_index = None
-                                    if current_step_thought:
-                                        already_streamed_step_index = current_step_thought.get("step_index")
-                                    
-                                    # Filter out thoughts that were already streamed progressively
-                                    thoughts_to_stream = []
-                                    for thought in node_thoughts:
-                                        thought_step_index = thought.get("step_index")
-                                        # Only stream if not already streamed, or if it's a different thought
-                                        if already_streamed_step_index is None or thought_step_index != already_streamed_step_index:
-                                            thoughts_to_stream.append(thought)
-                                        else:
-                                            logger.debug(
-                                                f"[{safe_thread_id}] ⏭️ Skipping thought for step {thought_step_index} "
-                                                f"(already streamed progressively)"
-                                            )
-                                    
-                                    # Stream remaining thoughts (if any) - these are thoughts from previous steps or all steps
-                                    if thoughts_to_stream:
-                                        # Find message ID from messages if available, or generate one
-                                        message_id = None
-                                        if "messages" in node_update:
-                                            messages = node_update.get("messages", [])
-                                            # Try to find a message ID from messages
-                                            for msg in messages:
-                                                if isinstance(msg, AIMessage) and hasattr(msg, 'id') and msg.id:
-                                                    message_id = msg.id
-                                                    break
-                                        
-                                        if not message_id:
-                                            message_id = f"run--{uuid4().hex}"
-                                        
-                                        logger.info(
-                                            f"[{safe_thread_id}] 💭 Streaming {len(thoughts_to_stream)} additional thoughts "
-                                            f"for {actual_agent_name} (node: {node_name}, messageId={message_id})"
-                                        )
-                                        
-                                        thoughts_event = {
-                                            "thread_id": thread_id,
-                                            "agent": actual_agent_name,
-                                            "id": message_id,
-                                            "role": "assistant",
-                                            "react_thoughts": thoughts_to_stream
-                                        }
-                                        yield _make_event("thoughts", thoughts_event)
-                                        
-                                        # Small delay to ensure thoughts are processed before tool_calls
-                                        import asyncio
-                                        await asyncio.sleep(0.01)  # 10ms delay before tool_calls
-                                    else:
-                                        logger.debug(
-                                            f"[{safe_thread_id}] ⏭️ All thoughts already streamed progressively, skipping batch stream"
-                                        )
-                        
-                        # Only stream non-reporter messages from state updates.
-                        # For planner: still stream the message from state updates to ensure it's stored,
-                        # but it will be sent as a complete message (not chunks) - the chunks from messages stream
-                        # will have already been received, so this just ensures the message exists in the store
-                        if "messages" in node_update and node_name != "reporter":
-                            messages = node_update.get("messages", [])
-                            if messages:
-                                # Get the latest message
-                                import sys
-                                sys.stderr.write(f"\n🔍 CHECKING MESSAGES: node_name='{node_name}', messages_count={len(messages)}\n")
-                                for msg in messages:
-                                    msg_type = type(msg).__name__
-                                    msg_name = getattr(msg, 'name', 'N/A')
-                                    is_ai = isinstance(msg, AIMessage)
-                                    name_match = msg_name == node_name
-                                    sys.stderr.write(f"🔍 Message: type={msg_type}, name={msg_name}, is_AIMessage={is_ai}, name_matches={name_match}\n")
-                                sys.stderr.flush()
-                                
-                                # Find the LAST AIMessage with content (that's the final response)
-                                # Earlier messages might be tool-calling messages with empty content
-                                final_ai_message = None
-                                for msg in reversed(messages):
-                                    if isinstance(msg, AIMessage) and msg.name == node_name:
-                                        msg_content = getattr(msg, 'content', '') or ''
-                                        # Pick the last message with content, or any message if none have content
-                                        if msg_content or final_ai_message is None:
-                                            final_ai_message = msg
-                                            if msg_content:  # Found message with content, use it
-                                                break
-                                
-                                # CRITICAL: Find AIMessage with tool_calls FIRST and attach thoughts to it
-                                # This ensures thoughts are available when tool_calls are streamed
-                                tool_call_ai_message = None
-                                for msg in messages:
-                                    if isinstance(msg, AIMessage) and msg.name == node_name:
-                                        if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                                            tool_call_ai_message = msg
-                                            logger.info(
-                                                f"[{safe_thread_id}] 🔍 Found AIMessage with tool_calls: {len(msg.tool_calls)} calls"
-                                            )
-                                            break
-                                
-                                # Process ToolMessages
-                                for msg in messages:
-                                    if isinstance(msg, ToolMessage):
-                                        logger.info(
-                                            f"[{safe_thread_id}] 🔧 Processing ToolMessage from updates stream: "
-                                            f"tool_call_id={msg.tool_call_id}"
-                                        )
-                                        msg_metadata = {
-                                            "langgraph_node": node_name,
-                                        }
-                                        async for event in _process_message_chunk(
-                                            msg,
-                                            msg_metadata,
-                                            thread_id,
-                                            (node_name,),
-                                        ):
-                                            yield event
-                                
-                                # Process AIMessage with tool_calls (stream tool_calls event WITHOUT thoughts)
-                                # NOTE: Thoughts are already streamed above before this block
-                                if tool_call_ai_message:
-                                    logger.info(
-                                        f"[{safe_thread_id}] 🔧 Streaming AIMessage with tool_calls: "
-                                        f"{len(tool_call_ai_message.tool_calls)} calls"
-                                    )
-                                    msg_metadata = {
-                                        "langgraph_node": node_name,
-                                        "finish_reason": "tool_calls"
-                                    }
-                                    async for event in _process_message_chunk(
-                                        tool_call_ai_message,
-                                        msg_metadata,
-                                        thread_id,
-                                        (node_name,),
-                                    ):
-                                        yield event
-                                
-                                # Process the final AIMessage (with content)
-                                if final_ai_message:
-                                    msg = final_ai_message
-                                    import sys
-                                    sys.stderr.write(f"\n✨ STREAMING MESSAGE: node_name='{node_name}', content_len={len(msg.content)}\n")
-                                    sys.stderr.flush()
-                                    
-                                    # Log message content preview for planner messages
-                                    content_preview = ""
-                                    if node_name == "planner" and msg.content:
-                                        content_str = str(msg.content)
-                                        content_preview = content_str[:200] + "..." if len(content_str) > 200 else content_str
-                                        logger.info(
-                                            f"[{safe_thread_id}] 📋 Planner message content preview: {content_preview}"
-                                        )
-                                    
-                                    logger.info(
-                                        f"[{safe_thread_id}] "
-                                        f"Streaming {node_name} message "
-                                        f"from state update: "
-                                        f"{len(msg.content)} chars, "
-                                        f"id: {msg.id}"
-                                    )
-                                    # Ensure finish_reason is set
-                                    if not msg.response_metadata:
-                                        msg.response_metadata = {}
-                                    if (
-                                        "finish_reason"
-                                        not in msg.response_metadata
-                                    ):
-                                        msg.response_metadata[
-                                            "finish_reason"
-                                        ] = "stop"
-                                    
-                                    # Cursor-style: Add react_thoughts to metadata if available
-                                    # Check multiple sources in order of reliability:
-                                    # 1. response_metadata (most reliable, preserved through LangGraph)
-                                    # 2. additional_kwargs (may be lost during serialization)
-                                    # 3. node_update (may not be present)
-                                    # Support both react_agent and pm_agent
-                                    react_thoughts = None
-                                    
-                                    # Method 1: Check response_metadata first (most reliable)
-                                    if hasattr(msg, 'response_metadata') and msg.response_metadata:
-                                        metadata_thoughts = msg.response_metadata.get("react_thoughts")
-                                        if metadata_thoughts:
-                                            react_thoughts = metadata_thoughts
-                                            logger.info(f"[{safe_thread_id}] ✅ Found react_thoughts in message.response_metadata for {node_name}: {len(react_thoughts) if react_thoughts else 0} thoughts")
-                                    
-                                    # Method 2: Check additional_kwargs
-                                    if not react_thoughts and hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
-                                        msg_thoughts = msg.additional_kwargs.get("react_thoughts")
-                                        if msg_thoughts:
-                                            react_thoughts = msg_thoughts
-                                            logger.info(f"[{safe_thread_id}] ✅ Found react_thoughts in message.additional_kwargs for {node_name}: {len(react_thoughts) if react_thoughts else 0} thoughts")
-                                    
-                                    # Method 3: Check node_update (fallback)
-                                    if not react_thoughts and "react_thoughts" in node_update and node_name in ["react_agent", "pm_agent"]:
-                                        react_thoughts = node_update.get("react_thoughts", [])
-                                        logger.info(f"[{safe_thread_id}] ✅ Found react_thoughts in node_update for {node_name}: {len(react_thoughts) if react_thoughts else 0} thoughts")
-                                    
-                                    # Debug: Log what we're checking
-                                    logger.info(f"[{safe_thread_id}] 🔍 Checking for thoughts: node_update_keys={list(node_update.keys())}, msg_has_additional_kwargs={hasattr(msg, 'additional_kwargs')}, additional_kwargs={msg.additional_kwargs if hasattr(msg, 'additional_kwargs') else 'N/A'}")
-                                    
-                                    if react_thoughts:
-                                        # Store thoughts in both additional_kwargs and response_metadata for maximum compatibility
-                                        if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
-                                            msg.additional_kwargs = {}
-                                        msg.additional_kwargs["react_thoughts"] = react_thoughts
-                                        
-                                        if not hasattr(msg, 'response_metadata') or not msg.response_metadata:
-                                            msg.response_metadata = {}
-                                        msg.response_metadata["react_thoughts"] = react_thoughts
-                                        
-                                        logger.info(
-                                            f"[{safe_thread_id}] ✅ Added {len(react_thoughts)} react_thoughts to message {msg.id} "
-                                            f"for streaming ({node_name}): {[t.get('thought', '')[:50] if isinstance(t, dict) else str(t)[:50] for t in react_thoughts[:3]]}"
-                                        )
-                                    else:
-                                        logger.warning(
-                                            f"[{safe_thread_id}] ⚠️ No react_thoughts found for {node_name} message {msg.id} "
-                                            f"(node_update has react_thoughts: {'react_thoughts' in node_update})"
-                                        )
-                                    
-                                    # CRITICAL: Ensure thoughts are in the message BEFORE calling _process_message_chunk
-                                    # _process_message_chunk calls _create_event_stream_message which needs thoughts
-                                    if react_thoughts:
-                                        # Double-check thoughts are still in the message
-                                        if not hasattr(msg, 'response_metadata') or not msg.response_metadata:
-                                            msg.response_metadata = {}
-                                        if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
-                                            msg.additional_kwargs = {}
-                                        msg.response_metadata["react_thoughts"] = react_thoughts
-                                        msg.additional_kwargs["react_thoughts"] = react_thoughts
-                                        logger.info(f"[{safe_thread_id}] ✅ Verified thoughts are in message {msg.id} before streaming")
-                                    
-                                    msg_metadata = {
-                                        "langgraph_node": node_name,
-                                        "finish_reason": "stop"
-                                    }
-                                    async for event in _process_message_chunk(
-                                        msg,
-                                        msg_metadata,
-                                        thread_id,
-                                        (node_name,),
-                                    ):
-                                        yield event
-                    
-                    logger.debug(
-                        f"[{safe_thread_id}] Processed state update from "
-                        f"{safe_agent}"
-                    )
+                        # Only stream if not already cached
+                        if message_id not in _react_thoughts_cache:
+                            thoughts_list = react_thoughts if isinstance(react_thoughts, list) else [react_thoughts]
+                            thoughts_event = {
+                                "id": message_id,
+                                "thread_id": thread_id,
+                                "agent": langgraph_node,
+                                "role": "assistant",
+                                "react_thoughts": thoughts_list
+                            }
+                            logger.info(f"[{safe_thread_id}] ⏰ [{timestamp_thoughts}] 💭 [on_chain_end] YIELDING thoughts event: node={langgraph_node}, messageId={message_id}")
+                            yield _make_event("thoughts", thoughts_event)
+                            _react_thoughts_cache[message_id] = thoughts_list
+                            await asyncio.sleep(0.001)
+                
+                # Check if this is a node output with messages
+                if isinstance(output, dict) and "messages" in output:
+                    messages = output.get("messages", [])
+                    for msg in messages:
+                        if hasattr(msg, 'content') or hasattr(msg, 'tool_calls'):
+                            async for sse_event in _process_message_chunk(
+                                msg, event_metadata, thread_id, (langgraph_node,)
+                            ):
+                                yield sse_event
+                
+                # Check for interrupt events
+                if isinstance(output, dict) and "__interrupt__" in output:
+                    yield _create_interrupt_event(thread_id, output)
+                
+                # Check for plan updates
+                if isinstance(output, dict) and "current_plan" in output:
+                    current_plan = output.get("current_plan")
+                    if current_plan:
+                        plan_data = _extract_plan_data(current_plan, safe_thread_id)
+                        if plan_data:
+                            yield _make_event("plan_update", {
+                                "thread_id": thread_id,
+                                "agent": langgraph_node,
+                                "role": "assistant",
+                                "plan": plan_data,
+                            })
+                continue
+            
+            # Log unhandled event types for debugging (first occurrence only)
+            if event_count < 50 and event_type not in ["on_chain_start", "on_chain_stream", "on_parser_start", "on_parser_end"]:
+                logger.debug(f"[{safe_thread_id}] Unhandled event type: {event_type}, name={event_name}")
         
         logger.info(
             f"[{safe_thread_id}] ✅ Streaming completed: {event_count} events, "

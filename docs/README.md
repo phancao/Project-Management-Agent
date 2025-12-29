@@ -1,78 +1,100 @@
-# Documentation
+# PM Agent Documentation
 
-This directory contains comprehensive documentation for the Project Management Agent project.
+## For AI Assistants (Antigravity)
 
-## Directory Structure
+### Quick Navigation by Log Prefix
 
-```
-docs/
-├── README.md                    # This file
-├── guides/                      # Comprehensive guides
-│   ├── README.md
-│   ├── TESTING_GUIDE.md
-│   └── README_SERVER_CHECKLIST.md
-├── reports/                     # Implementation reports and summaries
-│   ├── README.md
-│   ├── EMAIL_FIELD_REMOVAL_SUMMARY.md
-│   ├── JIRA_IMPLEMENTATION_SUMMARY.md
-│   ├── JIRA_SPACES_UPDATE.md
-│   └── OPENPROJECT_V13_PROVIDER_REPORT.md
-└── [other documentation files]  # Various technical documentation
-```
+| Log Prefix | Component | Read This |
+|------------|-----------|-----------|
+| `[COORDINATOR]` | Entry point & routing | `architecture/01_coordinator.md` |
+| `[COORDINATOR] PM intent` | Intent detection | `architecture/02_intent_detection.md` |
+| `[PM-AGENT]` | PM tool execution | `architecture/03_react_agent.md` |
+| `[PM-TOOLS]` | Individual tool errors | `troubleshooting/tool_errors.md` |
+| `[PLANNER]` | Multi-step planning | `architecture/04_planner.md` |
+| `[PM-REPORTER]` | Report generation | `architecture/05_reporter.md` |
+| `[STREAM-Q]` | SSE streaming | `architecture/06_streaming.md` |
 
-## Documentation Categories
+### Search Strategy by Error Type
 
-### Guides (`guides/`)
-Comprehensive guides for using and maintaining the system:
-- **TESTING_GUIDE.md** - Complete testing guide
-- **README_SERVER_CHECKLIST.md** - Server setup checklist
+| Error/Issue Type | Read This |
+|------------------|-----------|
+| Query not reaching PM tools | `architecture/02_intent_detection.md` |
+| Wrong routing / generic response | `troubleshooting/routing_issues.md` |
+| Tool method not found / attribute error | `troubleshooting/tool_errors.md` |
+| Results not streaming / batch delivery | `troubleshooting/streaming_issues.md` |
+| Missing project context | `architecture/03_react_agent.md` |
 
-### Reports (`reports/`)
-Implementation summaries and historical documentation:
-- **EMAIL_FIELD_REMOVAL_SUMMARY.md** - Email field removal changes
-- **JIRA_IMPLEMENTATION_SUMMARY.md** - JIRA integration summary
-- **JIRA_SPACES_UPDATE.md** - JIRA spaces update documentation
-- **OPENPROJECT_V13_PROVIDER_REPORT.md** - OpenProject v13 provider report
+---
 
-### Main Documentation
-- **API.md** - API documentation
-- **USER_GUIDE.md** - User guide
-- **configuration_guide.md** - Configuration guide
-- **ARCHITECTURE.md** - System architecture
-- **Agent.md** - Agent documentation
-- **ANALYTICS_QUICKSTART.md** - Analytics quick start guide
-- **TEST_SCRIPT_GUIDELINES.md** - Guidelines for creating test scripts
+## Architecture Docs (docs/architecture/)
 
-## Quick Links
+Read in order (00 → 06) to understand the full flow.
 
-### Getting Started
-- [User Guide](USER_GUIDE.md)
-- [Configuration Guide](configuration_guide.md)
-- [Server Checklist](guides/README_SERVER_CHECKLIST.md)
+### 00_overview.md
+**Purpose:** System flow diagram and component map  
+**When to read:** Starting point for any PM Agent investigation  
+**Contains:** Mermaid flow diagram, component list, log prefix reference
 
-### Development
-- [Testing Guide](guides/TESTING_GUIDE.md)
-- [Test Script Guidelines](TEST_SCRIPT_GUIDELINES.md)
-- [API Documentation](API.md)
+### 01_coordinator.md  
+**Purpose:** Entry point for ALL user messages  
+**Function:** `coordinator_node()` in `nodes.py`  
+**Responsibility:** Receives message → detects intent → routes to react_agent or END  
+**Log prefix:** `[COORDINATOR]`  
+**When to read:** Message not reaching PM tools, routing confusion
 
-### Architecture
-- [Architecture Overview](ARCHITECTURE.md)
-- [Agent Documentation](Agent.md)
-- [Architecture Flow](ARCHITECTURE_FLOW.md)
+### 02_intent_detection.md
+**Purpose:** Hybrid PM intent detection (keywords + LLM fallback)  
+**Function:** `classify_pm_intent_with_llm()` in `nodes.py`  
+**Responsibility:** Determines if query is PM-related using:
+1. Fast keyword matching (English)
+2. LLM fallback (multilingual - Vietnamese, etc.)  
+**Log prefix:** `[COORDINATOR] PM intent`, `[COORDINATOR] 🤖 LLM`  
+**When to read:** Non-English queries not being detected, false positives/negatives
 
-### Integrations
-- [PM Providers Integration](pm_providers_integration.md)
-- [MCP Integrations](mcp_integrations.md)
-- [OpenProject Setup](openproject_local_setup.md)
+### 03_react_agent.md
+**Purpose:** PM tool execution using ReAct pattern  
+**Function:** `react_agent_node()` in `nodes.py`  
+**Responsibility:** Calls PM tools (list_sprints, list_users, etc.), returns results  
+**Log prefix:** `[PM-AGENT]`  
+**When to read:** Tools not being called, wrong project context, tool selection issues
 
-### Analytics
-- [Analytics Quick Start](ANALYTICS_QUICKSTART.md)
-- [Chart Data Flow](CHART_DATA_FLOW.md)
-- [Task Status Resolver](TASK_STATUS_RESOLVER.md)
+### 04_planner.md
+**Purpose:** Complex multi-step query handling  
+**Function:** `planner_node()` in `nodes.py`  
+**Responsibility:** Creates execution plan for complex analysis requiring multiple tools  
+**Log prefix:** `[PLANNER]`  
+**When to read:** Simple queries going to planner, infinite loops, escalation issues
 
-## Notes
+### 05_reporter.md
+**Purpose:** Final report generation  
+**Function:** `reporter_node()` in `nodes.py`  
+**Responsibility:** Formats tool results into markdown report  
+**Log prefix:** `[PM-REPORTER]`  
+**When to read:** Missing data in report, duplicate reports, formatting issues
 
-- Guides are actively maintained and should be up-to-date
-- Reports are historical documentation and may contain outdated information
-- Check the main README.md in the project root for overview and quick start
+### 06_streaming.md
+**Purpose:** Real-time SSE event delivery  
+**File:** `app.py`  
+**Responsibility:** Pushes tool results to frontend via Server-Sent Events  
+**Log prefix:** `[STREAM-Q]`  
+**When to read:** Results appearing only at end, wrong user receiving events
 
+---
+
+## Troubleshooting Docs (docs/troubleshooting/)
+
+### debug_markers.md
+**Purpose:** Complete log prefix → component → doc mapping  
+**When to read:** Don't know which component caused the error
+
+### routing_issues.md
+**Purpose:** PM intent detection and routing failures  
+**Symptoms:** Generic response, no PM data, query not reaching react_agent
+
+### tool_errors.md
+**Purpose:** PM tool execution errors  
+**Symptoms:** Method not found, attribute errors, dict vs object issues
+
+### streaming_issues.md
+**Purpose:** SSE streaming problems  
+**Symptoms:** Batch delivery, events to wrong user, missing events

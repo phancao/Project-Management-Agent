@@ -366,6 +366,18 @@ class PMServiceHandler:
             result = await client.list_users(project_id=project_id)
         return result.get("items", [])
     
+    async def list_users(
+        self,
+        project_id: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        """List users (alias for list_project_users for API compatibility)."""
+        if project_id:
+            return await self.list_project_users(project_id)
+        # If no project_id, list all users
+        async with self._client as client:
+            result = await client.list_users()
+        return result.get("items", [])
+    
     async def get_user(self, user_id: str) -> Optional[dict[str, Any]]:
         """Get user by ID."""
         async with self._client as client:

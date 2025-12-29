@@ -337,11 +337,35 @@ function mergeToolCallResultMessage(
   message: Message,
   event: ToolCallResultEvent,
 ) {
-  const toolCall = message.toolCalls?.find(
+  // [TOOL-RESULT-DEBUG] Step 10: Log ID matching in merge logic
+  const ts = new Date().toISOString().slice(11, 23);
+  const eventToolCallId = event.data.tool_call_id;
+  const eventToolName = (event.data as any).agent ?? (event.data as any).name ?? "";
+  const existingToolCallIds = message.toolCalls?.map(t => t.id) ?? [];
+  const existingToolCallNames = message.toolCalls?.map(t => t.name) ?? [];
+  console.log(`[TOOL-RESULT-DEBUG][${ts}][merge-message.ts:merge] Looking for tool_call_id="${eventToolCallId}" (name="${eventToolName}") in message.toolCalls:`, existingToolCallIds);
+
+  // Primary match: exact tool_call_id match
+  let toolCall = message.toolCalls?.find(
     (toolCall) => toolCall.id === event.data.tool_call_id,
   );
+
+  // Fallback match: if no ID match and we have a tool name, match by name
+  // This handles inner tool calls whose IDs don't match the registered IDs
+  if (!toolCall && eventToolName && message.toolCalls) {
+    toolCall = message.toolCalls.find(
+      (tc) => tc.name === eventToolName && !tc.result,
+    );
+    if (toolCall) {
+      console.log(`[TOOL-RESULT-DEBUG][${ts}][merge-message.ts:merge] ⚡ FALLBACK MATCHED by name! tool="${toolCall.name}"`);
+    }
+  }
+
   if (toolCall) {
     toolCall.result = event.data.content ?? "";
+    console.log(`[TOOL-RESULT-DEBUG][${ts}][merge-message.ts:merge] ✅ MATCHED! Set result (len=${toolCall.result.length}) for tool "${toolCall.name}"`);
+  } else {
+    console.warn(`[TOOL-RESULT-DEBUG][${ts}][merge-message.ts:merge] ❌ NO MATCH! tool_call_id="${eventToolCallId}" name="${eventToolName}" not found in message.toolCalls IDs:`, existingToolCallIds, "names:", existingToolCallNames);
   }
 }
 

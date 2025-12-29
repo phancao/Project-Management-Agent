@@ -290,7 +290,6 @@ async def chat_stream(request: ChatRequest):
     mcp_enabled = get_bool_env("ENABLE_MCP_SERVER_CONFIGURATION", False)
     
     # Debug logging for MCP settings
-    logger.info(f"[chat_stream] mcp_enabled={mcp_enabled}, request.mcp_settings={request.mcp_settings}")
 
     # Validate MCP settings if provided
     if request.mcp_settings and not mcp_enabled:
@@ -312,10 +311,8 @@ async def chat_stream(request: ChatRequest):
     if mcp_enabled:
         if request.mcp_settings and isinstance(request.mcp_settings, dict) and request.mcp_settings.get("servers"):
             mcp_settings_to_use = request.mcp_settings
-            logger.info(f"[chat_stream] Using request mcp_settings with servers: {list(request.mcp_settings['servers'].keys())}")
         else:
             mcp_settings_to_use = get_default_mcp_settings()
-            logger.info(f"[chat_stream] Using default mcp_settings with servers: {list(mcp_settings_to_use['servers'].keys())}")
     else:
         mcp_settings_to_use = {}
         logger.info("[chat_stream] MCP disabled, using empty mcp_settings")
@@ -350,7 +347,6 @@ def _validate_tool_call_chunks(tool_call_chunks):
     if not tool_call_chunks:
         return
     
-    logger.debug(f"Validating tool_call_chunks: count={len(tool_call_chunks)}")
     
     indices_seen = set()
     tool_ids_seen = set()
@@ -444,7 +440,6 @@ def _process_tool_call_chunks(tool_call_chunks):
                 chunk_by_index[index]["args"] += chunk.get("args", "")
         else:
             # Handle chunks without explicit index (edge case)
-            logger.debug(f"Chunk without index encountered: {chunk}")
             chunks.append({
                 "name": chunk.get("name", ""),
                 "args": sanitize_args(chunk.get("args", "")),

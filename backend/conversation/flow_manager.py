@@ -174,7 +174,6 @@ class ConversationFlowManager:
         # This allows follow-up messages to be processed properly
         if context.current_state == FlowState.COMPLETED:
             context.current_state = FlowState.INTENT_DETECTION
-            logger.info(f"Reset state to INTENT_DETECTION for new message (previous state was COMPLETED)")
         
         # Generate PM plan or use existing plan
         if context.current_state == FlowState.INTENT_DETECTION:
@@ -185,7 +184,6 @@ class ConversationFlowManager:
                 gathered_data=context.gathered_data.copy()  # Pass existing context
             )
             context.gathered_data.update(initial_data)
-            logger.info(f"Extracted initial data: {initial_data}")
             
             # Try to generate a PM plan for multi-task execution
             pm_plan = await self.generate_pm_plan(message, context)
@@ -195,7 +193,6 @@ class ConversationFlowManager:
                 context.gathered_data['_pm_plan'] = pm_plan
                 context.gathered_data['_current_step_index'] = 0
                 context.current_state = FlowState.PLANNING_PHASE
-                logger.info(f"Generated PM plan with {len(pm_plan.get('steps', []))} steps")
             else:
                 # Fallback to legacy intent-based approach
                 logger.info("Could not generate PM plan, falling back to intent-based classification")
@@ -241,7 +238,6 @@ class ConversationFlowManager:
                     # Fallback to execution phase if DeerFlow not available
                     logger.warning("DeerFlow not available, falling back to execution phase")
                     context.current_state = FlowState.EXECUTION_PHASE
-                logger.info(f"State set to: {context.current_state}")
             else:
                 return await self._generate_clarification_response(context)
         
@@ -542,7 +538,6 @@ class ConversationFlowManager:
         current_iteration = context.gathered_data['_planning_iteration']
         
         while current_iteration < max_iterations:
-            logger.info(f"[ADAPTIVE] Iteration {current_iteration + 1}/{max_iterations}")
             
             # Execute steps in current plan
             steps = pm_plan.get('steps', [])
@@ -1055,7 +1050,6 @@ class ConversationFlowManager:
                 # Validate and return
                 try:
                     pm_plan = PMPlan(**plan_data)
-                    logger.info(f"Generated PM plan with {len(pm_plan.steps)} steps in {time.time() - plan_start:.2f}s")
                     # Use mode='json' to serialize enums as strings
                     return pm_plan.model_dump(mode='json')
                 except Exception as validation_error:
@@ -2790,7 +2784,6 @@ Format as a numbered list with brief explanations."""
             context.gathered_data['active_project_id'] = project_id
             context.gathered_data['active_project_name'] = project_name
             
-            # Reset state to INTENT_DETECTION so next message can process normally
             context.current_state = FlowState.INTENT_DETECTION
             
             return {
@@ -2878,7 +2871,6 @@ Format as a numbered list with brief explanations."""
             context.gathered_data['active_sprint_id'] = sprint_id
             context.gathered_data['active_sprint_name'] = sprint_name
             
-            # Reset state to INTENT_DETECTION so next message can process normally
             context.current_state = FlowState.INTENT_DETECTION
             
             project_info = f" (Project: {context.gathered_data.get('active_project_name', project_id)})" if project_id else ""
@@ -2967,7 +2959,6 @@ Format as a numbered list with brief explanations."""
             context.gathered_data['active_task_id'] = task_id
             context.gathered_data['active_task_title'] = task.title
             
-            # Reset state to INTENT_DETECTION so next message can process normally
             context.current_state = FlowState.INTENT_DETECTION
             
             # Build task details message

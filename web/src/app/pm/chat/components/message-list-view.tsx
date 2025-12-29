@@ -82,6 +82,12 @@ export function MessageListView({
     (state) => state.ongoingResearchId === state.openResearchId,
   );
 
+  // FIX: Always show loading when responding=true
+  // The old logic hid loading when ongoingResearchId === openResearchId, assuming a research
+  // side-panel was visible. But PM queries don't have a visible research panel, leaving users
+  // with no feedback during the ~36 second "dead zone" while waiting for the report.
+  const showLoading = responding;
+
   const handleToggleResearch = useCallback(() => {
     // Fix the issue where auto-scrolling to the bottom
     // occasionally fails when toggling research.
@@ -117,7 +123,7 @@ export function MessageListView({
         ))}
         <div className="flex h-8 w-full shrink-0"></div>
       </ul>
-      {responding && (noOngoingResearch || !ongoingResearchIsOpen) && (
+      {showLoading && (
         <LoadingAnimation className="w-full" />
       )}
     </ScrollContainer>
@@ -798,20 +804,20 @@ function ToolsDisplay({ tools, toolCalls }: { tools?: string[]; toolCalls?: Tool
                   {!tool.result && <span className="text-orange-500">(waiting...)</span>}
                 </CollapsibleTrigger>
               </div>
-              
+
               {tool.result && (
                 <CollapsibleContent className="pl-5 border-l-2 border-muted-foreground/10 ml-1.5 mt-1 overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
                   {jsonContent ? (
-                     <div className="rounded-md overflow-hidden text-xs my-1">
-                        <SyntaxHighlighter 
-                          language="json" 
-                          style={vscDarkPlus}
-                          customStyle={{ margin: 0, padding: '1rem', fontSize: '11px', lineHeight: '1.4' }}
-                          wrapLongLines
-                        >
-                          {JSON.stringify(jsonContent, null, 2)}
-                        </SyntaxHighlighter>
-                     </div>
+                    <div className="rounded-md overflow-hidden text-xs my-1">
+                      <SyntaxHighlighter
+                        language="json"
+                        style={vscDarkPlus}
+                        customStyle={{ margin: 0, padding: '1rem', fontSize: '11px', lineHeight: '1.4' }}
+                        wrapLongLines
+                      >
+                        {JSON.stringify(jsonContent, null, 2)}
+                      </SyntaxHighlighter>
+                    </div>
                   ) : (
                     <div className="font-mono text-muted-foreground/80 whitespace-pre-wrap py-1">
                       {tool.result}

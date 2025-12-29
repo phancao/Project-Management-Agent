@@ -53,6 +53,9 @@ from .thought_extractor import (
 )
 
 logger = logging.getLogger(__name__)
+from datetime import datetime
+
+
 
 
 def _add_context_optimization_tool_call(state: State, agent_name: str, optimization_metadata: dict) -> list:
@@ -957,6 +960,7 @@ def coordinator_node(
     4. Clarification enabled → Use that flow
     """
     configurable = Configuration.from_runnable_config(config)
+    safe_thread_id = config.get("configurable", {}).get("thread_id", "unknown")
     
     # ADAPTIVE ROUTING: Check if user wants more detail (follow-up escalation)
     messages = state.get("messages", [])
@@ -1593,6 +1597,7 @@ async def reporter_node(state: State, config: RunnableConfig):
                     # Extract tool name and input from AgentAction
                     tool_name = getattr(action, 'tool', None) or (action.tool if hasattr(action, 'tool') else str(action))
                     tool_input = getattr(action, 'tool_input', None) or (action.tool_input if hasattr(action, 'tool_input') else {})
+                    observation = step[1]
                     
                     # Keep the RAW observation - DO NOT truncate for PM data queries
                     obs_text = f"## Tool: {tool_name}\n**Input:** {tool_input}\n\n**Result:**\n{observation}"
@@ -3894,6 +3899,7 @@ async def react_agent_node(
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     
     configurable = Configuration.from_runnable_config(config)
+    safe_thread_id = config.get("configurable", {}).get("thread_id", "unknown")
     
     # Load PM tools + web_search for background investigation
     try:
@@ -3935,12 +3941,19 @@ async def react_agent_node(
         
         try:
             # Run the LLM-driven agent
+            # PLAN 9: Inject side-channel callback for real-time streaming
+            from backend.utils import streaming_state
+            
+            async def side_channel_callback(tool_name, tool_call_id, result):
+                streaming_state.register_tool_result(tool_name, result, tool_call_id)
+
             result = await run_pm_agent(
                 llm=llm,
                 tools=pm_tools,
                 user_query=user_query,
                 project_id=project_id,
-                max_steps=5
+                max_steps=5,
+                on_tool_result=side_channel_callback
             )
             
             if result.success and result.result:

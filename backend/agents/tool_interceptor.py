@@ -13,6 +13,7 @@ from backend.utils.log_sanitizer import (
     sanitize_log_input,
     sanitize_tool_name,
 )
+from backend.utils import streaming_state
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,18 @@ class ToolInterceptor:
             try:
                 result = original_func(*args, **kwargs)
                 logger.info(f"[ToolInterceptor] Tool '{safe_tool_name_local}' execution completed successfully")
+                
+                # PLAN 9 SIDE-CHANNEL: Push result to stream immediately
+                # This uses the context-aware streaming_state to find the correct queue for this thread
+                try:
+                    # Convert result to string if needed, as expected by app.py
+                    result_str = str(result)
+                    # We don't have tool_call_id here, but we push the result anyway.
+                    # The frontend might need to rely on agent/name matching if tool_call_id is missing.
+                    streaming_state.register_tool_result(tool_name, result_str)
+                except Exception as e:
+                    logger.error(f"[ToolInterceptor] Failed to push side-channel result: {e}")
+                    
                 return result
             except Exception as e:
                 logger.error(f"[ToolInterceptor] Error executing tool '{safe_tool_name_local}': {str(e)}")

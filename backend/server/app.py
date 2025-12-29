@@ -82,21 +82,9 @@ _previous_content_length: dict[str, int] = {}  # message_id -> previous accumula
 # Tracks step_index per thread_id so each thought gets a unique sequential index
 _progressive_step_counter: dict[str, int] = {}  # thread_id -> current step_index
 
-# PLAN 9: Async queue registry for real-time inner tool result streaming
-# Each thread gets its own queue so pm_agent can push results during execution
-# The streaming loop consumes from this queue and emits SSE events immediately
-_tool_result_queues: dict[str, asyncio.Queue] = {}  # thread_id -> Queue[dict]
-
-def get_tool_result_queue(thread_id: str) -> asyncio.Queue:
-    """Get or create async queue for thread."""
-    if thread_id not in _tool_result_queues:
-        _tool_result_queues[thread_id] = asyncio.Queue()
-    return _tool_result_queues[thread_id]
-
-def cleanup_tool_result_queue(thread_id: str):
-    """Cleanup queue after streaming completes."""
-    if thread_id in _tool_result_queues:
-        del _tool_result_queues[thread_id]
+# Import new streaming state module
+from backend.utils import streaming_state
+from backend.utils.streaming_state import current_thread_id
 
 
 from backend.server.config_request import ConfigResponse
@@ -1106,6 +1094,25 @@ async def _process_message_chunk(
 async def _stream_graph_events(
     graph_instance, workflow_input, workflow_config, thread_id
 ):
+    """Wrapper to inject Plan 9 side-channel context."""
+    # Run the core logic inside the context
+    safe_thread_id = sanitize_thread_id(thread_id)
+    token_ctx = current_thread_id.set(safe_thread_id)
+    streaming_state.get_tool_result_queue(safe_thread_id)
+
+    try:
+        async for event in _stream_graph_events_core(
+            graph_instance, workflow_input, workflow_config, thread_id
+        ):
+            yield event
+    finally:
+        streaming_state.cleanup_tool_result_queue(safe_thread_id)
+        current_thread_id.reset(token_ctx)
+
+
+async def _stream_graph_events_core(
+    graph_instance, workflow_input, workflow_config, thread_id
+):
     """Stream events from the graph using latest LangGraph features.
     
     Features:
@@ -1201,23 +1208,30 @@ async def _stream_graph_events(
                         event_type = event.split('\n')[0] if '\n' in event else event[:50]
                         yield event
                     
+                    
                     # PLAN 9: Drain queue for real-time tool results
-                    if thread_id in _tool_result_queues:
-                        queue = _tool_result_queues[thread_id]
-                        while not queue.empty():
-                            try:
-                                item = queue.get_nowait()
-                                tool_result_event = {
-                                    "thread_id": thread_id,
-                                    "agent": "pm_agent",
-                                    "role": "assistant",
-                                    "tool_call_id": item.get("tool_call_id"),
-                                    "name": item.get("tool_name"),
-                                    "content": item.get("result", "")[:5000],
-                                }
-                                yield _make_event("tool_call_result", tool_result_event)
-                            except asyncio.QueueEmpty:
-                                break
+                    # CRITICAL: This allows tool results (captured via interceptor side-channel) 
+                    # to be streamed immediately, even while the graph is still "thinking" or running other nodes.
+                    queue = streaming_state.get_tool_result_queue(safe_thread_id)
+                    while not queue.empty():
+                        try:
+                            item = queue.get_nowait()
+                            tool_result_event = {
+                                "thread_id": thread_id,
+                                "agent": "pm_agent",
+                                "role": "assistant",
+                                "tool_call_id": item.get("tool_call_id"),
+                                "name": item.get("tool_name"),
+                                "content": item.get("result", "")[:5000],
+                            }
+                            yield _make_event("tool_call_result", tool_result_event)
+                            
+                            # Cooperative yield to ensure event loop doesn't starve
+                            import asyncio
+                            await asyncio.sleep(0.01)
+                        except asyncio.QueueEmpty:
+                            break
+
             
             elif stream_type == "updates":
                 # Process state updates (plan updates, observations)

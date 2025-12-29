@@ -125,6 +125,7 @@ async def get_current_project() -> str:
                 project_name = project.get("name", "Unknown")
                 provider_type = project.get("provider_type", "unknown")
         except Exception as e:
+            pass
         
         # Return structured JSON that the agent can easily parse
         result_json = {
@@ -462,7 +463,9 @@ async def list_tasks(
                 if resolved_id:
                     actual_sprint_id = resolved_id
                 else:
+                    pass
             except Exception as e:
+                pass
 
         if actual_sprint_id and actual_sprint_id.isdigit() and len(actual_sprint_id) < 3:
              # Heuristic: IDs are usually 3+ digits. Sprint numbers are 1-2 digits.
@@ -796,6 +799,7 @@ async def list_sprints(
             duplicates = {id: count for id, count in id_counts.items() if count > 1}
             # Log first few sprint IDs to see pattern
         else:
+            pass
         
         # TEMPORARY: Deduplicate sprints by ID to prevent duplicates from PM service
         # TODO: Remove this once root cause is fixed
@@ -807,6 +811,7 @@ async def list_sprints(
                 seen_ids.add(sprint_id)
                 deduplicated_sprints.append(sprint)
             elif sprint_id:
+                pass
         
         if len(deduplicated_sprints) < len(sprints):
             logger.warning(

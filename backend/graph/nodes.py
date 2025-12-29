@@ -1417,6 +1417,7 @@ Create a comprehensive plan that addresses their need for more detailed analysis
     from langgraph.graph import END
     if goto == END or goto == "__end__":
         # Don't override - already set correctly
+        pass
     elif goto == "planner" and not escalation_reason and not previous_result:
         # First-time query → Use ReAct (fast), even for comprehensive queries
         # React Agent will auto-escalate to planner if it can't handle complexity
@@ -4277,6 +4278,7 @@ async def react_agent_node(
             f"Strategy: {optimization_metadata.get('strategy', 'unknown')}"
         )
     else:
+        pass
     
     
     # Count tokens in compressed messages
@@ -4415,7 +4417,9 @@ async def react_agent_node(
         if current_pid:
             project_context_str = f"\n\nCURRENT PROJECT CONTEXT:\n- ID: {current_pid}\n- YOU MUST USE THIS PROJECT ID immediately for any tools requiring 'project_id'.\n- Do NOT call get_current_project or get_current_project_details first - you already have the project ID!"
         else:
+            pass
     except Exception as e:
+        pass
 
     react_prompt_template = """You are a helpful PM assistant with access to project management tools and web search.
 """ + project_context_str + """
@@ -4736,6 +4740,7 @@ Question: {input}
                 else:
                     pass
             except Exception as e:
+                pass
     
     # Create callback to monitor scratchpad
     scratchpad_monitor = ScratchpadTokenMonitor(
@@ -4774,6 +4779,7 @@ Question: {input}
         if project_id:
             system_prompt += f"\n\n---\n\n## CURRENT PROJECT CONTEXT\n\n**project_id:** `{project_id}`\n\nUse this project_id in ALL tool calls."
         else:
+            pass
         
         # Get user message from state to include in context
         messages = state.get("messages", [])
@@ -4851,6 +4857,7 @@ Question: {input}
                     
         except Exception as e:
             # Continue with original messages if tracking fails
+            pass
         
         return state
     
@@ -5021,6 +5028,7 @@ Question: {input}
             result_messages = result_state.get("messages", [])
             
             if chunk_count == 0:
+                pass
             
             if result_messages:
                 # Get the last AI message as the output
@@ -5213,6 +5221,7 @@ Question: {input}
                                 "step_index": len(intermediate_steps) if has_tool_calls else len(thoughts)
                             })
                         elif has_tool_calls:
+                            pass
                         elif not has_tool_calls:
                             # Even without tool_calls, extract thought from content to show what agent is thinking
                             msg_content = getattr(msg, 'content', '') or ''
@@ -5265,6 +5274,7 @@ Question: {input}
                                     )
                                     intermediate_steps.append((action, tool_result))
                                 else:
+                                    pass
             
             # Store thoughts in result for frontend display
             if thoughts:
@@ -5353,6 +5363,7 @@ Question: {input}
                                     )
                                     partial_intermediate_steps.append((action, tool_result))
             except Exception as extract_error:
+                pass
             
             # Convert partial intermediate steps to messages for frontend display
             tool_call_messages = []
@@ -5529,6 +5540,7 @@ Question: {input}
                     goto="planner"
                 )
         else:
+            pass
         
         # Check for escalation triggers
         
@@ -5686,6 +5698,7 @@ Question: {input}
                 )
         except Exception as token_check_error:
             # If token checking fails, log but don't block the flow
+            pass
         
         # CRITICAL: Only escalate if agent failed to execute a PM request
         # Do NOT escalate for normal conversation (greetings, small talk)
@@ -5874,6 +5887,7 @@ Question: {input}
         if is_pm_query:
             update_dict["previous_result"] = output
         else:
+            pass
         
         return Command(
             update=update_dict,
@@ -5966,6 +5980,7 @@ Question: {input}
                                 f"  Observation: {obs_content}..."
                             )
             except Exception as log_error:
+                pass
         
         # Check if it's a rate limit error
         if "rate_limit" in error_msg.lower() or "429" in error_msg or "too large" in error_msg.lower():

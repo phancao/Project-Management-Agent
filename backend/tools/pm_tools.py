@@ -125,7 +125,6 @@ async def get_current_project() -> str:
                 project_name = project.get("name", "Unknown")
                 provider_type = project.get("provider_type", "unknown")
         except Exception as e:
-            logger.warning(f"[PM-TOOLS] get_current_project: Could not fetch project details: {e}")
         
         # Return structured JSON that the agent can easily parse
         result_json = {
@@ -195,7 +194,6 @@ async def list_projects() -> str:
                 pass  # If not JSON, use sanitize_tool_response as fallback
             
             result = sanitize_tool_response(result, max_length=max_chars, compress_arrays=True)
-            logger.info(f"[PM-TOOLS] ✅ list_projects compressed to {len(result):,} chars (≈{len(result)//4:,} tokens)")
         
         return result
     except Exception as e:
@@ -417,8 +415,6 @@ async def list_tasks(
                 else:
                     actual_project_id = composite_project_id
         
-        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks ENTER - project_id='{project_id}', assignee_id='{assignee_id}', sprint_id='{sprint_id}'")
-        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks detected/actual project_id='{actual_project_id}'")
 
         # Extract sprint ID from composite format (e.g., "project_id:sprint_id" -> "sprint_id")
         actual_sprint_id = None
@@ -446,7 +442,6 @@ async def list_tasks(
                 if ":" in project_for_sprints:
                    project_for_sprints = project_for_sprints.split(":", 1)[1]
                 
-                logger.info(f"[PM-TOOLS] Smart Resolution: Resolving ambiguous sprint_id='{actual_sprint_id}' for project='{project_for_sprints}'")
                 sprints = await handler.list_project_sprints(project_for_sprints)
                 
                 resolved_id = None
@@ -454,7 +449,6 @@ async def list_tasks(
                 for s in sprints:
                     if s.get("name") and s.get("name").lower() == actual_sprint_id.lower():
                         resolved_id = str(s.get("id"))
-                        logger.info(f"[PM-TOOLS] Smart Resolution: Matched Name '{s.get('name')}' -> ID {resolved_id}")
                         break
                 
                 # Strategy 2: "Sprint X" Pattern Match (if input is "4", look for "Sprint 4")
@@ -463,15 +457,12 @@ async def list_tasks(
                     for s in sprints:
                         if s.get("name") and s.get("name").lower() == target_name.lower():
                             resolved_id = str(s.get("id"))
-                            logger.info(f"[PM-TOOLS] Smart Resolution: Matched Pattern '{target_name}' -> ID {resolved_id}")
                             break
 
                 if resolved_id:
                     actual_sprint_id = resolved_id
                 else:
-                    logger.warning(f"[PM-TOOLS] Smart Resolution: Could not resolve '{actual_sprint_id}'")
             except Exception as e:
-                logger.warning(f"[PM-TOOLS] Smart Resolution Failed: {e}")
 
         if actual_sprint_id and actual_sprint_id.isdigit() and len(actual_sprint_id) < 3:
              # Heuristic: IDs are usually 3+ digits. Sprint numbers are 1-2 digits.
@@ -481,7 +472,6 @@ async def list_tasks(
                  "error": f"Invalid sprint_id '{actual_sprint_id}'. It appears to be a sprint number, not an ID. Please call 'list_sprints' first to find the real ID (e.g. '613') and use that."
              })
 
-        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks: Filter strategy check - sprint_id='{actual_sprint_id}', project_id='{actual_project_id}'")
         
         # If sprint_id is provided, try to use a more efficient method
         # Check if handler has a method to get tasks by sprint directly
@@ -585,12 +575,9 @@ async def list_tasks(
                 )
         
         
-        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks: Returning {len(tasks)} tasks")
         if tasks:
             task_ids = [t.get("id") for t in tasks]
-            logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks: Task IDs: {task_ids}")
             # Log first task for debugging
-            logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks: First task sample: {json.dumps(tasks[0], default=str)[:200]}...")
             
         result = json.dumps({
             "success": True,
@@ -601,7 +588,6 @@ async def list_tasks(
         # LAZY OPTIMIZATION: Do NOT truncate at tool level.
         # Let the context manager at reporter level handle limits ONLY if exceeded.
         # This preserves full task data for simple queries.
-        logger.info(f"[{get_ts()}] [PM-TOOLS] list_tasks returning {len(result):,} chars (≈{len(result)//4:,} tokens) - NO TRUNCATION at tool level")
         
         return result
     except Exception as e:
@@ -647,7 +633,6 @@ async def list_my_tasks() -> str:
                 f"(≈{len(result)//4:,} tokens). Truncating to {max_chars:,} chars."
             )
             result = sanitize_tool_response(result, max_length=max_chars, compress_arrays=True)
-            logger.info(f"[PM-TOOLS] ✅ list_my_tasks truncated to {len(result):,} chars (≈{len(result)//4:,} tokens)")
         
         return result
     except Exception as e:
@@ -763,7 +748,6 @@ async def list_sprints(
         # Use handler method if available, otherwise use provider directly
         sprints = []
         handler_type = handler.__class__.__name__
-        logger.info(f"[PM-TOOLS] list_sprints: Using handler type: {handler_type}, project_id: {actual_project_id}")
 
         import time
         start_time = time.time()
@@ -775,16 +759,11 @@ async def list_sprints(
              sprints = await handler.list_all_sprints(project_id=actual_project_id)
              
         duration = time.time() - start_time
-        logger.info(f"[PM-TOOLS] ⏱️ END list_sprints - took {duration:.2f}s, found {len(sprints)} sprints")
         
         if hasattr(handler, 'list_all_sprints'):
-            logger.info(f"[PM-TOOLS] list_sprints: Calling handler.list_all_sprints(project_id={actual_project_id})")
             sprints = await handler.list_all_sprints(project_id=actual_project_id)
-            logger.info(f"[PM-TOOLS] list_sprints: handler.list_all_sprints returned {len(sprints)} sprints")
         elif handler.single_provider:
-            logger.info(f"[PM-TOOLS] list_sprints: Using single_provider.list_sprints(project_id={actual_project_id})")
             sprint_objs = await handler.single_provider.list_sprints(project_id=actual_project_id)
-            logger.info(f"[PM-TOOLS] list_sprints: single_provider.list_sprints returned {len(sprint_objs)} sprint objects")
             sprints = [
                 {
                     "id": str(s.id),
@@ -800,9 +779,7 @@ async def list_sprints(
                 for s in sprint_objs
             ]
         elif project_id:
-            logger.info(f"[PM-TOOLS] list_sprints: Calling handler.list_project_sprints(project_id={project_id})")
             sprints = await handler.list_project_sprints(project_id)
-            logger.info(f"[PM-TOOLS] list_sprints: handler.list_project_sprints returned {len(sprints)} sprints")
         
         # INVESTIGATE: Check for duplicate sprint IDs to understand why list is doubled
         sprint_ids = [s.get("id") if isinstance(s, dict) else str(getattr(s, "id", None)) for s in sprints]
@@ -817,11 +794,8 @@ async def list_sprints(
             from collections import Counter
             id_counts = Counter(sprint_ids)
             duplicates = {id: count for id, count in id_counts.items() if count > 1}
-            logger.warning(f"[PM-TOOLS] Duplicate sprint IDs: {duplicates}")
             # Log first few sprint IDs to see pattern
-            logger.info(f"[PM-TOOLS] First 10 sprint IDs: {sprint_ids[:10]}")
         else:
-            logger.info(f"[PM-TOOLS] ✅ No duplicates: {len(sprint_ids)} sprints, all unique IDs")
         
         # TEMPORARY: Deduplicate sprints by ID to prevent duplicates from PM service
         # TODO: Remove this once root cause is fixed
@@ -833,7 +807,6 @@ async def list_sprints(
                 seen_ids.add(sprint_id)
                 deduplicated_sprints.append(sprint)
             elif sprint_id:
-                logger.warning(f"[PM-TOOLS] Removing duplicate sprint (ID: {sprint_id})")
         
         if len(deduplicated_sprints) < len(sprints):
             logger.warning(
@@ -859,7 +832,6 @@ async def list_sprints(
                 f"(≈{len(result)//4:,} tokens). Truncating to {max_chars:,} chars."
             )
             result = sanitize_tool_response(result, max_length=max_chars, compress_arrays=True)
-            logger.info(f"[PM-TOOLS] ✅ list_sprints truncated to {len(result):,} chars (≈{len(result)//4:,} tokens)")
         
         return result
     except Exception as e:

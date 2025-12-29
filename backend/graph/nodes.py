@@ -1416,7 +1416,6 @@ Create a comprehensive plan that addresses their need for more detailed analysis
     # This adaptive routing code only executes for the clarification branch
     from langgraph.graph import END
     if goto == END or goto == "__end__":
-        logger.info("[COORDINATOR] 💬 Greeting handled - routing to END")
         # Don't override - already set correctly
     elif goto == "planner" and not escalation_reason and not previous_result:
         # First-time query → Use ReAct (fast), even for comprehensive queries
@@ -1446,7 +1445,6 @@ Create a comprehensive plan that addresses their need for more detailed analysis
     # CRITICAL: Include project_id in state so ReAct agent can use it
     if project_id:
         update_dict["project_id"] = project_id
-        logger.info(f"[COORDINATOR] ✅ Passing project_id to {goto}: {project_id}")
     # Only add messages if we have new ones (prevents duplicating existing messages)
     if new_messages:
         update_dict["messages"] = new_messages
@@ -4007,9 +4005,7 @@ async def react_agent_node(
                 )
         
         except Exception as e:
-            logger.error(f"[{ts}] [PM-AGENT] ❌ Agent error: {e}")
             import traceback
-            logger.error(f"[{ts}] [PM-AGENT] Traceback: {traceback.format_exc()}")
         
         # Fall through to LangGraph agent if PM agent failed
         
@@ -4168,7 +4164,6 @@ async def react_agent_node(
         
         tools = wrapped_pm_tools + [wrapped_search_tool]
     except Exception as e:
-        logger.error(f"[PM-AGENT] Failed to load tools: {e}", exc_info=True)
         # Escalate if tools fail
         return Command(
             update={"escalation_reason": "tool_loading_failed"},
@@ -4282,7 +4277,6 @@ async def react_agent_node(
             f"Strategy: {optimization_metadata.get('strategy', 'unknown')}"
         )
     else:
-        logger.error(f"[PM-AGENT] 🚨 CRITICAL: No optimization metadata returned! This means compression didn't work!")
     
     
     # Count tokens in compressed messages
@@ -4421,9 +4415,7 @@ async def react_agent_node(
         if current_pid:
             project_context_str = f"\n\nCURRENT PROJECT CONTEXT:\n- ID: {current_pid}\n- YOU MUST USE THIS PROJECT ID immediately for any tools requiring 'project_id'.\n- Do NOT call get_current_project or get_current_project_details first - you already have the project ID!"
         else:
-            logger.info(f"[PM-AGENT] ⚠️ No project_id in state after all access methods attempted")
     except Exception as e:
-        logger.warning(f"[PM-AGENT] Failed to inject project context: {e}")
 
     react_prompt_template = """You are a helpful PM assistant with access to project management tools and web search.
 """ + project_context_str + """
@@ -4744,7 +4736,6 @@ Question: {input}
                 else:
                     pass
             except Exception as e:
-                logger.error(f"[PM-AGENT] ❌ Error monitoring scratchpad: {e}")
     
     # Create callback to monitor scratchpad
     scratchpad_monitor = ScratchpadTokenMonitor(
@@ -4783,7 +4774,6 @@ Question: {input}
         if project_id:
             system_prompt += f"\n\n---\n\n## CURRENT PROJECT CONTEXT\n\n**project_id:** `{project_id}`\n\nUse this project_id in ALL tool calls."
         else:
-            logger.warning(f"[{ts}] [PM-AGENT] NO project_id found in state!")
         
         # Get user message from state to include in context
         messages = state.get("messages", [])
@@ -4860,7 +4850,6 @@ Question: {input}
                 pass
                     
         except Exception as e:
-            logger.warning(f"[PM-AGENT] ⚠️ pre_model_hook failed: {e}")
             # Continue with original messages if tracking fails
         
         return state
@@ -5023,7 +5012,6 @@ Question: {input}
                                 if key != "messages":
                                     result_state[key] = value
             except Exception as stream_error:
-                logger.error(f"[PM-AGENT] ❌ Stream error: {stream_error}", exc_info=True)
                 # Re-raise to be caught by outer handler, but result_state now has partial data
                 raise
             
@@ -5033,7 +5021,6 @@ Question: {input}
             result_messages = result_state.get("messages", [])
             
             if chunk_count == 0:
-                logger.error(f"[PM-AGENT] ❌ CRITICAL: No chunks received from astream! This means the agent graph didn't execute.")
             
             if result_messages:
                 # Get the last AI message as the output
@@ -5226,7 +5213,6 @@ Question: {input}
                                 "step_index": len(intermediate_steps) if has_tool_calls else len(thoughts)
                             })
                         elif has_tool_calls:
-                            logger.warning(f"[PM-AGENT] 💭 No thought found in AIMessage {i} with tool_calls (content empty, no reasoning_content)")
                         elif not has_tool_calls:
                             # Even without tool_calls, extract thought from content to show what agent is thinking
                             msg_content = getattr(msg, 'content', '') or ''
@@ -5279,7 +5265,6 @@ Question: {input}
                                     )
                                     intermediate_steps.append((action, tool_result))
                                 else:
-                                    logger.warning(f"[PM-AGENT] ⚠️ No tool result found for {tool_name} (call_id={tool_call_id})")
             
             # Store thoughts in result for frontend display
             if thoughts:
@@ -5368,7 +5353,6 @@ Question: {input}
                                     )
                                     partial_intermediate_steps.append((action, tool_result))
             except Exception as extract_error:
-                logger.warning(f"[PM-AGENT] Failed to extract partial steps on timeout: {extract_error}")
             
             # Convert partial intermediate steps to messages for frontend display
             tool_call_messages = []
@@ -5447,19 +5431,16 @@ Question: {input}
                     # Check for invalid tool name (with parentheses)
                     if tool_name and "()" in tool_name:
                         invalid_tool_count += 1
-                        logger.error(f"[PM-AGENT] ❌ ERROR: Step {idx + 1} - Invalid tool name with parentheses: {tool_name}")
                     
                     # Check for placeholder values
                     if tool_input:
                         tool_input_str = str(tool_input)
                         if '"project_id": "project_id"' in tool_input_str or '"sprint_id": "sprint_id"' in tool_input_str:
                             placeholder_count += 1
-                            logger.error(f"[PM-AGENT] ❌ ERROR: Step {idx + 1} - Placeholder values detected: {tool_input_str[:200]}")
                     
                     # Check for errors in observation
                     if any(err in obs_lower for err in ["error", "failed", "exception", "invalid", "not found", "not a valid tool"]):
                         error_count += 1
-                        logger.warning(f"[PM-AGENT] ⚠️ ERROR DETECTED in Step {idx + 1}: {obs_str[:300]}")
                     
                     action_str = str(action)[:200] if action else "None"
                     obs_len = len(obs_str)
@@ -5503,7 +5484,6 @@ Question: {input}
                             f"Observation: {obs_len:,} chars, {obs_tokens:,} tokens"
                         )
                     except Exception as e:
-                        logger.warning(f"[PM-AGENT] Failed to count tokens in observation: {e}")
                         # Estimate tokens as fallback
                         obs_tokens = obs_len // 4
                         total_obs_tokens += obs_tokens
@@ -5549,7 +5529,6 @@ Question: {input}
                     goto="planner"
                 )
         else:
-            logger.warning("[PM-AGENT] ⚠️ No intermediate steps - agent may not have called any tools")
         
         # Check for escalation triggers
         
@@ -5615,7 +5594,6 @@ Question: {input}
         ]
         if any(phrase in output.lower() for phrase in escalation_phrases):
             thoughts_to_preserve = incremental_thoughts if 'incremental_thoughts' in locals() and incremental_thoughts else (thoughts if 'thoughts' in locals() else [])
-            logger.info("[PM-AGENT] ⬆️ Agent requested planning - escalating")
             if thoughts_to_preserve:
                 pass
             return Command(
@@ -5708,7 +5686,6 @@ Question: {input}
                 )
         except Exception as token_check_error:
             # If token checking fails, log but don't block the flow
-            logger.warning(f"[PM-AGENT] ⚠️ Token check failed: {token_check_error}", exc_info=True)
         
         # CRITICAL: Only escalate if agent failed to execute a PM request
         # Do NOT escalate for normal conversation (greetings, small talk)
@@ -5796,8 +5773,6 @@ Question: {input}
             )
         
         # Success - return result to user
-        logger.info(f"[PM-AGENT] ✅ Success - returning answer ({len(output)} chars)")
-        logger.info(f"[PM-AGENT] 💭 Including {len(thoughts)} thoughts in state update")
         
         # Cursor-style: Include thoughts in state for UI display
         # Use incremental_thoughts if available (from streaming), otherwise extract from result
@@ -5805,7 +5780,6 @@ Question: {input}
         final_thoughts = []
         if 'incremental_thoughts' in locals() and incremental_thoughts:
             final_thoughts = incremental_thoughts
-            logger.info(f"[PM-AGENT] 💭 Using incremental_thoughts: {len(final_thoughts)} thoughts")
         elif 'result' in locals() and result:
             final_thoughts = result.get("thoughts", [])
         else:
@@ -5816,14 +5790,12 @@ Question: {input}
                         if msg_thoughts:
                             final_thoughts.extend(msg_thoughts)
         
-        logger.info(f"[PM-AGENT] 💭 Final thoughts count: {len(final_thoughts)}")
         thoughts = final_thoughts
         
         # Convert intermediate_steps to AIMessage/ToolMessage pairs for frontend display
         # This allows tool calls to show up in the step box
         tool_call_messages = []
         if intermediate_steps:
-            logger.info(f"[PM-AGENT] 🔧 Converting {len(intermediate_steps)} intermediate steps to tool call messages for frontend")
             import uuid
             # AIMessage and ToolMessage are already imported at module level (line 14)
             
@@ -5881,10 +5853,8 @@ Question: {input}
                 final_message.response_metadata = {}
             final_message.response_metadata["react_thoughts"] = thoughts
             
-            logger.info(f"[PM-AGENT] 💭 Added {len(thoughts)} thoughts to final message (additional_kwargs + response_metadata) for streaming")
         return_messages.append(final_message)
         
-        logger.info(f"[PM-AGENT] 🔧 Returning {len(return_messages)} messages ({len(tool_call_messages)} tool call pairs + final output)")
         
         # CRITICAL: Only set previous_result for PM queries (has tool calls)
         # Normal conversation should NOT set previous_result, so next query goes to ReAct again
@@ -5903,9 +5873,7 @@ Question: {input}
         # This allows normal conversation to not block ReAct for the next query
         if is_pm_query:
             update_dict["previous_result"] = output
-            logger.info(f"[PM-AGENT] 📌 Set previous_result (PM query with {len(intermediate_steps)} tool calls)")
         else:
-            logger.info(f"[PM-AGENT] 💬 Normal conversation - NOT setting previous_result (allows ReAct for next query)")
         
         return Command(
             update=update_dict,
@@ -5926,7 +5894,6 @@ Question: {input}
             try:
                 # First, try to get messages from scratchpad monitor callback
                 if hasattr(scratchpad_monitor, 'captured_messages') and scratchpad_monitor.captured_messages:
-                    logger.warning(f"[PM-AGENT] ⚠️ Hit recursion limit. Logging {len(scratchpad_monitor.captured_messages)} captured messages:")
                     for i, (msg_type, msg_data) in enumerate(scratchpad_monitor.captured_messages):
                         if msg_type == "AIMessage":
                             content = getattr(msg_data, 'content', '') if hasattr(msg_data, 'content') else str(msg_data)
@@ -5950,7 +5917,6 @@ Question: {input}
                 # Extract messages from result_state (captured via astream)
                 result_messages = result_state.get("messages", []) if result_state else []
                 if result_messages:
-                    logger.warning(f"[PM-AGENT] ⚠️ Hit recursion limit. Logging {len(result_messages)} messages from result_state:")
                     
                     # Log all messages to see what happened
                     iteration_count = 0
@@ -6000,7 +5966,6 @@ Question: {input}
                                 f"  Observation: {obs_content}..."
                             )
             except Exception as log_error:
-                logger.error(f"[PM-AGENT] Error logging partial execution: {log_error}")
         
         # Check if it's a rate limit error
         if "rate_limit" in error_msg.lower() or "429" in error_msg or "too large" in error_msg.lower():

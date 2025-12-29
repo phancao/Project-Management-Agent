@@ -254,6 +254,7 @@ export async function sendMessage(
     for await (const event of stream) {
       const { type, data } = event;
 
+
       // Handle PM refresh events to update PM views
       if ((type as string) === "pm_refresh") {
         if (typeof window !== "undefined") {

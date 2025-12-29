@@ -435,7 +435,6 @@ def _process_tool_call_chunks(tool_call_chunks):
         chunk_data = chunk_by_index[index]
         chunk_data["args"] = sanitize_args(chunk_data["args"])
         chunks.append(chunk_data)
-        chunks.append(chunk_data)
     
     return chunks
 

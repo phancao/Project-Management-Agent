@@ -5,6 +5,8 @@
 
 import { LoadingOutlined } from "@ant-design/icons";
 import { motion } from "framer-motion";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import {
   Download,
   Headphones,
@@ -769,21 +771,57 @@ function PodcastCard({
 import type { ToolCallRuntime } from "~/core/messages/types";
 
 function ToolsDisplay({ tools, toolCalls }: { tools?: string[]; toolCalls?: ToolCallRuntime[] }) {
+
+
   if (toolCalls && toolCalls.length > 0) {
     return (
       <div className="mt-2 flex flex-col gap-2">
-        {toolCalls.map((tool, index) => (
-          <div key={index} className="flex flex-col gap-1 rounded-md border bg-muted/50 p-2 text-xs">
-            <div className="font-mono font-semibold text-muted-foreground">
-              🔧 {tool.name} {!tool.result && <span className="text-orange-500">(waiting...)</span>}
-            </div>
-            {tool.result && (
-              <div className="font-mono text-muted-foreground/80 whitespace-pre-wrap pl-4 border-l-2 border-muted-foreground/20">
-                {tool.result}
+        {toolCalls.map((tool, index) => {
+          let jsonContent = null;
+          if (tool.result) {
+            try {
+              const parsed = JSON.parse(tool.result);
+              if (parsed && typeof parsed === 'object') {
+                jsonContent = parsed;
+              }
+            } catch (e) {
+              // Not JSON, ignore
+            }
+          }
+
+          return (
+            <Collapsible key={index} defaultOpen={false} className="flex flex-col gap-1 rounded-md border bg-muted/50 p-2 text-xs">
+              <div className="flex items-center justify-between">
+                <CollapsibleTrigger className="flex items-center gap-2 font-mono font-semibold text-muted-foreground w-full hover:text-foreground text-left cursor-pointer group">
+                  <ChevronRight className="h-3 w-3 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                  <span>🔧 {tool.name}</span>
+                  {!tool.result && <span className="text-orange-500">(waiting...)</span>}
+                </CollapsibleTrigger>
               </div>
-            )}
-          </div>
-        ))}
+              
+              {tool.result && (
+                <CollapsibleContent className="pl-5 border-l-2 border-muted-foreground/10 ml-1.5 mt-1 overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+                  {jsonContent ? (
+                     <div className="rounded-md overflow-hidden text-xs my-1">
+                        <SyntaxHighlighter 
+                          language="json" 
+                          style={vscDarkPlus}
+                          customStyle={{ margin: 0, padding: '1rem', fontSize: '11px', lineHeight: '1.4' }}
+                          wrapLongLines
+                        >
+                          {JSON.stringify(jsonContent, null, 2)}
+                        </SyntaxHighlighter>
+                     </div>
+                  ) : (
+                    <div className="font-mono text-muted-foreground/80 whitespace-pre-wrap py-1">
+                      {tool.result}
+                    </div>
+                  )}
+                </CollapsibleContent>
+              )}
+            </Collapsible>
+          );
+        })}
       </div>
     );
   }

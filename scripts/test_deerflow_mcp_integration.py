@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Test DeerFlow + PM MCP Integration
+Test Galaxy AI Project Manager + PM MCP Integration
 
-Verifies that DeerFlow agents can successfully load and use PM tools
+Verifies that Galaxy AI Project Manager agents can successfully load and use PM tools
 from the PM MCP Server.
 """
 
@@ -153,7 +153,7 @@ async def main():
         print("      configure_pm_mcp_client(transport='sse', url='http://localhost:8080')")
         print("      tools = await get_pm_mcp_tools()")
         print("      print(f'Loaded {len(tools)} tools')")
-        print("\n   3. Integrate with DeerFlow agents (see docs/DEERFLOW_MCP_INTEGRATION.md)")
+        print("\n   3. Integrate with Galaxy AI Project Manager agents (see docs/DEERFLOW_MCP_INTEGRATION.md)")
         return 0
     else:
         print(f"\n❌ {total - passed} test(s) failed")

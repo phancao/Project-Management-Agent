@@ -4,10 +4,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
 import { MessagesBlock } from "./components/messages-block";
 import { PMViewsPanel } from "./components/pm-views-panel";
 
 const STORAGE_KEY = "pm-chat-panel-width";
+const COLLAPSE_STORAGE_KEY = "pm-chat-panel-collapsed";
 const DEFAULT_WIDTH = 40; // percentage
 const MIN_WIDTH = 25; // percentage
 const MAX_WIDTH = 70; // percentage
@@ -17,6 +19,7 @@ export default function Main() {
   const [isDragging, setIsDragging] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileView, setMobileView] = useState<"chat" | "board">("chat");
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Detect mobile
@@ -29,7 +32,7 @@ export default function Main() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Load saved width from localStorage
+  // Load saved width and collapse state from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -38,12 +41,22 @@ export default function Main() {
         setChatWidth(width);
       }
     }
+
+    const savedCollapsed = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+    if (savedCollapsed) {
+      setIsCollapsed(savedCollapsed === "true");
+    }
   }, []);
 
   // Save width to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, chatWidth.toString());
   }, [chatWidth]);
+
+  // Save collapse state to localStorage
+  useEffect(() => {
+    localStorage.setItem(COLLAPSE_STORAGE_KEY, isCollapsed.toString());
+  }, [isCollapsed]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -52,7 +65,7 @@ export default function Main() {
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
-      if (!isDragging || !containerRef.current || isMobile) return;
+      if (!isDragging || !containerRef.current || isMobile || isCollapsed) return;
 
       const container = containerRef.current;
       const rect = container.getBoundingClientRect();
@@ -62,16 +75,20 @@ export default function Main() {
       const clampedWidth = Math.min(Math.max(newWidth, MIN_WIDTH), MAX_WIDTH);
       setChatWidth(clampedWidth);
     },
-    [isDragging, isMobile]
+    [isDragging, isMobile, isCollapsed]
   );
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
   }, []);
 
+  const toggleCollapse = useCallback(() => {
+    setIsCollapsed((prev) => !prev);
+  }, []);
+
   // Add/remove global mouse listeners for dragging
   useEffect(() => {
-    if (isDragging && !isMobile) {
+    if (isDragging && !isMobile && !isCollapsed) {
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
       document.body.style.cursor = "col-resize";
@@ -84,7 +101,7 @@ export default function Main() {
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-  }, [isDragging, isMobile, handleMouseMove, handleMouseUp]);
+  }, [isDragging, isMobile, isCollapsed, handleMouseMove, handleMouseUp]);
 
   return (
     <div ref={containerRef} className={`flex h-full w-full relative overflow-hidden bg-background ${isMobile ? "pt-16" : "pt-0"}`}>
@@ -112,27 +129,48 @@ export default function Main() {
         </div>
       )}
 
-      {/* Chat Panel - Left Side (resizable or full width on mobile) */}
-      <div
-        style={{
-          width: isMobile ? "100%" : `${chatWidth}%`,
-          contain: 'layout size style',
-          maxWidth: isMobile ? "100%" : `${chatWidth}%`,
-          display: isMobile && mobileView !== "chat" ? "none" : "flex"
-        }}
-        className="flex-shrink-0 flex-grow-0 border-r border-border/40 overflow-hidden bg-app/20"
-      >
-        <MessagesBlock className="h-full" />
-      </div>
+      {/* Collapsed State - Expand Button */}
+      {!isMobile && isCollapsed && (
+        <div className="flex-shrink-0 w-12 h-full bg-background border-r border-border/40 flex flex-col items-center py-4 gap-2">
+          <button
+            onClick={toggleCollapse}
+            className="p-2 rounded-lg bg-brand/10 hover:bg-brand/20 text-brand transition-all duration-200 group"
+            title="Expand chat panel"
+          >
+            <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+          </button>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="writing-mode-vertical text-xs text-muted-foreground font-medium flex items-center gap-2 rotate-180" style={{ writingMode: 'vertical-rl' }}>
+              <MessageSquare className="w-4 h-4 rotate-90" />
+              AI Chat
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Resize Handle - Refined Desktop Experience */}
-      {!isMobile && (
+      {/* Chat Panel - Left Side (resizable or full width on mobile) */}
+      {(!isCollapsed || isMobile) && (
+        <div
+          style={{
+            width: isMobile ? "100%" : `${chatWidth}%`,
+            contain: 'layout size style',
+            maxWidth: isMobile ? "100%" : `${chatWidth}%`,
+            display: isMobile && mobileView !== "chat" ? "none" : "flex"
+          }}
+          className="flex-shrink-0 flex-grow-0 border-r border-border/40 overflow-hidden bg-app/20 transition-all duration-300"
+        >
+          <MessagesBlock className="h-full" />
+        </div>
+      )}
+
+      {/* Resize Handle with Collapse Button - Refined Desktop Experience */}
+      {!isMobile && !isCollapsed && (
         <div
           className={`
-            group w-1.5 flex-shrink-0 cursor-col-resize
-            bg-transparent hover:bg-brand/10
+            group w-4 flex-shrink-0 cursor-col-resize
+            bg-transparent hover:bg-brand/5
             transition-all duration-300 relative
-            ${isDragging ? "bg-brand/20 shadow-[0_0_15px_rgba(var(--brand),0.1)]" : ""}
+            ${isDragging ? "bg-brand/10" : ""}
           `}
           onMouseDown={handleMouseDown}
         >
@@ -143,8 +181,29 @@ export default function Main() {
             ${isDragging ? "bg-brand/60" : ""}
           `} />
 
-          {/* Grabber Handle */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Collapse Button - centered on handle */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleCollapse();
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 
+              p-1.5 rounded-full bg-background border border-border shadow-sm
+              hover:bg-brand/10 hover:border-brand/30 hover:shadow-md
+              transition-all duration-200 opacity-0 group-hover:opacity-100 z-10"
+            title="Collapse chat panel"
+          >
+            <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground hover:text-brand" />
+          </button>
+
+          {/* Grabber dots */}
+          <div className="absolute top-[calc(50%-30px)] left-1/2 -translate-x-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="w-1 h-1 rounded-full bg-border" />
+            <div className="w-1 h-1 rounded-full bg-border" />
+            <div className="w-1 h-1 rounded-full bg-border" />
+          </div>
+          <div className="absolute top-[calc(50%+20px)] left-1/2 -translate-x-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="w-1 h-1 rounded-full bg-border" />
             <div className="w-1 h-1 rounded-full bg-border" />
             <div className="w-1 h-1 rounded-full bg-border" />
@@ -154,10 +213,11 @@ export default function Main() {
 
       {/* PM Views Panel - Right Side (fills remaining space or full width on mobile) */}
       <div
-        className={`flex-1 min-w-0 ${isMobile && mobileView !== "board" ? "hidden" : "block"}`}
+        className={`flex-1 min-w-0 transition-all duration-300 ${isMobile && mobileView !== "board" ? "hidden" : "block"}`}
       >
         <PMViewsPanel className="h-full" />
       </div>
     </div>
   );
 }
+

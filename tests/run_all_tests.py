@@ -122,7 +122,7 @@ async def main():
     
     # Define test suites
     test_suites = [
-        ("DeerFlow Integration", "tests/backend/test_deerflow.py"),
+        ("Galaxy AI Project Manager Integration", "tests/backend/test_deerflow.py"),
         ("Conversation Flow Manager", "tests/backend/test_conversation_flow.py"),
         ("Database Models", "tests/shared/test_database.py"),
         ("FastAPI Endpoints", "tests/backend/test_api.py"),

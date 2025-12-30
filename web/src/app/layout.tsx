@@ -16,9 +16,9 @@ import { env } from "~/env";
 import { Toaster } from "../components/deer-flow/toaster";
 
 export const metadata: Metadata = {
-  title: "🦌 DeerFlow",
+  title: "🌌 Galaxy AI Project Manager",
   description:
-    "Deep Exploration and Efficient Research, an AI tool that combines language models with specialized tools for research tasks.",
+    "An AI-powered project management assistant that helps you manage sprints, tasks, and team collaboration.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 

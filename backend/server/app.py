@@ -190,7 +190,7 @@ async def lifespan(_app: FastAPI):  # FastAPI requires this parameter
 
 
 app = FastAPI(
-    title="DeerFlow API",
+    title="Galaxy AI Project Manager API",
     description="API for Deer",
     version="0.1.0",
     lifespan=lifespan,
@@ -712,7 +712,6 @@ async def _process_message_chunk(
             # Try to parse result and extract count for better display
             result_count_info = ""
             try:
-                import json
                 result_data = json.loads(tool_result_content)
                 if isinstance(result_data, dict):
                     # Check for common count patterns
@@ -3376,7 +3375,7 @@ async def pm_chat_stream(request: Request):
                     user_message_first_line = user_message.strip().split('\n')[0].strip()
                     has_pm_intent, pm_report_type = detect_pm_intent_llm(user_message_first_line) if user_message_first_line else (False, "general")
                     
-                    # Determine routing: PM queries go to coordinator → ReAct, non-PM queries go to DeerFlow
+                    # Determine routing: PM queries go to coordinator → ReAct, non-PM queries go to Galaxy AI Project Manager
                     needs_research = not has_pm_intent
                     
                     
@@ -3415,12 +3414,12 @@ async def pm_chat_stream(request: Request):
                         # initial_chunk removed as requested
 
                     else:
-                        # Not PM-related (greetings, weather, news, etc.) - route to DeerFlow
-                        logger.info(f"[PM-CHAT] 💬 No PM intent detected: '{user_message}' - routing to DeerFlow")
+                        # Not PM-related (greetings, weather, news, etc.) - route to Galaxy AI Project Manager
+                        logger.info(f"[PM-CHAT] 💬 No PM intent detected: '{user_message}' - routing to Galaxy AI Project Manager")
                     
                     # Route queries based on intent
                     if needs_research:
-                        # Non-PM query - route to DeerFlow (research flow)
+                        # Non-PM query - route to Galaxy AI Project Manager (research flow)
                         try:
                             # Ensure PM handler is set for tools before agents run
                             if fm.pm_handler:
@@ -3428,7 +3427,7 @@ async def pm_chat_stream(request: Request):
                                 set_pm_handler(fm.pm_handler)
                                 logger.info(
                                     "[PM-CHAT-TIMING] PM handler set for "
-                                    "DeerFlow agents"
+                                    "Galaxy AI Project Manager agents"
                                 )
                             
                             # Use original message for research query (Option 2: agents decide what to do)
@@ -3436,7 +3435,7 @@ async def pm_chat_stream(request: Request):
                                 
                             research_start = time.time()
                             logger.info(
-                                f"[PM-CHAT-TIMING] Starting DeerFlow "
+                                f"[PM-CHAT-TIMING] Starting Galaxy AI Project Manager "
                                 f"research: {time.time() - api_start:.2f}s"
                             )
                             final_research_state = None
@@ -3485,7 +3484,7 @@ async def pm_chat_stream(request: Request):
                                 model_name=model_name,
                                 project_id=selected_project_id,  # Pass project_id to graph state
                             ):
-                                # Yield formatted DeerFlow events directly
+                                # Yield formatted Galaxy AI Project Manager events directly
                                 yield event
                                 
                             # Collect final state for storing research context
@@ -3532,18 +3531,18 @@ async def pm_chat_stream(request: Request):
 
                             research_duration = time.time() - research_start
                             logger.info(
-                                f"[PM-CHAT-TIMING] DeerFlow research "
+                                f"[PM-CHAT-TIMING] Galaxy AI Project Manager research "
                                 f"completed: {research_duration:.2f}s"
                             )
                             
                         except Exception as research_error:
                             logger.error(
-                                f"DeerFlow streaming failed: {research_error}"
+                                f"Galaxy AI Project Manager streaming failed: {research_error}"
                             )
                             import traceback
                             logger.error(traceback.format_exc())
                         
-                        # DeerFlow already streamed all responses, so we're done
+                        # Galaxy AI Project Manager already streamed all responses, so we're done
                     else:
                         # PM query - route to PM graph (coordinator → ReAct)
                         logger.info(f"[PM-CHAT-TIMING] Routing PM query to PM graph (coordinator → ReAct)")

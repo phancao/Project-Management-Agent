@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """
-Server script for running the DeerFlow API.
+Server script for running the Galaxy AI Project Manager API.
 """
 
 import argparse
@@ -61,7 +61,7 @@ signal.signal(signal.SIGINT, handle_shutdown)
 
 if __name__ == "__main__":
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Run the DeerFlow API server")
+    parser = argparse.ArgumentParser(description="Run the Galaxy AI Project Manager API server")
     parser.add_argument(
         "--reload",
         action="store_true",
@@ -95,7 +95,7 @@ if __name__ == "__main__":
         reload = True
 
     try:
-        logger.info(f"Starting DeerFlow API server on {args.host}:{args.port}")
+        logger.info(f"Starting Galaxy AI Project Manager API server on {args.host}:{args.port}")
         logger.info(f"Log level: {args.log_level.upper()}")
         
         # Set the appropriate logging level for the src package if debug is enabled

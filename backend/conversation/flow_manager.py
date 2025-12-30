@@ -117,13 +117,13 @@ class ConversationFlowManager:
             except Exception as e:
                 logger.warning(f"Could not initialize self-learning: {e}")
         
-        # Import DeerFlow workflow for research tasks
+        # Import Galaxy AI Project Manager workflow for research tasks
         try:
             from backend.workflow import run_agent_workflow_async, run_agent_workflow_stream
             self.run_deerflow_workflow = run_agent_workflow_async
             self.run_deerflow_workflow_stream = run_agent_workflow_stream
         except ImportError:
-            logger.warning("DeerFlow workflow not available")
+            logger.warning("Galaxy AI Project Manager workflow not available")
             self.run_deerflow_workflow = None
             self.run_deerflow_workflow_stream = None
         
@@ -229,14 +229,14 @@ class ConversationFlowManager:
             context.gathered_data.update(extracted_data)
             
             if await self._has_enough_context(context):
-                # Route everything to DeerFlow for agent decision-making
+                # Route everything to Galaxy AI Project Manager for agent decision-making
                 # Agents now have PM tools and can handle all queries (simple and complex)
                 if self.run_deerflow_workflow:
-                    logger.info(f"Routing to DeerFlow for intent: {context.intent}")
+                    logger.info(f"Routing to Galaxy AI Project Manager for intent: {context.intent}")
                     context.current_state = FlowState.RESEARCH_PHASE
                 else:
-                    # Fallback to execution phase if DeerFlow not available
-                    logger.warning("DeerFlow not available, falling back to execution phase")
+                    # Fallback to execution phase if Galaxy AI Project Manager not available
+                    logger.warning("Galaxy AI Project Manager not available, falling back to execution phase")
                     context.current_state = FlowState.EXECUTION_PHASE
             else:
                 return await self._generate_clarification_response(context)
@@ -244,9 +244,9 @@ class ConversationFlowManager:
         logger.info(f"Final current_state: {context.current_state}, intent: {context.intent}")
         
         # Execute appropriate action based on state
-        # Option 2: Route everything to DeerFlow agents
+        # Option 2: Route everything to Galaxy AI Project Manager agents
         if context.current_state == FlowState.RESEARCH_PHASE:
-            # Route all queries to DeerFlow - agents decide what tools to use
+            # Route all queries to Galaxy AI Project Manager - agents decide what tools to use
             result = await self._handle_research_phase(context)
             if result is not None:
                 return result
@@ -255,8 +255,8 @@ class ConversationFlowManager:
             # Planning phase still used for multi-step PM operations
             return await self._handle_planning_phase(context, stream_callback)
         elif context.current_state == FlowState.EXECUTION_PHASE:
-            # Fallback: Only used if DeerFlow is not available
-            logger.warning("Falling back to execution phase - DeerFlow should handle this")
+            # Fallback: Only used if Galaxy AI Project Manager is not available
+            logger.warning("Falling back to execution phase - Galaxy AI Project Manager should handle this")
             return await self._handle_execution_phase(context)
         else:
             return await self._handle_unknown_state(context)
@@ -382,8 +382,8 @@ class ConversationFlowManager:
         self, 
         context: ConversationContext
     ) -> Dict[str, Any]:
-        """Handle all queries using DeerFlow agents (agent decision-making approach)"""
-        logger.info(f"Routing query to DeerFlow agents for intent: {context.intent}")
+        """Handle all queries using Galaxy AI Project Manager agents (agent decision-making approach)"""
+        logger.info(f"Routing query to Galaxy AI Project Manager agents for intent: {context.intent}")
         
         # Skip if research already done (from streaming)
         if context.gathered_data.get('research_already_done'):
@@ -391,7 +391,7 @@ class ConversationFlowManager:
             context.current_state = FlowState.COMPLETED
             return None
         
-        # Route ALL queries to DeerFlow - agents decide what tools to use
+        # Route ALL queries to Galaxy AI Project Manager - agents decide what tools to use
         if self.run_deerflow_workflow:
             # Build user input from message and context
             # For all queries, use the original message - agents will decide what to do
@@ -449,7 +449,7 @@ class ConversationFlowManager:
                     context.gathered_data['deerflow_result'] = research_result
                     summary_msg = f"Query completed successfully.\n\n{research_result[:500]}{'...' if len(research_result) > 500 else ''}"
                 else:
-                    summary_msg = f"Query has been processed by DeerFlow agents."
+                    summary_msg = f"Query has been processed by Galaxy AI Project Manager agents."
                 
                 # All queries complete here - agents handled everything
                     context.current_state = FlowState.COMPLETED
@@ -463,7 +463,7 @@ class ConversationFlowManager:
                         }
                     }
             except Exception as e:
-                logger.error(f"DeerFlow research failed: {e}")
+                logger.error(f"Galaxy AI Project Manager research failed: {e}")
                 return {
                     "type": "error",
                     "message": f"Research failed: {str(e)}",
@@ -699,7 +699,7 @@ class ConversationFlowManager:
                 # ETA research: analyze tasks and provide estimates
                 return await self._handle_eta_research(context)
             elif 'wbs' in description or 'work breakdown' in description or 'project structure' in description:
-                # WBS research: handled by CREATE_WBS via DeerFlow
+                # WBS research: handled by CREATE_WBS via Galaxy AI Project Manager
                 logger.warning(f"Research step for WBS should be handled by CREATE_WBS step instead")
                 return await self._handle_create_wbs_with_deerflow_planner(context)
             elif 'dependency' in description or 'phụ thuộc' in description:
@@ -959,11 +959,11 @@ class ConversationFlowManager:
                 }
             
             elif intent == IntentType.CREATE_WBS:
-                # Use DeerFlow planner for thinking steps
+                # Use Galaxy AI Project Manager planner for thinking steps
                 return await self._handle_create_wbs_with_deerflow_planner(context)
             
             elif intent == IntentType.SPRINT_PLANNING:
-                # Use DeerFlow planner for thinking steps
+                # Use Galaxy AI Project Manager planner for thinking steps
                 return await self._handle_sprint_planning_with_deerflow_planner(context)
             
             elif intent == IntentType.CREATE_REPORT:
@@ -1271,7 +1271,7 @@ class ConversationFlowManager:
         user_query: str,
         context: ConversationContext
     ) -> Dict[str, Any]:
-        """Use LLM to generate a thinking plan for PM tasks using DeerFlow prompt style"""
+        """Use LLM to generate a thinking plan for PM tasks using Galaxy AI Project Manager prompt style"""
         try:
             from backend.llms.llm import get_llm_by_type
             from backend.prompts.template import get_prompt_template

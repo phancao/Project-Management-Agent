@@ -14,8 +14,8 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath('.'))
 
 async def run_deerflow_tests():
-    """Run DeerFlow integration tests"""
-    print("🦌 Running DeerFlow Integration Tests...")
+    """Run Galaxy AI Project Manager integration tests"""
+    print("🦌 Running Galaxy AI Project Manager Integration Tests...")
     from tests.test_deerflow import main
     return await main()
 

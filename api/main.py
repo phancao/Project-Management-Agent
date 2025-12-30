@@ -121,7 +121,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
-# Config endpoint for DeerFlow UI compatibility
+# Config endpoint for Galaxy AI Project Manager UI compatibility
 @app.get("/api/config")
 async def get_config():
     """Return default config to prevent 404 errors"""
@@ -155,7 +155,7 @@ async def send_message(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Streaming chat endpoint for DeerFlow-style frontend
+# Streaming chat endpoint for Galaxy AI Project Manager-style frontend
 @app.post("/api/chat/stream")
 async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
     """Stream chat responses using Server-Sent Events (SSE)"""
@@ -174,23 +174,23 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
             logger.info(f"[API-TIMING] generate_stream started")
             
             try:
-                # Option 2: Route everything to DeerFlow (skip PM plan generation)
-                # Detect if this is a research query or should go to DeerFlow
+                # Option 2: Route everything to Galaxy AI Project Manager (skip PM plan generation)
+                # Detect if this is a research query or should go to Galaxy AI Project Manager
                 user_message_lower = user_message.lower().strip()
                 is_research_query = any(keyword in user_message_lower for keyword in [
                     "research", "what is", "explain", "analyze", "compare", 
                     "tell me about", "how does", "why does"
                 ])
                 
-                # For Option 2, route all queries to DeerFlow
+                # For Option 2, route all queries to Galaxy AI Project Manager
                 # Skip PM plan generation to avoid project ID errors for research queries
-                needs_research = True  # Always route to DeerFlow with Option 2
+                needs_research = True  # Always route to Galaxy AI Project Manager with Option 2
                 
-                logger.info(f"[API-TIMING] Routing to DeerFlow (Option 2): is_research={is_research_query}")
+                logger.info(f"[API-TIMING] Routing to Galaxy AI Project Manager (Option 2): is_research={is_research_query}")
                 
-                # Route all queries to DeerFlow
+                # Route all queries to Galaxy AI Project Manager
                 if needs_research:
-                    logger.info(f"[DEBUG-API] [STEP 1] Entering DeerFlow research path for query: {user_message[:100]}")
+                    logger.info(f"[DEBUG-API] [STEP 1] Entering Galaxy AI Project Manager research path for query: {user_message[:100]}")
                     # Yield initial message
                     initial_chunk = {
                         "id": str(uuid.uuid4()),
@@ -204,7 +204,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                     yield f"data: {json.dumps(initial_chunk)}\n\n"
                     logger.info(f"[DEBUG-API] [STEP 2] Initial message yielded")
                     
-                    # Stream DeerFlow research progress
+                    # Stream Galaxy AI Project Manager research progress
                     try:
                         # Use original message for research query (Option 2: agents decide what to do)
                         research_query = user_message
@@ -223,7 +223,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         yield f"data: {json.dumps(research_chunk)}\n\n"
                         logger.info(f"[DEBUG-API] [STEP 4] Research chunk yielded")
                         
-                        # Stream intermediate states from DeerFlow
+                        # Stream intermediate states from Galaxy AI Project Manager
                         research_start = time.time()
                         logger.info(f"[API-TIMING] [DEBUG-API] [STEP 5] About to call run_agent_workflow_stream. Time elapsed: {time.time() - api_start:.2f}s")
                         last_step_emitted = ""
@@ -361,7 +361,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                                             yield "event: message_chunk\n"
                                             yield f"data: {json.dumps(step_chunk)}\n\n"
                         except asyncio.TimeoutError:
-                            logger.error(f"[API-TIMING] DeerFlow workflow timed out after {workflow_timeout}s")
+                            logger.error(f"[API-TIMING] Galaxy AI Project Manager workflow timed out after {workflow_timeout}s")
                             timeout_chunk = {
                                 "id": str(uuid.uuid4()),
                                 "thread_id": thread_id,
@@ -373,7 +373,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                             yield "event: message_chunk\n"
                             yield f"data: {json.dumps(timeout_chunk)}\n\n"
                         except Exception as research_error:
-                            logger.error(f"[API-TIMING] DeerFlow streaming failed: {research_error}", exc_info=True)
+                            logger.error(f"[API-TIMING] Galaxy AI Project Manager streaming failed: {research_error}", exc_info=True)
                             error_chunk = {
                                 "id": str(uuid.uuid4()),
                                 "thread_id": thread_id,
@@ -423,7 +423,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         
                         # Emit completion message
                         research_duration = time.time() - research_start
-                        logger.info(f"[API-TIMING] DeerFlow research completed: {research_duration:.2f}s")
+                        logger.info(f"[API-TIMING] Galaxy AI Project Manager research completed: {research_duration:.2f}s")
                         complete_chunk = {
                             "id": str(uuid.uuid4()),
                             "thread_id": thread_id,
@@ -436,7 +436,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                         yield f"data: {json.dumps(complete_chunk)}\n\n"
                     
                     except Exception as research_error:
-                        logger.error(f"DeerFlow streaming failed: {research_error}")
+                        logger.error(f"Galaxy AI Project Manager streaming failed: {research_error}")
                         # Continue with normal flow even if streaming fails
                 
                 # Create a queue to collect streaming chunks
@@ -878,8 +878,8 @@ async def start_research(
     project_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Start a research session using DeerFlow"""
-    # TODO: Integrate with DeerFlow
+    """Start a research session using Galaxy AI Project Manager"""
+    # TODO: Integrate with Galaxy AI Project Manager
     research_id = str(uuid.uuid4())
     return {
         "research_id": research_id,

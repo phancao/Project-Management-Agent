@@ -17,7 +17,7 @@ const Main = dynamic(() => import("./main"), {
   ssr: false,
   loading: () => (
     <div className="flex h-full w-full items-center justify-center">
-      Loading DeerFlow...
+      Loading Galaxy AI Project Manager...
     </div>
   ),
 });
@@ -28,10 +28,10 @@ function ChatPageContent() {
       <header className="fixed top-0 left-0 flex h-16 w-full items-center justify-between px-6 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 z-50">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">🦌</span>
+            <span className="text-2xl">🌌</span>
             <div>
               <h1 className="text-lg font-bold text-gray-900 dark:text-white">
-                DeerFlow
+                Galaxy AI Project Manager
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Deep Research Assistant
@@ -63,7 +63,7 @@ export default function ChatPage() {
   return (
     <Suspense fallback={
       <div className="flex h-screen w-screen items-center justify-center">
-        Loading DeerFlow...
+        Loading Galaxy AI Project Manager...
       </div>
     }>
       <ChatPageContent />

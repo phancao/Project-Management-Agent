@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Test script for DeerFlow integration
-Tests basic DeerFlow functionality and API connectivity
+Test script for Galaxy AI Project Manager integration
+Tests basic Galaxy AI Project Manager functionality and API connectivity
 """
 
 import asyncio
@@ -14,8 +14,8 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath('.'))
 
 async def test_deerflow_imports():
-    """Test DeerFlow imports"""
-    print("🔍 Testing DeerFlow imports...")
+    """Test Galaxy AI Project Manager imports"""
+    print("🔍 Testing Galaxy AI Project Manager imports...")
     
     try:
         from backend.llms.llm import get_llm_by_type
@@ -193,8 +193,8 @@ async def test_configuration():
         return False
 
 async def main():
-    """Run all DeerFlow tests"""
-    print("🚀 Starting DeerFlow Integration Tests")
+    """Run all Galaxy AI Project Manager tests"""
+    print("🚀 Starting Galaxy AI Project Manager Integration Tests")
     print("=" * 50)
     
     tests = [
@@ -234,7 +234,7 @@ async def main():
     print(f"\n🎯 Results: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 All tests passed! DeerFlow integration is working correctly.")
+        print("🎉 All tests passed! Galaxy AI Project Manager integration is working correctly.")
         return True
     else:
         print("⚠️ Some tests failed. Please check the errors above.")

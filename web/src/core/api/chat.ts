@@ -119,7 +119,7 @@ export async function* chatStream(
     const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
     const projectId = urlParams.get('project');
 
-    // Use PM chat endpoint for project management tasks, DeerFlow endpoint for research
+    // Use PM chat endpoint for project management tasks, Galaxy AI Project Manager endpoint for research
     const endpoint = isPMChat ? "pm/chat/stream" : "chat/stream";
 
     // Build messages array with conversation history

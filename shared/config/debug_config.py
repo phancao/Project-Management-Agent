@@ -34,7 +34,7 @@ class DebugConfig:
     Each module can be independently enabled/disabled for debug logging.
     """
     # Core modules
-    deerflow: bool = False  # DeerFlow workflow, graph, agents
+    deerflow: bool = False  # Galaxy AI Project Manager workflow, graph, agents
     pm_provider: bool = False  # PM providers, PM handler, PM MCP server
     analytics: bool = False  # Analytics service, adapters, calculators
     conversation: bool = False  # Conversation flow manager

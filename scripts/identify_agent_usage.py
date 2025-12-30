@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to identify which agent is being used in the DeerFlow workflow.
+Script to identify which agent is being used in the Galaxy AI Project Manager workflow.
 
 This script:
 1. Monitors the stream to identify which agents are called

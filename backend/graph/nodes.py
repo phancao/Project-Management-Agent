@@ -494,7 +494,7 @@ def get_formatted_tool_definitions() -> str:
              definitions.append(f"- **{obj.name}**: {desc}")
     
     # Add special abstract step types that are NOT tools but handled by nodes
-    # definitions.append("- **research**: Research a topic using DeerFlow (web search)")
+    # definitions.append("- **research**: Research a topic using Galaxy AI Project Manager (web search)")
     # definitions.append("- **create_report**: Generate project reports")
     # definitions.append("- **gantt_chart**: Create timeline/Gantt chart")
     

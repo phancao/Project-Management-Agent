@@ -274,7 +274,7 @@ async def main():
         print("      - 'List my projects'")
         print("      - 'Show me all my tasks'")
         print("      - 'What's the status of project X?'")
-        print("\n   3. Integrate with DeerFlow graph")
+        print("\n   3. Integrate with Galaxy AI Project Manager graph")
         return 0
     else:
         print(f"\n❌ {total - passed} test(s) failed")

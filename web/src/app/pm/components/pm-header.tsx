@@ -131,17 +131,16 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
     }
   };
 
-  const isOverview = pathname?.includes('/overview') ?? false;
   const isChat = pathname?.includes('/chat') ?? false;
   const isMeeting = pathname?.includes('/meeting') ?? false;
 
   // Auto-select first project if no project is selected (only on Project Management page)
   useEffect(() => {
-    // Don't auto-redirect if we're on overview or meeting page
-    if (!isOverview && !isMeeting && !selectedProjectId && projects.length > 0 && selectedProject) {
+    // Don't auto-redirect if we're on meeting page
+    if (!isMeeting && !selectedProjectId && projects.length > 0 && selectedProject) {
       router.push(`/pm/chat?project=${selectedProject}`);
     }
-  }, [projects.length, selectedProject, selectedProjectId, router, isOverview, isMeeting]);
+  }, [projects.length, selectedProject, selectedProjectId, router, isMeeting]);
 
   const handleProjectChange = (projectId: string) => {
     if (onProjectChange) {
@@ -189,19 +188,6 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
 
   const NavButtons = ({ vertical = false }: { vertical?: boolean }) => (
     <div className={`flex ${vertical ? 'flex-col gap-2 w-full' : 'items-center gap-3 border-r border-border/40 pr-6'}`}>
-      <Link href="/pm/overview" className={vertical ? 'w-full' : ''}>
-        <Button
-          variant={isOverview ? "default" : "ghost"}
-          size="sm"
-          className={cn(
-            "rounded-xl font-medium transition-all duration-300",
-            isOverview ? "bg-brand text-white shadow-lg shadow-brand/25 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
-            vertical ? "w-full justify-start text-base py-6" : "px-5"
-          )}
-        >
-          Overview
-        </Button>
-      </Link>
       <Link href={`/pm/chat${selectedProject ? `?project=${selectedProject}` : ''}`} className={vertical ? 'w-full' : ''}>
         <Button
           variant={isChat ? "default" : "ghost"}
@@ -276,7 +262,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
               <SheetContent side="left" className="w-80">
                 <SheetHeader className="mb-6">
                   <SheetTitle className="flex items-center gap-2">
-                    <span className="text-xl">🦌</span> DeerFlow
+                    <span className="text-xl">🌌</span> Galaxy AI Project Manager
                   </SheetTitle>
                 </SheetHeader>
                 <NavButtons vertical />
@@ -288,8 +274,8 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
           {/* Logo / Title (Hidden on small mobile if no room, but usually stays) */}
           {!isMobile && (
             <div className="flex items-center gap-3 shrink-0 mr-4">
-              <span className="text-2xl filter drop-shadow-sm">🦌</span>
-              <span className="font-semibold text-lg tracking-tight text-foreground/90 hidden sm:inline-block">DeerFlow</span>
+              <span className="text-2xl filter drop-shadow-sm">🌌</span>
+              <span className="font-semibold text-lg tracking-tight text-foreground/90 hidden sm:inline-block">Galaxy AI Project Manager</span>
             </div>
           )}
 
@@ -297,7 +283,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
           {!isMobile && <NavButtons />}
 
           {/* Project Selector - Responsive width */}
-          {!isOverview && (
+          {!isMeeting && (
             <div className="flex items-center gap-3 flex-1 max-w-[440px] ml-4">
               <Popover open={projectComboboxOpen} onOpenChange={setProjectComboboxOpen}>
                 <PopoverTrigger asChild>

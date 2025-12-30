@@ -1,5 +1,5 @@
 """
-PM MCP Tools for DeerFlow Agents
+PM MCP Tools for Galaxy AI Project Manager Agents
 
 This module provides PM tools via MCP client, allowing agents to connect
 to the PM MCP Server instead of using direct PMHandler integration.
@@ -30,7 +30,7 @@ def configure_pm_mcp_client(
     enabled_tools: Optional[list[str]] = None
 ) -> None:
     """
-    Configure the PM MCP client for DeerFlow agents.
+    Configure the PM MCP client for Galaxy AI Project Manager agents.
     
     Args:
         transport: Transport type ("sse" or "stdio")
@@ -73,7 +73,7 @@ async def get_pm_mcp_tools() -> list:
     Get PM tools from MCP server.
     
     This function connects to the PM MCP Server and loads all available
-    PM tools that can be used by DeerFlow agents.
+    PM tools that can be used by Galaxy AI Project Manager agents.
     
     Returns:
         List of LangChain tools loaded from PM MCP Server

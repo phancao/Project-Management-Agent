@@ -114,7 +114,7 @@ def log_version_info():
     """Log version information at startup."""
     info = get_version_info()
     logger.info("=" * 80)
-    logger.info("🚀 DeerFlow API Server Starting")
+    logger.info("🚀 Galaxy AI Project Manager API Server Starting")
     logger.info("=" * 80)
     logger.info(f"Version: {info['version']}")
     logger.info(f"Git Commit: {info['commit_hash']} ({info['commit_date']})")

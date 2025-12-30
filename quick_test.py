@@ -13,8 +13,8 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath('.'))
 
 async def quick_deerflow_test():
-    """Quick DeerFlow test"""
-    print("🦌 Quick DeerFlow Test...")
+    """Quick Galaxy AI Project Manager test"""
+    print("🦌 Quick Galaxy AI Project Manager Test...")
     
     try:
         # Test imports
@@ -27,14 +27,14 @@ async def quick_deerflow_test():
         response = await llm.ainvoke("Hello")
         
         if response and response.content:
-            print("✅ DeerFlow LLM connection works")
+            print("✅ Galaxy AI Project Manager LLM connection works")
             return True
         else:
-            print("❌ DeerFlow LLM connection failed")
+            print("❌ Galaxy AI Project Manager LLM connection failed")
             return False
             
     except Exception as e:
-        print(f"❌ DeerFlow test failed: {e}")
+        print(f"❌ Galaxy AI Project Manager test failed: {e}")
         return False
 
 async def quick_conversation_test():
@@ -121,7 +121,7 @@ async def main():
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     tests = [
-        ("DeerFlow", quick_deerflow_test),
+        ("Galaxy AI Project Manager", quick_deerflow_test),
         ("Conversation", quick_conversation_test),
         ("Database", quick_database_test),
         ("API", quick_api_test),

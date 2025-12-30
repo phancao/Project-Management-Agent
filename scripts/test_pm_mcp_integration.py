@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Test PM MCP Integration in DeerFlow Graph
+Test PM MCP Integration in Galaxy AI Project Manager Graph
 
 Verifies that PM tools are loaded correctly via MCP configuration
-in the DeerFlow graph nodes.
+in the Galaxy AI Project Manager graph nodes.
 """
 
 import asyncio

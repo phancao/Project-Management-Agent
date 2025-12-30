@@ -2,7 +2,7 @@
 WBS (Work Breakdown Structure) Generator
 
 Generates a comprehensive WBS for a project using LLM reasoning
-and optionally DeerFlow research.
+and optionally Galaxy AI Project Manager research.
 """
 
 import logging
@@ -51,8 +51,8 @@ class WBSGenerator:
             project_description: Description of the project
             project_domain: Domain/industry of the project
             breakdown_levels: Number of levels in WBS (default: 3)
-            use_research: Whether to use DeerFlow for research
-            external_research_context: External research context from DeerFlow
+            use_research: Whether to use Galaxy AI Project Manager for research
+            external_research_context: External research context from Galaxy AI Project Manager
             
         Returns:
             Dictionary containing WBS structure and metadata
@@ -94,7 +94,7 @@ class WBSGenerator:
         domain: str
     ) -> str:
         """
-        Research similar project structures using DeerFlow
+        Research similar project structures using Galaxy AI Project Manager
         
         Returns a context string about typical project structure
         """
@@ -109,7 +109,7 @@ Research the typical work breakdown structure for a {domain} project:
 - Provide typical project structure examples
 """
             
-            # Run DeerFlow research and extract results
+            # Run Galaxy AI Project Manager research and extract results
             # Note: run_agent_workflow_async is a coroutine that streams internally
             # For now, we'll just call it to complete the research
             await run_agent_workflow_async(
@@ -123,11 +123,11 @@ Research the typical work breakdown structure for a {domain} project:
             
             # For demonstration, return a summary that research was performed
             # In production, we'd extract actual findings from the workflow state
-            research_summary = f"DeerFlow research completed for {domain} project patterns"
+            research_summary = f"Galaxy AI Project Manager research completed for {domain} project patterns"
             return f"Research findings for similar {domain} projects:\n{research_summary}"
             
         except Exception as e:
-            logger.error(f"DeerFlow research failed: {e}")
+            logger.error(f"Galaxy AI Project Manager research failed: {e}")
             return ""
     
     async def _generate_wbs_with_llm(

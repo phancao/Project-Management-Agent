@@ -269,14 +269,18 @@ export async function sendMessage(
 
       if (type === "thoughts") {
         const thoughtsData = data as { react_thoughts?: Array<{ thought: string; before_tool?: boolean; step_index: number }> };
+        if ((data.agent as any) === 'pm_agent' && thoughtsData.react_thoughts) {
+          // Log thoughts packet receipt
+          console.log(`[FRONTEND_RECEIVE] ${new Date().toISOString()} Received thoughts event:`, {
+            id: data.id,
+            thread_id: data.thread_id,
+            thoughts_count: thoughtsData.react_thoughts.length,
+            preview: thoughtsData.react_thoughts.map(t => t.thought.substring(0, 50))
+          });
+        }
 
         // DEBUG: Log thoughts event to trace tool call streaming
-        const ts = new Date().toISOString();
-        console.log(`[${ts}] [DEBUG-THOUGHTS] Received thoughts event:`, {
-          id: data.id,
-          agent: data.agent,
-          react_thoughts: thoughtsData.react_thoughts?.map(t => t.thought?.substring(0, 80))
-        });
+        // console.log removed
 
         // Find or create message for thoughts
         messageId = data.id;
@@ -308,8 +312,15 @@ export async function sendMessage(
 
       // Handle tool_call_result specially: use the message that contains the tool call
       if (type === "tool_call_result") {
+        // Log tool result receipt
+        console.log(`[FRONTEND_RECEIVE] ${new Date().toISOString()} Received tool_call_result event:`, {
+          tool_call_id: (data as any).tool_call_id,
+          tool_name: (data as any).name,
+          content_len: (data as any).content?.length
+        });
+
         const toolName = data.agent || (data as any).name;
-        message = findMessageByToolCallId(data.tool_call_id, toolName);
+        message = findMessageByToolCallId((data as any).tool_call_id, toolName);
         if (message) {
           messageId = message.id;
         } else {

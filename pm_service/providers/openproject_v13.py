@@ -1227,6 +1227,7 @@ class OpenProjectV13Provider(BasePMProvider):
                 if total_count is None:
                     total_count = result.get("total", 0)
                     logger.info(f"OpenProject list_users (project {project_id}): Total {total_count} memberships to fetch")
+                    logger.info(f"[MCP_PROVIDER] Found {len(memberships)} memberships in this page")
                 
                 # Extract user information from each membership
                 for membership in memberships:

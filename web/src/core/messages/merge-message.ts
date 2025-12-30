@@ -241,6 +241,74 @@ function mergeThoughtsMessage(
 
   // Convert map back to array and sort by step_index
   message.reactThoughts = Array.from(thoughtsMap.values()).sort((a, b) => a.step_index - b.step_index);
+
+  // FIX: Scan for TOOL_RESULT in thoughts and update corresponding tool calls
+  // This handles cases where backend sends tool results inside thoughts (ReAct style) 
+  // without a separate tool_call_result event.
+  message.reactThoughts.forEach(thought => {
+    // Check for tool results in the thought content using regex
+    // Format: TOOL_RESULT: {"success": true, ...}
+    const toolResultRegex = /TOOL_RESULT:([\s\S]*)/;
+    const currentThought = thought.thought || "";
+    const match = currentThought.match(toolResultRegex);
+
+    // Log regex attempt
+    // console.log removed
+
+    if (match) {
+      const resultString = (match[1] || "").trim();
+
+      // Find the last tool call that doesn't have a result yet
+      // We assume the tool result corresponds to the most recent tool call
+      if (message.toolCalls && message.toolCalls.length > 0) {
+        // Find valid tool calls (skip meta tools if needed, but pm_agent is a meta tool here)
+        // Just find the last one without a result (or just the very last one)
+        const targetToolCall = [...message.toolCalls].reverse().find(tc => !tc.result);
+
+        // Check if string looks like valid complete JSON (ends with } or ])
+        // This optimization prevents JSON.parse from throwing SyntaxError for every partial chunk during streaming
+        const trimmed = resultString.trim();
+        const isLikelyComplete = (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']'));
+
+        let parsed = false;
+
+        if (isLikelyComplete) {
+          try {
+            const resultJson = JSON.parse(resultString);
+
+            if (targetToolCall) {
+              targetToolCall.result = resultJson;
+            } else {
+              const lastToolCall = message.toolCalls[message.toolCalls.length - 1];
+              if (lastToolCall) {
+                lastToolCall.result = resultJson;
+              }
+            }
+            parsed = true;
+          } catch (e) {
+            // Context matches 50kb truncation issue: silence the error for large partials
+            // Only log if we really expected it to work
+            if (resultString.length < 1000) {
+              console.warn(`[MERGE_TOOL] JSON parse failed on seemingly complete string:`, e);
+            }
+          }
+        }
+
+        // If not parsed (either incomplete or failed), store raw string
+        if (!parsed) {
+          if (targetToolCall) {
+            targetToolCall.result = resultString;
+          } else {
+            const lastToolCall = message.toolCalls[message.toolCalls.length - 1];
+            if (lastToolCall) {
+              lastToolCall.result = resultString;
+            }
+          }
+        }
+      }
+    }
+  });
 }
 
 function mergeToolCallResultMessage(

@@ -840,15 +840,13 @@ async def _process_message_chunk(
             # This ensures thoughts appear incrementally as each step happens (not batched at end)
             # Skip if called from "updates" stream (thoughts already streamed from "messages" stream)
             message_id = event_stream_message.get("id")
-            has_new_tool_calls = False  # Track if any tool call is new (not duplicate)
+            # CRITICAL FIX: Always emit tool_calls event if tools exist, even if thoughts are duplicates
+            # Frontend handles tool call deduplication by ID, but requires the event to create the entry
+            has_new_tool_calls = bool(message_chunk.tool_calls)
             
             if message_id and agent_name in ["pm_agent", "react_agent"] and not skip_progressive_thoughts:
                 # Get current step index for this thread
                 step_index = _progressive_step_counter.get(safe_thread_id, 0)
-                
-                # Initialize deduplication set for this thread if needed
-                if safe_thread_id not in _streamed_tool_calls:
-                    _streamed_tool_calls[safe_thread_id] = set()
                 
                 # Generate a thought for EACH tool call (most PM queries have just 1)
                 for tc in message_chunk.tool_calls:
@@ -858,16 +856,6 @@ async def _process_message_chunk(
                     # Skip tool calls with empty name - they shouldn't create UI elements
                     if not tc_name or tc_name == 'unknown':
                         continue
-                    
-                    # DEDUPLICATION: Skip if we've already streamed this tool name for this thread
-                    # This prevents _decide() and _act() from both streaming the same tool call
-                    if tc_name in _streamed_tool_calls[safe_thread_id]:
-                        logger.info(f"[{safe_thread_id}] 🔧 [PROGRESSIVE] SKIPPING duplicate tool_call thought: {tc_name}")
-                        continue
-                    
-                    # Mark this tool as streamed and flag that we have new tools
-                    _streamed_tool_calls[safe_thread_id].add(tc_name)
-                    has_new_tool_calls = True
                     
                     # Format args nicely (truncate if too long)
                     args_str = json.dumps(tc_args, ensure_ascii=False)[:100]
@@ -1106,7 +1094,22 @@ async def _process_message_chunk(
             
             # CRITICAL: Always yield the message_chunk event for content chunks
             # This ensures the frontend receives the message content
-            yield _make_event("message_chunk", event_stream_message)
+            
+            # Filter events with empty content to prevent empty bubbles in frontend
+            content = event_stream_message.get("content", "")
+            # CRITICAL FIX: Do NOT use .strip() here!
+            # Whitespace-only chunks (like \n) are valid and critical for Markdown formatting
+            has_content = content is not None and isinstance(content, str) and len(content) > 0
+            has_thoughts = bool(event_stream_message.get("react_thoughts"))
+            
+            # Only yield if there is actual content OR thoughts
+            # If strictly empty content and no thoughts, skip it
+            if has_content or has_thoughts:
+               yield _make_event("message_chunk", event_stream_message)
+            else:
+               # Debug log for skipped empty message
+               # logger.debug(f"Skipping empty message_chunk: {event_stream_message.get('id')}")
+               pass
     elif isinstance(message_chunk, AIMessage):
         # Full AIMessage (not chunk) - used for state update streaming
         # Ensure react_thoughts are included
@@ -3374,21 +3377,13 @@ async def pm_chat_stream(request: Request):
                                 "step_index": 0
                             }]
                         }
-                        yield "event: thoughts\n"
-                        yield f"data: {json.dumps(intent_chunk)}\n\n"
+                        yield _make_event("thoughts", intent_chunk)
+                        await asyncio.sleep(0.05) # Force flush to ensure frontend receives it
+
+
                         
-                        initial_chunk = {
-                            "id": str(uuid.uuid4()),
-                            "thread_id": thread_id,
-                            "agent": "coordinator",
-                            "role": "assistant",
-                            "content": (
-                                "🔍 **Processing your request...**\n\n"
-                            ),
-                            "finish_reason": None
-                        }
-                        yield "event: message_chunk\n"
-                        yield f"data: {json.dumps(initial_chunk)}\n\n"
+                        # initial_chunk removed as requested
+
                     else:
                         # Not PM-related (greetings, weather, news, etc.) - route to DeerFlow
                         logger.info(f"[PM-CHAT] 💬 No PM intent detected: '{user_message}' - routing to DeerFlow")

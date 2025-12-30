@@ -397,9 +397,6 @@ class PMServiceHandler:
         project_id: Optional[str] = None
     ) -> dict[str, Any]:
         """Get aggregated task summary for a user."""
-        import datetime
-        ts = datetime.datetime.now().isoformat()
-        logger.info(f"[{ts}] [MCP_SERVER] get_user_tasks_summary called with user_id={user_id}, project_id={project_id}")
         
         # Get tasks filtered by user and optional project
         if project_id:

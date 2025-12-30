@@ -1059,7 +1059,7 @@ async def list_users(
 
 
 @tool
-def get_user_tasks_summary(
+async def get_user_tasks_summary(
     user_id: Annotated[str, "The ID of the user to analyze"],
     project_id: Annotated[Optional[str], "Optional project ID to filter tasks"] = None
 ) -> str:
@@ -1082,24 +1082,15 @@ def get_user_tasks_summary(
     try:
         handler = _ensure_pm_handler()
         
-        # DEBUG: Log entry
-        ts = datetime.datetime.now().isoformat()
-        logger.info(f"[{ts}] [PM_AGENT_TOOLS] get_user_tasks_summary called with user_id={user_id}, project_id={project_id}")
-        
         # Call handler method (supports sync/async)
-        # Note: PMServiceHandler.get_user_tasks_summary is async, so _call_handler_method handles it
-        import asyncio
-        if asyncio.iscoroutinefunction(getattr(handler, "get_user_tasks_summary", None)):
-            # It's async, use _call_handler_method which handles async
-             summary = _call_handler_method(
-                "get_user_tasks_summary", 
-                user_id=user_id,
-                project_id=project_id
-            )
-        else:
-            # Sync fallback (unlikely for PMServiceHandler but safe)
-            summary = handler.get_user_tasks_summary(user_id=user_id, project_id=project_id)
-            
+        # Fix: Ensure we await the result since this is an async tool
+        # Correctly pass the function object, not string
+        summary = await _call_handler_method(
+            handler.get_user_tasks_summary, 
+            user_id=user_id,
+            project_id=project_id
+        )
+        
         return json.dumps(summary, indent=2, default=str)
         
     except Exception as e:

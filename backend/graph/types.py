@@ -57,6 +57,7 @@ class State(MessagesState):
     frontend_history_message_count: int = 0  # Number of messages from frontend history  # Store previous ReAct result for user feedback detection
     escalation_reason: str = ""  # Why was query escalated
     escalation_context: str = ""  # Context for escalated planning
+    pm_report_type: str = "general" # PM Report Type (list, sprint, person, resources, etc.)
     react_intermediate_steps: list = field(default_factory=list)  # ReAct execution steps
     react_thoughts: list = field(default_factory=list)  # ReAct thoughts for UI display (streamed separately)
 

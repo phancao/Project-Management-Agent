@@ -266,24 +266,21 @@ function MessageListItem({
       );
     } else {
 
-      // Render if there's content OR if there are tool calls (require actual content, don't just rely on isStreaming)
-      const hasContent = message.content && message.content.trim().length > 0;
-      // Filter out tool calls with empty names before checking
+      // Render Guard: Strict checks to prevent "Ghost Bubbles" (empty 1px UI)
+      // This allows the backend to stream pure whitespace (for formatting) without breaking the UI.
+      const hasVisibleContent = message.content && /\S/.test(message.content); // Checks for any non-whitespace character
       const validTools = message.toolCalls?.filter(t => t.name && t.name.trim()) || [];
       const hasTools = validTools.length > 0;
+      const hasThoughts = message.reactThoughts && message.reactThoughts.length > 0;
 
-      // DEBUG: Log tool calls for this message
-      if (message.toolCalls && message.toolCalls.length > 0) {
-        const ts = new Date().toISOString();
-        console.log(`[${ts}] [DEBUG-RENDER] Message ${message.id}:`, {
-          allToolCalls: message.toolCalls.map(t => t.name),
-          validTools: validTools.map(t => t.name),
-          hasContent,
-          hasTools
-        });
-      }
+      const shouldRender = hasVisibleContent || hasTools || hasThoughts;
 
-      content = (hasContent || hasTools) ? (
+      // DEBUG: Log specific rejection reason if needed (commented out for prod)
+      // if (!shouldRender && message.content) {
+      //   console.debug(`[MessageListView] Ghost Bubble prevented: content='${message.content}'`);
+      // }
+
+      content = shouldRender ? (
         <div
           className={cn(
             "flex w-full px-4",
@@ -292,11 +289,23 @@ function MessageListItem({
         >
           <MessageBubble message={message}>
             <div className="flex w-full flex-col break-words">
-              <Markdown
-                className={cn()}
-              >
-                {message?.content}
-              </Markdown>
+              {hasVisibleContent && (
+                <Markdown
+                  className={cn()}
+                >
+                  {message?.content}
+                </Markdown>
+              )}
+              {/* SHOW THOUGHTS (Detected intent, etc) */}
+              {hasThoughts && (
+                <div className="flex flex-col gap-2 mb-2">
+                  {message.reactThoughts?.map((thought, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 p-2 rounded-md border border-border/50">
+                      <span>{thought.thought}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {/* SHOW TOOLS AND RESULTS for pm_agent and other agents */}
               {hasTools && (
                 <ToolsDisplay toolCalls={validTools} />
@@ -347,6 +356,11 @@ function MessageBubble({
       )}
       style={{ wordBreak: "break-all" }}
     >
+      {message.role === "assistant" && message.agent && (
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground opacity-70">
+          {message.agent === "react_agent" ? "React" : message.agent.replace(/_/g, " ")}
+        </div>
+      )}
       {children}
     </div>
   );

@@ -1010,6 +1010,10 @@ async def list_users(
     try:
         handler = _ensure_pm_handler()
         
+        # DEBUG: Log entry
+        ts = datetime.datetime.now().isoformat()
+        logger.info(f"[{ts}] [PM_AGENT_TOOLS] list_users called with project_id={project_id}")
+        
         # Extract actual project ID if in provider_id:project_id format
         actual_project_id = None
         if project_id and ":" in project_id:
@@ -1051,6 +1055,56 @@ async def list_users(
             "success": False,
             "error": str(e)
         })
+
+
+
+@tool
+def get_user_tasks_summary(
+    user_id: Annotated[str, "The ID of the user to analyze"],
+    project_id: Annotated[Optional[str], "Optional project ID to filter tasks"] = None
+) -> str:
+    """Get aggregated task summary for a specific user.
+    
+    Useful for analyzing workload and performance.
+    
+    Args:
+        user_id: The ID of the user
+        project_id: Optional project ID to limit the analysis
+        
+    Returns:
+        JSON string with summary stats:
+        - total_tasks
+        - status_counts (done, in_progress, new)
+        - estimated_hours_total
+        - priority_counts
+        - overdue_count
+    """
+    try:
+        handler = _ensure_pm_handler()
+        
+        # DEBUG: Log entry
+        ts = datetime.datetime.now().isoformat()
+        logger.info(f"[{ts}] [PM_AGENT_TOOLS] get_user_tasks_summary called with user_id={user_id}, project_id={project_id}")
+        
+        # Call handler method (supports sync/async)
+        # Note: PMServiceHandler.get_user_tasks_summary is async, so _call_handler_method handles it
+        import asyncio
+        if asyncio.iscoroutinefunction(getattr(handler, "get_user_tasks_summary", None)):
+            # It's async, use _call_handler_method which handles async
+             summary = _call_handler_method(
+                "get_user_tasks_summary", 
+                user_id=user_id,
+                project_id=project_id
+            )
+        else:
+            # Sync fallback (unlikely for PMServiceHandler but safe)
+            summary = handler.get_user_tasks_summary(user_id=user_id, project_id=project_id)
+            
+        return json.dumps(summary, indent=2, default=str)
+        
+    except Exception as e:
+        logger.error(f"Error in get_user_tasks_summary: {e}")
+        return json.dumps({"error": str(e)})
 
 
 @tool
@@ -1112,5 +1166,6 @@ def get_pm_tools() -> List:
         list_epics,
         get_epic,
         list_users,
+        get_user_tasks_summary,
         get_current_user,
     ]

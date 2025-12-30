@@ -128,7 +128,10 @@ Use tables for structured data. Use bullet points for lists.
 
 User Request: {user_query}
 
-Think through this briefly, then proceed to call the appropriate tool."""
+IMPORTANT: 
+- Do NOT generate fake data, placeholder content, or example responses.
+- Do NOT write out tables or lists with made-up values.
+- Only describe your plan briefly, then proceed to call the appropriate tool."""
 
         conversation.append(HumanMessage(content=think_prompt))
         

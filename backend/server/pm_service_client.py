@@ -371,6 +371,10 @@ class PMServiceHandler:
         project_id: Optional[str] = None
     ) -> list[dict[str, Any]]:
         """List users (alias for list_project_users for API compatibility)."""
+        import datetime
+        ts = datetime.datetime.now().isoformat()
+        logger.info(f"[{ts}] [MCP_SERVER] list_users called with project_id={project_id}")
+        
         if project_id:
             return await self.list_project_users(project_id)
         # If no project_id, list all users
@@ -386,6 +390,76 @@ class PMServiceHandler:
             except Exception as e:
                 logger.error(f"Failed to get user {user_id}: {e}")
                 return None
+    
+    async def get_user_tasks_summary(
+        self,
+        user_id: str,
+        project_id: Optional[str] = None
+    ) -> dict[str, Any]:
+        """Get aggregated task summary for a user."""
+        import datetime
+        ts = datetime.datetime.now().isoformat()
+        logger.info(f"[{ts}] [MCP_SERVER] get_user_tasks_summary called with user_id={user_id}, project_id={project_id}")
+        
+        # Get tasks filtered by user and optional project
+        if project_id:
+            tasks = await self.list_project_tasks(project_id, assignee_id=user_id)
+        else:
+            tasks = await self.list_all_tasks(assignee_id=user_id)
+            
+        # Initialize stats
+        summary = {
+            "total_tasks": len(tasks),
+            "status_counts": {"done": 0, "in_progress": 0, "new": 0},
+            "estimated_hours_total": 0.0,
+            "priority_counts": {},
+            "overdue_count": 0,
+            "tasks": tasks  # Include raw tasks for analysis if needed
+        }
+        
+        # Helper to normalize status
+        def normalize_status(status_name: str) -> str:
+            s = status_name.lower().strip()
+            if s in ["done", "completed", "closed", "rejected"]:
+                return "done"
+            elif s in ["in progress", "doing", "working"]:
+                return "in_progress"
+            else:
+                return "new"
+                
+        import datetime
+        now = datetime.datetime.now()
+        
+        for task in tasks:
+            # Status counts
+            status_name = task.get("status", "New")
+            norm_status = normalize_status(status_name)
+            summary["status_counts"][norm_status] += 1
+            
+            # Estimated hours
+            est = task.get("estimated_hours") or task.get("story_points")
+            if est:
+                try:
+                    summary["estimated_hours_total"] += float(est)
+                except:
+                    pass
+                    
+            # Priority counts
+            priority = task.get("priority", "Normal")
+            summary["priority_counts"][priority] = summary["priority_counts"].get(priority, 0) + 1
+            
+            # Overdue check (only for non-done tasks)
+            if norm_status != "done":
+                due_date_str = task.get("due_date")
+                if due_date_str:
+                    try:
+                        due_date = datetime.datetime.strptime(due_date_str, "%Y-%m-%d")
+                        if due_date < now:
+                            summary["overdue_count"] += 1
+                    except:
+                        pass
+                        
+        return summary
     
     # ==================== Providers ====================
     

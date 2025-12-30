@@ -270,6 +270,14 @@ export async function sendMessage(
       if (type === "thoughts") {
         const thoughtsData = data as { react_thoughts?: Array<{ thought: string; before_tool?: boolean; step_index: number }> };
 
+        // DEBUG: Log thoughts event to trace tool call streaming
+        const ts = new Date().toISOString();
+        console.log(`[${ts}] [DEBUG-THOUGHTS] Received thoughts event:`, {
+          id: data.id,
+          agent: data.agent,
+          react_thoughts: thoughtsData.react_thoughts?.map(t => t.thought?.substring(0, 80))
+        });
+
         // Find or create message for thoughts
         messageId = data.id;
         if (!existsMessage(messageId)) {

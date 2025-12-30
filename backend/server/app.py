@@ -2173,6 +2173,10 @@ def _make_event(event_type: str, data: dict[str, Any]):
     thread_id = data.get("thread_id", "")
     safe_thread_id = sanitize_thread_id(thread_id) if thread_id else "unknown"
     
+    # DEBUG: Log thoughts events removed as requested
+    # to cleanup production logs while keeping PM intent logs
+
+    
     if data.get("content") == "":
         data.pop("content")
     # Ensure JSON serialization with proper encoding
@@ -3333,15 +3337,11 @@ async def pm_chat_stream(request: Request):
                     
                 try:
                     # Check if this is a Project Management (PM) related query
-                    # CRITICAL: Extract only the FIRST LINE to avoid matching metadata like "project_id: xxx"
-                    # The frontend appends "\n\nproject_id: xxx" to messages, which would falsely trigger PM intent
-                    user_message_first_line = user_message.strip().split('\n')[0].strip().lower()
-                    pm_keywords = ["sprint", "task", "project", "user", "epic", "backlog", "burndown", "velocity", "assign", "assignee", "team member", "work package", "version", "milestone", "status", "priority", "due date", "story point", "scrum", "kanban", "board", "list", "show", "get", "analyze", "report", "health", "dashboard", "description"]
-                    # Only check first line for PM intent to avoid false positives from context/metadata
-                    has_pm_intent = any(keyword in user_message_first_line for keyword in pm_keywords)
+                    # Use LLM-based detection that works with any language
+                    from backend.graph.nodes import detect_pm_intent_llm
                     
-                    if user_message_first_line in ["hi", "hello", "hey"]:
-                        matching_keywords = [kw for kw in pm_keywords if kw in user_message_first_line]
+                    user_message_first_line = user_message.strip().split('\n')[0].strip()
+                    has_pm_intent, pm_report_type = detect_pm_intent_llm(user_message_first_line) if user_message_first_line else (False, "general")
                     
                     # Determine routing: PM queries go to coordinator → ReAct, non-PM queries go to DeerFlow
                     needs_research = not has_pm_intent
@@ -3349,7 +3349,34 @@ async def pm_chat_stream(request: Request):
                     
                     if has_pm_intent:
                         # PM-related query - route to coordinator → ReAct agent
-                        logger.info(f"[PM-CHAT] 📊 PM intent detected: '{user_message}' - routing to PM graph (coordinator → ReAct)")
+                        logger.info(f"[SSE_ENDPOINT] 📊 PM intent detected: '{user_message}' - routing to PM graph (coordinator → ReAct), report_type={pm_report_type}")
+                        
+                        # Stream intent detection decision to frontend
+                        report_type_labels = {
+                            "list": "📋 Listing Data",
+                            "sprint": "🏃 Sprint Analysis", 
+                            "health": "💚 Project Health",
+                            "analytics": "📊 Analytics",
+                            "resources": "👥 Resource Analysis",
+                            "person": "👤 Person Performance",
+                            "general": "📝 General PM Query"
+                        }
+                        intent_label = report_type_labels.get(pm_report_type, "📝 PM Query")
+                        
+                        intent_chunk = {
+                            "id": str(uuid.uuid4()),
+                            "thread_id": thread_id,
+                            "agent": "intent_detector",
+                            "role": "assistant",
+                            "react_thoughts": [{
+                                "thought": f"🔍 Detected: {intent_label}",
+                                "before_tool": True,
+                                "step_index": 0
+                            }]
+                        }
+                        yield "event: thoughts\n"
+                        yield f"data: {json.dumps(intent_chunk)}\n\n"
+                        
                         initial_chunk = {
                             "id": str(uuid.uuid4()),
                             "thread_id": thread_id,

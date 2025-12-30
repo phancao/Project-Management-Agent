@@ -268,7 +268,21 @@ function MessageListItem({
 
       // Render if there's content OR if there are tool calls (require actual content, don't just rely on isStreaming)
       const hasContent = message.content && message.content.trim().length > 0;
-      const hasTools = message.toolCalls && message.toolCalls.length > 0;
+      // Filter out tool calls with empty names before checking
+      const validTools = message.toolCalls?.filter(t => t.name && t.name.trim()) || [];
+      const hasTools = validTools.length > 0;
+
+      // DEBUG: Log tool calls for this message
+      if (message.toolCalls && message.toolCalls.length > 0) {
+        const ts = new Date().toISOString();
+        console.log(`[${ts}] [DEBUG-RENDER] Message ${message.id}:`, {
+          allToolCalls: message.toolCalls.map(t => t.name),
+          validTools: validTools.map(t => t.name),
+          hasContent,
+          hasTools
+        });
+      }
+
       content = (hasContent || hasTools) ? (
         <div
           className={cn(
@@ -285,7 +299,7 @@ function MessageListItem({
               </Markdown>
               {/* SHOW TOOLS AND RESULTS for pm_agent and other agents */}
               {hasTools && (
-                <ToolsDisplay toolCalls={message.toolCalls} />
+                <ToolsDisplay toolCalls={validTools} />
               )}
             </div>
           </MessageBubble>
@@ -780,9 +794,13 @@ function ToolsDisplay({ tools, toolCalls }: { tools?: string[]; toolCalls?: Tool
 
 
   if (toolCalls && toolCalls.length > 0) {
+    // Filter out tool calls with empty names
+    const validToolCalls = toolCalls.filter(tool => tool.name && tool.name.trim());
+    if (validToolCalls.length === 0) return null;
+
     return (
       <div className="mt-2 flex flex-col gap-2">
-        {toolCalls.map((tool, index) => {
+        {validToolCalls.map((tool, index) => {
           let jsonContent = null;
           if (tool.result) {
             try {

@@ -945,6 +945,89 @@ def human_feedback_node(
     )
 
 
+# LLM-based PM intent detection cache (avoid repeat calls for same message)
+_pm_intent_cache: dict[str, tuple[bool, str]] = {}
+
+def detect_pm_intent_llm(user_message: str) -> tuple[bool, str]:
+    """
+    Use LLM to detect if a message is related to Project Management and classify report type.
+    Works with any language (Vietnamese, English, etc.)
+    
+    Args:
+        user_message: The user's message text
+        
+    Returns:
+        Tuple of (is_pm: bool, report_type: str)
+        report_type: "list" | "sprint" | "health" | "analytics" | "general"
+    """
+    import datetime
+    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    
+    # Check cache first
+    cache_key = user_message.strip().lower()[:200]  # Limit cache key size
+    if cache_key in _pm_intent_cache:
+        cached = _pm_intent_cache[cache_key]
+        logger.info(f"[{ts}] [DETECT_PM_INTENT] Cache hit: is_pm={cached[0]}, type={cached[1]}")
+        return cached
+    
+    logger.info(f"[{ts}] [DETECT_PM_INTENT] Starting LLM classification for: '{user_message[:100]}...'")
+    
+    try:
+        # Use a fast, cheap model for classification
+        llm = get_llm_by_type("basic")
+        
+        prompt = f"""Classify this message for Project Management:
+
+1. Is it PM-related? (YES/NO)
+2. If PM-related, what type?
+   - LIST: listing data (show sprints, list users, get tasks, list epics)
+   - SPRINT: sprint-specific analysis (sprint report, analyze sprint X)
+   - HEALTH: project health/status (project health, project status, overview)
+   - ANALYTICS: metrics/charts (burndown, velocity, cycle time)
+   - RESOURCES: team workload, resource allocation, who is working on what
+   - PERSON: individual performance (analyze John's work, how is Minh doing)
+   - GENERAL: other PM queries
+
+Message: "{user_message}"
+
+Reply with ONE of: PM_LIST, PM_SPRINT, PM_HEALTH, PM_ANALYTICS, PM_RESOURCES, PM_PERSON, PM_GENERAL, NOT_PM
+"""
+        
+        response = llm.invoke([{"role": "user", "content": prompt}])
+        result_text = response.content.strip().upper() if hasattr(response, 'content') else str(response).strip().upper()
+        
+        # Parse result
+        is_pm = "NOT_PM" not in result_text and "PM" in result_text
+        
+        # Extract report type
+        report_type = "general"
+        if "LIST" in result_text:
+            report_type = "list"
+        elif "SPRINT" in result_text:
+            report_type = "sprint"
+        elif "HEALTH" in result_text:
+            report_type = "health"
+        elif "ANALYTICS" in result_text:
+            report_type = "analytics"
+        elif "RESOURCES" in result_text:
+            report_type = "resources"
+        elif "PERSON" in result_text:
+            report_type = "person"
+        
+        # Cache the result
+        _pm_intent_cache[cache_key] = (is_pm, report_type)
+        
+        ts2 = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        logger.info(f"[{ts2}] [DETECT_PM_INTENT] LLM result: '{result_text}' -> is_pm={is_pm}, type={report_type}")
+        
+        return (is_pm, report_type)
+        
+    except Exception as e:
+        logger.error(f"[DETECT_PM_INTENT] Error in LLM classification: {e}")
+        # Fallback: assume PM intent with general type
+        return (True, "general")
+
+
 def coordinator_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["planner", "background_investigator", "coordinator", "react_agent", "__end__"]]:
@@ -989,8 +1072,8 @@ def coordinator_node(
         user_message_first_line = user_message.split('\n')[0].strip() if user_message else ""
         
         # Check if this is a NEW PM query (different topic) - if so, clear previous_result and route to ReAct
-        pm_keywords = ["sprint", "task", "project", "user", "epic", "backlog", "list", "show", "get", "analyze", "report", "health", "status"]
-        is_new_pm_query = any(keyword in user_message_first_line for keyword in pm_keywords)
+        # Use LLM-based detection that works with any language
+        is_new_pm_query, _ = detect_pm_intent_llm(user_message_first_line) if user_message_first_line else (False, "general")
         
         if is_new_pm_query:
             # This is a NEW PM query, not a follow-up on previous result
@@ -1069,12 +1152,8 @@ Create a comprehensive plan that addresses their need for more detailed analysis
         # This prevents "project_id: ..." from matching "project" keyword
         user_message_first_line = user_message.split('\n')[0].strip()
         
-        # PM intent detection - only route to PM tools if PM-related
-        pm_keywords = ["sprint", "task", "project", "user", "epic", "backlog", "burndown", "velocity", "assign", "assignee", "team member", "work package", "version", "milestone", "status", "priority", "due date", "story point", "scrum", "kanban", "board", "list", "show", "get", "analyze", "report", "health", "dashboard", "description"]
-        has_pm_intent = any(keyword in user_message_first_line for keyword in pm_keywords)
-        
-        # Find matching keywords for debug
-        matching_keywords = [kw for kw in pm_keywords if kw in user_message_first_line]
+        # PM intent detection - use LLM-based detection that works with any language
+        has_pm_intent, pm_report_type = detect_pm_intent_llm(user_message_first_line) if user_message_first_line else (False, "general")
         
         # Debug logging for greetings
         if user_message_first_line in ["hi", "hello", "hey"]:
@@ -1145,13 +1224,9 @@ Create a comprehensive plan that addresses their need for more detailed analysis
         # Extract first line to avoid metadata matching
         user_message_first_line = user_message_for_pm_check.split('\n')[0].strip() if user_message_for_pm_check else ""
         
-        # PM intent detection - Coordinator only detects PM intent, NOT complexity
-        # Complexity assessment is ReAct's responsibility
-        pm_keywords = ["sprint", "task", "project", "user", "epic", "backlog", "burndown", "velocity", "assign", "assignee", "team member", "work package", "version", "milestone", "status", "priority", "due date", "story point", "scrum", "kanban", "board", "list", "show", "get", "analyze", "report", "health", "dashboard", "description"]
-        has_pm_intent = any(keyword in user_message_first_line for keyword in pm_keywords) if user_message_first_line else False
-        
-        # Find matching keywords for debug
-        matching_keywords = [kw for kw in pm_keywords if kw in user_message_first_line] if user_message_first_line else []
+        # PM intent detection - use LLM-based detection that works with any language
+        # Coordinator only detects PM intent, NOT complexity. Complexity assessment is ReAct's responsibility
+        has_pm_intent, pm_report_type = detect_pm_intent_llm(user_message_first_line) if user_message_first_line else (False, "general")
         
         if has_pm_intent:
             # PM query detected - route to ReAct agent
@@ -1164,6 +1239,7 @@ Create a comprehensive plan that addresses their need for more detailed analysis
                     "previous_result": None,
                     "routing_mode": "",
                     "final_report": "",  # CRITICAL: Clear final_report to allow reporter to execute
+                    "pm_report_type": pm_report_type,  # Pass report type for template selection
                     "goto": "react_agent"
                 },
                 goto="react_agent"
@@ -1574,11 +1650,27 @@ async def reporter_node(state: State, config: RunnableConfig):
     }
     # Use PM-specific reporter for PM routes, generic reporter otherwise
     # PM routes come from React Agent with routing_mode="react_first"
-    reporter_template = "pm_reporter" if is_from_react else "reporter"
+    if is_from_react:
+        # Select template based on report type
+        pm_report_type = state.get("pm_report_type", "general")
+        pm_template_map = {
+            "list": "pm_reporter_list",
+            "sprint": "pm_reporter_sprint", 
+            "health": "pm_reporter_health",
+            "analytics": "pm_reporter_analytics",
+            "resources": "pm_reporter_resources",
+            "person": "pm_reporter_person",
+        }
+        reporter_template = pm_template_map.get(pm_report_type, "pm_reporter")
+        logger.info(f"[REPORTER_NODE] PM route: Using template '{reporter_template}' for report_type='{pm_report_type}'")
+    else:
+        reporter_template = "reporter"
+        logger.info(f"[REPORTER_NODE] Non-PM route: Using template '{reporter_template}'")
     
     # Get system prompt only (first message from apply_prompt_template)
     # Don't include all messages from state - that causes token overflow!
     all_template_messages = apply_prompt_template(reporter_template, input_, configurable, input_.get("locale", "en-US"))
+    
     # Only take the system prompt (first message), not the rest
     invoke_messages = [all_template_messages[0]] if all_template_messages else []
     # CRITICAL FOR PM ROUTES: Extract RAW tool results from react_intermediate_steps

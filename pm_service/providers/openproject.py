@@ -207,7 +207,8 @@ class OpenProjectProvider(BasePMProvider):
     async def list_tasks(
         self,
         project_id: Optional[str] = None,
-        assignee_id: Optional[str] = None
+        assignee_id: Optional[str] = None,
+        sprint_id: Optional[str] = None
     ) -> List[PMTask]:
         """
         List all work packages (tasks) with automatic pagination.
@@ -215,9 +216,6 @@ class OpenProjectProvider(BasePMProvider):
         OpenProject defaults to 20 items per page. This method fetches
         ALL pages to return the complete task list.
         """
-        url = f"{self.base_url}/api/v3/work_packages"
-        
-        # Build filters for project and/or assignee
         import json as json_lib
         import logging
         logger = logging.getLogger(__name__)
@@ -230,14 +228,23 @@ class OpenProjectProvider(BasePMProvider):
                 f"from composite project_id '{project_id}'"
             )
         
-        filters = []
+        # Use project-scoped endpoint when project_id is provided
         if actual_project_id:
-            filters.append({
-                "project": {"operator": "=", "values": [actual_project_id]}
-            })
+            url = f"{self.base_url}/api/v3/projects/{actual_project_id}/work_packages"
+        else:
+            url = f"{self.base_url}/api/v3/work_packages"
+        
+        # Build filters (don't include project filter if using project-scoped URL)
+        filters = []
         if assignee_id:
             filters.append({
                 "assignee": {"operator": "=", "values": [assignee_id]}
+            })
+        if sprint_id:
+            # Cast to integer if numeric
+            val = int(sprint_id) if str(sprint_id).isdigit() else sprint_id
+            filters.append({
+                "version": {"operator": "=", "values": [val]}
             })
         
         # Build base params

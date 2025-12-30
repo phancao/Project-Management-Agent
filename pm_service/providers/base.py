@@ -54,8 +54,14 @@ class BasePMProvider(ABC):
     # ==================== Task Operations ====================
     
     @abstractmethod
-    async def list_tasks(self, project_id: Optional[str] = None, assignee_id: Optional[str] = None) -> List[PMTask]:
-        """List all tasks, optionally filtered by project and/or assignee"""
+    @abstractmethod
+    async def list_tasks(
+        self, 
+        project_id: Optional[str] = None, 
+        assignee_id: Optional[str] = None,
+        sprint_id: Optional[str] = None
+    ) -> List[PMTask]:
+        """List all tasks, optionally filtered by project, assignee, and/or sprint"""
         pass
     
     @abstractmethod

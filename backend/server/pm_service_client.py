@@ -130,13 +130,15 @@ class PMServiceHandler:
     async def list_all_tasks(
         self,
         project_id: Optional[str] = None,
-        assignee_id: Optional[str] = None
+        assignee_id: Optional[str] = None,
+        sprint_id: Optional[str] = None
     ) -> list[dict[str, Any]]:
         """List all tasks from all providers."""
         async with self._client as client:
             result = await client.list_tasks(
                 project_id=project_id,
-                assignee_id=assignee_id
+                assignee_id=assignee_id,
+                sprint_id=sprint_id
             )
         return result.get("items", [])
     

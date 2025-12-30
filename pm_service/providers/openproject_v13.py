@@ -302,47 +302,113 @@ class OpenProjectV13Provider(BasePMProvider):
     async def list_tasks(
         self,
         project_id: Optional[str] = None,
-        assignee_id: Optional[str] = None
+        assignee_id: Optional[str] = None,
+        sprint_id: Optional[str] = None
     ) -> List[PMTask]:
         """List all work packages (tasks) with pagination support"""
         import json as json_lib
         import logging
+        import logging
         logger = logging.getLogger(__name__)
         
-        # Build filters for project and/or assignee
+        # Prepare filters
         filters = []
+        
+        # CRITICAL: OpenProject project-scoped endpoint excludes "Done/Closed" status by default
+        # We need to explicitly request ALL statuses using the "*" (all) operator
+        # This ensures we get all work packages regardless of status
+        filters.append({
+            "status": {
+                "operator": "*",  # "*" means "all" - include all statuses
+                "values": []
+            }
+        })
+        
         if project_id:
+            # OpenProject IDs must be integers in JSON filters to avoid 400 Bad Request
+            val = project_id
+            if str(project_id).isdigit():
+                val = int(project_id)
+                
             filters.append({
-                "project": {"operator": "=", "values": [project_id]}
+                "project": {
+                    "operator": "=",
+                    "values": [val]
+                }
             })
+            
         if assignee_id:
+            val = assignee_id
+            if str(assignee_id).isdigit():
+                val = int(assignee_id)
+                
             filters.append({
-                "assignee": {"operator": "=", "values": [assignee_id]}
+                "assignee": {
+                    "operator": "=",
+                    "values": [val]
+                }
+            })
+            
+        if sprint_id:
+            val = sprint_id
+            if str(sprint_id).isdigit():
+                val = int(sprint_id)
+                
+            filters.append({
+                "version": {
+                    "operator": "=",
+                    "values": [val]
+                }
             })
         
-        # Build initial request parameters (matching test script pattern)
-        if filters:
-            params = {
-                "filters": json_lib.dumps(filters),
-                "pageSize": 100,
-                "include": "priority,status,assignee,project,version,parent"
-            }
-            logger.info(f"OpenProject list_tasks with filters: {params}")
-        else:
-            params = {
-                "pageSize": 100,
-                "include": "priority,status,assignee,project,version,parent"
-            }
+        # Build initial request parameters
+        params = {
+            "filters": json_lib.dumps(filters),
+            "pageSize": 100,
+            "include": "priority,status,assignee,project,version,parent"
+        }
+        logger.info(f"OpenProject list_tasks with filters: {params}")
         
         # Fetch all pages using pagination (exact pattern from test script)
         all_tasks_data = []
-        request_url = f"{self.base_url}/api/v3/work_packages"
+        # CRITICAL FIX: Use project-scoped endpoint when project_id is provided
+        # The global /work_packages endpoint rejects version filter even with project filter.
+        # The project-scoped endpoint accepts version filter correctly.
+        if project_id:
+            proj_id_val = int(project_id) if str(project_id).isdigit() else project_id
+            request_url = f"{self.base_url}/api/v3/projects/{proj_id_val}/work_packages"
+            # Remove project filter from filters array since it's now in the URL
+            if filters:
+                filters = [f for f in filters if "project" not in f]
+                if filters:
+                    params["filters"] = json_lib.dumps(filters)
+                elif "filters" in params:
+                    del params["filters"]
+        else:
+            request_url = f"{self.base_url}/api/v3/work_packages"
         page_num = 1
         
         while request_url:
             logger.debug(f"Fetching page {page_num} from {request_url}")
             response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except requests.exceptions.HTTPError as e:
+                # OpenProject returns detailed error info in JSON
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("message") or error_data.get("_type") or str(e)
+                    logger.error(f"OpenProject API Error: {error_msg}")
+                except ValueError:
+                    # JSON decode failed, allow falls through to raise e or custom error
+                    error_msg = str(e)
+                    pass
+                
+                # If status is 400, it's likely invalid filter/ID.
+                if response.status_code == 400:
+                    raise ValueError(f"OpenProject API Error (400): {error_msg}") from e
+                
+                raise e
             
             data = response.json()
             tasks_data = data.get("_embedded", {}).get("elements", [])
@@ -1002,9 +1068,20 @@ class OpenProjectV13Provider(BasePMProvider):
         from datetime import date, datetime
         logger = logging.getLogger(__name__)
         
-        url = f"{self.base_url}/api/v3/versions"
+        if project_id:
+            # Use project-scoped endpoint which is safer and cleaner than filtering global list
+            url = f"{self.base_url}/api/v3/projects/{project_id}/versions"
+            # logger.info(f"[list_sprints] Using scoped access: {url}")
+        else:
+            url = f"{self.base_url}/api/v3/versions"
+            
         all_sprints_data = []
         params = {"pageSize": 100}
+        
+        # NOTE: filters param is not needed for project-scoped endpoint for scoping,
+        # but if we wanted to filter global list we would use it.
+        # Since we switched to scoped endpoint, we can skip complex filter construction.
+
         request_url = url
         
         # Fetch all pages using pagination (exact pattern from test script)
@@ -1035,8 +1112,13 @@ class OpenProjectV13Provider(BasePMProvider):
         
         sprints_data = all_sprints_data
         
-        # Filter by project_id if provided
-        # (versions don't have project filter in API)
+        # Client-side filter fallback (if project_id was not filtered server-side)
+        # But if we did server-side, this list should be clean already.
+        if project_id and "filters" not in params: # Only filter if we didn't use server-side (redundant check)
+             pass 
+         
+        # Still filter again just to be safe (no harm), or simply rely on API.
+        # OpenProject versions are strictly scoped.
         if project_id:
             sprints_data = [
                 sprint for sprint in sprints_data

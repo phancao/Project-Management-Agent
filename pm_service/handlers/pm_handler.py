@@ -259,6 +259,8 @@ class PMHandler:
         Pagination/limiting should be handled by the API router layer.
         The providers already handle their own pagination to fetch all data.
         """
+        import datetime
+        import logging
         tasks = []
         
         # Parse project_id if provided
@@ -281,13 +283,20 @@ class PMHandler:
         for provider_conn in providers:
             try:
                 provider = self.create_provider_instance(provider_conn)
+                # Call provider with sprint_id to enable server-side filtering
                 provider_tasks = await provider.list_tasks(
                     project_id=actual_project_id,
-                    assignee_id=assignee_id
+                    assignee_id=assignee_id,
+                    sprint_id=actual_sprint_id
                 )
                 
-                # Filter by sprint if provided
+                # Double-check filtering if provider didn't handle it strictly (optional safety net)
+                # But if we trust the provider, we can rely on it.
+                # Keeping the check logic but as a fallback/validation is safer for generic handler.
                 if actual_sprint_id:
+                     # Check if result set seems filtered. If provider supports it, all tasks should match.
+                     # If generic provider, it might ignore the arg.
+                     # So we keep the filter logic as refined filter.
                     provider_tasks = [
                         t for t in provider_tasks
                         if self._task_in_sprint(t, actual_sprint_id)
@@ -299,8 +308,18 @@ class PMHandler:
                     task_dict["provider_name"] = provider_conn.name
                     tasks.append(task_dict)
                     
+            except ValueError as e:
+                # ValueErrors are often user input errors (invalid ID, invalid filter) from the provider.
+                # We should NOT swallow them, even if iterating multiple providers, because the user needs to know their input is invalid.
+                # Especially OpenProject 400s which indicate syntax/logic errors.
+                self.record_error(str(provider_conn.id), e)
+                raise e
             except Exception as e:
                 self.record_error(str(provider_conn.id), e)
+                # If a specific provider was targeted, failure is fatal.
+                # If iterating all providers, we continue to get partial results.
+                if provider_id:
+                    raise e
                 continue
         
         return tasks
@@ -448,6 +467,7 @@ class PMHandler:
         provider_id, actual_id = self._parse_composite_id(sprint_id)
         
         if provider_id:
+            # Provider ID specified - use that provider
             provider_conn = self.get_provider_by_id(provider_id)
             if provider_conn:
                 try:
@@ -460,6 +480,20 @@ class PMHandler:
                         return sprint_dict
                 except Exception as e:
                     self.record_error(provider_id, e)
+        else:
+            # No provider ID - iterate all active providers
+            for provider_conn in self.get_active_providers():
+                try:
+                    provider = self.create_provider_instance(provider_conn)
+                    sprint = await provider.get_sprint(actual_id)
+                    if sprint:
+                        sprint_dict = self._to_dict(sprint)
+                        sprint_dict["provider_id"] = str(provider_conn.id)
+                        sprint_dict["provider_name"] = provider_conn.name
+                        return sprint_dict
+                except Exception as e:
+                    self.record_error(str(provider_conn.id), e)
+                    continue
         
         return None
     

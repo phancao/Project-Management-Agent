@@ -35,6 +35,7 @@ def set_pm_handler(handler):
     """Set the PM handler instance for tools to use"""
     global _pm_handler
     _pm_handler = handler
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:set_pm_handler] INPUT handler={handler.__class__.__name__}")
     logger.info(f"PM handler set for tools: {handler.__class__.__name__}")
 
 
@@ -91,6 +92,7 @@ async def get_current_project() -> str:
     If no project is selected, you may need to ask the user to select one,
     or call list_projects to show available projects.
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:get_current_project] INPUT")
     try:
         composite_project_id = get_current_project_id()
         
@@ -160,6 +162,7 @@ async def list_projects() -> str:
         - description: Project description
         - status: Project status
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:list_projects] INPUT")
     try:
         handler = _ensure_pm_handler()
         projects = await handler.list_all_projects()
@@ -223,6 +226,7 @@ async def get_current_project_details() -> str:
         
     If no project is currently selected, returns an error message asking the user to select a project.
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:get_current_project_details] INPUT")
     try:
         # First, get the current project ID
         composite_project_id = get_current_project_id()
@@ -321,6 +325,7 @@ async def get_project(project_id: Annotated[str, "The project ID to retrieve"]) 
         - start_date, end_date, owner_id
         - created_at, updated_at
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:get_project] INPUT project_id={project_id}")
     try:
         handler = _ensure_pm_handler()
         
@@ -398,6 +403,10 @@ async def list_tasks(
     Returns:
         JSON with task list including id, title, status, priority, assignee, dates
     """
+    logger.info(f"[PM-TOOLS] list_tasks called with project_id={project_id}, sprint_id={sprint_id}")
+    
+    tasks = []
+
     try:
         handler = _ensure_pm_handler()
         
@@ -405,7 +414,7 @@ async def list_tasks(
         actual_project_id = None
         if project_id and ":" in project_id:
             actual_project_id = project_id.split(":", 1)[1]
-        if project_id:
+        elif project_id:
             actual_project_id = project_id
         else:
             # Auto-detect project ID if not provided, needed for Smart Resolution
@@ -488,33 +497,41 @@ async def list_tasks(
                     if ":" in project_for_tasks:
                         project_for_tasks = project_for_tasks.split(":", 1)[1]
                     
-                    # Use list_project_tasks which may be more efficient
-                    tasks = await handler.list_project_tasks(project_for_tasks)
-                    # Filter by sprint_id
-                    original_count = len(tasks)
-                    tasks = [
-                        t for t in tasks 
-                        if t.get("sprint_id") and str(t.get("sprint_id")) == str(actual_sprint_id)
-                    ]
+                    # Use list_project_tasks which may be more efficient, passing sprint_id for server-side filtering
+                    tasks = await handler.list_project_tasks(
+                        project_id=project_for_tasks,
+                        sprint_id=actual_sprint_id
+                    )
+                    
+                    # Double-check filtering client-side (redundant if server supports it, but safe)
+                    if actual_sprint_id:
+                        original_count = len(tasks)
+                        tasks = [
+                            t for t in tasks 
+                            if not t.get("sprint_id") or str(t.get("sprint_id")) == str(actual_sprint_id)
+                        ]
+                        if len(tasks) < original_count:
+                             logger.info(f"[PM-TOOLS] Client-side refined {original_count} -> {len(tasks)} tasks")
+                    
                     logger.info(
-                        f"[PM-TOOLS] list_tasks: Used list_project_tasks and filtered by sprint_id={actual_sprint_id}: "
-                        f"{original_count} → {len(tasks)} tasks"
+                        f"[PM-TOOLS] list_tasks: Used list_project_tasks with sprint_id={actual_sprint_id}: {len(tasks)} tasks"
                     )
                 else:
                     # No project_id, fall back to list_all_tasks
                     tasks = await handler.list_all_tasks(
                         project_id=actual_project_id,
-                        assignee_id=assignee_id
+                        assignee_id=assignee_id,
+                        sprint_id=actual_sprint_id
                     )
                     # Filter by sprint_id
-                    original_count = len(tasks)
-                    tasks = [
-                        t for t in tasks 
-                        if t.get("sprint_id") and str(t.get("sprint_id")) == str(actual_sprint_id)
-                    ]
+                    if actual_sprint_id:
+                        tasks = [
+                            t for t in tasks 
+                            if not t.get("sprint_id") or str(t.get("sprint_id")) == str(actual_sprint_id)
+                        ]
+                        
                     logger.info(
-                        f"[PM-TOOLS] list_tasks: Filtered by sprint_id={actual_sprint_id}: "
-                        f"{original_count} → {len(tasks)} tasks"
+                        f"[PM-TOOLS] list_tasks: Filtered by sprint_id={actual_sprint_id}: {len(tasks)} tasks"
                     )
             except Exception as e:
                 logger.warning(
@@ -616,6 +633,7 @@ async def list_my_tasks() -> str:
         - start_date, due_date, completed_at
         - provider_id: The provider ID for tasks from multi-provider setups
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:list_my_tasks] INPUT")
     try:
         handler = _ensure_pm_handler()
         
@@ -661,6 +679,7 @@ async def get_task(task_id: Annotated[str, "The task ID to retrieve"]) -> str:
         - estimated_hours, actual_hours
         - start_date, due_date, completed_at
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:get_task] INPUT task_id={task_id}")
     try:
         handler = _ensure_pm_handler()
         
@@ -730,6 +749,7 @@ async def list_sprints(
     Returns:
         JSON string with list of sprints.
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:list_sprints] INPUT project_id={project_id}")
     try:
         handler = _ensure_pm_handler()
         
@@ -805,48 +825,37 @@ async def get_sprint(sprint_id: Annotated[str, "The sprint ID to retrieve"]) -> 
         - capacity_hours, planned_hours
         - goal, created_at, updated_at
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:get_sprint] INPUT sprint_id={sprint_id}")
     try:
         handler = _ensure_pm_handler()
         
-        # Handle provider_id:sprint_id format
-        if ":" in sprint_id:
-            parts = sprint_id.split(":", 1)
-            provider_id = parts[0]
-            actual_sprint_id = parts[1]
-        else:
-            actual_sprint_id = sprint_id
-        
-        # Try to get sprint from provider directly
-        sprint = None
-        if handler.single_provider:
-            sprint_obj = await handler.single_provider.get_sprint(actual_sprint_id)
-            if sprint_obj:
-                sprint = {
-                    "id": str(sprint_obj.id),
-                    "name": sprint_obj.name,
-                    "project_id": str(sprint_obj.project_id) if sprint_obj.project_id else None,
-                    "status": str(sprint_obj.status) if sprint_obj.status else None,
-                    "start_date": sprint_obj.start_date.isoformat() if sprint_obj.start_date else None,
-                    "end_date": sprint_obj.end_date.isoformat() if sprint_obj.end_date else None,
-                    "capacity_hours": sprint_obj.capacity_hours,
-                    "planned_hours": sprint_obj.planned_hours,
-                    "goal": sprint_obj.goal or "",
-                }
-        else:
-            # List all and find matching - need to iterate through projects
-            projects = await handler.list_all_projects()
-            for project in projects:
-                project_id = project.get('id')
-                if project_id:
-                    sprints = await handler.list_project_sprints(project_id)
-                    sprint = next((s for s in sprints if s.get('id') == sprint_id), None)
-                    if sprint:
-                        break
+        # Use the handler's get_sprint which iterates all providers
+        # It returns a dict with all sprint details
+        sprint = await handler.get_sprint(sprint_id)
         
         if not sprint:
+            error_msg = f"Sprint not found: {sprint_id}"
+            
+            # HELP THE LLM: List available sprints to correct the hallucination
+            try:
+                project_id = get_current_project_id()
+                if project_id:
+                    sprints = await handler.list_project_sprints(project_id)
+                    # Sort by start date (descending) to show recent sprints first
+                    sprints.sort(key=lambda x: x.get('start_date') or "", reverse=True)
+                    
+                    # Create a concise list of top 10 sprints
+                    available_list = ", ".join([f"'{s.get('name')}' (ID: {s.get('id')})" for s in sprints[:10]])
+                    if len(sprints) > 10:
+                        available_list += f", ... ({len(sprints) - 10} more)"
+                        
+                    error_msg += f". Did you mean one of these? {available_list}"
+            except Exception:
+                pass
+
             return json.dumps({
                 "success": False,
-                "error": f"Sprint not found: {sprint_id}"
+                "error": error_msg
             })
         
         return json.dumps({
@@ -877,6 +886,7 @@ async def list_epics(
         - start_date, end_date, owner_id
         - created_at, updated_at
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:list_epics] INPUT project_id={project_id}")
     try:
         handler = _ensure_pm_handler()
         
@@ -937,6 +947,7 @@ async def get_epic(epic_id: Annotated[str, "The epic ID to retrieve"]) -> str:
         - start_date, end_date, owner_id
         - created_at, updated_at
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:get_epic] INPUT epic_id={epic_id}")
     try:
         handler = _ensure_pm_handler()
         
@@ -1007,6 +1018,7 @@ async def list_users(
         - id, name, email, username
         - avatar_url (if available)
     """
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:list_users] INPUT project_id={project_id}")
     try:
         handler = _ensure_pm_handler()
         

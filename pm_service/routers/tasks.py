@@ -60,7 +60,7 @@ async def get_task(
     task_id: str,
     db: Session = Depends(get_db_session)
 ):
-    """Get task by ID."""
+    """Get all tasks."""
     handler = PMHandler(db)
     task = await handler.get_task(task_id)
     

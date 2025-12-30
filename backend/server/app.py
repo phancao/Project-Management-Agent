@@ -709,8 +709,38 @@ async def _process_message_chunk(
             # Get tool name from the ToolMessage
             tool_name = getattr(message_chunk, 'name', 'unknown') or 'tool'
             
+            # Try to parse result and extract count for better display
+            result_count_info = ""
+            try:
+                import json
+                result_data = json.loads(tool_result_content)
+                if isinstance(result_data, dict):
+                    # Check for common count patterns
+                    if "count" in result_data:
+                        count = result_data["count"]
+                        result_count_info = f" → {count} items"
+                    elif "tasks" in result_data and isinstance(result_data["tasks"], list):
+                        result_count_info = f" → {len(result_data['tasks'])} tasks"
+                    elif "sprints" in result_data and isinstance(result_data["sprints"], list):
+                        result_count_info = f" → {len(result_data['sprints'])} sprints"
+                    elif "users" in result_data and isinstance(result_data["users"], list):
+                        result_count_info = f" → {len(result_data['users'])} users"
+                    elif "projects" in result_data and isinstance(result_data["projects"], list):
+                        result_count_info = f" → {len(result_data['projects'])} projects"
+                    elif "sprint" in result_data and isinstance(result_data["sprint"], dict):
+                        sprint_name = result_data["sprint"].get("name", "")
+                        result_count_info = f" → {sprint_name}" if sprint_name else ""
+                    elif "success" in result_data:
+                        if result_data["success"]:
+                            result_count_info = " ✓"
+                        else:
+                            error = result_data.get("error", "")[:50]
+                            result_count_info = f" ✗ {error}" if error else " ✗"
+            except (json.JSONDecodeError, KeyError, TypeError):
+                pass
+            
             tool_result_thought = {
-                "thought": f"📋 TOOL_RESULT: {result_preview}",
+                "thought": f"📋 {tool_name}{result_count_info}",
                 "before_tool": False,
                 "step_index": step_index,
                 "step_type": "tool_result",
@@ -725,7 +755,7 @@ async def _process_message_chunk(
                 "react_thoughts": [tool_result_thought]
             }
             
-            logger.info(f"[{safe_thread_id}] 📋 [PROGRESSIVE] YIELDING TOOL_RESULT thought: step={step_index}, tool={tool_name}")
+            logger.info(f"[{safe_thread_id}] 📋 [PROGRESSIVE] YIELDING TOOL_RESULT thought: step={step_index}, tool={tool_name}{result_count_info}")
             yield _make_event("thoughts", tool_result_thoughts_event)
             
             # Increment step counter

@@ -8,7 +8,9 @@ Factory function to create PM provider instances from configuration parameters.
 """
 import os
 import logging
-from typing import Optional
+import base64
+import requests
+from typing import Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 from .base import BasePMProvider
 from .models import PMProviderConfig
@@ -87,6 +89,84 @@ def _convert_localhost_to_docker_service(base_url: str) -> str:
     return base_url
 
 
+def detect_openproject_version(
+    base_url: str,
+    api_key: Optional[str] = None,
+    api_token: Optional[str] = None
+) -> Tuple[Optional[str], str]:
+    """
+    Detect OpenProject version from the /api/v3 root endpoint.
+    
+    The root endpoint returns a 'coreVersion' field (e.g., "13.4.0", "16.0.0")
+    which we use to determine which provider implementation to use.
+    
+    Args:
+        base_url: OpenProject base URL
+        api_key: API key for authentication
+        api_token: Alternative API token
+        
+    Returns:
+        Tuple of (detected_version_string, recommended_provider_type)
+        - detected_version_string: e.g., "13.4.0" or None if detection failed
+        - recommended_provider_type: "openproject_v13" or "openproject_v16"
+    """
+    key = api_key or api_token
+    if not key:
+        logger.warning("No API key provided for OpenProject version detection, defaulting to v13")
+        return (None, "openproject_v13")
+    
+    try:
+        # Build authentication header
+        auth_string = f"apikey:{key.strip()}"
+        credentials = base64.b64encode(auth_string.encode()).decode()
+        headers = {
+            "Authorization": f"Basic {credentials}",
+            "Content-Type": "application/json"
+        }
+        
+        # Query the root API endpoint
+        resp = requests.get(f"{base_url}/api/v3", headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            core_version = data.get("coreVersion")
+            
+            if core_version:
+                logger.info(f"Detected OpenProject version: {core_version}")
+                
+                # Parse major version number
+                try:
+                    major_version = int(core_version.split(".")[0])
+                    
+                    # v14+ uses the newer API patterns (openproject_v16 provider)
+                    # v13 and below use the older API patterns (openproject_v13 provider)
+                    if major_version >= 14:
+                        logger.info(f"OpenProject v{major_version} detected, using v16 provider")
+                        return (core_version, "openproject_v16")
+                    else:
+                        logger.info(f"OpenProject v{major_version} detected, using v13 provider")
+                        return (core_version, "openproject_v13")
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Failed to parse version '{core_version}': {e}")
+            else:
+                logger.info("coreVersion not returned (may require admin privileges)")
+        elif resp.status_code == 401:
+            logger.warning("Authentication failed for version detection, defaulting to v13")
+        else:
+            logger.warning(f"Version detection request failed with status {resp.status_code}")
+            
+    except requests.exceptions.Timeout:
+        logger.warning(f"Timeout while detecting OpenProject version from {base_url}")
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Network error during OpenProject version detection: {e}")
+    except Exception as e:
+        logger.warning(f"Unexpected error during OpenProject version detection: {e}")
+    
+    # Default to v13 provider (more compatible, safer fallback)
+    logger.info("Defaulting to OpenProject v13 provider")
+    return (None, "openproject_v13")
+
+
 def create_pm_provider(
     provider_type: str,
     base_url: str,
@@ -101,6 +181,9 @@ def create_pm_provider(
     
     Args:
         provider_type: Type of provider (openproject, jira, clickup)
+            - "openproject": Auto-detect version and use appropriate provider
+            - "openproject_v13": Force OpenProject v13 provider
+            - "openproject_v16": Force OpenProject v16 provider
         base_url: Base URL of the provider API
         api_key: API key (for OpenProject, ClickUp)
         api_token: API token (for JIRA)
@@ -118,8 +201,22 @@ def create_pm_provider(
     # Convert localhost URLs to Docker service names when running in containers
     converted_base_url = _convert_localhost_to_docker_service(base_url)
     
+    # Normalize provider type to lowercase for case-insensitive matching
+    provider_type_lower = provider_type.lower().strip()
+    
+    # Auto-detect OpenProject version when generic "openproject" type is specified
+    if provider_type_lower == "openproject":
+        detected_version, recommended_type = detect_openproject_version(
+            converted_base_url, api_key, api_token
+        )
+        provider_type_lower = recommended_type
+        logger.info(
+            f"Auto-detected OpenProject provider type: {recommended_type} "
+            f"(version: {detected_version or 'unknown'})"
+        )
+    
     config = PMProviderConfig(
-        provider_type=provider_type,
+        provider_type=provider_type_lower,
         base_url=converted_base_url,
         api_key=api_key,
         api_token=api_token,
@@ -128,10 +225,7 @@ def create_pm_provider(
         workspace_id=workspace_id,
     )
     
-    # Normalize provider type to lowercase for case-insensitive matching
-    provider_type_lower = provider_type.lower().strip()
-    
-    if provider_type_lower == "openproject" or provider_type_lower == "openproject_v16":
+    if provider_type_lower == "openproject_v16":
         return OpenProjectProvider(config)
     elif provider_type_lower == "openproject_v13":
         return OpenProjectV13Provider(config)
@@ -144,3 +238,4 @@ def create_pm_provider(
             f"Unsupported provider type: {provider_type} "
             f"(supported: openproject, openproject_v13, openproject_v16, jira, clickup)"
         )
+

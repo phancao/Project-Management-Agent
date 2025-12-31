@@ -1,0 +1,918 @@
+INFO:     172.66.0.243:27950 - "GET /api/pm/projects/ba599805-f7cd-40f6-91c3-e986b9c0207b/epics HTTP/1.1" 200 OK
+INFO:     172.66.0.243:20384 - "GET /api/pm/projects/ba599805-f7cd-40f6-91c3-e986b9c0207b/sprints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35486 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.66.0.243:48707 - "OPTIONS /api/pm/projects HTTP/1.1" 200 OK
+INFO:     172.66.0.243:27669 - "OPTIONS /api/pm/providers HTTP/1.1" 200 OK
+INFO:     172.66.0.243:36506 - "OPTIONS /api/pm/projects HTTP/1.1" 200 OK
+INFO:     172.66.0.243:23491 - "GET /api/pm/providers HTTP/1.1" 200 OK
+INFO:     172.66.0.243:36506 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     172.66.0.243:27669 - "OPTIONS /api/ai/providers HTTP/1.1" 200 OK
+INFO:     172.66.0.243:23491 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     172.66.0.243:34484 - "OPTIONS /api/search/providers HTTP/1.1" 200 OK
+INFO:     172.66.0.243:29349 - "OPTIONS /api/search/providers HTTP/1.1" 200 OK
+INFO:     172.66.0.243:36506 - "GET /api/ai/providers HTTP/1.1" 200 OK
+INFO:     172.66.0.243:27669 - "GET /api/search/providers HTTP/1.1" 200 OK
+INFO:     172.66.0.243:34484 - "GET /api/search/providers HTTP/1.1" 200 OK
+INFO:     172.66.0.243:48707 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     172.66.0.243:34484 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     172.66.0.243:48707 - "GET /api/pm/projects HTTP/1.1" 200 OK
+INFO:     172.66.0.243:34484 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     172.66.0.243:46304 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/epics HTTP/1.1" 200 OK
+INFO:     172.66.0.243:26028 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/priorities HTTP/1.1" 200 OK
+INFO:     172.66.0.243:36510 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/sprints HTTP/1.1" 200 OK
+INFO:     172.66.0.243:63338 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/users HTTP/1.1" 200 OK
+INFO:     172.66.0.243:48707 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     172.66.0.243:34484 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/tasks HTTP/1.1" 200 OK
+INFO:     172.66.0.243:46304 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/epics HTTP/1.1" 200 OK
+INFO:     172.66.0.243:26028 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/sprints HTTP/1.1" 200 OK
+INFO:     172.66.0.243:36510 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/priorities HTTP/1.1" 200 OK
+INFO:     172.66.0.243:48707 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/statuses?entity_type=task HTTP/1.1" 200 OK
+INFO:     172.66.0.243:34484 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/users HTTP/1.1" 200 OK
+INFO:     172.66.0.243:63338 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/epics HTTP/1.1" 200 OK
+INFO:     172.66.0.243:26028 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/priorities HTTP/1.1" 200 OK
+INFO:     172.66.0.243:48707 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/users HTTP/1.1" 200 OK
+INFO:     172.66.0.243:63338 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/epics HTTP/1.1" 200 OK
+INFO:     172.66.0.243:26028 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/priorities HTTP/1.1" 200 OK
+INFO:     172.66.0.243:63338 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/epics HTTP/1.1" 200 OK
+INFO:     172.66.0.243:48707 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/priorities HTTP/1.1" 200 OK
+INFO:     172.66.0.243:63338 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/epics HTTP/1.1" 200 OK
+INFO:     172.66.0.243:63338 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/epics HTTP/1.1" 200 OK
+INFO:     172.66.0.243:63338 - "GET /api/pm/projects/d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496/epics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52222 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58882 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.66.0.243:27627 - "OPTIONS /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-12-31 02:41:42,529 - backend.graph.builder - INFO - [GRAPH-BUILDER] 🔧 Setting entry point: START → coordinator
+2025-12-31 02:41:42,530 - backend.graph.builder - INFO - [GRAPH-BUILDER] ✅ Entry point configured: START → coordinator
+2025-12-31 02:41:42,687 - backend.server.app - INFO - Created global ConversationFlowManager singleton
+INFO:     172.66.0.243:41562 - "POST /api/pm/chat/stream HTTP/1.1" 200 OK
+2025-12-31 02:41:42,689 - backend.server.app - INFO - [PM-CHAT-TIMING] generate_stream started
+2025-12-31 02:41:42,689 - backend.graph.nodes - INFO - [2025-12-31 02:41:42.689] [DETECT_PM_INTENT] Starting LLM classification for: 'give me the report of Sprint 7...'
+2025-12-31 02:41:42,691 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:41:44,805 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:41:44,839 - backend.graph.nodes - INFO - [2025-12-31 02:41:44.839] [DETECT_PM_INTENT] LLM result: 'PM_SPRINT' -> is_pm=True, type=sprint
+2025-12-31 02:41:44,839 - backend.server.app - INFO - [SSE_ENDPOINT] 📊 PM intent detected: 'give me the report of Sprint 7' - routing to PM graph (coordinator → ReAct), report_type=sprint
+2025-12-31 02:41:44,891 - backend.server.app - INFO - [PM-CHAT-TIMING] Routing PM query to PM graph (coordinator → ReAct)
+2025-12-31 02:41:44,891 - backend.server.app - INFO - [PM-CHAT] 🔧 Using fresh thread_id for PM query: pm_560ac6252f6d49ee (original: VHwOdsqM3alztFpxYrCv2)
+2025-12-31 02:41:44,891 - backend.tools.pm_tools - INFO - [DEEP_TRACE] 2025-12-31T02:41:44.891544 [TOOL:set_pm_handler] INPUT handler=PMServiceHandler
+2025-12-31 02:41:44,891 - backend.tools.pm_tools - INFO - PM handler set for tools: PMServiceHandler
+2025-12-31 02:41:44,891 - backend.server.app - INFO - [PM-CHAT-TIMING] PM handler set for PM graph agents
+2025-12-31 02:41:44,891 - backend.tools.pm_tools - INFO - Current project set: d7e300c6-d6c0-4c08-bc8d-e41967458d86:496
+2025-12-31 02:41:44,891 - backend.server.app - INFO - [PM-CHAT] Set current project: d7e300c6-d6c0-4c08-bc8d-e41967458d86:496
+2025-12-31 02:41:44,891 - backend.server.app - INFO - [PM-CHAT] Using default MCP settings with servers: ['pm-server', 'mcp-github-trending']
+2025-12-31 02:41:44,891 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Model selection set: provider=openai, model=gpt-5-nano
+2025-12-31 02:41:44,891 - shared.config.configuration - INFO - Recursion limit set to: 100
+2025-12-31 02:41:44,891 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🎬 Starting graph.astream with workflow_input keys: ['messages', 'plan_iterations', 'final_report', 'current_plan', 'observations', 'auto_accepted_plan', 'enable_background_investigation', 'research_topic', 'clarification_history', 'clarified_research_topic', 'enable_clarification', 'max_clarification_rounds', 'locale', 'project_id']
+2025-12-31 02:41:44,891 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🎬 Graph entry point should be: START → coordinator
+2025-12-31 02:41:44,896 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: coordinator (id=1a0867dc-0761-3902-2174-dca7e655a17c, step=1)
+2025-12-31 02:41:44,897 - backend.graph.nodes - INFO - [2025-12-31 02:41:44.897] [DETECT_PM_INTENT] Cache hit: is_pm=True, type=sprint
+2025-12-31 02:41:44,901 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: coordinator (id=1a0867dc-0761-3902-2174-dca7e655a17c, step=1)
+2025-12-31 02:41:44,902 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: react_agent (id=7b0b00d0-7077-78f3-ae7c-bb66008c98f4, step=2)
+2025-12-31 02:41:44,907 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:41:44,908 - backend.agents.pm_agent - INFO - [PM-AGENT] 🚀 Starting agent for: give me the report of Sprint 7...
+2025-12-31 02:41:44,908 - backend.agents.pm_agent - INFO - [2025-12-31 02:41:44.908] [PM-AGENT] 📍 Step 1/5
+2025-12-31 02:41:44,908 - backend.agents.pm_agent - INFO - [2025-12-31 02:41:44.908] [PM-AGENT] 🧠 Starting initial thinking phase...
+2025-12-31 02:41:52,164 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:41:53,421 - backend.agents.pm_agent - INFO - [PM-AGENT] 🧠 THINKING: THINK:
+- The user wants the report for Sprint 7. I should locate Sprint 7 within the current project and then retrieve its details to generate a report.
+- Steps:
+  1) List sprints in the current proje...
+2025-12-31 02:42:01,195 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:42:02,145 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['get_sprint'], node=react_agent, msg_id=run--45553f2e-5e9f-4f0e-bdf8-0a7ca352f6c3, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:02,145 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=0, tool=get_sprint
+2025-12-31 02:42:02,154 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--45553f2e-5e9f-4f0e-bdf8-0a7ca352f6c3, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:02,155 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_tasks'], node=react_agent, msg_id=run--45553f2e-5e9f-4f0e-bdf8-0a7ca352f6c3, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:02,155 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=1, tool=list_tasks
+2025-12-31 02:42:02,166 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--45553f2e-5e9f-4f0e-bdf8-0a7ca352f6c3, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:02,168 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔧 TOOL CALL: get_sprint({'sprint_id': '7', 'project_id': 'd7e300c6-d6c0-4c08-bc8d-e41967458d86:496'})
+2025-12-31 02:42:02,169 - backend.tools.pm_tools - INFO - [DEEP_TRACE] 2025-12-31T02:42:02.169412 [TOOL:get_sprint] INPUT sprint_id=7
+2025-12-31 02:42:02,503 - httpx - INFO - HTTP Request: GET http://pm-service:8001/api/v1/sprints/7 "HTTP/1.1 200 OK"
+2025-12-31 02:42:02,504 - backend.agents.pm_agent - INFO - [PM-AGENT] 📋 TOOL RESULT: 4284 chars
+2025-12-31 02:42:02,504 - backend.agents.pm_agent - INFO - [COUNTER-DEBUG] 2025-12-31T02:42:02.504499 pm_agent captured: tool=get_sprint, result_len=4284
+INFO:     127.0.0.1:39534 - "GET /health HTTP/1.1" 200 OK
+2025-12-31 02:42:07,288 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:42:07,293 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_tasks'], node=react_agent, msg_id=run--2807bc32-cffb-49d3-ac2c-ba0877574650, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:07,293 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=2, tool=list_tasks
+2025-12-31 02:42:07,303 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:42:07.303043 PLAN9 emitting thoughts: 📋 get_sprint → Wish List
+2025-12-31 02:42:07,316 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--2807bc32-cffb-49d3-ac2c-ba0877574650, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:07,529 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔄 DECISION: Need more info, continuing...
+2025-12-31 02:42:07,529 - backend.agents.pm_agent - INFO - [2025-12-31 02:42:07.529] [PM-AGENT] 📍 Step 2/5
+2025-12-31 02:42:18,699 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:42:18,700 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_tasks'], node=react_agent, msg_id=run--0a41e9e6-75b9-49c1-8722-07a34a250c49, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:18,701 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=4, tool=list_tasks
+2025-12-31 02:42:18,710 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--0a41e9e6-75b9-49c1-8722-07a34a250c49, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:18,918 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔧 TOOL CALL: list_tasks({'project_id': 'd7e300c6-d6c0-4c08-bc8d-e41967458d86:496', 'sprint_id': '7'})
+2025-12-31 02:42:18,919 - backend.tools.pm_tools - INFO - [PM-TOOLS] list_tasks called with project_id=d7e300c6-d6c0-4c08-bc8d-e41967458d86:496, sprint_id=7
+2025-12-31 02:42:18,919 - backend.server.pm_service_client - INFO - [PMServiceHandler] list_sprints called: project_id=d7e300c6-d6c0-4c08-bc8d-e41967458d86:496, status=None
+2025-12-31 02:42:19,015 - httpx - INFO - HTTP Request: GET http://pm-service:8001/api/v1/sprints?project_id=d7e300c6-d6c0-4c08-bc8d-e41967458d86%3A496&limit=500&offset=0 "HTTP/1.1 200 OK"
+2025-12-31 02:42:19,016 - backend.server.pm_service_client - INFO - [PMServiceHandler] ⏱️ UPSTREAM list_sprints call took 0.10s
+2025-12-31 02:42:19,016 - backend.server.pm_service_client - INFO - [PMServiceHandler] list_sprints result: 0 items, total=0, returned=0
+2025-12-31 02:42:19,016 - backend.agents.pm_agent - INFO - [PM-AGENT] 📋 TOOL RESULT: 178 chars
+2025-12-31 02:42:19,016 - backend.agents.pm_agent - INFO - [COUNTER-DEBUG] 2025-12-31T02:42:19.016356 pm_agent captured: tool=list_tasks, result_len=178
+2025-12-31 02:42:27,769 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:42:27,770 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_sprints'], node=react_agent, msg_id=run--2133886e-3c16-4770-9586-e57b0820c7cd, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:27,771 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=5, tool=list_sprints
+2025-12-31 02:42:27,782 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:42:27.782842 PLAN9 emitting thoughts: 📋 list_tasks ✗ Invalid sprint_id '7'. It appears to be 
+2025-12-31 02:42:27,813 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--2133886e-3c16-4770-9586-e57b0820c7cd, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:27,988 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔄 DECISION: Need more info, continuing...
+2025-12-31 02:42:27,988 - backend.agents.pm_agent - INFO - [2025-12-31 02:42:27.988] [PM-AGENT] 📍 Step 3/5
+INFO:     127.0.0.1:56910 - "GET /health HTTP/1.1" 200 OK
+2025-12-31 02:42:35,075 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:42:35,076 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_sprints'], node=react_agent, msg_id=run--7eaae6a0-3a80-404b-8a04-2f8e614d7b6a, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:35,076 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=7, tool=list_sprints
+2025-12-31 02:42:35,108 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--7eaae6a0-3a80-404b-8a04-2f8e614d7b6a, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:35,443 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔧 TOOL CALL: list_sprints({'project_id': 'd7e300c6-d6c0-4c08-bc8d-e41967458d86:496'})
+2025-12-31 02:42:35,443 - backend.tools.pm_tools - INFO - [DEEP_TRACE] 2025-12-31T02:42:35.443737 [TOOL:list_sprints] INPUT project_id=d7e300c6-d6c0-4c08-bc8d-e41967458d86:496
+2025-12-31 02:42:35,443 - backend.server.pm_service_client - INFO - [PMServiceHandler] list_sprints called: project_id=496, status=None
+2025-12-31 02:42:35,793 - httpx - INFO - HTTP Request: GET http://pm-service:8001/api/v1/sprints?project_id=496&limit=500&offset=0 "HTTP/1.1 200 OK"
+2025-12-31 02:42:35,793 - backend.server.pm_service_client - INFO - [PMServiceHandler] ⏱️ UPSTREAM list_sprints call took 0.35s
+2025-12-31 02:42:35,793 - backend.server.pm_service_client - INFO - [PMServiceHandler] list_sprints result: 0 items, total=0, returned=0
+2025-12-31 02:42:35,793 - backend.tools.pm_tools - INFO - [PM-TOOLS] list_sprints completed in 0.35s, returned 0 sprints
+2025-12-31 02:42:35,793 - backend.agents.pm_agent - INFO - [PM-AGENT] 📋 TOOL RESULT: 52 chars
+2025-12-31 02:42:35,793 - backend.agents.pm_agent - INFO - [COUNTER-DEBUG] 2025-12-31T02:42:35.793890 pm_agent captured: tool=list_sprints, result_len=52
+2025-12-31 02:42:48,081 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:42:48,083 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_sprints'], node=react_agent, msg_id=run--37b91bd5-2f99-4af6-8597-5f69b2e3de72, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:42:48,083 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=8, tool=list_sprints
+2025-12-31 02:42:48,083 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔄 DECISION: Need more info, continuing...
+2025-12-31 02:42:48,083 - backend.agents.pm_agent - INFO - [2025-12-31 02:42:48.083] [PM-AGENT] 📍 Step 4/5
+2025-12-31 02:42:48,127 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:42:48.127358 PLAN9 emitting thoughts: 📋 list_sprints → 0 sprints
+2025-12-31 02:42:48,138 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--37b91bd5-2f99-4af6-8597-5f69b2e3de72, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+INFO:     127.0.0.1:35892 - "GET /health HTTP/1.1" 200 OK
+2025-12-31 02:43:09,714 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:43:09,721 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['get_current_project_details'], node=react_agent, msg_id=run--e6f0039f-7bad-4f4c-8329-dc0510779d4b, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:43:09,721 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=10, tool=get_current_project_details
+2025-12-31 02:43:09,736 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--e6f0039f-7bad-4f4c-8329-dc0510779d4b, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:43:09,747 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔧 TOOL CALL: get_current_project_details({'project_id': 'd7e300c6-d6c0-4c08-bc8d-e41967458d86:496'})
+2025-12-31 02:43:09,747 - backend.tools.pm_tools - INFO - [DEEP_TRACE] 2025-12-31T02:43:09.747481 [TOOL:get_current_project_details] INPUT
+2025-12-31 02:43:09,872 - httpx - INFO - HTTP Request: GET http://pm-service:8001/api/v1/projects/496 "HTTP/1.1 200 OK"
+2025-12-31 02:43:09,873 - backend.agents.pm_agent - INFO - [PM-AGENT] 📋 TOOL RESULT: 417 chars
+2025-12-31 02:43:09,873 - backend.agents.pm_agent - INFO - [COUNTER-DEBUG] 2025-12-31T02:43:09.873092 pm_agent captured: tool=get_current_project_details, result_len=417
+2025-12-31 02:43:31,184 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:43:31,231 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_sprints'], node=react_agent, msg_id=run--be76d647-42e5-4eb1-a884-659600fef335, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:43:31,231 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=11, tool=list_sprints
+2025-12-31 02:43:31,241 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:43:31.241929 PLAN9 emitting thoughts: 📋 get_current_project_details
+2025-12-31 02:43:31,254 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--be76d647-42e5-4eb1-a884-659600fef335, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:43:31,255 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔄 DECISION: Need more info, continuing...
+2025-12-31 02:43:31,255 - backend.agents.pm_agent - INFO - [2025-12-31 02:43:31.255] [PM-AGENT] 📍 Step 5/5
+INFO:     127.0.0.1:50910 - "GET /health HTTP/1.1" 200 OK
+2025-12-31 02:43:46,548 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:43:46,613 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_sprints'], node=react_agent, msg_id=run--005cfc77-e08d-45bc-9e7a-db5df23cec6c, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:43:46,622 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=13, tool=list_sprints
+2025-12-31 02:43:46,661 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--005cfc77-e08d-45bc-9e7a-db5df23cec6c, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:43:46,661 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔧 TOOL CALL: list_sprints({'project_id': 'd7e300c6-d6c0-4c08-bc8d-e41967458d86:496'})
+2025-12-31 02:43:46,662 - backend.tools.pm_tools - INFO - [DEEP_TRACE] 2025-12-31T02:43:46.662019 [TOOL:list_sprints] INPUT project_id=d7e300c6-d6c0-4c08-bc8d-e41967458d86:496
+2025-12-31 02:43:46,662 - backend.server.pm_service_client - INFO - [PMServiceHandler] list_sprints called: project_id=496, status=None
+2025-12-31 02:43:47,540 - httpx - INFO - HTTP Request: GET http://pm-service:8001/api/v1/sprints?project_id=496&limit=500&offset=0 "HTTP/1.1 200 OK"
+2025-12-31 02:43:47,540 - backend.server.pm_service_client - INFO - [PMServiceHandler] ⏱️ UPSTREAM list_sprints call took 0.88s
+2025-12-31 02:43:47,540 - backend.server.pm_service_client - INFO - [PMServiceHandler] list_sprints result: 0 items, total=0, returned=0
+2025-12-31 02:43:47,540 - backend.tools.pm_tools - INFO - [PM-TOOLS] list_sprints completed in 0.88s, returned 0 sprints
+2025-12-31 02:43:47,540 - backend.agents.pm_agent - INFO - [PM-AGENT] 📋 TOOL RESULT: 52 chars
+2025-12-31 02:43:47,540 - backend.agents.pm_agent - INFO - [COUNTER-DEBUG] 2025-12-31T02:43:47.540928 pm_agent captured: tool=list_sprints, result_len=52
+2025-12-31 02:43:58,301 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:43:58,302 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_sprints'], node=react_agent, msg_id=run--f7172edd-1943-4876-b7b9-7ecc068d4ac5, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:43:58,302 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=14, tool=list_sprints
+2025-12-31 02:43:58,419 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:43:58.419014 PLAN9 emitting thoughts: 📋 list_sprints → 0 sprints
+2025-12-31 02:43:58,436 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=react_agent, msg_id=run--f7172edd-1943-4876-b7b9-7ecc068d4ac5, agent=('react_agent:7b0b00d0-7077-78f3-ae7c-bb66008c98f4',)
+2025-12-31 02:43:58,607 - backend.agents.pm_agent - INFO - [PM-AGENT] 🔄 DECISION: Need more info, continuing...
+2025-12-31 02:43:58,607 - backend.agents.pm_agent - INFO - [PM-AGENT] 🏁 Agent complete with 16 steps
+2025-12-31 02:43:58,610 - backend.tools.search - INFO - Using search provider: tavily
+2025-12-31 02:43:58,613 - backend.tools.search - INFO - Tavily search configuration loaded: include_domains=[], exclude_domains=[], include_answer=False, search_depth=advanced, include_raw_content=True, include_images=True, include_image_descriptions=True
+2025-12-31 02:43:58,613 - backend.tools.search - INFO - Using Tavily API key from database
+2025-12-31 02:43:58,625 - backend.graph.nodes - INFO - agent_type=react_agent, model_context_limit=400,000, frontend_messages=0
+2025-12-31 02:43:58,626 - backend.utils.adaptive_context_config - INFO - [ADAPTIVE-CONTEXT] 🔍 DEBUG: get_adaptive_context_manager called - agent_type=react_agent, model_name=gpt-3.5-turbo, model_context_limit=400,000, frontend_messages=0
+2025-12-31 02:43:58,626 - backend.utils.adaptive_context_config - INFO - [ADAPTIVE-CONTEXT] 🔍 DEBUG: Strategy - token_percent=0.35, preserve_prefix=1, compression_mode=simple
+2025-12-31 02:43:58,626 - backend.graph.nodes - INFO - token_limit=140000, compression_mode=simple, preserve_prefix=1
+2025-12-31 02:43:58,635 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:43:58,814 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:43:58,815 - backend.utils.context_manager - INFO - [CONTEXT-MANAGER] 🔍 DEBUG: is_over_limit - Token count: 8, Token limit: 140,000, Over limit: False
+2025-12-31 02:43:58,816 - backend.graph.nodes - INFO - Token count: 13, Token limit: 140,000, Is over limit: False
+2025-12-31 02:43:58,816 - backend.graph.nodes - INFO - Keeping full data (13 tokens). Reporter will use raw data from react_intermediate_steps.
+2025-12-31 02:43:58,816 - backend.graph.nodes - INFO - Original: 1 messages, Compressed: 1 messages
+2025-12-31 02:43:58,816 - backend.graph.nodes - INFO - Compressed: False, Original tokens: 13, Compressed tokens: 13, Ratio: 100.00%, Strategy: pm_no_compression
+2025-12-31 02:43:58,816 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:43:58,818 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:43:58,819 - backend.graph.nodes - INFO - Original: 13 tokens, Compressed: 13 tokens, Model limit: 400,000 tokens, ReAct budget (35%): 140,000 tokens
+2025-12-31 02:43:58,819 - backend.graph.nodes - INFO - Base (prompt+tools+query): ~6,007 tokens, With compressed messages: ~6,020 tokens, Model limit: 400,000 tokens
+2025-12-31 02:43:58,819 - backend.graph.nodes - INFO - Base tokens (6,020) < 80% threshold (160,000), and with realistic tool accumulation (9,020) < limit (200,000)
+2025-12-31 02:43:58,848 - backend.graph.nodes - INFO -   - input: give me the report of Sprint 7...
+  - state messages count: 1
+  - compressed messages count: 1
+  - compressed tokens: 13
+  - NOTE: LangGraph agent manages scratchpad internally with better control
+2025-12-31 02:43:58,852 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: pre_model_hook (id=ce7ed689-834a-1b2d-de0e-28b6f354375d, step=1)
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Initialized tracker - total_limit=400,000 tokens, optimization_threshold=90%
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Global tracker set: 400,000 tokens
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 35% (140,000 tokens) to 'react_agent' ReAct agent context
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_get_current_project' Tool: get_current_project
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_get_current_project_details' Tool: get_current_project_details
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_list_projects' Tool: list_projects
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_get_project' Tool: get_project
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_list_tasks' Tool: list_tasks
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_list_my_tasks' Tool: list_my_tasks
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_get_task' Tool: get_task
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_list_sprints' Tool: list_sprints
+2025-12-31 02:43:58,853 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_get_sprint' Tool: get_sprint
+2025-12-31 02:43:58,854 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_list_epics' Tool: list_epics
+2025-12-31 02:43:58,854 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_get_epic' Tool: get_epic
+2025-12-31 02:43:58,854 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_list_users' Tool: list_users
+2025-12-31 02:43:58,854 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_get_user_tasks_summary' Tool: get_user_tasks_summary
+2025-12-31 02:43:58,854 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_get_current_user' Tool: get_current_user
+2025-12-31 02:43:58,854 - backend.utils.cursor_style_context_tracker - INFO - [CURSOR-CONTEXT] Allocated 5% (20,000 tokens) to 'tool_web_search' Tool: web_search
+2025-12-31 02:43:58,854 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:43:58,854 - backend.graph.nodes - INFO - Keeping full data for PM queries.
+2025-12-31 02:43:58,855 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: pre_model_hook (id=ce7ed689-834a-1b2d-de0e-28b6f354375d, step=1)
+2025-12-31 02:43:58,855 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: agent (id=ebd1d5d2-9d76-52fa-f8c4-6a371c79dda0, step=2)
+INFO:     127.0.0.1:40832 - "GET /health HTTP/1.1" 200 OK
+2025-12-31 02:44:13,822 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:44:14,112 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:44:14.112457 app.py updates stream: node=agent, has_react_thoughts=False, keys=['messages']
+2025-12-31 02:44:14,112 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: agent (id=ebd1d5d2-9d76-52fa-f8c4-6a371c79dda0, step=2)
+2025-12-31 02:44:14,112 - backend.graph.nodes - INFO - has_tool_calls=False (0 calls), has_tool_call_id=False, content_len=30, content_preview=give me the report of Sprint 7..., reasoning_content=False
+2025-12-31 02:44:14,113 - backend.graph.nodes - INFO - has_tool_calls=False (0 calls), has_tool_call_id=False, content_len=30, content_preview=give me the report of Sprint 7..., reasoning_content=False
+2025-12-31 02:44:14,113 - backend.graph.nodes - INFO - has_tool_calls=False (0 calls), has_tool_call_id=False, content_len=30, content_preview=give me the report of Sprint 7..., reasoning_content=False
+2025-12-31 02:44:14,113 - backend.graph.nodes - INFO - has_tool_calls=False (0 calls), has_tool_call_id=False, content_len=47, content_preview=Sorry, need more steps to process this request...., reasoning_content=False
+2025-12-31 02:44:14,113 - backend.graph.nodes - INFO - min=494, max=494, avg=494
+2025-12-31 02:44:14,115 - backend.graph.nodes - INFO - output=10, intermediate_steps=0, state=8, total=18, reporter_limit=340000
+2025-12-31 02:44:14,116 - backend.graph.nodes - WARNING - [PM-AGENT] ⬆️ Escalating to planner: pm_request_failed: PM request but output looks like failure/greeting ('Sorry, need more steps to process this request....')
+2025-12-31 02:44:14,119 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:44:14.119095 app.py updates stream: node=react_agent, has_react_thoughts=True, keys=['escalation_reason', 'react_thoughts', 'previous_result', 'routing_mode', 'goto']
+2025-12-31 02:44:14,119 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 💭 Found react_thoughts in node_update for react_agent (node: react_agent): 1 thoughts: ['Agent greeting (no tools called): Sorry, need more']
+2025-12-31 02:44:14,119 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DEBUG] Checking for thoughts streaming: node_name=react_agent, actual_agent_name=react_agent, has_react_thoughts=True, node_update_keys=['escalation_reason', 'react_thoughts', 'previous_result', 'routing_mode', 'goto']
+2025-12-31 02:44:14,119 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DEBUG] Found react_thoughts in node_update: count=1
+2025-12-31 02:44:14,130 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: react_agent (id=7b0b00d0-7077-78f3-ae7c-bb66008c98f4, step=2)
+2025-12-31 02:44:14,133 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: planner (id=64a1abc8-725c-2bc7-32c5-fd7aa44a927d, step=3)
+2025-12-31 02:44:14,146 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:44:32,568 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:36636 - "GET /health HTTP/1.1" 200 OK
+2025-12-31 02:44:35,858 - backend.graph.nodes - INFO - (title: 'Sprint 7 Report Generation Plan')
+2025-12-31 02:44:35,858 - backend.graph.nodes - WARNING - [PLANNER] Missing tools detected: ['list_tasks']. Steps: 3
+2025-12-31 02:44:35,858 - backend.graph.nodes - INFO - with missing tools reminder for sprint analysis
+2025-12-31 02:44:35,859 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Inspecting current_plan: type=<class 'str'>
+2025-12-31 02:44:35,859 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.title type: <class 'builtin_function_or_method'>
+2025-12-31 02:44:35,859 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming plan update from planner: 3 steps
+2025-12-31 02:44:35,859 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Checking for step_progress emission. current_plan type: <class 'str'>
+2025-12-31 02:44:35,859 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan does NOT have steps attribute
+2025-12-31 02:44:35,859 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 📋 Planner message content preview: {
+  "locale": "en-US",
+  "has_enough_context": false,
+  "thought": "User requests the Sprint 7 report for the selected project. To deliver a comprehensive report, we need to retrieve Sprint 7 details ...
+2025-12-31 02:44:35,859 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming planner message from state update: 1849 chars, id: cd2cc934-1462-4e6f-9558-ae38f9d69615
+2025-12-31 02:44:35,859 - backend.server.app - WARNING - [pm_560ac6252f6d49ee] ⚠️ No react_thoughts found for planner message cd2cc934-1462-4e6f-9558-ae38f9d69615 (node_update has react_thoughts: False)
+2025-12-31 02:44:35,859 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: planner (id=64a1abc8-725c-2bc7-32c5-fd7aa44a927d, step=3)
+2025-12-31 02:44:35,859 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: human_feedback (id=05df886c-b8a9-5ef6-4a9c-66ee6a2d7ba9, step=4)
+2025-12-31 02:44:35,860 - backend.graph.nodes - INFO - (title: 'Sprint 7 Report Generation Plan')
+2025-12-31 02:44:35,861 - backend.graph.nodes - WARNING - [PLANNER] Missing tools detected: ['list_tasks']. Steps: 3
+2025-12-31 02:44:35,861 - backend.graph.nodes - INFO - with missing tools reminder for sprint analysis
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Inspecting current_plan: type=<class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.title type: <class 'str'>
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.steps type: <class 'list'>
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step type: <class 'backend.prompts.planner_model.Step'>
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step step_type type: <enum 'StepType'>
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming plan update from human_feedback: 3 steps
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Checking for step_progress emission. current_plan type: <class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan has steps. Count: 3
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step progress: Step 1/3: Identify Sprint 7 in the project
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step progress: Step 1/3: Identify Sprint 7 in the project
+2025-12-31 02:44:35,863 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: human_feedback (id=05df886c-b8a9-5ef6-4a9c-66ee6a2d7ba9, step=4)
+2025-12-31 02:44:35,864 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: research_team (id=2a764169-d141-f66f-f19c-8296406baac3, step=5)
+2025-12-31 02:44:35,864 - backend.graph.nodes - INFO - Research team node - checking step completion status
+2025-12-31 02:44:35,865 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: research_team (id=2a764169-d141-f66f-f19c-8296406baac3, step=5)
+2025-12-31 02:44:35,865 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: pm_agent (id=aeb470d8-af23-b264-3c9c-8fdaf647f5ec, step=6)
+2025-12-31 02:44:35,865 - backend.graph.nodes - INFO - [2025-12-31 02:44:35.865] PM Agent node is analyzing project management data.
+2025-12-31 02:44:35,865 - backend.graph.nodes - INFO - [pm_agent_node] PM Agent will use PM tools exclusively (loaded via MCP)
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Configuration.mcp_settings: True, type: dict
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] mcp_settings keys: ['servers']
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] mcp_settings['servers'] keys: ['pm-server', 'mcp-github-trending']
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' in mcp_settings: transport=sse, has_url=True, has_command=False
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Server 'mcp-github-trending' in mcp_settings: transport=stdio, has_url=False, has_command=True
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Processing MCP settings for agent
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Checking server 'pm-server', add_to_agents=['pm_agent']
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Agent IS in add_to_agents for 'pm-server'
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] enabled_tools_config=None, type=<class 'NoneType'>
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Adding server 'pm-server' to mcp_servers
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] enabled_tools is None - will enable ALL tools from 'pm-server'
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Checking server 'mcp-github-trending', add_to_agents=['researcher']
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Agent NOT in add_to_agents for 'mcp-github-trending'
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] After processing: mcp_servers=['pm-server'], enabled_tools count=0
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Connecting to 1 MCP server(s): pm-server
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' config: transport=sse, has_url=True, has_command=False, has_headers=True, config_keys=['transport', 'url', 'headers']
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' URL: http://pm_mcp_server:8080/sse
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' headers: {'X-MCP-API-Key': 'mcp_a9b43d...'}
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' transport type: str, value: 'sse'
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] MCP server configs: {
+  "pm-server": {
+    "transport": "sse",
+    "url": "http://pm_mcp_server:8080/sse",
+    "headers": {
+      "X-MCP-API-Key": "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+    }
+  }
+}
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Creating MultiServerMCPClient with 1 server(s)...
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Passing to MultiServerMCPClient: {
+  "pm-server": {
+    "transport": "sse",
+    "url": "http://pm_mcp_server:8080/sse",
+    "headers": {
+      "X-MCP-API-Key": "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+    }
+  }
+}
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] MultiServerMCPClient created. Checking connections...
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Stored connection 'pm-server': transport=sse, has_url=True, keys=['transport', 'url', 'headers'], connection_type=dict
+2025-12-31 02:44:35,866 - backend.graph.nodes - INFO - [pm_agent] Connection 'pm-server' dict contents: {
+  "transport": "sse",
+  "url": "http://pm_mcp_server:8080/sse",
+  "headers": {
+    "X-MCP-API-Key": "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+  }
+}
+2025-12-31 02:44:36,187 - httpx - INFO - HTTP Request: GET http://pm_mcp_server:8080/sse "HTTP/1.1 200 OK"
+2025-12-31 02:44:36,209 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=90a02aef59a741d3abae31a94ac01fde "HTTP/1.1 202 Accepted"
+2025-12-31 02:44:36,219 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=90a02aef59a741d3abae31a94ac01fde "HTTP/1.1 202 Accepted"
+2025-12-31 02:44:36,224 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=90a02aef59a741d3abae31a94ac01fde "HTTP/1.1 202 Accepted"
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Retrieved 43 tools from MCP servers
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] MCP tool names: ['burndown_chart', 'velocity_chart', 'sprint_report', 'project_health', 'cfd_chart', 'cycle_time_chart', 'work_distribution_chart', 'issue_trend_chart', 'list_projects', 'get_project', 'create_project', 'update_project', 'delete_project', 'search_projects', 'list_tasks', 'list_my_tasks', 'list_tasks_by_assignee', 'list_unassigned_tasks', 'list_tasks_in_sprint', 'get_task', 'create_task', 'update_task', 'delete_task', 'assign_task', 'update_task_status', 'search_tasks', 'list_sprints', 'get_sprint', 'create_sprint', 'update_sprint', 'delete_sprint', 'start_sprint', 'complete_sprint', 'get_sprint_tasks', 'list_epics', 'get_epic', 'create_epic', 'update_epic', 'delete_epic', 'link_task_to_epic', 'unlink_task_from_epic', 'list_users', 'get_user']
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Enabled tools filter: []
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] list_my_tasks tool found: True
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: burndown_chart (from pm-server, with truncation)
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: velocity_chart (from pm-server, with truncation)
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: sprint_report (from pm-server, with truncation)
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: project_health (from pm-server, with truncation)
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: cfd_chart (from pm-server, with truncation)
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: cycle_time_chart (from pm-server, with truncation)
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: work_distribution_chart (from pm-server, with truncation)
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: issue_trend_chart (from pm-server, with truncation)
+2025-12-31 02:44:36,240 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_projects (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_project (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_project (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_project (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_project (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: search_projects (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_tasks (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_my_tasks (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_tasks_by_assignee (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_unassigned_tasks (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_tasks_in_sprint (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_task (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_task (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_task (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_task (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: assign_task (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_task_status (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: search_tasks (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_sprints (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_sprint (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_sprint (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_sprint (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_sprint (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: start_sprint (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: complete_sprint (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_sprint_tasks (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_epics (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_epic (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_epic (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_epic (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_epic (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: link_task_to_epic (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: unlink_task_from_epic (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_users (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_user (from pm-server, with truncation)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] Added 43 MCP tools to agent (total tools: 43)
+2025-12-31 02:44:36,241 - backend.graph.nodes - INFO - [pm_agent] list_my_tasks tool added to agent: True
+2025-12-31 02:44:36,255 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:44:36,348 - backend.agents.agents - INFO - Agent 'pm_agent' created successfully
+2025-12-31 02:44:36,350 - backend.graph.nodes - INFO - [_execute_agent_step] Executing step: Identify Sprint 7 in the project, agent: pm_agent
+2025-12-31 02:44:36,356 - backend.graph.nodes - INFO - [_execute_agent_step] Agent 'pm_agent' token_limit=400000, completed_steps=0, max_length_per_step=10000, max_items=10, available_chars=960000
+2025-12-31 02:44:36,356 - backend.graph.nodes - INFO - Recursion limit set to: 100
+2025-12-31 02:44:36,356 - backend.graph.nodes - INFO - Agent input: {'messages': [HumanMessage(content='# Research Topic\n\nSprint 7 Report Generation Plan\n\n# Current Step\n\n## Title\n\nIdentify Sprint 7 in the project\n\n## Description\n\nUse the list_sprints(project_id="d7e300c6-d6c0-4c08-bc8d-e41967458d86:496") MCP PM tool to retrieve all sprints for the project. Locate the sprint named \'Sprint 7\'. If multiple exist, select the most recent by start date. Do NOT call any other tools.\n\n⚠️ MISSING TOOLS DETECTED: For sprint analysis, you must also call these tools: list_tasks. Call ALL 4 required tools for sprint analysis.\n\n## Project ID\n\nd7e300c6-d6c0-4c08-bc8d-e41967458d86:496\n\n## Locale\n\nen-US', additional_kwargs={}, response_metadata={})]}
+2025-12-31 02:44:36,356 - backend.graph.nodes - INFO - [pm_agent] Applying context compression before agent invocation (token_limit=400000)
+2025-12-31 02:44:36,380 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:44:36,380 - backend.utils.adaptive_context_config - INFO - [ADAPTIVE-CONTEXT] 🔍 DEBUG: get_adaptive_context_manager called - agent_type=pm_agent, model_name=gpt-5-nano, model_context_limit=400,000, frontend_messages=0
+2025-12-31 02:44:36,380 - backend.utils.adaptive_context_config - INFO - [ADAPTIVE-CONTEXT] 🔍 DEBUG: Strategy - token_percent=0.6, preserve_prefix=3, compression_mode=hierarchical
+2025-12-31 02:44:36,380 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:44:36,380 - backend.graph.nodes - INFO - [pm_agent] Agent input token count: 183 (limit: 400,000)
+2025-12-31 02:44:36,380 - backend.graph.nodes - INFO - [pm_agent] Message token limit (70% of total): 280,000 tokens
+2025-12-31 02:44:36,380 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:44:36,380 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:44:36,382 - backend.graph.nodes - INFO - [pm_agent] 📊 Context token count before LLM: 183 / 400,000 tokens (0.0%)
+2025-12-31 02:44:36,387 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: pre_model_hook (id=a4136921-f4c6-2a11-e724-26f317cba08c, step=1)
+2025-12-31 02:44:36,387 - backend.utils.context_manager - ERROR - 🔴🔴🔴 DEBUG: compress_messages CALLED - agent_type=pm_agent
+2025-12-31 02:44:36,397 - backend.utils.context_manager - ERROR - 🔴🔴🔴 Stack trace:
+  File "/usr/local/lib/python3.12/threading.py", line 1032, in _bootstrap
+    self._bootstrap_inner()
+  File "/usr/local/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "/usr/local/lib/python3.12/threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 93, in _worker
+    work_item.run()
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/app/.venv/lib/python3.12/site-packages/langchain_core/runnables/config.py", line 608, in wrapper
+    return func(*args, **kwargs)
+  File "/app/backend/graph/nodes.py", line 3460, in compress_with_tracking
+    compressed = context_manager.compress_messages(state_dict)
+  File "/app/backend/utils/context_manager.py", line 350, in compress_messages
+    logger.error(f"🔴🔴🔴 Stack trace:\n{''.join(traceback.format_stack()[-8:])}")
+
+2025-12-31 02:44:36,397 - backend.utils.context_manager - INFO - [CONTEXT-MANAGER] 🚫 COMPRESSION DISABLED - returning original state unchanged
+2025-12-31 02:44:36,405 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: pre_model_hook (id=a4136921-f4c6-2a11-e724-26f317cba08c, step=1)
+2025-12-31 02:44:36,405 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: agent (id=f7bbf76d-2c34-aae3-4939-22d2b3d0833f, step=2)
+2025-12-31 02:44:43,208 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:44:43,707 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_sprints'], node=agent, msg_id=run--27094d2b-4fec-4adb-8809-4acd963f4d05, agent=('pm_agent:aeb470d8-af23-b264-3c9c-8fdaf647f5ec', 'agent:f7bbf76d-2c34-aae3-4939-22d2b3d0833f')
+2025-12-31 02:44:43,707 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=16, tool=list_sprints
+2025-12-31 02:44:43,721 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=agent, msg_id=run--27094d2b-4fec-4adb-8809-4acd963f4d05, agent=('pm_agent:aeb470d8-af23-b264-3c9c-8fdaf647f5ec', 'agent:f7bbf76d-2c34-aae3-4939-22d2b3d0833f')
+2025-12-31 02:44:43,960 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:44:43.960714 app.py updates stream: node=agent, has_react_thoughts=False, keys=['messages']
+2025-12-31 02:44:43,960 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: agent (id=f7bbf76d-2c34-aae3-4939-22d2b3d0833f, step=2)
+2025-12-31 02:44:43,960 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: tools (id=97028230-e8df-a512-7c0c-8fca6f53f049, step=3)
+2025-12-31 02:44:45,700 - httpx - INFO - HTTP Request: GET http://pm_mcp_server:8080/sse "HTTP/1.1 200 OK"
+2025-12-31 02:44:45,718 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=c9b3a76a4f424659bb1df83965157087 "HTTP/1.1 202 Accepted"
+2025-12-31 02:44:45,732 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=c9b3a76a4f424659bb1df83965157087 "HTTP/1.1 202 Accepted"
+2025-12-31 02:44:45,752 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=c9b3a76a4f424659bb1df83965157087 "HTTP/1.1 202 Accepted"
+2025-12-31 02:44:46,274 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=c9b3a76a4f424659bb1df83965157087 "HTTP/1.1 202 Accepted"
+2025-12-31 02:44:46,332 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 Processing ToolMessage from updates stream: tool_call_id=call_ziUyEVj17UB4CG6mf7V8CQry, tool=list_sprints
+2025-12-31 02:44:46,332 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:44:46.332894 app.py emitting thoughts: 📋 list_sprints → 0 sprints
+2025-12-31 02:44:46,333 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: tools (id=97028230-e8df-a512-7c0c-8fca6f53f049, step=3)
+2025-12-31 02:44:46,333 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: pre_model_hook (id=977bcf6b-c346-5b09-34f6-e0f1dc140247, step=4)
+2025-12-31 02:44:46,333 - backend.utils.context_manager - ERROR - 🔴🔴🔴 DEBUG: compress_messages CALLED - agent_type=pm_agent
+2025-12-31 02:44:46,334 - backend.utils.context_manager - ERROR - 🔴🔴🔴 Stack trace:
+  File "/usr/local/lib/python3.12/threading.py", line 1032, in _bootstrap
+    self._bootstrap_inner()
+  File "/usr/local/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "/usr/local/lib/python3.12/threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 93, in _worker
+    work_item.run()
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/app/.venv/lib/python3.12/site-packages/langchain_core/runnables/config.py", line 608, in wrapper
+    return func(*args, **kwargs)
+  File "/app/backend/graph/nodes.py", line 3460, in compress_with_tracking
+    compressed = context_manager.compress_messages(state_dict)
+  File "/app/backend/utils/context_manager.py", line 350, in compress_messages
+    logger.error(f"🔴🔴🔴 Stack trace:\n{''.join(traceback.format_stack()[-8:])}")
+
+2025-12-31 02:44:46,334 - backend.utils.context_manager - INFO - [CONTEXT-MANAGER] 🚫 COMPRESSION DISABLED - returning original state unchanged
+2025-12-31 02:44:46,342 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 Processing ToolMessage from updates stream: tool_call_id=call_ziUyEVj17UB4CG6mf7V8CQry, tool=list_sprints
+2025-12-31 02:44:46,342 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:44:46.342655 app.py emitting thoughts: 📋 list_sprints → 0 sprints
+2025-12-31 02:44:46,343 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: pre_model_hook (id=977bcf6b-c346-5b09-34f6-e0f1dc140247, step=4)
+2025-12-31 02:44:46,343 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: agent (id=5d35e762-0221-b0f0-69e1-4db66539732b, step=5)
+2025-12-31 02:44:55,110 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:45:00,167 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:45:00.167119 app.py updates stream: node=agent, has_react_thoughts=False, keys=['messages']
+2025-12-31 02:45:00,167 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: agent (id=5d35e762-0221-b0f0-69e1-4db66539732b, step=5)
+2025-12-31 02:45:00,167 - backend.graph.nodes - INFO - [pm_agent] Message 1: AIMessage with 1 tool calls: ['list_sprints']
+2025-12-31 02:45:00,167 - backend.graph.nodes - INFO - [pm_agent] Message 2: ToolMessage - tool_call_id=call_ziUyEVj17UB4CG6mf7V8CQry, content_len=33
+2025-12-31 02:45:00,167 - backend.graph.nodes - INFO - [pm_agent] Including 1 tool results in execution result: list_sprints: 33→33 chars
+2025-12-31 02:45:00,167 - backend.graph.nodes - INFO - [pm_agent] Final execution result length: 1143 chars (max=50000, token_limit=400000)
+2025-12-31 02:45:00,167 - backend.graph.nodes - INFO - Step 'Identify Sprint 7 in the project' execution completed by pm_agent
+2025-12-31 02:45:00,167 - backend.graph.nodes - INFO - Step progress: 1/3 steps completed (current_step_index=1)
+2025-12-31 02:45:00,167 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Inspecting current_plan: type=<class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:00,167 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.title type: <class 'str'>
+2025-12-31 02:45:00,167 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.steps type: <class 'list'>
+2025-12-31 02:45:00,167 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step type: <class 'backend.prompts.planner_model.Step'>
+2025-12-31 02:45:00,167 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step step_type type: <enum 'StepType'>
+2025-12-31 02:45:00,167 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming plan update from pm_agent: 3 steps
+2025-12-31 02:45:00,168 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Checking for step_progress emission. current_plan type: <class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:00,168 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan has steps. Count: 3
+2025-12-31 02:45:00,168 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step progress: Step 2/3: Fetch Sprint 7 detailed report
+2025-12-31 02:45:00,168 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step execution update from pm_agent: 1062 chars
+2025-12-31 02:45:00,168 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:45:00.168125 app.py updates stream: node=pm_agent, has_react_thoughts=False, keys=['messages', 'observations', 'current_step_index', 'current_plan']
+2025-12-31 02:45:00,168 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming pm_agent message from state update: 1062 chars, id: d1fc266b-60e8-4db4-8539-76f410054214
+2025-12-31 02:45:00,168 - backend.server.app - WARNING - [pm_560ac6252f6d49ee] ⚠️ No react_thoughts found for pm_agent message d1fc266b-60e8-4db4-8539-76f410054214 (node_update has react_thoughts: False)
+2025-12-31 02:45:00,168 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: pm_agent (id=aeb470d8-af23-b264-3c9c-8fdaf647f5ec, step=6)
+2025-12-31 02:45:00,168 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: research_team (id=ab7688d9-56c9-6c1d-8352-b29ef91b1b0a, step=7)
+2025-12-31 02:45:00,168 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: validator (id=2459673a-0832-9c6f-7b6d-0325494bc6e2, step=7)
+2025-12-31 02:45:00,169 - backend.graph.nodes - INFO - Research team node - checking step completion status
+2025-12-31 02:45:00,171 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: research_team (id=ab7688d9-56c9-6c1d-8352-b29ef91b1b0a, step=7)
+2025-12-31 02:45:00,172 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+INFO:     127.0.0.1:55108 - "GET /health HTTP/1.1" 200 OK
+2025-12-31 02:45:08,936 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:45:09,549 - backend.graph.nodes - ERROR - [VALIDATOR] ❌ Step failed: Sprint 7 could not be identified; no sprints were returned for the project.
+2025-12-31 02:45:09,550 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Inspecting current_plan: type=<class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:09,550 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.title type: <class 'str'>
+2025-12-31 02:45:09,550 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.steps type: <class 'list'>
+2025-12-31 02:45:09,550 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step type: <class 'backend.prompts.planner_model.Step'>
+2025-12-31 02:45:09,550 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step step_type type: <enum 'StepType'>
+2025-12-31 02:45:09,550 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming plan update from validator: 3 steps
+2025-12-31 02:45:09,550 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Checking for step_progress emission. current_plan type: <class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:09,550 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan has steps. Count: 3
+2025-12-31 02:45:09,550 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step progress: Step 1/3: Identify Sprint 7 in the project
+2025-12-31 02:45:09,551 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: validator (id=2459673a-0832-9c6f-7b6d-0325494bc6e2, step=7)
+2025-12-31 02:45:09,551 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: pm_agent (id=6ecd540e-ec58-f8df-07bc-74136322c7fc, step=8)
+2025-12-31 02:45:09,551 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: research_team (id=f214a2fa-8201-afe8-b7d8-c4a0a6bcebd7, step=8)
+2025-12-31 02:45:09,552 - backend.graph.nodes - INFO - [2025-12-31 02:45:09.551] PM Agent node is analyzing project management data.
+2025-12-31 02:45:09,552 - backend.graph.nodes - INFO - [pm_agent_node] PM Agent will use PM tools exclusively (loaded via MCP)
+2025-12-31 02:45:09,552 - backend.graph.nodes - INFO - [pm_agent] Configuration.mcp_settings: True, type: dict
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] mcp_settings keys: ['servers']
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] mcp_settings['servers'] keys: ['pm-server', 'mcp-github-trending']
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' in mcp_settings: transport=sse, has_url=True, has_command=False
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Server 'mcp-github-trending' in mcp_settings: transport=stdio, has_url=False, has_command=True
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Processing MCP settings for agent
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Checking server 'pm-server', add_to_agents=['pm_agent']
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Agent IS in add_to_agents for 'pm-server'
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] enabled_tools_config=None, type=<class 'NoneType'>
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Adding server 'pm-server' to mcp_servers
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] enabled_tools is None - will enable ALL tools from 'pm-server'
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Checking server 'mcp-github-trending', add_to_agents=['researcher']
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Agent NOT in add_to_agents for 'mcp-github-trending'
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] After processing: mcp_servers=['pm-server'], enabled_tools count=0
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Connecting to 1 MCP server(s): pm-server
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' config: transport=sse, has_url=True, has_command=False, has_headers=True, config_keys=['transport', 'url', 'headers']
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' URL: http://pm_mcp_server:8080/sse
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' headers: {'X-MCP-API-Key': 'mcp_a9b43d...'}
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' transport type: str, value: 'sse'
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] MCP server configs: {
+  "pm-server": {
+    "transport": "sse",
+    "url": "http://pm_mcp_server:8080/sse",
+    "headers": {
+      "X-MCP-API-Key": "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+    }
+  }
+}
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Creating MultiServerMCPClient with 1 server(s)...
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Passing to MultiServerMCPClient: {
+  "pm-server": {
+    "transport": "sse",
+    "url": "http://pm_mcp_server:8080/sse",
+    "headers": {
+      "X-MCP-API-Key": "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+    }
+  }
+}
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] MultiServerMCPClient created. Checking connections...
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Stored connection 'pm-server': transport=sse, has_url=True, keys=['transport', 'url', 'headers'], connection_type=dict
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - [pm_agent] Connection 'pm-server' dict contents: {
+  "transport": "sse",
+  "url": "http://pm_mcp_server:8080/sse",
+  "headers": {
+    "X-MCP-API-Key": "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+  }
+}
+2025-12-31 02:45:09,553 - backend.graph.nodes - INFO - Research team node - checking step completion status
+2025-12-31 02:45:09,574 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: research_team (id=f214a2fa-8201-afe8-b7d8-c4a0a6bcebd7, step=8)
+2025-12-31 02:45:09,622 - httpx - INFO - HTTP Request: GET http://pm_mcp_server:8080/sse "HTTP/1.1 200 OK"
+2025-12-31 02:45:09,627 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=869e2b5329db42f390aba43487d48ab3 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:09,629 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=869e2b5329db42f390aba43487d48ab3 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:09,631 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=869e2b5329db42f390aba43487d48ab3 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Retrieved 43 tools from MCP servers
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] MCP tool names: ['burndown_chart', 'velocity_chart', 'sprint_report', 'project_health', 'cfd_chart', 'cycle_time_chart', 'work_distribution_chart', 'issue_trend_chart', 'list_projects', 'get_project', 'create_project', 'update_project', 'delete_project', 'search_projects', 'list_tasks', 'list_my_tasks', 'list_tasks_by_assignee', 'list_unassigned_tasks', 'list_tasks_in_sprint', 'get_task', 'create_task', 'update_task', 'delete_task', 'assign_task', 'update_task_status', 'search_tasks', 'list_sprints', 'get_sprint', 'create_sprint', 'update_sprint', 'delete_sprint', 'start_sprint', 'complete_sprint', 'get_sprint_tasks', 'list_epics', 'get_epic', 'create_epic', 'update_epic', 'delete_epic', 'link_task_to_epic', 'unlink_task_from_epic', 'list_users', 'get_user']
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Enabled tools filter: []
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] list_my_tasks tool found: True
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: burndown_chart (from pm-server, with truncation)
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: velocity_chart (from pm-server, with truncation)
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: sprint_report (from pm-server, with truncation)
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: project_health (from pm-server, with truncation)
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: cfd_chart (from pm-server, with truncation)
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: cycle_time_chart (from pm-server, with truncation)
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: work_distribution_chart (from pm-server, with truncation)
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: issue_trend_chart (from pm-server, with truncation)
+2025-12-31 02:45:09,636 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_projects (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_project (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_project (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_project (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_project (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: search_projects (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_tasks (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_my_tasks (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_tasks_by_assignee (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_unassigned_tasks (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_tasks_in_sprint (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_task (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_task (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_task (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_task (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: assign_task (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_task_status (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: search_tasks (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_sprints (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_sprint (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_sprint (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_sprint (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_sprint (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: start_sprint (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: complete_sprint (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_sprint_tasks (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_epics (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_epic (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_epic (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_epic (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_epic (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: link_task_to_epic (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: unlink_task_from_epic (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_users (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_user (from pm-server, with truncation)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] Added 43 MCP tools to agent (total tools: 43)
+2025-12-31 02:45:09,637 - backend.graph.nodes - INFO - [pm_agent] list_my_tasks tool added to agent: True
+2025-12-31 02:45:09,640 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:45:09,643 - backend.agents.agents - INFO - Agent 'pm_agent' created successfully
+2025-12-31 02:45:09,644 - backend.graph.nodes - INFO - [_execute_agent_step] Executing step: Identify Sprint 7 in the project, agent: pm_agent
+2025-12-31 02:45:09,645 - backend.graph.nodes - INFO - [_execute_agent_step] Agent 'pm_agent' token_limit=400000, completed_steps=0, max_length_per_step=10000, max_items=10, available_chars=960000
+2025-12-31 02:45:09,645 - backend.graph.nodes - INFO - Recursion limit set to: 100
+2025-12-31 02:45:09,645 - backend.graph.nodes - INFO - Agent input: {'messages': [HumanMessage(content='# Research Topic\n\nSprint 7 Report Generation Plan\n\n# Current Step\n\n## Title\n\nIdentify Sprint 7 in the project\n\n## Description\n\nUse the list_sprints(project_id="d7e300c6-d6c0-4c08-bc8d-e41967458d86:496") MCP PM tool to retrieve all sprints for the project. Locate the sprint named \'Sprint 7\'. If multiple exist, select the most recent by start date. Do NOT call any other tools.\n\n⚠️ MISSING TOOLS DETECTED: For sprint analysis, you must also call these tools: list_tasks. Call ALL 4 required tools for sprint analysis.\n\n## Project ID\n\nd7e300c6-d6c0-4c08-bc8d-e41967458d86:496\n\n## Locale\n\nen-US', additional_kwargs={}, response_metadata={})]}
+2025-12-31 02:45:09,645 - backend.graph.nodes - INFO - [pm_agent] Applying context compression before agent invocation (token_limit=400000)
+2025-12-31 02:45:09,646 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:45:09,646 - backend.utils.adaptive_context_config - INFO - [ADAPTIVE-CONTEXT] 🔍 DEBUG: get_adaptive_context_manager called - agent_type=pm_agent, model_name=gpt-5-nano, model_context_limit=400,000, frontend_messages=0
+2025-12-31 02:45:09,647 - backend.utils.adaptive_context_config - INFO - [ADAPTIVE-CONTEXT] 🔍 DEBUG: Strategy - token_percent=0.6, preserve_prefix=3, compression_mode=hierarchical
+2025-12-31 02:45:09,647 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:45:09,647 - backend.graph.nodes - INFO - [pm_agent] Agent input token count: 183 (limit: 400,000)
+2025-12-31 02:45:09,647 - backend.graph.nodes - INFO - [pm_agent] Message token limit (70% of total): 280,000 tokens
+2025-12-31 02:45:09,647 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:45:09,648 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:45:09,648 - backend.graph.nodes - INFO - [pm_agent] 📊 Context token count before LLM: 183 / 400,000 tokens (0.0%)
+2025-12-31 02:45:09,649 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: pre_model_hook (id=53032653-00d7-95cb-6c2b-255ded01527b, step=1)
+2025-12-31 02:45:09,650 - backend.utils.context_manager - ERROR - 🔴🔴🔴 DEBUG: compress_messages CALLED - agent_type=pm_agent
+2025-12-31 02:45:09,650 - backend.utils.context_manager - ERROR - 🔴🔴🔴 Stack trace:
+  File "/usr/local/lib/python3.12/threading.py", line 1032, in _bootstrap
+    self._bootstrap_inner()
+  File "/usr/local/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "/usr/local/lib/python3.12/threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 93, in _worker
+    work_item.run()
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/app/.venv/lib/python3.12/site-packages/langchain_core/runnables/config.py", line 608, in wrapper
+    return func(*args, **kwargs)
+  File "/app/backend/graph/nodes.py", line 3460, in compress_with_tracking
+    compressed = context_manager.compress_messages(state_dict)
+  File "/app/backend/utils/context_manager.py", line 350, in compress_messages
+    logger.error(f"🔴🔴🔴 Stack trace:\n{''.join(traceback.format_stack()[-8:])}")
+
+2025-12-31 02:45:09,650 - backend.utils.context_manager - INFO - [CONTEXT-MANAGER] 🚫 COMPRESSION DISABLED - returning original state unchanged
+2025-12-31 02:45:09,651 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: pre_model_hook (id=53032653-00d7-95cb-6c2b-255ded01527b, step=1)
+2025-12-31 02:45:09,651 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: agent (id=69e7fe86-4dce-39a7-5d46-7d6dc26b29ff, step=2)
+2025-12-31 02:45:19,863 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:45:20,428 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=['list_sprints'], node=agent, msg_id=run--8e69de48-3858-4081-8427-eb22d329acc5, agent=('pm_agent:6ecd540e-ec58-f8df-07bc-74136322c7fc', 'agent:69e7fe86-4dce-39a7-5d46-7d6dc26b29ff')
+2025-12-31 02:45:20,428 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 [PROGRESSIVE] YIELDING TOOL_CALL thought: step=19, tool=list_sprints
+2025-12-31 02:45:20,441 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔍 [DUPLICATE-DEBUG] messages stream: tool_calls=[''], node=agent, msg_id=run--8e69de48-3858-4081-8427-eb22d329acc5, agent=('pm_agent:6ecd540e-ec58-f8df-07bc-74136322c7fc', 'agent:69e7fe86-4dce-39a7-5d46-7d6dc26b29ff')
+2025-12-31 02:45:20,663 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:45:20.663490 app.py updates stream: node=agent, has_react_thoughts=False, keys=['messages']
+2025-12-31 02:45:20,663 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: agent (id=69e7fe86-4dce-39a7-5d46-7d6dc26b29ff, step=2)
+2025-12-31 02:45:20,663 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: tools (id=825742b6-592e-158b-cb1a-bc147b1a5406, step=3)
+2025-12-31 02:45:20,699 - httpx - INFO - HTTP Request: GET http://pm_mcp_server:8080/sse "HTTP/1.1 200 OK"
+2025-12-31 02:45:20,702 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=06b9b4bd344e423aa33eab5ede29f4f4 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:20,704 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=06b9b4bd344e423aa33eab5ede29f4f4 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:20,706 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=06b9b4bd344e423aa33eab5ede29f4f4 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:20,757 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=06b9b4bd344e423aa33eab5ede29f4f4 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:20,761 - backend.utils.context_manager - ERROR - 🔴🔴🔴 DEBUG: compress_messages CALLED - agent_type=pm_agent
+2025-12-31 02:45:20,762 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 Processing ToolMessage from updates stream: tool_call_id=call_6tVBVnZ6sz610wPsawmiPiuV, tool=list_sprints
+2025-12-31 02:45:20,762 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:45:20.762306 app.py emitting thoughts: 📋 list_sprints → 0 sprints
+2025-12-31 02:45:20,762 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: tools (id=825742b6-592e-158b-cb1a-bc147b1a5406, step=3)
+2025-12-31 02:45:20,762 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: pre_model_hook (id=59759d79-f853-f89e-2bb2-0bf8406d1c11, step=4)
+2025-12-31 02:45:20,762 - backend.utils.context_manager - ERROR - 🔴🔴🔴 Stack trace:
+  File "/usr/local/lib/python3.12/threading.py", line 1032, in _bootstrap
+    self._bootstrap_inner()
+  File "/usr/local/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "/usr/local/lib/python3.12/threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 93, in _worker
+    work_item.run()
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/app/.venv/lib/python3.12/site-packages/langchain_core/runnables/config.py", line 608, in wrapper
+    return func(*args, **kwargs)
+  File "/app/backend/graph/nodes.py", line 3460, in compress_with_tracking
+    compressed = context_manager.compress_messages(state_dict)
+  File "/app/backend/utils/context_manager.py", line 350, in compress_messages
+    logger.error(f"🔴🔴🔴 Stack trace:\n{''.join(traceback.format_stack()[-8:])}")
+
+2025-12-31 02:45:20,762 - backend.utils.context_manager - INFO - [CONTEXT-MANAGER] 🚫 COMPRESSION DISABLED - returning original state unchanged
+2025-12-31 02:45:20,764 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔧 Processing ToolMessage from updates stream: tool_call_id=call_6tVBVnZ6sz610wPsawmiPiuV, tool=list_sprints
+2025-12-31 02:45:20,764 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:45:20.764619 app.py emitting thoughts: 📋 list_sprints → 0 sprints
+2025-12-31 02:45:20,764 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: pre_model_hook (id=59759d79-f853-f89e-2bb2-0bf8406d1c11, step=4)
+2025-12-31 02:45:20,764 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: agent (id=d9e5740e-133b-f4ad-d45c-84698573588f, step=5)
+2025-12-31 02:45:31,758 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:45:32,547 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:45:32.547453 app.py updates stream: node=agent, has_react_thoughts=False, keys=['messages']
+2025-12-31 02:45:32,547 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: agent (id=d9e5740e-133b-f4ad-d45c-84698573588f, step=5)
+2025-12-31 02:45:32,547 - backend.graph.nodes - INFO - [pm_agent] Message 1: AIMessage with 1 tool calls: ['list_sprints']
+2025-12-31 02:45:32,547 - backend.graph.nodes - INFO - [pm_agent] Message 2: ToolMessage - tool_call_id=call_6tVBVnZ6sz610wPsawmiPiuV, content_len=33
+2025-12-31 02:45:32,547 - backend.graph.nodes - INFO - [pm_agent] Including 1 tool results in execution result: list_sprints: 33→33 chars
+2025-12-31 02:45:32,547 - backend.graph.nodes - INFO - [pm_agent] Final execution result length: 538 chars (max=50000, token_limit=400000)
+2025-12-31 02:45:32,547 - backend.graph.nodes - INFO - Step 'Identify Sprint 7 in the project' execution completed by pm_agent
+2025-12-31 02:45:32,547 - backend.graph.nodes - INFO - Step progress: 1/3 steps completed (current_step_index=1)
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Inspecting current_plan: type=<class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.title type: <class 'str'>
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.steps type: <class 'list'>
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step type: <class 'backend.prompts.planner_model.Step'>
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step step_type type: <enum 'StepType'>
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming plan update from pm_agent: 3 steps
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Checking for step_progress emission. current_plan type: <class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan has steps. Count: 3
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step progress: Step 2/3: Fetch Sprint 7 detailed report
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step execution update from pm_agent: 457 chars
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:45:32.548407 app.py updates stream: node=pm_agent, has_react_thoughts=False, keys=['messages', 'observations', 'current_step_index', 'current_plan']
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming pm_agent message from state update: 457 chars, id: 8afd34f5-ff45-4df3-bba0-10220351bd77
+2025-12-31 02:45:32,548 - backend.server.app - WARNING - [pm_560ac6252f6d49ee] ⚠️ No react_thoughts found for pm_agent message 8afd34f5-ff45-4df3-bba0-10220351bd77 (node_update has react_thoughts: False)
+2025-12-31 02:45:32,548 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: pm_agent (id=6ecd540e-ec58-f8df-07bc-74136322c7fc, step=8)
+2025-12-31 02:45:32,549 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: pm_agent (id=9eaffc06-d809-7a5e-cf02-4cb8548d665e, step=9)
+2025-12-31 02:45:32,549 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: research_team (id=b9be3501-6c16-3f1c-c10c-150e76ce027f, step=9)
+2025-12-31 02:45:32,549 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: validator (id=6e9cb357-b599-0f66-a37d-b2a033d2482f, step=9)
+2025-12-31 02:45:32,549 - backend.graph.nodes - INFO - [2025-12-31 02:45:32.549] PM Agent node is analyzing project management data.
+2025-12-31 02:45:32,549 - backend.graph.nodes - INFO - [pm_agent_node] PM Agent will use PM tools exclusively (loaded via MCP)
+2025-12-31 02:45:32,549 - backend.graph.nodes - INFO - [pm_agent] Configuration.mcp_settings: True, type: dict
+2025-12-31 02:45:32,549 - backend.graph.nodes - INFO - [pm_agent] mcp_settings keys: ['servers']
+2025-12-31 02:45:32,549 - backend.graph.nodes - INFO - [pm_agent] mcp_settings['servers'] keys: ['pm-server', 'mcp-github-trending']
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' in mcp_settings: transport=sse, has_url=True, has_command=False
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Server 'mcp-github-trending' in mcp_settings: transport=stdio, has_url=False, has_command=True
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Processing MCP settings for agent
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Checking server 'pm-server', add_to_agents=['pm_agent']
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Agent IS in add_to_agents for 'pm-server'
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] enabled_tools_config=None, type=<class 'NoneType'>
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Adding server 'pm-server' to mcp_servers
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] enabled_tools is None - will enable ALL tools from 'pm-server'
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Checking server 'mcp-github-trending', add_to_agents=['researcher']
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Agent NOT in add_to_agents for 'mcp-github-trending'
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] After processing: mcp_servers=['pm-server'], enabled_tools count=0
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Connecting to 1 MCP server(s): pm-server
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' config: transport=sse, has_url=True, has_command=False, has_headers=True, config_keys=['transport', 'url', 'headers']
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' URL: http://pm_mcp_server:8080/sse
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' headers: {'X-MCP-API-Key': 'mcp_a9b43d...'}
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Server 'pm-server' transport type: str, value: 'sse'
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] MCP server configs: {
+  "pm-server": {
+    "transport": "sse",
+    "url": "http://pm_mcp_server:8080/sse",
+    "headers": {
+      "X-MCP-API-Key": "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+    }
+  }
+}
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Creating MultiServerMCPClient with 1 server(s)...
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Passing to MultiServerMCPClient: {
+  "pm-server": {
+    "transport": "sse",
+    "url": "http://pm_mcp_server:8080/sse",
+    "headers": {
+      "X-MCP-API-Key": "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+    }
+  }
+}
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] MultiServerMCPClient created. Checking connections...
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Stored connection 'pm-server': transport=sse, has_url=True, keys=['transport', 'url', 'headers'], connection_type=dict
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - [pm_agent] Connection 'pm-server' dict contents: {
+  "transport": "sse",
+  "url": "http://pm_mcp_server:8080/sse",
+  "headers": {
+    "X-MCP-API-Key": "mcp_a9b43d595b627e1e094209dea14bcb32f98867649ae181d4836dde87e283ccc3"
+  }
+}
+2025-12-31 02:45:32,550 - backend.graph.nodes - INFO - Research team node - checking step completion status
+2025-12-31 02:45:32,553 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:45:32,572 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: research_team (id=b9be3501-6c16-3f1c-c10c-150e76ce027f, step=9)
+2025-12-31 02:45:32,607 - httpx - INFO - HTTP Request: GET http://pm_mcp_server:8080/sse "HTTP/1.1 200 OK"
+2025-12-31 02:45:32,613 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=b590dccb024e44179f76c64fb7dd1f17 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:32,615 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=b590dccb024e44179f76c64fb7dd1f17 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:32,617 - httpx - INFO - HTTP Request: POST http://pm_mcp_server:8080/messages?session_id=b590dccb024e44179f76c64fb7dd1f17 "HTTP/1.1 202 Accepted"
+2025-12-31 02:45:32,623 - backend.graph.nodes - INFO - [pm_agent] Retrieved 43 tools from MCP servers
+2025-12-31 02:45:32,623 - backend.graph.nodes - INFO - [pm_agent] MCP tool names: ['burndown_chart', 'velocity_chart', 'sprint_report', 'project_health', 'cfd_chart', 'cycle_time_chart', 'work_distribution_chart', 'issue_trend_chart', 'list_projects', 'get_project', 'create_project', 'update_project', 'delete_project', 'search_projects', 'list_tasks', 'list_my_tasks', 'list_tasks_by_assignee', 'list_unassigned_tasks', 'list_tasks_in_sprint', 'get_task', 'create_task', 'update_task', 'delete_task', 'assign_task', 'update_task_status', 'search_tasks', 'list_sprints', 'get_sprint', 'create_sprint', 'update_sprint', 'delete_sprint', 'start_sprint', 'complete_sprint', 'get_sprint_tasks', 'list_epics', 'get_epic', 'create_epic', 'update_epic', 'delete_epic', 'link_task_to_epic', 'unlink_task_from_epic', 'list_users', 'get_user']
+2025-12-31 02:45:32,623 - backend.graph.nodes - INFO - [pm_agent] Enabled tools filter: []
+2025-12-31 02:45:32,623 - backend.graph.nodes - INFO - [pm_agent] list_my_tasks tool found: True
+2025-12-31 02:45:32,623 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: burndown_chart (from pm-server, with truncation)
+2025-12-31 02:45:32,623 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: velocity_chart (from pm-server, with truncation)
+2025-12-31 02:45:32,623 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: sprint_report (from pm-server, with truncation)
+2025-12-31 02:45:32,623 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: project_health (from pm-server, with truncation)
+2025-12-31 02:45:32,623 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: cfd_chart (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: cycle_time_chart (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: work_distribution_chart (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: issue_trend_chart (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_projects (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_project (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_project (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_project (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_project (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: search_projects (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_tasks (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_my_tasks (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_tasks_by_assignee (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_unassigned_tasks (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_tasks_in_sprint (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_task (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_task (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_task (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_task (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: assign_task (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_task_status (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: search_tasks (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_sprints (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_sprint (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_sprint (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_sprint (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_sprint (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: start_sprint (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: complete_sprint (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_sprint_tasks (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_epics (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_epic (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: create_epic (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: update_epic (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: delete_epic (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: link_task_to_epic (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: unlink_task_from_epic (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: list_users (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added MCP tool: get_user (from pm-server, with truncation)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] Added 43 MCP tools to agent (total tools: 43)
+2025-12-31 02:45:32,624 - backend.graph.nodes - INFO - [pm_agent] list_my_tasks tool added to agent: True
+2025-12-31 02:45:32,628 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:45:32,631 - backend.agents.agents - INFO - Agent 'pm_agent' created successfully
+2025-12-31 02:45:32,631 - backend.graph.nodes - INFO - [_execute_agent_step] Executing step: Fetch Sprint 7 detailed report, agent: pm_agent
+2025-12-31 02:45:32,632 - backend.graph.nodes - INFO - [_execute_agent_step] Agent 'pm_agent' token_limit=400000, completed_steps=1, max_length_per_step=10000, max_items=19, available_chars=960000
+2025-12-31 02:45:32,632 - backend.graph.nodes - INFO - Recursion limit set to: 100
+2025-12-31 02:45:32,633 - backend.graph.nodes - INFO - Agent input: {'messages': [HumanMessage(content='# Research Topic\n\nSprint 7 Report Generation Plan\n\n# Completed Research Steps\n\n## Completed Step 1: Identify Sprint 7 in the project\n\n<finding>\nSprint identification result:\n\n- Project ID: d7e300c6-d6c0-4c08-bc8d-e41967458d86:496\n- Sprints found: 0\n- Conclusion: No sprints were found for this project. Therefore, Sprint 7 cannot be identified.\n\nWhat would you like to do next?\n- Verify the project_id or search in another project\n- Check if sprints exist with a different status (e.g., active, planned)\n- Look for a sprint named "Sprint 7" in a different project or with a different naming convention\n\n## Tool Call Results\n\n### Tool: list_sprints\n\n{\n  "sprints": [],\n  "total": 0\n}\n</finding>\n\n# Current Step\n\n## Title\n\nFetch Sprint 7 detailed report\n\n## Description\n\nCall get_sprint_report(sprint_id=<identified_sprint_id>) using the sprint_id obtained in Step 1. Only call this tool. Do not call any other tools. If the sprint_id is not found, report an error and stop.\n\n## Project ID\n\nd7e300c6-d6c0-4c08-bc8d-e41967458d86:496\n\n## Locale\n\nen-US', additional_kwargs={}, response_metadata={})]}
+2025-12-31 02:45:32,633 - backend.graph.nodes - INFO - [pm_agent] Applying context compression before agent invocation (token_limit=400000)
+2025-12-31 02:45:32,634 - backend.llms.llm - INFO - [LLM-CONFIG] Creating basic LLM: provider=unknown, model=gpt-5-nano, base_url=https://api.openai.com/v1
+2025-12-31 02:45:32,634 - backend.utils.adaptive_context_config - INFO - [ADAPTIVE-CONTEXT] 🔍 DEBUG: get_adaptive_context_manager called - agent_type=pm_agent, model_name=gpt-5-nano, model_context_limit=400,000, frontend_messages=0
+2025-12-31 02:45:32,634 - backend.utils.adaptive_context_config - INFO - [ADAPTIVE-CONTEXT] 🔍 DEBUG: Strategy - token_percent=0.6, preserve_prefix=3, compression_mode=hierarchical
+2025-12-31 02:45:32,634 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:45:32,634 - backend.graph.nodes - INFO - [pm_agent] Agent input token count: 297 (limit: 400,000)
+2025-12-31 02:45:32,634 - backend.graph.nodes - INFO - [pm_agent] Message token limit (70% of total): 280,000 tokens
+2025-12-31 02:45:32,634 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:45:32,634 - backend.utils.context_manager - WARNING - Unknown model 'gpt-5-nano', using cl100k_base encoding
+2025-12-31 02:45:32,635 - backend.graph.nodes - INFO - [pm_agent] 📊 Context token count before LLM: 297 / 400,000 tokens (0.1%)
+2025-12-31 02:45:32,636 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: pre_model_hook (id=e0c5ae32-63b7-59ee-ed01-8dc9ef9deacd, step=1)
+2025-12-31 02:45:32,636 - backend.utils.context_manager - ERROR - 🔴🔴🔴 DEBUG: compress_messages CALLED - agent_type=pm_agent
+2025-12-31 02:45:32,637 - backend.utils.context_manager - ERROR - 🔴🔴🔴 Stack trace:
+  File "/usr/local/lib/python3.12/threading.py", line 1032, in _bootstrap
+    self._bootstrap_inner()
+  File "/usr/local/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "/usr/local/lib/python3.12/threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 93, in _worker
+    work_item.run()
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/app/.venv/lib/python3.12/site-packages/langchain_core/runnables/config.py", line 608, in wrapper
+    return func(*args, **kwargs)
+  File "/app/backend/graph/nodes.py", line 3460, in compress_with_tracking
+    compressed = context_manager.compress_messages(state_dict)
+  File "/app/backend/utils/context_manager.py", line 350, in compress_messages
+    logger.error(f"🔴🔴🔴 Stack trace:\n{''.join(traceback.format_stack()[-8:])}")
+
+2025-12-31 02:45:32,637 - backend.utils.context_manager - INFO - [CONTEXT-MANAGER] 🚫 COMPRESSION DISABLED - returning original state unchanged
+2025-12-31 02:45:32,640 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: pre_model_hook (id=e0c5ae32-63b7-59ee-ed01-8dc9ef9deacd, step=1)
+2025-12-31 02:45:32,640 - backend.server.app - INFO - [pm_560ac6252f6d49ee] 🔵 Task started: agent (id=ee8c97ca-42fb-93a6-b010-601451e9c0f1, step=2)
+INFO:     127.0.0.1:58290 - "GET /health HTTP/1.1" 200 OK
+2025-12-31 02:45:41,628 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:45:42,144 - backend.graph.nodes - ERROR - [VALIDATOR] ❌ Step failed: No sprints found and not all required tools were invoked.
+2025-12-31 02:45:42,145 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Inspecting current_plan: type=<class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:42,145 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.title type: <class 'str'>
+2025-12-31 02:45:42,145 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.steps type: <class 'list'>
+2025-12-31 02:45:42,145 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step type: <class 'backend.prompts.planner_model.Step'>
+2025-12-31 02:45:42,145 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step step_type type: <enum 'StepType'>
+2025-12-31 02:45:42,145 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming plan update from validator: 3 steps
+2025-12-31 02:45:42,146 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Checking for step_progress emission. current_plan type: <class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:42,146 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan has steps. Count: 3
+2025-12-31 02:45:42,146 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step progress: Step 1/3: Identify Sprint 7 in the project
+2025-12-31 02:45:42,146 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: validator (id=6e9cb357-b599-0f66-a37d-b2a033d2482f, step=9)
+2025-12-31 02:45:50,652 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-31 02:45:52,780 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:45:52.780208 app.py updates stream: node=agent, has_react_thoughts=False, keys=['messages']
+2025-12-31 02:45:52,780 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: agent (id=ee8c97ca-42fb-93a6-b010-601451e9c0f1, step=2)
+2025-12-31 02:45:52,780 - backend.graph.nodes - INFO - [pm_agent] Final execution result length: 735 chars (max=50000, token_limit=400000)
+2025-12-31 02:45:52,780 - backend.graph.nodes - INFO - Step 'Fetch Sprint 7 detailed report' execution completed by pm_agent
+2025-12-31 02:45:52,780 - backend.graph.nodes - INFO - Step progress: 2/3 steps completed (current_step_index=2)
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Inspecting current_plan: type=<class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.title type: <class 'str'>
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan.steps type: <class 'list'>
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step type: <class 'backend.prompts.planner_model.Step'>
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] First step step_type type: <enum 'StepType'>
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming plan update from pm_agent: 3 steps
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Checking for step_progress emission. current_plan type: <class 'backend.prompts.planner_model.Plan'>
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] current_plan has steps. Count: 3
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step progress: Step 3/3: Compile and format Sprint 7 report
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming step execution update from pm_agent: 735 chars
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [COUNTER-DEBUG] 2025-12-31T02:45:52.781732 app.py updates stream: node=pm_agent, has_react_thoughts=False, keys=['messages', 'observations', 'current_step_index', 'current_plan']
+2025-12-31 02:45:52,781 - backend.server.app - INFO - [pm_560ac6252f6d49ee] Streaming pm_agent message from state update: 735 chars, id: 18941e4e-43bd-4dcb-83c3-e22e5a7cdd94
+2025-12-31 02:45:52,781 - backend.server.app - WARNING - [pm_560ac6252f6d49ee] ⚠️ No react_thoughts found for pm_agent message 18941e4e-43bd-4dcb-83c3-e22e5a7cdd94 (node_update has react_thoughts: False)
+2025-12-31 02:45:52,782 - backend.server.app - INFO - [pm_560ac6252f6d49ee] ✅ Task completed: pm_agent (id=9eaffc06-d809-7a5e-cf02-4cb8548d665e, step=9)
+2025-12-31 02:45:52,782 - backend.server.app - ERROR - [pm_560ac6252f6d49ee] ❌ Error in graph event stream: At key 'current_step_index': Can receive only one value per step. Use an Annotated key to handle multiple values.
+For troubleshooting, visit: https://python.langchain.com/docs/troubleshooting/errors/INVALID_CONCURRENT_GRAPH_UPDATE
+Traceback (most recent call last):
+  File "/app/backend/server/app.py", line 1200, in _stream_graph_events_core
+    async for agent, stream_type, event_data in graph_instance.astream(
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2758, in astream
+    while loop.tick(input_keys=self.input_channels):
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/pregel/loop.py", line 481, in tick
+    mv_writes, updated_channels = apply_writes(
+                                  ^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/pregel/algo.py", line 315, in apply_writes
+    if channels[chan].update(vals) and get_next_version is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/channels/last_value.py", line 58, in update
+    raise InvalidUpdateError(msg)
+langgraph.errors.InvalidUpdateError: At key 'current_step_index': Can receive only one value per step. Use an Annotated key to handle multiple values.
+For troubleshooting, visit: https://python.langchain.com/docs/troubleshooting/errors/INVALID_CONCURRENT_GRAPH_UPDATE
+2025-12-31 02:45:52,786 - backend.server.app - INFO - [PM-CHAT-TIMING] PM graph query completed
+2025-12-31 02:45:52,786 - backend.server.app - INFO - [PM-CHAT-TIMING] Total response time: 250.10s
+INFO:     127.0.0.1:33434 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58916 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46026 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47746 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46474 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52260 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36628 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37512 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36552 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44186 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47792 - "GET /health HTTP/1.1" 200 OK

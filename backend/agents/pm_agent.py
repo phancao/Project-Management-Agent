@@ -205,6 +205,7 @@ IMPORTANT:
         self.tool_results.append((tool_name, json.dumps(tool_args), result_str))
         
         logger.info(f"[PM-AGENT] 📋 TOOL RESULT: {len(result_str)} chars")
+        logger.info(f"[COUNTER-DEBUG] {datetime.datetime.now().isoformat()} pm_agent captured: tool={tool_name}, result_len={len(result_str)}")
         
         return tool_name, tool_args, result_str, tool_call_id
     
@@ -332,6 +333,7 @@ Be concise and actionable."""
     
     def get_thoughts_for_ui(self) -> List[Dict[str, Any]]:
         """Convert steps to thoughts format for UI display."""
+        logger.info(f"[COUNTER-DEBUG] {datetime.datetime.now().isoformat()} get_thoughts_for_ui called with {len(self.steps)} steps")
         thoughts = []
         for i, step in enumerate(self.steps):
             emoji = {
@@ -341,8 +343,40 @@ Be concise and actionable."""
                 "decision": "✅" if step.metadata.get("action") == "done" else "🔄"
             }.get(step.type, "•")
             
+            # For tool_result, parse content to extract count
+            if step.type == "tool_result":
+                tool_name = step.metadata.get("tool", "tool")
+                result_count_info = ""
+                try:
+                    result_data = json.loads(step.content)
+                    if isinstance(result_data, dict):
+                        if "tasks" in result_data and isinstance(result_data["tasks"], list):
+                            result_count_info = f" → {len(result_data['tasks'])} tasks"
+                        elif "sprints" in result_data and isinstance(result_data["sprints"], list):
+                            result_count_info = f" → {len(result_data['sprints'])} sprints"
+                        elif "users" in result_data and isinstance(result_data["users"], list):
+                            result_count_info = f" → {len(result_data['users'])} users"
+                        elif "projects" in result_data and isinstance(result_data["projects"], list):
+                            result_count_info = f" → {len(result_data['projects'])} projects"
+                        elif "sprint" in result_data and isinstance(result_data["sprint"], dict):
+                            sprint_name = result_data["sprint"].get("name", "")
+                            result_count_info = f" → {sprint_name}" if sprint_name else ""
+                        elif "success" in result_data:
+                            if result_data["success"]:
+                                result_count_info = " ✓"
+                            else:
+                                error = result_data.get("error", "")[:40]
+                                result_count_info = f" ✗ {error}" if error else " ✗"
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    pass
+                
+                thought_text = f"{emoji} {tool_name}{result_count_info}"
+                logger.info(f"[COUNTER-DEBUG] {datetime.datetime.now().isoformat()} tool_result thought: {thought_text}")
+            else:
+                thought_text = f"{emoji} {step.type.upper()}: {step.content[:5000]}"
+            
             thoughts.append({
-                "thought": f"{emoji} {step.type.upper()}: {step.content[:5000]}",
+                "thought": thought_text,
                 "before_tool": step.type in ["thinking", "tool_call"],
                 "step_index": i,
                 "step_type": step.type,

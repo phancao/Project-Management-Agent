@@ -275,10 +275,14 @@ function MessageListItem({
 
       const shouldRender = hasVisibleContent || hasTools || hasThoughts;
 
-      // DEBUG: Log specific rejection reason if needed (commented out for prod)
-      // if (!shouldRender && message.content) {
-      //   console.debug(`[MessageListView] Ghost Bubble prevented: content='${message.content}'`);
-      // }
+      // [PM-DEBUG] Render Filter Decision
+      if (!shouldRender) {
+        console.log(`[PM-DEBUG][RENDER] ${new Date().toISOString()} SKIP: id=${message.id}, agent=${message.agent}, reason=no_content_tools_thoughts, content_len=${message.content?.length ?? 0}`);
+      } else {
+        console.log(`[PM-DEBUG][RENDER] ${new Date().toISOString()} SHOW: id=${message.id}, agent=${message.agent}, hasContent=${!!hasVisibleContent}, hasTools=${hasTools}, hasThoughts=${hasThoughts}`);
+      }
+
+
 
       content = shouldRender ? (
         <div
@@ -816,11 +820,30 @@ function ToolsDisplay({ tools, toolCalls }: { tools?: string[]; toolCalls?: Tool
       <div className="mt-2 flex flex-col gap-2">
         {validToolCalls.map((tool, index) => {
           let jsonContent = null;
+          let resultCountInfo = "";
           if (tool.result) {
             try {
-              const parsed = JSON.parse(tool.result);
+              const parsed = typeof tool.result === 'string'
+                ? JSON.parse(tool.result)
+                : tool.result;
+
               if (parsed && typeof parsed === 'object') {
                 jsonContent = parsed;
+                // Extract counter from result
+                if ("tasks" in parsed && Array.isArray(parsed.tasks)) {
+                  resultCountInfo = ` → ${parsed.tasks.length} tasks`;
+                } else if ("sprints" in parsed && Array.isArray(parsed.sprints)) {
+                  resultCountInfo = ` → ${parsed.sprints.length} sprints`;
+                } else if ("users" in parsed && Array.isArray(parsed.users)) {
+                  resultCountInfo = ` → ${parsed.users.length} users`;
+                } else if ("projects" in parsed && Array.isArray(parsed.projects)) {
+                  resultCountInfo = ` → ${parsed.projects.length} projects`;
+                } else if ("sprint" in parsed && typeof parsed.sprint === 'object' && parsed.sprint !== null) {
+                  const sprintName = parsed.sprint.name;
+                  resultCountInfo = sprintName ? ` → ${sprintName}` : "";
+                } else if ("success" in parsed) {
+                  resultCountInfo = parsed.success ? " ✓" : " ✗";
+                }
               }
             } catch (e) {
               // Not JSON, ignore
@@ -832,7 +855,7 @@ function ToolsDisplay({ tools, toolCalls }: { tools?: string[]; toolCalls?: Tool
               <div className="flex items-center justify-between">
                 <CollapsibleTrigger className="flex items-center gap-2 font-mono font-semibold text-muted-foreground w-full hover:text-foreground text-left cursor-pointer group">
                   <ChevronRight className="h-3 w-3 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                  <span>🔧 {tool.name}</span>
+                  <span>🔧 {tool.name}{resultCountInfo}</span>
                   {!tool.result && <span className="text-orange-500">(waiting...)</span>}
                 </CollapsibleTrigger>
               </div>

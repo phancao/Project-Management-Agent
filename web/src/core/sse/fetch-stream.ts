@@ -116,6 +116,8 @@ export async function* fetchStream(
         if (chunk.trim()) {
           const event = parseEvent(chunk);
           if (event) {
+            // [PM-DEBUG] Network Layer
+            console.log(`[PM-DEBUG][SSE] ${new Date().toISOString()} YIELD: type=${event.event}, dataLen=${event.data?.length ?? 0}`);
             yield event;
           }
         }

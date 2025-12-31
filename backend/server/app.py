@@ -1295,18 +1295,69 @@ async def _stream_graph_events_core(
                     while not queue.empty():
                         try:
                             item = queue.get_nowait()
+                            tool_name = item.get("tool_name", "tool")
+                            tool_content = item.get("result", "")
+                            tool_call_id = item.get("tool_call_id")
+                            
+                            # [COUNTER-FIX] Parse tool result for counter
+                            result_count_info = ""
+                            try:
+                                result_data = json.loads(tool_content)
+                                if isinstance(result_data, dict):
+                                    if "tasks" in result_data and isinstance(result_data["tasks"], list):
+                                        result_count_info = f" → {len(result_data['tasks'])} tasks"
+                                    elif "sprints" in result_data and isinstance(result_data["sprints"], list):
+                                        result_count_info = f" → {len(result_data['sprints'])} sprints"
+                                    elif "users" in result_data and isinstance(result_data["users"], list):
+                                        result_count_info = f" → {len(result_data['users'])} users"
+                                    elif "projects" in result_data and isinstance(result_data["projects"], list):
+                                        result_count_info = f" → {len(result_data['projects'])} projects"
+                                    elif "sprint" in result_data and isinstance(result_data["sprint"], dict):
+                                        sprint_name = result_data["sprint"].get("name", "")
+                                        result_count_info = f" → {sprint_name}" if sprint_name else ""
+                                    elif "success" in result_data:
+                                        if result_data["success"]:
+                                            result_count_info = " ✓"
+                                        else:
+                                            error = result_data.get("error", "")[:40]
+                                            result_count_info = f" ✗ {error}" if error else " ✗"
+                            except (json.JSONDecodeError, KeyError, TypeError):
+                                pass
+                            
+                            # Emit thoughts event with counter BEFORE tool_call_result
+                            step_index = _progressive_step_counter.get(safe_thread_id, 0)
+                            thought_text = f"📋 {tool_name}{result_count_info}"
+                            logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} PLAN9 emitting thoughts: {thought_text}")
+                            
+                            tool_result_thought = {
+                                "thought": thought_text,
+                                "before_tool": False,
+                                "step_index": step_index,
+                                "step_type": "tool_result",
+                                "timestamp": datetime.now().isoformat()
+                            }
+                            thoughts_event = {
+                                "thread_id": thread_id,
+                                "agent": "pm_agent",
+                                "id": f"tool-result-{tool_call_id}",
+                                "role": "assistant",
+                                "react_thoughts": [tool_result_thought]
+                            }
+                            yield _make_event("thoughts", thoughts_event)
+                            _progressive_step_counter[safe_thread_id] = step_index + 1
+                            
+                            # Original tool_call_result event
                             tool_result_event = {
                                 "thread_id": thread_id,
                                 "agent": "pm_agent",
                                 "role": "assistant",
-                                "tool_call_id": item.get("tool_call_id"),
-                                "name": item.get("tool_name"),
-                                "content": item.get("result", ""),
+                                "tool_call_id": tool_call_id,
+                                "name": tool_name,
+                                "content": tool_content,
                             }
                             yield _make_event("tool_call_result", tool_result_event)
                             
                             # Cooperative yield to ensure event loop doesn't starve
-                            import asyncio
                             await asyncio.sleep(0.01)
                         except asyncio.QueueEmpty:
                             break
@@ -1351,13 +1402,11 @@ async def _stream_graph_events_core(
                             if current_plan:
                                 # Extract plan information
                                 plan_data = {}
-                                
                                 # Handle different types of current_plan (string, dict, or Plan object)
                                 plan_obj = None
                                 if isinstance(current_plan, str):
                                     # Try to parse JSON string
                                     try:
-                                        import json
                                         plan_dict = json.loads(current_plan)
                                         plan_obj = plan_dict
                                     except (json.JSONDecodeError, TypeError):
@@ -1522,7 +1571,8 @@ async def _stream_graph_events_core(
                         
                         # Debug: Log node_update keys for pm_agent/react_agent nodes
                         if node_name in ["react_agent", "pm_agent", "agent"]:
-                            pass
+                            has_react_thoughts = "react_thoughts" in node_update
+                            logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} app.py updates stream: node={node_name}, has_react_thoughts={has_react_thoughts}, keys={list(node_update.keys())[:5]}")
                         
                         # Check if react_thoughts exist in node_update
                         if "react_thoughts" in node_update:
@@ -1569,8 +1619,54 @@ async def _stream_graph_events_core(
                             for msg in messages:
                                 if isinstance(msg, ToolMessage):
                                     tool_call_id = getattr(msg, 'tool_call_id', None)
-                                    tool_name = getattr(msg, 'name', None)
+                                    tool_name = getattr(msg, 'name', None) or 'tool'
                                     tool_content = str(getattr(msg, 'content', ''))
+                                    
+                                    # Extract count for display
+                                    result_count_info = ""
+                                    try:
+                                        result_data = json.loads(tool_content)
+                                        if isinstance(result_data, dict):
+                                            if "tasks" in result_data and isinstance(result_data["tasks"], list):
+                                                result_count_info = f" → {len(result_data['tasks'])} tasks"
+                                            elif "sprints" in result_data and isinstance(result_data["sprints"], list):
+                                                result_count_info = f" → {len(result_data['sprints'])} sprints"
+                                            elif "users" in result_data and isinstance(result_data["users"], list):
+                                                result_count_info = f" → {len(result_data['users'])} users"
+                                            elif "projects" in result_data and isinstance(result_data["projects"], list):
+                                                result_count_info = f" → {len(result_data['projects'])} projects"
+                                            elif "sprint" in result_data and isinstance(result_data["sprint"], dict):
+                                                sprint_name = result_data["sprint"].get("name", "")
+                                                result_count_info = f" → {sprint_name}" if sprint_name else ""
+                                            elif "success" in result_data:
+                                                if result_data["success"]:
+                                                    result_count_info = " ✓"
+                                                else:
+                                                    error = result_data.get("error", "")[:40]
+                                                    result_count_info = f" ✗ {error}" if error else " ✗"
+                                    except (json.JSONDecodeError, KeyError, TypeError):
+                                        pass
+                                    
+                                    # Emit progressive thought with counter
+                                    step_index = _progressive_step_counter.get(safe_thread_id, 0)
+                                    tool_result_thought = {
+                                        "thought": f"📋 {tool_name}{result_count_info}",
+                                        "before_tool": False,
+                                        "step_index": step_index,
+                                        "step_type": "tool_result",
+                                        "timestamp": datetime.now().isoformat()
+                                    }
+                                    thoughts_event = {
+                                        "thread_id": thread_id,
+                                        "agent": node_name,
+                                        "id": f"tool-result-{tool_call_id}",
+                                        "role": "assistant",
+                                        "react_thoughts": [tool_result_thought]
+                                    }
+                                    logger.info(f"[{safe_thread_id}] 📋 [PROGRESSIVE] TOOL_RESULT from updates: {tool_name}{result_count_info}")
+                                    yield _make_event("thoughts", thoughts_event)
+                                    _progressive_step_counter[safe_thread_id] = step_index + 1
+                                    
                                     tool_result_event = {
                                         "thread_id": thread_id,
                                         "agent": node_name,
@@ -1706,7 +1802,6 @@ async def _stream_graph_events_core(
                                         yield _make_event("thoughts", thoughts_event)
                                         
                                         # Small delay to ensure thought is processed before tool calls
-                                        import asyncio
                                         await asyncio.sleep(0.01)  # 10ms delay
                                 else:
                                     logger.warning(
@@ -1788,7 +1883,6 @@ async def _stream_graph_events_core(
                                         yield _make_event("thoughts", thoughts_event)
                                         
                                         # Small delay to ensure thoughts are processed before tool_calls
-                                        import asyncio
                                         await asyncio.sleep(0.01)  # 10ms delay before tool_calls
                                     else:
                                         pass
@@ -1835,10 +1929,62 @@ async def _stream_graph_events_core(
                                 # Process ToolMessages
                                 for msg in messages:
                                     if isinstance(msg, ToolMessage):
+                                        tool_name = getattr(msg, 'name', None) or 'tool'
+                                        tool_content = str(getattr(msg, 'content', ''))
+                                        
                                         logger.info(
                                             f"[{safe_thread_id}] 🔧 Processing ToolMessage from updates stream: "
-                                            f"tool_call_id={msg.tool_call_id}"
+                                            f"tool_call_id={msg.tool_call_id}, tool={tool_name}"
                                         )
+                                        
+                                        # [COUNTER-FIX] Parse tool result to extract counter
+                                        result_count_info = ""
+                                        try:
+                                            result_data = json.loads(tool_content)
+                                            if isinstance(result_data, dict):
+                                                if "tasks" in result_data and isinstance(result_data["tasks"], list):
+                                                    result_count_info = f" → {len(result_data['tasks'])} tasks"
+                                                elif "sprints" in result_data and isinstance(result_data["sprints"], list):
+                                                    result_count_info = f" → {len(result_data['sprints'])} sprints"
+                                                elif "users" in result_data and isinstance(result_data["users"], list):
+                                                    result_count_info = f" → {len(result_data['users'])} users"
+                                                elif "projects" in result_data and isinstance(result_data["projects"], list):
+                                                    result_count_info = f" → {len(result_data['projects'])} projects"
+                                                elif "sprint" in result_data and isinstance(result_data["sprint"], dict):
+                                                    sprint_name = result_data["sprint"].get("name", "")
+                                                    result_count_info = f" → {sprint_name}" if sprint_name else ""
+                                                elif "success" in result_data:
+                                                    if result_data["success"]:
+                                                        result_count_info = " ✓"
+                                                    else:
+                                                        error = result_data.get("error", "")[:40]
+                                                        result_count_info = f" ✗ {error}" if error else " ✗"
+                                        except (json.JSONDecodeError, KeyError, TypeError):
+                                            pass
+                                        
+                                        # Emit thoughts event with counter
+                                        step_index = _progressive_step_counter.get(safe_thread_id, 0)
+                                        thought_text = f"📋 {tool_name}{result_count_info}"
+                                        logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} app.py emitting thoughts: {thought_text}")
+                                        
+                                        tool_result_thought = {
+                                            "thought": thought_text,
+                                            "before_tool": False,
+                                            "step_index": step_index,
+                                            "step_type": "tool_result",
+                                            "timestamp": datetime.now().isoformat()
+                                        }
+                                        thoughts_event = {
+                                            "thread_id": thread_id,
+                                            "agent": "pm_agent",
+                                            "id": f"tool-result-{msg.tool_call_id}",
+                                            "role": "assistant",
+                                            "react_thoughts": [tool_result_thought]
+                                        }
+                                        yield _make_event("thoughts", thoughts_event)
+                                        _progressive_step_counter[safe_thread_id] = step_index + 1
+                                        
+                                        # Also yield original tool_call_result event via _process_message_chunk
                                         msg_metadata = {
                                             "langgraph_node": node_name,
                                         }

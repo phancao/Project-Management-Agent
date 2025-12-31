@@ -410,20 +410,12 @@ async def list_tasks(
     try:
         handler = _ensure_pm_handler()
         
-        # Extract actual project ID if in provider_id:project_id format
-        actual_project_id = None
-        if project_id and ":" in project_id:
-            actual_project_id = project_id.split(":", 1)[1]
-        elif project_id:
-            actual_project_id = project_id
-        else:
-            # Auto-detect project ID if not provided, needed for Smart Resolution
-            composite_project_id = get_current_project_id()
-            if composite_project_id:
-                if ":" in composite_project_id:
-                    actual_project_id = composite_project_id.split(":", 1)[1]
-                else:
-                    actual_project_id = composite_project_id
+        # PRESERVE the full composite project_id (provider_uuid:project_id) for provider scoping
+        # The handler uses the provider_uuid prefix to route to the correct provider
+        actual_project_id = project_id
+        if not actual_project_id:
+            # Auto-detect project ID if not provided
+            actual_project_id = get_current_project_id()
         
 
         # Extract sprint ID from composite format (e.g., "project_id:sprint_id" -> "sprint_id")
@@ -448,11 +440,8 @@ async def list_tasks(
         if is_ambiguous and actual_sprint_id and hasattr(handler, 'list_project_sprints') and actual_project_id:
             try:
                 # Fetch sprints to resolve the name/index
-                project_for_sprints = actual_project_id
-                if ":" in project_for_sprints:
-                   project_for_sprints = project_for_sprints.split(":", 1)[1]
-                
-                sprints = await handler.list_project_sprints(project_for_sprints)
+                # Pass full composite ID - handler extracts what it needs
+                sprints = await handler.list_project_sprints(actual_project_id)
                 
                 resolved_id = None
                 # Strategy 1: Exact Name Match (Case Insensitive)
@@ -492,14 +481,9 @@ async def list_tasks(
                 # Try to get tasks for the project and filter by sprint_id at the provider level
                 # This is more efficient than listing all tasks
                 if actual_project_id:
-                    # Extract project_id from composite format if needed
-                    project_for_tasks = actual_project_id
-                    if ":" in project_for_tasks:
-                        project_for_tasks = project_for_tasks.split(":", 1)[1]
-                    
-                    # Use list_project_tasks which may be more efficient, passing sprint_id for server-side filtering
+                    # Pass full composite ID for provider scoping
                     tasks = await handler.list_project_tasks(
-                        project_id=project_for_tasks,
+                        project_id=actual_project_id,
                         sprint_id=actual_sprint_id
                     )
                     

@@ -254,6 +254,10 @@ export async function sendMessage(
     for await (const event of stream) {
       const { type, data } = event;
 
+      // [PM-DEBUG] Store Layer
+      console.log(`[PM-DEBUG][STORE] ${new Date().toISOString()} EVENT: type=${type}, id=${data?.id ?? 'none'}, agent=${data?.agent ?? 'none'}`);
+
+
 
       // Handle PM refresh events to update PM views
       if ((type as string) === "pm_refresh") {
@@ -270,13 +274,7 @@ export async function sendMessage(
       if (type === "thoughts") {
         const thoughtsData = data as { react_thoughts?: Array<{ thought: string; before_tool?: boolean; step_index: number }> };
         if ((data.agent as any) === 'pm_agent' && thoughtsData.react_thoughts) {
-          // Log thoughts packet receipt
-          console.log(`[FRONTEND_RECEIVE] ${new Date().toISOString()} Received thoughts event:`, {
-            id: data.id,
-            thread_id: data.thread_id,
-            thoughts_count: thoughtsData.react_thoughts.length,
-            preview: thoughtsData.react_thoughts.map(t => t.thought.substring(0, 50))
-          });
+
         }
 
         // DEBUG: Log thoughts event to trace tool call streaming
@@ -312,12 +310,7 @@ export async function sendMessage(
 
       // Handle tool_call_result specially: use the message that contains the tool call
       if (type === "tool_call_result") {
-        // Log tool result receipt
-        console.log(`[FRONTEND_RECEIVE] ${new Date().toISOString()} Received tool_call_result event:`, {
-          tool_call_id: (data as any).tool_call_id,
-          tool_name: (data as any).name,
-          content_len: (data as any).content?.length
-        });
+
 
         const toolName = data.agent || (data as any).name;
         message = findMessageByToolCallId((data as any).tool_call_id, toolName);

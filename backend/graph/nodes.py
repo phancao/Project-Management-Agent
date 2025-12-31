@@ -353,9 +353,7 @@ def validate_and_fix_plan(plan: dict, enforce_web_search: bool = False) -> dict:
         
         if missing_tools:
             logger.warning(
-            )
-            logger.warning(
-                f"Steps: {len(steps)}, "
+                f"[PLANNER] Missing tools detected: {missing_tools}. Steps: {len(steps)}"
             )
             
             # Try to enhance the first pm_query step with missing tools
@@ -4067,6 +4065,7 @@ async def react_agent_node(
                 )
                 
                 # Convert agent steps to thoughts for UI
+                logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} nodes.py building thoughts, steps={len(result.steps)}, step_types={[s.type for s in result.steps]}")
                 thoughts = []
                 for i, step in enumerate(result.steps):
                     emoji = {
@@ -4076,14 +4075,51 @@ async def react_agent_node(
                         "decision": "✅" if step.metadata.get("action") == "done" else "🔄"
                     }.get(step.type, "•")
                     
+                    # For tool_result, parse content to extract count
+                    if step.type == "tool_result":
+                        tool_name = step.metadata.get("tool", "tool")
+                        result_count_info = ""
+                        try:
+                            import json
+                            result_data = json.loads(step.content)
+                            if isinstance(result_data, dict):
+                                if "tasks" in result_data and isinstance(result_data["tasks"], list):
+                                    result_count_info = f" → {len(result_data['tasks'])} tasks"
+                                elif "sprints" in result_data and isinstance(result_data["sprints"], list):
+                                    result_count_info = f" → {len(result_data['sprints'])} sprints"
+                                elif "users" in result_data and isinstance(result_data["users"], list):
+                                    result_count_info = f" → {len(result_data['users'])} users"
+                                elif "projects" in result_data and isinstance(result_data["projects"], list):
+                                    result_count_info = f" → {len(result_data['projects'])} projects"
+                                elif "sprint" in result_data and isinstance(result_data["sprint"], dict):
+                                    sprint_name = result_data["sprint"].get("name", "")
+                                    result_count_info = f" → {sprint_name}" if sprint_name else ""
+                                elif "success" in result_data:
+                                    if result_data["success"]:
+                                        result_count_info = " ✓"
+                                    else:
+                                        error = result_data.get("error", "")[:40]
+                                        result_count_info = f" ✗ {error}" if error else " ✗"
+                        except (json.JSONDecodeError, KeyError, TypeError):
+                            pass
+                        
+                        thought_text = f"{emoji} {tool_name}{result_count_info}"
+                        logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} nodes.py tool_result: {thought_text}")
+                    else:
+                        thought_text = f"{emoji} {step.type.upper()}: {step.content[:5000]}"
+                    
                     thoughts.append({
-                        "thought": f"{emoji} {step.type.upper()}: {step.content[:50000]}",
+                        "thought": thought_text,
                         "before_tool": step.type in ["thinking", "tool_call"],
                         "step_index": i,
                         "step_type": step.type,
                         "timestamp": step.timestamp
                     })
                 
+                
+                logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} nodes.py returning {len(thoughts)} thoughts in Command update")
+                for t in thoughts:
+                    logger.info(f"[COUNTER-DEBUG]   thought: {t.get('thought', '')[:100]}")
                 
                 return Command(
                     update={
@@ -5104,6 +5140,46 @@ Question: {input}
                                         if not hasattr(msg, 'additional_kwargs') or not msg.additional_kwargs:
                                             msg.additional_kwargs = {}
                                         msg.additional_kwargs["react_thoughts"] = incremental_thoughts.copy()
+                                
+                                # [COUNTER-FIX] Process ToolMessage to extract counter
+                                elif isinstance(msg, ToolMessage):
+                                    tool_name = getattr(msg, 'name', 'tool') or 'tool'
+                                    tool_content = getattr(msg, 'content', '') or ''
+                                    
+                                    result_count_info = ""
+                                    try:
+                                        import json
+                                        result_data = json.loads(tool_content)
+                                        if isinstance(result_data, dict):
+                                            if "tasks" in result_data and isinstance(result_data["tasks"], list):
+                                                result_count_info = f" → {len(result_data['tasks'])} tasks"
+                                            elif "sprints" in result_data and isinstance(result_data["sprints"], list):
+                                                result_count_info = f" → {len(result_data['sprints'])} sprints"
+                                            elif "users" in result_data and isinstance(result_data["users"], list):
+                                                result_count_info = f" → {len(result_data['users'])} users"
+                                            elif "projects" in result_data and isinstance(result_data["projects"], list):
+                                                result_count_info = f" → {len(result_data['projects'])} projects"
+                                            elif "sprint" in result_data and isinstance(result_data["sprint"], dict):
+                                                sprint_name = result_data["sprint"].get("name", "")
+                                                result_count_info = f" → {sprint_name}" if sprint_name else ""
+                                            elif "success" in result_data:
+                                                if result_data["success"]:
+                                                    result_count_info = " ✓"
+                                                else:
+                                                    error = result_data.get("error", "")[:40]
+                                                    result_count_info = f" ✗ {error}" if error else " ✗"
+                                    except (json.JSONDecodeError, KeyError, TypeError):
+                                        pass
+                                    
+                                    thought_text = f"📋 {tool_name}{result_count_info}"
+                                    logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} nodes.py ToolMessage: {thought_text}")
+                                    
+                                    incremental_thoughts.append({
+                                        "thought": thought_text,
+                                        "before_tool": False,
+                                        "step_index": len(incremental_thoughts),
+                                        "step_type": "tool_result"
+                                    })
                         
                         # Merge other state fields (only if state_update is a dict)
                         if isinstance(state_update, dict):

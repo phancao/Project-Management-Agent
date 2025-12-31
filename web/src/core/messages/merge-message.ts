@@ -117,6 +117,9 @@ export function mergeMessage(message: Message, event: ChatEvent) {
 
 function mergeTextMessage(message: Message, event: MessageChunkEvent) {
   if (event.data.content) {
+    // [PM-DEBUG] Text Merge
+    console.log(`[PM-DEBUG][MERGE] ${new Date().toISOString()} TEXT: +${event.data.content.length} chars, total=${(message.content?.length ?? 0) + event.data.content.length}`);
+
     // Ensure content is initialized as string (not undefined/null)
     message.content = (message.content ?? "") + event.data.content;
     // Ensure contentChunks is initialized
@@ -149,6 +152,12 @@ function mergeToolCallMessage(
 ) {
   // Initialize toolCalls array if not present
   message.toolCalls ??= [];
+
+  // [PM-DEBUG] Tool Calls Merge
+  const newToolCount = event.type === "tool_calls" ? event.data.tool_calls?.length ?? 0 : 0;
+  console.log(`[PM-DEBUG][MERGE] ${new Date().toISOString()} TOOLS: existing=${message.toolCalls.length}, new=${newToolCount}`);
+
+
 
   // Extract react_thoughts from tool_calls event if present
   const data = event.data as any;
@@ -242,6 +251,11 @@ function mergeThoughtsMessage(
   // Convert map back to array and sort by step_index
   message.reactThoughts = Array.from(thoughtsMap.values()).sort((a, b) => a.step_index - b.step_index);
 
+  // [PM-DEBUG] Thoughts Merge
+  console.log(`[PM-DEBUG][MERGE] ${new Date().toISOString()} THOUGHTS: count=${message.reactThoughts.length}`);
+
+
+
   // FIX: Scan for TOOL_RESULT in thoughts and update corresponding tool calls
   // This handles cases where backend sends tool results inside thoughts (ReAct style) 
   // without a separate tool_call_result event.
@@ -317,6 +331,11 @@ function mergeToolCallResultMessage(
 ) {
   const eventToolName = (event.data as any).agent ?? (event.data as any).name ?? "";
 
+  // [PM-DEBUG] Tool Result Merge
+  console.log(`[PM-DEBUG][MERGE] ${new Date().toISOString()} RESULT: tool=${eventToolName}, tool_call_id=${event.data.tool_call_id}`);
+
+
+
   // Primary match: exact tool_call_id match
   let toolCall = message.toolCalls?.find(
     (toolCall) => toolCall.id === event.data.tool_call_id,
@@ -328,6 +347,7 @@ function mergeToolCallResultMessage(
     toolCall = message.toolCalls.find(
       (tc) => tc.name === eventToolName && !tc.result,
     );
+
   }
 
   if (toolCall) {

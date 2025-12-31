@@ -75,3 +75,25 @@ This document lists the baseline debug instrumentation that must be preserved in
   - `Transport: <transport_type>`
 - **Database**:
   - `Database initialized successfully`
+
+---
+
+## 4. System Logger Hierarchy
+This section documents the Python logger names used across the backend. Use these names if you need to configure specific log levels manually (e.g. in `logging.getLogger("src.workflow").setLevel(logging.DEBUG)`).
+
+### Core Modules
+| Logical Component | Logger Names |
+|-------------------|--------------|
+| **Workflow & Graph** | `src.workflow`, `src.graph`, `src.agents` |
+| **PM Provider** | `pm_providers`, `src.server.pm_handler`, `mcp_server` |
+| **Analytics** | `src.analytics`, `src.analytics.service`, `src.analytics.adapters`, `src.analytics.calculators` |
+| **Conversation** | `src.conversation` |
+| **Tools** | `src.tools`, `src.tools.search`, `src.tools.pm_tools`, `src.tools.pm_mcp_tools`, `src.tools.analytics_tools` |
+| **RAG** | `src.rag` |
+| **Crawler** | `src.crawler` |
+
+### MCP Integration
+| Logical Component | Logger Names |
+|-------------------|--------------|
+| **MCP Utils** | `src.server.mcp_utils` |
+| **PM MCP Server** | `mcp_server` |

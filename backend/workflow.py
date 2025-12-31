@@ -16,9 +16,7 @@ logging.basicConfig(
 )
 
 
-def enable_debug_logging():
-    """Enable debug level logging for more detailed execution information."""
-    logging.getLogger("src").setLevel(logging.DEBUG)
+
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +27,6 @@ graph = build_graph()
 
 async def run_agent_workflow_async(
     user_input: str,
-    debug: bool = False,
     max_plan_iterations: int = 1,
     max_step_num: int = 3,
     enable_background_investigation: bool = True,
@@ -41,7 +38,6 @@ async def run_agent_workflow_async(
 
     Args:
         user_input: The user's query or request
-        debug: If True, enables debug level logging
         max_plan_iterations: Maximum number of plan iterations
         max_step_num: Maximum number of steps in a plan
         enable_background_investigation: If True, performs web search before planning to enhance context
@@ -55,8 +51,7 @@ async def run_agent_workflow_async(
     if not user_input:
         raise ValueError("Input could not be empty")
 
-    if debug:
-        enable_debug_logging()
+
 
     logger.info(f"Starting async workflow with user input: {user_input}")
 
@@ -180,7 +175,6 @@ async def run_agent_workflow_async(
 
 async def run_agent_workflow_stream(
     user_input: str,
-    debug: bool = False,
     max_plan_iterations: int = 1,
     max_step_num: int = 3,
     enable_background_investigation: bool = True,
@@ -195,7 +189,6 @@ async def run_agent_workflow_stream(
     
     Args:
         user_input: The user's query or request
-        debug: If True, enables debug level logging
         max_plan_iterations: Maximum number of plan iterations
         max_step_num: Maximum number of steps in a plan
         enable_background_investigation: If True, performs web search before planning to enhance context
@@ -209,8 +202,7 @@ async def run_agent_workflow_stream(
     if not user_input:
         raise ValueError("Input could not be empty")
 
-    if debug:
-        enable_debug_logging()
+
 
 
     # Use provided initial_state or create a new one

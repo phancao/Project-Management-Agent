@@ -67,7 +67,7 @@ function SortableMember({ member }: { member: PMUser }) {
                 <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-indigo-400 transition-colors" />
             </div>
 
-            <Link href={`/team/member/${encodeURIComponent(member.id)}`} className="flex flex-1 items-center gap-3 min-w-0 hover:opacity-80 transition-opacity">
+            <Link href={`/team/member/${encodeURIComponent(member.id)}?returnTab=assignments`} className="flex flex-1 items-center gap-3 min-w-0 hover:opacity-80 transition-opacity">
                 <Avatar className="w-9 h-9 border-2 border-white dark:border-gray-700 shadow-sm">
                     <AvatarImage src={member.avatar} />
                     <AvatarFallback className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300">
@@ -151,9 +151,10 @@ function DroppableProject({ project, assignedMemberIds, members }: { project: Pr
                             const member = members.find(m => m.id === memberId);
                             if (!member) return null;
                             return (
-                                <div
+                                <Link
                                     key={`${project.id}-${member.id}`}
-                                    className="flex items-center gap-1.5 pl-1 pr-2 py-1 bg-white dark:bg-gray-800 rounded-full border border-gray-100 dark:border-gray-700 shadow-sm hover:scale-105 transition-transform cursor-default"
+                                    href={`/team/member/${encodeURIComponent(member.id)}?returnTab=assignments`}
+                                    className="flex items-center gap-1.5 pl-1 pr-2 py-1 bg-white dark:bg-gray-800 rounded-full border border-gray-100 dark:border-gray-700 shadow-sm hover:scale-105 transition-transform hover:border-indigo-200"
                                     title={member.email}
                                 >
                                     <Avatar className="w-5 h-5">
@@ -163,7 +164,7 @@ function DroppableProject({ project, assignedMemberIds, members }: { project: Pr
                                     <span className="text-xs font-medium text-gray-700 dark:text-gray-300 max-w-[80px] truncate">
                                         {member.name.split(' ')[0]}
                                     </span>
-                                </div>
+                                </Link>
                             );
                         })}
                     </div>

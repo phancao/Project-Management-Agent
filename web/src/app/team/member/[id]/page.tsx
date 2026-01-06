@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useTeamDataContext, useTeamUsers, useTeamTasks } from "../../context/team-data-context";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
@@ -20,6 +20,8 @@ import type { PMTask } from "~/core/api/pm/tasks";
 export default function MemberPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const returnTab = searchParams.get('returnTab');
     const memberId = params.id as string; // Decode? It's typically raw string. OpenProject ID might contain colon.
 
     // Using context for data - assuming team data is already loaded or we force a load
@@ -140,7 +142,24 @@ export default function MemberPage() {
                 {/* Header */}
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-6">
-                        <Button variant="ghost" size="icon" className="rounded-full" onClick={() => router.push('/team?tab=teams')}>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-full"
+                            onClick={() => {
+                                if (returnTab === 'teams') {
+                                    router.push('/team?tab=members'); // "Teams" tab is actually key="members"
+                                } else if (returnTab === 'assignments') {
+                                    router.push('/team?tab=assignments');
+                                } else if (returnTab === 'worklogs') {
+                                    router.push('/team?tab=worklogs');
+                                } else if (returnTab === 'overview') {
+                                    router.push('/team?tab=overview');
+                                } else {
+                                    router.back();
+                                }
+                            }}
+                        >
                             <ArrowLeft className="w-5 h-5" />
                         </Button>
                         <Avatar className="w-20 h-20 border-4 border-white dark:border-gray-900 shadow-xl">

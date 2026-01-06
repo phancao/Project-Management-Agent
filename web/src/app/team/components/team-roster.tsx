@@ -1,6 +1,6 @@
-"use client"
 
 import { useState, useMemo } from "react"
+import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -84,16 +84,18 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {members.map((member: PMUser) => (
                                 <div key={member.id} className="group relative flex items-center gap-4 p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/40 hover:border-gray-200 dark:hover:border-gray-700 transition-all">
-                                    <Avatar className="h-12 w-12 border border-gray-100 dark:border-gray-800">
-                                        <AvatarImage src={member.avatar} />
-                                        <AvatarFallback className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
-                                            {member.name[0]}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-medium truncate">{member.name}</div>
-                                        <div className="text-xs text-muted-foreground truncate">{member.email}</div>
-                                    </div>
+                                    <Link href={`/team/member/${encodeURIComponent(member.id)}?returnTab=members`} className="flex items-center gap-4 flex-1 min-w-0">
+                                        <Avatar className="h-12 w-12 border border-gray-100 dark:border-gray-800 hover:opacity-80 transition-opacity">
+                                            <AvatarImage src={member.avatar} />
+                                            <AvatarFallback className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                                {member.name[0]}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-medium truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{member.name}</div>
+                                            <div className="text-xs text-muted-foreground truncate">{member.email}</div>
+                                        </div>
+                                    </Link>
                                     <Button
                                         variant="ghost"
                                         size="icon"
@@ -143,23 +145,31 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                     {(searchQuery ? filteredAvailable : availableUsers).slice(0, 12).map((user: PMUser) => (
-                                        <button
+                                        <div
                                             key={user.id}
                                             className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all text-left group"
-                                            onClick={() => handleAddMember(user.id)}
                                         >
-                                            <Avatar className="h-10 w-10">
-                                                <AvatarImage src={user.avatar} />
-                                                <AvatarFallback className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 text-sm">
-                                                    {user.name[0]}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium truncate">{user.name}</div>
-                                                <div className="text-xs text-muted-foreground truncate">{user.email}</div>
-                                            </div>
-                                            <Plus className="w-4 h-4 text-muted-foreground group-hover:text-indigo-500 flex-shrink-0" />
-                                        </button>
+                                            <Link href={`/team/member/${encodeURIComponent(user.id)}?returnTab=members`} className="flex-1 flex items-center gap-3 min-w-0">
+                                                <Avatar className="h-10 w-10 hover:opacity-80 transition-opacity">
+                                                    <AvatarImage src={user.avatar} />
+                                                    <AvatarFallback className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 text-sm">
+                                                        {user.name[0]}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{user.name}</div>
+                                                    <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                                                </div>
+                                            </Link>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 hover:bg-transparent"
+                                                onClick={() => handleAddMember(user.id)}
+                                            >
+                                                <Plus className="w-4 h-4 text-muted-foreground group-hover:text-indigo-500 flex-shrink-0" />
+                                            </Button>
+                                        </div>
                                     ))}
                                 </div>
                                 {availableUsers.length > 12 && !searchQuery && (

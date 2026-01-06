@@ -10,6 +10,7 @@ import { Loader2, BarChart3, Users, ListTodo, TrendingUp, Briefcase, Clock } fro
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { Progress } from "~/components/ui/progress";
+import Link from "next/link";
 
 // Helper to get start of current week (Monday)
 function getWeekStart(): Date {
@@ -100,10 +101,12 @@ function TeamStatsCard({ stats }: { stats: TeamStats }) {
                 <div className="flex items-center gap-1 pt-2">
                     <div className="flex -space-x-2">
                         {stats.members.slice(0, 5).map((member) => (
-                            <Avatar key={member.id} className="w-7 h-7 border-2 border-background">
-                                <AvatarImage src={member.avatar} />
-                                <AvatarFallback className="text-[10px]">{member.name?.[0] || "?"}</AvatarFallback>
-                            </Avatar>
+                            <Link key={member.id} href={`/team/member/${encodeURIComponent(member.id)}?returnTab=overview`}>
+                                <Avatar className="w-7 h-7 border-2 border-background hover:opacity-80 transition-opacity">
+                                    <AvatarImage src={member.avatar} />
+                                    <AvatarFallback className="text-[10px]">{member.name?.[0] || "?"}</AvatarFallback>
+                                </Avatar>
+                            </Link>
                         ))}
                         {stats.members.length > 5 && (
                             <div className="w-7 h-7 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-medium">

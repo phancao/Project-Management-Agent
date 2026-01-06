@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/com
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+import Link from "next/link";
 // @ts-expect-error - Direct import
 import Check from "lucide-react/dist/esm/icons/check";
 // @ts-expect-error - Direct import
@@ -14,10 +15,10 @@ import Clock from "lucide-react/dist/esm/icons/clock";
 
 // Mock Data
 const initialEntries = [
-    { id: '1', user: 'Alice', project: 'Website Redesign', task: 'Homepage Layout', hours: 6.5, date: '2025-05-12', status: 'pending' },
-    { id: '2', user: 'Bob', project: 'Mobile App', task: 'API Integration', hours: 8.0, date: '2025-05-12', status: 'approved' },
-    { id: '3', user: 'Alice', project: 'Website Redesign', task: 'Navigation Menu', hours: 2.0, date: '2025-05-13', status: 'rejected' },
-    { id: '4', user: 'Charlie', project: 'Website Redesign', task: 'Assets', hours: 4.0, date: '2025-05-12', status: 'approved' },
+    { id: '1', user: 'Alice', user_id: 'alice-id', project: 'Website Redesign', task: 'Homepage Layout', hours: 6.5, date: '2025-05-12', status: 'pending' },
+    { id: '2', user: 'Bob', user_id: 'bob-id', project: 'Mobile App', task: 'API Integration', hours: 8.0, date: '2025-05-12', status: 'approved' },
+    { id: '3', user: 'Alice', user_id: 'alice-id', project: 'Website Redesign', task: 'Navigation Menu', hours: 2.0, date: '2025-05-13', status: 'rejected' },
+    { id: '4', user: 'Charlie', user_id: 'charlie-id', project: 'Website Redesign', task: 'Assets', hours: 4.0, date: '2025-05-12', status: 'approved' },
 ];
 
 export function TimesheetGrid() {
@@ -55,9 +56,11 @@ export function TimesheetGrid() {
                         {entries.map((entry) => (
                             <div key={entry.id} className="grid grid-cols-6 gap-4 p-4 items-center hover:bg-gray-50/50 dark:hover:bg-gray-900/50 transition-colors">
                                 <div className="col-span-2 flex items-center gap-3">
-                                    <Avatar className="w-8 h-8">
-                                        <AvatarFallback>{entry.user[0]}</AvatarFallback>
-                                    </Avatar>
+                                    <Link href={`/team/member/${encodeURIComponent(entry.user_id || entry.user)}?returnTab=worklogs`}>
+                                        <Avatar className="w-8 h-8 hover:opacity-80 transition-opacity">
+                                            <AvatarFallback>{entry.user[0]}</AvatarFallback>
+                                        </Avatar>
+                                    </Link>
                                     <div>
                                         <div className="font-medium text-sm">{entry.task}</div>
                                         <div className="text-xs text-muted-foreground">by {entry.user}</div>

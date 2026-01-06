@@ -195,7 +195,7 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
                                 >
                                     <td className="p-2">
                                         <Link
-                                            href={`/team/member/${encodeURIComponent(member.id)}`}
+                                            href={`/team/member/${encodeURIComponent(member.id)}?returnTab=worklogs`}
                                             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                                         >
                                             <Avatar className="w-7 h-7">

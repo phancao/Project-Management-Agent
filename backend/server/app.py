@@ -179,23 +179,8 @@ async def lifespan(_app: FastAPI):  # FastAPI requires this parameter
     
     Handles startup and shutdown events.
     """
-    # Startup: Sync providers to MCP Server
-    logger.info("[Startup] Starting provider sync to MCP Server...")
-    try:
-        from backend.server.mcp_sync import check_and_sync_providers
-        
-        # Run sync in background to not block startup
-        async def startup_sync():
-            await asyncio.sleep(5)  # Wait for MCP Server to be ready
-            try:
-                result = await check_and_sync_providers()
-                logger.info(f"[Startup] Provider sync completed: {result}")
-            except Exception as e:
-                logger.warning(f"[Startup] Provider sync failed (non-fatal): {e}")
-        
-        asyncio.create_task(startup_sync())
-    except Exception as e:
-        logger.warning(f"[Startup] Failed to start provider sync: {e}")
+    # Startup: Log startup (sync moved to per-user lazy initialization)
+    logger.info("[Startup] Backend API starting...")
     
     yield
     
@@ -232,6 +217,145 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# ==================== Authentication Endpoints ====================
+
+@app.post("/api/auth/register")
+async def register_user(request: Request):
+    """Register a new user with email and password."""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import User
+        from backend.server.web_auth import (
+            RegisterRequest, hash_password, create_access_token, TokenResponse
+        )
+        
+        body = await request.json()
+        data = RegisterRequest(**body)
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Check if email already exists
+            existing_user = db.query(User).filter(User.email == data.email).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="Email already registered")
+            
+            # Create new user
+            new_user = User(
+                email=data.email,
+                password_hash=hash_password(data.password),
+                name=data.name,
+                role="user",
+            )
+            db.add(new_user)
+            db.commit()
+            db.refresh(new_user)
+            
+            # Generate token
+            token, expires_in = create_access_token(
+                user_id=str(new_user.id),
+                email=new_user.email,
+                name=new_user.name,
+                role=new_user.role or "user",
+            )
+            
+            return {
+                "access_token": token,
+                "token_type": "bearer",
+                "expires_in": expires_in,
+                "user": {
+                    "id": str(new_user.id),
+                    "email": new_user.email,
+                    "name": new_user.name,
+                    "role": new_user.role,
+                },
+            }
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/auth/login")
+async def login_user(request: Request):
+    """Login with email and password, returns JWT token."""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import User
+        from backend.server.web_auth import (
+            LoginRequest, verify_password, create_access_token
+        )
+        
+        body = await request.json()
+        data = LoginRequest(**body)
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Find user by email
+            user = db.query(User).filter(User.email == data.email).first()
+            
+            if not user:
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+            
+            if not user.password_hash:
+                raise HTTPException(status_code=401, detail="User has no password set. Please contact admin.")
+            
+            if not verify_password(data.password, user.password_hash):
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+            
+            # Generate token
+            token, expires_in = create_access_token(
+                user_id=str(user.id),
+                email=user.email,
+                name=user.name,
+                role=user.role or "user",
+            )
+            
+            return {
+                "access_token": token,
+                "token_type": "bearer",
+                "expires_in": expires_in,
+                "user": {
+                    "id": str(user.id),
+                    "email": user.email,
+                    "name": user.name,
+                    "role": user.role,
+                },
+            }
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/auth/me")
+async def get_current_user(request: Request):
+    """Get current authenticated user from JWT token."""
+    try:
+        from backend.server.web_auth import require_auth
+        
+        user = await require_auth(request)
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get current user error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Load examples into Milvus if configured
 load_examples()
@@ -3823,20 +3947,35 @@ async def pm_chat_stream(request: Request):
 # PM Provider Management Endpoints
 
 @app.get("/api/pm/providers")
-async def pm_list_providers():
-    """List all configured PM providers"""
+async def pm_list_providers(request: Request, include_disabled: bool = False):
+    """List all configured PM providers for the current user
+    
+    Args:
+        include_disabled: If true, include disabled providers (for management UI)
+    """
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
         from backend.server.mcp_sync import get_mcp_provider_id
+        from backend.server.web_auth import get_user_id_from_request
+        
+        # Get current user from JWT (optional - still allow unauthenticated for now)
+        user_id = get_user_id_from_request(request)
         
         db_gen = get_db_session()
         db = next(db_gen)
         
         try:
-            providers = db.query(PMProviderConnection).filter(
-                PMProviderConnection.is_active.is_(True)
-            ).all()
+            query = db.query(PMProviderConnection)
+            
+            # Filter by user if authenticated
+            if user_id:
+                from uuid import UUID
+                query = query.filter(PMProviderConnection.created_by == UUID(user_id))
+            
+            if not include_disabled:
+                query = query.filter(PMProviderConnection.is_active.is_(True))
+            providers = query.all()
             return [
                 {
                     "id": str(p.id),
@@ -3846,6 +3985,7 @@ async def pm_list_providers():
                     "username": p.username,
                     "organization_id": p.organization_id,
                     "workspace_id": p.workspace_id,
+                    "is_active": p.is_active,
                     # Include MCP provider ID for AI Agent context
                     "mcp_provider_id": get_mcp_provider_id(p),
                 }
@@ -3879,29 +4019,35 @@ async def pm_list_providers():
 
 
 @app.post("/api/pm/providers/import-projects")
-async def pm_import_projects(request: ProjectImportRequest):
+async def pm_import_projects(body: ProjectImportRequest, request: Request):
     """Save provider configuration and import projects"""
     try:
+        from uuid import UUID as UUIDTYPE
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
         from pm_providers.factory import create_pm_provider
         from backend.server.mcp_sync import sync_provider_to_mcp, MCPSyncError, set_mcp_provider_id
+        from backend.server.web_auth import get_user_id_from_request
+        
+        # Get current user from JWT (optional for now, but set created_by if available)
+        user_id = get_user_id_from_request(request)
         
         db_gen = get_db_session()
         db = next(db_gen)
         
         try:
-            # Create provider config
+            # Create provider config with created_by if user authenticated
             provider = PMProviderConnection(
-                name=f"{request.provider_type} - {request.base_url}",
-                provider_type=request.provider_type,
-                base_url=request.base_url,
-                api_key=request.api_key,
-                api_token=request.api_token,
-                username=request.username,
-                organization_id=request.organization_id,
-                workspace_id=request.workspace_id,
-                is_active=True
+                name=f"{body.provider_type} - {body.base_url}",
+                provider_type=body.provider_type,
+                base_url=body.base_url,
+                api_key=body.api_key,
+                api_token=body.api_token,
+                username=body.username,
+                organization_id=body.organization_id,
+                workspace_id=body.workspace_id,
+                is_active=True,
+                created_by=UUIDTYPE(user_id) if user_id else None,
             )
             db.add(provider)
             db.commit()
@@ -3916,11 +4062,11 @@ async def pm_import_projects(request: ProjectImportRequest):
                     name=str(provider.name),
                     provider_type=str(provider.provider_type),
                     base_url=str(provider.base_url),
-                    api_key=request.api_key,
-                    api_token=request.api_token,
-                    username=request.username,
-                    organization_id=request.organization_id,
-                    workspace_id=request.workspace_id,
+                    api_key=body.api_key,
+                    api_token=body.api_token,
+                    username=body.username,
+                    organization_id=body.organization_id,
+                    workspace_id=body.workspace_id,
                     is_active=True,
                     test_connection=False,  # We'll test below
                 )
@@ -3935,13 +4081,13 @@ async def pm_import_projects(request: ProjectImportRequest):
             
             # Create provider instance and import projects
             provider_instance = create_pm_provider(
-                provider_type=request.provider_type,
-                base_url=request.base_url,
-                api_key=request.api_key,
-                api_token=request.api_token,
-                username=request.username,
-                organization_id=request.organization_id,
-                workspace_id=request.workspace_id,
+                provider_type=body.provider_type,
+                base_url=body.base_url,
+                api_key=body.api_key,
+                api_token=body.api_token,
+                username=body.username,
+                organization_id=body.organization_id,
+                workspace_id=body.workspace_id,
             )
             
             try:
@@ -4482,6 +4628,87 @@ async def pm_check_and_sync_providers():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/pm/providers/reconcile")
+async def pm_reconcile_providers():
+    """
+    Full reconciliation between Backend and MCP Server.
+    
+    This endpoint:
+    1. Syncs all active Backend providers to MCP Server
+    2. DELETES any MCP providers that don't exist in Backend (orphan cleanup)
+    
+    Use this to completely clean up ghost/orphan providers in MCP Server.
+    This is also called automatically on backend startup.
+    """
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import PMProviderConnection
+        from backend.server.mcp_sync import bulk_sync_providers_to_mcp, MCPSyncError, set_mcp_provider_id
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            # Get all active providers from Backend
+            providers = db.query(PMProviderConnection).filter(
+                PMProviderConnection.is_active.is_(True)
+            ).all()
+            
+            # Build provider list for bulk sync
+            provider_configs = [
+                {
+                    "backend_provider_id": str(p.id),
+                    "name": p.name,
+                    "provider_type": p.provider_type,
+                    "base_url": p.base_url,
+                    "api_key": p.api_key,
+                    "api_token": p.api_token,
+                    "username": p.username,
+                    "organization_id": p.organization_id,
+                    "workspace_id": p.workspace_id,
+                    "is_active": True,
+                    "test_connection": False,
+                }
+                for p in providers
+            ]
+            
+            # Sync all and DELETE any MCP providers not in this list
+            result = await bulk_sync_providers_to_mcp(
+                providers=provider_configs,
+                delete_missing=True,  # This triggers cleanup of orphan MCP providers
+            )
+            
+            # Update MCP provider IDs for successful syncs
+            for sync_result in result.get("results", []):
+                if sync_result.get("success") and sync_result.get("mcp_provider_id"):
+                    backend_id = sync_result.get("backend_provider_id")
+                    for provider in providers:
+                        if str(provider.id) == backend_id:
+                            set_mcp_provider_id(provider, sync_result["mcp_provider_id"])
+                            break
+            
+            db.commit()
+            
+            return {
+                "success": result.get("success", False),
+                "message": f"Reconciled {result.get('synced', 0)} active providers, deleted {result.get('deleted', 0)} orphan MCP providers",
+                "backend_active_providers": len(providers),
+                "synced": result.get("synced", 0),
+                "failed": result.get("failed", 0),
+                "deleted": result.get("deleted", 0),
+                "errors": result.get("errors", []),
+            }
+        finally:
+            db.close()
+            
+    except MCPSyncError as e:
+        logger.error(f"Reconcile failed: {e}")
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to reconcile providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/pm/providers/sync-status")
 async def pm_get_sync_status():
     """
@@ -4535,12 +4762,16 @@ async def pm_get_sync_status():
 
 
 @app.delete("/api/pm/providers/{provider_id}")
-async def pm_delete_provider(provider_id: str):
+async def pm_delete_provider(provider_id: str, request: Request):
     """Delete (deactivate) a provider"""
     try:
         from database.connection import get_db_session
         from database.orm_models import PMProviderConnection
         from backend.server.mcp_sync import delete_provider_from_mcp, MCPSyncError
+        from backend.server.web_auth import get_user_id_from_request
+        
+        # Get current user from JWT
+        user_id = get_user_id_from_request(request)
         
         db_gen = get_db_session()
         db = next(db_gen)
@@ -4562,6 +4793,13 @@ async def pm_delete_provider(provider_id: str):
                 raise HTTPException(
                     status_code=404, detail="Provider not found"
                 )
+            
+            # Verify ownership if user is authenticated
+            if user_id and provider.created_by:
+                if str(provider.created_by) != user_id:
+                    raise HTTPException(
+                        status_code=403, detail="You do not own this provider"
+                    )
             
             # Soft delete by deactivating
             provider.is_active = False  # type: ignore
@@ -4597,10 +4835,108 @@ async def pm_delete_provider(provider_id: str):
         logger.error(f"Failed to delete provider: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================================================================
+# PM Provider Toggle Endpoint
+# ============================================================================
+
+@app.patch("/api/pm/providers/{provider_id}/toggle")
+async def pm_toggle_provider(provider_id: str, request: Request):
+    """Toggle a provider's active status (enable/disable)"""
+    try:
+        from database.connection import get_db_session
+        from database.orm_models import PMProviderConnection
+        from backend.server.mcp_sync import sync_provider_to_mcp, MCPSyncError, set_mcp_provider_id
+        from backend.server.web_auth import get_user_id_from_request
+        
+        # Get current user from JWT
+        user_id = get_user_id_from_request(request)
+        
+        db_gen = get_db_session()
+        db = next(db_gen)
+        
+        try:
+            from uuid import UUID
+            try:
+                provider_uuid = UUID(provider_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, detail="Invalid provider ID format"
+                )
+            
+            provider = db.query(PMProviderConnection).filter(
+                PMProviderConnection.id == provider_uuid
+            ).first()
+            
+            if not provider:
+                raise HTTPException(
+                    status_code=404, detail="Provider not found"
+                )
+            
+            # Verify ownership if user is authenticated
+            if user_id and provider.created_by:
+                if str(provider.created_by) != user_id:
+                    raise HTTPException(
+                        status_code=403, detail="You do not own this provider"
+                    )
+            
+            # Toggle the is_active status
+            new_status = not provider.is_active
+            provider.is_active = new_status
+            db.commit()
+            db.refresh(provider)
+            
+            # Sync to MCP Server
+            mcp_sync_result = None
+            mcp_sync_error = None
+            try:
+                mcp_sync_result = await sync_provider_to_mcp(
+                    backend_provider_id=str(provider.id),
+                    name=str(provider.name),
+                    provider_type=str(provider.provider_type),
+                    base_url=str(provider.base_url),
+                    api_key=str(provider.api_key) if provider.api_key else None,
+                    api_token=str(provider.api_token) if provider.api_token else None,
+                    username=str(provider.username) if provider.username else None,
+                    organization_id=str(provider.organization_id) if provider.organization_id else None,
+                    workspace_id=str(provider.workspace_id) if provider.workspace_id else None,
+                    is_active=new_status,
+                    test_connection=False,
+                )
+                if mcp_sync_result and mcp_sync_result.get("success"):
+                    set_mcp_provider_id(provider, mcp_sync_result["mcp_provider_id"])
+                    db.commit()
+                    logger.info(f"[pm_toggle_provider] Provider synced to MCP: {mcp_sync_result}")
+            except MCPSyncError as e:
+                mcp_sync_error = str(e)
+                logger.warning(f"[pm_toggle_provider] MCP sync failed (non-fatal): {e}")
+            
+            return {
+                "id": str(provider.id),
+                "name": provider.name,
+                "provider_type": provider.provider_type,
+                "base_url": provider.base_url,
+                "is_active": provider.is_active,
+                "mcp_sync": {
+                    "success": mcp_sync_result.get("success") if mcp_sync_result else False,
+                    "mcp_provider_id": mcp_sync_result.get("mcp_provider_id") if mcp_sync_result else None,
+                    "error": mcp_sync_error,
+                }
+            }
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to toggle provider: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # AI Provider API Key Management Endpoints
 # ============================================================================
+
 
 @app.get("/api/ai/providers", response_model=List[AIProviderAPIKeyResponse])
 async def list_ai_providers():

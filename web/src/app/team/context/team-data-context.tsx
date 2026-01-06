@@ -124,16 +124,20 @@ export function useTeamUsers(memberIds: string[]) {
 /**
  * Hook for tabs that need tasks data.
  * Call this within components that need tasks.
+ * Filters by assignee_ids at API level to avoid fetching all tasks.
  */
 export function useTeamTasks(memberIds: string[]) {
     const tasksQuery = useQuery({
-        queryKey: ['pm', 'tasks', 'all_active'],
-        queryFn: () => listTasks({}),
+        queryKey: ['pm', 'tasks', 'team', memberIds.slice().sort().join(',')],
+        queryFn: () => listTasks({ assignee_ids: memberIds }),
         staleTime: 2 * 60 * 1000, // 2 minutes
         gcTime: 5 * 60 * 1000,    // 5 minutes
+        enabled: memberIds.length > 0, // Don't fetch if no members
     });
 
     const allTasks = tasksQuery.data || [];
+    // Note: allTasks is already filtered by assignee_ids from the API
+    // teamTasks is provided for backwards compatibility but is the same as allTasks
     const teamTasks = useMemo(() =>
         allTasks.filter(t => t.assignee_id && memberIds.includes(t.assignee_id)),
         [allTasks, memberIds]

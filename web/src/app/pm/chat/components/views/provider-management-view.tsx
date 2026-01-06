@@ -15,6 +15,8 @@ import {
   AlertCircle,
   Brain,
   Key,
+  Power,
+  PowerOff,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -43,6 +45,7 @@ import {
   getProviderProjects,
   updateProvider,
   deleteProvider,
+  toggleProviderStatus,
   type ProviderConfig,
   type ProjectImportRequest,
   type ProjectInfo,
@@ -64,6 +67,7 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
   const [providerToDelete, setProviderToDelete] = useState<ProviderConfig | null>(null);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
+  const [togglingProviders, setTogglingProviders] = useState<Set<string>>(new Set());
 
   // Form state
   const [formData, setFormData] = useState<ProjectImportRequest>({
@@ -86,12 +90,15 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
   const loadProviders = async () => {
     setIsLoadingProviders(true);
     try {
-      const providerList = await listProviders();
+      // Include disabled providers for management view
+      const providerList = await listProviders(true);
       setProviders(providerList);
-      
-      // Load projects for each provider
+
+      // Load projects only for active providers
       for (const provider of providerList) {
-        await loadProjectsForProvider(provider);
+        if (provider.is_active !== false) {
+          await loadProjectsForProvider(provider);
+        }
       }
     } catch (err) {
       // Error is displayed in UI via setError, no need to log to console
@@ -106,14 +113,14 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
       // Silently skip if provider ID is missing
       return;
     }
-    
+
     const providerKey = provider.id;
-    
+
     // Skip if already loading or loaded
     if (projects[providerKey]?.loading) {
       return;
     }
-    
+
     setProjects((prev) => ({
       ...prev,
       [providerKey]: { projects: [], loading: true },
@@ -135,8 +142,8 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
       // Error is displayed in UI via setProjects with error state, no need to log to console
       setProjects((prev) => ({
         ...prev,
-        [providerKey]: { 
-          projects: [], 
+        [providerKey]: {
+          projects: [],
           loading: false,
           error: errorMessage,
         },
@@ -175,12 +182,12 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
 
   const validateApiKey = async (): Promise<boolean> => {
     // Check if API key/token is required and provided
-    const needsApiKey = 
+    const needsApiKey =
       formData.provider_type === "openproject" ||
       formData.provider_type === "openproject_v13" ||
       formData.provider_type === "clickup";
     const needsApiToken = formData.provider_type === "jira";
-    
+
     // For JIRA, both username (email) and API token are required
     if (needsApiToken) {
       if (!formData.username?.trim()) {
@@ -197,17 +204,17 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
         return true;
       }
     }
-    
+
     if (needsApiKey && !formData.api_key?.trim()) {
       setApiKeyError("API key is required");
       return false;
     }
-    
+
     // Test connection if API key/token is provided
     if ((needsApiKey && formData.api_key?.trim()) || (needsApiToken && formData.api_token?.trim())) {
       setIsValidating(true);
       setApiKeyError(null);
-      
+
       try {
         const request: ProjectImportRequest = {
           provider_type: formData.provider_type,
@@ -217,13 +224,13 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
             auto_sync: false,
           },
         };
-        
+
         if (needsApiKey) {
           request.api_key = formData.api_key;
         } else if (needsApiToken) {
           request.api_token = formData.api_token;
         }
-        
+
         // For JIRA, username is required
         if (formData.provider_type === "jira") {
           if (!formData.username?.trim()) {
@@ -235,23 +242,23 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
         } else if (formData.username) {
           request.username = formData.username;
         }
-        
+
         if (formData.organization_id) {
           request.organization_id = formData.organization_id;
         }
-        
+
         if (formData.workspace_id) {
           request.workspace_id = formData.workspace_id;
         }
-        
+
         const { testProviderConnection } = await import("~/core/api/pm/providers");
         const result = await testProviderConnection(request);
-        
+
         if (!result.success) {
           setApiKeyError(result.message || "Connection test failed");
           return false;
         }
-        
+
         setApiKeyError(null);
         return true;
       } catch (err) {
@@ -262,18 +269,18 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
         setIsValidating(false);
       }
     }
-    
+
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Prevent double submission
     if (isLoading || isValidating) {
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
@@ -286,7 +293,7 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
         setIsLoading(false);
         return;
       }
-      
+
       // Prepare request based on provider type
       const request: ProjectImportRequest = {
         provider_type: formData.provider_type,
@@ -353,8 +360,8 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
         } else {
           setError(
             response.errors?.[0]?.error ||
-              response.message ||
-              "Failed to configure provider",
+            response.message ||
+            "Failed to configure provider",
           );
         }
       }
@@ -411,6 +418,43 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
     }
   };
 
+  const handleToggleProvider = async (provider: ProviderConfig) => {
+    if (!provider.id) {
+      setError("Provider ID is missing");
+      return;
+    }
+
+    // Add to toggling set for loading state
+    setTogglingProviders((prev) => new Set(prev).add(provider.id!));
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await toggleProviderStatus(provider.id);
+      // Update local state
+      setProviders((prev) =>
+        prev.map((p) =>
+          p.id === provider.id ? { ...p, is_active: result.is_active } : p
+        )
+      );
+      setSuccessMessage(
+        result.is_active
+          ? `Provider "${result.name}" enabled successfully!`
+          : `Provider "${result.name}" disabled successfully!`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to toggle provider status"
+      );
+    } finally {
+      // Remove from toggling set
+      setTogglingProviders((prev) => {
+        const next = new Set(prev);
+        next.delete(provider.id!);
+        return next;
+      });
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -467,228 +511,269 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
 
           {/* PM Provider List */}
           <div className="flex-1 overflow-auto p-4">
-        {isLoadingProviders ? (
-          <div className="flex flex-col items-center justify-center h-full">
-            <RefreshCw className="w-8 h-8 text-gray-400 mb-4 animate-spin" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Loading providers...
-            </p>
-          </div>
-        ) : providers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center p-8">
-            <div className="max-w-md">
-              <Server className="w-20 h-20 text-gray-400 dark:text-gray-500 mx-auto mb-6" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                No Project Management Providers Configured
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                Connect to your project management system to start managing projects, tasks, and sprints.
-              </p>
-              
-              {/* Supported Providers */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
-                <p className="text-sm font-medium text-gray-900 dark:text-white mb-3">
-                  Supported Providers:
+            {isLoadingProviders ? (
+              <div className="flex flex-col items-center justify-center h-full">
+                <RefreshCw className="w-8 h-8 text-gray-400 mb-4 animate-spin" />
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Loading providers...
                 </p>
-                <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                  <li className="flex items-center gap-2">
-                    <span className="text-lg">{getProviderIcon("openproject")}</span>
-                    <span><strong>OpenProject</strong> - Open-source project management</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-lg">{getProviderIcon("openproject_v13")}</span>
-                    <span><strong>OpenProject v13</strong> - Legacy OpenProject instances</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-lg">{getProviderIcon("jira")}</span>
-                    <span><strong>JIRA</strong> - Atlassian JIRA Cloud or Server</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-lg">{getProviderIcon("clickup")}</span>
-                    <span><strong>ClickUp</strong> - All-in-one productivity platform</span>
-                  </li>
-                </ul>
               </div>
+            ) : providers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                <div className="max-w-md">
+                  <Server className="w-20 h-20 text-gray-400 dark:text-gray-500 mx-auto mb-6" />
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                    No Project Management Providers Configured
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                    Connect to your project management system to start managing projects, tasks, and sprints.
+                  </p>
 
-              {/* Quick Start Guide */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6 text-left">
-                <p className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
-                  Quick Start:
-                </p>
-                <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1.5 list-decimal list-inside">
-                  <li>Click the button below to add your first provider</li>
-                  <li>Select your project management system type</li>
-                  <li>Enter your server URL and API credentials</li>
-                  <li>Import your projects and start managing them</li>
-                </ol>
-              </div>
-
-              <Button 
-                onClick={() => setIsDialogOpen(true)}
-                size="lg"
-                className="w-full sm:w-auto"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Your First Provider
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {providers.map((provider) => {
-              const providerKey =
-                provider.id || `${provider.provider_type}-${provider.base_url}`;
-              const providerProjects = projects[providerKey];
-
-              return (
-                <div
-                  key={providerKey}
-                  className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">
-                        {getProviderIcon(provider.provider_type)}
-                      </span>
-                      <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
-                          {provider.provider_type.toUpperCase()}
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {provider.base_url}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => loadProjects(providerKey, provider)}
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(provider)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteClick(provider)}
-                        disabled={isLoading || !provider.id}
-                      >
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </Button>
-                    </div>
+                  {/* Supported Providers */}
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                      Supported Providers:
+                    </p>
+                    <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                      <li className="flex items-center gap-2">
+                        <span className="text-lg">{getProviderIcon("openproject")}</span>
+                        <span><strong>OpenProject</strong> - Open-source project management</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="text-lg">{getProviderIcon("openproject_v13")}</span>
+                        <span><strong>OpenProject v13</strong> - Legacy OpenProject instances</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="text-lg">{getProviderIcon("jira")}</span>
+                        <span><strong>JIRA</strong> - Atlassian JIRA Cloud or Server</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="text-lg">{getProviderIcon("clickup")}</span>
+                        <span><strong>ClickUp</strong> - All-in-one productivity platform</span>
+                      </li>
+                    </ul>
                   </div>
 
-                  {/* Projects List */}
-                  {providerProjects && (
-                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      {providerProjects.loading ? (
-                        <div className="flex items-center justify-center py-4">
-                          <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />
-                        </div>
-                      ) : providerProjects?.error ? (
-                        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
-                          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                              Failed to load projects
-                            </p>
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                              {providerProjects?.error || "Unknown error"}
+                  {/* Quick Start Guide */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6 text-left">
+                    <p className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
+                      Quick Start:
+                    </p>
+                    <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1.5 list-decimal list-inside">
+                      <li>Click the button below to add your first provider</li>
+                      <li>Select your project management system type</li>
+                      <li>Enter your server URL and API credentials</li>
+                      <li>Import your projects and start managing them</li>
+                    </ol>
+                  </div>
+
+                  <Button
+                    onClick={() => setIsDialogOpen(true)}
+                    size="lg"
+                    className="w-full sm:w-auto"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Your First Provider
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {providers.map((provider) => {
+                  const providerKey =
+                    provider.id || `${provider.provider_type}-${provider.base_url}`;
+                  const providerProjects = projects[providerKey];
+                  const isToggling = provider.id ? togglingProviders.has(provider.id) : false;
+                  const isDisabled = provider.is_active === false;
+
+                  return (
+                    <div
+                      key={providerKey}
+                      className={cn(
+                        "bg-white dark:bg-gray-800 border rounded-lg p-4 transition-all",
+                        isDisabled
+                          ? "border-gray-300 dark:border-gray-600 opacity-60"
+                          : "border-gray-200 dark:border-gray-700"
+                      )}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <span className={cn("text-2xl", isDisabled && "grayscale")}>
+                            {getProviderIcon(provider.provider_type)}
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className={cn(
+                                "font-semibold",
+                                isDisabled
+                                  ? "text-gray-500 dark:text-gray-400"
+                                  : "text-gray-900 dark:text-white"
+                              )}>
+                                {provider.provider_type.toUpperCase()}
+                              </h3>
+                              {isDisabled && (
+                                <span className="px-2 py-0.5 text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                                  Disabled
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {provider.base_url}
                             </p>
                           </div>
                         </div>
-                      ) : (providerProjects?.projects?.length ?? 0) > 0 ? (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Projects (
-                            {providerProjects?.projects?.length ?? 0}):
-                          </p>
-                          <div className="space-y-1">
-                            {providerProjects?.projects?.slice(0, 3).map((project) => {
-                              // Construct external URL for the project
-                              const getProjectUrl = (provider: ProviderConfig, projectId: string): string | null => {
-                                if (!provider.base_url) return null;
-                                
-                                const baseUrl = provider.base_url.replace(/\/$/, '');
-                                const providerType = provider.provider_type;
-                                switch (providerType) {
-                                  case "jira":
-                                    // JIRA: try /browse/{projectKey} first, fallback to /projects/{projectKey}
-                                    return `${baseUrl}/browse/${projectId}`;
-                                  case "openproject":
-                                  case "openproject_v13":
-                                    // OpenProject: projects are at /projects/{projectId}
-                                    return `${baseUrl}/projects/${projectId}`;
-                                  case "clickup":
-                                    // ClickUp: projects/spaces might be at different URLs
-                                    // For now, try a common pattern
-                                    return `${baseUrl.replace('/api/v2', '')}/p/${projectId}`;
-                                  default:
-                                    return null;
-                                }
-                              };
-                              
-                              const projectUrl = getProjectUrl(provider, project.id);
-                              
-                              return (
-                                <div
-                                  key={project.id}
-                                  className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded"
-                                >
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                      {project.name}
-                                    </p>
-                                    {project.description && (
-                                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
-                                        {project.description.length > 100 
-                                          ? `${project.description.substring(0, 100)}...`
-                                          : project.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                  {projectUrl ? (
-                                    <a
-                                      href={projectUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0 ml-2"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <ExternalLink className="w-4 h-4" />
-                                    </a>
-                                  ) : (
-                                    <ExternalLink className="w-4 h-4 text-gray-400 shrink-0 ml-2" />
-                                  )}
-                                </div>
-                              );
-                            })}
-                            {providerProjects?.projects?.length > 3 && (
-                              <p className="text-xs text-gray-500 dark:text-gray-400 pt-1">
-                                +{providerProjects.projects.length - 3} more project{providerProjects.projects.length - 3 !== 1 ? 's' : ''}
-                              </p>
+                        <div className="flex items-center gap-2">
+                          {/* Toggle Enable/Disable Button */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleProvider(provider)}
+                            disabled={isToggling || !provider.id}
+                            title={isDisabled ? "Enable provider" : "Disable provider"}
+                            className={cn(
+                              isDisabled
+                                ? "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                : "text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
                             )}
-                          </div>
+                          >
+                            {isToggling ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : isDisabled ? (
+                              <Power className="w-4 h-4" />
+                            ) : (
+                              <PowerOff className="w-4 h-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => loadProjects(providerKey, provider)}
+                            disabled={isDisabled}
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(provider)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteClick(provider)}
+                            disabled={isLoading || !provider.id}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </Button>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          No projects found
-                        </p>
+                      </div>
+
+                      {/* Projects List */}
+                      {providerProjects && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                          {providerProjects.loading ? (
+                            <div className="flex items-center justify-center py-4">
+                              <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />
+                            </div>
+                          ) : providerProjects?.error ? (
+                            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+                              <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                                  Failed to load projects
+                                </p>
+                                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                  {providerProjects?.error || "Unknown error"}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (providerProjects?.projects?.length ?? 0) > 0 ? (
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Projects (
+                                {providerProjects?.projects?.length ?? 0}):
+                              </p>
+                              <div className="space-y-1">
+                                {providerProjects?.projects?.slice(0, 3).map((project) => {
+                                  // Construct external URL for the project
+                                  const getProjectUrl = (provider: ProviderConfig, projectId: string): string | null => {
+                                    if (!provider.base_url) return null;
+
+                                    const baseUrl = provider.base_url.replace(/\/$/, '');
+                                    const providerType = provider.provider_type;
+                                    switch (providerType) {
+                                      case "jira":
+                                        // JIRA: try /browse/{projectKey} first, fallback to /projects/{projectKey}
+                                        return `${baseUrl}/browse/${projectId}`;
+                                      case "openproject":
+                                      case "openproject_v13":
+                                        // OpenProject: projects are at /projects/{projectId}
+                                        return `${baseUrl}/projects/${projectId}`;
+                                      case "clickup":
+                                        // ClickUp: projects/spaces might be at different URLs
+                                        // For now, try a common pattern
+                                        return `${baseUrl.replace('/api/v2', '')}/p/${projectId}`;
+                                      default:
+                                        return null;
+                                    }
+                                  };
+
+                                  const projectUrl = getProjectUrl(provider, project.id);
+
+                                  return (
+                                    <div
+                                      key={project.id}
+                                      className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded"
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                          {project.name}
+                                        </p>
+                                        {project.description && (
+                                          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                                            {project.description.length > 100
+                                              ? `${project.description.substring(0, 100)}...`
+                                              : project.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                      {projectUrl ? (
+                                        <a
+                                          href={projectUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0 ml-2"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <ExternalLink className="w-4 h-4" />
+                                        </a>
+                                      ) : (
+                                        <ExternalLink className="w-4 h-4 text-gray-400 shrink-0 ml-2" />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                {providerProjects?.projects?.length > 3 && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 pt-1">
+                                    +{providerProjects.projects.length - 3} more project{providerProjects.projects.length - 3 !== 1 ? 's' : ''}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              No projects found
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                  );
+                })}
+              </div>
+            )}
           </div>
         </TabsContent>
 
@@ -751,50 +836,50 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
               />
             </div>
 
-                                  {(formData.provider_type === "openproject" ||
-                        formData.provider_type === "openproject_v13" ||
-                        formData.provider_type === "clickup") && (
-                        <div className="space-y-2">
-                          <Label htmlFor="api_key">
-                            API Key
-                            {editingProvider && (
-                              <span className="text-xs text-gray-500 ml-2">
-                                (leave blank to keep existing)
-                              </span>
-                            )}
-                            {!editingProvider && <span className="text-red-500 ml-1">*</span>}
-                          </Label>
-                          <Input
-                            id="api_key"
-                            type="password"
-                            placeholder={
-                              editingProvider
-                                ? "Enter new API key or leave blank"
-                                : "Enter API key"
-                            }
-                            value={formData.api_key}
-                            onChange={(e) => {
-                              setFormData({ ...formData, api_key: e.target.value });
-                              setApiKeyError(null);
-                            }}
-                            required={!editingProvider}
-                            className={apiKeyError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
-                            disabled={isValidating}
-                          />
-                          {apiKeyError && (
-                            <p className="text-sm text-red-500 flex items-center gap-1">
-                              <AlertCircle className="w-4 h-4" />
-                              {apiKeyError}
-                            </p>
-                          )}
-                          {isValidating && !apiKeyError && (
-                            <p className="text-sm text-blue-500 flex items-center gap-1">
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              Testing connection...
-                            </p>
-                          )}
-                        </div>
-                      )}
+            {(formData.provider_type === "openproject" ||
+              formData.provider_type === "openproject_v13" ||
+              formData.provider_type === "clickup") && (
+                <div className="space-y-2">
+                  <Label htmlFor="api_key">
+                    API Key
+                    {editingProvider && (
+                      <span className="text-xs text-gray-500 ml-2">
+                        (leave blank to keep existing)
+                      </span>
+                    )}
+                    {!editingProvider && <span className="text-red-500 ml-1">*</span>}
+                  </Label>
+                  <Input
+                    id="api_key"
+                    type="password"
+                    placeholder={
+                      editingProvider
+                        ? "Enter new API key or leave blank"
+                        : "Enter API key"
+                    }
+                    value={formData.api_key}
+                    onChange={(e) => {
+                      setFormData({ ...formData, api_key: e.target.value });
+                      setApiKeyError(null);
+                    }}
+                    required={!editingProvider}
+                    className={apiKeyError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
+                    disabled={isValidating}
+                  />
+                  {apiKeyError && (
+                    <p className="text-sm text-red-500 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {apiKeyError}
+                    </p>
+                  )}
+                  {isValidating && !apiKeyError && (
+                    <p className="text-sm text-blue-500 flex items-center gap-1">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Testing connection...
+                    </p>
+                  )}
+                </div>
+              )}
 
             {formData.provider_type === "jira" && (
               <>
@@ -884,32 +969,32 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
               </div>
             )}
 
-                              <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCloseDialog}
-                    >
-                      Cancel
-                    </Button>
-                    <Button 
-                      type="submit" 
-                      disabled={isLoading || isValidating || !!apiKeyError}
-                      className={apiKeyError ? "opacity-50 cursor-not-allowed" : ""}
-                    >
-                      {isLoading || isValidating ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          {isValidating ? "Testing..." : editingProvider ? "Updating..." : "Connecting..."}
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          {editingProvider ? "Update" : "Connect"}
-                        </>
-                      )}
-                    </Button>
-                  </DialogFooter>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCloseDialog}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isLoading || isValidating || !!apiKeyError}
+                className={apiKeyError ? "opacity-50 cursor-not-allowed" : ""}
+              >
+                {isLoading || isValidating ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    {isValidating ? "Testing..." : editingProvider ? "Updating..." : "Connecting..."}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    {editingProvider ? "Update" : "Connect"}
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

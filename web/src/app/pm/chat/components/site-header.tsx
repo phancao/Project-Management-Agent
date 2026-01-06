@@ -1,17 +1,28 @@
 // Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
-import { StarFilledIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
+"use client";
+
+import { StarFilledIcon, GitHubLogoIcon, ExitIcon } from "@radix-ui/react-icons";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslations } from 'next-intl';
 
 import { LanguageSwitcher } from "~/components/deer-flow/language-switcher";
 import { NumberTicker } from "~/components/magicui/number-ticker";
 import { Button } from "~/components/ui/button";
 import { env } from "~/env";
+import { useAuth } from "~/core/contexts/auth-context";
 
 export function SiteHeader() {
   const t = useTranslations('common');
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
 
   return (
     <header className="supports-backdrop-blur:bg-background/80 bg-background/40 sticky top-0 left-0 z-40 flex h-15 w-full flex-col items-center backdrop-blur-lg">
@@ -21,6 +32,21 @@ export function SiteHeader() {
           <span>Galaxy AI Project Manager</span>
         </div>
         <div className="relative flex items-center gap-2">
+          {user && (
+            <span className="text-sm text-muted-foreground mr-2">
+              {user.name}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className="relative z-10"
+            title="Logout"
+          >
+            <ExitIcon className="size-4 mr-1" />
+            Logout
+          </Button>
           <LanguageSwitcher />
           <div
             className="pointer-events-none absolute inset-0 z-0 h-full w-full rounded-full opacity-60 blur-2xl"
@@ -58,9 +84,9 @@ export async function StarCounter() {
       {
         headers: env.GITHUB_OAUTH_TOKEN
           ? {
-              Authorization: `Bearer ${env.GITHUB_OAUTH_TOKEN}`,
-              "Content-Type": "application/json",
-            }
+            Authorization: `Bearer ${env.GITHUB_OAUTH_TOKEN}`,
+            "Content-Type": "application/json",
+          }
           : {},
         next: {
           revalidate: 3600,

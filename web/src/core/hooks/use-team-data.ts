@@ -18,18 +18,14 @@ export function useTeamData(memberIds: string[]) {
     const teamMembers = (usersQuery.data || []).filter(u => memberIds.includes(u.id));
 
     // 2. Fetch Tasks for Team Members
-    // Ideally we filter by assignee_id IN [...], but API might not support bulk.
-    // We'll fetch all tasks or loop. For now, let's fetch all active tasks and filter client side.
-    // Optimization: If memberIds is empty, don't fetch.
+    // Filter by assignee_ids at API level to avoid fetching all tasks
     const tasksQuery = useQuery({
-        queryKey: ['pm', 'tasks', 'all_active'], // Cache key shared across teams for now
-        queryFn: () => listTasks({ /* limit/status not supported by strict types yet, fix later if needed */ }),
+        queryKey: ['pm', 'tasks', 'team', memberIds.slice().sort().join(',')],
+        queryFn: () => listTasks({ assignee_ids: memberIds }),
         enabled: memberIds.length > 0
     });
 
-    const teamTasks = (tasksQuery.data || []).filter(t =>
-        t.assignee_id && memberIds.includes(t.assignee_id)
-    );
+    const teamTasks = tasksQuery.data || [];
 
     // 3. Fetch Time Entries (e.g., last 30 days)
     const timeQuery = useQuery({

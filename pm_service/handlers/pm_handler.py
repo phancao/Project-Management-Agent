@@ -139,13 +139,27 @@ class PMHandler:
         return self.create_provider_instance(provider_conn)
     
     def record_error(self, provider_id: str, error: Exception) -> None:
-        """Record provider error."""
+        """Record provider error. Connection errors are logged as warnings (expected behavior)."""
         self._errors.append({
             "provider_id": provider_id,
             "error": str(error),
             "type": type(error).__name__
         })
-        logger.error(f"Provider {provider_id} error: {error}")
+        # Connection errors are expected when providers are unavailable - use WARNING
+        error_type = type(error).__name__
+        error_str = str(error)
+        is_connection_error = (
+            "ConnectionError" in error_type or 
+            "MaxRetryError" in error_type or
+            "NameResolutionError" in error_str or
+            "Failed to resolve" in error_str or
+            "Connection refused" in error_str or
+            "timeout" in error_str.lower()
+        )
+        if is_connection_error:
+            logger.warning(f"Provider {provider_id} unavailable: {error}")
+        else:
+            logger.error(f"Provider {provider_id} error: {error}")
     
     def get_errors(self) -> list[dict[str, Any]]:
         """Get recorded errors."""
@@ -232,7 +246,7 @@ class PMHandler:
                     
             except Exception as e:
                 self.record_error(str(provider_conn.id), e)
-                logger.error(f"[PM-DEBUG][{run_id}] Failed to fetch from {provider_conn.name}: {e}")
+                logger.warning(f"[PM-DEBUG][{run_id}] Provider {provider_conn.name} unavailable, skipping: {type(e).__name__}")
                 continue
 
         projects = await buffer.read_all()

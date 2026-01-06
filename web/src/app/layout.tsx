@@ -16,6 +16,7 @@ import { env } from "~/env";
 import { Toaster } from "../components/deer-flow/toaster";
 import { LoadingProvider } from "~/core/contexts/loading-context";
 import { LoadingScreen } from "~/components/ui/loading-screen";
+import { AuthProvider } from "~/core/contexts/auth-context";
 
 export const metadata: Metadata = {
   title: "🌌 Galaxy AI Project Manager",
@@ -55,7 +56,9 @@ export default async function RootLayout({
           <PMMCPAutoConfig />
           <LoadingProvider>
             <LoadingScreen />
-            <ThemeProviderWrapper>{children}</ThemeProviderWrapper>
+            <ThemeProviderWrapper>
+              <AuthProvider>{children}</AuthProvider>
+            </ThemeProviderWrapper>
           </LoadingProvider>
           <Toaster />
         </NextIntlClientProvider>

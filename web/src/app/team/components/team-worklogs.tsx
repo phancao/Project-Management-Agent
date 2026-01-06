@@ -4,19 +4,25 @@ import { useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Button } from "~/components/ui/button"
 import { useTeamDataContext, useTeamUsers, useTeamTimeEntries } from "../context/team-data-context"
-import { ChevronLeft, ChevronRight, Clock, AlertTriangle, Users, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Users, Loader2 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar"
 import { Badge } from "~/components/ui/badge"
 import { cn } from "~/lib/utils"
 
-// Helper to get start of week (Monday)
-function getWeekStart(date: Date): Date {
-    const d = new Date(date)
-    const day = d.getDay()
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1) // Monday
-    d.setDate(diff)
-    d.setHours(0, 0, 0, 0)
-    return d
+interface TeamData {
+    id: string
+    name: string
+    memberIds: string[]
+}
+
+// Helper to get start of week (Monday) with offset
+function getWeekStart(weekOffset: number = 0): Date {
+    const today = new Date()
+    const day = today.getDay()
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1) // Monday
+    today.setDate(diff + (weekOffset * 7))
+    today.setHours(0, 0, 0, 0)
+    return today
 }
 
 // Generate array of 7 days starting from Monday
@@ -53,52 +59,46 @@ interface MemberWorklogRow {
     isUnderUtilized: boolean // <40h/week
 }
 
-export function TeamWorklogs() {
+// Individual team card component with its own state
+function TeamWorklogCard({ team }: { team: TeamData }) {
     const [weekOffset, setWeekOffset] = useState(0)
 
-    // Get current week based on offset
-    const currentWeekStart = useMemo(() => {
-        const today = new Date()
-        const start = getWeekStart(today)
-        start.setDate(start.getDate() + (weekOffset * 7))
-        return start
+    // Calculate week dates based on this card's offset
+    const weekRange = useMemo(() => {
+        const start = getWeekStart(weekOffset)
+        const end = new Date(start)
+        end.setDate(end.getDate() + 6)
+        return {
+            start: formatDateKey(start),
+            end: formatDateKey(end),
+            startDate: start,
+            endDate: end,
+            weekDays: getWeekDays(start)
+        }
     }, [weekOffset])
 
-    const weekDays = useMemo(() => getWeekDays(currentWeekStart), [currentWeekStart])
-
-    // Calculate week end date
-    const weekEndDate = useMemo(() => {
-        const end = new Date(currentWeekStart)
-        end.setDate(end.getDate() + 6)
-        return end
-    }, [currentWeekStart])
-
-    // Context and data hooks
-    const { allMemberIds, isLoading: isContextLoading } = useTeamDataContext()
-    const { teamMembers, isLoading: isLoadingUsers, count: usersCount } = useTeamUsers(allMemberIds)
-    // Use server-side date filtering for efficient queries
-    const { teamTimeEntries, isLoading: isLoadingTimeEntries, count: timeEntriesCount } = useTeamTimeEntries(
-        allMemberIds,
-        { startDate: formatDateKey(currentWeekStart), endDate: formatDateKey(weekEndDate) }
+    // Fetch data for this team's members only
+    const { teamMembers, isLoading: isLoadingUsers } = useTeamUsers(team.memberIds)
+    const { teamTimeEntries, isLoading: isLoadingTimeEntries, isFetching } = useTeamTimeEntries(
+        team.memberIds,
+        { startDate: weekRange.start, endDate: weekRange.end }
     )
 
-    // Build worklog data per member - only team members
+    const isInitialLoading = isLoadingUsers || isLoadingTimeEntries
+    const showLoadingOverlay = isFetching
+
+    // Build worklog data
     const worklogData = useMemo((): MemberWorklogRow[] => {
-        if (isLoadingUsers || isLoadingTimeEntries) return []
+        if (isInitialLoading) return []
 
         return teamMembers.map(user => {
-            // Get time entries for this user
             const userEntries = teamTimeEntries.filter(e => e.user_id === user.id)
-
-            // Build daily hours array (Mon-Sun)
-            const dailyHours = weekDays.map(day => {
+            const dailyHours = weekRange.weekDays.map(day => {
                 const dateKey = formatDateKey(day)
                 const dayEntries = userEntries.filter(e => e.date?.startsWith(dateKey))
                 return dayEntries.reduce((sum, e) => sum + (e.hours || 0), 0)
             })
-
             const totalHours = dailyHours.reduce((sum, h) => sum + h, 0)
-
             return {
                 id: user.id,
                 name: user.name || 'Unknown',
@@ -107,220 +107,150 @@ export function TeamWorklogs() {
                 totalHours,
                 isUnderUtilized: totalHours < 40
             }
-        }).sort((a, b) => a.totalHours - b.totalHours) // Sort by lowest hours first
-    }, [teamMembers, teamTimeEntries, weekDays, isLoadingUsers, isLoadingTimeEntries])
+        }).sort((a, b) => a.totalHours - b.totalHours)
+    }, [teamMembers, teamTimeEntries, weekRange.weekDays, isInitialLoading])
 
-    // Summary stats
-    const stats = useMemo(() => {
-        const underUtilizedCount = worklogData.filter(m => m.isUnderUtilized).length
-        const avgHours = worklogData.length > 0
-            ? Math.round(worklogData.reduce((sum, m) => sum + m.totalHours, 0) / worklogData.length)
-            : 0
-        return { underUtilizedCount, avgHours, totalMembers: worklogData.length }
-    }, [worklogData])
+    // Don't render cards for empty teams (after initial load)
+    if (!isInitialLoading && worklogData.length === 0) return null
 
-    const isLoading = isContextLoading || isLoadingUsers || isLoadingTimeEntries
+    const isCurrentWeek = weekOffset === 0
 
-    if (isLoading) {
-        const loadingItems = [
-            { label: "Users", isLoading: isLoadingUsers, count: usersCount },
-            { label: "Time Entries", isLoading: isLoadingTimeEntries, count: timeEntriesCount },
-        ]
-        const completedCount = loadingItems.filter(item => !item.isLoading).length
-        const progressPercent = Math.round((completedCount / loadingItems.length) * 100)
-
-        return (
-            <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
-                <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400 animate-pulse" />
+    return (
+        <Card>
+            <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <Users className="w-4 h-4" />
+                        {team.name}
+                        <Badge variant="secondary" className="ml-2">{team.memberIds.length} members</Badge>
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                        {/* Week navigation - same style as workload chart */}
+                        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => setWeekOffset(w => w - 1)}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <span className="text-sm font-medium px-2 min-w-[120px] text-center">
+                                {formatDateDisplay(weekRange.startDate)} - {formatDateDisplay(weekRange.endDate)}
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => setWeekOffset(w => w + 1)}
+                                disabled={isCurrentWeek}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
                         </div>
-                        <div>
-                            <h3 className="text-sm font-semibold">Loading Worklogs</h3>
-                            <p className="text-xs text-muted-foreground">{progressPercent}% complete</p>
-                        </div>
-                    </div>
-                    <div className="w-full h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
-                        <div
-                            className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full transition-all duration-500"
-                            style={{ width: `${progressPercent}%` }}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        {loadingItems.map((item, index) => (
-                            <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
-                                <div className="flex items-center gap-2">
-                                    {index === 0 ? <Users className="w-3.5 h-3.5 text-blue-500" /> : <Clock className="w-3.5 h-3.5 text-orange-500" />}
-                                    <span className="text-xs font-medium">{item.label}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <span className={`text-xs font-mono tabular-nums ${item.isLoading ? 'text-orange-600' : 'text-green-600'}`}>
-                                        {item.isLoading ? (item.count > 0 ? item.count : "...") : item.count}
-                                    </span>
-                                    {item.isLoading ? (
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />
-                                    ) : (
-                                        <div className="w-3.5 h-3.5 text-green-500">✓</div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                        {!isCurrentWeek && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setWeekOffset(0)}
+                            >
+                                Today
+                            </Button>
+                        )}
                     </div>
                 </div>
-            </div>
-        )
-    }
+            </CardHeader>
+            <CardContent className="relative">
+                {/* Loading overlay - only for this card */}
+                {showLoadingOverlay && (
+                    <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    </div>
+                )}
+                <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                        <thead>
+                            <tr className="border-b">
+                                <th className="text-left p-2 font-medium text-sm w-[200px]">Member</th>
+                                {DAY_NAMES.map((day, i) => (
+                                    <th key={day} className="text-center p-2 font-medium text-sm min-w-[60px]">
+                                        <div>{day}</div>
+                                        <div className="text-xs text-muted-foreground font-normal">
+                                            {formatDateDisplay(weekRange.weekDays[i]!)}
+                                        </div>
+                                    </th>
+                                ))}
+                                <th className="text-center p-2 font-medium text-sm min-w-[70px] bg-muted/50">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {worklogData.map((member: MemberWorklogRow) => (
+                                <tr
+                                    key={member.id}
+                                    className={cn(
+                                        "border-b hover:bg-muted/30 transition-colors",
+                                        member.isUnderUtilized && "bg-red-50 dark:bg-red-950/20"
+                                    )}
+                                >
+                                    <td className="p-2">
+                                        <div className="flex items-center gap-2">
+                                            <Avatar className="w-7 h-7">
+                                                <AvatarImage src={member.avatar} />
+                                                <AvatarFallback className="text-xs">{member.name?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <span className="text-sm font-medium truncate max-w-[150px]">{member.name}</span>
+                                        </div>
+                                    </td>
+                                    {member.dailyHours.map((hours: number, dayIndex: number) => {
+                                        const isWeekday = dayIndex < 5
+                                        const isFullyLogged = hours >= 8
+                                        const isPartiallyLogged = hours > 0 && hours < 8
+                                        const isUnlogged = hours === 0
+
+                                        return (
+                                            <td
+                                                key={dayIndex}
+                                                className={cn(
+                                                    "text-center p-2 text-sm tabular-nums font-medium",
+                                                    isWeekday && isFullyLogged && "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40",
+                                                    isWeekday && isPartiallyLogged && "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40",
+                                                    isWeekday && isUnlogged && "text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-950/50 font-bold",
+                                                    !isWeekday && hours === 0 && "text-muted-foreground/50",
+                                                    !isWeekday && hours > 0 && "text-blue-500 dark:text-blue-400"
+                                                )}
+                                            >
+                                                {hours}h
+                                            </td>
+                                        )
+                                    })}
+                                    <td className={cn(
+                                        "text-center p-2 text-sm font-bold tabular-nums bg-muted/50",
+                                        member.totalHours >= 40 && "text-emerald-600 dark:text-emerald-400",
+                                        member.totalHours > 0 && member.totalHours < 40 && "text-amber-600 dark:text-amber-400",
+                                        member.totalHours === 0 && "text-red-500 dark:text-red-400"
+                                    )}>
+                                        {member.totalHours}h
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
+// Main component - just renders team cards
+export function TeamWorklogs() {
+    const { teams } = useTeamDataContext()
 
     return (
         <div className="space-y-6">
-            {/* Summary Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-200 dark:border-blue-900">
-                    <CardContent className="pt-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Users className="w-4 h-4 text-blue-500" />
-                            <span className="text-xs text-muted-foreground">Total Members</span>
-                        </div>
-                        <div className="text-2xl font-bold">{stats.totalMembers}</div>
-                    </CardContent>
-                </Card>
-                <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-200 dark:border-green-900">
-                    <CardContent className="pt-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Clock className="w-4 h-4 text-green-500" />
-                            <span className="text-xs text-muted-foreground">Avg Hours/Week</span>
-                        </div>
-                        <div className="text-2xl font-bold">{stats.avgHours}h</div>
-                    </CardContent>
-                </Card>
-                <Card className={cn(
-                    "bg-gradient-to-br border",
-                    stats.underUtilizedCount > 0
-                        ? "from-red-500/10 to-orange-500/10 border-red-200 dark:border-red-900"
-                        : "from-gray-500/10 to-slate-500/10 border-gray-200 dark:border-gray-800"
-                )}>
-                    <CardContent className="pt-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <AlertTriangle className={cn("w-4 h-4", stats.underUtilizedCount > 0 ? "text-red-500" : "text-gray-400")} />
-                            <span className="text-xs text-muted-foreground">Under 40h/week</span>
-                        </div>
-                        <div className={cn("text-2xl font-bold", stats.underUtilizedCount > 0 && "text-red-500")}>
-                            {stats.underUtilizedCount}
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Week Navigation */}
-            <Card>
-                <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle className="flex items-center gap-2">
-                                <Clock className="w-5 h-5" />
-                                Weekly Worklogs
-                            </CardTitle>
-                            <CardDescription>
-                                Week of {formatDateDisplay(currentWeekStart)} - {formatDateDisplay(weekDays[6]!)}
-                            </CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" onClick={() => setWeekOffset(w => w - 1)}>
-                                <ChevronLeft className="w-4 h-4" />
-                                Prev
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => setWeekOffset(0)} disabled={weekOffset === 0}>
-                                Today
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => setWeekOffset(w => w + 1)}>
-                                Next
-                                <ChevronRight className="w-4 h-4" />
-                            </Button>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {worklogData.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                            No team members found.
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full border-collapse">
-                                <thead>
-                                    <tr className="border-b">
-                                        <th className="text-left p-2 font-medium text-sm w-[200px]">Member</th>
-                                        {DAY_NAMES.map((day, i) => (
-                                            <th key={day} className="text-center p-2 font-medium text-sm min-w-[60px]">
-                                                <div>{day}</div>
-                                                <div className="text-xs text-muted-foreground font-normal">
-                                                    {formatDateDisplay(weekDays[i]!)}
-                                                </div>
-                                            </th>
-                                        ))}
-                                        <th className="text-center p-2 font-medium text-sm min-w-[70px] bg-muted/50">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {worklogData.map((member) => (
-                                        <tr
-                                            key={member.id}
-                                            className={cn(
-                                                "border-b hover:bg-muted/30 transition-colors",
-                                                member.isUnderUtilized && "bg-red-50 dark:bg-red-950/20"
-                                            )}
-                                        >
-                                            <td className="p-2">
-                                                <div className="flex items-center gap-2">
-                                                    <Avatar className="w-7 h-7">
-                                                        <AvatarImage src={member.avatar} />
-                                                        <AvatarFallback className="text-xs">{member.name?.[0]}</AvatarFallback>
-                                                    </Avatar>
-                                                    <span className="text-sm font-medium truncate max-w-[150px]">{member.name}</span>
-                                                </div>
-                                            </td>
-                                            {member.dailyHours.map((hours, dayIndex) => {
-                                                const isWeekday = dayIndex < 5
-                                                const isFullyLogged = hours >= 8
-                                                const isPartiallyLogged = hours > 0 && hours < 8
-                                                const isUnlogged = hours === 0
-                                                const isUnder = isWeekday && hours < 8
-
-                                                return (
-                                                    <td
-                                                        key={dayIndex}
-                                                        className={cn(
-                                                            "text-center p-2 text-sm tabular-nums font-medium",
-                                                            // Weekday styling
-                                                            isWeekday && isFullyLogged && "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40",
-                                                            isWeekday && isPartiallyLogged && "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40",
-                                                            isWeekday && isUnlogged && "text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-950/50 font-bold",
-                                                            // Weekend styling (muted)
-                                                            !isWeekday && hours === 0 && "text-muted-foreground/50",
-                                                            !isWeekday && hours > 0 && "text-blue-500 dark:text-blue-400"
-                                                        )}
-                                                    >
-                                                        {hours}h
-                                                    </td>
-                                                )
-                                            })}
-                                            <td className={cn(
-                                                "text-center p-2 text-sm font-bold tabular-nums bg-muted/50",
-                                                member.totalHours >= 40 && "text-emerald-600 dark:text-emerald-400",
-                                                member.totalHours > 0 && member.totalHours < 40 && "text-amber-600 dark:text-amber-400",
-                                                member.totalHours === 0 && "text-red-500 dark:text-red-400"
-                                            )}>
-                                                {member.totalHours}h
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+            {/* Per-Team Worklog Cards - each with independent state */}
+            {teams.map(team => (
+                <TeamWorklogCard key={team.id} team={team} />
+            ))}
 
             {/* Legend */}
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">

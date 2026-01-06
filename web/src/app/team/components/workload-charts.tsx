@@ -4,9 +4,10 @@ import { useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, ReferenceLine, Cell } from "recharts"
 import { useTeamDataContext, useTeamUsers, useTeamTasks, useTeamTimeEntries } from "../context/team-data-context"
-import { Loader2, Info, ChevronLeft, ChevronRight } from "lucide-react"
+import { Loader2, Info, ChevronLeft, ChevronRight, Users } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover"
 import { Button } from "~/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 
 // Helper to get start of week (Monday) with offset
 function getWeekStart(weekOffset: number = 0): Date {
@@ -40,6 +41,8 @@ const COMPLETED_STATUSES = [
 export function WorkloadCharts() {
     // Week navigation state
     const [weekOffset, setWeekOffset] = useState(0)
+    // Team selector state
+    const [selectedTeamId, setSelectedTeamId] = useState<string>("all")
 
     // Get selected week's date range
     const weekRange = useMemo(() => {
@@ -57,14 +60,23 @@ export function WorkloadCharts() {
 
     const isCurrentWeek = weekOffset === 0
 
-    // Get essential data from context
-    const { allMemberIds, isLoading: isContextLoading } = useTeamDataContext();
+    // Get essential data from context (includes teams)
+    const { teams, allMemberIds, isLoading: isContextLoading } = useTeamDataContext();
 
-    // Load members, tasks, and time entries
-    const { teamMembers: members, isLoading: isLoadingUsers } = useTeamUsers(allMemberIds);
-    const { teamTasks: tasks, isLoading: isLoadingTasks } = useTeamTasks(allMemberIds);
+    // Filter member IDs based on selected team
+    const filteredMemberIds = useMemo(() => {
+        if (selectedTeamId === "all") {
+            return allMemberIds;
+        }
+        const team = teams.find(t => t.id === selectedTeamId);
+        return team?.memberIds || [];
+    }, [selectedTeamId, teams, allMemberIds]);
+
+    // Load members, tasks, and time entries for filtered members
+    const { teamMembers: members, isLoading: isLoadingUsers } = useTeamUsers(filteredMemberIds);
+    const { teamTasks: tasks, isLoading: isLoadingTasks } = useTeamTasks(filteredMemberIds);
     const { teamTimeEntries: timeEntries, isLoading: isLoadingTimeEntries, isFetching: isFetchingTimeEntries } = useTeamTimeEntries(
-        allMemberIds,
+        filteredMemberIds,
         { startDate: weekRange.start, endDate: weekRange.end }
     );
 
@@ -127,7 +139,7 @@ export function WorkloadCharts() {
                 behindSchedule,
                 expectedHours: expectedHoursToday
             };
-        }).sort((a, b) => b.totalWorkload - a.totalWorkload).slice(0, 10);
+        }).sort((a, b) => b.totalWorkload - a.totalWorkload);
     }, [members, tasks, timeEntries, expectedHoursToday]);
 
     // Show loading state or empty state
@@ -151,7 +163,7 @@ export function WorkloadCharts() {
 
     return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="col-span-4">
+            <Card className="col-span-5">
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div>
@@ -161,6 +173,21 @@ export function WorkloadCharts() {
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
+                            {/* Team selector */}
+                            <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                                <SelectTrigger className="w-[160px] h-8 text-xs">
+                                    <Users className="w-3 h-3 mr-1" />
+                                    <SelectValue placeholder="Select team" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Teams</SelectItem>
+                                    {teams.map(team => (
+                                        <SelectItem key={team.id} value={team.id}>
+                                            {team.name} ({team.memberIds.length})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                             {/* Week navigation */}
                             <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
                                 <Button
@@ -241,81 +268,87 @@ export function WorkloadCharts() {
                             <Loader2 className="w-6 h-6 animate-spin text-primary" />
                         </div>
                     )}
-                    <ResponsiveContainer width="100%" height={350}>
-                        <BarChart data={workloadData} barCategoryGap="20%">
-                            <XAxis
-                                dataKey="name"
-                                stroke="#888888"
-                                fontSize={12}
-                                tickLine={false}
-                                axisLine={false}
-                                interval={0}
-                                angle={-20}
-                                textAnchor="end"
-                                height={60}
-                            />
-                            <YAxis
-                                stroke="#888888"
-                                fontSize={12}
-                                tickLine={false}
-                                axisLine={false}
-                                tickFormatter={(value) => `${value}h`}
-                                domain={[0, 'auto']}
-                            />
-                            <Tooltip
-                                cursor={{ fill: 'rgba(0,0,0,0.1)' }}
-                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                formatter={(value, name) => [
-                                    `${value ?? 0}h`,
-                                    name === 'timeSpent' ? 'Time Spent' : 'Time Remaining'
-                                ]}
-                                labelFormatter={(label) => workloadData.find(d => d.name === label)?.fullName || label}
-                            />
-                            <Legend
-                                content={() => (
-                                    <div className="flex justify-center gap-6 mt-2 text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-3 h-3 rounded" style={{ backgroundColor: '#10b981' }} />
-                                            <span>Time Spent</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-3 h-3 rounded" style={{ backgroundColor: '#3b82f6' }} />
-                                            <span>Time Remaining</span>
-                                        </div>
-                                    </div>
-                                )}
-                            />
-                            {/* Expected hours for today reference line */}
-                            <ReferenceLine y={workloadData[0]?.expectedHours || 0} stroke="#f59e0b" strokeDasharray="3 3" label={{ value: `${workloadData[0]?.expectedHours || 0}h expected`, position: 'right', fill: '#f59e0b', fontSize: 11 }} />
-                            {/* 40h reference line */}
-                            <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="5 5" label={{ value: '40h', position: 'right', fill: '#ef4444' }} />
-                            {/* Stacked bars with red border for behind schedule */}
-                            <Bar dataKey="timeSpent" stackId="workload" radius={[0, 0, 0, 0]} maxBarSize={50}>
-                                {workloadData.map((entry, index) => (
-                                    <Cell
-                                        key={`spent-${index}`}
-                                        fill="#10b981"
-                                        stroke={entry.behindSchedule ? "#ef4444" : "transparent"}
-                                        strokeWidth={entry.behindSchedule ? 3 : 0}
+
+                    <div className="overflow-x-auto pb-4">
+                        <div style={{ width: `${Math.max(100, workloadData.length * 6)}%`, minWidth: '100%', height: 350 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={workloadData} barCategoryGap="20%">
+                                    <XAxis
+                                        dataKey="name"
+                                        stroke="#888888"
+                                        fontSize={12}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        interval={0}
+                                        angle={-20}
+                                        textAnchor="end"
+                                        height={60}
                                     />
-                                ))}
-                            </Bar>
-                            <Bar dataKey="timeRemaining" stackId="workload" radius={[4, 4, 0, 0]} maxBarSize={50}>
-                                {workloadData.map((entry, index) => (
-                                    <Cell
-                                        key={`remaining-${index}`}
-                                        fill="#3b82f6"
-                                        stroke={entry.behindSchedule ? "#ef4444" : "transparent"}
-                                        strokeWidth={entry.behindSchedule ? 3 : 0}
+                                    <YAxis
+                                        stroke="#888888"
+                                        fontSize={12}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tickFormatter={(value) => `${value}h`}
+                                        domain={[0, 'auto']}
                                     />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
+                                    <Tooltip
+                                        cursor={{ fill: 'rgba(0,0,0,0.1)' }}
+                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        formatter={(value, name) => [
+                                            `${value ?? 0}h`,
+                                            name === 'timeSpent' ? 'Time Spent' : 'Time Remaining'
+                                        ]}
+                                        labelFormatter={(label) => workloadData.find(d => d.name === label)?.fullName || label}
+                                    />
+                                    <Legend
+                                        wrapperStyle={{ paddingTop: '20px' }}
+                                        content={() => (
+                                            <div className="flex justify-center gap-6 mt-2 text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 rounded" style={{ backgroundColor: '#10b981' }} />
+                                                    <span>Time Spent</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 rounded" style={{ backgroundColor: '#3b82f6' }} />
+                                                    <span>Time Remaining</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    />
+                                    {/* Expected hours for today reference line */}
+                                    <ReferenceLine y={workloadData[0]?.expectedHours || 0} stroke="#f59e0b" strokeDasharray="3 3" label={{ value: `${workloadData[0]?.expectedHours || 0}h expected`, position: 'right', fill: '#f59e0b', fontSize: 11 }} />
+                                    {/* 40h reference line */}
+                                    <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="5 5" label={{ value: '40h', position: 'right', fill: '#ef4444' }} />
+                                    {/* Stacked bars with red border for behind schedule */}
+                                    <Bar dataKey="timeSpent" stackId="workload" radius={[0, 0, 0, 0]} maxBarSize={50}>
+                                        {workloadData.map((entry, index) => (
+                                            <Cell
+                                                key={`spent-${index}`}
+                                                fill="#10b981"
+                                                stroke={entry.behindSchedule ? "#ef4444" : "transparent"}
+                                                strokeWidth={entry.behindSchedule ? 3 : 0}
+                                            />
+                                        ))}
+                                    </Bar>
+                                    <Bar dataKey="timeRemaining" stackId="workload" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                                        {workloadData.map((entry, index) => (
+                                            <Cell
+                                                key={`remaining-${index}`}
+                                                fill="#3b82f6"
+                                                stroke={entry.behindSchedule ? "#ef4444" : "transparent"}
+                                                strokeWidth={entry.behindSchedule ? 3 : 0}
+                                            />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
 
-            <Card className="col-span-3">
+            <Card className="col-span-2">
                 <CardHeader>
                     <CardTitle>Workload Details</CardTitle>
                     <CardDescription>All team members ({workloadData.length})</CardDescription>

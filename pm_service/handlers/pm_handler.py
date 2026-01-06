@@ -1017,6 +1017,23 @@ class PMHandler:
                             else:
                                 d = dict(entry)
                             
+                            # Get provider_id prefix for normalizing IDs
+                            provider_id_prefix = (
+                                str(provider_conn.backend_provider_id) 
+                                if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                                else str(provider_conn.id)
+                            )
+                            
+                            # Normalize user_id with provider prefix
+                            raw_user_id = d.get("user_id")
+                            if raw_user_id and ":" not in str(raw_user_id):
+                                d["user_id"] = f"{provider_id_prefix}:{raw_user_id}"
+                            
+                            # Normalize task_id with provider prefix
+                            raw_task_id = d.get("task_id")
+                            if raw_task_id and ":" not in str(raw_task_id):
+                                d["task_id"] = f"{provider_id_prefix}:{raw_task_id}"
+                            
                             d["provider_id"] = str(provider_conn.id)
                             d["provider_name"] = provider_conn.name
                             yield d

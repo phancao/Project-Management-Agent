@@ -152,11 +152,15 @@ export function useTeamTasks(memberIds: string[]) {
 /**
  * Hook for tabs that need time entries data.
  * Call this within components that need time entries.
+ * Supports optional date range filtering for efficient server-side queries.
  */
-export function useTeamTimeEntries(memberIds: string[]) {
+export function useTeamTimeEntries(memberIds: string[], options?: { startDate?: string; endDate?: string }) {
     const timeQuery = useQuery({
-        queryKey: ['pm', 'time_entries', 'recent'],
-        queryFn: () => listTimeEntries(),
+        queryKey: ['pm', 'time_entries', options?.startDate || 'all', options?.endDate || 'all'],
+        queryFn: () => listTimeEntries({
+            startDate: options?.startDate,
+            endDate: options?.endDate,
+        }),
         staleTime: 2 * 60 * 1000, // 2 minutes
         gcTime: 5 * 60 * 1000,    // 5 minutes
     });

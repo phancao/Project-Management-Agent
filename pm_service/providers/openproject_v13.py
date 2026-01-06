@@ -1825,7 +1825,24 @@ class OpenProjectV13Provider(BasePMProvider):
                 time_entries = data.get("_embedded", {}).get("elements", [])
                 
                 for entry in time_entries:
-                    yield entry
+                    # Transform entry to include parsed fields
+                    transformed = dict(entry)
+                    # Parse hours from ISO duration (e.g., "PT8H" -> 8.0)
+                    raw_hours = entry.get("hours")
+                    if raw_hours:
+                        transformed["hours"] = self._parse_duration_to_hours(raw_hours) or 0.0
+                    else:
+                        transformed["hours"] = 0.0
+                    # Extract user_id from _links
+                    entry_links = entry.get("_links", {})
+                    user_href = entry_links.get("user", {}).get("href")
+                    transformed["user_id"] = self._extract_id_from_href(user_href) if user_href else None
+                    # Extract task_id from workPackage link
+                    wp_href = entry_links.get("workPackage", {}).get("href")
+                    transformed["task_id"] = self._extract_id_from_href(wp_href) if wp_href else None
+                    # Use spentOn as date
+                    transformed["date"] = entry.get("spentOn")
+                    yield transformed
                     total_entries += 1
                 
                 # Check for next page

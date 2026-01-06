@@ -9,16 +9,31 @@ export interface PMTimeEntry {
     description?: string;
 }
 
-export async function listTimeEntries(userIds?: string[]): Promise<PMTimeEntry[]> {
+export interface ListTimeEntriesOptions {
+    userIds?: string[];
+    startDate?: string;  // YYYY-MM-DD
+    endDate?: string;    // YYYY-MM-DD
+}
+
+export async function listTimeEntries(options?: ListTimeEntriesOptions): Promise<PMTimeEntry[]> {
     const params = new URLSearchParams();
 
-    // API supports user_id filter (singular). 
-    // If we have multiple, we might need multiple calls or filter client side.
-    // For now, if we have just one, pass it. Else don't pass and filter later?
-    // Or just fetch recent.
-    if (userIds && userIds.length === 1) {
-        params.append("user_id", userIds[0]!);
+    // Use server-side date filtering for efficient queries
+    // This is the proper solution for large datasets
+    if (options?.startDate) {
+        params.append("start_date", options.startDate);
     }
+    if (options?.endDate) {
+        params.append("end_date", options.endDate);
+    }
+
+    // API supports user_id filter (singular)
+    if (options?.userIds && options.userIds.length === 1) {
+        params.append("user_id", options.userIds[0]!);
+    }
+
+    // Request enough entries for filtered date range
+    params.append("limit", "5000");
 
     let url = resolvePMServiceURL("time_entries");
     const queryString = params.toString();

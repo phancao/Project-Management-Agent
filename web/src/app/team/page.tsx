@@ -9,13 +9,13 @@ import Users from "lucide-react/dist/esm/icons/users";
 // @ts-expect-error - Direct import
 import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
 // @ts-expect-error - Direct import
-import Clock from "lucide-react/dist/esm/icons/clock";
-// @ts-expect-error - Direct import
 import Settings from "lucide-react/dist/esm/icons/settings";
+// @ts-expect-error - Direct import
+import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list";
 import { TeamOverview } from "./components/team-overview";
 import { TeamMembers } from "./components/team-members";
 import { MemberMatrix } from "./components/member-matrix";
-import { TeamTimesheets } from "./components/team-timesheets";
+import { TeamWorklogs } from "./components/team-worklogs";
 import { PMLoadingProvider } from "../pm/context/pm-loading-context";
 import { PMLoadingManager } from "../pm/components/pm-loading-manager";
 import { TeamDataProvider, useTeamDataContext } from "./context/team-data-context";
@@ -59,9 +59,9 @@ function TeamContent() {
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Assignments
                 </TabsTrigger>
-                <TabsTrigger value="timesheets" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
-                    <Clock className="w-4 h-4 mr-2" />
-                    Timesheets
+                <TabsTrigger value="worklogs" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                    <ClipboardList className="w-4 h-4 mr-2" />
+                    Worklogs
                 </TabsTrigger>
                 <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
                     <Settings className="w-4 h-4 mr-2" />
@@ -81,8 +81,8 @@ function TeamContent() {
                 <MemberMatrix />
             </TabsContent>
 
-            <TabsContent value="timesheets" className="space-y-6 animate-in fade-in-50 duration-300">
-                <TeamTimesheets />
+            <TabsContent value="worklogs" className="space-y-6 animate-in fade-in-50 duration-300">
+                <TeamWorklogs />
             </TabsContent>
 
             <TabsContent value="settings" className="space-y-6 animate-in fade-in-50 duration-300">

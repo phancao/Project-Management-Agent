@@ -21,8 +21,8 @@ export function useTeams() {
     const [teams, setTeams] = useState<Team[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Load from LocalStorage on mount
-    useEffect(() => {
+    // Load from LocalStorage
+    const loadTeams = () => {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
             try {
@@ -34,13 +34,40 @@ export function useTeams() {
         } else {
             setTeams(DEFAULT_TEAMS);
         }
+    };
+
+    // Load on mount
+    useEffect(() => {
+        loadTeams();
         setIsLoading(false);
     }, []);
 
-    // Save to LocalStorage whenever teams change
+    // Listen for storage changes from OTHER tabs (browser tabs)
+    useEffect(() => {
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === STORAGE_KEY) {
+                loadTeams();
+            }
+        };
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+    }, []);
+
+    // Listen for custom event from SAME tab (for component sync)
+    useEffect(() => {
+        const handleTeamsUpdate = () => {
+            loadTeams();
+        };
+        window.addEventListener('teams-updated', handleTeamsUpdate);
+        return () => window.removeEventListener('teams-updated', handleTeamsUpdate);
+    }, []);
+
+    // Save to LocalStorage and dispatch sync event
     const saveTeams = (newTeams: Team[]) => {
         setTeams(newTeams);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(newTeams));
+        // Dispatch custom event to sync other components in same tab
+        window.dispatchEvent(new CustomEvent('teams-updated'));
     };
 
     const addTeam = (name: string, description: string = "") => {

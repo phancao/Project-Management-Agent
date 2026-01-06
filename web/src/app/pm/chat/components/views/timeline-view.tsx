@@ -653,10 +653,49 @@ export function TimelineView() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-64 w-full" />
+      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <CalendarRange className="w-4 h-4 animate-pulse text-blue-600 dark:text-blue-400" />
+              </div>
+              Loading Timeline
+            </h3>
+          </div>
+
+          {/* Progress bar - indeterminate */}
+          <div className="w-full h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
+            <div className="h-full w-1/3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-pulse" />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
+              <div className="flex items-center gap-2">
+                <CalendarRange className="w-3.5 h-3.5 text-blue-500" />
+                <span className="text-xs font-medium">Sprints</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-mono tabular-nums text-blue-600 dark:text-blue-400">...</span>
+                <CalendarRange className="w-3.5 h-3.5 animate-spin text-blue-500" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
+              <div className="flex items-center gap-2">
+                <ListChecks className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="text-xs font-medium">Tasks</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-mono tabular-nums text-blue-600 dark:text-blue-400">...</span>
+                <CalendarRange className="w-3.5 h-3.5 animate-spin text-blue-500" />
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-muted-foreground mt-3 text-center">
+            Loading timeline data...
+          </p>
+        </div>
       </div>
     );
   }

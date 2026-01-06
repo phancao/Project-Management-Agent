@@ -5,7 +5,21 @@ import asyncio
 import base64
 import json
 import logging
+import logging
 import os
+import sys
+
+# Configure logging globally with the requested format
+# Format: [timestamp] [PREFIX] Message
+# We key off the fact that the '[PREFIX]' is usually part of the message string passed by the application logic
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s.%(msecs)03d] %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+    force=True
+)
+
 import requests
 from datetime import datetime
 from typing import Annotated, Any, AsyncIterator, List, Optional
@@ -2577,12 +2591,22 @@ async def mcp_server_metadata(request: MCPServerMetadataRequest):
         if request.timeout_seconds is not None:
             timeout = request.timeout_seconds
 
+        # Translate localhost URLs to Docker DNS names for container-to-container communication
+        # Frontend sends localhost:8080 but backend container needs to use Docker DNS
+        mcp_url = request.url
+        if mcp_url:
+            # PM MCP Server: localhost:8080 -> pm-mcp-server:8080
+            if "localhost:8080" in mcp_url or "127.0.0.1:8080" in mcp_url:
+                mcp_url = mcp_url.replace("localhost:8080", "pm-mcp-server:8080")
+                mcp_url = mcp_url.replace("127.0.0.1:8080", "pm-mcp-server:8080")
+                logger.info(f"[MCP] Translated URL to Docker DNS: {mcp_url}")
+
         # Load tools from the MCP server using the utility function
         tools = await load_mcp_tools(
             server_type=request.transport,
             command=request.command,
             args=request.args,
-            url=request.url,
+            url=mcp_url,
             env=request.env,
             headers=request.headers,
             timeout_seconds=timeout,

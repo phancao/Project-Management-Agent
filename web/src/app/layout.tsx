@@ -14,6 +14,8 @@ import { ThemeProviderWrapper } from "~/components/deer-flow/theme-provider-wrap
 import { env } from "~/env";
 
 import { Toaster } from "../components/deer-flow/toaster";
+import { LoadingProvider } from "~/core/contexts/loading-context";
+import { LoadingScreen } from "~/components/ui/loading-screen";
 
 export const metadata: Metadata = {
   title: "🌌 Galaxy AI Project Manager",
@@ -51,7 +53,10 @@ export default async function RootLayout({
       <body className="bg-app" suppressHydrationWarning>
         <NextIntlClientProvider messages={messages}>
           <PMMCPAutoConfig />
-          <ThemeProviderWrapper>{children}</ThemeProviderWrapper>
+          <LoadingProvider>
+            <LoadingScreen />
+            <ThemeProviderWrapper>{children}</ThemeProviderWrapper>
+          </LoadingProvider>
           <Toaster />
         </NextIntlClientProvider>
         {

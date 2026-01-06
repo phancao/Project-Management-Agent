@@ -133,14 +133,15 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
 
   const isChat = pathname?.includes('/chat') ?? false;
   const isMeeting = pathname?.includes('/meeting') ?? false;
+  const isTeam = pathname?.includes('/team') ?? false;
 
   // Auto-select first project if no project is selected (only on Project Management page)
   useEffect(() => {
-    // Don't auto-redirect if we're on meeting page
-    if (!isMeeting && !selectedProjectId && projects.length > 0 && selectedProject) {
+    // Don't auto-redirect if we're on meeting or team page
+    if (!isMeeting && !isTeam && !selectedProjectId && projects.length > 0 && selectedProject) {
       router.push(`/pm/chat?project=${selectedProject}`);
     }
-  }, [projects.length, selectedProject, selectedProjectId, router, isMeeting]);
+  }, [projects.length, selectedProject, selectedProjectId, router, isMeeting, isTeam]);
 
   const handleProjectChange = (projectId: string) => {
     if (onProjectChange) {
@@ -201,12 +202,29 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
           Project Management
         </Button>
       </Link>
-      <Link href="/meeting" className={vertical ? 'w-full' : ''}>
+
+      <Link href="/team" className={vertical ? 'w-full' : ''}>
         <Button
-          variant="ghost"
+          variant={pathname?.includes('/team') ? "default" : "ghost"}
           size="sm"
           className={cn(
             "rounded-xl font-medium transition-all duration-300 hover:bg-brand/5 hover:text-brand",
+            pathname?.includes('/team') ? "bg-brand text-white shadow-lg shadow-brand/25 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
+            vertical ? "w-full justify-start text-base py-6" : "px-5"
+          )}
+        >
+          <span className="mr-2">👥</span>
+          <span>Team Management</span>
+        </Button>
+      </Link>
+
+      <Link href="/meeting" className={vertical ? 'w-full' : ''}>
+        <Button
+          variant={isMeeting ? "default" : "ghost"}
+          size="sm"
+          className={cn(
+            "rounded-xl font-medium transition-all duration-300 hover:bg-brand/5 hover:text-brand",
+            isMeeting ? "bg-brand text-white shadow-lg shadow-brand/25 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
             vertical ? "w-full justify-start text-base py-6" : "px-5"
           )}
         >
@@ -283,7 +301,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
           {!isMobile && <NavButtons />}
 
           {/* Project Selector - Responsive width */}
-          {!isMeeting && (
+          {!isMeeting && !isTeam && (
             <div className="flex items-center gap-3 flex-1 max-w-[440px] ml-4">
               <Popover open={projectComboboxOpen} onOpenChange={setProjectComboboxOpen}>
                 <PopoverTrigger asChild>

@@ -30,6 +30,8 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
   };
 
+  // Views handle their own loading states - no blocking here
+
   return (
     <div className={cn("flex flex-col h-full bg-gray-50 dark:bg-gray-900", className)}>
       {/* Navigation Tabs */}
@@ -97,4 +99,5 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
     </div>
   );
 }
+
 

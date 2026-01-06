@@ -3,14 +3,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-// Get backend URL - handle both with and without /api suffix
+// Get backend URL from environment
+// - In Docker: API_URL=http://host.docker.internal:8000 (set in docker-compose.yml)
+// - In local dev: defaults to localhost:8000
 function getBackendUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl) {
-    // Remove /api if present
-    return envUrl.replace(/\/api\/?$/, '');
-  }
-  return 'http://127.0.0.1:8000';
+  const url = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  // Remove trailing /api if present
+  return url.replace(/\/api\/?$/, '');
 }
 
 const BACKEND_URL = getBackendUrl();

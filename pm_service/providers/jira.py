@@ -6,7 +6,7 @@ Connects to Atlassian JIRA API to manage projects, issues, and sprints.
 import base64
 import logging
 import requests
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, AsyncIterator
 from datetime import datetime, date
 
 from .base import BasePMProvider
@@ -222,8 +222,9 @@ class JIRAProvider(BasePMProvider):
     async def list_tasks(
         self,
         project_id: Optional[str] = None,
-        assignee_id: Optional[str] = None
-    ) -> List[PMTask]:
+        assignee_id: Optional[str] = None,
+        sprint_id: Optional[str] = None
+    ) -> AsyncIterator[PMTask]:
         """
         List all issues (tasks) from JIRA.
         

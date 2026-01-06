@@ -30,8 +30,8 @@ export interface SearchProviderRequest {
 export async function listSearchProviders(): Promise<SearchProviderConfig[]> {
   const url = resolveServiceURL("search/providers");
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-  
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
   try {
     const response = await fetch(url, {
       method: "GET",
@@ -39,7 +39,7 @@ export async function listSearchProviders(): Promise<SearchProviderConfig[]> {
       cache: "no-store",
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeoutId);
 
     if (!response.ok) {
@@ -54,18 +54,18 @@ export async function listSearchProviders(): Promise<SearchProviderConfig[]> {
     }
 
     const data = await response.json();
-    
+
     if (!Array.isArray(data)) {
       throw new Error("Invalid response format: expected an array of search providers");
     }
-    
+
     return data;
   } catch (error) {
     clearTimeout(timeoutId);
-    
+
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
-        throw new Error('Request timeout: Failed to fetch providers within 15 seconds. The backend server may be slow or unresponsive.');
+        throw new Error('Request timeout: Failed to fetch providers within 60 seconds. The backend server may be slow or unresponsive.');
       }
       if (error.message.startsWith('Request timeout') || error.message.startsWith('Invalid response format')) {
         throw error; // Re-throw already formatted errors

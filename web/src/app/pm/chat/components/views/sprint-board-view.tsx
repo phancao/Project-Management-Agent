@@ -233,8 +233,8 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId, 
     <div ref={setNodeRef} style={columnStyle} data-order-id={orderId} className="w-[280px] sm:w-80 shrink-0">
       <div
         className={`flex items-center justify-between px-3 py-2 rounded-t-lg border-b ${isActive
-            ? "bg-blue-100 dark:bg-blue-900 border-blue-400 dark:border-blue-500"
-            : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+          ? "bg-blue-100 dark:bg-blue-900 border-blue-400 dark:border-blue-500"
+          : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
           }`}
       >
         <div className="flex items-center gap-2">
@@ -253,10 +253,10 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId, 
       <div
         ref={setColumnDropRef}
         className={`rounded-b-lg border-l border-r border-b ${isHovered
-            ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-400 dark:ring-blue-500"
-            : isActive
-              ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30"
-              : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+          ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-400 dark:ring-blue-500"
+          : isActive
+            ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30"
+            : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
           } p-3 space-y-2 min-h-24 transition-all`}
       >
         <SortableContext items={tasks.map((task) => String(task.id))} strategy={verticalListSortingStrategy}>
@@ -328,7 +328,7 @@ export function SprintBoardView() {
     columnHeight: null,
   });
 
-  const { tasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForTasks ?? undefined);
+  const { tasks, loading, isFetching, error, refresh: refreshTasks } = useTasks(projectIdForTasks ?? undefined);
   const { priorities: backendPriorities } = usePriorities(activeProjectId ?? undefined);
   const { epics } = useEpics(activeProjectId ?? undefined);
   // Use projectIdForTasks for sprints to match tasks (ensures same cache key)
@@ -1245,12 +1245,62 @@ export function SprintBoardView() {
   // 2. We should load tasks AND we're actually loading AND we don't have tasks yet
   // This ensures cached data (hasTasks=true, loading=false) displays immediately
   // If we have cached tasks, show them even if filter data is still loading
-  const isLoadingBoard = (loadingState.filterData.loading && !hasTasks) || (shouldLoadTasks && loading && !hasTasks);
+  const isLoadingBoard = (loadingState.filterData.loading && !hasTasks) || (shouldLoadTasks && loading && !hasTasks) || (shouldLoadTasks && isFetching);
 
   if (isLoadingBoard) {
+    // Calculate loading progress
+    const loadingItems = [
+      { label: "Tasks", isLoading: loading, count: tasks?.length || 0 },
+      { label: "Statuses", isLoading: statusesLoading, count: availableStatuses?.length || 0 },
+    ];
+    const completedCount = loadingItems.filter(item => !item.isLoading).length;
+    const progressPercent = Math.round((completedCount / loadingItems.length) * 100);
+
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500 dark:text-gray-400">Loading board...</div>
+      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <Settings2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+              </div>
+              Loading Board
+            </h3>
+            <span className="text-xs font-mono text-muted-foreground">
+              {progressPercent}%
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          <div className="space-y-2">
+            {loadingItems.map((item, index) => (
+              <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
+                <span className="text-xs font-medium">{item.label}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-xs font-mono tabular-nums ${item.isLoading ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {item.isLoading ? (item.count > 0 ? item.count : "...") : item.count}
+                  </span>
+                  {item.isLoading ? (
+                    <Settings2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 text-green-500">✓</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-[10px] text-muted-foreground mt-3 text-center">
+            Loading tasks and statuses...
+          </p>
+        </div>
       </div>
     );
   }

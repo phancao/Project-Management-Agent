@@ -77,8 +77,8 @@ export async function importProjectsFromProvider(
 export async function listProviders(): Promise<ProviderConfig[]> {
   const url = resolveServiceURL("pm/providers");
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
-  
+  const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
+
   try {
     const response = await fetch(url, {
       method: "GET",
@@ -100,11 +100,11 @@ export async function listProviders(): Promise<ProviderConfig[]> {
     }
 
     const data = await response.json();
-    
+
     if (!Array.isArray(data)) {
       throw new Error("Invalid response format: expected an array of providers");
     }
-    
+
     // Map and filter in one pass for better performance
     return data
       .filter((p: any): p is any => p?.id && p?.provider_type)
@@ -120,10 +120,10 @@ export async function listProviders(): Promise<ProviderConfig[]> {
       }));
   } catch (error) {
     clearTimeout(timeoutId);
-    
+
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
-        throw new Error('Request timeout: Failed to fetch providers within 15 seconds. The backend server may be slow or unresponsive.');
+        throw new Error('Request timeout: Failed to fetch providers within 120 seconds. The backend server may be slow or unresponsive.');
       }
       if (error.message.startsWith('Request timeout') || error.message.startsWith('Invalid response format')) {
         throw error; // Re-throw already formatted errors
@@ -170,7 +170,7 @@ export async function getProviderProjects(
       const error = await response.json();
       // Extract error message from various possible formats
       errorMessage = error.detail || error.message || error.error || errorMessage;
-      
+
       // For 403 errors, provide more context
       if (response.status === 403) {
         if (errorMessage.includes("forbidden") || errorMessage.includes("permission")) {
@@ -193,7 +193,7 @@ export async function getProviderProjects(
   }
 
   const data = await response.json();
-  
+
   // Backend returns either an array (old format) or an object (new format)
   if (Array.isArray(data)) {
     // Old format: array of projects
@@ -210,7 +210,7 @@ export async function getProviderProjects(
       projects: data.projects || [],
     };
   }
-  
+
   // Fallback: empty result
   return {
     success: true,

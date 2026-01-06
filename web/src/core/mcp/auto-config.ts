@@ -53,11 +53,14 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
       // Server is running in Docker with SSE transport
 
       try {
-        // Query metadata via SSE transport
+        // Query metadata via SSE transport with internal auth header
         const sseConfig: SimpleSSEMCPServerMetadata = {
           transport: "sse",
           name: PM_MCP_SERVER_NAME,
           url: `${PM_MCP_SERVER_URL}/sse`,
+          headers: {
+            "X-User-ID": "internal-frontend", // Bypass API key auth for internal use
+          },
         };
 
         const metadata = await queryMCPServerMetadata(
@@ -90,58 +93,17 @@ export async function autoConfigurePMMCPServer(): Promise<MCPServerMetadata | nu
 
         return pmServer;
       } catch (sseError) {
-        console.warn("[PM MCP] SSE configuration failed, trying stdio:", sseError);
-        // Fall through to stdio fallback
+        console.warn("[PM MCP] SSE configuration failed:", sseError);
+        // PM MCP server is auto-injected by the backend for PM chat endpoints
+        // No stdio fallback needed - it doesn't work in Docker anyway
+        return null;
       }
     }
 
-    // Fallback: Try stdio transport (local development)
-    // PM MCP server runs via stdio when not in Docker
-    try {
-      const serverConfig: SimpleStdioMCPServerMetadata = {
-        transport: "stdio",
-        name: PM_MCP_SERVER_NAME,
-        command: "python3",
-        args: [
-          "scripts/run_pm_mcp_server.py",
-          "--transport",
-          "stdio",
-        ],
-      };
-
-      const metadata = await queryMCPServerMetadata(
-        serverConfig,
-        AbortSignal.timeout(60000) // 60 second timeout
-      );
-
-      // Create PM MCP server configuration with stdio transport
-      const pmServer: MCPServerMetadata = {
-        ...metadata,
-        name: PM_MCP_SERVER_NAME,
-        enabled: true,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      // Add to settings
-      const updatedServers = [...currentSettings.mcp.servers, pmServer];
-      useSettingsStore.setState({
-        mcp: {
-          servers: updatedServers,
-        },
-      });
-
-      // Save to localStorage
-      saveSettings();
-
-
-      return pmServer;
-    } catch (stdioError) {
-      console.warn("[PM MCP] stdio configuration also failed:", stdioError);
-      // PM MCP server is auto-injected by the backend for PM chat
-      // If both SSE and stdio fail, backend will handle it
-      return null;
-    }
+    // Server not available via SSE health check
+    console.log("[PM MCP] Server not available at", PM_MCP_SERVER_URL);
+    // Backend will auto-inject MCP server for PM chat endpoints
+    return null;
   } catch (error) {
     console.error("[PM MCP] Failed to auto-configure:", error);
     // Backend will still auto-inject for PM chat endpoints

@@ -97,7 +97,12 @@ services:
       context: ./web
       dockerfile: Dockerfile.dev
     environment:
+      # Client-side: Browser accesses backend via host's localhost
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # Server-side: Container accesses backend via host.docker.internal
+      # This allows Next.js API routes to reach the backend running on the host
+      - API_URL=http://host.docker.internal:8000
+      - NODE_OPTIONS=--max-old-space-size=4096
     ports:
       - "3000:3000"
     depends_on:
@@ -106,7 +111,13 @@ services:
       - ./web:/app
       - /app/node_modules
       - ./uploads:/app/uploads
-    command: pnpm run dev
+    command: pnpm exec next dev --turbo
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
 
   # Vector Database (Pinecone alternative - using local Qdrant)
   qdrant:
@@ -320,11 +331,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 256M
+          cpus: '1.0'
+          memory: 1G
         reservations:
-          cpus: '0.25'
-          memory: 128M
+          cpus: '0.5'
+          memory: 512M
 
 volumes:
   postgres_data:

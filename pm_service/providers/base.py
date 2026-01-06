@@ -4,7 +4,7 @@ Base PM Provider interface
 Defines the common interface that all PM providers must implement.
 """
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, AsyncIterator
 from datetime import date
 from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMComponent, PMLabel,
@@ -27,8 +27,11 @@ class BasePMProvider(ABC):
     # ==================== Project Operations ====================
     
     @abstractmethod
-    async def list_projects(self) -> List[PMProject]:
-        """List all projects"""
+    async def list_projects(self, user_id: Optional[str] = None) -> AsyncIterator[PMProject]:
+        """
+        List all projects.
+        Yields projects one by one.
+        """
         pass
     
     @abstractmethod
@@ -54,14 +57,16 @@ class BasePMProvider(ABC):
     # ==================== Task Operations ====================
     
     @abstractmethod
-    @abstractmethod
     async def list_tasks(
         self, 
         project_id: Optional[str] = None, 
         assignee_id: Optional[str] = None,
         sprint_id: Optional[str] = None
-    ) -> List[PMTask]:
-        """List all tasks, optionally filtered by project, assignee, and/or sprint"""
+    ) -> AsyncIterator[PMTask]:
+        """
+        List all tasks, optionally filtered by project, assignee, and/or sprint.
+        Yields tasks one by one to handle large datasets.
+        """
         pass
     
     @abstractmethod
@@ -89,8 +94,11 @@ class BasePMProvider(ABC):
     @abstractmethod
     async def list_sprints(
         self, project_id: Optional[str] = None, state: Optional[str] = None
-    ) -> List[PMSprint]:
-        """List all sprints, optionally filtered by project"""
+    ) -> AsyncIterator[PMSprint]:
+        """
+        List all sprints, optionally filtered by project.
+        Yields sprints one by one.
+        """
         pass
     
     @abstractmethod
@@ -116,8 +124,11 @@ class BasePMProvider(ABC):
     # ==================== User/Member Operations ====================
     
     @abstractmethod
-    async def list_users(self, project_id: Optional[str] = None) -> List[PMUser]:
-        """List all users/members, optionally filtered by project"""
+    async def list_users(self, project_id: Optional[str] = None) -> AsyncIterator[PMUser]:
+        """
+        List all users/members, optionally filtered by project.
+        Yields users one by one.
+        """
         pass
     
     @abstractmethod
@@ -134,6 +145,21 @@ class BasePMProvider(ABC):
             Current user or None if not supported
         """
         return None
+        
+    @abstractmethod
+    async def get_time_entries(
+        self,
+        task_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Get time entries, optionally filtered.
+        Yields entries one by one.
+        """
+        pass
     
     # ==================== Health Check ====================
     
@@ -192,8 +218,11 @@ class BasePMProvider(ABC):
     # ==================== Epic Operations ====================
     
     @abstractmethod
-    async def list_epics(self, project_id: Optional[str] = None) -> List[PMEpic]:
-        """List all epics, optionally filtered by project"""
+    async def list_epics(self, project_id: Optional[str] = None) -> AsyncIterator[PMEpic]:
+        """
+        List all epics, optionally filtered by project.
+        Yields epics one by one.
+        """
         pass
     
     @abstractmethod

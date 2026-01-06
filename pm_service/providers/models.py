@@ -18,6 +18,7 @@ class PMEntityType(str, Enum):
     SPRINT = "sprint"
     EPIC = "epic"
     MILESTONE = "milestone"
+    TIME_ENTRY = "time_entry"
 
 
 class PMStatus(str, Enum):
@@ -170,6 +171,23 @@ class PMStatusTransition:
     name: Optional[str] = None  # User-friendly transition name
     requires_fields: Optional[List[str]] = None  # Fields required for transition
     conditions: Optional[Dict[str, Any]] = None  # Conditions that must be met
+
+
+@dataclass
+class PMTimeEntry:
+    """Unified time entry representation"""
+    id: Optional[str] = None
+    hours: float = 0.0
+    date: Optional[date] = None
+    comment: Optional[str] = None
+    activity_type: Optional[str] = None
+    task_id: Optional[str] = None
+    project_id: Optional[str] = None
+    user_id: Optional[str] = None
+    user_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    raw_data: Optional[Dict[str, Any]] = None
 
 
 @dataclass

@@ -25,6 +25,11 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 
+// @ts-expect-error - Direct import for tree-shaking
+import ListTodo from "lucide-react/dist/esm/icons/list-todo";
+// @ts-expect-error - Direct import for tree-shaking
+import Target from "lucide-react/dist/esm/icons/target";
+
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { Card } from "~/components/ui/card";
@@ -398,7 +403,7 @@ function EpicSidebar({
           {isMobile && (isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)}
           EPICS
         </h3>
-        {!isMobile && <CreateEpicDialog projectId={projectId} onEpicCreated={onEpicCreate} />}
+        {!isMobile && <CreateEpicDialog projectId={projectId} onEpicCreated={onEpicCreate} className="w-auto" />}
         {isMobile && !isOpen && (
           <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
             {epics.length} epics
@@ -494,6 +499,7 @@ interface SprintSectionProps {
   };
   isSorting?: boolean;
   onAddTask?: (sprintId: string) => void;
+  loading?: boolean;
 }
 
 function SprintSection({
@@ -505,14 +511,15 @@ function SprintSection({
   draggedTaskId,
   dragHandleProps,
   isSorting,
-  onAddTask
+  onAddTask,
+  loading = false
 }: SprintSectionProps) {
   const isActive = sprint.status === "active";
   const isClosed = sprint.status === "closed";
   const isFuture = sprint.status === "future";
 
-  // Closed sprints should be collapsed by default
-  const [isExpanded, setIsExpanded] = useState(!isClosed);
+  // Sprints should be collapsed by default for performance
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const { setNodeRef } = useDroppable({
     id: `sprint-${sprint.id}`,
@@ -579,8 +586,12 @@ function SprintSection({
                 <span>{new Date(sprint.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
               </div>
             )}
-            <span className="px-2 py-1 bg-white dark:bg-gray-800 rounded text-xs font-medium text-gray-700 dark:text-gray-300">
-              {tasks.length}
+            <span className="px-2 py-1 bg-white dark:bg-gray-800 rounded text-xs font-medium text-gray-700 dark:text-gray-300 min-w-[30px] flex items-center justify-center">
+              {loading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />
+              ) : (
+                tasks.length
+              )}
             </span>
           </div>
         </div>
@@ -776,7 +787,7 @@ export function BacklogView() {
   }, [activeProject?.id, projectIdForSprints]);
 
   const shouldLoadTasks = loadingState.canLoadTasks && projectIdForSprints;
-  const { tasks: allTasks, loading, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
+  const { tasks: allTasks, loading, isFetching, error, refresh: refreshTasks } = useTasks(projectIdForSprints ?? undefined);
 
   const normalizedTasksForFiltering = useMemo<Task[]>(() => {
     if (!allTasks) return [];
@@ -802,6 +813,8 @@ export function BacklogView() {
   });
 
   const { sprints, loading: sprintsLoading } = useSprints(projectIdForSprints ?? "", undefined);
+  const { state: pmLoadingState } = usePMLoading();
+  const projects = pmLoadingState.filterData.projects.data;
 
   useEffect(() => {
     if (!sprints) return;
@@ -1281,6 +1294,7 @@ export function BacklogView() {
             isOver={dragState.type !== 'sprint' && overSprintId === sprint.id}
             draggedTaskId={draggedTaskId}
             onAddTask={handleOpenCreateTaskDialog}
+            loading={loading}
           />
         );
       });
@@ -2004,12 +2018,65 @@ export function BacklogView() {
     }
   };
 
-  const isLoading = loadingState.filterData.loading || (shouldLoadTasks && loading);
+  const isLoading = loadingState.filterData.loading || (shouldLoadTasks && loading) || (shouldLoadTasks && isFetching);
 
   if (isLoading) {
+    // Calculate loading progress
+    const loadingItems = [
+      { label: "Tasks", isLoading: loading, count: allTasks?.length || 0 },
+      { label: "Sprints", isLoading: sprintsLoading, count: sprints?.length || 0 },
+    ];
+    const completedCount = loadingItems.filter(item => !item.isLoading).length;
+    const progressPercent = Math.round((completedCount / loadingItems.length) * 100);
+
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500 dark:text-gray-400">Loading backlog...</div>
+      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+              </div>
+              Loading Backlog
+            </h3>
+            <span className="text-xs font-mono text-muted-foreground">
+              {progressPercent}%
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          <div className="space-y-2">
+            {loadingItems.map((item, index) => (
+              <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
+                <div className="flex items-center gap-2">
+                  {index === 0 ? <ListTodo className="w-3.5 h-3.5 text-green-500" /> : <Target className="w-3.5 h-3.5 text-purple-500" />}
+                  <span className="text-xs font-medium">{item.label}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-xs font-mono tabular-nums ${item.isLoading ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {item.isLoading ? (item.count > 0 ? item.count : "...") : item.count}
+                  </span>
+                  {item.isLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 text-green-500">✓</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-[10px] text-muted-foreground mt-3 text-center">
+            Loading tasks and sprints...
+          </p>
+        </div>
       </div>
     );
   }
@@ -2107,7 +2174,14 @@ export function BacklogView() {
             {!activeProjectId ? (
               <Card className="p-6">
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                  Please select a project to view sprints
+                  {(projects && projects.length > 0) ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                      <span>Loading project...</span>
+                    </div>
+                  ) : (
+                    "Please select a project to view sprints"
+                  )}
                 </div>
               </Card>
             ) : sprintsLoading ? (

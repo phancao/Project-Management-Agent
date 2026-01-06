@@ -22,6 +22,7 @@ async def list_tasks(
     sprint_id: Optional[str] = Query(None, description="Filter by sprint ID"),
     assignee_id: Optional[str] = Query(None, description="Filter by assignee ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    provider_id: Optional[str] = Query(None, description="Filter by provider ID"),
     limit: int = Query(1000, ge=1, le=5000, description="Max items to return (default: 1000, max: 5000)"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
@@ -40,6 +41,7 @@ async def list_tasks(
         sprint_id=sprint_id,
         assignee_id=assignee_id,
         status=status,
+        provider_id=provider_id,
     )
     
     # Apply pagination at API level

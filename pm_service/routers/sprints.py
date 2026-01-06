@@ -32,7 +32,7 @@ async def list_sprints(
     handler = PMHandler(db)
     all_sprints = await handler.list_sprints(
         project_id=project_id,
-        status=status
+        state=status
     )
     
     # Apply pagination

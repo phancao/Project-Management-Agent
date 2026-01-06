@@ -48,6 +48,7 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "requests>=2.31.0",
     "types-requests>=2.31.0",
+    "aiofiles>=24.1.0",
 ]
 
 [project.optional-dependencies]

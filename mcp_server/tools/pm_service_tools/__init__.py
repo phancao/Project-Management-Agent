@@ -8,6 +8,7 @@ from .projects import ListProjectsTool, GetProjectTool
 from .tasks import ListTasksTool, GetTaskTool, CreateTaskTool, UpdateTaskTool
 from .sprints import ListSprintsTool, GetSprintTool
 from .users import ListUsersTool, GetUserTool
+from .worklogs import ListWorklogsTool
 from .providers import ListProvidersTool
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "GetSprintTool",
     "ListUsersTool",
     "GetUserTool",
+    "ListWorklogsTool",
     "ListProvidersTool",
 ]
 

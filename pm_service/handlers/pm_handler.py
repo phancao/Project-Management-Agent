@@ -160,14 +160,19 @@ class PMHandler:
     async def list_projects(
         self,
         provider_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """
         List projects from all or specific provider.
-        
-        Note: This method returns ALL projects from providers.
-        Pagination should be handled by the API router layer.
+        Uses DataBuffer for streaming and OOM safety.
         """
-        projects = []
+        import time
+        from ..utils.data_buffer import DataBuffer, ensure_async_iterator
+        
+        run_id = f"run_{int(time.time())}"
+        logger.info(f"[PM-DEBUG][{run_id}] list_projects START: provider_id={provider_id}, user_id={user_id}")
+        
+        buffer = DataBuffer(prefix="projects_")
         
         if provider_id:
             providers = [self.get_provider_by_id(provider_id)]
@@ -177,37 +182,62 @@ class PMHandler:
         
         for provider_conn in providers:
             try:
-                provider = self.create_provider_instance(provider_conn)
-                provider_projects = await provider.list_projects()
+                # Handle user_id for specific provider if it's a composite ID
+                actual_user_id = user_id
+                if user_id and ":" in user_id:
+                    p_id, u_id = self._parse_composite_id(user_id)
+                    if p_id == str(provider_conn.id) or p_id == str(provider_conn.backend_provider_id):
+                        actual_user_id = u_id
+                    else:
+                        if p_id: 
+                            continue 
                 
-                for project in provider_projects:
-                    project_dict = self._to_dict(project)
-                    # Format project ID as composite: provider_id:project_id
-                    # Use backend_provider_id if available (for frontend compatibility),
-                    # otherwise use PM Service provider ID
-                    original_id = str(project_dict.get("id", ""))
-                    if ":" not in original_id:
-                        # Prefer backend_provider_id for frontend compatibility
-                        provider_id_for_project = (
-                            str(provider_conn.backend_provider_id) 
-                            if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
-                            else str(provider_conn.id)
-                        )
-                        project_dict["id"] = f"{provider_id_for_project}:{original_id}"
-                    # Store both provider IDs for reference
-                    project_dict["provider_id"] = str(provider_conn.id)
-                    if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id:
-                        project_dict["backend_provider_id"] = str(provider_conn.backend_provider_id)
-                    project_dict["provider_name"] = provider_conn.name
-                    # Ensure status is always a string (not null)
-                    if project_dict.get("status") is None:
-                        project_dict["status"] = "None"
-                    projects.append(project_dict)
+                provider = self.create_provider_instance(provider_conn)
+                if not hasattr(provider, 'list_projects'):
+                    continue
+
+                logger.info(f"[PM-DEBUG][{run_id}] Streaming projects from {provider_conn.name} (ID: {provider_conn.id})...")
+                start = time.time()
+                
+                # Get the iterator (might be list or async iterator)
+                raw_result = provider.list_projects(user_id=actual_user_id)
+                
+                # Define enrichment generator
+                async def enriched_iterator():
+                    async for project in ensure_async_iterator(raw_result):
+                        try:
+                            project_dict = self._to_dict(project)
+                            original_id = str(project_dict.get("id", ""))
+                            if ":" not in original_id:
+                                provider_id_for_project = (
+                                    str(provider_conn.backend_provider_id) 
+                                    if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                                    else str(provider_conn.id)
+                                )
+                                project_dict["id"] = f"{provider_id_for_project}:{original_id}"
+                            
+                            project_dict["provider_id"] = str(provider_conn.id)
+                            if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id:
+                                project_dict["backend_provider_id"] = str(provider_conn.backend_provider_id)
+                            project_dict["provider_name"] = provider_conn.name
+                            if project_dict.get("status") is None:
+                                project_dict["status"] = "None"
+                            yield project_dict
+                        except Exception as e:
+                            logger.error(f"Error enriching project from {provider_conn.name}: {e}")
+
+                count = await buffer.write_items(enriched_iterator())
+                dur = time.time() - start
+                logger.info(f"[PM-DEBUG][{run_id}] Streamed {count} projects from {provider_conn.name} in {dur:.3f}s")
                     
             except Exception as e:
                 self.record_error(str(provider_conn.id), e)
+                logger.error(f"[PM-DEBUG][{run_id}] Failed to fetch from {provider_conn.name}: {e}")
                 continue
-        
+
+        projects = await buffer.read_all()
+        buffer.cleanup()
+        logger.info(f"[PM-DEBUG][{run_id}] list_projects END: Total projects={len(projects)}")
         return projects
     
     async def get_project(self, project_id: str) -> Optional[dict[str, Any]]:
@@ -251,6 +281,8 @@ class PMHandler:
         sprint_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
         status: Optional[str] = None,
+
+        provider_id: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """
         List tasks with filters.
@@ -261,67 +293,131 @@ class PMHandler:
         """
         import datetime
         import logging
+        import asyncio
+        import time
+        
+        run_id = f"run_{int(time.time())}"
+        logger.info(f"[PM-DEBUG][{run_id}] list_tasks START: project_id={project_id}, sprint_id={sprint_id}")
+
         tasks = []
         
         # Parse project_id if provided
-        provider_id = None
+        provider_id_from_project = None
         actual_project_id = None
         if project_id:
-            provider_id, actual_project_id = self._parse_composite_id(project_id)
+            provider_id_from_project, actual_project_id = self._parse_composite_id(project_id)
         
         # Parse sprint_id
         actual_sprint_id = None
         if sprint_id:
             _, actual_sprint_id = self._parse_composite_id(sprint_id)
         
-        if provider_id:
-            providers = [self.get_provider_by_id(provider_id)]
-            providers = [p for p in providers if p]
+        # Determine providers to fetch from
+        providers = []
+        target_provider_id = provider_id or provider_id_from_project
+        
+        if target_provider_id:
+            # Fetch from specific provider
+            p_conn = self.get_provider_by_id(target_provider_id)
+            if p_conn:
+                providers = [p_conn]
         else:
+            # Fetch from all active providers
             providers = self.get_active_providers()
+        
+        # Prepare fetch tasks
+        # Refactored to use DataBuffer and sequential processing to prevent OOM
+        # and ensure reliable streaming to disk.
+        
+        from ..utils.data_buffer import DataBuffer, ensure_async_iterator
+        buffer = DataBuffer(prefix="tasks_")
+        
+        provider_map = [] # To keep track of successful providers if needed
         
         for provider_conn in providers:
             try:
+                # Handle user_id for specific provider if it's a composite ID
+                # (Logic from list_projects preserved roughly, though list_tasks uses project_id/sprint_id mainly)
+                
                 provider = self.create_provider_instance(provider_conn)
-                # Call provider with sprint_id to enable server-side filtering
-                provider_tasks = await provider.list_tasks(
-                    project_id=actual_project_id,
-                    assignee_id=assignee_id,
-                    sprint_id=actual_sprint_id
-                )
+                p_id = str(provider_conn.id)
                 
-                # Double-check filtering if provider didn't handle it strictly (optional safety net)
-                # But if we trust the provider, we can rely on it.
-                # Keeping the check logic but as a fallback/validation is safer for generic handler.
-                if actual_sprint_id:
-                     # Check if result set seems filtered. If provider supports it, all tasks should match.
-                     # If generic provider, it might ignore the arg.
-                     # So we keep the filter logic as refined filter.
-                    provider_tasks = [
-                        t for t in provider_tasks
-                        if self._task_in_sprint(t, actual_sprint_id)
-                    ]
+                # Determine sprint_id for this provider
+                s_id = None
+                if sprint_id:
+                     if ":" in sprint_id:
+                         sp_pid, sp_sid = self._parse_composite_id(sprint_id)
+                         if sp_pid == p_id:
+                             s_id = sp_sid
+                     else:
+                         s_id = sprint_id
                 
-                for task in provider_tasks:
-                    task_dict = self._to_dict(task)
-                    task_dict["provider_id"] = str(provider_conn.id)
-                    task_dict["provider_name"] = provider_conn.name
-                    tasks.append(task_dict)
+                p_project_id = actual_project_id
+                
+                # Check if we should skip this provider (if project_id was specific to another provider)
+                # target_provider_id logic handles this implicitly by filtering `providers` list
+                
+                if hasattr(provider, 'list_tasks'):
+                    logger.info(f"[PM-DEBUG][{run_id}] Streaming tasks from {provider_conn.name}...")
                     
-            except ValueError as e:
-                # ValueErrors are often user input errors (invalid ID, invalid filter) from the provider.
-                # We should NOT swallow them, even if iterating multiple providers, because the user needs to know their input is invalid.
-                # Especially OpenProject 400s which indicate syntax/logic errors.
-                self.record_error(str(provider_conn.id), e)
-                raise e
+                    # Async iterator call or list (handled by ensure_async_iterator)
+                    raw_result = provider.list_tasks(
+                        project_id=p_project_id,
+                        assignee_id=assignee_id,
+                        sprint_id=s_id
+                    )
+                    
+                    # Wrapper to inject provider info and filter by sprint
+                    async def enriched_iterator():
+                        async for task in ensure_async_iterator(raw_result):
+                            # Apply sprint filter if needed (double check)
+                            if s_id and not self._task_in_sprint(task, s_id):
+                                continue
+                                
+                            task_dict = self._to_dict(task)
+                            
+                            # Normalize IDs with provider prefix
+                            provider_id_prefix = (
+                                str(provider_conn.backend_provider_id) 
+                                if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                                else str(provider_conn.id)
+                            )
+                            
+                            # Normalize Task ID
+                            original_id = str(task_dict.get("id", ""))
+                            if ":" not in original_id:
+                                task_dict["id"] = f"{provider_id_prefix}:{original_id}"
+                                
+                            # Normalize References
+                            # This ensures that references like sprint_id match the composite IDs used by list_sprints
+                            for field in ["sprint_id", "project_id", "assignee_id", "parent_id", "epic_id"]:
+                                ref_id = task_dict.get(field)
+                                if ref_id and ":" not in str(ref_id):
+                                    task_dict[field] = f"{provider_id_prefix}:{ref_id}"
+
+                            task_dict["provider_id"] = str(provider_conn.id)
+                            task_dict["provider_name"] = provider_conn.name
+                            yield task_dict
+                    
+                    # Write to buffer
+                    count = await buffer.write_items(enriched_iterator())
+                    logger.info(f"[PM-DEBUG][{run_id}] Streamed {count} tasks from {provider_conn.name}")
+                    
             except Exception as e:
                 self.record_error(str(provider_conn.id), e)
-                # If a specific provider was targeted, failure is fatal.
-                # If iterating all providers, we continue to get partial results.
-                if provider_id:
+                logger.error(f"[PM-DEBUG][{run_id}] Error streaming from {provider_conn.name}: {e}")
+                if target_provider_id:
                     raise e
                 continue
-        
+
+        # Read all items from buffer to return list
+        # This brings items back into memory, but as simple dicts, and only for the final response.
+        # Ideally we would stream this too, but Router expects list.
+        # This prevents the accumulation of Pydantic models and Response objects during fetch.
+        tasks = await buffer.read_all()
+        buffer.cleanup()
+
+        logger.info(f"[PM-DEBUG][{run_id}] list_tasks END: Total tasks={len(tasks)}")
         return tasks
     
     async def get_task(self, task_id: str) -> Optional[dict[str, Any]]:
@@ -424,42 +520,79 @@ class PMHandler:
     async def list_sprints(
         self,
         project_id: Optional[str] = None,
-        status: Optional[str] = None
+        state: Optional[str] = None,
+        provider_id: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        """
-        List ALL sprints.
+        """List sprints from providers (streaming)."""
+        import time
+        from ..utils.data_buffer import DataBuffer, ensure_async_iterator
         
-        Note: This method returns ALL sprints from providers.
-        Pagination should be handled by the API router layer.
-        """
-        sprints = []
+        run_id = f"run_{int(time.time())}"
+        logger.info(f"[PM-DEBUG][{run_id}] list_sprints START: project_id={project_id}")
         
-        provider_id = None
+        buffer = DataBuffer(prefix="sprints_")
+        
+        provider_id_arg = provider_id
         actual_project_id = None
-        if project_id:
-            provider_id, actual_project_id = self._parse_composite_id(project_id)
-        
-        if provider_id:
-            providers = [self.get_provider_by_id(provider_id)]
+        if project_id and ":" in project_id:
+             p_id, p_key = self._parse_composite_id(project_id)
+             if p_id: 
+                 provider_id_arg = p_id
+                 actual_project_id = p_key
+        elif project_id:
+             actual_project_id = project_id
+
+        if provider_id_arg:
+            providers = [self.get_provider_by_id(provider_id_arg)]
             providers = [p for p in providers if p]
         else:
             providers = self.get_active_providers()
-        
+            
         for provider_conn in providers:
             try:
-                provider = self.create_provider_instance(provider_conn)
-                provider_sprints = await provider.list_sprints(project_id=actual_project_id)
+                # If we have a project_id filter but the provider doesn't match the prefix (if we knew it)
+                # But here we rely on provider_id extraction which already filtered the list of providers.
                 
-                for sprint in provider_sprints:
-                    sprint_dict = self._to_dict(sprint)
-                    sprint_dict["provider_id"] = str(provider_conn.id)
-                    sprint_dict["provider_name"] = provider_conn.name
-                    sprints.append(sprint_dict)
-                    
+                provider = self.create_provider_instance(provider_conn)
+                if not hasattr(provider, 'list_sprints'):
+                    continue
+
+                logger.info(f"[PM-DEBUG][{run_id}] Streaming sprints from {provider_conn.name}...")
+                
+                # Pass state only if provider supports it (base method does)
+                # But we should check signature? BasePMProvider has it.
+                
+                raw_result = provider.list_sprints(project_id=actual_project_id, state=state)
+
+                async def enriched_iterator():
+                    async for sprint in ensure_async_iterator(raw_result):
+                         try:
+                             s_dict = self._to_dict(sprint)
+                             # Enrich ID
+                             original_id = str(s_dict.get("id", ""))
+                             if ":" not in original_id:
+                                 provider_id_prefix = (
+                                     str(provider_conn.backend_provider_id) 
+                                     if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                                     else str(provider_conn.id)
+                                 )
+                                 s_dict["id"] = f"{provider_id_prefix}:{original_id}"
+                             
+                             s_dict["provider_id"] = str(provider_conn.id)
+                             s_dict["provider_name"] = provider_conn.name
+                             yield s_dict
+                         except Exception as e:
+                             logger.error(f"Error enriching sprint: {e}")
+
+                await buffer.write_items(enriched_iterator())
+
             except Exception as e:
+                logger.error(f"Error fetching sprints from {provider_conn.name}: {e}")
                 self.record_error(str(provider_conn.id), e)
-                continue
-        
+                
+        sprints = await buffer.read_all()
+        buffer.cleanup()
+        logger.info(f"[PM-DEBUG][{run_id}] list_sprints END: Total sprints={len(sprints)}")
         return sprints
     
     async def get_sprint(self, sprint_id: str) -> Optional[dict[str, Any]]:
@@ -501,50 +634,76 @@ class PMHandler:
     
     async def list_users(
         self,
-        project_id: Optional[str] = None
+        project_id: Optional[str] = None,
+        provider_id: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        """
-        List ALL users.
+        """List users from providers (streaming)."""
+        import time
+        from ..utils.data_buffer import DataBuffer, ensure_async_iterator
         
-        Note: This method returns ALL users from providers.
-        Pagination should be handled by the API router layer.
-        """
-        users = []
+        run_id = f"run_{int(time.time())}"
+        logger.info(f"[PM-DEBUG][{run_id}] list_users START: project_id={project_id}")
         
-        provider_id = None
+        buffer = DataBuffer(prefix="users_")
+        
+        provider_id_from_project = None
         actual_project_id = None
         if project_id:
-            provider_id, actual_project_id = self._parse_composite_id(project_id)
+            provider_id_from_project, actual_project_id = self._parse_composite_id(project_id)
         
-        if provider_id:
-            providers = [self.get_provider_by_id(provider_id)]
-            providers = [p for p in providers if p]
+        target_provider_id = provider_id or provider_id_from_project
+        if target_provider_id:
+            p_conn = self.get_provider_by_id(target_provider_id)
+            providers = [p_conn] if p_conn else []
         else:
             providers = self.get_active_providers()
-        
+
         for provider_conn in providers:
             try:
                 provider = self.create_provider_instance(provider_conn)
-                provider_users = await provider.list_users(project_id=actual_project_id)
+                if not hasattr(provider, 'list_users'):
+                    continue
+
+                logger.info(f"[PM-DEBUG][{run_id}] Streaming users from {provider_conn.name}...")
                 
-                for user in provider_users:
-                    user_dict = self._to_dict(user)
-                    user_dict["provider_id"] = str(provider_conn.id)
-                    user_dict["provider_name"] = provider_conn.name
-                    users.append(user_dict)
-                    
+                raw_result = provider.list_users(project_id=actual_project_id)
+                
+                async def enriched_iterator():
+                    async for user in ensure_async_iterator(raw_result):
+                        try:
+                            u_dict = self._to_dict(user)
+                            original_id = str(u_dict.get("id", ""))
+                            if ":" not in original_id:
+                                 provider_id_prefix = (
+                                     str(provider_conn.backend_provider_id) 
+                                     if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                                     else str(provider_conn.id)
+                                 )
+                                 u_dict["id"] = f"{provider_id_prefix}:{original_id}"
+                            u_dict["provider_id"] = str(provider_conn.id)
+                            yield u_dict
+                        except Exception as e:
+                            logger.error(f"Error enriching user: {e}")
+                
+                await buffer.write_items(enriched_iterator())
+
             except PermissionError as e:
-                # Re-raise permission errors so they're visible to the user
-                error_msg = f"[{provider_conn.name}] Permission Error: {str(e)}"
-                logger.error(error_msg)
-                self.record_error(str(provider_conn.id), e)
-                raise PermissionError(error_msg) from e
+                 logger.error(f"[{provider_conn.name}] Permission Error: {e}")
+                 # For streaming, we might record error but continue?
+                 # Legacy raised it. If we raise, we break other providers.
+                 # Let's record and continue to ensure partial data if possible,
+                 # or re-raise if critical? 
+                 # Given architecture goal is robustness, we record exception and move on?
+                 # The original raised it. I will record it.
+                 self.record_error(str(provider_conn.id), e)
+                 
             except Exception as e:
+                logger.error(f"Error listing users from {provider_conn.name}: {e}")
                 self.record_error(str(provider_conn.id), e)
-                # For other errors, continue but log them
-                logger.warning(f"Error listing users from {provider_conn.name}: {e}")
-                continue
         
+        users = await buffer.read_all()
+        buffer.cleanup()
+        logger.info(f"[PM-DEBUG][{run_id}] list_users END: Total users={len(users)}")
         return users
     
     async def get_user(self, user_id: str) -> Optional[dict[str, Any]]:
@@ -571,43 +730,73 @@ class PMHandler:
     
     async def list_epics(
         self,
-        project_id: Optional[str] = None
+        project_id: Optional[str] = None,
+        provider_id: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        """
-        List ALL epics.
+        """List epics from providers (streaming)."""
+        import time
+        from ..utils.data_buffer import DataBuffer, ensure_async_iterator
         
-        Note: This method returns ALL epics from providers.
-        Pagination should be handled by the API router layer.
-        """
-        epics = []
+        run_id = f"run_{int(time.time())}"
+        logger.info(f"[PM-DEBUG][{run_id}] list_epics START: project_id={project_id}")
         
-        provider_id = None
+        buffer = DataBuffer(prefix="epics_")
+        
+        provider_id_from_project = None
         actual_project_id = None
         if project_id:
-            provider_id, actual_project_id = self._parse_composite_id(project_id)
+            provider_id_from_project, actual_project_id = self._parse_composite_id(project_id)
         
-        if provider_id:
-            providers = [self.get_provider_by_id(provider_id)]
-            providers = [p for p in providers if p]
+        target_provider_id = provider_id or provider_id_from_project
+        if target_provider_id:
+            p_conn = self.get_provider_by_id(target_provider_id)
+            providers = [p_conn] if p_conn else []
         else:
             providers = self.get_active_providers()
-        
+            
         for provider_conn in providers:
             try:
                 provider = self.create_provider_instance(provider_conn)
-                if hasattr(provider, 'list_epics'):
-                    provider_epics = await provider.list_epics(project_id=actual_project_id)
-                    
-                    for epic in provider_epics:
-                        epic_dict = self._to_dict(epic)
-                        epic_dict["provider_id"] = str(provider_conn.id)
-                        epic_dict["provider_name"] = provider_conn.name
-                        epics.append(epic_dict)
-                        
+                if not hasattr(provider, 'list_epics'):
+                    continue
+
+                logger.info(f"[PM-DEBUG][{run_id}] Streaming epics from {provider_conn.name}...")
+                
+                raw_result = provider.list_epics(project_id=actual_project_id)
+                
+                async def enriched_iterator():
+                    async for epic in ensure_async_iterator(raw_result):
+                        try:
+                            e_dict = self._to_dict(epic)
+                            # Enrich ID
+                            original_id = str(e_dict.get("id", ""))
+                            if ":" not in original_id:
+                                provider_id_prefix = (
+                                    str(provider_conn.backend_provider_id) 
+                                    if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                                    else str(provider_conn.id)
+                                )
+                                e_dict["id"] = f"{provider_id_prefix}:{original_id}"
+                                
+                                # Normalize References
+                                if e_dict.get("project_id") and ":" not in str(e_dict.get("project_id")):
+                                    e_dict["project_id"] = f"{provider_id_prefix}:{e_dict.get('project_id')}"
+                            
+                            e_dict["provider_id"] = str(provider_conn.id)
+                            e_dict["provider_name"] = provider_conn.name
+                            yield e_dict
+                        except Exception as e:
+                            logger.error(f"Error enriching epic: {e}")
+                
+                await buffer.write_items(enriched_iterator())
+
             except Exception as e:
+                logger.error(f"Error fetching epics from {provider_conn.name}: {e}")
                 self.record_error(str(provider_conn.id), e)
-                continue
-        
+                
+        epics = await buffer.read_all()
+        buffer.cleanup()
+        logger.info(f"[PM-DEBUG][{run_id}] list_epics END: Total epics={len(epics)}")
         return epics
     
     async def get_epic(self, epic_id: str) -> Optional[dict[str, Any]]:
@@ -755,3 +944,135 @@ class PMHandler:
         
         return False
 
+    # ==================== Time Entries ====================
+    
+    async def list_time_entries(
+        self,
+        provider_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        """
+        List time entries from providers with buffered storage.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # If specific provider requested
+        if provider_id:
+            providers = [self.get_provider_by_id(provider_id)]
+            providers = [p for p in providers if p]
+        else:
+            providers = self.get_active_providers()
+            
+        # Parse composite IDs if provided
+        actual_task_id = None
+        if task_id:
+            pid, actual_task_id = self._parse_composite_id(task_id)
+            if pid and not provider_id:
+                # If specific provider implied by task ID, filter providers? 
+                # Original logic didn't filter explicitly here but did parsing.
+                # We'll stick to logic: filter only if provider_id explicitly passed or we want to optimize.
+                pass
+        
+        actual_user_id = None
+        if user_id:
+             _, actual_user_id = self._parse_composite_id(user_id)
+             
+        actual_project_id = None
+        if project_id:
+             _, actual_project_id = self._parse_composite_id(project_id)
+
+        from ..utils.data_buffer import DataBuffer
+        buffer = DataBuffer(prefix="time_")
+        
+        for provider_conn in providers:
+            try:
+                # Create provider instance
+                provider = self.create_provider_instance(provider_conn)
+                
+                if hasattr(provider, 'get_time_entries'):
+                    logger.info(f"[PM-DEBUG] Streaming time entries from {provider_conn.name}...")
+                    
+                    # Async iterator call
+                    iterator = provider.get_time_entries(
+                        task_id=actual_task_id,
+                        user_id=actual_user_id,
+                        project_id=actual_project_id,
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+                    
+                    # Wrapper generator to inject provider info
+                    async def enriched_iterator():
+                        async for entry in iterator:
+                            # Convert pydantic if needed
+                            if hasattr(entry, 'dict'):
+                                d = entry.dict()
+                            elif hasattr(entry, 'model_dump'):
+                                d = entry.model_dump()
+                            else:
+                                d = dict(entry)
+                            
+                            d["provider_id"] = str(provider_conn.id)
+                            d["provider_name"] = provider_conn.name
+                            yield d
+                            
+                    count = await buffer.write_items(enriched_iterator())
+                    logger.info(f"[PM-DEBUG] Streamed {count} entries from {provider_conn.name}")
+                    
+            except Exception as e:
+                self.record_error(str(provider_conn.id), e)
+                logger.error(f"Error streaming time entries from {provider_conn.name}: {e}")
+                continue
+        
+        # Read all items from buffer to return list
+        entries = await buffer.read_all()
+        buffer.cleanup()
+        return entries
+
+    async def log_time_entry(
+        self,
+        task_id: str,
+        hours: float,
+        comment: Optional[str] = None,
+        activity_id: Optional[str] = None,
+        user_id: Optional[str] = None
+    ) -> Optional[dict[str, Any]]:
+        """Log time entry."""
+        provider_id, actual_task_id = self._parse_composite_id(task_id)
+        
+        if not provider_id:
+            raise ValueError("task_id must include provider_id")
+            
+        provider_conn = self.get_provider_by_id(provider_id)
+        if not provider_conn:
+            raise ValueError(f"Provider {provider_id} not found")
+            
+        provider = self.create_provider_instance(provider_conn)
+        
+        if not hasattr(provider, 'log_time_entry'):
+            raise ValueError(f"Provider {provider_conn.provider_type} does not support logging time")
+            
+        actual_user_id = None
+        if user_id:
+            _, actual_user_id = self._parse_composite_id(user_id)
+            
+        entry = await provider.log_time_entry(
+            task_id=actual_task_id,
+            hours=hours,
+            comment=comment,
+            activity_id=activity_id,
+            user_id=actual_user_id
+        )
+        
+        if entry:
+            entry_dict = self._to_dict(entry)
+            entry_dict["provider_id"] = str(provider_conn.id)
+            entry_dict["provider_name"] = provider_conn.name
+            return entry_dict
+            
+        return None

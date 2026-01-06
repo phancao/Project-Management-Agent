@@ -9,7 +9,7 @@ from .models import (
     PMUser, PMProject, PMTask, PMSprint, PMEpic, PMLabel,
     PMProviderConfig
 )
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, AsyncIterator
 
 
 class ClickUpProvider(BasePMProvider):
@@ -49,8 +49,14 @@ class ClickUpProvider(BasePMProvider):
     async def delete_project(self, project_id: str) -> bool:
         raise NotImplementedError("ClickUp provider not yet implemented")
     
-    async def list_tasks(self, project_id: Optional[str] = None) -> List[PMTask]:
+    async def list_tasks(
+        self,
+        project_id: Optional[str] = None,
+        assignee_id: Optional[str] = None,
+        sprint_id: Optional[str] = None
+    ) -> AsyncIterator[PMTask]:
         raise NotImplementedError("ClickUp provider not yet implemented")
+        yield # Make it a generator
     
     async def get_task(self, task_id: str) -> Optional[PMTask]:
         raise NotImplementedError("ClickUp provider not yet implemented")

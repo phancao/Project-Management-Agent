@@ -10,6 +10,7 @@ from mcp.server import Server
 from mcp.types import Tool
 
 from .users import ListUsersTool, GetUserTool
+from .worklogs import ListWorklogsTool
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ def register_pm_service_user_tools(
     tool_classes = [
         ListUsersTool,
         GetUserTool,
+        ListWorklogsTool,
     ]
     
     for tool_class in tool_classes:

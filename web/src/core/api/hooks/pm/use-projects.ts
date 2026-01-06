@@ -15,7 +15,7 @@ export interface Project {
 
 const fetchProjects = async (): Promise<Project[]> => {
   const url = resolveServiceURL("pm/projects");
-  
+
   try {
     const response = await fetch(url, {
       headers: {
@@ -24,7 +24,7 @@ const fetchProjects = async (): Promise<Project[]> => {
       // Remove timeout for now to see if request completes
       // The backend responds in ~0.75s, so 10s timeout should be fine
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => response.statusText);
       console.error('[useProjects] Failed to fetch projects:', response.status, errorText);
@@ -47,8 +47,10 @@ export function useProjects() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const refresh = useCallback(() => {
-    setLoading(true);
+  const refresh = useCallback((isBackground: boolean = false) => {
+    if (!isBackground) {
+      setLoading(true);
+    }
     fetchProjects()
       .then((data) => {
         setProjects(data);
@@ -61,10 +63,10 @@ export function useProjects() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    refresh(false);
   }, [refresh]);
 
-  usePMRefresh(refresh);
+  usePMRefresh(() => refresh(true));
 
   return { projects, loading, error, refresh };
 }

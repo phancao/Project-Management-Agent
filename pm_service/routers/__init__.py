@@ -5,4 +5,5 @@ from .sprints import router as sprints_router
 from .users import router as users_router
 from .providers import router as providers_router
 from .epics import router as epics_router
+from .time_entries import router as time_entries_router
 

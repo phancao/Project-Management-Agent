@@ -71,7 +71,7 @@ export function SprintReportView() {
       return sortedSprints[0]?.id ?? "";
     });
   }, [sortedSprints, sprintParam]);
-  
+
   const { data: report, isLoading: loading, error } = useSprintReport(
     selectedSprintId,
     projectId
@@ -107,8 +107,21 @@ export function SprintReportView() {
 
   if (sprintsLoading || (!selectedSprintId && sortedSprints.length > 0)) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500 dark:text-gray-400">Loading sprints...</div>
+      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-xs">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center text-lg">
+              📊
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Loading Sprint Report</h3>
+              <p className="text-xs text-muted-foreground">Fetching sprints...</p>
+            </div>
+          </div>
+          <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+            <div className="h-full w-1/3 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -125,8 +138,21 @@ export function SprintReportView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500 dark:text-gray-400">Loading sprint report...</div>
+      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-xs">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center text-lg">
+              📊
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Loading Sprint Report</h3>
+              <p className="text-xs text-muted-foreground">Generating report...</p>
+            </div>
+          </div>
+          <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+            <div className="h-full w-2/3 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -173,12 +199,12 @@ export function SprintReportView() {
                   normalizedStatus === "active"
                     ? "Active"
                     : normalizedStatus === "future"
-                    ? "Planned"
-                    : normalizedStatus === "planning"
-                    ? "Planning"
-                    : normalizedStatus === "closed" || normalizedStatus === "completed"
-                    ? "Completed"
-                    : sprint.status || "Unknown";
+                      ? "Planned"
+                      : normalizedStatus === "planning"
+                        ? "Planning"
+                        : normalizedStatus === "closed" || normalizedStatus === "completed"
+                          ? "Completed"
+                          : sprint.status || "Unknown";
 
                 return (
                   <SelectItem key={sprint.id} value={sprint.id}>
@@ -224,7 +250,7 @@ export function SprintReportView() {
             <div className="text-2xl font-bold text-green-600">{report.commitment.completed_items}</div>
           </div>
         </div>
-        
+
         {/* Progress Bar */}
         <div className="mt-4">
           <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
@@ -232,7 +258,7 @@ export function SprintReportView() {
             <span className="font-semibold">{completionRate.toFixed(1)}%</span>
           </div>
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-            <div 
+            <div
               className={`h-3 rounded-full transition-all ${completionRate >= 90 ? 'bg-green-500' : completionRate >= 70 ? 'bg-yellow-500' : 'bg-red-500'}`}
               style={{ width: `${Math.min(completionRate, 100)}%` }}
             ></div>
@@ -305,7 +331,7 @@ export function SprintReportView() {
                 <span className="font-semibold text-purple-600 dark:text-purple-400">{capacityUtilized.toFixed(0)}%</span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div 
+                <div
                   className={`h-2 rounded-full ${capacityUtilized >= 80 && capacityUtilized <= 95 ? 'bg-green-500' : capacityUtilized > 95 ? 'bg-red-500' : 'bg-yellow-500'}`}
                   style={{ width: `${Math.min(capacityUtilized, 100)}%` }}
                 ></div>
@@ -359,7 +385,7 @@ export function SprintReportView() {
       <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📊 What is a Sprint Report?</h3>
         <p className="text-sm text-gray-700 dark:text-gray-300">
-          A comprehensive summary of sprint performance, combining multiple metrics into one view. It shows commitment vs delivery, 
+          A comprehensive summary of sprint performance, combining multiple metrics into one view. It shows commitment vs delivery,
           scope changes, work breakdown, and team capacity utilization. Use this report to:
         </p>
         <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">

@@ -52,7 +52,7 @@ class PMServiceTool:
                     "Please ensure providers are configured with pm_service_url in additional_config."
                 )
             
-            self._client = AsyncPMServiceClient(base_url=pm_service_url)
+            self._client = AsyncPMServiceClient(base_url=pm_service_url, timeout=60.0)
         return self._client
     
     async def execute(self, **kwargs) -> dict[str, Any]:

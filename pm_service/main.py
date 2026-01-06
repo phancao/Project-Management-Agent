@@ -19,7 +19,9 @@ from pm_service.routers import (
     sprints_router,
     users_router,
     providers_router,
-    epics_router
+    providers_router,
+    epics_router,
+    time_entries_router
 )
 
 # Configure logging
@@ -106,6 +108,7 @@ app.include_router(sprints_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(providers_router, prefix="/api/v1")
 app.include_router(epics_router, prefix="/api/v1")
+app.include_router(time_entries_router, prefix="/api/v1")
 
 
 # Root endpoint

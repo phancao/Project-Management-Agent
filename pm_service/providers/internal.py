@@ -4,7 +4,7 @@ Internal PM Provider
 Uses our own database as the PM backend.
 This wraps the existing database CRUD operations.
 """
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, AsyncIterator
 from datetime import date, datetime
 
 from .base import BasePMProvider
@@ -70,18 +70,22 @@ class InternalPMProvider(BasePMProvider):
     
     # ==================== Task Operations ====================
     
-    async def list_tasks(self, project_id: Optional[str] = None, assignee_id: Optional[str] = None) -> List[PMTask]:
+    async def list_tasks(self,
+        project_id: Optional[str] = None,
+        assignee_id: Optional[str] = None,
+        sprint_id: Optional[str] = None
+    ) -> AsyncIterator[PMTask]:
         """List all tasks from internal database"""
         from uuid import UUID
+        
+        tasks_to_process = []
         if project_id:
-            tasks = crud.get_tasks_by_project(self.db_session, UUID(project_id))
+            tasks_to_process = crud.get_tasks_by_project(self.db_session, UUID(project_id))
         else:
             # Get all tasks - we need to query all projects first
             projects = crud.get_projects(self.db_session, limit=1000)
-            all_tasks = []
             for project in projects:
-                all_tasks.extend(crud.get_tasks_by_project(self.db_session, project.id))
-            tasks = all_tasks
+                tasks_to_process.extend(crud.get_tasks_by_project(self.db_session, project.id))
         
         # Filter by assignee if provided
         if assignee_id:

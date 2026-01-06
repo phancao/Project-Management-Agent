@@ -34,8 +34,21 @@ export function IssueTrendView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500 dark:text-gray-400">Loading issue trend...</div>
+      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-xs">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center text-lg">
+              📊
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Loading Issue Trend</h3>
+              <p className="text-xs text-muted-foreground">Analyzing trends...</p>
+            </div>
+          </div>
+          <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+            <div className="h-full w-1/2 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -45,7 +58,7 @@ export function IssueTrendView() {
     <Card className="p-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📈 What is Issue Trend Analysis?</h3>
       <p className="text-sm text-gray-700 dark:text-gray-300">
-        Issue trend analysis tracks how issues are created and resolved over time. It helps you understand if your backlog 
+        Issue trend analysis tracks how issues are created and resolved over time. It helps you understand if your backlog
         is growing or shrinking. Use this chart to:
       </p>
       <ul className="text-sm text-gray-700 dark:text-gray-300 mt-2 space-y-1 list-disc list-inside">
@@ -72,7 +85,7 @@ export function IssueTrendView() {
                 Unable to Load Issue Trend Chart
               </h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {error.message.includes("503") || error.message.includes("NotImplementedError") 
+                {error.message.includes("503") || error.message.includes("NotImplementedError")
                   ? "Issue trend chart is not available for this project type."
                   : "There was an error loading the issue trend chart. Please try again later."}
               </p>
@@ -94,11 +107,10 @@ export function IssueTrendView() {
           </p>
         </div>
         {netChange !== 0 && (
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-            netChange > 0 
-              ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" 
+          <div className={`px-3 py-1 rounded-full text-sm font-medium ${netChange > 0
+              ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
               : "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-          }`}>
+            }`}>
             {netChange > 0 ? "⚠️" : "✅"} {netChange > 0 ? "+" : ""}{netChange} Net Change
           </div>
         )}
@@ -141,7 +153,7 @@ export function IssueTrendView() {
         <Card className="p-4">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Resolution Rate</div>
           <div className="text-2xl font-bold text-purple-600">
-            {totalCreated + totalResolved > 0 
+            {totalCreated + totalResolved > 0
               ? ((totalResolved / (totalCreated + totalResolved)) * 100).toFixed(0)
               : 0}%
           </div>
@@ -159,42 +171,42 @@ export function IssueTrendView() {
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="date" stroke="#666" />
             <YAxis stroke="#666" />
-            <Tooltip 
+            <Tooltip
               contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
             />
             <Legend />
-            
+
             {/* Lines for created and resolved */}
-            <Line 
-              type="monotone" 
-              dataKey="created" 
-              stroke="#3b82f6" 
+            <Line
+              type="monotone"
+              dataKey="created"
+              stroke="#3b82f6"
               strokeWidth={2}
               name="Created"
               dot={{ r: 3 }}
             />
-            <Line 
-              type="monotone" 
-              dataKey="resolved" 
-              stroke="#10b981" 
+            <Line
+              type="monotone"
+              dataKey="resolved"
+              stroke="#10b981"
               strokeWidth={2}
               name="Resolved"
               dot={{ r: 3 }}
             />
-            
+
             {/* Bar for net change */}
-            <Bar 
-              dataKey="netChange" 
-              fill="#f59e0b" 
+            <Bar
+              dataKey="netChange"
+              fill="#f59e0b"
               name="Net Change"
               opacity={0.6}
             />
-            
+
             {/* Line for cumulative */}
-            <Line 
-              type="monotone" 
-              dataKey="cumulativeNet" 
-              stroke="#ef4444" 
+            <Line
+              type="monotone"
+              dataKey="cumulativeNet"
+              stroke="#ef4444"
               strokeWidth={2}
               strokeDasharray="5 5"
               name="Cumulative Net"

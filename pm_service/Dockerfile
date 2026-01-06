@@ -1,6 +1,8 @@
 # PM Service Dockerfile
 FROM python:3.12-slim
 
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 # Install system dependencies
@@ -26,5 +28,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
 # Run the application
-CMD ["uvicorn", "pm_service.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uvicorn", "pm_service.main:app", "--host", "0.0.0.0", "--port", "8001", "--timeout-keep-alive", "65"]
 

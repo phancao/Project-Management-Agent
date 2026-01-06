@@ -152,8 +152,13 @@ async def get_current_project() -> str:
 
 
 @tool
-async def list_projects() -> str:
+async def list_projects(
+    user_id: Annotated[Optional[str], "Filter by user ID"] = None
+) -> str:
     """List all available projects from the PM provider.
+    
+    Args:
+        user_id: Optional user ID to filter projects (e.g., "Show projects for user X")
     
     Returns:
         JSON string with list of projects, each containing:
@@ -162,10 +167,16 @@ async def list_projects() -> str:
         - description: Project description
         - status: Project status
     """
-    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:list_projects] INPUT")
+    logger.info(f"[DEEP_TRACE] {datetime.datetime.now().isoformat()} [TOOL:list_projects] INPUT user_id={user_id}")
     try:
         handler = _ensure_pm_handler()
-        projects = await handler.list_all_projects()
+        
+        # Handle composite user_id
+        actual_user_id = user_id
+        if user_id and ":" in user_id:
+            actual_user_id = user_id.split(":", 1)[1]
+            
+        projects = await handler.list_all_projects(user_id=actual_user_id)
         result = json.dumps({
             "success": True,
             "projects": projects,
@@ -1134,6 +1145,67 @@ async def get_current_user() -> str:
         })
 
 
+@tool
+async def list_user_worklogs(
+    user_id: Annotated[str, "The ID of the user to retrieve worklogs for"],
+    project_id: Annotated[Optional[str], "Optional project ID to filter worklogs (recommended)"] = None,
+    task_id: Annotated[Optional[str], "Optional task ID to filter worklogs"] = None
+) -> str:
+    """List worklogs (time entries) for a specific user.
+    
+    Use this tool when the user asks for "worklogs", "time entries", "logged time", or "what did X work on".
+    
+    Args:
+        user_id: The ID of the user
+        project_id: Optional project ID to filter results
+        task_id: Optional task ID to filter results
+        
+    Returns:
+        JSON string with list of time entries including:
+        - id, hours, date, comment
+        - task_id, project_id, user_id
+        - provider_id
+    """
+    logger.info(f"[PM-TOOLS] list_user_worklogs called for user_id={user_id}")
+    try:
+        handler = _ensure_pm_handler()
+        
+        # Handle composite IDs
+        actual_project_id = project_id
+        if project_id and ":" in project_id:
+             actual_project_id = project_id.split(":", 1)[1]
+             
+        actual_task_id = task_id
+        if task_id and ":" in task_id:
+             actual_task_id = task_id.split(":", 1)[1]
+             
+        actual_user_id = user_id
+        if user_id and ":" in user_id:
+             actual_user_id = user_id.split(":", 1)[1]
+
+        # Call handler method
+        entries = await handler.list_worklogs(
+            project_id=actual_project_id,
+            user_id=actual_user_id,
+            task_id=actual_task_id
+        )
+        
+        result = json.dumps({
+            "success": True,
+            "worklogs": entries,
+            "count": len(entries)
+        }, indent=2, default=str)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error listing worklogs: {e}")
+        return json.dumps({
+            "success": False,
+            "error": str(e)
+        })
+
+
 def get_pm_tools() -> List:
     """Get list of all PM tools.
     
@@ -1155,4 +1227,5 @@ def get_pm_tools() -> List:
         list_users,
         get_user_tasks_summary,
         get_current_user,
+        list_user_worklogs,
     ]

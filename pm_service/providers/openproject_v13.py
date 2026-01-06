@@ -9,7 +9,7 @@ For OpenProject v16+, use the OpenProjectProvider class.
 """
 import base64
 import requests
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union, AsyncIterator
 from datetime import datetime, date
 
 from .base import BasePMProvider
@@ -73,9 +73,10 @@ class OpenProjectV13Provider(BasePMProvider):
     
     # ==================== Project Operations ====================
     
-    async def list_projects(self) -> List[PMProject]:
+    async def list_projects(self, user_id: Optional[str] = None) -> List[PMProject]:
         """List all projects from OpenProject (handles pagination)"""
         import logging
+        import json
         logger = logging.getLogger(__name__)
         
         url = f"{self.base_url}/api/v3/projects"
@@ -87,7 +88,15 @@ class OpenProjectV13Provider(BasePMProvider):
             # Start with a large page size to minimize API calls
             params = {"pageSize": 500}
             
-            logger.info(f"OpenProject v13: Fetching projects from {url} with pageSize=500")
+            # Apply user_id filter if provided
+            if user_id:
+                # OpenProject JSON filter syntax
+                # [{"member":{"operator":"=","values":["<user_id>"]}}]
+                filters = [{"member": {"operator": "=", "values": [str(user_id)]}}]
+                params["filters"] = json.dumps(filters)
+                logger.info(f"OpenProject v13: Filtering projects by user_id={user_id}")
+            
+            logger.info(f"OpenProject v13: Fetching projects from {url} with params={params}")
             
             request_url = url
             while request_url:
@@ -390,7 +399,7 @@ class OpenProjectV13Provider(BasePMProvider):
         
         while request_url:
             logger.debug(f"Fetching page {page_num} from {request_url}")
-            response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+            response = requests.get(request_url, headers=self.headers, params=params, timeout=120)
             try:
                 response.raise_for_status()
             except requests.exceptions.HTTPError as e:
@@ -1086,7 +1095,7 @@ class OpenProjectV13Provider(BasePMProvider):
         
         # Fetch all pages using pagination (exact pattern from test script)
         while request_url:
-            response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+            response = requests.get(request_url, headers=self.headers, params=params, timeout=120)
             response.raise_for_status()
             
             data = response.json()
@@ -1346,51 +1355,82 @@ class OpenProjectV13Provider(BasePMProvider):
             logger.info(f"OpenProject list_users (project {project_id}): Fetched {len(all_users)} users total")
         else:
             # List all users (requires admin permissions)
+            # Fallback for non-admins: List users from all visible projects
             url = f"{self.base_url}/api/v3/users"
-            all_users_data = []
+            all_users: List[PMUser] = [] # Re-initialize for this branch
             
             # Use larger page size and handle pagination
             params = {"pageSize": 100}
             
-            while url:
-                response = requests.get(url, headers=self.headers, params=params)
-                
-                # Check for permission errors and raise clear error message
-                if response.status_code == 403:
-                    raise PermissionError(
-                        "OpenProject API returned 403 Forbidden. "
-                        "Listing all users requires administrator permissions. "
-                        "Please either: "
-                        "1) Provide a project_id to list users in that specific project (uses memberships endpoint, no admin needed), "
-                        "2) Contact your OpenProject administrator to grant user listing permissions to your API token."
-                    )
-                
-                response.raise_for_status()
-                
-                data = response.json()
-                users_data = data.get("_embedded", {}).get("elements", [])
-                all_users_data.extend(users_data)
-                
-                # Check for next page
-                links = data.get("_links", {})
-                next_link = links.get("nextByOffset") or links.get("next")
-                
-                if next_link and isinstance(next_link, dict):
-                    next_href = next_link.get("href")
-                    if next_href:
-                        # If it's a relative URL, make it absolute
-                        if not next_href.startswith("http"):
-                            url = f"{self.base_url}{next_href}"
+            try:
+                logger.info("OpenProject list_users: Attempting to list global users (Admin only)")
+                while url:
+                    response = requests.get(url, headers=self.headers, params=params)
+                    
+                    # Check for permission errors and trigger fallback
+                    if response.status_code == 403:
+                        logger.warning("OpenProject list_users: 403 Forbidden. User is likely not an Admin. Switching to Project-Based Fallback.")
+                        
+                        # FALLBACK: Aggregation Strategy
+                        # 1. List all projects the user can see
+                        # 2. Iterate and fetch members for each project
+                        # 3. Deduplicate
+                        
+                        projects = await self.list_projects()
+                        unique_users = {}
+                        
+                        for project in projects:
+                            try:
+                                # Recursive call with project_id (which uses /memberships endpoint)
+                                # This endpoint is generally accessible to project members
+                                project_users = await self.list_users(project_id=str(project.id))
+                                for user in project_users:
+                                    if user.id not in unique_users:
+                                        unique_users[user.id] = user
+                            except Exception as e:
+                                logger.warning(f"Fallback: Failed to list users for project {project.id}: {e}")
+                                continue
+                        
+                        logger.info(f"OpenProject list_users (Fallback): Found {len(unique_users)} users across {len(projects)} projects")
+                        return list(unique_users.values())
+
+                    response.raise_for_status()
+                    
+                    result = response.json()
+                    users_data = result.get("_embedded", {}).get("elements", [])
+                    
+                    for user_data in users_data:
+                        all_users.append(self._parse_user(user_data))
+                    
+                    # Check for next page
+                    links = result.get("_links", {})
+                    next_link = links.get("nextByOffset") or links.get("next")
+                    
+                    if next_link and isinstance(next_link, dict):
+                        next_href = next_link.get("href")
+                        if next_href:
+                            url = f"{self.base_url}{next_href}" if not next_href.startswith("http") else next_href
+                            params = {} # Params are in the URL now
                         else:
-                            url = next_href
-                        # Clear params for subsequent requests (they're in the URL)
-                        params = {}
+                            url = None
                     else:
                         url = None
-                else:
-                    url = None
-            
-            all_users = [self._parse_user(user) for user in all_users_data]
+            except requests.exceptions.HTTPError as e:
+                 # Double check if we missed the 403 check above or if raise_for_status caught it
+                 if e.response.status_code == 403:
+                     # This path might be redundant but safe
+                     logger.warning("OpenProject list_users: HTTP 403 caught in exception. Triggering Fallback.")
+                     projects = await self.list_projects()
+                     unique_users = {}
+                     for project in projects:
+                         try:
+                             project_users = await self.list_users(project_id=str(project.id))
+                             for user in project_users:
+                                 unique_users[user.id] = user
+                         except Exception:
+                             continue
+                     return list(unique_users.values())
+                 raise e
             logger.info(f"OpenProject list_users: Fetched {len(all_users)} users total")
         
         return all_users
@@ -1668,8 +1708,10 @@ class OpenProjectV13Provider(BasePMProvider):
         self, 
         task_id: Optional[str] = None,
         user_id: Optional[str] = None,
-        project_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        project_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> AsyncIterator[Dict[str, Any]]:
         """
         Get time entries, optionally filtered by task, user, or project
         
@@ -1696,6 +1738,29 @@ class OpenProjectV13Provider(BasePMProvider):
             filters.append({
                 "project": {"operator": "=", "values": [project_id]}
             })
+            
+        # Date filtering
+        if start_date and end_date:
+            filters.append({
+                "spentOn": {
+                    "operator": "<>d",
+                    "values": [start_date, end_date]
+                }
+            })
+        elif start_date:
+            filters.append({
+                "spentOn": {
+                    "operator": ">=",
+                    "values": [start_date]
+                }
+            })
+        elif end_date:
+            filters.append({
+                "spentOn": {
+                    "operator": "<=",
+                    "values": [end_date]
+                }
+            })
         
         # Build initial request parameters
         if filters:
@@ -1710,43 +1775,100 @@ class OpenProjectV13Provider(BasePMProvider):
         # Fetch all pages using pagination (exact pattern from test script)
         import logging
         logger = logging.getLogger(__name__)
-        all_time_entries = []
+        
+        # DEBUG: Log the filters being sent
+        if filters:
+            logger.info(f"OpenProject get_time_entries filters: {json_lib.dumps(filters)}")
+            
         request_url = url
         page_num = 1
+        total_entries = 0
         
         while request_url:
             logger.debug(f"Fetching time entries page {page_num} from {request_url}")
-            response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
-            response.raise_for_status()
-            
-            data = response.json()
-            time_entries = data.get("_embedded", {}).get("elements", [])
-            all_time_entries.extend(time_entries)
-            
-            # Check for next page
-            links = data.get("_links", {})
-            next_link = links.get("nextByOffset") or links.get("next")
-            
-            if next_link and isinstance(next_link, dict):
-                next_href = next_link.get("href")
-                if next_href:
-                    if not next_href.startswith("http"):
-                        request_url = f"{self.base_url}{next_href}"
+            try:
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=120)
+                
+                # Check for permission errors (403) and trigger fallback
+                if response.status_code == 403:
+                    # Only attempt fallback if we aren't already filtering by a specific project
+                    # (If we failed on a specfic project, fallback won't help)
+                    if not project_id:
+                        logger.warning("OpenProject get_time_entries: 403 Forbidden. Switching to Project-Based Fallback.")
+                        
+                        projects = await self.list_projects()
+                        
+                        for project in projects:
+                            try:
+                                # Recursive call with filtered project_id
+                                # Yield from recursive call
+                                async for entry in self.get_time_entries(
+                                    task_id=task_id,
+                                    user_id=user_id,
+                                    project_id=str(project.id),
+                                    start_date=start_date,
+                                    end_date=end_date
+                                ):
+                                    yield entry
+                                    total_entries += 1
+                            except Exception as e:
+                                # Log but continue to next project
+                                logger.debug(f"Fallback: Failed to fetch entries for project {project.id}: {e}")
+                                continue
+                        
+                        logger.info(f"OpenProject get_time_entries (Fallback): Fetched {total_entries} entries across {len(projects)} projects")
+                        return
+                
+                response.raise_for_status()
+                
+                data = response.json()
+                time_entries = data.get("_embedded", {}).get("elements", [])
+                
+                for entry in time_entries:
+                    yield entry
+                    total_entries += 1
+                
+                # Check for next page
+                links = data.get("_links", {})
+                next_link = links.get("nextByOffset") or links.get("next")
+                
+                if next_link and isinstance(next_link, dict):
+                    next_href = next_link.get("href")
+                    if next_href:
+                        if not next_href.startswith("http"):
+                            request_url = f"{self.base_url}{next_href}"
+                        else:
+                            request_url = next_href
+                        params = {}  # Clear params for subsequent requests
+                        page_num += 1
                     else:
-                        request_url = next_href
-                    params = {}  # Clear params for subsequent requests
-                    page_num += 1
+                        request_url = None
                 else:
                     request_url = None
-            else:
-                request_url = None
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 403 and not project_id:
+                     logger.warning("OpenProject get_time_entries: HTTP 403 caught in exception. Triggering Fallback.")
+                     projects = await self.list_projects()
+                     for project in projects:
+                         try:
+                             async for entry in self.get_time_entries(
+                                 task_id=task_id,
+                                 user_id=user_id,
+                                 project_id=str(project.id),
+                                 start_date=start_date,
+                                 end_date=end_date
+                             ):
+                                 yield entry
+                                 total_entries += 1
+                         except Exception:
+                             continue
+                     return
+                raise e
         
         logger.info(
-            f"OpenProject get_time_entries: Fetched {len(all_time_entries)} entries "
+            f"OpenProject get_time_entries: Fetched {total_entries} entries "
             f"from {page_num} page(s)"
         )
-        
-        return all_time_entries
     
     async def get_total_hours_for_task(self, task_id: str) -> float:
         """
@@ -1857,7 +1979,7 @@ class OpenProjectV13Provider(BasePMProvider):
             request_url = url
             
             while request_url:
-                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=120)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -2228,7 +2350,7 @@ class OpenProjectV13Provider(BasePMProvider):
             request_url = url
             
             while request_url:
-                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=120)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -2336,7 +2458,7 @@ class OpenProjectV13Provider(BasePMProvider):
             # Fetch all pages using pagination (exact pattern from test script)
             request_url = url
             while request_url:
-                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=120)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -2413,7 +2535,7 @@ class OpenProjectV13Provider(BasePMProvider):
             # Fetch all pages using pagination (exact pattern from test script)
             request_url = url
             while request_url:
-                response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
+                response = requests.get(request_url, headers=self.headers, params=params, timeout=120)
                 
                 if response.status_code == 200:
                     data = response.json()

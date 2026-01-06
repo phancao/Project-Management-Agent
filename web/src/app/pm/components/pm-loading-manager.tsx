@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { listProviders } from "~/core/api/pm/providers";
 import { usePMLoading } from "../context/pm-loading-context";
+import { useLoading } from "~/core/contexts/loading-context";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { useStatuses } from "~/core/api/hooks/pm/use-statuses";
 import { usePriorities } from "~/core/api/hooks/pm/use-priorities";
@@ -24,6 +25,7 @@ import { debug } from "../utils/debug";
 export function PMLoadingManager() {
   const searchParams = useSearchParams();
   const activeProjectId = searchParams.get('project');
+  const globalLoading = useLoading();
 
   const {
     state,
@@ -40,6 +42,7 @@ export function PMLoadingManager() {
     // Only load if we're in loading state and don't have data yet
     if (state.providers.loading && !state.providers.data && !state.providers.error) {
       debug.state('Step 1: Loading providers...');
+      globalLoading.setLoading(true, "Loading providers...");
 
       // Add timeout to prevent infinite loading
       const timeoutId = setTimeout(() => {
@@ -50,6 +53,7 @@ export function PMLoadingManager() {
           error: timeoutError,
           data: null,
         });
+        globalLoading.setLoading(false);
         toast.error("Provider loading timeout", {
           description: timeoutError.message,
           duration: 10000,
@@ -67,6 +71,7 @@ export function PMLoadingManager() {
             error: null,
             data: validProviders,
           });
+          // Don't turn off global loading here, wait for projects
         })
         .catch((error) => {
           clearTimeout(timeoutId);
@@ -79,6 +84,7 @@ export function PMLoadingManager() {
             error: errorObj,
             data: null,
           });
+          globalLoading.setLoading(false);
 
           // Show error toast to user
           toast.error("Failed to load providers", {
@@ -91,7 +97,7 @@ export function PMLoadingManager() {
         clearTimeout(timeoutId);
       };
     }
-  }, [state.providers.loading, state.providers.data, state.providers.error, setProvidersState]);
+  }, [state.providers.loading, state.providers.data, state.providers.error, setProvidersState, globalLoading]);
 
   // Step 2: Load filter data after providers are loaded
   // Use the existing hooks but sync their state with our loading context
@@ -114,6 +120,19 @@ export function PMLoadingManager() {
   // Sync projects state
   useEffect(() => {
     if (!state.providers.loading && state.providers.data) {
+      if (projectsLoading) {
+        // If still loading projects, update message but keep loading true
+        // Only if global loading was already true (initial load)
+        if (globalLoading.isLoading) {
+          globalLoading.setLoading(true, "Loading projects...");
+        }
+      } else {
+        // Projects loaded, if we were global loading, stop it
+        if (globalLoading.isLoading) {
+          globalLoading.setLoading(false);
+        }
+      }
+
       setProjectsState({
         loading: projectsLoading,
         error: projectsError,
@@ -122,7 +141,7 @@ export function PMLoadingManager() {
     } else if (state.providers.loading) {
     } else if (!state.providers.data) {
     }
-  }, [projects, projectsLoading, projectsError, state.providers.loading, state.providers.data, state.providers.error, setProjectsState]);
+  }, [projects, projectsLoading, projectsError, state.providers.loading, state.providers.data, state.providers.error, setProjectsState, globalLoading]);
 
   // Sync sprints state (only load if project is selected)
   useEffect(() => {

@@ -123,8 +123,21 @@ export function BurndownView() {
 
   if (sprintsLoading || (!selectedSprintId && sortedSprints.length > 0)) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500 dark:text-gray-400">Loading sprints...</div>
+      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-xs">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center text-lg">
+              📉
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Loading Burndown</h3>
+              <p className="text-xs text-muted-foreground">Fetching sprints...</p>
+            </div>
+          </div>
+          <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+            <div className="h-full w-1/2 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -141,8 +154,21 @@ export function BurndownView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-gray-500 dark:text-gray-400">Loading burndown...</div>
+      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-xs">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center text-lg">
+              📉
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Loading Burndown</h3>
+              <p className="text-xs text-muted-foreground">Calculating chart data...</p>
+            </div>
+          </div>
+          <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+            <div className="h-full w-2/3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }

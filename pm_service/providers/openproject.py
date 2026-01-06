@@ -6,7 +6,7 @@ to manage projects, work packages (tasks), and sprints.
 """
 import base64
 import requests
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, AsyncIterator
 from datetime import datetime, date
 
 from .base import BasePMProvider
@@ -66,13 +66,12 @@ class OpenProjectProvider(BasePMProvider):
     
     # ==================== Project Operations ====================
     
-    async def list_projects(self) -> List[PMProject]:
+    async def list_projects(self) -> AsyncIterator[PMProject]:
         """List all projects from OpenProject (handles pagination)"""
         import logging
         logger = logging.getLogger(__name__)
         
         url = f"{self.base_url}/api/v3/projects"
-        all_projects = []
         page_num = 1
         
         # Use maximum page size for efficiency (OpenProject API supports up to 500 per page)
@@ -80,6 +79,9 @@ class OpenProjectProvider(BasePMProvider):
         request_url = url
         
         logger.info(f"OpenProject: Fetching projects from {url} with pageSize=500")
+        
+        fetched_count = 0
+        total_count = None
         
         while request_url:
             response = requests.get(request_url, headers=self.headers, params=params, timeout=60)
@@ -105,13 +107,17 @@ class OpenProjectProvider(BasePMProvider):
             data = response.json()
             projects_data = data.get("_embedded", {}).get("elements", [])
             
-            total_count = data.get("count", len(all_projects) + len(projects_data))
+            if total_count is None:
+                total_count = data.get("count", 0)
+
+            fetched_count += len(projects_data)
             logger.info(
                 f"OpenProject: Page {page_num} - Found {len(projects_data)} projects "
-                f"(total so far: {len(all_projects) + len(projects_data)}/{total_count})"
+                f"(total so far: {fetched_count}/{total_count})"
             )
             
-            all_projects.extend(projects_data)
+            for proj in projects_data:
+                yield self._parse_project(proj)
             
             # Check for next page
             links = data.get("_links", {})
@@ -129,21 +135,12 @@ class OpenProjectProvider(BasePMProvider):
                 else:
                     request_url = None
             else:
-                # Verify we got all projects
-                if total_count > len(all_projects):
-                    logger.warning(
-                        f"OpenProject: Response indicates {total_count} total projects, "
-                        f"but only fetched {len(all_projects)}. "
-                        f"This may indicate pagination issues."
-                    )
                 request_url = None
         
         logger.info(
-            f"OpenProject: Pagination complete - Total projects fetched: {len(all_projects)} "
+            f"OpenProject: Pagination complete - Total projects fetched: {fetched_count} "
             f"from {page_num} page(s)"
         )
-        
-        return [self._parse_project(proj) for proj in all_projects]
     
     async def get_project(self, project_id: str) -> Optional[PMProject]:
         """Get a single project by ID"""
@@ -257,9 +254,9 @@ class OpenProjectProvider(BasePMProvider):
         base_params["include"] = "priority,status,assignee,project,version,parent"
         
         # Pagination settings
-        page_size = 500  # OpenProject max is typically 1000, use 500 for safety
+        # Pagination settings
+        page_size = 500
         offset = 0
-        all_tasks: List[PMTask] = []
         total_count = None
         
         while True:
@@ -275,15 +272,14 @@ class OpenProjectProvider(BasePMProvider):
                 total_count = result.get("total", 0)
                 logger.info(f"OpenProject list_tasks: Total {total_count} work packages to fetch")
             
-            # Parse and add tasks
+            # Parse and yield tasks
             for task in tasks_data:
-                all_tasks.append(self._parse_task(task))
+                parsed = self._parse_task(task)
+                if parsed:
+                    yield parsed
             
             # Check if we've fetched all
             if len(tasks_data) < page_size:
-                break
-            
-            if len(all_tasks) >= total_count:
                 break
             
             offset += page_size
@@ -293,16 +289,7 @@ class OpenProjectProvider(BasePMProvider):
                 logger.warning(f"OpenProject list_tasks: Safety limit reached at offset {offset}")
                 break
         
-        logger.info(f"OpenProject list_tasks: Fetched {len(all_tasks)} work packages total")
-        
-        # Log if filter returns no results
-        if assignee_id and len(all_tasks) == 0:
-            logger.warning(
-                f"Assignee filter returned 0 tasks for "
-                f"user_id={assignee_id}. Total available: {total_count}"
-            )
-        
-        return all_tasks
+        logger.info(f"OpenProject list_tasks: Fetch complete")
     
     async def get_task(self, task_id: str) -> Optional[PMTask]:
         """Get a single work package by ID"""
@@ -1001,23 +988,14 @@ class OpenProjectProvider(BasePMProvider):
     
     async def list_sprints(
         self, project_id: Optional[str] = None, state: Optional[str] = None
-    ) -> List[PMSprint]:
+    ) -> AsyncIterator[PMSprint]:
         """
         List sprints (iterations) from OpenProject with automatic pagination.
-        
-        Note: OpenProject uses "versions" for sprints/iterations.
-        Versions have status: "open" or "closed"
-        
-        State mapping:
-        - "active" -> versions with status "open" and current date within start/end dates
-        - "closed" -> versions with status "closed" or end date in the past
-        - "future" -> versions with status "open" and start date in the future
-        - None -> all versions
-        
-        TESTED: ✅ Works with state filtering based on status and dates
+        Yields sprints one by one.
         """
         import logging
         from datetime import date, datetime
+        from typing import AsyncIterator
         logger = logging.getLogger(__name__)
         
         url = f"{self.base_url}/api/v3/versions"
@@ -1025,115 +1003,84 @@ class OpenProjectProvider(BasePMProvider):
         # Pagination settings
         page_size = 500
         offset = 0
-        sprints_data: List[Dict[str, Any]] = []
         total_count = None
         
+        actual_project_id = self._extract_project_key(project_id)
+        today = date.today()
+
         while True:
             params = {"pageSize": page_size, "offset": offset}
             response = requests.get(url, headers=self.headers, params=params, timeout=10)
             response.raise_for_status()
             
             result = response.json()
-            page_data = result.get("_embedded", {}).get("elements", [])
+            sprints_data_page = result.get("_embedded", {}).get("elements", [])
             
+            # Get total count on first request
             if total_count is None:
                 total_count = result.get("total", 0)
                 logger.info(f"OpenProject list_sprints: Total {total_count} versions to fetch")
             
-            sprints_data.extend(page_data)
-            
-            if len(page_data) < page_size:
-                break
-            if len(sprints_data) >= total_count:
+            for sprint_data in sprints_data_page:
+                # Filter by project_id if provided
+                if actual_project_id:
+                     defining_project_href = sprint_data.get("_links", {}).get("definingProject", {}).get("href", "")
+                     if not defining_project_href.endswith(f"/projects/{actual_project_id}"):
+                         continue
+                
+                # Filter by state if provided
+                if state:
+                    sprint_status = sprint_data.get("status", "open")
+                    start_date_str = sprint_data.get("startDate")
+                    end_date_str = sprint_data.get("endDate")
+                    
+                    start_date = None
+                    end_date = None
+                    if start_date_str:
+                        try:
+                            start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00')).date()
+                        except (ValueError, AttributeError):
+                            pass
+                    if end_date_str:
+                        try:
+                            end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00')).date()
+                        except (ValueError, AttributeError):
+                            pass
+                    
+                    sprint_state = None
+                    if sprint_status == "closed":
+                        sprint_state = "closed"
+                    elif sprint_status == "open":
+                        if start_date and end_date:
+                            if end_date < today:
+                                sprint_state = "closed"
+                            elif start_date <= today <= end_date:
+                                sprint_state = "active"
+                            elif start_date > today:
+                                sprint_state = "future"
+                        elif start_date:
+                             if start_date > today:
+                                 sprint_state = "future"
+                             else:
+                                 sprint_state = "active"
+                        else:
+                            sprint_state = "active"
+                    
+                    if state != sprint_state:
+                         continue
+
+                yield self._parse_sprint(sprint_data)
+
+            # Check if we've fetched all
+            if len(sprints_data_page) < page_size:
                 break
             
             offset += page_size
-            if offset > 10000:  # Safety limit
+            
+            # Safety limit to prevent infinite loops
+            if offset > 50000:
                 logger.warning(f"OpenProject list_sprints: Safety limit reached at offset {offset}")
                 break
-        
-        logger.info(f"OpenProject list_sprints: Fetched {len(sprints_data)} versions total")
-        
-        # Filter by project_id if provided
-        # (versions don't have project filter in API)
-        # Extract project key from composite format
-        actual_project_id = self._extract_project_key(project_id)
-        if actual_project_id:
-            sprints_data = [
-                sprint for sprint in sprints_data
-                if sprint.get("_links", {})
-                .get("definingProject", {})
-                .get("href", "")
-                .endswith(f"/projects/{actual_project_id}")
-            ]
-        
-        # Filter by state if provided
-        if state:
-            today = date.today()
-            filtered_sprints = []
-            
-            for sprint in sprints_data:
-                sprint_status = sprint.get("status", "open")
-                start_date_str = sprint.get("startDate")
-                end_date_str = sprint.get("endDate")
-                
-                # Parse dates if available
-                start_date = None
-                end_date = None
-                if start_date_str:
-                    try:
-                        start_date = datetime.fromisoformat(
-                            start_date_str.replace('Z', '+00:00')
-                        ).date()
-                    except (ValueError, AttributeError):
-                        pass
-                if end_date_str:
-                    try:
-                        end_date = datetime.fromisoformat(
-                            end_date_str.replace('Z', '+00:00')
-                        ).date()
-                    except (ValueError, AttributeError):
-                        pass
-                
-                # Determine sprint state based on status and dates
-                sprint_state = None
-                
-                if sprint_status == "closed":
-                    sprint_state = "closed"
-                elif sprint_status == "open":
-                    if start_date and end_date:
-                        if end_date < today:
-                            sprint_state = "closed"
-                        elif start_date <= today <= end_date:
-                            sprint_state = "active"
-                        elif start_date > today:
-                            sprint_state = "future"
-                        else:
-                            sprint_state = "active"  # Default for open with dates
-                    elif end_date:
-                        if end_date < today:
-                            sprint_state = "closed"
-                        else:
-                            sprint_state = "active"
-                    elif start_date:
-                        if start_date > today:
-                            sprint_state = "future"
-                        else:
-                            sprint_state = "active"
-                    else:
-                        # No dates, status is "open" -> treat as active
-                        sprint_state = "active"
-                
-                # Match against requested state
-                if sprint_state == state:
-                    filtered_sprints.append(sprint)
-            
-            sprints_data = filtered_sprints
-            logger.info(
-                f"Filtered to {len(sprints_data)} sprints with state '{state}'"
-            )
-        
-        return [self._parse_sprint(sprint) for sprint in sprints_data]
     
     async def get_sprint(self, sprint_id: str) -> Optional[PMSprint]:
         """Get a single version (sprint) by ID"""
@@ -1197,18 +1144,15 @@ class OpenProjectProvider(BasePMProvider):
     
     async def list_users(
         self, project_id: Optional[str] = None
-    ) -> List[PMUser]:
+    ) -> AsyncIterator[PMUser]:
         """
         List users with automatic pagination.
-        
-        If project_id is provided, uses /api/v3/memberships to get project members.
-        Otherwise, uses /api/v3/users to get all users (requires admin permissions).
+        Yields users one by one.
         """
         import logging
         import json as json_lib
+        from typing import AsyncIterator
         logger = logging.getLogger(__name__)
-        
-        all_users: List[PMUser] = []
         
         if project_id:
             # Use memberships endpoint to get users in a specific project
@@ -1230,14 +1174,9 @@ class OpenProjectProvider(BasePMProvider):
                 params["offset"] = offset
                 response = requests.get(url, headers=self.headers, params=params)
                 
-                # Check for permission errors and raise clear error message
                 if response.status_code == 403:
                     raise PermissionError(
-                        f"OpenProject API returned 403 Forbidden when trying to list memberships for project {project_id}. "
-                        "This may indicate that: "
-                        "1) The API token doesn't have permission to view project memberships, "
-                        "2) The project doesn't exist or you don't have access to it, "
-                        "3) Contact your OpenProject administrator to grant project membership viewing permissions."
+                        f"OpenProject API returned 403 Forbidden when trying to list memberships for project {project_id}."
                     )
                 
                 response.raise_for_status()
@@ -1249,87 +1188,49 @@ class OpenProjectProvider(BasePMProvider):
                     total_count = result.get("total", 0)
                     logger.info(f"OpenProject list_users (project {project_id}): Total {total_count} memberships to fetch")
                 
-                # Extract user information from each membership
                 for membership in memberships:
-                    # First try to get embedded user data (more efficient)
                     principal_data = membership.get("_embedded", {}).get("principal", {})
-                    if principal_data:
-                        # Use embedded user data if available
-                        all_users.append(self._parse_user(principal_data))
-                    else:
-                        # Fallback: fetch user from link
-                        user_link = membership.get("_links", {}).get("principal", {})
-                        if user_link and isinstance(user_link, dict):
-                            user_href = user_link.get("href", "")
-                            if user_href:
-                                try:
-                                    user_url = f"{self.base_url}{user_href}" if user_href.startswith("/") else user_href
-                                    user_response = requests.get(user_url, headers=self.headers)
-                                    user_response.raise_for_status()
-                                    user_data = user_response.json()
-                                    all_users.append(self._parse_user(user_data))
-                                except Exception as e:
-                                    logger.warning(f"Failed to fetch user from {user_href}: {e}")
-                
-                if len(memberships) < 500:
+                    # For memberships, we need to map principal data to PMUser
+                    if principal_data.get("_type") == "User":
+                        # We can reuse _parse_user but need to ensure it handles the structure
+                        # Usually principal_data is exactly the user structure
+                        yield self._parse_user(principal_data)
+
+                if len(memberships) < params["pageSize"]:
                     break
-                if total_count and len(all_users) >= total_count:
-                    break
-                
-                offset += 500
-                if offset > 10000:  # Safety limit
-                    logger.warning(f"OpenProject list_users: Safety limit reached at offset {offset}")
-                    break
-            
-            logger.info(f"OpenProject list_users (project {project_id}): Fetched {len(all_users)} users total")
+                offset += params["pageSize"]
         else:
-            # List all users (requires admin permissions)
+            # Global listing
             url = f"{self.base_url}/api/v3/users"
-            
-            # Pagination settings
-            page_size = 500
+            params = {"pageSize": 500, "offset": 0}
             offset = 0
             total_count = None
             
             while True:
-                params = {"pageSize": page_size, "offset": offset}
+                params["offset"] = offset
                 response = requests.get(url, headers=self.headers, params=params)
                 
-                # Check for permission errors and raise clear error message
                 if response.status_code == 403:
-                    raise PermissionError(
-                        "OpenProject API returned 403 Forbidden. "
-                        "Listing all users requires administrator permissions. "
-                        "Please either: "
-                        "1) Provide a project_id to list users in that specific project (uses memberships endpoint, no admin needed), "
-                        "2) Contact your OpenProject administrator to grant user listing permissions to your API token."
-                    )
+                     # Fallback to current user if forbidden
+                     logger.warning("Forbidden to list all users. Fetching current user only.")
+                     current = await self.get_current_user()
+                     if current:
+                         yield current
+                     return # Stop yielding
                 
                 response.raise_for_status()
-                
                 result = response.json()
                 users_data = result.get("_embedded", {}).get("elements", [])
                 
                 if total_count is None:
                     total_count = result.get("total", 0)
-                    logger.info(f"OpenProject list_users: Total {total_count} users to fetch")
                 
-                for user in users_data:
-                    all_users.append(self._parse_user(user))
+                for user_data in users_data:
+                    yield self._parse_user(user_data)
                 
-                if len(users_data) < page_size:
+                if len(users_data) < params["pageSize"]:
                     break
-                if len(all_users) >= total_count:
-                    break
-                
-                offset += page_size
-                if offset > 10000:  # Safety limit
-                    logger.warning(f"OpenProject list_users: Safety limit reached at offset {offset}")
-                    break
-            
-            logger.info(f"OpenProject list_users: Fetched {len(all_users)} users total")
-        
-        return all_users
+                offset += params["pageSize"]
     
     async def get_user(self, user_id: str) -> Optional[PMUser]:
         """Get a single user by ID"""
@@ -1701,15 +1602,14 @@ class OpenProjectProvider(BasePMProvider):
     
     # ==================== Epic Operations ====================
     
-    async def list_epics(self, project_id: Optional[str] = None) -> List[PMEpic]:
+    async def list_epics(self, project_id: Optional[str] = None) -> AsyncIterator[PMEpic]:
         """
         List all epics with automatic pagination, optionally filtered by project.
-        
-        TESTED: ✅ Works - Uses type ID from /api/v3/types endpoint
-        OpenProject requires numeric type ID, not string name
+        Yields epics one by one.
         """
         import logging
         import json as json_lib
+        from typing import AsyncIterator
         logger = logging.getLogger(__name__)
         
         # First, get Epic type ID from types endpoint
@@ -1731,7 +1631,7 @@ class OpenProjectProvider(BasePMProvider):
         
         if not epic_type_id:
             logger.warning("Epic type not found in OpenProject types")
-            return []
+            return
         
         # Build filters with Epic type ID
         url = f"{self.base_url}/api/v3/work_packages"
@@ -1753,7 +1653,6 @@ class OpenProjectProvider(BasePMProvider):
         # Pagination settings
         page_size = 500
         offset = 0
-        all_epics: List[PMEpic] = []
         total_count = None
         
         try:
@@ -1792,20 +1691,15 @@ class OpenProjectProvider(BasePMProvider):
                         updated_at=self._parse_datetime(wp.get('updatedAt')),
                         raw_data=wp
                     )
-                    all_epics.append(epic)
+                    yield epic
                 
                 if len(work_packages) < page_size:
                     break
-                if len(all_epics) >= total_count:
-                    break
-                
                 offset += page_size
                 if offset > 10000:  # Safety limit
                     logger.warning(f"OpenProject list_epics: Safety limit reached at offset {offset}")
                     break
             
-            logger.info(f"OpenProject list_epics: Fetched {len(all_epics)} epics total")
-            return all_epics
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Error listing epics: {e}", exc_info=True)

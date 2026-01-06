@@ -87,10 +87,12 @@ class PMServiceHandler:
     
     # ==================== Projects ====================
     
-    async def list_all_projects(self) -> list[dict[str, Any]]:
+    async def list_all_projects(self, user_id: Optional[str] = None) -> list[dict[str, Any]]:
         """List all projects from all providers."""
         async with self._client as client:
-            result = await client.list_projects(user_id=self.user_id)
+            # Use provided user_id or fall back to authenticated user_id
+            target_user_id = user_id if user_id else self.user_id
+            result = await client.list_projects(user_id=target_user_id)
         return result.get("items", [])
     
     async def get_project(self, project_id: str) -> Optional[dict[str, Any]]:
@@ -543,6 +545,62 @@ class PMServiceHandler:
         async with self._client as client:
             result = await client.list_priorities(project_id=project_id)
         return result.get("items", [])
+    
+    # ==================== Worklogs / Time Entries ====================
+
+    async def list_worklogs(
+        self,
+        project_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        task_id: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        """
+        List worklogs (time entries) with filters.
+        
+        Args:
+            project_id: Filter by project ID
+            user_id: Filter by user ID
+            task_id: Filter by task ID
+        """
+        async with self._client as client:
+            result = await client.list_time_entries(
+                project_id=project_id,
+                user_id=user_id,
+                task_id=task_id
+            )
+        return result.get("items", [])
+
+    async def log_worklog(
+        self,
+        task_id: str,
+        hours: float,
+        date: str,
+        comment: Optional[str] = None,
+        activity_type: Optional[str] = None
+    ) -> Optional[dict[str, Any]]:
+        """
+        Log time entry.
+        
+        Args:
+            task_id: Task ID
+            hours: Hours to log
+            date: Date (YYYY-MM-DD)
+            comment: Optional comment
+            activity_type: Optional activity type
+        """
+        async with self._client as client:
+            try:
+                return await client.log_time_entry(
+                    task_id=task_id,
+                    hours=hours,
+                    date=date,
+                    comment=comment,
+                    activity_type=activity_type
+                )
+            except Exception as e:
+                logger.error(f"Failed to log worklog for task {task_id}: {e}")
+                return None
+
 
 
 # Convenience function

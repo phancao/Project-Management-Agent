@@ -13,12 +13,15 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 
+import { cn } from "~/lib/utils";
+
 interface CreateEpicDialogProps {
   projectId: string | null | undefined;
   onEpicCreated?: () => void;
+  className?: string;
 }
 
-export function CreateEpicDialog({ projectId, onEpicCreated }: CreateEpicDialogProps) {
+export function CreateEpicDialog({ projectId, onEpicCreated, className }: CreateEpicDialogProps) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -29,7 +32,7 @@ export function CreateEpicDialog({ projectId, onEpicCreated }: CreateEpicDialogP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!projectId) {
       setError("No project selected");
       return;
@@ -64,13 +67,13 @@ export function CreateEpicDialog({ projectId, onEpicCreated }: CreateEpicDialogP
       // Reset form and close dialog
       setFormData({ name: "", description: "" });
       setOpen(false);
-      
+
       // Trigger refresh
       if (onEpicCreated) {
         onEpicCreated();
       }
-      window.dispatchEvent(new CustomEvent("pm_refresh", { 
-        detail: { type: "pm_refresh" } 
+      window.dispatchEvent(new CustomEvent("pm_refresh", {
+        detail: { type: "pm_refresh" }
       }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create epic");
@@ -91,7 +94,12 @@ export function CreateEpicDialog({ projectId, onEpicCreated }: CreateEpicDialogP
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="w-full" disabled={!projectId}>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn("w-full", className)}
+          disabled={!projectId}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Create epic
         </Button>
@@ -100,7 +108,7 @@ export function CreateEpicDialog({ projectId, onEpicCreated }: CreateEpicDialogP
         <DialogHeader>
           <DialogTitle>Create Epic</DialogTitle>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label htmlFor="epic-name">Epic Name *</Label>

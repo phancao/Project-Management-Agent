@@ -29,7 +29,7 @@ const fetchTasksFn = async (projectId?: string) => {
   if (!projectId) {
     return [];
   }
-  
+
   const url = `pm/projects/${projectId}/tasks`;
   const fullUrl = resolveServiceURL(url);
   debug.api('Fetching tasks', { url: fullUrl, projectId: projectId ?? 'N/A' });
@@ -45,17 +45,17 @@ const fetchTasksFn = async (projectId?: string) => {
     });
     throw userFriendlyError;
   }
-  
-    if (!response?.ok) {
+
+  if (!response?.ok) {
     const status = response?.status ?? 0;
     let errorDetail = `HTTP ${status}`;
     let userFriendlyMessage = "Failed to load tasks";
     const isClientError = status >= 400 && status < 500;
-    
+
     try {
       const errorData = await response.json();
       errorDetail = errorData.detail ?? errorData.message ?? errorDetail;
-      
+
       // Provide user-friendly messages for specific status codes
       if (status === 410) {
         userFriendlyMessage = "Project no longer available";
@@ -94,7 +94,7 @@ const fetchTasksFn = async (projectId?: string) => {
       // If response is not JSON, use status text
       errorDetail = response?.statusText ?? errorDetail;
       const status = response?.status ?? 0;
-      
+
       if (status === 410) {
         userFriendlyMessage = "Project no longer available";
         toast.error(userFriendlyMessage, {
@@ -108,7 +108,7 @@ const fetchTasksFn = async (projectId?: string) => {
         });
       }
     }
-    
+
     // Log client errors (4xx) as warnings since they're expected business conditions
     // Log server errors (5xx) as errors since they're unexpected
     if (isClientError) {
@@ -139,12 +139,13 @@ export function useTasks(projectId?: string) {
     }
     return { tasks: [], loading: true, error: null };
   }, [projectId]);
-  
+
   const initialState = getInitialState();
   const [tasks, setTasks] = useState<Task[]>(initialState.tasks);
   const [loading, setLoading] = useState(initialState.loading);
+  const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(initialState.error);
-  
+
   // Update state if projectId changes and we have cached data
   useEffect(() => {
     if (projectId) {
@@ -168,7 +169,7 @@ export function useTasks(projectId?: string) {
       setError(null);
       return;
     }
-    
+
     // Check cache if not forcing refresh
     if (!forceRefresh) {
       const cached = tasksCache.get(projectId);
@@ -180,32 +181,35 @@ export function useTasks(projectId?: string) {
         return;
       }
     }
-    
+
     // Optionally clear tasks to avoid showing stale data
     // Don't clear if we're just refreshing after an update (to prevent flash)
     if (clearTasks) {
       setTasks([]);
     }
     setLoading(true);
+    setIsFetching(true);
     setError(null);
-    
+
     fetchTasksFn(projectId)
       .then((data) => {
         // Update cache
         tasksCache.set(projectId, { data, timestamp: Date.now() });
         setTasks(data);
         setLoading(false);
+        setIsFetching(false);
       })
       .catch((err) => {
         setError(err as Error);
         setTasks([]); // Clear tasks on error
         setLoading(false);
+        setIsFetching(false);
       });
   }, [projectId]);
 
   useEffect(() => {
     debug.api('Effect triggered', { projectId });
-    
+
     // If no project ID, set loading to false and return empty
     if (!projectId) {
       debug.api('No projectId, setting loading to false');
@@ -214,7 +218,7 @@ export function useTasks(projectId?: string) {
       setLoading(false);
       return;
     }
-    
+
     // Check cache first - if we already have cached data from initial state, skip
     const cached = tasksCache.get(projectId);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
@@ -233,7 +237,7 @@ export function useTasks(projectId?: string) {
       }
       return;
     }
-    
+
     // Only fetch if we don't have cached data
     // If tasks are already set from initial state, don't clear them
     if (tasks.length === 0) {
@@ -242,18 +246,19 @@ export function useTasks(projectId?: string) {
       setError(null);
       setLoading(true);
     }
-    
+    setIsFetching(true);
+
     // Use a flag to track if this effect is still relevant (projectId hasn't changed)
     let isCurrent = true;
     debug.timeStart(`fetch-tasks-${projectId}`);
-    
+
     // Fetch new data
     fetchTasksFn(projectId)
       .then((data) => {
         debug.timeEnd(`fetch-tasks-${projectId}`, `Tasks fetched successfully. Count: ${data.length}`);
-        debug.api('Tasks fetched successfully', { 
-          count: data.length, 
-          projectId, 
+        debug.api('Tasks fetched successfully', {
+          count: data.length,
+          projectId,
           isCurrent,
           taskIds: data.length > 0 ? data.slice(0, 5).map((t: Task) => t.id) : []
         });
@@ -264,6 +269,7 @@ export function useTasks(projectId?: string) {
           debug.api('Updating state with tasks', { count: data.length });
           setTasks(data);
           setLoading(false);
+          setIsFetching(false);
           debug.api('State updated');
         } else {
           debug.api('Effect is stale (projectId changed), ignoring response');
@@ -276,11 +282,12 @@ export function useTasks(projectId?: string) {
           setError(err as Error);
           setTasks([]);
           setLoading(false);
+          setIsFetching(false);
         } else {
           debug.api('Effect is stale (projectId changed), ignoring error');
         }
       });
-    
+
     // Cleanup: mark this effect as stale if projectId changes
     return () => {
       debug.api('Cleanup: marking effect as stale', { projectId });
@@ -290,7 +297,7 @@ export function useTasks(projectId?: string) {
 
   usePMRefresh(() => refresh(true, true)); // Force refresh on PM refresh event
 
-  return { tasks, loading, error, refresh };
+  return { tasks, loading, isFetching, error, refresh };
 }
 
 export function useMyTasks() {
@@ -312,16 +319,16 @@ const fetchAllTasksFn = async () => {
     });
     throw userFriendlyError;
   }
-  
+
   if (!response.ok) {
     let errorDetail = `HTTP ${response?.status ?? 'unknown'}`;
     let userFriendlyMessage = "Failed to load tasks";
     const isClientError = (response?.status ?? 0) >= 400 && (response?.status ?? 0) < 500;
-    
+
     try {
       const errorData = await response.json();
       errorDetail = errorData.detail ?? errorData.message ?? errorDetail;
-      
+
       const status = response?.status ?? 0;
       if (status === 401 || status === 403) {
         userFriendlyMessage = "Authentication failed";
@@ -348,7 +355,7 @@ const fetchAllTasksFn = async () => {
         duration: 5000,
       });
     }
-    
+
     // Log client errors (4xx) as warnings since they're expected business conditions
     // Log server errors (5xx) as errors since they're unexpected
     if (isClientError) {

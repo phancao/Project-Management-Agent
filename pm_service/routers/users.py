@@ -18,6 +18,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("", response_model=ListResponse)
 async def list_users(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
+    provider_id: Optional[str] = Query(None, description="Filter by provider ID"),
     limit: int = Query(500, ge=1, le=1000, description="Max items to return"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
@@ -33,7 +34,7 @@ async def list_users(
     """
     handler = PMHandler(db)
     try:
-        all_users = await handler.list_users(project_id=project_id)
+        all_users = await handler.list_users(project_id=project_id, provider_id=provider_id)
     except PermissionError as e:
         # Convert PermissionError to HTTPException so it's properly returned to client
         raise HTTPException(

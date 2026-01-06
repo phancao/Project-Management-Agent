@@ -322,7 +322,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db_session)):
                                         plan_title = current_plan.get("title", "")
                                     elif isinstance(current_plan, str):
                                         # String - skip it to avoid the .title() method issue
-                                        continue
+                                        plan_title = None
                                     else:
                                         # Unknown type - convert to string
                                         plan_title = str(current_plan)

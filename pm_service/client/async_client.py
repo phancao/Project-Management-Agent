@@ -28,7 +28,7 @@ class AsyncPMServiceClient:
     def __init__(
         self,
         base_url: str = DEFAULT_PM_SERVICE_URL,
-        timeout: float = 30.0,
+        timeout: float = 300.0,  # Increased for large data operations (480 projects, 639 users)
         max_retries: int = 3,
         retry_delay: float = 1.0
     ):
@@ -734,6 +734,79 @@ class AsyncPMServiceClient:
             ListResponse with priorities
         """
         return await self._request("GET", f"/api/v1/projects/{project_id}/priorities")
+
+    # ==================== Time Entries ====================
+
+    async def list_time_entries(
+        self,
+        project_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        List ALL time entries.
+        
+        Automatically paginates to fetch all entries.
+        
+        Args:
+            project_id: Filter by project ID
+            user_id: Filter by user ID
+            task_id: Filter by task ID
+            start_date: Filter by start date (YYYY-MM-DD)
+            end_date: Filter by end date (YYYY-MM-DD)
+            
+        Returns:
+            ListResponse with ALL time entries
+        """
+        params = {}
+        if project_id:
+            params["project_id"] = project_id
+        if user_id:
+            params["user_id"] = user_id
+        if task_id:
+            params["task_id"] = task_id
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+            
+        return await self._paginate_all("/api/v1/time_entries", params=params)
+
+    async def log_time_entry(
+        self,
+        task_id: str,
+        hours: float,
+        date: str,
+        comment: Optional[str] = None,
+        activity_type: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        Log time entry.
+        
+        Args:
+            task_id: Task ID
+            hours: Hours to log
+            date: Date (YYYY-MM-DD)
+            comment: Optional comment
+            activity_type: Optional activity type
+            
+        Returns:
+            Created time entry
+        """
+        params = {"task_id": task_id}
+        data = {
+            "hours": hours,
+            "date": date
+        }
+        if comment:
+            data["comment"] = comment
+        if activity_type:
+            data["activity_type"] = activity_type
+            
+        return await self._request("POST", "/api/v1/time_entries", params=params, json=data)
+
 
 
 # Singleton instance for convenience

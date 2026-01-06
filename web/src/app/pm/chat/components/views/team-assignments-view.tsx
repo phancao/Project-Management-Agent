@@ -96,9 +96,8 @@ function TaskCard({ task, isDragging, dragHandleProps }: { task: Task; isDraggin
 
   return (
     <div
-      className={`flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900 ${
-        isDragging ? "opacity-40" : ""
-      }`}
+      className={`flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900 ${isDragging ? "opacity-40" : ""
+        }`}
     >
       <div
         className="mt-1 cursor-grab text-gray-400 dark:text-gray-500"
@@ -244,7 +243,7 @@ function AssigneeColumn({
 
 export function TeamAssignmentsView() {
   const { projectIdForData, activeProject } = useProjectData();
-  const { tasks, loading: tasksLoading, error: tasksError, refresh: refreshTasks } = useTasks(projectIdForData ?? undefined);
+  const { tasks, loading: tasksLoading, isFetching: tasksFetching, error: tasksError, refresh: refreshTasks } = useTasks(projectIdForData ?? undefined);
   const { users, loading: usersLoading, error: usersError } = useUsers(projectIdForData ?? undefined);
 
   const sensors = useSensors(
@@ -432,17 +431,62 @@ export function TeamAssignmentsView() {
     setOpenColumns((prev) => ({ ...prev, [columnKey]: open }));
   }, []);
 
-  if (tasksLoading || usersLoading) {
+  if (tasksLoading || tasksFetching || usersLoading) {
+    // Calculate loading progress
+    const loadingItems = [
+      { label: "Tasks", isLoading: tasksLoading, count: tasks?.length || 0 },
+      { label: "Users", isLoading: usersLoading, count: users?.length || 0 },
+    ];
+    const completedCount = loadingItems.filter(item => !item.isLoading).length;
+    const progressPercent = Math.round((completedCount / loadingItems.length) * 100);
+
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-4 w-24" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 w-full rounded-xl" />
-          ))}
+      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <Users className="w-4 h-4 animate-pulse text-blue-600 dark:text-blue-400" />
+              </div>
+              Loading Team
+            </h3>
+            <span className="text-xs font-mono text-muted-foreground">
+              {progressPercent}%
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          <div className="space-y-2">
+            {loadingItems.map((item, index) => (
+              <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
+                <div className="flex items-center gap-2">
+                  {index === 0 ? <Inbox className="w-3.5 h-3.5 text-green-500" /> : <Users className="w-3.5 h-3.5 text-blue-500" />}
+                  <span className="text-xs font-medium">{item.label}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-xs font-mono tabular-nums ${item.isLoading ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {item.isLoading ? (item.count > 0 ? item.count : "...") : item.count}
+                  </span>
+                  {item.isLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 text-green-500">✓</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-[10px] text-muted-foreground mt-3 text-center">
+            Loading tasks and team members...
+          </p>
         </div>
       </div>
     );
@@ -486,8 +530,8 @@ export function TeamAssignmentsView() {
               Cannot View Team Assignments
             </h3>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Your API key doesn't have permission to access the users endpoint. 
-              Please contact your administrator to grant the necessary permissions, 
+              Your API key doesn't have permission to access the users endpoint.
+              Please contact your administrator to grant the necessary permissions,
               or use an API key with user access rights.
             </p>
           </div>
@@ -594,7 +638,7 @@ export function TeamAssignmentsView() {
               {taskMap.get(activeDrag.taskId) ? (
                 <TaskCard task={taskMap.get(activeDrag.taskId)!} isDragging />
               ) : null}
-              </div>
+            </div>
           ) : null}
         </DragOverlay>
       </DndContext>

@@ -140,7 +140,7 @@ export default function MemberPage() {
                 {/* Header */}
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-6">
-                        <Button variant="ghost" size="icon" className="rounded-full" onClick={() => router.back()}>
+                        <Button variant="ghost" size="icon" className="rounded-full" onClick={() => router.push('/team?tab=teams')}>
                             <ArrowLeft className="w-5 h-5" />
                         </Button>
                         <Avatar className="w-20 h-20 border-4 border-white dark:border-gray-900 shadow-xl">

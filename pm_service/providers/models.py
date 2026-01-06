@@ -95,12 +95,15 @@ class PMTask:
     label_ids: Optional[List[str]] = None  # Associated labels
     sprint_id: Optional[str] = None  # Associated sprint
     estimated_hours: Optional[float] = None
+    spent_hours: Optional[float] = None
+    remaining_hours: Optional[float] = None
     actual_hours: Optional[float] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    has_children: bool = False
     raw_data: Optional[Dict[str, Any]] = None
 
 

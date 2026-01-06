@@ -1,7 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from 'react';
 import { PMHeader } from "../pm/components/pm-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 // @ts-expect-error - Direct import
@@ -16,20 +15,8 @@ import { TeamOverview } from "./components/team-overview";
 import { TeamMembers } from "./components/team-members";
 import { MemberMatrix } from "./components/member-matrix";
 import { TeamWorklogs } from "./components/team-worklogs";
-import { PMLoadingProvider } from "../pm/context/pm-loading-context";
-import { PMLoadingManager } from "../pm/components/pm-loading-manager";
-import { TeamDataProvider, useTeamDataContext } from "./context/team-data-context";
+import { useTeamDataContext } from "./context/team-data-context";
 import { TeamPageLoadingOverlay } from "./components/team-page-loading-overlay";
-
-// Create a client
-const queryClient = new QueryClient({
-    defaultOptions: {
-        queries: {
-            refetchOnWindowFocus: false,
-            retry: 1,
-        },
-    },
-});
 
 /**
  * TeamContent renders the tabs only after the initial blocking load is complete.
@@ -57,7 +44,7 @@ function TeamContent() {
                 </TabsTrigger>
                 <TabsTrigger value="assignments" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
                     <BarChart3 className="w-4 h-4 mr-2" />
-                    Assignments
+                    Project Assignation
                 </TabsTrigger>
                 <TabsTrigger value="worklogs" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
                     <ClipboardList className="w-4 h-4 mr-2" />
@@ -96,31 +83,24 @@ function TeamContent() {
 
 export default function TeamPage() {
     return (
-        <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center">Loading...</div>}>
-            <QueryClientProvider client={queryClient}>
-                <PMLoadingProvider>
-                    <PMLoadingManager />
-                    <TeamDataProvider>
-                        <TeamPageLoadingOverlay />
-                        <div className="min-h-screen bg-white dark:bg-gray-950">
-                            <PMHeader />
-                            <div className="pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
-                                <div className="flex items-center gap-3 mb-8">
-                                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                                        <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                                    </div>
-                                    <div>
-                                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Team Management</h1>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">Manage capacity, assignments, and time logs.</p>
-                                    </div>
-                                </div>
-
-                                <TeamContent />
-                            </div>
+        <>
+            <TeamPageLoadingOverlay />
+            <div className="min-h-screen bg-white dark:bg-gray-950">
+                <PMHeader />
+                <div className="pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
+                    <div className="flex items-center gap-3 mb-8">
+                        <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                            <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                         </div>
-                    </TeamDataProvider>
-                </PMLoadingProvider>
-            </QueryClientProvider>
-        </Suspense>
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Team Management</h1>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Manage capacity, assignments, and time logs.</p>
+                        </div>
+                    </div>
+
+                    <TeamContent />
+                </div>
+            </div>
+        </>
     );
 }

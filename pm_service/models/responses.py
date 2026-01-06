@@ -44,12 +44,17 @@ class TaskResponse(BaseModel):
     priority: Optional[str] = None
     task_type: Optional[str] = None
     progress: Optional[int] = None
+    estimated_hours: Optional[float] = None
+    spent_hours: Optional[float] = None
+    remaining_hours: Optional[float] = None
+    actual_hours: Optional[float] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     due_date: Optional[date] = None
     provider_id: str
     provider_name: str
     metadata: Optional[dict[str, Any]] = None
+    has_children: Optional[bool] = False
 
 
 class SprintResponse(BaseModel):

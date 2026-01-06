@@ -8,6 +8,11 @@ export interface PMTask {
     project_id?: string;
     deadline?: string;
     estimated_hours?: number;
+    spent_hours?: number;
+    remaining_hours?: number;
+    actual_hours?: number;
+    title?: string; // Often aliased to name in response
+    has_children?: boolean;
 }
 
 export async function listTasks(filters: { assignee_ids?: string[], project_id?: string }): Promise<PMTask[]> {

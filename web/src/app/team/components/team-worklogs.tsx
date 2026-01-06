@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Button } from "~/components/ui/button"
 import { useTeamDataContext, useTeamUsers, useTeamTimeEntries } from "../context/team-data-context"
@@ -193,13 +194,18 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
                                     )}
                                 >
                                     <td className="p-2">
-                                        <div className="flex items-center gap-2">
+                                        <Link
+                                            href={`/team/member/${encodeURIComponent(member.id)}`}
+                                            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                                        >
                                             <Avatar className="w-7 h-7">
                                                 <AvatarImage src={member.avatar} />
                                                 <AvatarFallback className="text-xs">{member.name?.[0]}</AvatarFallback>
                                             </Avatar>
-                                            <span className="text-sm font-medium truncate max-w-[150px]">{member.name}</span>
-                                        </div>
+                                            <span className="text-sm font-medium truncate max-w-[150px] hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                                                {member.name}
+                                            </span>
+                                        </Link>
                                     </td>
                                     {member.dailyHours.map((hours: number, dayIndex: number) => {
                                         const isWeekday = dayIndex < 5

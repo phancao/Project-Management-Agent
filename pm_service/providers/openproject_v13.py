@@ -1536,13 +1536,20 @@ class OpenProjectV13Provider(BasePMProvider):
             estimated_hours=self._parse_duration_to_hours(
                 data.get("estimatedTime")
             ),
+            spent_hours=self._parse_duration_to_hours(
+                data.get("spentTime")
+            ),
+            remaining_hours=self._parse_duration_to_hours(
+                data.get("remainingTime")
+            ),
             actual_hours=self._parse_duration_to_hours(
-                data.get("derivedRemainingTime")
+                data.get("spentTime")  # Usually actual = spent
             ),
             start_date=self._parse_date(data.get("startDate")),
             due_date=self._parse_date(data.get("dueDate")),
             created_at=self._parse_datetime(data.get("createdAt")),
             updated_at=self._parse_datetime(data.get("updatedAt")),
+            has_children=len(links.get("children", [])) > 0,
             raw_data=data
         )
     

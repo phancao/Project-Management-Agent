@@ -104,10 +104,13 @@ export function WorkloadCharts() {
             const timeSpent = memberTimeEntries.reduce((sum, te) => sum + (te.hours || 0), 0);
 
             // 2. Get incomplete tasks assigned to this member
-            const memberTasks = tasks.filter(t =>
-                t.assignee_id === member.id &&
-                !COMPLETED_STATUSES.includes((t.status || '').toLowerCase())
-            );
+            const memberTasks = tasks.filter(t => {
+                const isAssigned = t.assignee_id === member.id;
+                const isCompleted = COMPLETED_STATUSES.includes((t.status || '').toLowerCase());
+                const isParent = t.has_children === true; // Strict check for boolean true
+
+                return isAssigned && !isCompleted && !isParent;
+            });
 
             // 3. Calculate time remaining for each task
             // Time Remaining = Estimated Hours - Time Already Spent on that task

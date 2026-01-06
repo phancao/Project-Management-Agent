@@ -132,49 +132,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # OpenProject Database v16 (separate from our PM database)
-  openproject_db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: openproject
-      POSTGRES_PASSWORD: openproject
-      POSTGRES_DB: openproject
-    volumes:
-      - openproject_db_data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432" # Different port to avoid conflict
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U openproject -d openproject" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # OpenProject Application v16
-  openproject:
-    image: openproject/openproject:16
-    environment:
-      OPENPROJECT_DATABASE_HOST: openproject_db
-      OPENPROJECT_DATABASE_PORT: 5432
-      OPENPROJECT_DATABASE_USERNAME: openproject
-      OPENPROJECT_DATABASE_PASSWORD: openproject
-      OPENPROJECT_DATABASE_DB_NAME: openproject
-      OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY:-development-secret-key-change-in-production}
-      OPENPROJECT_HOST__NAME: localhost:8082
-      OPENPROJECT_HTTPS: "false"
-    ports:
-      - "8082:80"
-    depends_on:
-      openproject_db:
-        condition: service_healthy
-    volumes:
-      - openproject_data:/var/openproject/assets
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost/api/v3/status" ]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 180s # OpenProject takes time to start
-
   # OpenProject Database v13.4.1 (PostgreSQL 15.13 for production dump)
   openproject_db_v13:
     image: postgres:15.13
@@ -341,8 +298,6 @@ volumes:
   postgres_data:
   mcp_postgres_data:
   qdrant_data:
-  openproject_db_data:
-  openproject_data:
   openproject_db_data_v13:
   openproject_data_v13:
 

@@ -312,7 +312,8 @@ class OpenProjectV13Provider(BasePMProvider):
         self,
         project_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
-        sprint_id: Optional[str] = None
+        sprint_id: Optional[str] = None,
+        status: Optional[str] = None  # 'open' = active only, None/'all' = include closed
     ) -> List[PMTask]:
         """List all work packages (tasks) with pagination support"""
         import json as json_lib
@@ -323,15 +324,20 @@ class OpenProjectV13Provider(BasePMProvider):
         # Prepare filters
         filters = []
         
-        # CRITICAL: OpenProject project-scoped endpoint excludes "Done/Closed" status by default
-        # We need to explicitly request ALL statuses using the "*" (all) operator
-        # This ensures we get all work packages regardless of status
-        filters.append({
-            "status": {
-                "operator": "*",  # "*" means "all" - include all statuses
-                "values": []
-            }
-        })
+        # Status filter behavior:
+        # - status='open' or None: Use default OpenProject behavior (excludes Done/Closed)
+        # - status='all' or '*': Explicitly request ALL statuses including closed
+        if status is None or status == 'open':
+            # Don't add status filter - OpenProject will exclude closed by default
+            pass
+        else:
+            # Include ALL statuses (including closed/done)
+            filters.append({
+                "status": {
+                    "operator": "*",  # "*" means "all" - include all statuses
+                    "values": []
+                }
+            })
         
         if project_id:
             # OpenProject IDs must be integers in JSON filters to avoid 400 Bad Request
@@ -347,9 +353,12 @@ class OpenProjectV13Provider(BasePMProvider):
             })
             
         if assignee_id:
-            val = assignee_id
-            if str(assignee_id).isdigit():
-                val = int(assignee_id)
+            # Handle composite ID format (e.g., "uuid:593") - extract just the numeric part
+            val = str(assignee_id)
+            if ":" in val:
+                val = val.split(":")[-1]  # Get the part after the colon
+            if val.isdigit():
+                val = int(val)
                 
             filters.append({
                 "assignee": {

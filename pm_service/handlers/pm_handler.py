@@ -378,7 +378,8 @@ class PMHandler:
                     raw_result = provider.list_tasks(
                         project_id=p_project_id,
                         assignee_id=assignee_id,
-                        sprint_id=s_id
+                        sprint_id=s_id,
+                        status=status  # Pass status filter to provider
                     )
                     
                     # Wrapper to inject provider info and filter by sprint

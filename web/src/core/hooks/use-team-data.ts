@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { listUsers, type PMUser } from "../api/pm/users";
 import { listTasks, type PMTask } from "../api/pm/tasks";
 import { listTimeEntries, type PMTimeEntry } from "../api/pm/time-entries";
+import { useMemo } from "react";
 
 export function useTeamData(memberIds: string[]) {
     // 1. Fetch All Users (to resolve member details)
@@ -17,15 +18,31 @@ export function useTeamData(memberIds: string[]) {
 
     const teamMembers = (usersQuery.data || []).filter(u => memberIds.includes(u.id));
 
-    // 2. Fetch Tasks for Team Members
-    // Filter by assignee_ids at API level to avoid fetching all tasks
-    const tasksQuery = useQuery({
-        queryKey: ['pm', 'tasks', 'team', memberIds.slice().sort().join(',')],
-        queryFn: () => listTasks({ assignee_ids: memberIds }),
-        enabled: memberIds.length > 0
+    // 2. Fetch Tasks for Team Members - PARALLEL per-member fetching
+    // Backend only supports single assignee_id, so we fetch in parallel for each member
+    // Use status='open' to only fetch active tasks (excludes closed/done)
+    const taskQueries = useQueries({
+        queries: memberIds.map(memberId => ({
+            queryKey: ['pm', 'tasks', 'member', memberId, 'open'],
+            queryFn: () => listTasks({ assignee_ids: [memberId], status: 'open' }),
+            staleTime: 2 * 60 * 1000,
+            gcTime: 5 * 60 * 1000,
+        })),
     });
 
-    const teamTasks = tasksQuery.data || [];
+    // Combine all task results
+    const teamTasks = useMemo(() => {
+        const taskMap = new Map<string, PMTask>();
+        taskQueries.forEach(query => {
+            (query.data || []).forEach((task: PMTask) => {
+                taskMap.set(task.id, task);
+            });
+        });
+        return Array.from(taskMap.values());
+    }, [taskQueries]);
+
+    // IMPORTANT: If memberIds is empty, we're still waiting for member data
+    const isLoadingTasks = memberIds.length === 0 || taskQueries.some(q => q.isLoading);
 
     // 3. Fetch Time Entries (e.g., last 30 days)
     const timeQuery = useQuery({
@@ -46,18 +63,18 @@ export function useTeamData(memberIds: string[]) {
         members: teamMembers,
         tasks: teamTasks,
         timeEntries: teamTimeEntries,
-        isLoading: usersQuery.isLoading || tasksQuery.isLoading || timeQuery.isLoading,
+        isLoading: usersQuery.isLoading || isLoadingTasks || timeQuery.isLoading,
         // Granular loading states for transparent progress indicators
         isLoadingUsers: usersQuery.isLoading,
-        isLoadingTasks: tasksQuery.isLoading,
+        isLoadingTasks,
         isLoadingTimeEntries: timeQuery.isLoading,
         // Error states
-        error: usersQuery.error || tasksQuery.error || timeQuery.error,
+        error: usersQuery.error || taskQueries.find(q => q.error)?.error || timeQuery.error,
         // Expose raw users for "Add Member" search
         allUsers: usersQuery.data || [],
         // Data counts for display
         usersCount: usersQuery.data?.length || 0,
-        tasksCount: tasksQuery.data?.length || 0,
+        tasksCount: teamTasks.length,
         timeEntriesCount: timeQuery.data?.length || 0,
     };
 }

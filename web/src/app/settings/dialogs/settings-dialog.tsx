@@ -1,9 +1,10 @@
 // Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
-import { Settings } from "lucide-react";
+import { Settings, LogOut } from "lucide-react";
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { Tooltip } from "~/components/deer-flow/tooltip";
 import { Badge } from "~/components/ui/badge";
@@ -26,6 +27,7 @@ import {
   useSettingsStore,
 } from "~/core/store";
 import { cn } from "~/lib/utils";
+import { useAuth } from "~/core/contexts/auth-context";
 
 import { SETTINGS_TABS } from "../tabs";
 
@@ -33,10 +35,18 @@ export function SettingsDialog() {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
   const { isReplay } = useReplay();
+  const router = useRouter();
+  const { user, logout } = useAuth();
   const [activeTabId, setActiveTabId] = useState(SETTINGS_TABS[0]!.id);
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState(useSettingsStore.getState());
   const [changes, setChanges] = useState<Partial<SettingsState>>({});
+
+  const handleLogout = useCallback(() => {
+    logout();
+    setOpen(false);
+    router.push('/login');
+  }, [logout, router]);
 
   const handleTabChange = useCallback(
     (newChanges: Partial<SettingsState>) => {
@@ -119,7 +129,7 @@ export function SettingsDialog() {
                     className={cn(
                       "hover:accent-foreground hover:bg-accent mb-1 flex h-8 w-full cursor-pointer items-center gap-1.5 rounded px-2",
                       activeTabId === tab.id &&
-                        "!bg-primary !text-primary-foreground",
+                      "!bg-primary !text-primary-foreground",
                     )}
                     onClick={() => setActiveTabId(tab.id)}
                   >
@@ -131,7 +141,7 @@ export function SettingsDialog() {
                         className={cn(
                           "border-muted-foreground text-muted-foreground ml-auto px-1 py-0 text-xs",
                           activeTabId === tab.id &&
-                            "border-primary-foreground text-primary-foreground",
+                          "border-primary-foreground text-primary-foreground",
                         )}
                       >
                         {tab.badge}
@@ -158,13 +168,31 @@ export function SettingsDialog() {
             </div>
           </div>
         </Tabs>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            {tCommon('cancel')}
-          </Button>
-          <Button className="w-24" type="submit" onClick={handleSave}>
-            {tCommon('save')}
-          </Button>
+        <DialogFooter className="flex justify-between sm:justify-between">
+          <div className="flex items-center gap-3">
+            {user && (
+              <span className="text-sm text-muted-foreground">
+                Signed in as <span className="font-medium">{user.name}</span>
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              {tCommon('cancel')}
+            </Button>
+            <Button className="w-24" type="submit" onClick={handleSave}>
+              {tCommon('save')}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

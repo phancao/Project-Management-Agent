@@ -8,8 +8,6 @@ import Users from "lucide-react/dist/esm/icons/users";
 // @ts-expect-error - Direct import
 import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
 // @ts-expect-error - Direct import
-import Settings from "lucide-react/dist/esm/icons/settings";
-// @ts-expect-error - Direct import
 import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list";
 import { TeamOverview } from "./components/team-overview";
 import { TeamMembers } from "./components/team-members";
@@ -50,10 +48,6 @@ function TeamContent() {
                     <ClipboardList className="w-4 h-4 mr-2" />
                     Worklogs
                 </TabsTrigger>
-                <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
-                    <Settings className="w-4 h-4 mr-2" />
-                    Settings
-                </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6 animate-in fade-in-50 duration-300">
@@ -70,12 +64,6 @@ function TeamContent() {
 
             <TabsContent value="worklogs" className="space-y-6 animate-in fade-in-50 duration-300">
                 <TeamWorklogs />
-            </TabsContent>
-
-            <TabsContent value="settings" className="space-y-6 animate-in fade-in-50 duration-300">
-                <div className="p-8 text-center text-gray-500 border-2 border-dashed rounded-xl">
-                    Settings coming soon...
-                </div>
             </TabsContent>
         </Tabs>
     );

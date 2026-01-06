@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useMemo, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries, type UseQueryResult } from "@tanstack/react-query";
 import { listUsers, type PMUser } from "~/core/api/pm/users";
 import { listTasks, type PMTask } from "~/core/api/pm/tasks";
 import { listTimeEntries, type PMTimeEntry } from "~/core/api/pm/time-entries";
@@ -123,32 +123,47 @@ export function useTeamUsers(memberIds: string[]) {
 
 /**
  * Hook for tabs that need tasks data.
- * Call this within components that need tasks.
- * Filters by assignee_ids at API level to avoid fetching all tasks.
+ * Fetches tasks for each member in PARALLEL (1 API call per member).
+ * This avoids fetching 87k+ tasks globally while still getting all team tasks.
  */
 export function useTeamTasks(memberIds: string[]) {
-    const tasksQuery = useQuery({
-        queryKey: ['pm', 'tasks', 'team', memberIds.slice().sort().join(',')],
-        queryFn: () => listTasks({ assignee_ids: memberIds }),
-        staleTime: 2 * 60 * 1000, // 2 minutes
-        gcTime: 5 * 60 * 1000,    // 5 minutes
-        enabled: memberIds.length > 0, // Don't fetch if no members
+    // Create a query for each member - React Query will batch and parallelize these
+    // Use status='open' to only fetch active tasks (excludes closed/done)
+    const taskQueries = useQueries({
+        queries: memberIds.map(memberId => ({
+            queryKey: ['pm', 'tasks', 'member', memberId, 'open'],
+            queryFn: () => listTasks({ assignee_ids: [memberId], status: 'open' }),
+            staleTime: 2 * 60 * 1000, // 2 minutes
+            gcTime: 5 * 60 * 1000,    // 5 minutes
+        })),
     });
 
-    const allTasks = tasksQuery.data || [];
-    // Note: allTasks is already filtered by assignee_ids from the API
-    // teamTasks is provided for backwards compatibility but is the same as allTasks
-    const teamTasks = useMemo(() =>
-        allTasks.filter(t => t.assignee_id && memberIds.includes(t.assignee_id)),
-        [allTasks, memberIds]
-    );
+    // Combine all results, deduplicate by task ID
+    const allTasks = useMemo(() => {
+        const taskMap = new Map<string, PMTask>();
+        taskQueries.forEach(query => {
+            (query.data || []).forEach(task => {
+                taskMap.set(task.id, task);
+            });
+        });
+        return Array.from(taskMap.values());
+    }, [taskQueries]);
+
+    // teamTasks is the same as allTasks (already filtered by member)
+    const teamTasks = allTasks;
+
+    // IMPORTANT: If memberIds is empty, we're still waiting for member data to load
+    // so isLoading should be true (not false from empty useQueries array)
+    const isLoading = memberIds.length === 0 || taskQueries.some(q => q.isLoading);
+    const isFetching = taskQueries.some(q => q.isFetching);
+    const error = taskQueries.find(q => q.error)?.error || null;
 
     return {
         allTasks,
         teamTasks,
-        isLoading: tasksQuery.isLoading,
-        isFetching: tasksQuery.isFetching,
-        error: tasksQuery.error,
+        isLoading,
+        isFetching,
+        error,
         count: allTasks.length,
     };
 }

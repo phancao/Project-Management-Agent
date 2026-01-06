@@ -15,7 +15,11 @@ export interface PMTask {
     has_children?: boolean;
 }
 
-export async function listTasks(filters: { assignee_ids?: string[], project_id?: string }): Promise<PMTask[]> {
+export async function listTasks(filters: {
+    assignee_ids?: string[],
+    project_id?: string,
+    status?: string // 'open' = only active tasks, 'all' = include closed
+}): Promise<PMTask[]> {
     const params = new URLSearchParams();
 
     // For now, if we have specific filters supported by API, add them.
@@ -26,6 +30,10 @@ export async function listTasks(filters: { assignee_ids?: string[], project_id?:
     // We handle assignee_ids array by fetching active tasks or passing the first one if we want to be specific
     if (filters.assignee_ids && filters.assignee_ids.length > 0) {
         params.append("assignee_id", filters.assignee_ids[0]!);
+    }
+    // Status filter - 'open' fetches only active tasks, 'all' fetches everything
+    if (filters.status) {
+        params.append("status", filters.status);
     }
 
     let url = resolvePMServiceURL("tasks");
@@ -49,3 +57,4 @@ export async function listTasks(filters: { assignee_ids?: string[], project_id?:
     const data = await response.json();
     return data.items || [];
 }
+

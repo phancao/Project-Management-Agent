@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
-import { RefreshCw, ChevronDown, Check, Menu, LogOut } from "lucide-react";
+import { RefreshCw, ChevronDown, Check, Menu } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandInput as CommandInputBase, CommandItem, CommandList } from "~/components/ui/command";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "~/components/ui/sheet";
@@ -45,15 +45,10 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
   const pathname = usePathname();
   const { projects, loading: projectsLoading, refresh: refreshProjects } = useProjects();
   const { mappings } = useProviders();
-  const { user, logout } = useAuth();
+  const { } = useAuth(); // Keep for future use, but logout moved to settings
   const [regeneratingMockData, setRegeneratingMockData] = useState(false);
   const [projectComboboxOpen, setProjectComboboxOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
-  };
 
   // Detect mobile
   useEffect(() => {
@@ -268,28 +263,6 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
       <Suspense>
         <SettingsDialog />
       </Suspense>
-      {/* User & Logout */}
-      <div className={cn("flex items-center gap-2", vertical ? "w-full justify-between px-2 pt-4 border-t border-border/40" : "pl-3 border-l border-border/40")}>
-        {user && (
-          <span className="text-sm text-muted-foreground truncate max-w-[100px]" title={user.email}>
-            {user.name}
-          </span>
-        )}
-        <Tooltip title="Logout">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleLogout}
-            className={cn(
-              "rounded-xl transition-all duration-300 hover:bg-red-500/10 hover:text-red-500",
-              vertical ? "w-full justify-start text-base py-6" : "px-3"
-            )}
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </Tooltip>
-      </div>
     </div>
   );
 

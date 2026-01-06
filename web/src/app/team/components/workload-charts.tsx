@@ -112,16 +112,15 @@ export function WorkloadCharts() {
                 return isAssigned && !isCompleted && !isParent;
             });
 
-            // 3. Calculate time remaining for each task
-            // Time Remaining = Estimated Hours - Time Already Spent on that task
-            // For simplicity, we use total logged hours as a proxy (not per-task tracking)
-            // A better approach would track spent per task_id, but we'll estimate
-            const totalEstimated = memberTasks.reduce((sum, t) => sum + (t.estimated_hours || 4), 0);
+            // 3. Calculate time remaining for each task using task's actual spent_hours
+            // NOT this week's logged hours - we want true remaining work regardless of week
+            const timeRemaining = memberTasks.reduce((sum, t) => {
+                const estimated = t.estimated_hours || 4; // Default 4h if no estimate
+                const spent = t.spent_hours || 0; // Total spent on this task
+                return sum + Math.max(0, estimated - spent);
+            }, 0);
 
-            // Time remaining = total estimated - time spent (minimum 0)
-            const timeRemaining = Math.max(0, totalEstimated - timeSpent);
-
-            // Total workload = spent + remaining
+            // Total workload = this week's logged + remaining work
             const totalWorkload = timeSpent + timeRemaining;
 
             // Behind schedule: spent less than expected for today

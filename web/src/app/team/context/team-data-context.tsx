@@ -9,51 +9,28 @@ import { useTeams } from "~/core/hooks/use-teams";
 import { useProjects, type Project } from "~/core/api/hooks/pm/use-projects";
 
 /**
- * Centralized Team Data Context
+ * Lightweight Team Data Context
  * 
- * This provider fetches all team-related data ONCE and shares it across
- * all child components, eliminating duplicate API calls that were happening
- * when each component called useTeamData independently.
+ * This provider only fetches essential data (teams, projects) to minimize initial load time.
+ * Heavy data (users, tasks, time entries) is loaded by individual tabs as needed.
  */
 
 interface TeamDataContextValue {
-    // Raw data from API
-    allUsers: PMUser[];
-    allTasks: PMTask[];
-    allTimeEntries: PMTimeEntry[];
-    allProjects: Project[];
-
-    // Teams data
+    // Essential data (loaded at startup)
     teams: Array<{ id: string; name: string; memberIds: string[]; description?: string }>;
     allMemberIds: string[];
+    allProjects: Project[];
 
-    // Filtered team members (users who are in teams)
-    teamMembers: PMUser[];
-    teamTasks: PMTask[];
-    teamTimeEntries: PMTimeEntry[];
-
-    // Loading states
+    // Loading states for essential data
     isLoading: boolean;
     isLoadingTeams: boolean;
-    isLoadingUsers: boolean;
-    isLoadingTasks: boolean;
-    isLoadingTimeEntries: boolean;
     isLoadingProjects: boolean;
 
-    // Fetching states (for showing "Loading..." vs "Loaded X items")
-    isFetchingUsers: boolean;
-    isFetchingTasks: boolean;
-    isFetchingTimeEntries: boolean;
-    isFetchingProjects: boolean;
-
-    // Counts for display (available during and after loading)
-    usersCount: number;
-    tasksCount: number;
-    timeEntriesCount: number;
+    // Counts
     teamsCount: number;
     projectsCount: number;
 
-    // Errors
+    // Error
     error: Error | null;
 }
 
@@ -64,7 +41,7 @@ interface TeamDataProviderProps {
 }
 
 export function TeamDataProvider({ children }: TeamDataProviderProps) {
-    // 1. Fetch Teams first (this determines which users/tasks we need)
+    // 1. Fetch Teams (essential - quick load)
     const { teams, isLoading: isLoadingTeams } = useTeams();
 
     // 2. Deduplicate all member IDs from teams
@@ -72,102 +49,29 @@ export function TeamDataProvider({ children }: TeamDataProviderProps) {
         return Array.from(new Set(teams.flatMap(t => t.memberIds)));
     }, [teams]);
 
-    // 3. Fetch Projects
+    // 3. Fetch Projects (essential - quick load)
     const { projects, loading: isLoadingProjects, error: projectsError } = useProjects();
 
-    // 4. Fetch ALL users ONCE with proper caching
-    const usersQuery = useQuery({
-        queryKey: ['pm', 'users'],
-        queryFn: () => listUsers(),
-        staleTime: 5 * 60 * 1000, // 5 minutes
-        gcTime: 10 * 60 * 1000,   // 10 minutes
-    });
-
-    // 5. Fetch ALL tasks ONCE
-    const tasksQuery = useQuery({
-        queryKey: ['pm', 'tasks', 'all_active'],
-        queryFn: () => listTasks({}),
-        staleTime: 2 * 60 * 1000, // 2 minutes
-        gcTime: 5 * 60 * 1000,    // 5 minutes
-    });
-
-    // 6. Fetch time entries ONCE
-    const timeQuery = useQuery({
-        queryKey: ['pm', 'time_entries', 'recent'],
-        queryFn: () => listTimeEntries(),
-        staleTime: 2 * 60 * 1000, // 2 minutes
-        gcTime: 5 * 60 * 1000,    // 5 minutes
-    });
-
-    // 7. Filter data for team members (client-side)
-    const allUsers = usersQuery.data || [];
-    const allTasks = tasksQuery.data || [];
-    const allTimeEntries = timeQuery.data || [];
     const allProjects = projects || [];
 
-    const teamMembers = useMemo(() =>
-        allUsers.filter(u => allMemberIds.includes(u.id)),
-        [allUsers, allMemberIds]
-    );
-
-    const teamTasks = useMemo(() =>
-        allTasks.filter(t => t.assignee_id && allMemberIds.includes(t.assignee_id)),
-        [allTasks, allMemberIds]
-    );
-
-    const teamTimeEntries = useMemo(() =>
-        allTimeEntries.filter(te => allMemberIds.includes(te.user_id)),
-        [allTimeEntries, allMemberIds]
-    );
-
-    // Build context value
+    // Build context value - only essential data
     const value: TeamDataContextValue = useMemo(() => ({
-        // Raw data
-        allUsers,
-        allTasks,
-        allTimeEntries,
-        allProjects,
-
-        // Teams
         teams,
         allMemberIds,
+        allProjects,
 
-        // Filtered for teams
-        teamMembers,
-        teamTasks,
-        teamTimeEntries,
-
-        // Loading states (true when no data yet)
-        isLoading: isLoadingTeams || usersQuery.isLoading || tasksQuery.isLoading || timeQuery.isLoading || isLoadingProjects,
+        isLoading: isLoadingTeams || isLoadingProjects,
         isLoadingTeams,
-        isLoadingUsers: usersQuery.isLoading,
-        isLoadingTasks: tasksQuery.isLoading,
-        isLoadingTimeEntries: timeQuery.isLoading,
         isLoadingProjects,
 
-        // Fetching states (true when fetching, even if we have stale data)
-        isFetchingUsers: usersQuery.isFetching,
-        isFetchingTasks: tasksQuery.isFetching,
-        isFetchingTimeEntries: timeQuery.isFetching,
-        isFetchingProjects: isLoadingProjects,
-
-        // Counts - available during loading to show progress
-        usersCount: allUsers.length,
-        tasksCount: allTasks.length,
-        timeEntriesCount: allTimeEntries.length,
         teamsCount: teams.length,
         projectsCount: allProjects.length,
 
-        // Error
-        error: usersQuery.error || tasksQuery.error || timeQuery.error || projectsError || null,
+        error: projectsError || null,
     }), [
-        allUsers, allTasks, allTimeEntries, allProjects,
-        teams, allMemberIds,
-        teamMembers, teamTasks, teamTimeEntries,
+        teams, allMemberIds, allProjects,
         isLoadingTeams, isLoadingProjects,
-        usersQuery.isLoading, tasksQuery.isLoading, timeQuery.isLoading,
-        usersQuery.isFetching, tasksQuery.isFetching, timeQuery.isFetching,
-        usersQuery.error, tasksQuery.error, timeQuery.error, projectsError,
+        projectsError,
     ]);
 
     return (
@@ -178,7 +82,7 @@ export function TeamDataProvider({ children }: TeamDataProviderProps) {
 }
 
 /**
- * Hook to access centralized team data.
+ * Hook to access centralized team data (essential data only).
  * Must be used within a TeamDataProvider.
  */
 export function useTeamDataContext(): TeamDataContextValue {
@@ -189,3 +93,86 @@ export function useTeamDataContext(): TeamDataContextValue {
     return context;
 }
 
+/**
+ * Hook for tabs that need users data.
+ * Call this within components that need users.
+ */
+export function useTeamUsers(memberIds: string[]) {
+    const usersQuery = useQuery({
+        queryKey: ['pm', 'users'],
+        queryFn: () => listUsers(),
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        gcTime: 10 * 60 * 1000,   // 10 minutes
+    });
+
+    const allUsers = usersQuery.data || [];
+    const teamMembers = useMemo(() =>
+        allUsers.filter(u => memberIds.includes(u.id)),
+        [allUsers, memberIds]
+    );
+
+    return {
+        allUsers,
+        teamMembers,
+        isLoading: usersQuery.isLoading,
+        isFetching: usersQuery.isFetching,
+        error: usersQuery.error,
+        count: allUsers.length,
+    };
+}
+
+/**
+ * Hook for tabs that need tasks data.
+ * Call this within components that need tasks.
+ */
+export function useTeamTasks(memberIds: string[]) {
+    const tasksQuery = useQuery({
+        queryKey: ['pm', 'tasks', 'all_active'],
+        queryFn: () => listTasks({}),
+        staleTime: 2 * 60 * 1000, // 2 minutes
+        gcTime: 5 * 60 * 1000,    // 5 minutes
+    });
+
+    const allTasks = tasksQuery.data || [];
+    const teamTasks = useMemo(() =>
+        allTasks.filter(t => t.assignee_id && memberIds.includes(t.assignee_id)),
+        [allTasks, memberIds]
+    );
+
+    return {
+        allTasks,
+        teamTasks,
+        isLoading: tasksQuery.isLoading,
+        isFetching: tasksQuery.isFetching,
+        error: tasksQuery.error,
+        count: allTasks.length,
+    };
+}
+
+/**
+ * Hook for tabs that need time entries data.
+ * Call this within components that need time entries.
+ */
+export function useTeamTimeEntries(memberIds: string[]) {
+    const timeQuery = useQuery({
+        queryKey: ['pm', 'time_entries', 'recent'],
+        queryFn: () => listTimeEntries(),
+        staleTime: 2 * 60 * 1000, // 2 minutes
+        gcTime: 5 * 60 * 1000,    // 5 minutes
+    });
+
+    const allTimeEntries = timeQuery.data || [];
+    const teamTimeEntries = useMemo(() =>
+        allTimeEntries.filter(te => memberIds.includes(te.user_id)),
+        [allTimeEntries, memberIds]
+    );
+
+    return {
+        allTimeEntries,
+        teamTimeEntries,
+        isLoading: timeQuery.isLoading,
+        isFetching: timeQuery.isFetching,
+        error: timeQuery.error,
+        count: allTimeEntries.length,
+    };
+}

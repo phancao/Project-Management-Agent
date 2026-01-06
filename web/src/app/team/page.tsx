@@ -18,7 +18,7 @@ import { MemberMatrix } from "./components/member-matrix";
 import { TeamTimesheets } from "./components/team-timesheets";
 import { PMLoadingProvider } from "../pm/context/pm-loading-context";
 import { PMLoadingManager } from "../pm/components/pm-loading-manager";
-import { TeamDataProvider } from "./context/team-data-context";
+import { TeamDataProvider, useTeamDataContext } from "./context/team-data-context";
 import { TeamPageLoadingOverlay } from "./components/team-page-loading-overlay";
 
 // Create a client
@@ -31,9 +31,70 @@ const queryClient = new QueryClient({
     },
 });
 
-export default function TeamPage() {
+/**
+ * TeamContent renders the tabs only after the initial blocking load is complete.
+ * This prevents heavy data (users, tasks) from being fetched during the blocking overlay.
+ */
+function TeamContent() {
     const [activeTab, setActiveTab] = useState("overview");
+    const { isLoading } = useTeamDataContext();
 
+    // Don't render tab content until initial load (Teams/Projects) is complete
+    if (isLoading) {
+        return null;
+    }
+
+    return (
+        <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl">
+                <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Overview
+                </TabsTrigger>
+                <TabsTrigger value="members" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                    <Users className="w-4 h-4 mr-2" />
+                    Teams
+                </TabsTrigger>
+                <TabsTrigger value="assignments" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Assignments
+                </TabsTrigger>
+                <TabsTrigger value="timesheets" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                    <Clock className="w-4 h-4 mr-2" />
+                    Timesheets
+                </TabsTrigger>
+                <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                    <Settings className="w-4 h-4 mr-2" />
+                    Settings
+                </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-6 animate-in fade-in-50 duration-300">
+                <TeamOverview />
+            </TabsContent>
+
+            <TabsContent value="members" className="space-y-6 animate-in fade-in-50 duration-300">
+                <TeamMembers />
+            </TabsContent>
+
+            <TabsContent value="assignments" className="space-y-6 animate-in fade-in-50 duration-300">
+                <MemberMatrix />
+            </TabsContent>
+
+            <TabsContent value="timesheets" className="space-y-6 animate-in fade-in-50 duration-300">
+                <TeamTimesheets />
+            </TabsContent>
+
+            <TabsContent value="settings" className="space-y-6 animate-in fade-in-50 duration-300">
+                <div className="p-8 text-center text-gray-500 border-2 border-dashed rounded-xl">
+                    Settings coming soon...
+                </div>
+            </TabsContent>
+        </Tabs>
+    );
+}
+
+export default function TeamPage() {
     return (
         <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center">Loading...</div>}>
             <QueryClientProvider client={queryClient}>
@@ -54,52 +115,7 @@ export default function TeamPage() {
                                     </div>
                                 </div>
 
-                                <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                                    <TabsList className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl">
-                                        <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
-                                            <BarChart3 className="w-4 h-4 mr-2" />
-                                            Overview
-                                        </TabsTrigger>
-                                        <TabsTrigger value="members" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
-                                            <Users className="w-4 h-4 mr-2" />
-                                            Teams
-                                        </TabsTrigger>
-                                        <TabsTrigger value="assignments" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
-                                            <BarChart3 className="w-4 h-4 mr-2" />
-                                            Assignments
-                                        </TabsTrigger>
-                                        <TabsTrigger value="timesheets" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
-                                            <Clock className="w-4 h-4 mr-2" />
-                                            Timesheets
-                                        </TabsTrigger>
-                                        <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
-                                            <Settings className="w-4 h-4 mr-2" />
-                                            Settings
-                                        </TabsTrigger>
-                                    </TabsList>
-
-                                    <TabsContent value="overview" className="space-y-6 animate-in fade-in-50 duration-300">
-                                        <TeamOverview />
-                                    </TabsContent>
-
-                                    <TabsContent value="members" className="space-y-6 animate-in fade-in-50 duration-300">
-                                        <TeamMembers />
-                                    </TabsContent>
-
-                                    <TabsContent value="assignments" className="space-y-6 animate-in fade-in-50 duration-300">
-                                        <MemberMatrix />
-                                    </TabsContent>
-
-                                    <TabsContent value="timesheets" className="space-y-6 animate-in fade-in-50 duration-300">
-                                        <TeamTimesheets />
-                                    </TabsContent>
-
-                                    <TabsContent value="settings" className="space-y-6 animate-in fade-in-50 duration-300">
-                                        <div className="p-8 text-center text-gray-500 border-2 border-dashed rounded-xl">
-                                            Settings coming soon...
-                                        </div>
-                                    </TabsContent>
-                                </Tabs>
+                                <TeamContent />
                             </div>
                         </div>
                     </TeamDataProvider>

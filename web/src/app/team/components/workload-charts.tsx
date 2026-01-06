@@ -2,30 +2,40 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from "recharts"
-import { useTeamDataContext } from "../context/team-data-context"
+import { useTeamDataContext, useTeamUsers, useTeamTasks } from "../context/team-data-context"
+import { Loader2 } from "lucide-react"
 
 export function WorkloadCharts() {
-    // Use centralized context - no duplicate API calls!
-    const { teamMembers: members, teamTasks: tasks, isLoading } = useTeamDataContext();
+    // Get essential data from context
+    const { allMemberIds, isLoading: isContextLoading } = useTeamDataContext();
+
+    // Load heavy data for this component
+    const { teamMembers: members, isLoading: isLoadingUsers } = useTeamUsers(allMemberIds);
+    const { teamTasks: tasks, isLoading: isLoadingTasks } = useTeamTasks(allMemberIds);
+
+    const isLoading = isContextLoading || isLoadingUsers || isLoadingTasks;
 
     // Calculate workload per member
     const workloadData = members.map(member => {
         const memberTasks = tasks.filter(t => t.assignee_id === member.id);
         const taskCount = memberTasks.length;
-        // Simple heuristic: 1 task = 1 unit of load
-        // Capacity logic can be refined later
         const capacity = 5;
-        const utilization = Math.min((taskCount / capacity) * 100, 150); // Cap visual at 150%
+        const utilization = Math.min((taskCount / capacity) * 100, 150);
 
         return {
             name: member.name,
             utilization: Math.round(utilization),
             tasks: taskCount
         };
-    }).sort((a, b) => b.utilization - a.utilization).slice(0, 10); // Top 10 busiest
+    }).sort((a, b) => b.utilization - a.utilization).slice(0, 10);
 
     if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading workload data...</div>;
+        return (
+            <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Loading workload data...</span>
+            </div>
+        );
     }
 
     if (workloadData.length === 0) {
@@ -55,13 +65,17 @@ export function WorkloadCharts() {
                 </CardHeader>
                 <CardContent className="pl-2">
                     <ResponsiveContainer width="100%" height={350}>
-                        <BarChart data={workloadData}>
+                        <BarChart data={workloadData} barCategoryGap="20%">
                             <XAxis
                                 dataKey="name"
                                 stroke="#888888"
                                 fontSize={12}
                                 tickLine={false}
                                 axisLine={false}
+                                interval={0}
+                                angle={-20}
+                                textAnchor="end"
+                                height={60}
                             />
                             <YAxis
                                 stroke="#888888"
@@ -74,7 +88,7 @@ export function WorkloadCharts() {
                                 cursor={{ fill: 'transparent' }}
                                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                             />
-                            <Bar dataKey="utilization" radius={[4, 4, 0, 0]}>
+                            <Bar dataKey="utilization" radius={[4, 4, 0, 0]} maxBarSize={50}>
                                 {workloadData.map((entry, index) => (
                                     <Cell
                                         key={`cell-${index}`}

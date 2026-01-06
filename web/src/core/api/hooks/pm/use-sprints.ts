@@ -58,7 +58,7 @@ export function useSprints(projectId: string, state?: string) {
     }
     return { sprints: [], loading: true, error: null };
   };
-  
+
   const initialState = getInitialState();
   const [sprints, setSprints] = useState<Sprint[]>(initialState.sprints);
   const [loading, setLoading] = useState(initialState.loading);
@@ -71,9 +71,9 @@ export function useSprints(projectId: string, state?: string) {
       setError(null);
       return;
     }
-    
+
     const cacheKey = getCacheKey(projectId, state);
-    
+
     // Check cache if not forcing refresh
     if (!forceRefresh) {
       const cached = sprintsCache.get(cacheKey);
@@ -84,13 +84,13 @@ export function useSprints(projectId: string, state?: string) {
         return;
       }
     }
-    
+
     setLoading(true);
     setError(null);
     // Clear sprints immediately when project changes to avoid showing stale data
     // from previous projects
     setSprints([]);
-    
+
     fetchSprints(projectId, state)
       .then((data) => {
         // Update cache
@@ -113,9 +113,9 @@ export function useSprints(projectId: string, state?: string) {
       setError(null);
       return;
     }
-    
+
     const cacheKey = getCacheKey(projectId, state);
-    
+
     // Check cache first - if we already have cached data from initial state, skip
     const cached = sprintsCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
@@ -127,19 +127,19 @@ export function useSprints(projectId: string, state?: string) {
       }
       return;
     }
-    
+
     // Only fetch if we don't have cached data
     // If sprints are already set from initial state, don't clear them
     if (sprints.length === 0) {
       setLoading(true);
     }
-    
+
     // Fetch if not cached
     refresh(false);
   }, [projectId, state, refresh]); // Removed sprints from deps to avoid infinite loop
 
   usePMRefresh(() => refresh(true)); // Force refresh on PM refresh event
 
-  return { sprints, loading, error, refresh };
+  return { sprints, loading, error, refresh, count: sprints.length };
 }
 

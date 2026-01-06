@@ -8,6 +8,7 @@ import {
   AlertCircle,
   CalendarRange,
   ListChecks,
+  Loader2,
   Users,
 } from "lucide-react";
 import {
@@ -651,45 +652,54 @@ export function TimelineView() {
 
   const isLoading = projectsLoading || timelineLoading;
 
+  // Get counts for progressive loading display
+  const sprintsCount = timeline?.sprints?.length || 0;
+  const tasksCount = timeline?.tasks?.length || 0;
+
   if (isLoading) {
+    const loadingItems = [
+      { label: "Sprints", isLoading: true, count: sprintsCount },
+      { label: "Tasks", isLoading: true, count: tasksCount },
+    ];
+    const completedCount = loadingItems.filter(item => !item.isLoading && item.count > 0).length;
+    const progressPercent = Math.round((completedCount / loadingItems.length) * 100);
+
     return (
       <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
         <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <CalendarRange className="w-4 h-4 animate-pulse text-blue-600 dark:text-blue-400" />
-              </div>
-              Loading Timeline
-            </h3>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+              <CalendarRange className="w-5 h-5 animate-pulse text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Loading Timeline</h3>
+              <p className="text-xs text-muted-foreground">{progressPercent}% complete</p>
+            </div>
           </div>
 
-          {/* Progress bar - indeterminate */}
+          {/* Progress bar */}
           <div className="w-full h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
-            <div className="h-full w-1/3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-pulse" />
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
-              <div className="flex items-center gap-2">
-                <CalendarRange className="w-3.5 h-3.5 text-blue-500" />
-                <span className="text-xs font-medium">Sprints</span>
+            {loadingItems.map((item, index) => (
+              <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
+                <div className="flex items-center gap-2">
+                  {index === 0 ? <CalendarRange className="w-3.5 h-3.5 text-blue-500" /> : <ListChecks className="w-3.5 h-3.5 text-indigo-500" />}
+                  <span className="text-xs font-medium">{item.label}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-mono tabular-nums text-blue-600 dark:text-blue-400">
+                    {item.count > 0 ? item.count : "..."}
+                  </span>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-mono tabular-nums text-blue-600 dark:text-blue-400">...</span>
-                <CalendarRange className="w-3.5 h-3.5 animate-spin text-blue-500" />
-              </div>
-            </div>
-            <div className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
-              <div className="flex items-center gap-2">
-                <ListChecks className="w-3.5 h-3.5 text-indigo-500" />
-                <span className="text-xs font-medium">Tasks</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-mono tabular-nums text-blue-600 dark:text-blue-400">...</span>
-                <CalendarRange className="w-3.5 h-3.5 animate-spin text-blue-500" />
-              </div>
-            </div>
+            ))}
           </div>
 
           <p className="text-[10px] text-muted-foreground mt-3 text-center">

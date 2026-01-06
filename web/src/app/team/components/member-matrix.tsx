@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { ScrollArea } from "~/components/ui/scroll-area";
-import { GripVertical, Loader2 } from 'lucide-react';
+import { GripVertical, Loader2, Users, ListTodo, Briefcase } from 'lucide-react';
 import {
     DndContext,
     closestCenter,
@@ -22,7 +22,7 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useTeamDataContext } from "../context/team-data-context";
+import { useTeamDataContext, useTeamUsers, useTeamTasks } from "../context/team-data-context";
 import { useProjects, type Project } from "~/core/api/hooks/pm/use-projects";
 import type { PMTask } from "~/core/api/pm/tasks";
 import type { PMUser } from "~/core/api/pm/users";
@@ -58,11 +58,15 @@ function SortableMember({ member }: { member: PMUser }) {
 }
 
 export function MemberMatrix() {
-    // Use centralized context - no duplicate API calls!
-    const { teamMembers: members, teamTasks: tasks, isLoading: isLoadingData } = useTeamDataContext();
+    // Get essential data from context
+    const { allMemberIds, isLoading: isContextLoading } = useTeamDataContext();
+
+    // Load heavy data for this tab
+    const { teamMembers: members, isLoading: isLoadingUsers, isFetching: isFetchingUsers, count: usersCount } = useTeamUsers(allMemberIds);
+    const { teamTasks: tasks, isLoading: isLoadingTasks, isFetching: isFetchingTasks, count: tasksCount } = useTeamTasks(allMemberIds);
     const { projects, loading: loadingProjects } = useProjects();
 
-    const isLoading = loadingProjects || isLoadingData;
+    const isLoading = isContextLoading || loadingProjects || isLoadingUsers || isLoadingTasks || isFetchingUsers || isFetchingTasks;
     const [activeId, setActiveId] = useState<string | null>(null);
 
     const sensors = useSensors(
@@ -103,9 +107,61 @@ export function MemberMatrix() {
     }
 
     if (isLoading) {
+        const loadingItems = [
+            { label: "Users", isLoading: isLoadingUsers || isFetchingUsers, count: usersCount },
+            { label: "Tasks", isLoading: isLoadingTasks || isFetchingTasks, count: tasksCount },
+            { label: "Projects", isLoading: loadingProjects, count: projects.length },
+        ];
+        const completedCount = loadingItems.filter(item => !item.isLoading).length;
+        const progressPercent = Math.round((completedCount / loadingItems.length) * 100);
+
         return (
-            <div className="flex items-center justify-center h-[400px]">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
+                <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                            <Users className="w-5 h-5 text-purple-600 dark:text-purple-400 animate-pulse" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-semibold">Loading Assignments</h3>
+                            <p className="text-xs text-muted-foreground">{progressPercent}% complete</p>
+                        </div>
+                    </div>
+
+                    <div className="w-full h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
+                        <div
+                            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500 ease-out"
+                            style={{ width: `${progressPercent}%` }}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        {loadingItems.map((item, index) => (
+                            <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
+                                <div className="flex items-center gap-2">
+                                    {index === 0 ? <Users className="w-3.5 h-3.5 text-purple-500" /> :
+                                        index === 1 ? <ListTodo className="w-3.5 h-3.5 text-pink-500" /> :
+                                            <Briefcase className="w-3.5 h-3.5 text-indigo-500" />}
+                                    <span className="text-xs font-medium">{item.label}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className={`text-xs font-mono tabular-nums ${item.isLoading ? 'text-purple-600 dark:text-purple-400' : 'text-green-600 dark:text-green-400'}`}>
+                                        {item.isLoading ? (item.count > 0 ? item.count : "...") : item.count}
+                                    </span>
+                                    {item.isLoading ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-500" />
+                                    ) : (
+                                        <div className="w-3.5 h-3.5 text-green-500">✓</div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <p className="text-[10px] text-muted-foreground mt-3 text-center">
+                        Building assignment matrix...
+                    </p>
+                </div>
             </div>
         );
     }

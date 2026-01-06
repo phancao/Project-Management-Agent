@@ -18,11 +18,11 @@ const fetchStatusesFn = async (projectId?: string, entityType: string = "task") 
   if (!projectId) {
     return [];
   }
-  
+
   const url = resolveServiceURL(`pm/projects/${projectId}/statuses?entity_type=${entityType}`);
-  
+
   const response = await fetch(url);
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     let errorDetail = `HTTP ${response.status}`;
@@ -34,7 +34,7 @@ const fetchStatusesFn = async (projectId?: string, entityType: string = "task") 
     }
     throw new Error(`Failed to fetch statuses: ${errorDetail}`);
   }
-  
+
   const data = await response.json();
   return data.statuses || [];
 };
@@ -60,12 +60,12 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
     }
     return { statuses: [], loading: true, error: null };
   };
-  
+
   const initialState = getInitialState();
   const [statuses, setStatuses] = useState<Status[]>(initialState.statuses);
   const [loading, setLoading] = useState(initialState.loading);
   const [error, setError] = useState<Error | null>(initialState.error);
-  
+
   // Update state if projectId or entityType changes and we have cached data
   useEffect(() => {
     if (projectId) {
@@ -88,9 +88,9 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
       setError(null);
       return;
     }
-    
+
     const cacheKey = getCacheKey(projectId, entityType);
-    
+
     // Check cache if not forcing refresh
     if (!forceRefresh) {
       const cached = statusesCache.get(cacheKey);
@@ -101,7 +101,7 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
         return;
       }
     }
-    
+
     setLoading(true);
     setError(null);
     fetchStatusesFn(projectId, entityType)
@@ -126,9 +126,9 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
       setLoading(false);
       return;
     }
-    
+
     const cacheKey = getCacheKey(projectId, entityType);
-    
+
     // Check cache first - if we already have cached data from initial state, skip
     const cached = statusesCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
@@ -144,16 +144,16 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
       }
       return;
     }
-    
+
     // Only fetch if we don't have cached data
     // If statuses are already set from initial state, don't clear them
     if (statuses.length === 0) {
       setLoading(true);
     }
-    
+
     // Use a flag to track if this effect is still relevant (projectId hasn't changed)
     let isCurrent = true;
-    
+
     // Fetch new data
     fetchStatusesFn(projectId, entityType)
       .then((data) => {
@@ -173,7 +173,7 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
           setLoading(false);
         }
       });
-    
+
     // Cleanup: mark this effect as stale if projectId changes
     return () => {
       isCurrent = false;
@@ -183,6 +183,6 @@ export function useStatuses(projectId?: string, entityType: string = "task") {
   // Listen for PM refresh events
   usePMRefresh(() => refresh(true)); // Force refresh on PM refresh event
 
-  return { statuses, loading, error, refresh };
+  return { statuses, loading, error, refresh, count: statuses.length };
 }
 

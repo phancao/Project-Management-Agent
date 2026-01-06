@@ -297,7 +297,7 @@ export function useTasks(projectId?: string) {
 
   usePMRefresh(() => refresh(true, true)); // Force refresh on PM refresh event
 
-  return { tasks, loading, isFetching, error, refresh };
+  return { tasks, loading, isFetching, error, refresh, count: tasks.length };
 }
 
 export function useMyTasks() {

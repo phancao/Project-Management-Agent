@@ -18,11 +18,11 @@ const fetchUsersFn = async (projectId?: string) => {
   if (!projectId) {
     return [];
   }
-  
+
   const url = resolveServiceURL(`pm/projects/${projectId}/users`);
-  
+
   const response = await fetch(url);
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     let errorDetail = `HTTP ${response.status}`;
@@ -34,7 +34,7 @@ const fetchUsersFn = async (projectId?: string) => {
     }
     throw new Error(`Failed to fetch users: ${errorDetail}`);
   }
-  
+
   return await response.json();
 };
 
@@ -50,7 +50,7 @@ export function useUsers(projectId?: string) {
       setError(null);
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     fetchUsersFn(projectId)
@@ -61,16 +61,16 @@ export function useUsers(projectId?: string) {
       .catch((err) => {
         // Log as warning instead of error - this is often expected (e.g., missing username for JIRA)
         const errorMessage = err instanceof Error ? err.message : String(err);
-        
+
         // Check if it's a permission/authentication issue (403, 401, Forbidden, Unauthorized)
-        const isPermissionError = 
-          errorMessage.includes("403") || 
+        const isPermissionError =
+          errorMessage.includes("403") ||
           errorMessage.includes("Forbidden") ||
           errorMessage.includes("401") ||
           errorMessage.includes("Unauthorized") ||
           errorMessage.includes("JIRA requires email") ||
           errorMessage.includes("username");
-        
+
         if (isPermissionError) {
           // This is a configuration/permission issue - show a warning toast
           console.warn(`[useUsers] Cannot fetch users for project ${projectId}: ${errorMessage}. Users list will be empty.`);
@@ -94,6 +94,6 @@ export function useUsers(projectId?: string) {
     refresh();
   }, [refresh]);
 
-  return { users, loading, error, refresh };
+  return { users, loading, error, refresh, count: users.length };
 }
 

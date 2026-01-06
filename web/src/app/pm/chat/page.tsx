@@ -9,9 +9,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { PMHeader } from "../components/pm-header";
 import { PMLoadingProvider } from "../context/pm-loading-context";
-import { PMDataProvider } from "../context/pm-data-context";
+import { PMDataProvider, usePMDataContext } from "../context/pm-data-context";
 import { PMLoadingManager } from "../components/pm-loading-manager";
 import Main from "./main";
+import { useLoading } from "~/core/contexts/loading-context";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -22,6 +23,22 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+/**
+ * PMContent renders Main only after the initial blocking load completes.
+ * This prevents views from fetching heavy data (tasks, users) during the blocking overlay.
+ */
+function PMContent() {
+  const { isLoading: isLoadingContext } = usePMDataContext();
+  const { isLoading: isLoadingGlobal } = useLoading();
+
+  // Don't render Main until initial load is complete
+  if (isLoadingContext || isLoadingGlobal) {
+    return null;
+  }
+
+  return <Main />;
+}
 
 function ChatPageContent() {
   const router = useRouter();
@@ -42,7 +59,7 @@ function ChatPageContent() {
 
           {/* Section 2: Left Pane + Section 3: Upper Body + Content Area */}
           <div className="flex h-screen w-screen justify-center overscroll-none bg-gray-50 dark:bg-gray-900 pt-16">
-            <Main />
+            <PMContent />
           </div>
         </PMDataProvider>
       </PMLoadingProvider>

@@ -19,7 +19,7 @@ import Users from "lucide-react/dist/esm/icons/users";
 // @ts-expect-error - Direct import
 import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 import type { Team } from "~/core/hooks/use-teams"
-import { useTeamDataContext } from "../context/team-data-context"
+import { useTeamDataContext, useTeamUsers } from "../context/team-data-context"
 import type { PMUser } from "~/core/api/pm/users"
 
 interface TeamRosterProps {
@@ -31,12 +31,13 @@ interface TeamRosterProps {
 export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProps) {
     const [searchQuery, setSearchQuery] = useState("");
 
-    // Use centralized context - no duplicate API calls!
-    const { allUsers, isLoading } = useTeamDataContext();
+    // Get memberIds from context and load users
+    const { allMemberIds: contextMemberIds } = useTeamDataContext();
+    const { allUsers, isLoading } = useTeamUsers(contextMemberIds);
 
     // Filter to get members of this specific team
     const members = useMemo(() =>
-        allUsers.filter(u => (team?.memberIds || []).includes(u.id)),
+        allUsers.filter((u: PMUser) => (team?.memberIds || []).includes(u.id)),
         [allUsers, team?.memberIds]
     );
 

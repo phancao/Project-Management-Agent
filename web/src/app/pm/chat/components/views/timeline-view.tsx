@@ -607,7 +607,7 @@ function TimelineContent({
             <BarChart
               data={taskChart.data}
               layout="vertical"
-              margin={{ top: 8, right: 16, left: 240, bottom: 8 }}
+              margin={{ top: 8, right: 16, left: 180, bottom: 8 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis
@@ -615,7 +615,7 @@ function TimelineContent({
                 domain={[0, taskChart.totalDays]}
                 tickFormatter={(value) => formatDateShort(addDays(taskChart.minDate!, Number(value)))}
               />
-              <YAxis type="category" dataKey="name" width={240} tick={{ fontSize: 12, fill: 'currentColor' }} />
+              <YAxis type="category" dataKey="name" width={180} tick={{ fontSize: 12, fill: 'currentColor' }} />
               <Tooltip content={<TimelineTooltip minDate={taskChart.minDate!} />} />
               <Bar dataKey="startOffset" stackId="task" fill="transparent" isAnimationActive={false} />
               <Bar dataKey="duration" stackId="task" radius={[0, 4, 4, 0]}>

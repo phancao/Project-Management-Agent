@@ -347,9 +347,23 @@ export function TeamAssignmentsView() {
     return Array.from(unique).sort();
   }, [tasks]);
 
-  // Calculate sprint capacity based on selected sprint duration (40h/week)
+  // Calculate sprint capacity based on selected sprint duration (8h/day, 5 days/week)
   const sprintCapacity = useMemo(() => {
-    const HOURS_PER_WEEK = 40;
+    const HOURS_PER_DAY = 8;
+
+    // Count working days between two dates (Mon-Fri)
+    const countWorkingDays = (startDate: Date, endDate: Date): number => {
+      let count = 0;
+      const current = new Date(startDate);
+      while (current <= endDate) {
+        const dayOfWeek = current.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday (0) or Saturday (6)
+          count++;
+        }
+        current.setDate(current.getDate() + 1);
+      }
+      return count;
+    };
 
     // Find the selected sprint if filtering by sprint
     if (filterSprint !== "all") {
@@ -357,14 +371,13 @@ export function TeamAssignmentsView() {
       if (selectedSprint?.start_date && selectedSprint?.end_date) {
         const start = new Date(selectedSprint.start_date);
         const end = new Date(selectedSprint.end_date);
-        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-        const weeks = Math.max(1, days / 7);
-        return Math.round(HOURS_PER_WEEK * weeks);
+        const workingDays = countWorkingDays(start, end);
+        return workingDays * HOURS_PER_DAY;
       }
     }
 
-    // Default to 1 week if no sprint selected or dates unavailable
-    return HOURS_PER_WEEK;
+    // Default to 1 week (5 working days = 40h) if no sprint selected
+    return 40;
   }, [filterSprint, sprints]);
 
   const columns = useMemo<Column[]>(() => {

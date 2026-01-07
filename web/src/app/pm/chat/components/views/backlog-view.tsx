@@ -1226,10 +1226,23 @@ export function BacklogView() {
   const tasksInSprints = useMemo(() => {
     const grouped: Record<string, Task[]> = {};
     const sprintSource = orderedSprints.length > 0 ? orderedSprints : sprints;
+
+    // Helper to extract short ID from composite ID (e.g., "provider:7" -> "7")
+    const extractShortId = (id: string | null | undefined): string | null => {
+      if (!id) return null;
+      const str = String(id);
+      return str.includes(':') ? str.split(':').pop() || str : str;
+    };
+
     sprintSource.forEach((sprint) => {
-      grouped[sprint.id] = epicFilteredTasks.filter(
-        (task) => task.sprint_id === sprint.id || String(task.sprint_id) === String(sprint.id)
-      );
+      const sprintShortId = extractShortId(sprint.id);
+      grouped[sprint.id] = epicFilteredTasks.filter((task) => {
+        const taskSprintShortId = extractShortId(task.sprint_id);
+        // Match by exact composite ID OR by short ID
+        return task.sprint_id === sprint.id ||
+          String(task.sprint_id) === String(sprint.id) ||
+          (taskSprintShortId && sprintShortId && taskSprintShortId === sprintShortId);
+      });
     });
     return grouped;
   }, [orderedSprints, sprints, epicFilteredTasks]);
@@ -1237,9 +1250,22 @@ export function BacklogView() {
   const backlogTasks = useMemo(() => {
     const sprintSource = orderedSprints.length > 0 ? orderedSprints : sprints;
     const sprintIds = new Set(sprintSource.map((s) => s.id));
+    // Also build a set of short IDs for comparison
+    const sprintShortIds = new Set(sprintSource.map((s) => {
+      const id = String(s.id);
+      return id.includes(':') ? id.split(':').pop() || id : id;
+    }));
+
     return epicFilteredTasks.filter((task) => {
       if (!task.sprint_id) return true;
-      return !sprintIds.has(task.sprint_id) && !sprintIds.has(String(task.sprint_id));
+      const taskSprintId = String(task.sprint_id);
+      const taskSprintShortId = taskSprintId.includes(':')
+        ? taskSprintId.split(':').pop() || taskSprintId
+        : taskSprintId;
+      // Task is in backlog if its sprint_id doesn't match any sprint (by full or short ID)
+      return !sprintIds.has(task.sprint_id) &&
+        !sprintIds.has(taskSprintId) &&
+        !sprintShortIds.has(taskSprintShortId);
     });
   }, [orderedSprints, sprints, epicFilteredTasks]);
 

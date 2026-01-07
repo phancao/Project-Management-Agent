@@ -121,9 +121,9 @@ function TaskCard({ task, isDragging, dragHandleProps }: { task: Task; isDraggin
               {task.priority}
             </span>
           ) : null}
-          {task.sprint_id ? (
+          {task.sprint_name ? (
             <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-              Sprint: {task.sprint_id}
+              {task.sprint_name}
             </span>
           ) : null}
           {typeof task.estimated_hours === "number" ? <span>{Number(task.estimated_hours).toFixed(1)}h</span> : null}
@@ -156,17 +156,18 @@ function SortableTask({ task, assigneeId }: { task: Task; assigneeId: string | n
   );
 }
 
-function AssigneeColumn({
+function UserCard({
   columnKey,
   assigneeId,
   assigneeName,
   tasks,
   totalHours,
+  maxHours,
   isAssignable,
   isOpen,
   onToggle,
   showDropHint,
-}: AssigneeColumnProps) {
+}: AssigneeColumnProps & { maxHours: number }) {
   const { setNodeRef, isOver } = useDroppable({
     id: columnKey,
     data: {
@@ -176,67 +177,96 @@ function AssigneeColumn({
     },
   });
 
-  const dropHintVisible = !isOpen && showDropHint && isAssignable;
+  // Calculate workload percentage relative to the busiest person
+  const workloadPercent = maxHours > 0 ? Math.min(100, (totalHours / maxHours) * 100) : 0;
+
+  // Color based on workload level
+  const getProgressColor = () => {
+    if (workloadPercent >= 80) return "bg-red-500";
+    if (workloadPercent >= 60) return "bg-amber-500";
+    return "bg-emerald-500";
+  };
 
   return (
-    <div ref={setNodeRef}>
-      <Collapsible open={isOpen} onOpenChange={(open) => onToggle(columnKey, open)}>
-        <Card
-          className={cn(
-            "flex min-h-[96px] flex-col rounded-xl border border-gray-200 bg-gray-50/80 p-4 shadow-sm transition dark:border-gray-700 dark:bg-gray-900/60",
-            isOver && "border-blue-400 bg-blue-50/60 dark:border-blue-500 dark:bg-blue-900/20",
-          )}
-        >
-          <div className="flex items-center justify-between gap-2">
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "rounded-xl border bg-card shadow-sm transition-all duration-200",
+        isOver && "border-blue-400 ring-2 ring-blue-200 dark:ring-blue-800",
+        !isOver && "border-border"
+      )}
+    >
+      {/* Main Row - User Info | Progress Bar | Expand Icon */}
+      <div
+        className="flex items-center gap-4 p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+        onClick={() => onToggle(columnKey, !isOpen)}
+      >
+        {/* Left: Avatar and Name (fixed width) */}
+        <div className="flex items-center gap-3 w-[200px] flex-shrink-0">
+          <AvatarBubble name={assigneeName} />
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <AvatarBubble name={assigneeName} />
-              <div>
-                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {assigneeId ? assigneeName : assigneeName || "Unassigned"}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {tasks.length} task{tasks.length === 1 ? "" : "s"} • {totalHours.toFixed(1)}h
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {assigneeId ? (
-                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
-                  {assigneeId}
-                </span>
-              ) : (
-                <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
-                  Unassigned
+              <span className="text-sm font-semibold truncate">
+                {assigneeName || "Unassigned"}
+              </span>
+              {!assigneeId && (
+                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                  Pool
                 </span>
               )}
-              <CollapsibleTrigger className="flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-                {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                {isOpen ? "Collapse" : "Expand"}
-              </CollapsibleTrigger>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {tasks.length} task{tasks.length !== 1 && "s"} • {totalHours.toFixed(0)}h
             </div>
           </div>
-          <CollapsibleContent>
-            <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-              {tasks.length === 0 ? (
-                <div className="mt-3 rounded border border-dashed border-gray-200 bg-white py-6 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-500">
-                  {isAssignable ? "Drop tasks here" : "Tasks assigned outside this workspace"}
-                </div>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {tasks.map((task) => (
-                    <SortableTask key={task.id} task={task} assigneeId={assigneeId} />
-                  ))}
-                </div>
-              )}
-            </SortableContext>
-          </CollapsibleContent>
-          {dropHintVisible ? (
-            <div className="mt-3 rounded border border-dashed border-gray-200 bg-white py-4 text-center text-xs text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-500">
-              {isAssignable ? "Drop tasks here" : "Tasks assigned outside this workspace"}
-            </div>
-          ) : null}
-        </Card>
-      </Collapsible>
+        </div>
+
+        {/* Middle: Workload Progress Bar (flex grow) */}
+        <div className="flex-1 min-w-[100px]">
+          <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn("h-full rounded-full transition-all duration-300", getProgressColor())}
+              style={{ width: `${workloadPercent}%` }}
+            />
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-0.5 text-right">
+            {workloadPercent.toFixed(0)}% workload
+          </div>
+        </div>
+
+        {/* Right: Expand Icon */}
+        <div className="text-muted-foreground flex-shrink-0">
+          {isOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+        </div>
+      </div>
+
+      {/* Drop hint when dragging */}
+      {showDropHint && isAssignable && !isOpen && (
+        <div className="px-3 pb-2">
+          <div className="rounded border border-dashed border-blue-300 bg-blue-50/50 py-1.5 text-center text-xs text-blue-500 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+            Drop to assign
+          </div>
+        </div>
+      )}
+
+      {/* Expandable Task List */}
+      {isOpen && (
+        <div className="px-3 pb-3 border-t border-border/50">
+          <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+            {tasks.length === 0 ? (
+              <div className="mt-2 rounded border border-dashed border-muted-foreground/30 bg-muted/30 py-4 text-center text-xs text-muted-foreground">
+                {isAssignable ? "Drop tasks here" : "No tasks"}
+              </div>
+            ) : (
+              <div className="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {tasks.map((task) => (
+                  <SortableTask key={task.id} task={task} assigneeId={assigneeId} />
+                ))}
+              </div>
+            )}
+          </SortableContext>
+        </div>
+      )}
     </div>
   );
 }
@@ -285,11 +315,16 @@ export function TeamAssignmentsView() {
   }, [tasks, filterStatus, filterSprint]);
 
   const sprintOptions = useMemo(() => {
-    const unique = new Set<string>();
+    const sprintMap = new Map<string, string>();
     tasks.forEach((task) => {
-      if (task.sprint_id) unique.add(String(task.sprint_id));
+      if (task.sprint_id) {
+        const name = task.sprint_name || task.sprint_id;
+        sprintMap.set(String(task.sprint_id), name);
+      }
     });
-    return Array.from(unique).sort();
+    return Array.from(sprintMap.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [tasks]);
 
   const statusOptions = useMemo(() => {
@@ -344,6 +379,11 @@ export function TeamAssignmentsView() {
       return b.totalHours - a.totalHours || a.assigneeName.localeCompare(b.assigneeName);
     });
   }, [filteredTasks, userNameById]);
+
+  // Calculate max hours for workload comparison bar
+  const maxHours = useMemo(() => {
+    return Math.max(...columns.map(c => c.totalHours), 1);
+  }, [columns]);
 
   const taskMap = useMemo(() => {
     const map = new Map<string, Task>();
@@ -574,9 +614,9 @@ export function TeamAssignmentsView() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All sprints</SelectItem>
-            {sprintOptions.map((id) => (
-              <SelectItem key={id} value={id}>
-                {id}
+            {sprintOptions.map((sprint) => (
+              <SelectItem key={sprint.id} value={sprint.id}>
+                {sprint.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -615,17 +655,18 @@ export function TeamAssignmentsView() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-3">
           {columns.map((column) => (
-            <AssigneeColumn
+            <UserCard
               key={column.columnKey}
               columnKey={column.columnKey}
               assigneeId={column.assigneeId}
               assigneeName={column.assigneeName}
               tasks={column.tasks}
               totalHours={column.totalHours}
+              maxHours={maxHours}
               isAssignable={column.isAssignable}
-              isOpen={openColumns[column.columnKey] ?? true}
+              isOpen={openColumns[column.columnKey] ?? false}
               onToggle={handleToggleColumn}
               showDropHint={isDraggingTask}
             />

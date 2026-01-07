@@ -205,19 +205,18 @@ function buildChartData<T extends TimelineSprint | TimelineTask>(
   return { data, minDate, totalDays };
 }
 
-// Custom YAxis tick for task names - single line with truncation
+// Custom YAxis tick for task names - single line with truncation, left-aligned
 function TaskYAxisTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
   const name = payload?.value ?? "";
   const truncated = name.length > 22 ? name.slice(0, 22) + "..." : name;
   return (
     <text
-      x={x}
+      x={8}
       y={y}
       dy={4}
-      textAnchor="end"
+      textAnchor="start"
       fill="currentColor"
       fontSize={11}
-      style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
     >
       {truncated}
     </text>

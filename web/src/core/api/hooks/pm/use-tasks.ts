@@ -57,7 +57,27 @@ const fetchTasksFn = async (projectId?: string) => {
       errorDetail = errorData.detail ?? errorData.message ?? errorDetail;
 
       // Provide user-friendly messages for specific status codes
-      if (status === 410) {
+      // Check for disabled provider error (400 with specific message)
+      if (status === 400 && errorDetail.includes("is disabled")) {
+        userFriendlyMessage = "Provider Disabled";
+        toast.error(userFriendlyMessage, {
+          id: "provider-disabled", // Deduplicate - only show one toast
+          description: errorDetail,
+          duration: 10000, // Keep visible for 10 seconds
+          action: {
+            label: "Select Project",
+            onClick: () => {
+              // Clear the project from URL to trigger project selection
+              const url = new URL(window.location.href);
+              url.searchParams.delete("project");
+              window.history.replaceState({}, "", url.toString());
+              window.location.reload();
+            },
+          },
+        });
+        // Don't show additional "failed to load tasks" message for disabled provider
+        throw new Error(userFriendlyMessage);
+      } else if (status === 410) {
         userFriendlyMessage = "Project no longer available";
         const description = errorDetail.includes("410") || errorDetail.includes("Gone")
           ? "This project may have been deleted, archived, or is no longer accessible. Please verify the project exists in your PM provider."

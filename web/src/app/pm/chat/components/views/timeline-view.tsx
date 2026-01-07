@@ -510,11 +510,11 @@ function TimelineContent({
             No sprints have complete scheduling information yet.
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(280, sprintChart.data.length * 48)}>
+          <ResponsiveContainer width="100%" height={Math.max(180, sprintChart.data.length * 28)}>
             <BarChart
               data={sprintChart.data}
               layout="vertical"
-              margin={{ top: 16, right: 24, left: 200, bottom: 16 }}
+              margin={{ top: 8, right: 16, left: 160, bottom: 8 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis
@@ -522,7 +522,7 @@ function TimelineContent({
                 domain={[0, sprintChart.totalDays]}
                 tickFormatter={(value) => formatDateShort(addDays(sprintChart.minDate!, Number(value)))}
               />
-              <YAxis type="category" dataKey="name" width={200} />
+              <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 11 }} />
               <Tooltip content={<TimelineTooltip minDate={sprintChart.minDate!} />} />
               <Bar dataKey="startOffset" stackId="sprint" fill="transparent" isAnimationActive={false} />
               <Bar dataKey="duration" stackId="sprint" radius={[0, 4, 4, 0]}>
@@ -603,11 +603,11 @@ function TimelineContent({
             No tasks match the current filters or have complete scheduling information.
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(320, taskChart.data.length * 48)}>
+          <ResponsiveContainer width="100%" height={Math.max(200, taskChart.data.length * 28)}>
             <BarChart
               data={taskChart.data}
               layout="vertical"
-              margin={{ top: 16, right: 24, left: 220, bottom: 16 }}
+              margin={{ top: 8, right: 16, left: 180, bottom: 8 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis
@@ -615,7 +615,7 @@ function TimelineContent({
                 domain={[0, taskChart.totalDays]}
                 tickFormatter={(value) => formatDateShort(addDays(taskChart.minDate!, Number(value)))}
               />
-              <YAxis type="category" dataKey="name" width={220} />
+              <YAxis type="category" dataKey="name" width={180} tick={{ fontSize: 11 }} />
               <Tooltip content={<TimelineTooltip minDate={taskChart.minDate!} />} />
               <Bar dataKey="startOffset" stackId="task" fill="transparent" isAnimationActive={false} />
               <Bar dataKey="duration" stackId="task" radius={[0, 4, 4, 0]}>

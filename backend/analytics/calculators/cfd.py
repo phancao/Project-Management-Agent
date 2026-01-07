@@ -67,11 +67,10 @@ def calculate_cfd(
             # Determine item's status on this date
             item_status = _get_status_on_date(item, date)
             
-            # Add to cumulative count for this status and all "earlier" statuses
-            status_index = statuses.index(item_status) if item_status in statuses else -1
-            if status_index >= 0:
-                for i in range(status_index + 1):
-                    cumulative_counts[statuses[i]] += 1
+            # Add to count for this item's current status only
+            # (CFD shows cumulative count of items in each status, not across statuses)
+            if item_status in statuses:
+                cumulative_counts[item_status] += 1
         
         # Add data points for each status
         for status in statuses:
@@ -85,11 +84,47 @@ def calculate_cfd(
     
     # Create series (in reverse order so "Done" is at bottom of stacked area)
     series = []
+    # Comprehensive color mapping for various PM provider statuses
     colors = {
-        "Done": "#10b981",      # Green
-        "In Review": "#3b82f6", # Blue
-        "In Progress": "#f59e0b", # Orange
-        "To Do": "#94a3b8"      # Gray
+        # Completed/Done states - Green shades
+        "Done": "#10b981",         # Emerald green
+        "Closed": "#059669",       # Darker green
+        "Passed": "#34d399",       # Light green
+        "Resolved": "#10b981",     # Emerald green
+        "Completed": "#059669",    # Darker green
+        
+        # In Progress states - Orange/Amber shades
+        "In Progress": "#f59e0b",  # Amber
+        "In progress": "#f59e0b",  # Amber (lowercase variant)
+        "Developed": "#f97316",    # Orange
+        "Development": "#f97316",  # Orange
+        "Ready4SIT": "#fb923c",    # Light orange
+        "Testing": "#fbbf24",      # Yellow-orange
+        
+        # Review/Verification states - Blue shades
+        "In Review": "#3b82f6",    # Blue
+        "Review": "#3b82f6",       # Blue
+        "Confirmed": "#60a5fa",    # Light blue
+        "Verified": "#2563eb",     # Darker blue
+        "Specified": "#818cf8",    # Indigo/purple-blue
+        
+        # New/Todo states - Cyan/Teal shades
+        "New": "#06b6d4",          # Cyan
+        "To Do": "#94a3b8",        # Slate gray
+        "Todo": "#94a3b8",         # Slate gray (variant)
+        "Open": "#22d3ee",         # Light cyan
+        "Backlog": "#a5b4fc",      # Light indigo
+        
+        # Blocked/Hold states - Red/Pink shades
+        "On hold": "#f43f5e",      # Rose
+        "On Hold": "#f43f5e",      # Rose (variant)
+        "Blocked": "#ef4444",      # Red
+        "Rejected": "#dc2626",     # Darker red
+        
+        # Planning states - Purple shades
+        "Planned": "#a855f7",      # Purple
+        "Planning": "#c084fc",     # Light purple
+        "Draft": "#d8b4fe",        # Very light purple
     }
     
     for status in reversed(statuses):

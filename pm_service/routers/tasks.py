@@ -41,14 +41,18 @@ async def list_tasks(
     
     handler = PMHandler(db)
     
-    # Handler returns ALL matching tasks (no internal limit)
-    all_tasks = await handler.list_tasks(
-        project_id=project_id,
-        sprint_id=sprint_id,
-        assignee_id=assignee_id,
-        status=status,
-        provider_id=provider_id,
-    )
+    try:
+        # Handler returns ALL matching tasks (no internal limit)
+        all_tasks = await handler.list_tasks(
+            project_id=project_id,
+            sprint_id=sprint_id,
+            assignee_id=assignee_id,
+            status=status,
+            provider_id=provider_id,
+        )
+    except ValueError as e:
+        # Handle disabled provider or invalid project errors
+        raise HTTPException(status_code=400, detail=str(e))
     
     # Apply pagination at API level only if limit is specified
     total = len(all_tasks)

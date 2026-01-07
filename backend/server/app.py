@@ -2881,12 +2881,22 @@ async def pm_list_tasks(_request: Request, project_id: str):  # FastAPI route pa
                 raise HTTPException(status_code=404, detail=error_msg)
             elif "not yet implemented" in error_msg:
                 raise HTTPException(status_code=501, detail=error_msg)
+            elif "is disabled" in error_msg:
+                # Provider is disabled - forward as 400 for proper frontend handling
+                raise HTTPException(status_code=400, detail=error_msg)
             else:
                 raise HTTPException(status_code=500, detail=error_msg)
     except HTTPException:
         # Re-raise HTTPExceptions as-is (preserve status codes)
         raise
     except Exception as e:
+        error_msg = str(e)
+        # Check if this is a disabled provider error from PM Service
+        if "is disabled" in error_msg or ("400" in error_msg and "Bad Request" in error_msg):
+            # Try to extract the actual detail from the error message
+            # Format: "Client error '400 Bad Request' for url '...'"
+            logger.warning(f"Disabled provider error: {error_msg}")
+            raise HTTPException(status_code=400, detail="Provider is disabled. Please enable it or select a different project.")
         logger.error(f"Failed to list tasks: {e}")
         import traceback
         logger.error(traceback.format_exc())
@@ -3102,11 +3112,19 @@ async def pm_list_sprints(
             raise HTTPException(status_code=400, detail=error_msg)
         elif "Provider not found" in error_msg:
             raise HTTPException(status_code=404, detail=error_msg)
+        elif "is disabled" in error_msg:
+            # Provider is disabled - forward as 400 for proper frontend handling
+            raise HTTPException(status_code=400, detail=error_msg)
         else:
             raise HTTPException(status_code=500, detail=error_msg)
     except HTTPException:
         raise
     except Exception as e:
+        error_msg = str(e)
+        # Check if this is a disabled provider error from PM Service
+        if "is disabled" in error_msg or ("400" in error_msg and "Bad Request" in error_msg):
+            logger.warning(f"Disabled provider error: {error_msg}")
+            raise HTTPException(status_code=400, detail="Provider is disabled. Please enable it or select a different project.")
         logger.error(f"Failed to list sprints: {e}")
         import traceback
         logger.error(traceback.format_exc())

@@ -94,27 +94,44 @@ class PMHandler:
             "Please add 'pm_service_url' to at least one provider's additional_config."
         )
     
-    def get_provider_by_id(self, provider_id: str) -> Optional[PMProviderConnection]:
-        """Get provider by ID (PM Service ID or backend_provider_id)."""
+    def get_provider_by_id(self, provider_id: str, require_active: bool = True) -> Optional[PMProviderConnection]:
+        """Get provider by ID (PM Service ID or backend_provider_id).
+        
+        Args:
+            provider_id: The provider ID to look up
+            require_active: If True, raise error if provider is disabled (default: True)
+            
+        Returns:
+            PMProviderConnection if found
+            
+        Raises:
+            ValueError: If provider is found but is disabled and require_active=True
+        """
         from uuid import UUID
+        
+        provider = None
         
         # First try to find by PM Service ID
         provider = self.db.query(PMProviderConnection).filter(
             PMProviderConnection.id == provider_id
         ).first()
         
-        if provider:
-            return provider
+        if not provider:
+            # If not found, try to find by backend_provider_id
+            try:
+                backend_uuid = UUID(provider_id)
+                provider = self.db.query(PMProviderConnection).filter(
+                    PMProviderConnection.backend_provider_id == backend_uuid
+                ).first()
+            except (ValueError, TypeError):
+                # provider_id is not a valid UUID, skip backend_provider_id lookup
+                pass
         
-        # If not found, try to find by backend_provider_id
-        try:
-            backend_uuid = UUID(provider_id)
-            provider = self.db.query(PMProviderConnection).filter(
-                PMProviderConnection.backend_provider_id == backend_uuid
-            ).first()
-        except (ValueError, TypeError):
-            # provider_id is not a valid UUID, skip backend_provider_id lookup
-            pass
+        # Check if provider is active when required
+        if provider and require_active and not provider.is_active:
+            provider_name = provider.name or f"ID:{provider_id}"
+            logger.warning(f"Attempted to use disabled provider: {provider_name}")
+            raise ValueError(f"Provider '{provider_name}' is disabled. Please enable it or select a different project.")
         
         return provider
     

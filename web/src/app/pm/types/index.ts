@@ -81,6 +81,7 @@ export interface ProviderConfig {
   username?: string;
   organization_id?: string;
   workspace_id?: string;
+  is_active?: boolean; // Whether the provider is enabled
   additional_config?: {
     backend_provider_id?: string;
     [key: string]: unknown;

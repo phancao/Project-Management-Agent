@@ -60,7 +60,8 @@ export function PMLoadingManager() {
         });
       }, 30000); // 30 second timeout
 
-      listProviders()
+      // Include disabled providers so isActiveMap can gate requests to disabled providers
+      listProviders(true)
         .then((providers) => {
           clearTimeout(timeoutId);
           debug.state('Providers loaded', { count: providers.length });

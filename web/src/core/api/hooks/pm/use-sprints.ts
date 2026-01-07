@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMRefresh } from "./use-pm-refresh";
@@ -32,6 +33,25 @@ const fetchSprints = async (projectId: string, state?: string): Promise<Sprint[]
         errorMessage = errorText;
       }
     }
+
+    // Check for disabled provider error (400 with specific message)
+    if (response.status === 400 && errorMessage.includes("is disabled")) {
+      toast.error("Provider Disabled", {
+        description: errorMessage,
+        duration: 10000, // Keep visible for 10 seconds
+        action: {
+          label: "Select Project",
+          onClick: () => {
+            // Clear the project from URL to trigger project selection
+            const url = new URL(window.location.href);
+            url.searchParams.delete("project");
+            window.history.replaceState({}, "", url.toString());
+            window.location.reload();
+          },
+        },
+      });
+    }
+
     throw new Error(errorMessage);
   }
   return response.json();

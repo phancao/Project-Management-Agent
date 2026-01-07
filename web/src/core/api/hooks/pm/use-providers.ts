@@ -8,7 +8,8 @@ import type { ProviderConfig as PMProviderConfig } from "~/app/pm/types";
 export interface ProviderMappings {
   typeMap: Map<string, string>;
   urlMap: Map<string, string>;
-  providers: Array<{ id: string; provider_type: string; base_url?: string }>;
+  isActiveMap: Map<string, boolean>; // Track active status of providers
+  providers: Array<{ id: string; provider_type: string; base_url?: string; is_active: boolean }>;
 }
 
 /**
@@ -27,11 +28,13 @@ export function useProviders(): {
     const providers = state.providers.data || [];
     const typeMap = new Map<string, string>();
     const urlMap = new Map<string, string>();
-    const providerList: Array<{ id: string; provider_type: string; base_url?: string }> = [];
+    const isActiveMap = new Map<string, boolean>();
+    const providerList: Array<{ id: string; provider_type: string; base_url?: string; is_active: boolean }> = [];
 
     providers.forEach((p) => {
       if (p.id && p.provider_type) {
         typeMap.set(p.id, p.provider_type);
+        isActiveMap.set(p.id, p.is_active !== false); // Default to true if not specified
         if (p.base_url) {
           urlMap.set(p.id, p.base_url);
         }
@@ -41,6 +44,7 @@ export function useProviders(): {
         const backendProviderId = p.additional_config?.backend_provider_id;
         if (backendProviderId && typeof backendProviderId === 'string') {
           typeMap.set(backendProviderId, p.provider_type);
+          isActiveMap.set(backendProviderId, p.is_active !== false);
           if (p.base_url) {
             urlMap.set(backendProviderId, p.base_url);
           }
@@ -50,11 +54,12 @@ export function useProviders(): {
           id: p.id,
           provider_type: p.provider_type,
           base_url: p.base_url,
+          is_active: p.is_active !== false,
         });
       }
     });
 
-    return { typeMap, urlMap, providers: providerList };
+    return { typeMap, urlMap, isActiveMap, providers: providerList };
   }, [state.providers.data]);
 
   return {

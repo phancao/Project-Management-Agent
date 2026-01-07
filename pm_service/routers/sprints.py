@@ -30,10 +30,15 @@ async def list_sprints(
     This endpoint applies limit/offset for pagination if specified.
     """
     handler = PMHandler(db)
-    all_sprints = await handler.list_sprints(
-        project_id=project_id,
-        state=status
-    )
+    
+    try:
+        all_sprints = await handler.list_sprints(
+            project_id=project_id,
+            state=status
+        )
+    except ValueError as e:
+        # Handle disabled provider or invalid project errors
+        raise HTTPException(status_code=400, detail=str(e))
     
     # Apply pagination
     total = len(all_sprints)
@@ -58,7 +63,11 @@ async def get_sprint(
 ):
     """Get sprint by ID."""
     handler = PMHandler(db)
-    sprint = await handler.get_sprint(sprint_id)
+    
+    try:
+        sprint = await handler.get_sprint(sprint_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
     if not sprint:
         raise HTTPException(status_code=404, detail="Sprint not found")
@@ -80,7 +89,11 @@ async def get_sprint_tasks(
     This endpoint applies limit/offset for pagination if specified.
     """
     handler = PMHandler(db)
-    all_tasks = await handler.list_tasks(sprint_id=sprint_id)
+    
+    try:
+        all_tasks = await handler.list_tasks(sprint_id=sprint_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
     # Apply pagination
     total = len(all_tasks)

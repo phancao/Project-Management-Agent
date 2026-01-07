@@ -35,6 +35,9 @@ class PMServiceHandler:
         # For compatibility with PM tools that expect single_provider
         self.single_provider = self
     
+    # Module-level cache for PM Service URL to avoid repeated lookups
+    _cached_pm_service_url: Optional[str] = None
+    
     @classmethod
     def from_db_session(cls, db_session=None, user_id: Optional[str] = None):
         """
@@ -52,14 +55,20 @@ class PMServiceHandler:
         """
         import httpx
         
+        # Use cached URL if available
+        if cls._cached_pm_service_url:
+            instance = cls(user_id=user_id)
+            instance._client = AsyncPMServiceClient(base_url=cls._cached_pm_service_url)
+            return instance
+        
         # First, try to get PM Service URL from PM Service API
         # Use default URL to make initial API call
         default_pm_service_url = PM_SERVICE_URL
         pm_service_url = default_pm_service_url
         
         try:
-            # Use sync client since we are in a sync method and potentially in a running event loop
-            with httpx.Client(timeout=5.0) as client:
+            # Use sync client with short timeout (1s) since this blocks the request
+            with httpx.Client(timeout=1.0) as client:
                 try:
                     # Get providers from PM Service API
                     response = client.get(f"{default_pm_service_url}/api/v1/providers")
@@ -75,10 +84,13 @@ class PMServiceHandler:
                                     pm_service_url = url
                                     break
                 except Exception as e:
-                    logger.warning(f"Failed to get PM Service URL from API: {e}, using default: {default_pm_service_url}")
+                    logger.debug(f"Failed to get PM Service URL from API: {e}, using default")
         except Exception as e:
-            logger.warning(f"Error getting PM Service URL from API: {e}, using default: {default_pm_service_url}")
+            logger.debug(f"Error getting PM Service URL from API: {e}, using default")
             pm_service_url = default_pm_service_url
+        
+        # Cache the URL for future requests
+        cls._cached_pm_service_url = pm_service_url
         
         instance = cls(user_id=user_id)
         # Update client with the loaded URL
@@ -502,14 +514,86 @@ class PMServiceHandler:
         self,
         project_id: str
     ) -> dict[str, Any]:
-        """Get project timeline data (sprints + tasks)."""
-        sprints = await self.list_project_sprints(project_id)
-        tasks = await self.list_project_tasks(project_id)
+        """Get project timeline data (sprints + tasks) with scheduling info."""
+        raw_sprints = await self.list_project_sprints(project_id)
+        raw_tasks = await self.list_project_tasks(project_id)
+        
+        # Process sprints - add is_scheduled and missing_reason
+        scheduled_sprints = []
+        unscheduled_sprints = []
+        
+        for sprint in raw_sprints:
+            start_date = sprint.get("start_date")
+            end_date = sprint.get("end_date")
+            
+            # Determine scheduling status
+            has_start = bool(start_date)
+            has_end = bool(end_date)
+            is_scheduled = has_start and has_end
+            
+            # Determine missing reason
+            missing_reason = None
+            if not has_start and not has_end:
+                missing_reason = "missing_start_end"
+            elif not has_start:
+                missing_reason = "missing_start"
+            elif not has_end:
+                missing_reason = "missing_end"
+            
+            # Add scheduling info to sprint
+            enriched_sprint = {
+                **sprint,
+                "is_scheduled": is_scheduled,
+                "missing_reason": missing_reason,
+            }
+            
+            if is_scheduled:
+                scheduled_sprints.append(enriched_sprint)
+            else:
+                unscheduled_sprints.append(enriched_sprint)
+        
+        # Process tasks - add is_scheduled and missing_reason
+        scheduled_tasks = []
+        unscheduled_tasks = []
+        
+        for task in raw_tasks:
+            start_date = task.get("start_date")
+            due_date = task.get("due_date")
+            
+            # Determine scheduling status
+            has_start = bool(start_date)
+            has_end = bool(due_date)
+            is_scheduled = has_start and has_end
+            
+            # Determine missing reason
+            missing_reason = None
+            if not has_start and not has_end:
+                missing_reason = "missing_start_end"
+            elif not has_start:
+                missing_reason = "missing_start"
+            elif not has_end:
+                missing_reason = "missing_end"
+            
+            # Add scheduling info to task
+            enriched_task = {
+                **task,
+                "is_scheduled": is_scheduled,
+                "missing_reason": missing_reason,
+            }
+            
+            if is_scheduled:
+                scheduled_tasks.append(enriched_task)
+            else:
+                unscheduled_tasks.append(enriched_task)
         
         return {
-            "sprints": sprints,
-            "tasks": tasks,
-            "project_id": project_id
+            "project_id": project_id,
+            "sprints": scheduled_sprints,
+            "tasks": scheduled_tasks,
+            "unscheduled": {
+                "sprints": unscheduled_sprints,
+                "tasks": unscheduled_tasks,
+            }
         }
     
     # ==================== Labels & Statuses ====================

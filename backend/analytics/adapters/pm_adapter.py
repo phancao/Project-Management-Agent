@@ -796,12 +796,20 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         days_back: int = 30
     ) -> Dict[str, Any]:
         """Fetch CFD data from PM provider"""
-        logger.info(f"[PMProviderAnalyticsAdapter] Fetching CFD data: project={project_id}, days_back={days_back}")
+        logger.info(f"[PMProviderAnalyticsAdapter] Fetching CFD data: project={project_id}, sprint_id={sprint_id}, days_back={days_back}")
         
         try:
             # Get tasks
             project_key = self._extract_project_key(project_id)
+            logger.info(f"[PMProviderAnalyticsAdapter] CFD: project_id={project_id} -> project_key={project_key}")
+            
+            # Validate project_key to prevent fetching all tasks across all projects
+            if not project_key:
+                logger.error(f"[PMProviderAnalyticsAdapter] CFD: Empty project_key from project_id={project_id}")
+                raise ValueError(f"Invalid project_id: '{project_id}'. Cannot fetch CFD data without a valid project.")
+            
             all_tasks = await self.provider.list_tasks(project_id=project_key)
+            logger.info(f"[PMProviderAnalyticsAdapter] CFD: Retrieved {len(all_tasks)} tasks from provider for project_key={project_key}")
             
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
@@ -871,12 +879,20 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         days_back: int = 60
     ) -> List[Dict[str, Any]]:
         """Fetch cycle time data from PM provider"""
-        logger.info(f"[PMProviderAnalyticsAdapter] Fetching cycle time data: project={project_id}, days_back={days_back}")
+        logger.info(f"[PMProviderAnalyticsAdapter] Fetching cycle time data: project={project_id}, sprint_id={sprint_id}, days_back={days_back}")
         
         try:
             # Get tasks
             project_key = self._extract_project_key(project_id)
+            logger.info(f"[PMProviderAnalyticsAdapter] CycleTime: project_id={project_id} -> project_key={project_key}")
+            
+            # Validate project_key to prevent fetching all tasks across all projects
+            if not project_key:
+                logger.error(f"[PMProviderAnalyticsAdapter] CycleTime: Empty project_key from project_id={project_id}")
+                raise ValueError(f"Invalid project_id: '{project_id}'. Cannot fetch cycle time data without a valid project.")
+            
             all_tasks = await self.provider.list_tasks(project_id=project_key)
+            logger.info(f"[PMProviderAnalyticsAdapter] CycleTime: Retrieved {len(all_tasks)} tasks from provider for project_key={project_key}")
             
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
@@ -939,12 +955,20 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         sprint_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Fetch work distribution data from PM provider"""
-        logger.info(f"[PMProviderAnalyticsAdapter] Fetching work distribution data: project={project_id}")
+        logger.info(f"[PMProviderAnalyticsAdapter] Fetching work distribution data: project={project_id}, sprint_id={sprint_id}")
         
         try:
             # Get tasks
             project_key = self._extract_project_key(project_id)
+            logger.info(f"[PMProviderAnalyticsAdapter] WorkDistribution: project_id={project_id} -> project_key={project_key}")
+            
+            # Validate project_key to prevent fetching all tasks across all projects
+            if not project_key:
+                logger.error(f"[PMProviderAnalyticsAdapter] WorkDistribution: Empty project_key from project_id={project_id}")
+                raise ValueError(f"Invalid project_id: '{project_id}'. Cannot fetch work distribution data without a valid project.")
+            
             all_tasks = await self.provider.list_tasks(project_id=project_key)
+            logger.info(f"[PMProviderAnalyticsAdapter] WorkDistribution: Retrieved {len(all_tasks)} tasks from provider for project_key={project_key}")
             
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]
@@ -1001,12 +1025,20 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         sprint_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Fetch issue trend data from PM provider"""
-        logger.info(f"[PMProviderAnalyticsAdapter] Fetching issue trend data: project={project_id}, days_back={days_back}")
+        logger.info(f"[PMProviderAnalyticsAdapter] Fetching issue trend data: project={project_id}, sprint_id={sprint_id}, days_back={days_back}")
         
         try:
             # Get tasks
             project_key = self._extract_project_key(project_id)
+            logger.info(f"[PMProviderAnalyticsAdapter] IssueTrend: project_id={project_id} -> project_key={project_key}")
+            
+            # Validate project_key to prevent fetching all tasks across all projects
+            if not project_key:
+                logger.error(f"[PMProviderAnalyticsAdapter] IssueTrend: Empty project_key from project_id={project_id}")
+                raise ValueError(f"Invalid project_id: '{project_id}'. Cannot fetch issue trend data without a valid project.")
+            
             all_tasks = await self.provider.list_tasks(project_id=project_key)
+            logger.info(f"[PMProviderAnalyticsAdapter] IssueTrend: Retrieved {len(all_tasks)} tasks from provider for project_key={project_key}")
             
             if sprint_id:
                 all_tasks = [t for t in all_tasks if t.sprint_id == sprint_id]

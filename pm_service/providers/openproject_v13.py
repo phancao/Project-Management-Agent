@@ -369,9 +369,12 @@ class OpenProjectV13Provider(BasePMProvider):
             })
             
         if sprint_id:
-            val = sprint_id
-            if str(sprint_id).isdigit():
-                val = int(sprint_id)
+            # Handle composite ID format (e.g., "uuid:616") - extract just the numeric part
+            val = str(sprint_id)
+            if ":" in val:
+                val = val.split(":")[-1]  # Get the part after the colon
+            if val.isdigit():
+                val = int(val)
                 
             filters.append({
                 "version": {

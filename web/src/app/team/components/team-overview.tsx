@@ -10,7 +10,12 @@ import { Loader2, BarChart3, Users, ListTodo, TrendingUp, Briefcase, Clock } fro
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { Progress } from "~/components/ui/progress";
-import Link from "next/link";
+import { useMemberProfile } from "../page";
+import { useProjects } from "~/core/api/hooks/pm/use-projects";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+
+// Color palette for pie chart
+const PIE_COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#10b981'];
 
 // Helper to get start of current week (Monday)
 function getWeekStart(): Date {
@@ -101,12 +106,7 @@ function TeamStatsCard({ stats }: { stats: TeamStats }) {
                 <div className="flex items-center gap-1 pt-2">
                     <div className="flex -space-x-2">
                         {stats.members.slice(0, 5).map((member) => (
-                            <Link key={member.id} href={`/team/member/${encodeURIComponent(member.id)}?returnTab=overview`}>
-                                <Avatar className="w-7 h-7 border-2 border-background hover:opacity-80 transition-opacity">
-                                    <AvatarImage src={member.avatar} />
-                                    <AvatarFallback className="text-[10px]">{member.name?.[0] || "?"}</AvatarFallback>
-                                </Avatar>
-                            </Link>
+                            <MemberAvatar key={member.id} member={member} />
                         ))}
                         {stats.members.length > 5 && (
                             <div className="w-7 h-7 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-medium">
@@ -117,6 +117,22 @@ function TeamStatsCard({ stats }: { stats: TeamStats }) {
                 </div>
             </CardContent>
         </Card>
+    );
+}
+
+// Clickable avatar that opens member profile dialog
+function MemberAvatar({ member }: { member: PMUser }) {
+    const { openMemberProfile } = useMemberProfile();
+    return (
+        <button
+            onClick={() => openMemberProfile(member.id)}
+            className="focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-full"
+        >
+            <Avatar className="w-7 h-7 border-2 border-background hover:opacity-80 transition-opacity cursor-pointer">
+                <AvatarImage src={member.avatar} />
+                <AvatarFallback className="text-[10px]">{member.name?.[0] || "?"}</AvatarFallback>
+            </Avatar>
+        </button>
     );
 }
 
@@ -196,6 +212,41 @@ export function TeamOverview() {
         const avgUtilization = Math.round(teamStats.reduce((sum, t) => sum + t.utilization, 0) / teamStats.length);
         return { totalMembers, totalTasks, avgUtilization, totalProjects };
     }, [teamStats, tasks]);
+
+    // Team Experience - aggregate spent hours by project per team
+    const { projects } = useProjects();
+    const getProjectName = (id?: string) => {
+        if (!id) return 'Unassigned';
+        const proj = projects.find(p => p.id === id);
+        return proj ? proj.name : id.split(':').pop() || id;
+    };
+
+    // Per-team experience breakdown
+    const perTeamExperience = useMemo(() => {
+        return teams.map(team => {
+            const teamTasks = allTasks.filter(t =>
+                t.assignee_id && team.memberIds.includes(t.assignee_id)
+            );
+            const projectMap = new Map<string, { id: string; name: string; hours: number; taskCount: number }>();
+            teamTasks.forEach((task: PMTask) => {
+                const projectId = task.project_id || 'unassigned';
+                const projectName = getProjectName(projectId);
+                const existing = projectMap.get(projectId) || { id: projectId, name: projectName, hours: 0, taskCount: 0 };
+                existing.hours += task.spent_hours || 0;
+                existing.taskCount += 1;
+                projectMap.set(projectId, existing);
+            });
+            const experience = Array.from(projectMap.values())
+                .filter(p => p.hours > 0 || p.taskCount > 0)
+                .sort((a, b) => b.hours - a.hours);
+            return {
+                teamId: team.id,
+                teamName: team.name,
+                experience,
+                totalHours: experience.reduce((sum, p) => sum + p.hours, 0),
+            };
+        }).filter(t => t.experience.length > 0);
+    }, [teams, allTasks, projects]);
 
     const isLoading = isContextLoading || isLoadingUsers || isLoadingTasks || isFetchingUsers || isFetchingTasks;
 
@@ -312,18 +363,98 @@ export function TeamOverview() {
                 </Card>
             </div>
 
-            {/* Per-Team Stats Cards */}
-            <div>
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    Team Stats ({teams.length} teams)
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {teamStats.map(stats => (
-                        <TeamStatsCard key={stats.teamId} stats={stats} />
-                    ))}
+            {/* Team Experience Section - Same layout as Team Workload */}
+            {perTeamExperience.map((teamData) => (
+                <div key={teamData.teamId} className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                    {/* Main Chart Card - col-span-5 */}
+                    <Card className="col-span-5">
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Briefcase className="w-5 h-5" />
+                                        {teamData.teamName}
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {teamData.totalHours.toFixed(0)}h logged across {teamData.experience.length} projects
+                                    </CardDescription>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                            <div className="flex gap-6 items-center">
+                                {/* Larger Pie chart */}
+                                <div className="w-56 h-56 shrink-0">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={teamData.experience.slice(0, 8).map((p: { name: string; hours: number }) => ({ name: p.name, value: p.hours }))}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={55}
+                                                outerRadius={100}
+                                                dataKey="value"
+                                                strokeWidth={1}
+                                            >
+                                                {teamData.experience.slice(0, 8).map((_: unknown, i: number) => (
+                                                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip formatter={(value) => typeof value === 'number' ? `${value.toFixed(1)}h` : value} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                {/* Project badges */}
+                                <div className="flex-1 flex flex-wrap gap-2 content-start">
+                                    {teamData.experience.slice(0, 10).map((proj: { id: string; name: string; hours: number; taskCount: number }, idx: number) => (
+                                        <span
+                                            key={proj.id}
+                                            className="inline-flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 rounded-full px-3 py-1 text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors cursor-default"
+                                            title={`${proj.name}: ${proj.hours.toFixed(1)}h across ${proj.taskCount} tasks`}
+                                            style={{ borderLeft: `3px solid ${PIE_COLORS[idx % PIE_COLORS.length]}` }}
+                                        >
+                                            <span className="font-medium text-gray-700 dark:text-gray-300 max-w-[100px] truncate">{proj.name}</span>
+                                            <span className="font-bold text-indigo-600 dark:text-indigo-400">{proj.hours.toFixed(0)}h</span>
+                                        </span>
+                                    ))}
+                                    {teamData.experience.length > 10 && (
+                                        <span className="text-xs text-muted-foreground px-2">+{teamData.experience.length - 10} more</span>
+                                    )}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Details Card - col-span-2 */}
+                    <Card className="col-span-2">
+                        <CardHeader>
+                            <CardTitle>Project Details</CardTitle>
+                            <CardDescription>All projects ({teamData.experience.length})</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                                {teamData.experience.map((proj: { id: string; name: string; hours: number; taskCount: number }, idx: number) => (
+                                    <div key={proj.id} className="flex items-center">
+                                        <div
+                                            className="w-2 h-2 rounded-full shrink-0 mr-2"
+                                            style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
+                                        />
+                                        <div className="flex-1 space-y-0.5 min-w-0">
+                                            <p className="text-sm font-medium leading-none truncate">{proj.name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {proj.taskCount} tasks
+                                            </p>
+                                        </div>
+                                        <div className="font-bold text-sm text-indigo-600 dark:text-indigo-400 shrink-0">
+                                            {proj.hours.toFixed(0)}h
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
-            </div>
+            ))}
 
             <WorkloadCharts />
         </div>

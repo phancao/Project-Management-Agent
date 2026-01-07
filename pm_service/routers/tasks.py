@@ -3,6 +3,7 @@
 API endpoints for task operations.
 """
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,6 +13,8 @@ from pm_service.database import get_db_session
 from pm_service.handlers import PMHandler
 from pm_service.models.requests import CreateTaskRequest, UpdateTaskRequest
 from pm_service.models.responses import TaskResponse, ListResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -33,6 +36,9 @@ async def list_tasks(
     The handler fetches ALL tasks from providers (providers handle their own pagination).
     This endpoint then applies limit/offset for API-level pagination.
     """
+    # DEBUG: Log the request with all parameters
+    logger.warning(f"[DEBUG] list_tasks called - assignee_id={assignee_id}, status={status}, project_id={project_id}, limit={limit}")
+    
     handler = PMHandler(db)
     
     # Handler returns ALL matching tasks (no internal limit)
@@ -47,6 +53,8 @@ async def list_tasks(
     # Apply pagination at API level
     total = len(all_tasks)
     paginated_tasks = all_tasks[offset:offset + limit]
+    
+    logger.warning(f"[DEBUG] list_tasks returning {len(paginated_tasks)} of {total} tasks for assignee={assignee_id}")
     
     return ListResponse(
         items=paginated_tasks,

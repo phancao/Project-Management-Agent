@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/com
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
-import Link from "next/link";
+import { useMemberProfile } from "../page";
 // @ts-expect-error - Direct import
 import Check from "lucide-react/dist/esm/icons/check";
 // @ts-expect-error - Direct import
@@ -20,6 +20,18 @@ const initialEntries = [
     { id: '3', user: 'Alice', user_id: 'alice-id', project: 'Website Redesign', task: 'Navigation Menu', hours: 2.0, date: '2025-05-13', status: 'rejected' },
     { id: '4', user: 'Charlie', user_id: 'charlie-id', project: 'Website Redesign', task: 'Assets', hours: 4.0, date: '2025-05-12', status: 'approved' },
 ];
+
+// Clickable avatar for timesheet entries
+function TimesheetAvatar({ userId, userName }: { userId: string; userName: string }) {
+    const { openMemberProfile } = useMemberProfile();
+    return (
+        <button onClick={() => openMemberProfile(userId)} className="focus:outline-none">
+            <Avatar className="w-8 h-8 hover:opacity-80 transition-opacity cursor-pointer">
+                <AvatarFallback>{userName[0]}</AvatarFallback>
+            </Avatar>
+        </button>
+    );
+}
 
 export function TimesheetGrid() {
     const [entries, setEntries] = useState(initialEntries);
@@ -56,11 +68,7 @@ export function TimesheetGrid() {
                         {entries.map((entry) => (
                             <div key={entry.id} className="grid grid-cols-6 gap-4 p-4 items-center hover:bg-gray-50/50 dark:hover:bg-gray-900/50 transition-colors">
                                 <div className="col-span-2 flex items-center gap-3">
-                                    <Link href={`/team/member/${encodeURIComponent(entry.user_id || entry.user)}?returnTab=worklogs`}>
-                                        <Avatar className="w-8 h-8 hover:opacity-80 transition-opacity">
-                                            <AvatarFallback>{entry.user[0]}</AvatarFallback>
-                                        </Avatar>
-                                    </Link>
+                                    <TimesheetAvatar userId={entry.user_id || entry.user} userName={entry.user} />
                                     <div>
                                         <div className="font-medium text-sm">{entry.task}</div>
                                         <div className="text-xs text-muted-foreground">by {entry.user}</div>

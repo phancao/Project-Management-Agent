@@ -1,6 +1,5 @@
 
 import { useState, useMemo } from "react"
-import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
@@ -19,8 +18,53 @@ import Users from "lucide-react/dist/esm/icons/users";
 // @ts-expect-error - Direct import
 import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 import type { Team } from "~/core/hooks/use-teams"
-import { useTeamDataContext, useTeamUsers } from "../context/team-data-context"
+import { useTeamDataContext, useTeamUsers, useAllUsers } from "../context/team-data-context"
 import type { PMUser } from "~/core/api/pm/users"
+import { useMemberProfile } from "../page"
+
+// Clickable member card that opens profile dialog
+function MemberClickable({ member }: { member: PMUser }) {
+    const { openMemberProfile } = useMemberProfile();
+    return (
+        <button
+            onClick={() => openMemberProfile(member.id)}
+            className="flex items-center gap-4 flex-1 min-w-0 text-left"
+        >
+            <Avatar className="h-12 w-12 border border-gray-100 dark:border-gray-800 hover:opacity-80 transition-opacity">
+                <AvatarImage src={member.avatar} />
+                <AvatarFallback className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                    {member.name[0]}
+                </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+                <div className="font-medium truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{member.name}</div>
+                <div className="text-xs text-muted-foreground truncate">{member.email}</div>
+            </div>
+        </button>
+    );
+}
+
+// Clickable user row for available users
+function UserClickable({ user }: { user: PMUser }) {
+    const { openMemberProfile } = useMemberProfile();
+    return (
+        <button
+            onClick={() => openMemberProfile(user.id)}
+            className="flex-1 flex items-center gap-3 min-w-0 text-left"
+        >
+            <Avatar className="h-10 w-10 hover:opacity-80 transition-opacity">
+                <AvatarImage src={user.avatar} />
+                <AvatarFallback className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 text-sm">
+                    {user.name[0]}
+                </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{user.name}</div>
+                <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+            </div>
+        </button>
+    );
+}
 
 interface TeamRosterProps {
     team?: Team;
@@ -31,15 +75,15 @@ interface TeamRosterProps {
 export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProps) {
     const [searchQuery, setSearchQuery] = useState("");
 
-    // Get memberIds from context and load users
-    const { allMemberIds: contextMemberIds } = useTeamDataContext();
-    const { allUsers, isLoading } = useTeamUsers(contextMemberIds);
+    // Use the team's memberIds directly (not context), so newly added members show immediately
+    const teamMemberIds = team?.memberIds || [];
 
-    // Filter to get members of this specific team
-    const members = useMemo(() =>
-        allUsers.filter((u: PMUser) => (team?.memberIds || []).includes(u.id)),
-        [allUsers, team?.memberIds]
-    );
+    // Load ONLY this team's members (fast - just fetches specific IDs)
+    const { teamMembers: members, isLoading: isLoadingTeamMembers } = useTeamUsers(teamMemberIds);
+
+    // Load ALL users for the "Add Member" dropdown
+    // This is needed to show users not yet in the team for adding
+    const { allUsers, isLoading: isLoadingAllUsers } = useAllUsers(true);
 
     // Filter available users for "Add Member"
     // Users NOT in the current team
@@ -69,12 +113,12 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                 <div className="space-y-1">
                     <CardTitle className="text-lg">{team.name} Roster</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                        {isLoading ? "Loading members..." : `${members.length} members`}
+                        {isLoadingTeamMembers ? "Loading members..." : `${members.length} members`}
                     </p>
                 </div>
             </CardHeader>
             <CardContent className="px-0">
-                {isLoading ? (
+                {isLoadingTeamMembers ? (
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     </div>
@@ -84,18 +128,7 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {members.map((member: PMUser) => (
                                 <div key={member.id} className="group relative flex items-center gap-4 p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/40 hover:border-gray-200 dark:hover:border-gray-700 transition-all">
-                                    <Link href={`/team/member/${encodeURIComponent(member.id)}?returnTab=members`} className="flex items-center gap-4 flex-1 min-w-0">
-                                        <Avatar className="h-12 w-12 border border-gray-100 dark:border-gray-800 hover:opacity-80 transition-opacity">
-                                            <AvatarImage src={member.avatar} />
-                                            <AvatarFallback className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
-                                                {member.name[0]}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-medium truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{member.name}</div>
-                                            <div className="text-xs text-muted-foreground truncate">{member.email}</div>
-                                        </div>
-                                    </Link>
+                                    <MemberClickable member={member} />
                                     <Button
                                         variant="ghost"
                                         size="icon"
@@ -149,18 +182,7 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                                             key={user.id}
                                             className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all text-left group"
                                         >
-                                            <Link href={`/team/member/${encodeURIComponent(user.id)}?returnTab=members`} className="flex-1 flex items-center gap-3 min-w-0">
-                                                <Avatar className="h-10 w-10 hover:opacity-80 transition-opacity">
-                                                    <AvatarImage src={user.avatar} />
-                                                    <AvatarFallback className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 text-sm">
-                                                        {user.name[0]}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-sm font-medium truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{user.name}</div>
-                                                    <div className="text-xs text-muted-foreground truncate">{user.email}</div>
-                                                </div>
-                                            </Link>
+                                            <UserClickable user={user} />
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

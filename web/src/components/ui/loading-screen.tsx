@@ -3,11 +3,15 @@
 import React from 'react';
 import { Loader2, FolderKanban, Server, Briefcase, Zap } from 'lucide-react';
 import { useLoading } from '~/core/contexts/loading-context';
+import { usePathname } from 'next/navigation';
 
 export function LoadingScreen() {
     const { isLoading, message } = useLoading();
+    const pathname = usePathname();
 
-    if (!isLoading) return null;
+    // Don't show loading screen on auth pages
+    const isAuthPage = pathname?.startsWith('/login') || pathname?.startsWith('/register');
+    if (isAuthPage || !isLoading) return null;
 
     // Determine which step we're on based on the message
     const isLoadingProviders = message?.toLowerCase().includes('provider');
@@ -66,24 +70,24 @@ export function LoadingScreen() {
                             <div
                                 key={index}
                                 className={`flex items-center justify-between py-3 px-4 rounded-lg transition-all duration-300 ${isActive
-                                        ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
-                                        : isDone
-                                            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                                            : 'bg-muted/30 border border-transparent'
+                                    ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+                                    : isDone
+                                        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                                        : 'bg-muted/30 border border-transparent'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">
                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive
-                                            ? 'bg-blue-100 dark:bg-blue-900/50'
-                                            : isDone
-                                                ? 'bg-green-100 dark:bg-green-900/50'
-                                                : 'bg-muted'
+                                        ? 'bg-blue-100 dark:bg-blue-900/50'
+                                        : isDone
+                                            ? 'bg-green-100 dark:bg-green-900/50'
+                                            : 'bg-muted'
                                         }`}>
                                         <Icon className={`w-4 h-4 ${isActive
-                                                ? 'text-blue-600 dark:text-blue-400'
-                                                : isDone
-                                                    ? 'text-green-600 dark:text-green-400'
-                                                    : 'text-muted-foreground'
+                                            ? 'text-blue-600 dark:text-blue-400'
+                                            : isDone
+                                                ? 'text-green-600 dark:text-green-400'
+                                                : 'text-muted-foreground'
                                             }`} />
                                     </div>
                                     <div>

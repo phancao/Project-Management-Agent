@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { MemberLoadingOverlay } from "../../components/member-loading-overlay";
 import { useProviders } from "~/core/api/hooks/pm/use-providers";
-import type { PMUser } from "~/core/api/pm/users";
+import type { PMUser, extractShortId } from "~/core/api/pm/users";
+import { extractShortId as extractId } from "~/core/api/pm/users";
 import type { PMTask } from "~/core/api/pm/tasks";
 
 // ...
@@ -35,8 +36,15 @@ export default function MemberPage() {
 
     const member = teamMembers.find((m: PMUser) => m.id === decodeURIComponent(memberId || ''));
 
-    // Filter tasks for this member
-    const memberTasks = teamTasks.filter((t: PMTask) => t.assignee_id === member?.id);
+    // Filter tasks for this member using shortId for proper matching
+    const memberShortId = member?.shortId || (member ? extractId(member.id) : '');
+    const memberTasks = teamTasks.filter((t: PMTask) => {
+        if (!t.assignee_id || !member) return false;
+        const taskAssigneeShortId = extractId(t.assignee_id);
+        return t.assignee_id === member.id ||
+            t.assignee_id === memberShortId ||
+            taskAssigneeShortId === memberShortId;
+    });
 
     // Stats
     const totalAssigned = memberTasks.length;

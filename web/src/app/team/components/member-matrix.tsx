@@ -28,11 +28,11 @@ import { useProjects, type Project } from "~/core/api/hooks/pm/use-projects";
 import type { PMTask } from "~/core/api/pm/tasks";
 import type { PMUser } from "~/core/api/pm/users";
 import { cn } from "~/lib/utils";
-
-import Link from 'next/link';
+import { useMemberProfile } from "../page";
 
 // --- Draggable Member Item ---
 function SortableMember({ member }: { member: PMUser }) {
+    const { openMemberProfile } = useMemberProfile();
     const {
         attributes,
         listeners,
@@ -58,16 +58,15 @@ function SortableMember({ member }: { member: PMUser }) {
                 isDragging ? "opacity-30 grayscale" : "opacity-100"
             )}
         >
-            {/* Drag Handle - Needs to be separate or the Link will interfere with Drag?
-                Actually, putting Link *inside* non-drag areas is safer,
-                OR using the whole item as drag handle but handling click carefully.
-                Best pattern: Grip is drag handle. Content area is Link.
-            */}
+            {/* Drag Handle */}
             <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1">
                 <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-indigo-400 transition-colors" />
             </div>
 
-            <Link href={`/team/member/${encodeURIComponent(member.id)}?returnTab=assignments`} className="flex flex-1 items-center gap-3 min-w-0 hover:opacity-80 transition-opacity">
+            <button
+                onClick={() => openMemberProfile(member.id)}
+                className="flex flex-1 items-center gap-3 min-w-0 hover:opacity-80 transition-opacity text-left"
+            >
                 <Avatar className="w-9 h-9 border-2 border-white dark:border-gray-700 shadow-sm">
                     <AvatarImage src={member.avatar} />
                     <AvatarFallback className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300">
@@ -83,7 +82,7 @@ function SortableMember({ member }: { member: PMUser }) {
                         <p className="text-[10px] text-muted-foreground truncate opacity-80">{member.email}</p>
                     </div>
                 </div>
-            </Link>
+            </button>
         </div>
     );
 }
@@ -104,90 +103,103 @@ function ProjectStatusBadge({ status }: { status?: string }) {
     );
 }
 
-// --- Droppable Project Card ---
-function DroppableProject({ project, assignedMemberIds, members }: { project: Project, assignedMemberIds?: Set<string>, members: PMUser[] }) {
+// --- Clickable Member Pill for Project Cards ---
+function MemberPill({ member }: { member: PMUser }) {
+    const { openMemberProfile } = useMemberProfile();
+    return (
+        <button
+            onClick={() => openMemberProfile(member.id)}
+            className="flex items-center gap-1.5 pl-1 pr-2 py-1 bg-white dark:bg-gray-800 rounded-full border border-gray-100 dark:border-gray-700 shadow-sm hover:scale-105 transition-transform hover:border-indigo-200"
+            title={member.email}
+        >
+            <Avatar className="w-5 h-5">
+                <AvatarImage src={member.avatar} />
+                <AvatarFallback className="text-[9px]">{member.name[0]}</AvatarFallback>
+            </Avatar>
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300 max-w-[80px] truncate">
+                {member.name.split(' ')[0]}
+            </span>
+        </button>
+    );
+}
+
+// --- Droppable Project Row (Table-based layout) ---
+function DroppableProjectRow({ project, assignedMemberIds, members, taskCount }: { project: Project, assignedMemberIds?: Set<string>, members: PMUser[], taskCount: number }) {
     const { setNodeRef, isOver } = useDroppable({
         id: project.id,
     });
 
+    const assignedMembers = assignedMemberIds
+        ? Array.from(assignedMemberIds).map(id => members.find(m => m.id === id)).filter(Boolean) as PMUser[]
+        : [];
+
     return (
-        <Card className={cn(
-            "h-full transition-all duration-300 border overflow-hidden group",
-            isOver ? "ring-2 ring-indigo-500 shadow-xl scale-[1.02] border-indigo-500" : "border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
-        )}>
-            {/* Glassmorphic Header */}
-            <div className="relative bg-gradient-to-r from-gray-50 to-white dark:from-gray-900 dark:to-gray-800/50 p-3 border-b border-gray-100 dark:border-gray-800">
-                <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        <div className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center shadow-inner",
-                            "bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700",
-                            "text-gray-500 dark:text-gray-400"
-                        )}>
-                            <FolderKanban className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                            <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate" title={project.name}>
-                                {project.name}
-                            </h3>
-                            {project.status && <ProjectStatusBadge status={project.status} />}
-                        </div>
-                    </div>
-                </div>
+        <div
+            ref={setNodeRef}
+            className={cn(
+                "flex items-center gap-4 px-4 py-3 border-b border-gray-100 dark:border-gray-800 transition-all",
+                isOver
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-500 ring-inset"
+                    : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+            )}
+        >
+            {/* Project Icon */}
+            <div className={cn(
+                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                assignedMembers.length > 0
+                    ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-400"
+            )}>
+                <FolderKanban className="w-4 h-4" />
             </div>
 
-            {/* Content / Drop Zone */}
-            <div
-                ref={setNodeRef}
-                className={cn(
-                    "p-3 min-h-[140px] transition-colors relative",
-                    isOver ? "bg-indigo-50/50 dark:bg-indigo-900/20" : "bg-white dark:bg-gray-900/20"
+            {/* Project Name & Status */}
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate" title={project.name}>
+                        {project.name}
+                    </h3>
+                    {project.status && <ProjectStatusBadge status={project.status} />}
+                </div>
+                {taskCount > 0 && (
+                    <p className="text-xs text-muted-foreground">{taskCount} tasks</p>
                 )}
-            >
-                {/* Active Member Grid */}
-                {assignedMemberIds && assignedMemberIds.size > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                        {Array.from(assignedMemberIds).map(memberId => {
-                            const member = members.find(m => m.id === memberId);
-                            if (!member) return null;
-                            return (
-                                <Link
-                                    key={`${project.id}-${member.id}`}
-                                    href={`/team/member/${encodeURIComponent(member.id)}?returnTab=assignments`}
-                                    className="flex items-center gap-1.5 pl-1 pr-2 py-1 bg-white dark:bg-gray-800 rounded-full border border-gray-100 dark:border-gray-700 shadow-sm hover:scale-105 transition-transform hover:border-indigo-200"
-                                    title={member.email}
-                                >
-                                    <Avatar className="w-5 h-5">
-                                        <AvatarImage src={member.avatar} />
-                                        <AvatarFallback className="text-[9px]">{member.name[0]}</AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 max-w-[80px] truncate">
-                                        {member.name.split(' ')[0]}
-                                    </span>
-                                </Link>
-                            );
-                        })}
+            </div>
+
+            {/* Members */}
+            <div className="flex items-center gap-1 min-w-[200px]">
+                {assignedMembers.length > 0 ? (
+                    <div className="flex items-center -space-x-2">
+                        {assignedMembers.slice(0, 5).map(member => (
+                            <MemberPill key={member.id} member={member} />
+                        ))}
+                        {assignedMembers.length > 5 && (
+                            <span className="text-xs text-muted-foreground ml-2">+{assignedMembers.length - 5}</span>
+                        )}
                     </div>
                 ) : (
-                    <div className={cn(
-                        "h-full flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg transition-all",
+                    <span className={cn(
+                        "text-xs px-3 py-1 rounded-full border-2 border-dashed",
                         isOver
-                            ? "border-indigo-400 bg-indigo-50/30 dark:border-indigo-500/50"
-                            : "border-gray-100 dark:border-gray-800/50 text-gray-300 dark:text-gray-700"
+                            ? "border-indigo-400 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30"
+                            : "border-gray-200 dark:border-gray-700 text-gray-400"
                     )}>
-                        <UserPlus className={cn("w-6 h-6 mb-2 transition-colors", isOver ? "text-indigo-500" : "text-gray-300 dark:text-gray-700")} />
-                        <span className={cn("text-xs font-medium", isOver ? "text-indigo-600" : "text-muted-foreground")}>
-                            {isOver ? "Drop to assign!" : "Drop members here"}
-                        </span>
-                    </div>
-                )}
-
-                {/* Visual Overlay for Dragging Over */}
-                {isOver && (
-                    <div className="absolute inset-0 bg-indigo-500/5 pointer-events-none animate-pulse" />
+                        {isOver ? "Drop here!" : "No members"}
+                    </span>
                 )}
             </div>
-        </Card>
+
+            {/* Member Count Badge */}
+            <Badge
+                variant={assignedMembers.length > 0 ? "default" : "secondary"}
+                className={cn(
+                    "text-[10px] shrink-0",
+                    assignedMembers.length > 0 ? "bg-indigo-600" : ""
+                )}
+            >
+                {assignedMembers.length}
+            </Badge>
+        </div>
     );
 }
 
@@ -238,6 +250,53 @@ export function MemberMatrix() {
             m.email.toLowerCase().includes(q)
         );
     }, [members, searchQuery]);
+
+    // Sort Projects: Projects with team members first, then by name
+    const sortedProjects = useMemo(() => {
+        return [...projects].sort((a, b) => {
+            const aHasMembers = projectAssignments.has(a.id) && (projectAssignments.get(a.id)?.size || 0) > 0;
+            const bHasMembers = projectAssignments.has(b.id) && (projectAssignments.get(b.id)?.size || 0) > 0;
+
+            // Projects with members come first
+            if (aHasMembers && !bHasMembers) return -1;
+            if (!aHasMembers && bHasMembers) return 1;
+
+            // Within same category, sort by member count (descending), then by name
+            if (aHasMembers && bHasMembers) {
+                const aCount = projectAssignments.get(a.id)?.size || 0;
+                const bCount = projectAssignments.get(b.id)?.size || 0;
+                if (aCount !== bCount) return bCount - aCount;
+            }
+
+            return a.name.localeCompare(b.name);
+        });
+    }, [projects, projectAssignments]);
+
+    // Task count per project
+    const projectTaskCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        tasks.forEach((task: PMTask) => {
+            if (task.project_id) {
+                counts.set(task.project_id, (counts.get(task.project_id) || 0) + 1);
+            }
+        });
+        return counts;
+    }, [tasks]);
+
+    // Split into active (with members) and available (without)
+    const { activeProjects, availableProjects } = useMemo(() => {
+        const active: typeof projects = [];
+        const available: typeof projects = [];
+        sortedProjects.forEach(p => {
+            const hasMembers = projectAssignments.has(p.id) && (projectAssignments.get(p.id)?.size || 0) > 0;
+            if (hasMembers) {
+                active.push(p);
+            } else {
+                available.push(p);
+            }
+        });
+        return { activeProjects: active, availableProjects: available };
+    }, [sortedProjects, projectAssignments]);
 
     function handleDragStart(event: DragStartEvent) {
         setActiveId(event.active.id as string);
@@ -299,10 +358,10 @@ export function MemberMatrix() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
         >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-[750px] overflow-hidden">
+            <div className="flex gap-6 h-[calc(100vh-200px)] min-h-[600px]">
                 {/* --- Sidebar: Team Members --- */}
-                <Card className="col-span-1 h-full flex flex-col border-r shadow-none rounded-none md:rounded-lg md:border bg-gray-50/50 dark:bg-gray-900/20">
-                    <div className="p-4 border-b space-y-3 bg-white dark:bg-gray-900">
+                <Card className="w-[280px] shrink-0 h-full flex flex-col border-r shadow-none rounded-lg border bg-gray-50/50 dark:bg-gray-900/20">
+                    <div className="p-4 border-b space-y-3 bg-white dark:bg-gray-900 shrink-0">
                         <div className="flex items-center justify-between">
                             <h3 className="font-semibold text-sm">Team Roster</h3>
                             <Badge variant="secondary" className="text-[10px] h-5">{filteredMembers.length}</Badge>
@@ -332,22 +391,63 @@ export function MemberMatrix() {
                     </ScrollArea>
                 </Card>
 
-                {/* --- Main: Project Grid --- */}
-                <div className="col-span-3 h-full flex flex-col">
-                    <ScrollArea className="h-full pr-4 pb-20">
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-10">
-                            {projects.map(project => {
-                                const assignedMemberIds = projectAssignments.get(project.id);
-                                return (
-                                    <div key={project.id} className="h-full">
-                                        <DroppableProject
-                                            project={project}
-                                            assignedMemberIds={assignedMemberIds}
-                                            members={members}
-                                        />
-                                    </div>
-                                );
-                            })}
+                {/* --- Main: Project Table --- */}
+                <div className="flex-1 h-full overflow-hidden">
+                    <ScrollArea className="h-full">
+                        <div className="pr-4 pb-10 space-y-4">
+                            {/* Active Projects Section */}
+                            {activeProjects.length > 0 && (
+                                <Card className="overflow-hidden">
+                                    <CardHeader className="py-3 bg-gradient-to-r from-indigo-50 to-white dark:from-indigo-900/20 dark:to-gray-900 border-b">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Users className="w-4 h-4 text-indigo-600" />
+                                                <CardTitle className="text-sm">Active Projects</CardTitle>
+                                            </div>
+                                            <Badge className="bg-indigo-600">{activeProjects.length}</Badge>
+                                        </div>
+                                        <CardDescription className="text-xs">Projects with team members assigned</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        {activeProjects.map(project => (
+                                            <DroppableProjectRow
+                                                key={project.id}
+                                                project={project}
+                                                assignedMemberIds={projectAssignments.get(project.id)}
+                                                members={members}
+                                                taskCount={projectTaskCounts.get(project.id) || 0}
+                                            />
+                                        ))}
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {/* Available Projects Section */}
+                            {availableProjects.length > 0 && (
+                                <Card className="overflow-hidden">
+                                    <CardHeader className="py-3 bg-gray-50 dark:bg-gray-900 border-b">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Briefcase className="w-4 h-4 text-gray-400" />
+                                                <CardTitle className="text-sm text-muted-foreground">Available Projects</CardTitle>
+                                            </div>
+                                            <Badge variant="secondary">{availableProjects.length}</Badge>
+                                        </div>
+                                        <CardDescription className="text-xs">Drop team members to assign</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        {availableProjects.map(project => (
+                                            <DroppableProjectRow
+                                                key={project.id}
+                                                project={project}
+                                                assignedMemberIds={projectAssignments.get(project.id)}
+                                                members={members}
+                                                taskCount={projectTaskCounts.get(project.id) || 0}
+                                            />
+                                        ))}
+                                    </CardContent>
+                                </Card>
+                            )}
                         </div>
                     </ScrollArea>
                 </div>

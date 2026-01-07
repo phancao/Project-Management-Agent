@@ -20,6 +20,7 @@ export async function listTasks(filters: {
     project_id?: string,
     status?: string // 'open' = only active tasks, 'all' = include closed
 }): Promise<PMTask[]> {
+    console.log('[DEBUG API] listTasks called - filters:', filters);
     const params = new URLSearchParams();
 
     // For now, if we have specific filters supported by API, add them.

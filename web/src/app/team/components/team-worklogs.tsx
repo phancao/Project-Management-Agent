@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Button } from "~/components/ui/button"
 import { useTeamDataContext, useTeamUsers, useTeamTimeEntries } from "../context/team-data-context"
@@ -9,6 +8,7 @@ import { ChevronLeft, ChevronRight, Users, Loader2 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar"
 import { Badge } from "~/components/ui/badge"
 import { cn } from "~/lib/utils"
+import { useMemberProfile } from "../page"
 
 interface TeamData {
     id: string
@@ -60,6 +60,25 @@ interface MemberWorklogRow {
     isUnderUtilized: boolean // <40h/week
 }
 
+// Clickable avatar cell that opens member profile dialog
+function MemberAvatarCell({ member }: { member: MemberWorklogRow }) {
+    const { openMemberProfile } = useMemberProfile();
+    return (
+        <button
+            onClick={() => openMemberProfile(member.id)}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left"
+        >
+            <Avatar className="w-7 h-7">
+                <AvatarImage src={member.avatar} />
+                <AvatarFallback className="text-xs">{member.name?.[0]}</AvatarFallback>
+            </Avatar>
+            <span className="text-sm font-medium truncate max-w-[150px] hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                {member.name}
+            </span>
+        </button>
+    );
+}
+
 // Individual team card component with its own state
 function TeamWorklogCard({ team }: { team: TeamData }) {
     const [weekOffset, setWeekOffset] = useState(0)
@@ -93,7 +112,9 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
         if (isInitialLoading) return []
 
         return teamMembers.map(user => {
+            // Both user.id and time_entry.user_id are now composite IDs (provider:shortId)
             const userEntries = teamTimeEntries.filter(e => e.user_id === user.id)
+
             const dailyHours = weekRange.weekDays.map(day => {
                 const dateKey = formatDateKey(day)
                 const dayEntries = userEntries.filter(e => e.date?.startsWith(dateKey))
@@ -194,18 +215,7 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
                                     )}
                                 >
                                     <td className="p-2">
-                                        <Link
-                                            href={`/team/member/${encodeURIComponent(member.id)}?returnTab=worklogs`}
-                                            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-                                        >
-                                            <Avatar className="w-7 h-7">
-                                                <AvatarImage src={member.avatar} />
-                                                <AvatarFallback className="text-xs">{member.name?.[0]}</AvatarFallback>
-                                            </Avatar>
-                                            <span className="text-sm font-medium truncate max-w-[150px] hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                                                {member.name}
-                                            </span>
-                                        </Link>
+                                        <MemberAvatarCell member={member} />
                                     </td>
                                     {member.dailyHours.map((hours: number, dayIndex: number) => {
                                         const isWeekday = dayIndex < 5

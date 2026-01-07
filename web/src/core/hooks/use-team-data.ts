@@ -1,22 +1,32 @@
 import { useQuery, useQueries } from "@tanstack/react-query";
-import { listUsers, type PMUser } from "../api/pm/users";
+import { getUser, type PMUser } from "../api/pm/users";
 import { listTasks, type PMTask } from "../api/pm/tasks";
 import { listTimeEntries, type PMTimeEntry } from "../api/pm/time-entries";
 import { useMemo } from "react";
 
 export function useTeamData(memberIds: string[]) {
-    // 1. Fetch All Users (to resolve member details)
-    // In a real large app, we might want to fetch only specific IDs, but our API list_users fetches all.
-    // Client-side filtering is fine for now (< 1000 users).
-    // Cache users for 5 minutes to avoid refetching on every search
-    const usersQuery = useQuery({
-        queryKey: ['pm', 'users'],
-        queryFn: () => listUsers(),
-        staleTime: 5 * 60 * 1000, // 5 minutes - don't refetch if data is less than 5 mins old
-        gcTime: 10 * 60 * 1000,   // 10 minutes - keep in cache for 10 mins
+    // DEBUG: Log when this hook is called
+    console.log('[DEBUG] useTeamData (use-team-data.ts) called with', memberIds.length, 'memberIds:', memberIds);
+
+    // 1. Fetch ONLY specific team members by ID (not all 500 users)
+    const userQueries = useQueries({
+        queries: memberIds.map(memberId => ({
+            queryKey: ['pm', 'user', memberId],
+            queryFn: () => getUser(memberId),
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            gcTime: 10 * 60 * 1000,   // 10 minutes
+            retry: false, // Don't retry - user might not exist
+        })),
     });
 
-    const teamMembers = (usersQuery.data || []).filter(u => memberIds.includes(u.id));
+    const teamMembers = useMemo(() => {
+        return userQueries
+            .filter(q => q.data)
+            .map(q => q.data as PMUser);
+    }, [userQueries]);
+
+    // Empty memberIds is valid (no members), not a loading state
+    const isLoadingUsers = memberIds.length > 0 && userQueries.some(q => q.isLoading);
 
     // 2. Fetch Tasks for Team Members - PARALLEL per-member fetching
     // Backend only supports single assignee_id, so we fetch in parallel for each member
@@ -41,8 +51,8 @@ export function useTeamData(memberIds: string[]) {
         return Array.from(taskMap.values());
     }, [taskQueries]);
 
-    // IMPORTANT: If memberIds is empty, we're still waiting for member data
-    const isLoadingTasks = memberIds.length === 0 || taskQueries.some(q => q.isLoading);
+    // Empty memberIds is valid (no tasks), not a loading state
+    const isLoadingTasks = memberIds.length > 0 && taskQueries.some(q => q.isLoading);
 
     // 3. Fetch Time Entries (e.g., last 30 days)
     const timeQuery = useQuery({
@@ -63,17 +73,17 @@ export function useTeamData(memberIds: string[]) {
         members: teamMembers,
         tasks: teamTasks,
         timeEntries: teamTimeEntries,
-        isLoading: usersQuery.isLoading || isLoadingTasks || timeQuery.isLoading,
+        isLoading: isLoadingUsers || isLoadingTasks || timeQuery.isLoading,
         // Granular loading states for transparent progress indicators
-        isLoadingUsers: usersQuery.isLoading,
+        isLoadingUsers,
         isLoadingTasks,
         isLoadingTimeEntries: timeQuery.isLoading,
         // Error states
-        error: usersQuery.error || taskQueries.find(q => q.error)?.error || timeQuery.error,
-        // Expose raw users for "Add Member" search
-        allUsers: usersQuery.data || [],
+        error: userQueries.find(q => q.error)?.error || taskQueries.find(q => q.error)?.error || timeQuery.error,
+        // Expose team members (not all users - that's deprecated)
+        allUsers: teamMembers,
         // Data counts for display
-        usersCount: usersQuery.data?.length || 0,
+        usersCount: teamMembers.length,
         tasksCount: teamTasks.length,
         timeEntriesCount: timeQuery.data?.length || 0,
     };

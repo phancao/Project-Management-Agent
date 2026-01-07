@@ -255,8 +255,22 @@ class PMHandler:
         return projects
     
     async def get_project(self, project_id: str) -> Optional[dict[str, Any]]:
-        """Get project by ID."""
+        """Get project by ID. Returns project with composite ID (provider:shortId) for multi-provider safety."""
         provider_id, actual_id = self._parse_composite_id(project_id)
+        
+        def _wrap_composite_id(entity_dict: dict, provider_conn) -> dict:
+            """Helper to wrap entity ID with provider prefix."""
+            provider_id_prefix = (
+                str(provider_conn.backend_provider_id) 
+                if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                else str(provider_conn.id)
+            )
+            original_id = str(entity_dict.get("id", ""))
+            if ":" not in original_id:
+                entity_dict["id"] = f"{provider_id_prefix}:{original_id}"
+            entity_dict["provider_id"] = str(provider_conn.id)
+            entity_dict["provider_name"] = provider_conn.name
+            return entity_dict
         
         if provider_id:
             provider_conn = self.get_provider_by_id(provider_id)
@@ -266,9 +280,7 @@ class PMHandler:
                     project = await provider.get_project(actual_id)
                     if project:
                         project_dict = self._to_dict(project)
-                        project_dict["provider_id"] = str(provider_conn.id)
-                        project_dict["provider_name"] = provider_conn.name
-                        return project_dict
+                        return _wrap_composite_id(project_dict, provider_conn)
                 except Exception as e:
                     self.record_error(provider_id, e)
         
@@ -279,9 +291,7 @@ class PMHandler:
                 project = await provider.get_project(actual_id)
                 if project:
                     project_dict = self._to_dict(project)
-                    project_dict["provider_id"] = str(provider_conn.id)
-                    project_dict["provider_name"] = provider_conn.name
-                    return project_dict
+                    return _wrap_composite_id(project_dict, provider_conn)
             except Exception as e:
                 continue
         
@@ -436,7 +446,7 @@ class PMHandler:
         return tasks
     
     async def get_task(self, task_id: str) -> Optional[dict[str, Any]]:
-        """Get task by ID."""
+        """Get task by ID. Returns task with composite ID (provider:shortId) for multi-provider safety."""
         provider_id, actual_id = self._parse_composite_id(task_id)
         
         if provider_id:
@@ -447,6 +457,15 @@ class PMHandler:
                     task = await provider.get_task(actual_id)
                     if task:
                         task_dict = self._to_dict(task)
+                        # Ensure ID is composite for multi-provider safety
+                        provider_id_prefix = (
+                            str(provider_conn.backend_provider_id) 
+                            if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                            else str(provider_conn.id)
+                        )
+                        original_id = str(task_dict.get("id", ""))
+                        if ":" not in original_id:
+                            task_dict["id"] = f"{provider_id_prefix}:{original_id}"
                         task_dict["provider_id"] = str(provider_conn.id)
                         task_dict["provider_name"] = provider_conn.name
                         return task_dict
@@ -498,6 +517,15 @@ class PMHandler:
         
         if task:
             task_dict = self._to_dict(task)
+            # Ensure ID is composite for multi-provider safety
+            provider_id_prefix = (
+                str(provider_conn.backend_provider_id) 
+                if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                else str(provider_conn.id)
+            )
+            original_id = str(task_dict.get("id", ""))
+            if ":" not in original_id:
+                task_dict["id"] = f"{provider_id_prefix}:{original_id}"
             task_dict["provider_id"] = str(provider_conn.id)
             task_dict["provider_name"] = provider_conn.name
             return task_dict
@@ -524,6 +552,15 @@ class PMHandler:
         
         if task:
             task_dict = self._to_dict(task)
+            # Ensure ID is composite for multi-provider safety
+            provider_id_prefix = (
+                str(provider_conn.backend_provider_id) 
+                if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                else str(provider_conn.id)
+            )
+            original_id = str(task_dict.get("id", ""))
+            if ":" not in original_id:
+                task_dict["id"] = f"{provider_id_prefix}:{original_id}"
             task_dict["provider_id"] = str(provider_conn.id)
             task_dict["provider_name"] = provider_conn.name
             return task_dict
@@ -611,8 +648,22 @@ class PMHandler:
         return sprints
     
     async def get_sprint(self, sprint_id: str) -> Optional[dict[str, Any]]:
-        """Get sprint by ID."""
+        """Get sprint by ID. Returns sprint with composite ID (provider:shortId) for multi-provider safety."""
         provider_id, actual_id = self._parse_composite_id(sprint_id)
+        
+        def _wrap_composite_id(entity_dict: dict, provider_conn) -> dict:
+            """Helper to wrap entity ID with provider prefix."""
+            provider_id_prefix = (
+                str(provider_conn.backend_provider_id) 
+                if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                else str(provider_conn.id)
+            )
+            original_id = str(entity_dict.get("id", ""))
+            if ":" not in original_id:
+                entity_dict["id"] = f"{provider_id_prefix}:{original_id}"
+            entity_dict["provider_id"] = str(provider_conn.id)
+            entity_dict["provider_name"] = provider_conn.name
+            return entity_dict
         
         if provider_id:
             # Provider ID specified - use that provider
@@ -623,9 +674,7 @@ class PMHandler:
                     sprint = await provider.get_sprint(actual_id)
                     if sprint:
                         sprint_dict = self._to_dict(sprint)
-                        sprint_dict["provider_id"] = str(provider_conn.id)
-                        sprint_dict["provider_name"] = provider_conn.name
-                        return sprint_dict
+                        return _wrap_composite_id(sprint_dict, provider_conn)
                 except Exception as e:
                     self.record_error(provider_id, e)
         else:
@@ -636,9 +685,7 @@ class PMHandler:
                     sprint = await provider.get_sprint(actual_id)
                     if sprint:
                         sprint_dict = self._to_dict(sprint)
-                        sprint_dict["provider_id"] = str(provider_conn.id)
-                        sprint_dict["provider_name"] = provider_conn.name
-                        return sprint_dict
+                        return _wrap_composite_id(sprint_dict, provider_conn)
                 except Exception as e:
                     self.record_error(str(provider_conn.id), e)
                     continue
@@ -722,7 +769,7 @@ class PMHandler:
         return users
     
     async def get_user(self, user_id: str) -> Optional[dict[str, Any]]:
-        """Get user by ID."""
+        """Get user by ID. Returns user with composite ID (provider:shortId) for multi-provider safety."""
         provider_id, actual_id = self._parse_composite_id(user_id)
         
         if provider_id:
@@ -733,6 +780,15 @@ class PMHandler:
                     user = await provider.get_user(actual_id)
                     if user:
                         user_dict = self._to_dict(user)
+                        # Ensure ID is composite for multi-provider safety
+                        provider_id_prefix = (
+                            str(provider_conn.backend_provider_id) 
+                            if hasattr(provider_conn, 'backend_provider_id') and provider_conn.backend_provider_id
+                            else str(provider_conn.id)
+                        )
+                        original_id = str(user_dict.get("id", ""))
+                        if ":" not in original_id:
+                            user_dict["id"] = f"{provider_id_prefix}:{original_id}"
                         user_dict["provider_id"] = str(provider_conn.id)
                         user_dict["provider_name"] = provider_conn.name
                         return user_dict

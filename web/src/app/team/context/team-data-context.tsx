@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useQuery, useQueries, type UseQueryResult } from "@tanstack/react-query";
-import { listUsers, type PMUser } from "~/core/api/pm/users";
+import { listUsers, getUser, type PMUser } from "~/core/api/pm/users";
 import { listTasks, type PMTask } from "~/core/api/pm/tasks";
 import { listTimeEntries, type PMTimeEntry } from "~/core/api/pm/time-entries";
 import { useTeams } from "~/core/hooks/use-teams";
@@ -44,9 +44,14 @@ export function TeamDataProvider({ children }: TeamDataProviderProps) {
     // 1. Fetch Teams (essential - quick load)
     const { teams, isLoading: isLoadingTeams } = useTeams();
 
+    // DEBUG: Log teams and their member IDs
+    console.log('[DEBUG] TeamDataProvider - teams:', teams.map(t => ({ id: t.id, name: t.name, memberIds: t.memberIds })));
+
     // 2. Deduplicate all member IDs from teams
     const allMemberIds = useMemo(() => {
-        return Array.from(new Set(teams.flatMap(t => t.memberIds)));
+        const ids = Array.from(new Set(teams.flatMap(t => t.memberIds)));
+        console.log('[DEBUG] allMemberIds computed:', ids);
+        return ids;
     }, [teams]);
 
     // 3. Fetch Projects (essential - quick load)
@@ -95,29 +100,43 @@ export function useTeamDataContext(): TeamDataContextValue {
 
 /**
  * Hook for tabs that need users data.
- * Call this within components that need users.
+ * Fetches ONLY the specific team members by ID (not all 500 users).
  */
 export function useTeamUsers(memberIds: string[]) {
-    const usersQuery = useQuery({
-        queryKey: ['pm', 'users'],
-        queryFn: () => listUsers(),
-        staleTime: 5 * 60 * 1000, // 5 minutes
-        gcTime: 10 * 60 * 1000,   // 10 minutes
+    // DEBUG: Log when this hook is called
+    console.log('[DEBUG] useTeamUsers called with', memberIds.length, 'memberIds:', memberIds);
+
+    // Fetch each team member in parallel by their ID
+    const userQueries = useQueries({
+        queries: memberIds.map(memberId => ({
+            queryKey: ['pm', 'user', memberId],
+            queryFn: () => getUser(memberId),
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            gcTime: 10 * 60 * 1000,   // 10 minutes
+            retry: false, // Don't retry - user might not exist for this provider
+        })),
     });
 
-    const allUsers = usersQuery.data || [];
-    const teamMembers = useMemo(() =>
-        allUsers.filter(u => memberIds.includes(u.id)),
-        [allUsers, memberIds]
-    );
+    // Combine all results into teamMembers array
+    const teamMembers = useMemo(() => {
+        return userQueries
+            .filter(q => q.data)
+            .map(q => q.data as PMUser);
+    }, [userQueries]);
+
+    // Empty memberIds is a valid state (no members), not a loading state
+    // Only loading if we have queries that are actively loading
+    const isLoading = memberIds.length > 0 && userQueries.some(q => q.isLoading);
+    const isFetching = userQueries.some(q => q.isFetching);
+    const error = userQueries.find(q => q.error)?.error || null;
 
     return {
-        allUsers,
+        allUsers: teamMembers, // Now just returns team members, not all 500 users
         teamMembers,
-        isLoading: usersQuery.isLoading,
-        isFetching: usersQuery.isFetching,
-        error: usersQuery.error,
-        count: allUsers.length,
+        isLoading,
+        isFetching,
+        error,
+        count: teamMembers.length,
     };
 }
 
@@ -127,6 +146,9 @@ export function useTeamUsers(memberIds: string[]) {
  * This avoids fetching 87k+ tasks globally while still getting all team tasks.
  */
 export function useTeamTasks(memberIds: string[]) {
+    // DEBUG: Log when this hook is called
+    console.log('[DEBUG] useTeamTasks called with', memberIds.length, 'memberIds:', memberIds);
+
     // Create a query for each member - React Query will batch and parallelize these
     // Use status='open' to only fetch active tasks (excludes closed/done)
     const taskQueries = useQueries({
@@ -152,9 +174,9 @@ export function useTeamTasks(memberIds: string[]) {
     // teamTasks is the same as allTasks (already filtered by member)
     const teamTasks = allTasks;
 
-    // IMPORTANT: If memberIds is empty, we're still waiting for member data to load
-    // so isLoading should be true (not false from empty useQueries array)
-    const isLoading = memberIds.length === 0 || taskQueries.some(q => q.isLoading);
+    // Empty memberIds is a valid state (no tasks), not a loading state
+    // Only loading if we have queries that are actively loading
+    const isLoading = memberIds.length > 0 && taskQueries.some(q => q.isLoading);
     const isFetching = taskQueries.some(q => q.isFetching);
     const error = taskQueries.find(q => q.error)?.error || null;
 
@@ -197,5 +219,28 @@ export function useTeamTimeEntries(memberIds: string[], options?: { startDate?: 
         isFetching: timeQuery.isFetching,
         error: timeQuery.error,
         count: allTimeEntries.length,
+    };
+}
+
+/**
+ * Hook for components that need ALL users (e.g., Add Member dropdown).
+ * This is a lazy-loaded hook - set enabled=true only when the dropdown is opened.
+ * This avoids loading 500+ users upfront when not needed.
+ */
+export function useAllUsers(enabled: boolean = false) {
+    const usersQuery = useQuery({
+        queryKey: ['pm', 'users', 'all'],
+        queryFn: () => listUsers(),
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        gcTime: 10 * 60 * 1000,   // 10 minutes
+        enabled, // Only fetch when explicitly enabled
+    });
+
+    return {
+        allUsers: usersQuery.data || [],
+        isLoading: usersQuery.isLoading,
+        isFetching: usersQuery.isFetching,
+        error: usersQuery.error,
+        count: (usersQuery.data || []).length,
     };
 }

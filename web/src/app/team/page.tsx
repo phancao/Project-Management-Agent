@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, createContext, useContext } from 'react';
 import { PMHeader } from "../pm/components/pm-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 // @ts-expect-error - Direct import
@@ -15,6 +15,21 @@ import { MemberMatrix } from "./components/member-matrix";
 import { TeamWorklogs } from "./components/team-worklogs";
 import { useTeamDataContext } from "./context/team-data-context";
 import { TeamPageLoadingOverlay } from "./components/team-page-loading-overlay";
+import { MemberProfileDialog } from "./components/member-profile-dialog";
+
+// Context for member profile dialog
+interface MemberProfileContextType {
+    openMemberProfile: (memberId: string) => void;
+}
+const MemberProfileContext = createContext<MemberProfileContextType | null>(null);
+
+export function useMemberProfile() {
+    const context = useContext(MemberProfileContext);
+    if (!context) {
+        throw new Error('useMemberProfile must be used within MemberProfileProvider');
+    }
+    return context;
+}
 
 /**
  * TeamContent renders the tabs only after the initial blocking load is complete.
@@ -70,8 +85,17 @@ function TeamContent() {
 }
 
 export default function TeamPage() {
+    // State for member profile dialog
+    const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+    const [dialogOpen, setDialogOpen] = useState(false);
+
+    const openMemberProfile = (memberId: string) => {
+        setSelectedMemberId(memberId);
+        setDialogOpen(true);
+    };
+
     return (
-        <>
+        <MemberProfileContext.Provider value={{ openMemberProfile }}>
             <TeamPageLoadingOverlay />
             <div className="min-h-screen bg-white dark:bg-gray-950">
                 <PMHeader />
@@ -89,6 +113,13 @@ export default function TeamPage() {
                     <TeamContent />
                 </div>
             </div>
-        </>
+
+            {/* Member Profile Dialog */}
+            <MemberProfileDialog
+                memberId={selectedMemberId}
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+            />
+        </MemberProfileContext.Provider>
     );
 }

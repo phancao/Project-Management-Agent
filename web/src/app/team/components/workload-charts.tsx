@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, ReferenceLine, Cell } from "recharts"
 import { useTeamDataContext, useTeamUsers, useTeamTasks, useTeamTimeEntries } from "../context/team-data-context"
+import { extractShortId } from "~/core/api/pm/users"
 import { Loader2, Info, ChevronLeft, ChevronRight, Users } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover"
 import { Button } from "~/components/ui/button"
@@ -99,13 +100,25 @@ export function WorkloadCharts() {
     // - Time Remaining: Sum of (estimated_hours - logged_hours) for each incomplete task
     const workloadData = useMemo(() => {
         return members.map(member => {
+            // Use shortId for matching with task/time entry data
+            const memberShortId = member.shortId || extractShortId(member.id);
+
             // 1. Time Spent this week (from time entries)
-            const memberTimeEntries = timeEntries.filter(te => te.user_id === member.id);
+            // Match using both shortId and full ID for compatibility
+            const memberTimeEntries = timeEntries.filter(te =>
+                te.user_id === member.id ||
+                te.user_id === memberShortId ||
+                extractShortId(te.user_id) === memberShortId
+            );
             const timeSpent = memberTimeEntries.reduce((sum, te) => sum + (te.hours || 0), 0);
 
             // 2. Get incomplete tasks assigned to this member
+            // Match using both shortId and full ID for compatibility
             const memberTasks = tasks.filter(t => {
-                const isAssigned = t.assignee_id === member.id;
+                const taskAssigneeShortId = t.assignee_id ? extractShortId(t.assignee_id) : '';
+                const isAssigned = t.assignee_id === member.id ||
+                    t.assignee_id === memberShortId ||
+                    taskAssigneeShortId === memberShortId;
                 const isCompleted = COMPLETED_STATUSES.includes((t.status || '').toLowerCase());
                 const isParent = t.has_children === true; // Strict check for boolean true
 
@@ -255,6 +268,14 @@ export function WorkloadCharts() {
                                                 • Total &gt; 40h: Overassigned (may need OT)<br />
                                                 • Total ≈ 40h: Optimal workload<br />
                                                 • Total &lt; 32h: Has free capacity
+                                            </p>
+                                        </div>
+                                        <div className="text-sm space-y-1 pt-2 border-t">
+                                            <p className="pt-2"><strong>Task Counts:</strong></p>
+                                            <p className="text-muted-foreground">
+                                                This chart shows only <strong>active leaf tasks</strong> (incomplete tasks without sub-tasks)
+                                                to calculate remaining work. This may differ from &quot;Total Tasks&quot; which includes
+                                                all assigned tasks (completed + parent tasks).
                                             </p>
                                         </div>
                                     </div>

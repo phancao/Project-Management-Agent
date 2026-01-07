@@ -627,7 +627,7 @@ function TimelineContent({
             <BarChart
               data={taskChart.data}
               layout="vertical"
-              margin={{ top: 8, right: 16, left: 160, bottom: 8 }}
+              margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
               barSize={18}
               barCategoryGap="20%"
             >

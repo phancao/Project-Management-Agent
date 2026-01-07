@@ -300,10 +300,12 @@ function TimelineContent({
   const assigneeOptions = useMemo(() => {
     const map = new Map<string, string>();
     scheduledTasks.forEach((task) => {
-      // Use assignee_id as the key, but ALWAYS show assigned_to (name) as label
-      const key = task.assignee_id ?? (task.assigned_to ? `name:${task.assigned_to}` : UNASSIGNED_KEY);
-      // Always prefer the name (assigned_to), never show ID
-      const label = task.assigned_to || "Unassigned";
+      // Use assignee_name (PM Service) or assigned_to (legacy) for the display name
+      const assigneeName = task.assignee_name ?? task.assigned_to;
+      // Use assignee_id as the key, or construct from name
+      const key = task.assignee_id ?? (assigneeName ? `name:${assigneeName}` : UNASSIGNED_KEY);
+      // Always prefer the name, never show ID
+      const label = assigneeName || "Unassigned";
       if (!map.has(key)) {
         map.set(key, label);
       }

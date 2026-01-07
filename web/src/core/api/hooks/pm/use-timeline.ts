@@ -31,7 +31,8 @@ export interface TimelineTask {
   sprint_start_date?: string | null;
   sprint_end_date?: string | null;
   assignee_id?: string | null;
-  assigned_to?: string | null;
+  assignee_name?: string | null;  // From PM Service
+  assigned_to?: string | null;    // Legacy/alias
   duration_days?: number | null;
   is_scheduled: boolean;
   missing_reason?: string | null;

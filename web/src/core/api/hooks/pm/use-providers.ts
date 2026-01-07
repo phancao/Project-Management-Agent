@@ -35,6 +35,17 @@ export function useProviders(): {
         if (p.base_url) {
           urlMap.set(p.id, p.base_url);
         }
+
+        // Also map by backend_provider_id if present (used by OpenProject v13)
+        // Project IDs use this format: "<backend_provider_id>:<project_id>"
+        const backendProviderId = p.additional_config?.backend_provider_id;
+        if (backendProviderId && typeof backendProviderId === 'string') {
+          typeMap.set(backendProviderId, p.provider_type);
+          if (p.base_url) {
+            urlMap.set(backendProviderId, p.base_url);
+          }
+        }
+
         providerList.push({
           id: p.id,
           provider_type: p.provider_type,

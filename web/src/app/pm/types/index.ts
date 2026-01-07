@@ -81,6 +81,10 @@ export interface ProviderConfig {
   username?: string;
   organization_id?: string;
   workspace_id?: string;
+  additional_config?: {
+    backend_provider_id?: string;
+    [key: string]: unknown;
+  };
 }
 
 export type PMView = "backlog" | "board" | "charts" | "timeline" | "team";

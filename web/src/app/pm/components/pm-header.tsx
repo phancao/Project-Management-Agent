@@ -69,7 +69,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
 
   // Helper to get provider badge component
   const getProviderBadge = (providerType: string | null) => {
-    if (!providerType) return null;
+    // getProviderBadgeConfig handles null by returning "??" badge
     const config = getProviderBadgeConfig(providerType);
     return (
       <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${config.color}`}>

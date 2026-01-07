@@ -17,6 +17,11 @@ export interface ProviderConfig {
   is_active?: boolean;
   // MCP Server provider ID - used for AI Agent context
   mcp_provider_id?: string;
+  // Additional configuration from backend
+  additional_config?: {
+    backend_provider_id?: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface ProjectImportRequest {
@@ -122,6 +127,8 @@ export async function listProviders(includeDisabled: boolean = false): Promise<P
         is_active: p.is_active ?? true,
         // Include MCP provider ID for AI Agent context
         mcp_provider_id: p.mcp_provider_id,
+        // Include additional_config for backend_provider_id mapping
+        additional_config: p.additional_config,
       }));
   } catch (error) {
     clearTimeout(timeoutId);

@@ -3968,10 +3968,16 @@ async def pm_list_providers(request: Request, include_disabled: bool = False):
         try:
             query = db.query(PMProviderConnection)
             
-            # Filter by user if authenticated
+            # Filter by user if authenticated - include user's providers AND shared providers (NULL)
             if user_id:
                 from uuid import UUID
-                query = query.filter(PMProviderConnection.created_by == UUID(user_id))
+                from sqlalchemy import or_
+                query = query.filter(
+                    or_(
+                        PMProviderConnection.created_by == UUID(user_id),
+                        PMProviderConnection.created_by.is_(None)
+                    )
+                )
             
             if not include_disabled:
                 query = query.filter(PMProviderConnection.is_active.is_(True))

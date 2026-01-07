@@ -107,9 +107,14 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
     const isInitialLoading = isLoadingUsers || isLoadingTimeEntries
     const showLoadingOverlay = isFetching
 
+    // Detect if team has members in localStorage but none could be fetched (provider inactive)
+    const hasStaleProviderData = !isInitialLoading &&
+        team.memberIds.length > 0 &&
+        teamMembers.length === 0;
+
     // Build worklog data
     const worklogData = useMemo((): MemberWorklogRow[] => {
-        if (isInitialLoading) return []
+        if (isInitialLoading || hasStaleProviderData) return []
 
         return teamMembers.map(user => {
             // Both user.id and time_entry.user_id are now composite IDs (provider:shortId)
@@ -130,10 +135,10 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
                 isUnderUtilized: totalHours < 40
             }
         }).sort((a, b) => a.totalHours - b.totalHours)
-    }, [teamMembers, teamTimeEntries, weekRange.weekDays, isInitialLoading])
+    }, [teamMembers, teamTimeEntries, weekRange.weekDays, isInitialLoading, hasStaleProviderData])
 
-    // Don't render cards for empty teams (after initial load)
-    if (!isInitialLoading && worklogData.length === 0) return null
+    // Don't render cards for truly empty teams (no members defined)
+    if (!isInitialLoading && team.memberIds.length === 0) return null
 
     const isCurrentWeek = weekOffset === 0
 
@@ -189,69 +194,78 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
                         <Loader2 className="w-6 h-6 animate-spin text-primary" />
                     </div>
                 )}
-                <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                        <thead>
-                            <tr className="border-b">
-                                <th className="text-left p-2 font-medium text-sm w-[200px]">Member</th>
-                                {DAY_NAMES.map((day, i) => (
-                                    <th key={day} className="text-center p-2 font-medium text-sm min-w-[60px]">
-                                        <div>{day}</div>
-                                        <div className="text-xs text-muted-foreground font-normal">
-                                            {formatDateDisplay(weekRange.weekDays[i]!)}
-                                        </div>
-                                    </th>
-                                ))}
-                                <th className="text-center p-2 font-medium text-sm min-w-[70px] bg-muted/50">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {worklogData.map((member: MemberWorklogRow) => (
-                                <tr
-                                    key={member.id}
-                                    className={cn(
-                                        "border-b hover:bg-muted/30 transition-colors",
-                                        member.isUnderUtilized && "bg-red-50 dark:bg-red-950/20"
-                                    )}
-                                >
-                                    <td className="p-2">
-                                        <MemberAvatarCell member={member} />
-                                    </td>
-                                    {member.dailyHours.map((hours: number, dayIndex: number) => {
-                                        const isWeekday = dayIndex < 5
-                                        const isFullyLogged = hours >= 8
-                                        const isPartiallyLogged = hours > 0 && hours < 8
-                                        const isUnlogged = hours === 0
 
-                                        return (
-                                            <td
-                                                key={dayIndex}
-                                                className={cn(
-                                                    "text-center p-2 text-sm tabular-nums font-medium",
-                                                    isWeekday && isFullyLogged && "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40",
-                                                    isWeekday && isPartiallyLogged && "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40",
-                                                    isWeekday && isUnlogged && "text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-950/50 font-bold",
-                                                    !isWeekday && hours === 0 && "text-muted-foreground/50",
-                                                    !isWeekday && hours > 0 && "text-blue-500 dark:text-blue-400"
-                                                )}
-                                            >
-                                                {hours}h
-                                            </td>
-                                        )
-                                    })}
-                                    <td className={cn(
-                                        "text-center p-2 text-sm font-bold tabular-nums bg-muted/50",
-                                        member.totalHours >= 40 && "text-emerald-600 dark:text-emerald-400",
-                                        member.totalHours > 0 && member.totalHours < 40 && "text-amber-600 dark:text-amber-400",
-                                        member.totalHours === 0 && "text-red-500 dark:text-red-400"
-                                    )}>
-                                        {member.totalHours}h
-                                    </td>
+                {/* Show message if provider is inactive */}
+                {hasStaleProviderData ? (
+                    <div className="py-8 text-center text-muted-foreground">
+                        <p className="text-sm">Provider unavailable or disabled</p>
+                        <p className="text-xs mt-1">This team's members belong to an inactive provider.</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                            <thead>
+                                <tr className="border-b">
+                                    <th className="text-left p-2 font-medium text-sm w-[200px]">Member</th>
+                                    {DAY_NAMES.map((day, i) => (
+                                        <th key={day} className="text-center p-2 font-medium text-sm min-w-[60px]">
+                                            <div>{day}</div>
+                                            <div className="text-xs text-muted-foreground font-normal">
+                                                {formatDateDisplay(weekRange.weekDays[i]!)}
+                                            </div>
+                                        </th>
+                                    ))}
+                                    <th className="text-center p-2 font-medium text-sm min-w-[70px] bg-muted/50">Total</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {worklogData.map((member: MemberWorklogRow) => (
+                                    <tr
+                                        key={member.id}
+                                        className={cn(
+                                            "border-b hover:bg-muted/30 transition-colors",
+                                            member.isUnderUtilized && "bg-red-50 dark:bg-red-950/20"
+                                        )}
+                                    >
+                                        <td className="p-2">
+                                            <MemberAvatarCell member={member} />
+                                        </td>
+                                        {member.dailyHours.map((hours: number, dayIndex: number) => {
+                                            const isWeekday = dayIndex < 5
+                                            const isFullyLogged = hours >= 8
+                                            const isPartiallyLogged = hours > 0 && hours < 8
+                                            const isUnlogged = hours === 0
+
+                                            return (
+                                                <td
+                                                    key={dayIndex}
+                                                    className={cn(
+                                                        "text-center p-2 text-sm tabular-nums font-medium",
+                                                        isWeekday && isFullyLogged && "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40",
+                                                        isWeekday && isPartiallyLogged && "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40",
+                                                        isWeekday && isUnlogged && "text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-950/50 font-bold",
+                                                        !isWeekday && hours === 0 && "text-muted-foreground/50",
+                                                        !isWeekday && hours > 0 && "text-blue-500 dark:text-blue-400"
+                                                    )}
+                                                >
+                                                    {hours}h
+                                                </td>
+                                            )
+                                        })}
+                                        <td className={cn(
+                                            "text-center p-2 text-sm font-bold tabular-nums bg-muted/50",
+                                            member.totalHours >= 40 && "text-emerald-600 dark:text-emerald-400",
+                                            member.totalHours > 0 && member.totalHours < 40 && "text-amber-600 dark:text-amber-400",
+                                            member.totalHours === 0 && "text-red-500 dark:text-red-400"
+                                        )}>
+                                            {member.totalHours}h
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </CardContent>
         </Card>
     )

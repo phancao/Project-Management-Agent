@@ -205,6 +205,25 @@ function buildChartData<T extends TimelineSprint | TimelineTask>(
   return { data, minDate, totalDays };
 }
 
+// Custom YAxis tick for task names - single line with truncation
+function TaskYAxisTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  const name = payload?.value ?? "";
+  const truncated = name.length > 22 ? name.slice(0, 22) + "..." : name;
+  return (
+    <text
+      x={x}
+      y={y}
+      dy={4}
+      textAnchor="end"
+      fill="currentColor"
+      fontSize={11}
+      style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+    >
+      {truncated}
+    </text>
+  );
+}
+
 function TimelineTooltip({
   active,
   payload,
@@ -624,8 +643,7 @@ function TimelineContent({
                 type="category"
                 dataKey="name"
                 width={160}
-                tick={{ fontSize: 11, fill: 'currentColor' }}
-                tickFormatter={(value) => value.length > 25 ? value.slice(0, 25) + '...' : value}
+                tick={<TaskYAxisTick />}
               />
               <Tooltip content={<TimelineTooltip minDate={taskChart.minDate!} />} />
               <Bar dataKey="startOffset" stackId="task" fill="transparent" isAnimationActive={false} />

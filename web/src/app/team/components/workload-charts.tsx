@@ -9,6 +9,7 @@ import { Loader2, Info, ChevronLeft, ChevronRight, Users } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover"
 import { Button } from "~/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
+import { useMemberProfile } from "../page"
 
 // Helper to get start of week (Monday) with offset
 function getWeekStart(weekOffset: number = 0): Date {
@@ -144,6 +145,7 @@ export function WorkloadCharts() {
                 totalWorkload < 32 ? 'underloaded' : 'optimal';
 
             return {
+                id: member.id, // For profile navigation
                 name: member.name.split(' ').slice(0, 2).join(' '), // First 2 words
                 fullName: member.name,
                 timeSpent: Math.round(timeSpent * 10) / 10,
@@ -371,32 +373,46 @@ export function WorkloadCharts() {
                 </CardContent>
             </Card>
 
-            <Card className="col-span-2">
-                <CardHeader>
-                    <CardTitle>Workload Details</CardTitle>
-                    <CardDescription>All team members ({workloadData.length})</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                        {workloadData.map(member => (
-                            <div key={member.name} className="flex items-center">
-                                <div className="flex-1 space-y-1">
-                                    <p className="text-sm font-medium leading-none">{member.fullName}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {member.taskCount} tasks • {member.timeSpent}h spent
-                                    </p>
-                                </div>
-                                <div className={`font-bold text-sm ${member.status === 'overassigned' ? 'text-red-500' :
-                                    member.status === 'underloaded' ? 'text-amber-500' :
-                                        'text-green-500'
-                                    }`}>
-                                    {member.totalWorkload}h
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
+            <WorkloadDetails workloadData={workloadData} />
         </div>
     )
+}
+
+// Separate component for Workload Details to use the hook
+function WorkloadDetails({ workloadData }: { workloadData: Array<{ id: string; name: string; fullName: string; timeSpent: number; taskCount: number; totalWorkload: number; status: string }> }) {
+    const { openMemberProfile } = useMemberProfile();
+
+    return (
+        <Card className="col-span-2">
+            <CardHeader>
+                <CardTitle>Workload Details</CardTitle>
+                <CardDescription>All team members ({workloadData.length})</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                    {workloadData.map(member => (
+                        <div key={member.id} className="flex items-center">
+                            <div className="flex-1 space-y-1">
+                                <button
+                                    onClick={() => openMemberProfile(member.id)}
+                                    className="text-sm font-medium leading-none hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-left"
+                                >
+                                    {member.fullName}
+                                </button>
+                                <p className="text-xs text-muted-foreground">
+                                    {member.taskCount} tasks • {member.timeSpent}h spent
+                                </p>
+                            </div>
+                            <div className={`font-bold text-sm ${member.status === 'overassigned' ? 'text-red-500' :
+                                member.status === 'underloaded' ? 'text-amber-500' :
+                                    'text-green-500'
+                                }`}>
+                                {member.totalWorkload}h
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
 }

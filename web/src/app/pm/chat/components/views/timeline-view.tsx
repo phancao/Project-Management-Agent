@@ -644,6 +644,7 @@ function TimelineContent({
                 type="category"
                 dataKey="name"
                 width={160}
+                interval={0}
                 tick={<TaskYAxisTick />}
               />
               <Tooltip content={<TimelineTooltip minDate={taskChart.minDate!} />} />

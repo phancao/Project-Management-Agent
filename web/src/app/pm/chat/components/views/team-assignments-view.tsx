@@ -367,7 +367,16 @@ export function TeamAssignmentsView() {
 
     // Find the selected sprint if filtering by sprint
     if (filterSprint !== "all") {
-      const selectedSprint = sprints.find((s) => s.id === filterSprint);
+      // Extract numeric portion if composite ID (e.g., "uuid:604" -> "604")
+      const numericId = filterSprint.includes(':') ? filterSprint.split(':').pop() : filterSprint;
+
+      // Try to find sprint by exact ID or by numeric portion
+      const selectedSprint = sprints.find((s) =>
+        s.id === filterSprint ||
+        s.id === numericId ||
+        s.id.endsWith(`:${numericId}`)
+      );
+
       if (selectedSprint?.start_date && selectedSprint?.end_date) {
         const start = new Date(selectedSprint.start_date);
         const end = new Date(selectedSprint.end_date);

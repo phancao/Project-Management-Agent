@@ -605,11 +605,12 @@ function TimelineContent({
             No tasks match the current filters or have complete scheduling information.
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(200, taskChart.data.length * 36)}>
+          <ResponsiveContainer width="100%" height={Math.max(200, taskChart.data.length * 24)}>
             <BarChart
               data={taskChart.data}
               layout="vertical"
               margin={{ top: 8, right: 16, left: 160, bottom: 8 }}
+              barSize={16}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis
@@ -619,7 +620,13 @@ function TimelineContent({
                 interval={0}
                 tickFormatter={(value) => formatDateShort(addDays(taskChart.minDate!, Number(value)))}
               />
-              <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12, fill: 'currentColor' }} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={160}
+                tick={{ fontSize: 11, fill: 'currentColor' }}
+                tickFormatter={(value) => value.length > 25 ? value.slice(0, 25) + '...' : value}
+              />
               <Tooltip content={<TimelineTooltip minDate={taskChart.minDate!} />} />
               <Bar dataKey="startOffset" stackId="task" fill="transparent" isAnimationActive={false} />
               <Bar dataKey="duration" stackId="task" radius={[0, 4, 4, 0]}>

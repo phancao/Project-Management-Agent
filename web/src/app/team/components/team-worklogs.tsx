@@ -83,6 +83,9 @@ function MemberAvatarCell({ member }: { member: MemberWorklogRow }) {
 function TeamWorklogCard({ team }: { team: TeamData }) {
     const [weekOffset, setWeekOffset] = useState(0)
 
+    // Get active provider IDs from context to filter stale members
+    const { activeProviderIds } = useTeamDataContext()
+
     // Calculate week dates based on this card's offset
     const weekRange = useMemo(() => {
         const start = getWeekStart(weekOffset)
@@ -97,20 +100,29 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
         }
     }, [weekOffset])
 
-    // Fetch data for this team's members only
-    const { teamMembers, isLoading: isLoadingUsers } = useTeamUsers(team.memberIds)
+    // Filter memberIds to only include those from active providers
+    const validMemberIds = useMemo(() => {
+        if (activeProviderIds.length === 0) return team.memberIds; // Allow all if no providers loaded yet
+        return team.memberIds.filter(id => {
+            const providerId = id.split(':')[0] || '';
+            return activeProviderIds.includes(providerId);
+        });
+    }, [team.memberIds, activeProviderIds])
+
+    // Detect if team has stale provider data (members in localStorage but all filtered out)
+    const hasStaleProviderData = activeProviderIds.length > 0 &&
+        team.memberIds.length > 0 &&
+        validMemberIds.length === 0;
+
+    // Fetch data for this team's members only (using filtered memberIds)
+    const { teamMembers, isLoading: isLoadingUsers } = useTeamUsers(validMemberIds)
     const { teamTimeEntries, isLoading: isLoadingTimeEntries, isFetching } = useTeamTimeEntries(
-        team.memberIds,
+        validMemberIds,
         { startDate: weekRange.start, endDate: weekRange.end }
     )
 
     const isInitialLoading = isLoadingUsers || isLoadingTimeEntries
     const showLoadingOverlay = isFetching
-
-    // Detect if team has members in localStorage but none could be fetched (provider inactive)
-    const hasStaleProviderData = !isInitialLoading &&
-        team.memberIds.length > 0 &&
-        teamMembers.length === 0;
 
     // Build worklog data
     const worklogData = useMemo((): MemberWorklogRow[] => {

@@ -325,13 +325,14 @@ class OpenProjectV13Provider(BasePMProvider):
         filters = []
         
         # Status filter behavior:
-        # - status='open' or None: Use default OpenProject behavior (excludes Done/Closed)
-        # - status='all' or '*': Explicitly request ALL statuses including closed
-        if status is None or status == 'open':
+        # - status='open': Exclude Done/Closed status (OpenProject default)
+        # - status=None or 'all' or '*': Include ALL statuses including closed
+        # CHANGED: Default to including all statuses to fix missing tasks issue
+        if status == 'open':
             # Don't add status filter - OpenProject will exclude closed by default
             pass
         else:
-            # Include ALL statuses (including closed/done)
+            # Include ALL statuses (including closed/done) - this is now the default
             filters.append({
                 "status": {
                     "operator": "*",  # "*" means "all" - include all statuses

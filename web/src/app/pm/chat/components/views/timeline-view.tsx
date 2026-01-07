@@ -520,6 +520,7 @@ function TimelineContent({
               <XAxis
                 type="number"
                 domain={[0, sprintChart.totalDays]}
+                ticks={Array.from({ length: Math.ceil(sprintChart.totalDays / 7) + 1 }, (_, i) => i * 7)}
                 tickFormatter={(value) => formatDateShort(addDays(sprintChart.minDate!, Number(value)))}
               />
               <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12, fill: 'currentColor' }} />
@@ -613,6 +614,7 @@ function TimelineContent({
               <XAxis
                 type="number"
                 domain={[0, taskChart.totalDays]}
+                ticks={Array.from({ length: Math.ceil(taskChart.totalDays / 7) + 1 }, (_, i) => i * 7)}
                 tickFormatter={(value) => formatDateShort(addDays(taskChart.minDate!, Number(value)))}
               />
               <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12, fill: 'currentColor' }} />

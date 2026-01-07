@@ -437,6 +437,22 @@ export function ProviderManagementView({ defaultTab = "pm" }: { defaultTab?: "pm
           p.id === provider.id ? { ...p, is_active: result.is_active } : p
         )
       );
+
+      // Handle projects based on new status
+      if (result.is_active) {
+        // Provider enabled - load projects
+        await loadProjectsForProvider({ ...provider, is_active: true });
+      } else {
+        // Provider disabled - clear/hide projects
+        if (provider.id) {
+          setProjects((prev) => {
+            const newProjects = { ...prev };
+            delete newProjects[provider.id!];
+            return newProjects;
+          });
+        }
+      }
+
       setSuccessMessage(
         result.is_active
           ? `Provider "${result.name}" enabled successfully!`

@@ -46,6 +46,7 @@ import { cn } from "~/lib/utils";
 import { useProjectData } from "../../../hooks/use-project-data";
 import { useTasks, type Task } from "~/core/api/hooks/pm/use-tasks";
 import { useUsers } from "~/core/api/hooks/pm/use-users";
+import { useSprints } from "~/core/api/hooks/pm/use-sprints";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 
 const UNASSIGNED_KEY = "__unassigned__";
@@ -276,6 +277,7 @@ export function TeamAssignmentsView() {
   const { projectIdForData, activeProject } = useProjectData();
   const { tasks, loading: tasksLoading, isFetching: tasksFetching, error: tasksError, refresh: refreshTasks } = useTasks(projectIdForData ?? undefined);
   const { users, loading: usersLoading, error: usersError } = useUsers(projectIdForData ?? undefined);
+  const { sprints } = useSprints(projectIdForData ?? "");
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -316,17 +318,25 @@ export function TeamAssignmentsView() {
   }, [tasks, filterStatus, filterSprint]);
 
   const sprintOptions = useMemo(() => {
-    const sprintMap = new Map<string, string>();
-    tasks.forEach((task) => {
-      if (task.sprint_id) {
-        const name = task.sprint_name || task.sprint_id;
-        sprintMap.set(String(task.sprint_id), name);
-      }
+    // Build sprint name lookup from fetched sprints
+    const sprintNameMap = new Map<string, string>();
+    sprints.forEach((sprint) => {
+      sprintNameMap.set(sprint.id, sprint.name);
     });
-    return Array.from(sprintMap.entries())
-      .map(([id, name]) => ({ id, name }))
+
+    // Get unique sprint IDs from tasks
+    const sprintIds = new Set<string>();
+    tasks.forEach((task) => {
+      if (task.sprint_id) sprintIds.add(String(task.sprint_id));
+    });
+
+    return Array.from(sprintIds)
+      .map((id) => ({
+        id,
+        name: sprintNameMap.get(id) || `Sprint ${id.split(':').pop() || id}`
+      }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [tasks]);
+  }, [tasks, sprints]);
 
   const statusOptions = useMemo(() => {
     const unique = new Set<string>();

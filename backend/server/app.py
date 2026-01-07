@@ -4042,6 +4042,19 @@ async def pm_import_projects(body: ProjectImportRequest, request: Request):
         db = next(db_gen)
         
         try:
+            # Check for duplicate provider (same base_url)
+            existing_provider = db.query(PMProviderConnection).filter(
+                PMProviderConnection.base_url == body.base_url,
+                PMProviderConnection.is_active.is_(True)
+            ).first()
+            
+            if existing_provider:
+                logger.warning(f"[pm_import_projects] Duplicate provider detected: {body.base_url} already exists as {existing_provider.id}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"A provider with base URL '{body.base_url}' already exists. Please remove the existing provider first or use a different URL."
+                )
+            
             # Create provider config with created_by if user authenticated
             provider = PMProviderConnection(
                 name=f"{body.provider_type} - {body.base_url}",

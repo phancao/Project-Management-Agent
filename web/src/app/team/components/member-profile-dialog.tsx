@@ -141,14 +141,6 @@ export function MemberProfileDialog({ memberId, open, onOpenChange }: MemberProf
         const parts = id.split(':');
         const localId = parts[parts.length - 1]; // Always the last part
 
-        // [DEBUG] Log provider matching
-        console.log('[TASK_URL_DEBUG]', {
-            taskId: id,
-            localId,
-            providersCount: providers.length,
-            providerIds: providers.map(p => p.id),
-        });
-
         // Try multiple matching strategies:
         // 1. Match entire prefix (before last colon) against provider ID
         // 2. Match first part against provider type
@@ -175,10 +167,6 @@ export function MemberProfileDialog({ memberId, open, onOpenChange }: MemberProf
             providerConfig = providers[0];
         }
 
-        console.log('[TASK_URL_DEBUG] Match result:', {
-            matchedProvider: providerConfig ? { id: providerConfig.id, type: providerConfig.provider_type, base: providerConfig.base_url } : 'NOT_FOUND'
-        });
-
         if (providerConfig) {
             const type = providerConfig.provider_type;
             const baseUrl = providerConfig.base_url || 'https://openproject.bstarsolutions.com';
@@ -199,12 +187,18 @@ export function MemberProfileDialog({ memberId, open, onOpenChange }: MemberProf
                 style={{ minWidth: '700px', minHeight: '400px' }}
             >
                 {isLoading ? (
-                    <div className="flex items-center justify-center h-64">
+                    <div className="flex flex-col items-center justify-center h-64">
+                        <DialogTitle className="sr-only">Loading Member Profile</DialogTitle>
                         <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                        <p className="text-sm text-muted-foreground mt-2">Loading profile...</p>
                     </div>
                 ) : !member ? (
                     <div className="text-center py-12">
+                        <DialogTitle className="sr-only">Member Not Found</DialogTitle>
                         <p className="text-muted-foreground">Member not found</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                            This user may belong to a different or inactive provider.
+                        </p>
                     </div>
                 ) : (
                     <>

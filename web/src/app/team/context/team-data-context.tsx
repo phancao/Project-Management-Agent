@@ -7,6 +7,7 @@ import { listTasks, type PMTask } from "~/core/api/pm/tasks";
 import { listTimeEntries, type PMTimeEntry } from "~/core/api/pm/time-entries";
 import { useTeams } from "~/core/hooks/use-teams";
 import { useProjects, type Project } from "~/core/api/hooks/pm/use-projects";
+import { useProviders } from "~/core/api/hooks/pm/use-providers";
 
 /**
  * Lightweight Team Data Context
@@ -20,6 +21,8 @@ interface TeamDataContextValue {
     teams: Array<{ id: string; name: string; memberIds: string[]; description?: string }>;
     allMemberIds: string[];
     allProjects: Project[];
+    // Active provider IDs for filtering
+    activeProviderIds: string[];
 
     // Loading states for essential data
     isLoading: boolean;
@@ -44,17 +47,30 @@ export function TeamDataProvider({ children }: TeamDataProviderProps) {
     // 1. Fetch Teams (essential - quick load)
     const { teams, isLoading: isLoadingTeams } = useTeams();
 
-    // DEBUG: Log teams and their member IDs
-    console.log('[DEBUG] TeamDataProvider - teams:', teams.map(t => ({ id: t.id, name: t.name, memberIds: t.memberIds })));
+    // 2. Get active providers for memberIds validation
+    const { providers, loading: isLoadingProviders } = useProviders();
 
-    // 2. Deduplicate all member IDs from teams
+    // Extract active provider IDs for filtering
+    const activeProviderIds = useMemo(() => {
+        return providers.map(p => p.id);
+    }, [providers]);
+
+    // 3. Deduplicate all member IDs from teams AND filter by active providers
     const allMemberIds = useMemo(() => {
-        const ids = Array.from(new Set(teams.flatMap(t => t.memberIds)));
-        console.log('[DEBUG] allMemberIds computed:', ids);
-        return ids;
-    }, [teams]);
+        const rawIds = Array.from(new Set(teams.flatMap(t => t.memberIds)));
 
-    // 3. Fetch Projects (essential - quick load)
+        // Filter memberIds to only include those from active providers
+        // MemberIds format: "provider_id:user_id"
+        const validIds = rawIds.filter(id => {
+            const providerId = id.split(':')[0] || '';
+            const isValid = activeProviderIds.includes(providerId);
+            return isValid || activeProviderIds.length === 0; // Allow all if no providers loaded yet
+        });
+
+        return validIds;
+    }, [teams, activeProviderIds]);
+
+    // 4. Fetch Projects (essential - quick load)
     const { projects, loading: isLoadingProjects, error: projectsError } = useProjects();
 
     const allProjects = projects || [];
@@ -64,8 +80,9 @@ export function TeamDataProvider({ children }: TeamDataProviderProps) {
         teams,
         allMemberIds,
         allProjects,
+        activeProviderIds,
 
-        isLoading: isLoadingTeams || isLoadingProjects,
+        isLoading: isLoadingTeams || isLoadingProjects || isLoadingProviders,
         isLoadingTeams,
         isLoadingProjects,
 
@@ -74,8 +91,8 @@ export function TeamDataProvider({ children }: TeamDataProviderProps) {
 
         error: projectsError || null,
     }), [
-        teams, allMemberIds, allProjects,
-        isLoadingTeams, isLoadingProjects,
+        teams, allMemberIds, allProjects, activeProviderIds,
+        isLoadingTeams, isLoadingProjects, isLoadingProviders,
         projectsError,
     ]);
 
@@ -103,9 +120,6 @@ export function useTeamDataContext(): TeamDataContextValue {
  * Fetches ONLY the specific team members by ID (not all 500 users).
  */
 export function useTeamUsers(memberIds: string[]) {
-    // DEBUG: Log when this hook is called
-    console.log('[DEBUG] useTeamUsers called with', memberIds.length, 'memberIds:', memberIds);
-
     // Fetch each team member in parallel by their ID
     const userQueries = useQueries({
         queries: memberIds.map(memberId => ({
@@ -146,9 +160,6 @@ export function useTeamUsers(memberIds: string[]) {
  * This avoids fetching 87k+ tasks globally while still getting all team tasks.
  */
 export function useTeamTasks(memberIds: string[]) {
-    // DEBUG: Log when this hook is called
-    console.log('[DEBUG] useTeamTasks called with', memberIds.length, 'memberIds:', memberIds);
-
     // Create a query for each member - React Query will batch and parallelize these
     // Use status='open' to only fetch active tasks (excludes closed/done)
     const taskQueries = useQueries({

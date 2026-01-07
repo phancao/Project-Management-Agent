@@ -151,56 +151,75 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                         </div>
 
                         {/* Available Users Section */}
-                        {availableUsers.length > 0 && (
-                            <div className="mt-8">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-muted-foreground">Available Users</h3>
-                                        <p className="text-xs text-muted-foreground">{availableUsers.length} users not in this team</p>
-                                    </div>
-                                    <div className="relative w-64">
-                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                            placeholder="Search users..."
-                                            className="pl-9 h-9"
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                        />
-                                        {searchQuery && (
-                                            <button
-                                                className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                                                onClick={() => setSearchQuery("")}
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {(searchQuery ? filteredAvailable : availableUsers).slice(0, 12).map((user: PMUser) => (
-                                        <div
-                                            key={user.id}
-                                            className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all text-left group"
-                                        >
-                                            <UserClickable user={user} />
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 hover:bg-transparent"
-                                                onClick={() => handleAddMember(user.id)}
-                                            >
-                                                <Plus className="w-4 h-4 text-muted-foreground group-hover:text-indigo-500 flex-shrink-0" />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                </div>
-                                {availableUsers.length > 12 && !searchQuery && (
-                                    <p className="text-xs text-center text-muted-foreground mt-3">
-                                        Showing 12 of {availableUsers.length} available users. Use search to find more.
+                        <div className="mt-8">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-muted-foreground">Available Users</h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        {isLoadingAllUsers
+                                            ? "Loading users..."
+                                            : `${availableUsers.length} users not in this team`}
                                     </p>
-                                )}
+                                </div>
+                                <div className="relative w-64">
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search users..."
+                                        className="pl-9 h-9"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        disabled={isLoadingAllUsers}
+                                    />
+                                    {searchQuery && (
+                                        <button
+                                            className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+                                            onClick={() => setSearchQuery("")}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                        )}
+
+                            {isLoadingAllUsers ? (
+                                <div className="flex items-center justify-center py-12 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                                        <p className="text-sm text-muted-foreground">Loading available users...</p>
+                                    </div>
+                                </div>
+                            ) : availableUsers.length > 0 ? (
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        {(searchQuery ? filteredAvailable : availableUsers).slice(0, 12).map((user: PMUser) => (
+                                            <div
+                                                key={user.id}
+                                                className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all text-left group"
+                                            >
+                                                <UserClickable user={user} />
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 hover:bg-transparent"
+                                                    onClick={() => handleAddMember(user.id)}
+                                                >
+                                                    <Plus className="w-4 h-4 text-muted-foreground group-hover:text-indigo-500 flex-shrink-0" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {availableUsers.length > 12 && !searchQuery && (
+                                        <p className="text-xs text-center text-muted-foreground mt-3">
+                                            Showing 12 of {availableUsers.length} available users. Use search to find more.
+                                        </p>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="text-center py-8 text-muted-foreground text-sm">
+                                    No available users to add
+                                </div>
+                            )}
+                        </div>
                     </>
                 )}
             </CardContent>

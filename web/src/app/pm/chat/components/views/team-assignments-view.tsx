@@ -258,7 +258,7 @@ function UserCard({
                 {isAssignable ? "Drop tasks here" : "No tasks"}
               </div>
             ) : (
-              <div className="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="mt-2 max-h-[240px] overflow-y-auto grid gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {tasks.map((task) => (
                   <SortableTask key={task.id} task={task} assigneeId={assigneeId} />
                 ))}

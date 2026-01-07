@@ -790,7 +790,13 @@ class PMHandler:
         provider_id, actual_id = self._parse_composite_id(user_id)
         
         if provider_id:
-            provider_conn = self.get_provider_by_id(provider_id)
+            try:
+                provider_conn = self.get_provider_by_id(provider_id)
+            except ValueError as e:
+                # Provider is disabled - log and return None gracefully
+                logger.debug(f"Cannot get user from disabled provider: {e}")
+                return None
+            
             if provider_conn:
                 try:
                     provider = self.create_provider_instance(provider_conn)

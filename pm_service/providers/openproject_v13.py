@@ -1524,6 +1524,13 @@ class OpenProjectV13Provider(BasePMProvider):
         elif links.get("status", {}).get("title"):
             status = links.get("status", {}).get("title")
         
+        # Extract assignee name from embedded data or link title
+        assignee_name = None
+        if embedded.get("assignee"):
+            assignee_name = embedded.get("assignee", {}).get("name")
+        elif links.get("assignee", {}).get("title"):
+            assignee_name = links.get("assignee", {}).get("title")
+        
         return PMTask(
             id=str(data["id"]),
             title=data.get("subject", ""),
@@ -1540,6 +1547,7 @@ class OpenProjectV13Provider(BasePMProvider):
             assignee_id=self._extract_id_from_href(
                 links.get("assignee", {}).get("href")
             ),
+            assignee_name=assignee_name,
             epic_id=self._extract_id_from_href(
                 links.get("parent", {}).get("href")
             ) if links.get("parent", {}).get("href") else None,

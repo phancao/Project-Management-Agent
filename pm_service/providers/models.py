@@ -91,6 +91,7 @@ class PMTask:
     parent_task_id: Optional[str] = None  # For subtasks
     epic_id: Optional[str] = None  # Associated epic
     assignee_id: Optional[str] = None
+    assignee_name: Optional[str] = None  # Assignee display name
     component_ids: Optional[List[str]] = None  # Associated components
     label_ids: Optional[List[str]] = None  # Associated labels
     sprint_id: Optional[str] = None  # Associated sprint

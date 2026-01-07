@@ -74,6 +74,7 @@ type AssigneeColumnProps = Column & {
   isOpen: boolean;
   onToggle: (key: string, open: boolean) => void;
   showDropHint: boolean;
+  sprintCapacity: number; // hours of capacity for the sprint duration
 };
 
 function initials(name?: string | null) {
@@ -167,6 +168,7 @@ function UserCard({
   isOpen,
   onToggle,
   showDropHint,
+  sprintCapacity,
 }: AssigneeColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: columnKey,
@@ -177,9 +179,8 @@ function UserCard({
     },
   });
 
-  // Calculate workload percentage based on 40h/week = 100% capacity
-  const WEEKLY_CAPACITY = 40; // hours per week
-  const workloadPercent = (totalHours / WEEKLY_CAPACITY) * 100;
+  // Calculate workload percentage based on sprint capacity
+  const workloadPercent = sprintCapacity > 0 ? (totalHours / sprintCapacity) * 100 : 0;
   const barPercent = Math.min(150, workloadPercent); // Cap bar at 150% for display
 
   // Color based on capacity utilization
@@ -232,7 +233,7 @@ function UserCard({
             />
           </div>
           <div className="text-[10px] text-muted-foreground mt-0.5 text-right">
-            {totalHours.toFixed(0)}h / 40h ({workloadPercent.toFixed(0)}%)
+            {totalHours.toFixed(0)}h / {sprintCapacity}h ({workloadPercent.toFixed(0)}%)
           </div>
         </div>
 
@@ -345,6 +346,26 @@ export function TeamAssignmentsView() {
     });
     return Array.from(unique).sort();
   }, [tasks]);
+
+  // Calculate sprint capacity based on selected sprint duration (40h/week)
+  const sprintCapacity = useMemo(() => {
+    const HOURS_PER_WEEK = 40;
+
+    // Find the selected sprint if filtering by sprint
+    if (filterSprint !== "all") {
+      const selectedSprint = sprints.find((s) => s.id === filterSprint);
+      if (selectedSprint?.start_date && selectedSprint?.end_date) {
+        const start = new Date(selectedSprint.start_date);
+        const end = new Date(selectedSprint.end_date);
+        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        const weeks = Math.max(1, days / 7);
+        return Math.round(HOURS_PER_WEEK * weeks);
+      }
+    }
+
+    // Default to 1 week if no sprint selected or dates unavailable
+    return HOURS_PER_WEEK;
+  }, [filterSprint, sprints]);
 
   const columns = useMemo<Column[]>(() => {
     const columnMap = new Map<string, Column>();
@@ -674,6 +695,7 @@ export function TeamAssignmentsView() {
               isOpen={openColumns[column.columnKey] ?? false}
               onToggle={handleToggleColumn}
               showDropHint={isDraggingTask}
+              sprintCapacity={sprintCapacity}
             />
           ))}
         </div>

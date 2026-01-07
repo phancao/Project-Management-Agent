@@ -346,7 +346,7 @@ function TimelineContent({
   const unscheduledTaskPreview = unscheduledTasks.slice(0, 6);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Timeline</h2>
@@ -481,7 +481,7 @@ function TimelineContent({
         </Card>
       ) : null}
 
-      <Card className="space-y-5 p-6">
+      <Card className="space-y-3 p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Sprint schedule</h3>
@@ -514,7 +514,7 @@ function TimelineContent({
             <BarChart
               data={sprintChart.data}
               layout="vertical"
-              margin={{ top: 8, right: 16, left: 100, bottom: 8 }}
+              margin={{ top: 8, right: 16, left: 80, bottom: 8 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis
@@ -522,7 +522,7 @@ function TimelineContent({
                 domain={[0, sprintChart.totalDays]}
                 tickFormatter={(value) => formatDateShort(addDays(sprintChart.minDate!, Number(value)))}
               />
-              <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12, fill: 'currentColor' }} />
+              <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12, fill: 'currentColor' }} />
               <Tooltip content={<TimelineTooltip minDate={sprintChart.minDate!} />} />
               <Bar dataKey="startOffset" stackId="sprint" fill="transparent" isAnimationActive={false} />
               <Bar dataKey="duration" stackId="sprint" radius={[0, 4, 4, 0]}>
@@ -535,7 +535,7 @@ function TimelineContent({
         )}
       </Card>
 
-      <Card className="space-y-5 p-6">
+      <Card className="space-y-3 p-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Task schedule</h3>
@@ -607,7 +607,7 @@ function TimelineContent({
             <BarChart
               data={taskChart.data}
               layout="vertical"
-              margin={{ top: 8, right: 16, left: 180, bottom: 8 }}
+              margin={{ top: 8, right: 16, left: 160, bottom: 8 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis
@@ -615,7 +615,7 @@ function TimelineContent({
                 domain={[0, taskChart.totalDays]}
                 tickFormatter={(value) => formatDateShort(addDays(taskChart.minDate!, Number(value)))}
               />
-              <YAxis type="category" dataKey="name" width={180} tick={{ fontSize: 12, fill: 'currentColor' }} />
+              <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12, fill: 'currentColor' }} />
               <Tooltip content={<TimelineTooltip minDate={taskChart.minDate!} />} />
               <Bar dataKey="startOffset" stackId="task" fill="transparent" isAnimationActive={false} />
               <Bar dataKey="duration" stackId="task" radius={[0, 4, 4, 0]}>

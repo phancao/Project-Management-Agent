@@ -26,7 +26,7 @@ async def list_tasks(
     assignee_id: Optional[str] = Query(None, description="Filter by assignee ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
     provider_id: Optional[str] = Query(None, description="Filter by provider ID"),
-    limit: int = Query(1000, ge=1, le=5000, description="Max items to return (default: 1000, max: 5000)"),
+    limit: Optional[int] = Query(None, ge=1, description="Max items to return (unlimited if not specified)"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
@@ -34,7 +34,7 @@ async def list_tasks(
     List tasks with filters and pagination.
     
     The handler fetches ALL tasks from providers (providers handle their own pagination).
-    This endpoint then applies limit/offset for API-level pagination.
+    This endpoint then applies limit/offset for API-level pagination if specified.
     """
     # DEBUG: Log the request with all parameters
     logger.warning(f"[DEBUG] list_tasks called - assignee_id={assignee_id}, status={status}, project_id={project_id}, limit={limit}")
@@ -50,9 +50,12 @@ async def list_tasks(
         provider_id=provider_id,
     )
     
-    # Apply pagination at API level
+    # Apply pagination at API level only if limit is specified
     total = len(all_tasks)
-    paginated_tasks = all_tasks[offset:offset + limit]
+    if limit is not None:
+        paginated_tasks = all_tasks[offset:offset + limit]
+    else:
+        paginated_tasks = all_tasks[offset:] if offset > 0 else all_tasks
     
     logger.warning(f"[DEBUG] list_tasks returning {len(paginated_tasks)} of {total} tasks for assignee={assignee_id}")
     
@@ -61,7 +64,7 @@ async def list_tasks(
         total=total,
         returned=len(paginated_tasks),
         offset=offset,
-        limit=limit
+        limit=limit if limit is not None else total
     )
 
 

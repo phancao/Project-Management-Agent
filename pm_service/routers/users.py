@@ -23,7 +23,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 async def list_users(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
     provider_id: Optional[str] = Query(None, description="Filter by provider ID"),
-    limit: int = Query(500, ge=1, le=1000, description="Max items to return"),
+    limit: Optional[int] = Query(None, ge=1, description="Max items to return (unlimited if not specified)"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
@@ -31,7 +31,7 @@ async def list_users(
     List users.
     
     The handler fetches ALL users from providers.
-    This endpoint applies limit/offset for pagination.
+    This endpoint applies limit/offset for pagination if specified.
     
     If permission errors occur, they are raised as HTTPException with 403 status
     so the client can properly handle and display them to the user.
@@ -53,7 +53,10 @@ async def list_users(
     
     # Apply pagination
     total = len(all_users)
-    paginated = all_users[offset:offset + limit]
+    if limit is not None:
+        paginated = all_users[offset:offset + limit]
+    else:
+        paginated = all_users[offset:] if offset > 0 else all_users
     
     logger.warning(f"[DEBUG] list_users returning {len(paginated)} of {total} users")
     
@@ -62,7 +65,7 @@ async def list_users(
         total=total,
         returned=len(paginated),
         offset=offset,
-        limit=limit
+        limit=limit if limit is not None else total
     )
 
 

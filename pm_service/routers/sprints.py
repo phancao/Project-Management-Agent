@@ -19,7 +19,7 @@ router = APIRouter(prefix="/sprints", tags=["sprints"])
 async def list_sprints(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
     status: Optional[str] = Query(None, description="Filter by status (active, closed, future)"),
-    limit: int = Query(500, ge=1, le=1000, description="Max items to return"),
+    limit: Optional[int] = Query(None, ge=1, description="Max items to return (unlimited if not specified)"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
@@ -27,7 +27,7 @@ async def list_sprints(
     List sprints.
     
     The handler fetches ALL sprints from providers.
-    This endpoint applies limit/offset for pagination.
+    This endpoint applies limit/offset for pagination if specified.
     """
     handler = PMHandler(db)
     all_sprints = await handler.list_sprints(
@@ -37,14 +37,17 @@ async def list_sprints(
     
     # Apply pagination
     total = len(all_sprints)
-    paginated = all_sprints[offset:offset + limit]
+    if limit is not None:
+        paginated = all_sprints[offset:offset + limit]
+    else:
+        paginated = all_sprints[offset:] if offset > 0 else all_sprints
     
     return ListResponse(
         items=paginated,
         total=total,
         returned=len(paginated),
         offset=offset,
-        limit=limit
+        limit=limit if limit is not None else total
     )
 
 
@@ -66,7 +69,7 @@ async def get_sprint(
 @router.get("/{sprint_id}/tasks", response_model=ListResponse)
 async def get_sprint_tasks(
     sprint_id: str,
-    limit: int = Query(500, ge=1, le=1000, description="Max items to return"),
+    limit: Optional[int] = Query(None, ge=1, description="Max items to return (unlimited if not specified)"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db_session)
 ):
@@ -74,20 +77,23 @@ async def get_sprint_tasks(
     Get tasks in a sprint.
     
     The handler fetches ALL tasks from providers.
-    This endpoint applies limit/offset for pagination.
+    This endpoint applies limit/offset for pagination if specified.
     """
     handler = PMHandler(db)
     all_tasks = await handler.list_tasks(sprint_id=sprint_id)
     
     # Apply pagination
     total = len(all_tasks)
-    paginated = all_tasks[offset:offset + limit]
+    if limit is not None:
+        paginated = all_tasks[offset:offset + limit]
+    else:
+        paginated = all_tasks[offset:] if offset > 0 else all_tasks
     
     return ListResponse(
         items=paginated,
         total=total,
         returned=len(paginated),
         offset=offset,
-        limit=limit
+        limit=limit if limit is not None else total
     )
 

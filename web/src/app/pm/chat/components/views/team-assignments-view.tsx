@@ -162,12 +162,11 @@ function UserCard({
   assigneeName,
   tasks,
   totalHours,
-  maxHours,
   isAssignable,
   isOpen,
   onToggle,
   showDropHint,
-}: AssigneeColumnProps & { maxHours: number }) {
+}: AssigneeColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: columnKey,
     data: {
@@ -177,14 +176,16 @@ function UserCard({
     },
   });
 
-  // Calculate workload percentage relative to the busiest person
-  const workloadPercent = maxHours > 0 ? Math.min(100, (totalHours / maxHours) * 100) : 0;
+  // Calculate workload percentage based on 40h/week = 100% capacity
+  const WEEKLY_CAPACITY = 40; // hours per week
+  const workloadPercent = (totalHours / WEEKLY_CAPACITY) * 100;
+  const barPercent = Math.min(150, workloadPercent); // Cap bar at 150% for display
 
-  // Color based on workload level
+  // Color based on capacity utilization
   const getProgressColor = () => {
-    if (workloadPercent >= 80) return "bg-red-500";
-    if (workloadPercent >= 60) return "bg-amber-500";
-    return "bg-emerald-500";
+    if (workloadPercent > 100) return "bg-red-500"; // Over capacity
+    if (workloadPercent > 80) return "bg-amber-500"; // Near capacity
+    return "bg-emerald-500"; // Under capacity
   };
 
   return (
@@ -226,11 +227,11 @@ function UserCard({
           <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
             <div
               className={cn("h-full rounded-full transition-all duration-300", getProgressColor())}
-              style={{ width: `${workloadPercent}%` }}
+              style={{ width: `${Math.min(100, barPercent / 1.5)}%` }}
             />
           </div>
           <div className="text-[10px] text-muted-foreground mt-0.5 text-right">
-            {workloadPercent.toFixed(0)}% workload
+            {totalHours.toFixed(0)}h / 40h ({workloadPercent.toFixed(0)}%)
           </div>
         </div>
 
@@ -379,11 +380,6 @@ export function TeamAssignmentsView() {
       return b.totalHours - a.totalHours || a.assigneeName.localeCompare(b.assigneeName);
     });
   }, [filteredTasks, userNameById]);
-
-  // Calculate max hours for workload comparison bar
-  const maxHours = useMemo(() => {
-    return Math.max(...columns.map(c => c.totalHours), 1);
-  }, [columns]);
 
   const taskMap = useMemo(() => {
     const map = new Map<string, Task>();
@@ -664,7 +660,6 @@ export function TeamAssignmentsView() {
               assigneeName={column.assigneeName}
               tasks={column.tasks}
               totalHours={column.totalHours}
-              maxHours={maxHours}
               isAssignable={column.isAssignable}
               isOpen={openColumns[column.columnKey] ?? false}
               onToggle={handleToggleColumn}

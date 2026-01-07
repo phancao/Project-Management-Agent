@@ -624,12 +624,13 @@ function TimelineContent({
             No tasks match the current filters or have complete scheduling information.
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(200, taskChart.data.length * 24)}>
+          <ResponsiveContainer width="100%" height={Math.max(200, taskChart.data.length * 28)}>
             <BarChart
               data={taskChart.data}
               layout="vertical"
               margin={{ top: 8, right: 16, left: 160, bottom: 8 }}
-              barSize={16}
+              barSize={18}
+              barCategoryGap="20%"
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis

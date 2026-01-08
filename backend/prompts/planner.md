@@ -31,6 +31,24 @@ For each step, you MUST set the correct `step_type`:
 - **`"research"`** - For steps that gather information via web search or retrieval (when `need_search: true`)
 - **`"processing"`** - For steps that analyze, compute, or process data without web search (when `need_search: false`)
 
+## 🔴🔴🔴 CRITICAL: PM Query Detection Rules 🔴🔴🔴
+
+**IF THE USER QUERY CONTAINS ANY OF THESE KEYWORDS, YOU MUST USE `step_type: "pm_query"`:**
+
+| Category | Keywords (ANY language) |
+|----------|------------------------|
+| **Users/Team** | users, team, members, roster, who, người dùng, thành viên, nhóm |
+| **Tasks** | tasks, work items, tickets, issues, công việc, nhiệm vụ |
+| **Sprints** | sprints, iterations, sprint, sprint report |
+| **Projects** | projects, project, dự án |
+| **Analytics** | burndown, velocity, health, analytics, metrics, report, báo cáo |
+| **Epics** | epics, epic, features |
+
+**🔴 NEVER USE `step_type: "processing"` FOR PM QUERIES! 🔴**
+
+- If the query involves listing, fetching, or analyzing PM data → Use `step_type: "pm_query"`
+- `step_type: "processing"` is ONLY for mathematical calculations, data transformations, or formatting
+
 **CRITICAL**: 
 - PM-related queries (projects, tasks, users, sprints, analytics) → Use `step_type: "pm_query"`
 - Research queries (web search, external data) → Use `step_type: "research"` with `need_search: true`

@@ -2355,6 +2355,24 @@ async def _astream_workflow_generator(
             f"[{sanitize_thread_id(thread_id)}] Model selection set: provider={model_provider}, model={model_name}"
         )
     
+    # CRITICAL FIX: Ensure PM handler is set for PM tools BEFORE graph starts
+    # Without this, PM tools like list_projects fail with 'PM handler not initialized'
+    try:
+        from backend.server.pm_service_client import PMServiceHandler
+        from backend.tools.pm_tools import set_pm_handler, set_current_project
+        
+        pm_handler = PMServiceHandler()
+        set_pm_handler(pm_handler)
+        
+        # Set current project if provided
+        if project_id:
+            set_current_project(project_id)
+            logger.info(f"[{sanitize_thread_id(thread_id)}] PM handler set with project_id={project_id}")
+        else:
+            logger.info(f"[{sanitize_thread_id(thread_id)}] PM handler set (no project_id)")
+    except Exception as e:
+        logger.warning(f"[{sanitize_thread_id(thread_id)}] Could not initialize PM handler: {e}")
+    
     safe_thread_id = sanitize_thread_id(thread_id)
     safe_feedback = (
         sanitize_log_input(interrupt_feedback) if interrupt_feedback else ""

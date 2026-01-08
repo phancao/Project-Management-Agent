@@ -3,11 +3,17 @@
 
 
 from dataclasses import field
+from typing import Annotated
 
 from langgraph.graph import MessagesState
 
 from backend.prompts.planner_model import Plan
 from backend.rag import Resource
+
+
+def _last_value(old_val, new_val):
+    """Reducer that takes the last value when multiple updates occur."""
+    return new_val
 
 
 class State(MessagesState):
@@ -23,8 +29,8 @@ class State(MessagesState):
     resources: list[Resource] = []
     plan_iterations: int = 0
     current_plan: Plan | str = None
-    current_step_index: int = 0  # Track which step is currently being executed (0-based)
-    total_steps: int = 0  # Total number of steps in the plan
+    current_step_index: Annotated[int, _last_value] = 0  # Track which step is currently being executed (0-based)
+    total_steps: Annotated[int, _last_value] = 0  # Total number of steps in the plan
     final_report: str = ""
     auto_accepted_plan: bool = False
     enable_background_investigation: bool = True

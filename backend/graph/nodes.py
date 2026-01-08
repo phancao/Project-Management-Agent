@@ -1576,6 +1576,16 @@ async def reporter_node(state: State, config: RunnableConfig):
     # Use either routing_mode OR presence of PM tool calls
     is_from_react = routing_mode == "react_first" or has_pm_tool_calls
     
+    # 🔍 DEBUG: Reporter template selection - log all relevant values
+    logger.warning(f"[REPORTER-DEBUG] ====== TEMPLATE SELECTION DEBUG ======")
+    logger.warning(f"[REPORTER-DEBUG] routing_mode='{routing_mode}'")
+    logger.warning(f"[REPORTER-DEBUG] has_pm_tool_calls={has_pm_tool_calls}")
+    logger.warning(f"[REPORTER-DEBUG] is_from_react={is_from_react}")
+    logger.warning(f"[REPORTER-DEBUG] react_steps count={len(react_steps)}")
+    logger.warning(f"[REPORTER-DEBUG] message types (last 10): {msg_types}")
+    logger.warning(f"[REPORTER-DEBUG] existing_report is not None: {state.get('final_report') is not None}")
+    logger.warning(f"[REPORTER-DEBUG] pm_report_type={state.get('pm_report_type', 'NOT SET')}")
+    logger.warning(f"[REPORTER-DEBUG] =======================================")
     
     # Check if we already have a final_report from React Agent
     existing_report = state.get("final_report")
@@ -2658,8 +2668,8 @@ async def _execute_agent_step(
                                                 "observations": observations + [error_msg],
                                                 "current_plan": updated_plan,
                                                 "current_step_index": min(completed_count, len(updated_plan.steps) - 1),
-                                            },
-                                            goto="research_team",
+                                            }
+                                            # NOTE: Removed goto - direct edge handles routing
                                         )
         else:
             pass
@@ -2732,8 +2742,8 @@ async def _execute_agent_step(
                                     "observations": observations + [error_msg],
                                     "current_plan": updated_plan,
                                     "current_step_index": min(completed_count, len(updated_plan.steps) - 1),
-                                },
-                                goto="research_team",
+                                }
+                                # NOTE: Removed goto - direct edge handles routing
                             )
         else:
             pass
@@ -2844,8 +2854,9 @@ async def _execute_agent_step(
                 "observations": observations + [detailed_error],
                 "current_step_index": current_step_index,  # Update step progress even on error
                 "current_plan": updated_plan,  # Include new plan object with updated step execution_res
-            },
-            goto="research_team",
+                "goto": "research_team"  # Set in state for validator conditional edge to read
+            }
+            # NOTE: Removed goto parameter from Command - direct edge handles routing
         )
 
     # Process the result
@@ -3048,8 +3059,9 @@ async def _execute_agent_step(
         logger.info(f"[{agent_name}] 💭 Added {len(pm_thoughts)} thoughts to state update")
     
     return Command(
-        update=update_dict,
-        goto="research_team",
+        update=update_dict
+        # NOTE: Removed goto="research_team" - direct edge pm_agent→validator handles routing
+        # Validator conditional edge reads state.goto to continue the flow
     )
 
 
@@ -4065,7 +4077,7 @@ async def react_agent_node(
                 )
                 
                 # Convert agent steps to thoughts for UI
-                logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} nodes.py building thoughts, steps={len(result.steps)}, step_types={[s.type for s in result.steps]}")
+                logger.info(f"[COUNTER-DEBUG] {datetime.datetime.now().isoformat()} nodes.py building thoughts, steps={len(result.steps)}, step_types={[s.type for s in result.steps]}")
                 thoughts = []
                 for i, step in enumerate(result.steps):
                     emoji = {
@@ -4104,7 +4116,7 @@ async def react_agent_node(
                             pass
                         
                         thought_text = f"{emoji} {tool_name}{result_count_info}"
-                        logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} nodes.py tool_result: {thought_text}")
+                        logger.info(f"[COUNTER-DEBUG] {datetime.datetime.now().isoformat()} nodes.py tool_result: {thought_text}")
                     else:
                         thought_text = f"{emoji} {step.type.upper()}: {step.content[:5000]}"
                     
@@ -4117,7 +4129,7 @@ async def react_agent_node(
                     })
                 
                 
-                logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} nodes.py returning {len(thoughts)} thoughts in Command update")
+                logger.info(f"[COUNTER-DEBUG] {datetime.datetime.now().isoformat()} nodes.py returning {len(thoughts)} thoughts in Command update")
                 for t in thoughts:
                     logger.info(f"[COUNTER-DEBUG]   thought: {t.get('thought', '')[:100]}")
                 
@@ -4128,9 +4140,11 @@ async def react_agent_node(
                         "react_intermediate_steps": [({"query": user_query}, result.result)],
                         "react_thoughts": thoughts,
                         "routing_mode": "react_first",
-                        "goto": "reporter",
-                    },
-                    goto="reporter"
+                        "goto": "reporter",  # Conditional edge reads this from state
+                    }
+                    # NOTE: Do NOT use goto= parameter with conditional edges
+                    # The conditional edge `lambda state: state.get("goto", "reporter")` reads from state,
+                    # not from Command.goto which causes TypeError: 'NoneType' object is not callable
                 )
         
         except Exception as e:
@@ -4476,9 +4490,9 @@ async def react_agent_node(
             update={
                 "escalation_reason": f"token_limit_exceeded_base: estimated={total_estimated_tokens}, threshold={base_token_threshold}, limit={effective_limit}",
                 "partial_result": f"Context too large ({total_estimated_tokens:,} tokens estimated, limit: {effective_limit:,}). Escalating to full pipeline.",
-                "goto": "planner"
-            },
-            goto="planner"
+                "goto": "planner"  # Set goto in state for conditional edge to read
+            }
+            # NOTE: Removed goto="planner" parameter to prevent conflict with conditional edge
         )
     
     # Check 2: Base + realistic tool accumulation > limit?
@@ -4494,9 +4508,9 @@ async def react_agent_node(
             update={
                 "escalation_reason": f"token_limit_exceeded_with_tools: estimated={total_estimated_tokens}, with_tools={total_with_realistic_tools}, limit={effective_limit}",
                 "partial_result": f"Context too large ({total_estimated_tokens:,} tokens estimated, with tool accumulation: {total_with_realistic_tools:,}). Escalating to full pipeline.",
-                "goto": "planner"
-            },
-            goto="planner"
+                "goto": "planner"  # Set goto in state for conditional edge to read
+            }
+            # NOTE: Removed goto="planner" parameter to prevent conflict with conditional edge
         )
     
     logger.info(
@@ -5056,8 +5070,17 @@ Question: {input}
             # Invoke LangGraph agent (returns state dict, not executor result)
             # Use recursion_limit to prevent infinite loops (NOT timeout - that's a bad workaround)
             # recursion_limit controls max iterations, which is the proper way to limit ReAct loops
-            # For PM queries with 1 tool call: 3 iterations (think → call → done)
-            recursion_limit = 3  # Reduced from 8 - PM queries need only 1 tool call
+            # For PM queries: think → call → think → call → think → done = ~6 iterations minimum
+            # FIXED: was 3, now 10 to allow PM queries to complete
+            recursion_limit = 10  # Increased from 3 - PM queries need multiple tool calls
+            
+            # 🔍 DEBUG: Log recursion_limit and tool count
+            logger.warning(f"[REACT-DEBUG] ====== REACT AGENT INVOCATION ======")
+            logger.warning(f"[REACT-DEBUG] recursion_limit={recursion_limit}")
+            logger.warning(f"[REACT-DEBUG] tool_count={len(tools)}")
+            logger.warning(f"[REACT-DEBUG] tools={[t.name for t in tools[:5]]}...")  # First 5 tools
+            logger.warning(f"[REACT-DEBUG] user_query={user_query[:100]}...")
+            logger.warning(f"[REACT-DEBUG] ===================================")
             
             # Use astream to capture state incrementally so we can log what happened even if recursion limit is hit
             result_state = {"messages": []}
@@ -5172,7 +5195,7 @@ Question: {input}
                                         pass
                                     
                                     thought_text = f"📋 {tool_name}{result_count_info}"
-                                    logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} nodes.py ToolMessage: {thought_text}")
+                                    logger.info(f"[COUNTER-DEBUG] {datetime.datetime.now().isoformat()} nodes.py ToolMessage: {thought_text}")
                                     
                                     incremental_thoughts.append({
                                         "thought": thought_text,
@@ -5948,9 +5971,10 @@ Question: {input}
                     "partial_result": output if output else "",
                     "previous_result": None,  # Clear previous_result when escalating (prevent adaptive routing from skipping ReAct on next request)
                     "routing_mode": "",  # Clear routing_mode when escalating
-                    "goto": "planner"
-                },
-                goto="planner"
+                    "goto": "planner"  # Conditional edge reads this from state
+                }
+                # NOTE: Do NOT use goto= parameter with conditional edges
+                # The conditional edge `lambda state: state.get("goto", "reporter")` reads from state
             )
         
         # Success - return result to user
@@ -6057,9 +6081,13 @@ Question: {input}
         else:
             pass
         
+        # 🔍 DEBUG: Log routing decision before return
+        logger.warning(f"[REACT-AGENT-DEBUG] Success path - returning with goto='reporter' in update dict")
+        logger.warning(f"[REACT-AGENT-DEBUG] update_dict['goto']={update_dict.get('goto')}")
+        
         return Command(
-            update=update_dict,
-            goto="reporter"  # Route to reporter to finalize
+            update=update_dict
+            # NOTE: Removed goto="reporter" - conditional edge reads state.goto instead
         )
         
     except Exception as e:
@@ -6263,8 +6291,9 @@ async def pm_agent_node(
                         "messages": [HumanMessage(content=error_message, name="pm_agent")],
                         "observations": state.get("observations", []) + [error_message],
                         "current_plan": updated_plan,
-                    },
-                    goto="reporter" if all_done else "research_team",
+                        "goto": "reporter" if all_done else "research_team",  # Set in state for conditional edge
+                    }
+                    # NOTE: Removed goto parameter - direct edge pm_agent→validator handles routing
                 )
         
         # Fallback: route to reporter with error
@@ -6272,8 +6301,9 @@ async def pm_agent_node(
             update={
                 "messages": [HumanMessage(content=error_message, name="pm_agent")],
                 "observations": state.get("observations", []) + [error_message],
-            },
-            goto="reporter",
+                "goto": "reporter",  # Set in state for conditional edge
+            }
+            # NOTE: Removed goto parameter - direct edge pm_agent→validator handles routing
         )
 
         return Command(

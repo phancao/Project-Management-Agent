@@ -95,13 +95,18 @@ class ConversationFlowManager:
             from backend.server.pm_service_client import PMServiceHandler
             from backend.tools.pm_tools import set_pm_handler
             
+            # 🔍 DEBUG: Log PM handler initialization attempt
+            logger.warning("[PM-HANDLER-DEBUG] Attempting to initialize PMServiceHandler...")
+            
             # Use PM Service handler for all PM operations
             self.pm_handler = PMServiceHandler()
             # Set PM handler for tools to use
             set_pm_handler(self.pm_handler)
-            logger.info("PM Handler initialized via PM Service")
+            logger.warning(f"[PM-HANDLER-DEBUG] PM Handler initialized successfully: {self.pm_handler.__class__.__name__}")
         except Exception as e:
-            logger.warning(f"Could not initialize PM handler: {e}")
+            logger.error(f"[PM-HANDLER-DEBUG] ❌ Could not initialize PM handler: {e}")
+            import traceback
+            logger.error(f"[PM-HANDLER-DEBUG] Traceback: {traceback.format_exc()}")
         
         # Keep backward compatibility - pm_provider is no longer directly available
         # Code should use pm_handler instead

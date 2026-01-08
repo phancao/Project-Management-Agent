@@ -300,13 +300,11 @@ function MessageListItem({
                   {message?.content}
                 </Markdown>
               )}
-              {/* SHOW THOUGHTS (Detected intent, etc) */}
+              {/* DEBUG: Intent/thoughts display (minimal) */}
               {hasThoughts && (
-                <div className="flex flex-col gap-2 mb-2">
+                <div className="text-[10px] text-muted-foreground/60 font-mono mb-1">
                   {message.reactThoughts?.map((thought, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 p-2 rounded-md border border-border/50">
-                      <span>{thought.thought}</span>
-                    </div>
+                    <span key={i} className="opacity-60">{thought.thought} </span>
                   ))}
                 </div>
               )}
@@ -361,8 +359,8 @@ function MessageBubble({
       style={{ wordBreak: "break-all" }}
     >
       {message.role === "assistant" && message.agent && (
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground opacity-70">
-          {message.agent === "react_agent" ? "React" : message.agent.replace(/_/g, " ")}
+        <div className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/40 mb-1">
+          {message.agent === "react_agent" ? "react" : message.agent.replace(/_/g, " ")}
         </div>
       )}
       {children}

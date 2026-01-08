@@ -344,11 +344,6 @@ class ContextManager:
         Returns:
             Compressed state with compressed messages and optimization metadata
         """
-        # 🔍 DEBUG: Print stack trace to find WHO is calling compress_messages
-        import traceback
-        logger.error(f"🔴🔴🔴 DEBUG: compress_messages CALLED - agent_type={self.agent_type}")
-        logger.error(f"🔴🔴🔴 Stack trace:\n{''.join(traceback.format_stack()[-8:])}")
-        
         # 🚫🚫🚫 COMPRESSION DISABLED GLOBALLY 🚫🚫🚫
         # PM queries need full data for task tables - compression truncates critical data
         logger.info(f"[CONTEXT-MANAGER] 🚫 COMPRESSION DISABLED - returning original state unchanged")

@@ -129,14 +129,20 @@ def _build_base_graph():
     # Validator routes based on validation result
     def route_from_validator(state):
         goto = state.get("goto", "research_team")
+        # 🔍 DEBUG: Log routing decision
+        logger.warning(f"[VALIDATOR-DEBUG] route_from_validator called - goto='{goto}', has_final_report={state.get('final_report') is not None}")
+        
         # Check if reporter already completed (prevent infinite loop)
         if state.get("final_report"):
             # Reporter already completed, route to END
+            logger.warning(f"[VALIDATOR-DEBUG] final_report exists, routing to __end__")
             return "__end__"
         # Validator can only route to these nodes, map anything else to research_team
         allowed = ["research_team", "reflector", "reporter", "__end__"]
         if goto not in allowed:
+            logger.warning(f"[VALIDATOR-DEBUG] goto '{goto}' not in allowed {allowed}, routing to research_team")
             return "research_team"
+        logger.warning(f"[VALIDATOR-DEBUG] Routing to '{goto}'")
         return goto
     
     builder.add_conditional_edges(

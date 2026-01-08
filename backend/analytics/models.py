@@ -25,6 +25,7 @@ class ChartType(str, Enum):
     SPRINT_REPORT = "sprint_report"
     EPIC_PROGRESS = "epic_progress"
     RELEASE_BURNDOWN = "release_burndown"
+    CAPACITY = "capacity"
 
 
 class ChartDataPoint(BaseModel):
@@ -104,6 +105,7 @@ class WorkItem(BaseModel):
     assigned_to: Optional[str] = Field(None, description="Assignee name")
     created_at: datetime = Field(..., description="Creation timestamp")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
+    due_date: Optional[date_type] = Field(None, description="Due date")
     component: Optional[str] = Field(None, description="Component/module name")
 
 

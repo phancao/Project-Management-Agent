@@ -546,4 +546,26 @@ class AnalyticsManager:
             days_back=days  # Service uses days_back parameter
         )
 
+    async def get_capacity_chart(
+        self,
+        project_id: str,
+        weeks: int = 12
+    ) -> dict:
+        """
+        Get capacity analysis chart.
+        
+        Args:
+            project_id: Project ID
+            weeks: Number of weeks to project (default: 12)
+            
+        Returns:
+            Chart data with capacity vs demand
+        """
+        service, actual_project_id = await self.get_service(project_id)
+        return await service.get_capacity_chart(
+            project_id=actual_project_id,
+            weeks=weeks
+        )
+
+
 

@@ -5,28 +5,26 @@ from ..decorators import mcp_tool, require_task
 
 @mcp_tool(
     name="update_task",
-    description="Update an existing task.",
+    description="Update an existing task. Supports reassigning, moving sprints, changing status, priority, due date, and hours.",
     input_schema={
         "type": "object",
         "properties": {
             "task_id": {"type": "string", "description": "Task ID"},
-            "title": {"type": "string"},
-            "description": {"type": "string"},
-            "status": {"type": "string"},
-            "priority": {"type": "string"}
+            "title": {"type": "string", "description": "New title"},
+            "description": {"type": "string", "description": "New description"},
+            "status": {"type": "string", "description": "New status"},
+            "priority": {"type": "string", "description": "New priority"},
+            "assignee_id": {"type": "string", "description": "New assignee ID"},
+            "sprint_id": {"type": "string", "description": "New sprint ID"},
+            "due_date": {"type": "string", "description": "New due date (YYYY-MM-DD)"},
+            "estimated_hours": {"type": "number", "description": "Estimated hours"},
+            "remaining_hours": {"type": "number", "description": "Remaining hours"}
         },
         "required": ["task_id"]
     }
 )
 class UpdateTaskTool(WriteTool):
-    @require_task
+    # Removed @require_task as pm_service handles parsing and validation
     async def execute(self, task_id: str, **kwargs) -> dict[str, Any]:
-        provider = await self._get_first_provider()
-        return await provider.update_task(task_id, **kwargs)
-    
-    async def _get_first_provider(self):
-        providers = self.context.provider_manager.get_active_providers()
-        if not providers:
-            raise ValueError("No active providers")
-        return self.context.provider_manager.create_provider_instance(providers[0])
+        return await self.context.pm_service.update_task(task_id, **kwargs)
 

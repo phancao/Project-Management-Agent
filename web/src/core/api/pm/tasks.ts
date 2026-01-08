@@ -6,7 +6,8 @@ export interface PMTask {
     status: string;
     assignee_id?: string;
     project_id?: string;
-    deadline?: string;
+    deadline?: string; // Legacy field?
+    due_date?: string; // Correct field from backend headers
     estimated_hours?: number;
     spent_hours?: number;
     remaining_hours?: number;

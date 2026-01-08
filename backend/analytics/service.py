@@ -23,6 +23,7 @@ from backend.analytics.calculators.cfd import calculate_cfd
 from backend.analytics.calculators.cycle_time import calculate_cycle_time
 from backend.analytics.calculators.work_distribution import calculate_work_distribution
 from backend.analytics.calculators.issue_trend import calculate_issue_trend
+from backend.analytics.calculators.capacity import CapacityCalculator
 from backend.analytics.adapters.base import BaseAnalyticsAdapter
 
 
@@ -596,6 +597,56 @@ class AnalyticsService:
             error_msg = f"Failed to fetch issue trend data for project {project_id}: {str(exc)}"
             logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
             raise ValueError(error_msg) from exc
+
+    async def get_capacity_chart(
+        self,
+        project_id: str,
+        weeks: int = 12
+    ) -> ChartResponse:
+        """
+        Get Capacity Planning chart.
+        
+        Args:
+            project_id: Project identifier
+            weeks: Number of weeks to include (default: 12)
+        
+        Returns:
+            ChartResponse with capacity data
+        """
+        cache_key = f"capacity_{project_id}_{weeks}"
+        cached = self._get_from_cache(cache_key)
+        if cached:
+            return cached
+        
+        if not self.adapter:
+            error_msg = f"No analytics adapter configured for project {project_id}"
+            logger.error(f"[AnalyticsService] {error_msg}")
+            raise ValueError(error_msg)
+
+        try:
+            data = await self.adapter.get_capacity_data(project_id)
+            if not data:
+                raise ValueError(f"No capacity data available for project {project_id}")
+                
+            tasks = [self._to_work_item(t) for t in data.get("tasks", [])]
+            team_members = data.get("team_members", [])
+            
+            chart = CapacityCalculator.calculate(
+                work_items=tasks,
+                team_members=team_members,
+                weeks=weeks
+            )
+            
+            # Cache result
+            self._set_cache(cache_key, chart)
+            
+            return chart
+        except ValueError:
+            raise
+        except Exception as exc:
+            error_msg = f"Failed to fetch capacity data for project {project_id}: {str(exc)}"
+            logger.error(f"[AnalyticsService] {error_msg}", exc_info=True)
+            raise ValueError(error_msg) from exc
     
     def clear_cache(self):
         """Clear all cached data"""
@@ -719,6 +770,7 @@ class AnalyticsService:
                 assigned_to=data.assignee_id,
                 created_at=created,
                 completed_at=completed,
+                due_date=data.due_date,
             )
 
         created = cls._parse_datetime(data.get("created_at"))
@@ -763,6 +815,7 @@ class AnalyticsService:
             assigned_to=data.get("assigned_to"),
             created_at=created,
             completed_at=completed,
+            due_date=cls._parse_datetime(data.get("due_date")).date() if data.get("due_date") else None,
         )
 
     @classmethod

@@ -13,9 +13,9 @@ from ..decorators import mcp_tool, default_value
 @mcp_tool(
     name="list_tasks",
     description=(
-        "List tasks from PM providers. "
-        "Supports filtering by project, assignee, sprint, status, and more. "
-        "Returns task information including title, status, assignee, and dates."
+        "List tasks from PM providers using unified streaming service. "
+        "Supports filtering by project, assignee, sprint (smart resolution), status, and more. "
+        "Returns normalized task objects with composite IDs (provider_id:task_id) for safe multi-provider access."
     ),
     input_schema={
         "type": "object",
@@ -107,59 +107,20 @@ class ListTasksTool(ReadTool):
         
         # Parse project_id if provided
         if project_id:
-            provider_id, actual_project_id = self._parse_project_id(project_id)
-            provider = await self.context.provider_manager.get_provider(provider_id)
-            
-            # Get tasks from specific project
-            raw_tasks = await provider.list_tasks(
-                project_id=actual_project_id,
-                assignee_id=assignee_id
-            )
-            
-            # Filter by sprint_id if provided (client-side filtering since OpenProject doesn't support it directly)
-            if actual_sprint_id:
-                raw_tasks = [
-                    task for task in raw_tasks 
-                    if self._task_in_sprint(task, actual_sprint_id)
-                ]
-            
-            # Convert to dicts and add provider metadata
-            provider_conn = self.context.provider_manager.get_provider_by_id(provider_id)
-            tasks = []
-            for task in raw_tasks:
-                task_dict = self._to_dict(task)
-                task_dict["provider_id"] = str(provider_conn.id)
-                task_dict["provider_name"] = provider_conn.name
-                tasks.append(task_dict)
-            
-        else:
-            # Get tasks from all providers
-            providers = self.context.provider_manager.get_active_providers()
-            tasks = []
-            
-            for provider_conn in providers:
-                try:
-                    provider = self.context.provider_manager.create_provider_instance(provider_conn)
-                    provider_tasks = await provider.list_tasks(
-                        assignee_id=assignee_id
-                    )
-                    
-                    # Filter by sprint_id if provided
-                    if actual_sprint_id:
-                        provider_tasks = [
-                            task for task in provider_tasks 
-                            if self._task_in_sprint(task, actual_sprint_id)
-                        ]
-                    
-                    # Convert to dicts and add provider metadata
-                    for task in provider_tasks:
-                        task_dict = self._to_dict(task)
-                        task_dict["provider_id"] = str(provider_conn.id)
-                        task_dict["provider_name"] = provider_conn.name
-                        tasks.append(task_dict)
-                except Exception as e:
-                    self.context.provider_manager.record_error(str(provider_conn.id), e)
-                    continue
+            # Smart Resolution for Sprint ID (if needed)
+            # (Logic maintained from original tool)
+            # ...
+            pass # We keep the smart resolution logic above this block if possible, but 
+                 # to be safe, I'm replacing the core fetching logic below.
+
+        # Use PM Service to list tasks
+        # This gives us streaming, buffering, and unified ID handling
+        tasks = await self.context.pm_service.list_tasks(
+            project_id=project_id,
+            sprint_id=actual_sprint_id,
+            assignee_id=assignee_id,
+            status=status
+        )
         
         # Apply limit (cap at 100 max to prevent buffer overflow)
         total = len(tasks)

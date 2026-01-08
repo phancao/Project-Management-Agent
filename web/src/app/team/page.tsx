@@ -13,6 +13,8 @@ import { TeamOverview } from "./components/team-overview";
 import { TeamMembers } from "./components/team-members";
 import { MemberMatrix } from "./components/member-matrix";
 import { TeamWorklogs } from "./components/team-worklogs";
+import { CapacityPlanningView } from "./components/capacity-planning";
+import { LineChart } from "lucide-react";
 import { useTeamDataContext } from "./context/team-data-context";
 import { TeamPageLoadingOverlay } from "./components/team-page-loading-overlay";
 import { MemberProfileDialog } from "./components/member-profile-dialog";
@@ -59,6 +61,10 @@ function TeamContent() {
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Project Assignation
                 </TabsTrigger>
+                <TabsTrigger value="planning" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                    <LineChart className="w-4 h-4 mr-2" />
+                    Planning
+                </TabsTrigger>
                 <TabsTrigger value="worklogs" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
                     <ClipboardList className="w-4 h-4 mr-2" />
                     Worklogs
@@ -75,6 +81,10 @@ function TeamContent() {
 
             <TabsContent value="assignments" className="space-y-6 animate-in fade-in-50 duration-300">
                 <MemberMatrix />
+            </TabsContent>
+
+            <TabsContent value="planning" className="space-y-6 animate-in fade-in-50 duration-300">
+                <CapacityPlanningView />
             </TabsContent>
 
             <TabsContent value="worklogs" className="space-y-6 animate-in fade-in-50 duration-300">

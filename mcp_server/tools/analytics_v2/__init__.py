@@ -18,6 +18,8 @@ from .cfd import CFDChartTool
 from .cycle_time import CycleTimeChartTool
 from .work_distribution import WorkDistributionChartTool
 from .issue_trend import IssueTrendChartTool
+from .capacity_planning import CapacityPlanningTool
+from .register import register_analytics_tools_v2
 
 __all__ = [
     "BurndownChartTool",

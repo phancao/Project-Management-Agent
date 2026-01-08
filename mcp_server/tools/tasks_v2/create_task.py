@@ -5,7 +5,7 @@ from ..decorators import mcp_tool, require_project
 
 @mcp_tool(
     name="create_task",
-    description="Create a new task in a project.",
+    description="Create a new task in a project. Supports advanced fields: sprint, story points, priority, due date, parent_task, and type.",
     input_schema={
         "type": "object",
         "properties": {
@@ -14,18 +14,26 @@ from ..decorators import mcp_tool, require_project
             "description": {"type": "string", "description": "Task description"},
             "assignee_id": {"type": "string", "description": "Assignee user ID"},
             "priority": {"type": "string", "description": "Priority"},
-            "due_date": {"type": "string", "description": "Due date"}
+            "due_date": {"type": "string", "description": "Due date"},
+            "sprint_id": {"type": "string", "description": "Sprint ID (optional)"},
+            "story_points": {"type": "number", "description": "Story points (optional)"},
+            "task_type": {"type": "string", "description": "Task type (bug, feature, etc.)"},
+            "parent_id": {"type": "string", "description": "Parent task ID for subtasks"}
         },
         "required": ["project_id", "title"]
     }
 )
 class CreateTaskTool(WriteTool):
-    @require_project
-    async def execute(self, project_id: str, title: str, **kwargs) -> dict[str, Any]:
-        provider_id, actual_project_id = self._parse_project_id(project_id)
-        provider = await self.context.provider_manager.get_provider(provider_id)
-        return await provider.create_task(project_id=actual_project_id, title=title, **kwargs)
-    
-    def _parse_project_id(self, project_id: str) -> tuple[str, str]:
-        return project_id.split(":", 1) if ":" in project_id else (str(self.context.provider_manager.get_active_providers()[0].id), project_id)
+    # Removed @require_project as pm_service handles validation
+    async def execute(
+        self, 
+        project_id: str, 
+        title: str, 
+        **kwargs
+    ) -> dict[str, Any]:
+        return await self.context.pm_service.create_task(
+            project_id=project_id, 
+            title=title, 
+            **kwargs
+        )
 

@@ -71,6 +71,12 @@ class PMHandler:
         Raises:
             ValueError: If no active provider has pm_service_url configured
         """
+        import os
+        # Check environment variable first (override)
+        env_url = os.environ.get("PM_SERVICE_URL")
+        if env_url:
+            return env_url
+            
         providers = self.get_active_providers()
         
         if not providers:

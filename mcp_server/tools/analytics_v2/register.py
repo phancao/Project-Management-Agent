@@ -20,6 +20,7 @@ from . import (
     CycleTimeChartTool,
     WorkDistributionChartTool,
     IssueTrendChartTool,
+    CapacityPlanningTool,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ def register_analytics_tools_v2(
         CycleTimeChartTool,
         WorkDistributionChartTool,
         IssueTrendChartTool,
+        CapacityPlanningTool,
     ]
     
     for tool_class in tool_classes:

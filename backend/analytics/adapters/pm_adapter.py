@@ -871,6 +871,36 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
         except Exception as e:
             logger.error(f"[PMProviderAnalyticsAdapter] Error fetching CFD data: {e}", exc_info=True)
             raise
+
+    async def get_capacity_data(self, project_id: str) -> Dict[str, Any]:
+        """
+        Fetch data for capacity planning.
+        
+        Returns:
+            Dict containing 'tasks' (list of PMTasks) and 'team_members' (list of IDs)
+        """
+        logger.info(f"[PMProviderAnalyticsAdapter] Fetching capacity data: project={project_id}")
+        project_key = self._extract_project_key(project_id)
+        
+        try:
+            # Fetch all tasks (active and planned)
+            # Ideally filter for non-completed tasks, but list_tasks relies on provider defaults usually
+            # We fetch all and let calculator filter by status if needed
+            all_tasks = await self.provider.list_tasks(project_id=project_key)
+            
+            # Extract unique team members
+            team_members = list(set(t.assignee_id for t in all_tasks if t.assignee_id))
+            
+            logger.info(f"[PMProviderAnalyticsAdapter] Capacity data: {len(all_tasks)} tasks, {len(team_members)} team members")
+            
+            return {
+                "tasks": all_tasks,
+                "team_members": team_members
+            }
+        except Exception as e:
+            logger.error(f"[PMProviderAnalyticsAdapter] Error fetching capacity data: {e}", exc_info=True)
+            raise
+
     
     async def get_cycle_time_data(
         self,

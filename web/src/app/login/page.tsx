@@ -7,10 +7,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Rocket, Loader2 } from 'lucide-react';
-import { login, register } from '~/core/api/auth';
+import { useAuth } from '~/core/contexts/auth-context';
 
 export default function LoginPage() {
     const router = useRouter();
+    const { login, register } = useAuth();
     const [isLogin, setIsLogin] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -32,7 +33,7 @@ export default function LoginPage() {
             } else {
                 await register({ email, password, name });
             }
-            router.push('/pm/chat');
+            // Navigation is handled by useAuth().login/register
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Authentication failed');
         } finally {

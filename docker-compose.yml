@@ -126,13 +126,10 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:6333/healthz" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    # Note: Disabling healthcheck as qdrant's minimal image doesn't include curl/wget
+    # The service is accessible at http://localhost:6333/healthz from host
 
-  # OpenProject Database v13.4.1 (PostgreSQL 15.13 for production dump)
+    # OpenProject Database v13.4.1 (PostgreSQL 15.13 for production dump)
   openproject_db_v13:
     image: postgres:15.13
     environment:

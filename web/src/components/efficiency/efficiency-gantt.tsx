@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { format, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isToday, isWeekend, isSameMonth, isSameWeek, differenceInBusinessDays } from 'date-fns';
+import { format, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isToday, isWeekend, isSameMonth, isSameWeek, differenceInBusinessDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { cn } from '~/lib/utils';
 import { type PMUser } from '~/core/api/pm/users';
 import { type PMTimeEntry } from '~/core/api/pm/time-entries';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
+import { type MemberPeriod } from './member-duration-manager';
 
 interface EfficiencyGanttProps {
     members: PMUser[];
@@ -12,9 +13,10 @@ interface EfficiencyGanttProps {
     endDate: Date;
     isLoading: boolean;
     viewMode: 'day' | 'week' | 'month';
+    activePeriods?: Record<string, MemberPeriod[]>;
 }
 
-export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLoading, viewMode }: EfficiencyGanttProps) {
+export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLoading, viewMode, activePeriods = {} }: EfficiencyGanttProps) {
 
     // 1. Generate Periods (Columns)
     const periods = useMemo(() => {
@@ -43,8 +45,28 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
         }
     };
 
-    // 3. Helper: Get Target Hours for a Period (Business Days * 8)
-    const getTargetHours = (periodStart: Date) => {
+    // 3. Helper: Get allocation percentage for a member on a specific day
+    const getMemberAllocation = (memberId: string, day: Date): number => {
+        const memberPeriods = activePeriods[memberId];
+        if (!memberPeriods || memberPeriods.length === 0) {
+            return 100; // Default 100% if no periods defined
+        }
+
+        // Find if this day falls within any active period
+        for (const period of memberPeriods) {
+            if (period.range.from && isWithinInterval(day, {
+                start: startOfDay(period.range.from),
+                end: endOfDay(period.range.to || period.range.from)
+            })) {
+                return period.allocation;
+            }
+        }
+
+        return 0; // If day is outside all active periods, member is not active
+    };
+
+    // 4. Helper: Get Target Hours for a Period (Business Days * 8 * allocation)
+    const getTargetHours = (memberId: string, periodStart: Date) => {
         let periodEnd;
         switch (viewMode) {
             case 'week':
@@ -54,33 +76,23 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                 periodEnd = endOfMonth(periodStart);
                 break;
             case 'day':
-            default:
-                return 8; // Constant target for day
+            default: {
+                const allocation = getMemberAllocation(memberId, periodStart);
+                return (8 * allocation) / 100; // e.g., 50% = 4h target
+            }
         }
 
-        // Return business days * 8
-        // Note: differenceInBusinessDays returns days between, excluding weekends. +1 for inclusive start.
-        // But we must handle partial periods if startDate/endDate clip the period?
-        // For simplicity in this Gantt, let's assume standard Capacity for the full period column.
-        // Or strictly strictly: filter weekends in range.
-        const start = periodStart < startDate ? startDate : periodStart;
-        const end = periodEnd > endDate ? endDate : periodEnd;
-
-        // Use simple calc for full periods to match standard expectations (40h week, ~176h month)
-        // If we clamp to user selection, the cells at edges might start partial.
-        // Let's use the full period capacity for the visualization target to encourage full week work?
-        // No, better to use standard constant for "Standard Week" = 40h.
-
-        if (viewMode === 'week') return 40;
-
-        if (viewMode === 'month') {
-            // Exact business days in month
-            const days = eachDayOfInterval({ start: periodStart, end: periodEnd });
-            const businessDays = days.filter(d => !isWeekend(d)).length;
-            return businessDays * 8;
+        // For week/month: calculate weighted capacity based on allocation per day
+        const days = eachDayOfInterval({ start: periodStart, end: periodEnd });
+        let totalCapacity = 0;
+        for (const day of days) {
+            if (!isWeekend(day)) {
+                const allocation = getMemberAllocation(memberId, day);
+                totalCapacity += (8 * allocation) / 100;
+            }
         }
 
-        return 8;
+        return totalCapacity;
     };
 
 
@@ -215,33 +227,113 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                     {periods.map(period => {
                                         const dateKey = `${member.id}_${getPeriodKey(period)}`;
                                         const hours = worklogMap.get(dateKey) || 0;
-                                        const target = getTargetHours(period);
+                                        const target = getTargetHours(member.id, period);
                                         const isWknd = viewMode === 'day' && isWeekend(period);
+                                        const percentage = Math.min((hours / target) * 100, 100);
+
+                                        // SVG circle params
+                                        const size = viewMode === 'day' ? 36 : viewMode === 'week' ? 44 : 52;
+                                        const strokeWidth = viewMode === 'day' ? 4 : 5;
+                                        const radius = (size - strokeWidth) / 2;
+                                        const circumference = 2 * Math.PI * radius;
+                                        const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+                                        // Color based on percentage
+                                        const getStrokeColor = () => {
+                                            if (hours === 0) return 'stroke-transparent';
+                                            if (percentage > 105) return 'stroke-red-500';
+                                            if (percentage >= 90) return 'stroke-emerald-500';
+                                            return 'stroke-amber-400';
+                                        };
 
                                         return (
                                             <div
                                                 key={period.toISOString()}
                                                 className={cn(
-                                                    "shrink-0 flex items-center justify-center border-r border-gray-100 dark:border-gray-800 last:border-0 relative p-1",
-                                                    viewMode === 'day' ? "w-12" : viewMode === 'week' ? "w-24" : "w-32",
+                                                    "shrink-0 flex items-center justify-center border-r border-gray-100 dark:border-gray-800 last:border-0 relative",
+                                                    viewMode === 'day' ? "w-12 h-12" : viewMode === 'week' ? "w-24 h-16" : "w-32 h-16",
                                                     isWknd ? "bg-slate-200/80 dark:bg-slate-800/60" : ""
                                                 )}
                                             >
                                                 {hours > 0 && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <div className="w-full h-full relative flex items-center justify-start bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
-                                                                {/* Progress Bar */}
-                                                                <div
-                                                                    className={cn(
-                                                                        "h-full transition-all duration-300",
-                                                                        getStatusColor(hours, target)
-                                                                    )}
-                                                                    style={{ width: `${Math.min((hours / target) * 100, 100)}%` }}
-                                                                />
+                                                            <div className="relative flex items-center justify-center cursor-pointer">
+                                                                {/* Pie Wedge Chart - hours out of 8 */}
+                                                                <svg width={size} height={size} className="transform -rotate-90">
+                                                                    {/* Background circle (outline) */}
+                                                                    <circle
+                                                                        cx={size / 2}
+                                                                        cy={size / 2}
+                                                                        r={radius - 2}
+                                                                        fill="none"
+                                                                        strokeWidth={2}
+                                                                        className="stroke-gray-300 dark:stroke-gray-600"
+                                                                    />
+                                                                    {/* Pie wedge for hours logged (out of 8h max) */}
+                                                                    {hours > 0 && (() => {
+                                                                        const hoursAngle = Math.min((hours / 8) * 360, 360);
+                                                                        const startAngle = 0;
+                                                                        const endAngle = hoursAngle;
+                                                                        const largeArc = endAngle > 180 ? 1 : 0;
+                                                                        const cx = size / 2;
+                                                                        const cy = size / 2;
+                                                                        const r = radius - 4;
 
-                                                                {/* Hours Overlay */}
-                                                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-700 dark:text-gray-300">
+                                                                        // Handle full circle case
+                                                                        if (hours >= 8) {
+                                                                            return (
+                                                                                <circle
+                                                                                    cx={cx}
+                                                                                    cy={cy}
+                                                                                    r={r}
+                                                                                    className={cn(
+                                                                                        "transition-all duration-500",
+                                                                                        percentage > 105 ? "fill-red-500" : percentage >= 90 ? "fill-emerald-500" : "fill-amber-400"
+                                                                                    )}
+                                                                                />
+                                                                            );
+                                                                        }
+
+                                                                        const x1 = cx;
+                                                                        const y1 = cy - r;
+                                                                        const x2 = cx + r * Math.sin((endAngle * Math.PI) / 180);
+                                                                        const y2 = cy - r * Math.cos((endAngle * Math.PI) / 180);
+
+                                                                        return (
+                                                                            <path
+                                                                                d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`}
+                                                                                className={cn(
+                                                                                    "transition-all duration-500",
+                                                                                    percentage > 105 ? "fill-red-500" : percentage >= 90 ? "fill-emerald-500" : "fill-amber-400"
+                                                                                )}
+                                                                            />
+                                                                        );
+                                                                    })()}
+                                                                    {/* Clock tick marks (8 ticks for 8 hours) */}
+                                                                    {[...Array(8)].map((_, i) => {
+                                                                        const angle = (i / 8) * 360;
+                                                                        const tickOuterRadius = size / 2 - 1;
+                                                                        const tickInnerRadius = tickOuterRadius - 5;
+                                                                        const x1 = size / 2 + tickInnerRadius * Math.cos((angle * Math.PI) / 180);
+                                                                        const y1 = size / 2 + tickInnerRadius * Math.sin((angle * Math.PI) / 180);
+                                                                        const x2 = size / 2 + tickOuterRadius * Math.cos((angle * Math.PI) / 180);
+                                                                        const y2 = size / 2 + tickOuterRadius * Math.sin((angle * Math.PI) / 180);
+                                                                        return (
+                                                                            <line
+                                                                                key={i}
+                                                                                x1={x1}
+                                                                                y1={y1}
+                                                                                x2={x2}
+                                                                                y2={y2}
+                                                                                strokeWidth={1.5}
+                                                                                className="stroke-gray-600 dark:stroke-gray-400"
+                                                                            />
+                                                                        );
+                                                                    })}
+                                                                </svg>
+                                                                {/* Hours text in center */}
+                                                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-200">
                                                                     {Number.isInteger(hours) ? hours : hours.toFixed(1)}
                                                                 </span>
                                                             </div>
@@ -254,7 +346,7 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                             </div>
                                                             <div>{member.name}: {hours.toFixed(2)} hours</div>
                                                             <div className="text-gray-400 mt-1 capitalize">
-                                                                Target: {target}h ({((hours / target) * 100).toFixed(0)}%)
+                                                                Target: {target}h ({percentage.toFixed(0)}%)
                                                             </div>
                                                         </TooltipContent>
                                                     </Tooltip>

@@ -6,6 +6,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 import { EfficiencyDashboard } from "~/components/efficiency/efficiency-dashboard";
+import { type MemberPeriod } from "~/components/efficiency/member-duration-manager";
 import { listTasks, type PMTask } from "~/core/api/pm/tasks";
 import { listTimeEntries, type PMTimeEntry } from "~/core/api/pm/time-entries";
 import { listUsers, type PMUser } from "~/core/api/pm/users";
@@ -19,27 +20,66 @@ export function EfficiencyPanelView() {
     const [users, setUsers] = useState<PMUser[]>([]);
     const [timeEntries, setTimeEntries] = useState<PMTimeEntry[]>([]);
 
-    const [dateRange, setDateRange] = useState<DateRange | undefined>({
-        from: startOfMonth(new Date()),
-        to: new Date(),
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+        // Initialize from localStorage if available
+        if (typeof window !== 'undefined' && projectId) {
+            const saved = localStorage.getItem(`ee-daterange-project-${projectId}`);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return {
+                        from: parsed.from ? new Date(parsed.from) : undefined,
+                        to: parsed.to ? new Date(parsed.to) : undefined
+                    };
+                } catch { /* ignore */ }
+            }
+        }
+        // Default: start of month to today
+        return { from: startOfMonth(new Date()), to: new Date() };
     });
 
-    // Member Active Periods (Persistence)
-    const [activePeriods, setActivePeriods] = useState<Record<string, DateRange[]>>({});
+    // Save dateRange to localStorage when it changes
+    const handleDateRangeChange = (range: DateRange | undefined) => {
+        setDateRange(range);
+        if (projectId && range) {
+            localStorage.setItem(`ee-daterange-project-${projectId}`, JSON.stringify(range));
+        }
+    };
 
-    // Load from localStorage on mount
+    // Member Active Periods (Persistence) - Using MemberPeriod for allocation support
+    const [activePeriods, setActivePeriods] = useState<Record<string, MemberPeriod[]>>({});
+
+    // Load from localStorage on mount - with backward compatibility
     useEffect(() => {
         if (!projectId) return;
         try {
             const saved = localStorage.getItem(`ee-durations-project-${projectId}`);
             if (saved) {
                 const parsed = JSON.parse(saved);
-                const hydrated: Record<string, DateRange[]> = {};
+                const hydrated: Record<string, MemberPeriod[]> = {};
                 Object.keys(parsed).forEach(key => {
-                    hydrated[key] = parsed[key].map((range: any) => ({
-                        from: range.from ? new Date(range.from) : undefined,
-                        to: range.to ? new Date(range.to) : undefined
-                    }));
+                    hydrated[key] = parsed[key].map((item: any) => {
+                        // Check if it's new MemberPeriod format or old DateRange format
+                        if (item.range) {
+                            // New format: { range: DateRange, allocation: number }
+                            return {
+                                range: {
+                                    from: item.range.from ? new Date(item.range.from) : undefined,
+                                    to: item.range.to ? new Date(item.range.to) : undefined
+                                },
+                                allocation: item.allocation ?? 100
+                            };
+                        } else {
+                            // Old format: DateRange directly
+                            return {
+                                range: {
+                                    from: item.from ? new Date(item.from) : undefined,
+                                    to: item.to ? new Date(item.to) : undefined
+                                },
+                                allocation: 100 // Default allocation for old data
+                            };
+                        }
+                    });
                 });
                 setActivePeriods(hydrated);
             }
@@ -48,7 +88,7 @@ export function EfficiencyPanelView() {
         }
     }, [projectId]);
 
-    const handleActivePeriodsChange = (periods: Record<string, DateRange[]>) => {
+    const handleActivePeriodsChange = (periods: Record<string, MemberPeriod[]>) => {
         setActivePeriods(periods);
         if (projectId) {
             localStorage.setItem(`ee-durations-project-${projectId}`, JSON.stringify(periods));
@@ -134,7 +174,7 @@ export function EfficiencyPanelView() {
                 timeEntries={timeEntries}
                 isLoading={isLoading}
                 dateRange={dateRange}
-                onDateRangeChange={setDateRange}
+                onDateRangeChange={handleDateRangeChange}
                 activePeriods={activePeriods}
                 onActivePeriodsChange={handleActivePeriodsChange}
                 title="Project Efficiency"

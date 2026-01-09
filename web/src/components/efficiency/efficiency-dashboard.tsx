@@ -268,6 +268,7 @@ export function EfficiencyDashboard({
                             endDate={dateRange.to}
                             isLoading={isLoading}
                             viewMode={viewMode}
+                            activePeriods={activePeriods}
                         />
                     ) : (
                         <div className="text-center py-10 text-gray-400">Please select a date range</div>

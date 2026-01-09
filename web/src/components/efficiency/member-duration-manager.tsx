@@ -132,23 +132,30 @@ export function MemberDurationManager({ members, activePeriods, onChange }: Memb
                                     )}
 
                                     {periods.map((period, index) => (
-                                        <Badge key={index} variant="secondary" className="gap-1.5 py-1 pr-1.5 flex items-center">
-                                            <CalendarIcon className="w-3 h-3 text-gray-500" />
-                                            <span>
+                                        <div
+                                            key={index}
+                                            className="relative flex items-center gap-1.5 py-1 pr-1.5 pl-2 rounded-md overflow-hidden bg-gray-300 dark:bg-gray-700"
+                                        >
+                                            {/* Progress bar fill as background */}
+                                            <div
+                                                className="absolute inset-0 bg-indigo-500 dark:bg-indigo-600 transition-all duration-300"
+                                                style={{ width: `${period.allocation}%` }}
+                                            />
+                                            {/* Content on top */}
+                                            <CalendarIcon className="relative w-3 h-3 text-white/80" />
+                                            <span className="relative text-sm text-white font-medium">
                                                 {format(period.range.from!, "MMM d")} - {period.range.to ? format(period.range.to, "MMM d") : "..."}
                                             </span>
-                                            {period.allocation !== 100 && (
-                                                <span className="ml-1 text-xs font-semibold text-indigo-600 bg-indigo-50 px-1 rounded">
-                                                    {period.allocation}%
-                                                </span>
-                                            )}
+                                            <span className="relative ml-1 text-xs font-bold text-white">
+                                                {period.allocation}%
+                                            </span>
                                             <button
                                                 onClick={() => handleRemovePeriod(member.id, index)}
-                                                className="ml-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full p-0.5 transition-colors"
+                                                className="relative ml-1 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-full p-0.5 transition-colors"
                                             >
                                                 <X className="w-3 h-3 text-gray-500 hover:text-red-500" />
                                             </button>
-                                        </Badge>
+                                        </div>
                                     ))}
 
                                     <Popover open={isAdding} onOpenChange={(open) => {

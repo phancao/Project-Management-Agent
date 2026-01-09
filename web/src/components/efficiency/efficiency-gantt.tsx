@@ -246,6 +246,9 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                             return 'stroke-amber-400';
                                         };
 
+                                        // Check if member is allocated (has non-zero target)
+                                        const isAllocated = target > 0;
+
                                         return (
                                             <div
                                                 key={period.toISOString()}
@@ -255,10 +258,13 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                     isWknd ? "bg-slate-200/80 dark:bg-slate-800/60" : ""
                                                 )}
                                             >
-                                                {hours > 0 && (
+                                                {isAllocated && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <div className="relative flex items-center justify-center cursor-pointer">
+                                                            <div className={cn(
+                                                                "relative flex items-center justify-center cursor-pointer",
+                                                                isWknd && "opacity-30"
+                                                            )}>
                                                                 {/* Pie Wedge Chart - hours out of 8 */}
                                                                 <svg width={size} height={size} className="transform -rotate-90">
                                                                     {/* Background circle (outline) */}
@@ -333,7 +339,10 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                                     })}
                                                                 </svg>
                                                                 {/* Hours text in center */}
-                                                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-200">
+                                                                <span className={cn(
+                                                                    "absolute inset-0 flex items-center justify-center text-[10px] font-bold",
+                                                                    hours === 0 && !isWknd ? "text-red-500" : "text-gray-700 dark:text-gray-200"
+                                                                )}>
                                                                     {Number.isInteger(hours) ? hours : hours.toFixed(1)}
                                                                 </span>
                                                             </div>
@@ -350,9 +359,6 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                             </div>
                                                         </TooltipContent>
                                                     </Tooltip>
-                                                )}
-                                                {hours === 0 && ((viewMode === 'day' && isToday(period)) || (viewMode === 'week' && isSameWeek(period, new Date(), { weekStartsOn: 1 })) || (viewMode === 'month' && isSameMonth(period, new Date()))) && (
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                                                 )}
                                             </div>
                                         );

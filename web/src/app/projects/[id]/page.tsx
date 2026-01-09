@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, use } from 'react';
 import { Clock, Download, Share2, Filter, ArrowLeft } from "lucide-react";
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -25,8 +25,9 @@ import { useTeamUsers } from '~/app/team/context/team-data-context'; // To get m
 // So we need to fetch users. Let's use `listUsers` directly if available.
 import { listUsers, type PMUser } from '~/core/api/pm/users';
 
-export default function ProjectDetailPage({ params }: { params: { id: string } }) {
-    const projectId = decodeURIComponent(params.id);
+export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const resolvedParams = use(params);
+    const projectId = decodeURIComponent(resolvedParams.id);
     const { projects, loading: projectsLoading } = useProjects();
 
     // Derived Project State
@@ -52,9 +53,9 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
     // Load from localStorage
     useEffect(() => {
-        if (!params.id) return;
+        if (!resolvedParams.id) return;
         try {
-            const saved = localStorage.getItem(`ee-durations-project-${params.id}`);
+            const saved = localStorage.getItem(`ee-durations-project-${resolvedParams.id}`);
             if (saved) {
                 const parsed = JSON.parse(saved);
                 const hydrated: Record<string, MemberPeriod[]> = {};
@@ -89,12 +90,12 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         } catch (e) {
             console.error("Failed to load active periods", e);
         }
-    }, [params.id]);
+    }, [resolvedParams.id]);
 
     const handleActivePeriodsChange = (periods: Record<string, MemberPeriod[]>) => {
         setActivePeriods(periods);
-        if (params.id) {
-            localStorage.setItem(`ee-durations-project-${params.id}`, JSON.stringify(periods));
+        if (resolvedParams.id) {
+            localStorage.setItem(`ee-durations-project-${resolvedParams.id}`, JSON.stringify(periods));
         }
     };
 

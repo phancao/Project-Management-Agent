@@ -19,20 +19,7 @@ import { LineChart, Timer } from "lucide-react";
 import { useTeamDataContext } from "./context/team-data-context";
 import { TeamPageLoadingOverlay } from "./components/team-page-loading-overlay";
 import { MemberProfileDialog } from "./components/member-profile-dialog";
-
-// Context for member profile dialog
-interface MemberProfileContextType {
-    openMemberProfile: (memberId: string) => void;
-}
-const MemberProfileContext = createContext<MemberProfileContextType | null>(null);
-
-export function useMemberProfile() {
-    const context = useContext(MemberProfileContext);
-    if (!context) {
-        throw new Error('useMemberProfile must be used within MemberProfileProvider');
-    }
-    return context;
-}
+import { MemberProfileContext } from "./context/member-profile-context";
 
 /**
  * TeamContent renders the tabs only after the initial blocking load is complete.

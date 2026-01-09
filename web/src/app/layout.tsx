@@ -17,6 +17,7 @@ import { Toaster } from "../components/deer-flow/toaster";
 import { LoadingProvider } from "~/core/contexts/loading-context";
 import { LoadingScreen } from "~/components/ui/loading-screen";
 import { AuthProvider } from "~/core/contexts/auth-context";
+import { HolidaysProvider } from "~/contexts/holidays-context";
 
 export const metadata: Metadata = {
   title: "🌌 Galaxy AI Project Manager",
@@ -57,7 +58,9 @@ export default async function RootLayout({
           <LoadingProvider>
             <LoadingScreen />
             <ThemeProviderWrapper>
-              <AuthProvider>{children}</AuthProvider>
+              <HolidaysProvider>
+                <AuthProvider>{children}</AuthProvider>
+              </HolidaysProvider>
             </ThemeProviderWrapper>
           </LoadingProvider>
           <Toaster />

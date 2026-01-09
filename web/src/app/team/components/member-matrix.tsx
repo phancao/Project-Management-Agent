@@ -28,7 +28,7 @@ import { useProjects, type Project } from "~/core/api/hooks/pm/use-projects";
 import type { PMTask } from "~/core/api/pm/tasks";
 import type { PMUser } from "~/core/api/pm/users";
 import { cn } from "~/lib/utils";
-import { useMemberProfile } from "../page";
+import { useMemberProfile } from "../context/member-profile-context";
 
 // --- Draggable Member Item ---
 function SortableMember({ member }: { member: PMUser }) {

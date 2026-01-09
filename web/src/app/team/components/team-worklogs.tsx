@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight, Users, Loader2 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar"
 import { Badge } from "~/components/ui/badge"
 import { cn } from "~/lib/utils"
-import { useMemberProfile } from "../page"
+import { useMemberProfile } from "../context/member-profile-context"
 
 interface TeamData {
     id: string

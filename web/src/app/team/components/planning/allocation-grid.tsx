@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
-import { useMemberProfile } from "../../page";
+import { useMemberProfile } from "../../context/member-profile-context";
 
 interface AllocationGridProps {
     weeks: string[];

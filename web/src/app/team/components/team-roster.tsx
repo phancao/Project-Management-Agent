@@ -20,7 +20,7 @@ import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 import type { Team } from "~/core/hooks/use-teams"
 import { useTeamDataContext, useTeamUsers, useAllUsers } from "../context/team-data-context"
 import type { PMUser } from "~/core/api/pm/users"
-import { useMemberProfile } from "../page"
+import { useMemberProfile } from "../context/member-profile-context"
 
 // Clickable member card that opens profile dialog
 function MemberClickable({ member }: { member: PMUser }) {

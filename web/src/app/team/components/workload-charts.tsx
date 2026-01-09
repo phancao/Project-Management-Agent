@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
 import { Button } from "~/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import { Calendar } from "~/components/ui/calendar"
-import { useMemberProfile } from "../page"
+import { useMemberProfile } from "../context/member-profile-context"
 
 // Helper to get start of week (Monday) with offset
 function getWeekStart(weekOffset: number = 0): Date {

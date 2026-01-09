@@ -42,6 +42,7 @@ export function useProjectData() {
     if (parts.length < 2) return true; // Invalid format, let backend handle
 
     const providerId = parts[0];
+    if (!providerId) return true; // No provider ID, let backend handle
     const isActive = mappings.isActiveMap.get(providerId);
 
     // If we have info about this provider, return its status

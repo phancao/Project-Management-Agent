@@ -96,8 +96,8 @@ export function CapacityPlanningView() {
 
                     // Add to Grid (Member aggregates)
                     const memberStats = memberMap.get(task.assignee_id);
-                    if (memberStats) {
-                        memberStats.allocations[i] += load;
+                    if (memberStats && i < memberStats.allocations.length) {
+                        memberStats.allocations[i] = (memberStats.allocations[i] ?? 0) + load;
                     }
                 }
             });

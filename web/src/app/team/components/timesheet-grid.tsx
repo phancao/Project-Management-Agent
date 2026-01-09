@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/com
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
-import { useMemberProfile } from "../page";
+import { useMemberProfile } from "../context/member-profile-context";
 // @ts-expect-error - Direct import
 import Check from "lucide-react/dist/esm/icons/check";
 // @ts-expect-error - Direct import

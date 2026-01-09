@@ -10,7 +10,7 @@ import { Loader2, BarChart3, Users, ListTodo, TrendingUp, Briefcase, Clock } fro
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { Progress } from "~/components/ui/progress";
-import { useMemberProfile } from "../page";
+import { useMemberProfile } from "../context/member-profile-context";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 

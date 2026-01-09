@@ -15,7 +15,8 @@ import { MemberMatrix } from "./components/member-matrix";
 import { TeamWorklogs } from "./components/team-worklogs";
 import { CapacityPlanningView } from "./components/capacity-planning";
 import { EfficiencyView } from "./components/efficiency-view";
-import { LineChart, Timer } from "lucide-react";
+import { LineChart, Timer, Calendar } from "lucide-react";
+import Link from "next/link";
 import { useTeamDataContext } from "./context/team-data-context";
 import { TeamPageLoadingOverlay } from "./components/team-page-loading-overlay";
 import { MemberProfileDialog } from "./components/member-profile-dialog";
@@ -106,14 +107,23 @@ export default function TeamPage() {
             <div className="min-h-screen bg-white dark:bg-gray-950">
                 <PMHeader />
                 <div className="pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
-                    <div className="flex items-center gap-3 mb-8">
-                        <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                            <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                                <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Team Management</h1>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Manage capacity, assignments, and time logs.</p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Team Management</h1>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Manage capacity, assignments, and time logs.</p>
-                        </div>
+                        <Link
+                            href="/settings/holidays"
+                            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                        >
+                            <Calendar className="w-4 h-4" />
+                            Holidays
+                        </Link>
                     </div>
 
                     <TeamContent />

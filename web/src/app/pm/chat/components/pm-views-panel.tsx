@@ -3,7 +3,7 @@
 
 "use client";
 
-import { CheckSquare, FolderKanban, LineChart, Calendar, Users, RefreshCw } from "lucide-react";
+import { CheckSquare, FolderKanban, LineChart, Calendar, Users, RefreshCw, Timer } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -12,11 +12,12 @@ import { cn } from "~/lib/utils";
 
 import { BacklogView } from "./views/backlog-view";
 import { ChartsPanelView } from "./views/charts-panel-view";
+import { EfficiencyPanelView } from "./views/efficiency-panel-view";
 import { SprintBoardView } from "./views/sprint-board-view";
 import { TeamAssignmentsView } from "./views/team-assignments-view";
 import { TimelineView } from "./views/timeline-view";
 
-type PMView = "backlog" | "board" | "charts" | "timeline" | "team";
+type PMView = "backlog" | "board" | "charts" | "timeline" | "team" | "efficiency";
 
 interface PMViewsPanelProps {
   className?: string;
@@ -68,6 +69,13 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
                 Timeline
               </TabsTrigger>
               <TabsTrigger
+                value="efficiency"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+              >
+                <Timer className="w-4 h-4" />
+                Efficiency
+              </TabsTrigger>
+              <TabsTrigger
                 value="team"
                 className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
               >
@@ -94,6 +102,7 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
         {activeView === "board" && <SprintBoardView />}
         {activeView === "charts" && <ChartsPanelView />}
         {activeView === "timeline" && <TimelineView />}
+        {activeView === "efficiency" && <EfficiencyPanelView />}
         {activeView === "team" && <TeamAssignmentsView />}
       </div>
     </div>

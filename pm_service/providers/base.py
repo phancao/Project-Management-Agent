@@ -61,7 +61,10 @@ class BasePMProvider(ABC):
         self, 
         project_id: Optional[str] = None, 
         assignee_id: Optional[str] = None,
-        sprint_id: Optional[str] = None
+        sprint_id: Optional[str] = None,
+        status: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
     ) -> AsyncIterator[PMTask]:
         """
         List all tasks, optionally filtered by project, assignee, and/or sprint.

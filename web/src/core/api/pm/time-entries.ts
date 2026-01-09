@@ -13,6 +13,7 @@ export interface ListTimeEntriesOptions {
     userIds?: string[];
     startDate?: string;  // YYYY-MM-DD
     endDate?: string;    // YYYY-MM-DD
+    projectId?: string;
 }
 
 export async function listTimeEntries(options?: ListTimeEntriesOptions): Promise<PMTimeEntry[]> {
@@ -30,6 +31,11 @@ export async function listTimeEntries(options?: ListTimeEntriesOptions): Promise
     // API supports user_id filter (singular)
     if (options?.userIds && options.userIds.length === 1) {
         params.append("user_id", options.userIds[0]!);
+    }
+
+    // Project filter
+    if (options?.projectId) {
+        params.append("project_id", options.projectId);
     }
 
     // Request enough entries for filtered date range

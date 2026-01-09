@@ -1708,30 +1708,28 @@ async def reporter_node(state: State, config: RunnableConfig):
         react_intermediate_steps = state.get("react_intermediate_steps", [])
         
 
-            react_observations = []
-            for step_idx, step in enumerate(react_intermediate_steps):
-                if isinstance(step, (list, tuple)) and len(step) >= 2:
-                    action = step[0]  # Tool call (AgentAction object)
-                    
-                    # Extract tool name and input from AgentAction
-                    tool_name = getattr(action, 'tool', None) or (action.tool if hasattr(action, 'tool') else str(action))
-                    tool_input = getattr(action, 'tool_input', None) or (action.tool_input if hasattr(action, 'tool_input') else {})
-                    observation = step[1]
-                    
-                    # Keep the RAW observation - DO NOT truncate for PM data queries
-                    obs_text = f"## Tool: {tool_name}\n**Input:** {tool_input}\n\n**Result:**\n{observation}"
-                    react_observations.append(obs_text)
-                else:
-                    logger.warning(f"[REPORTER] Step {step_idx + 1} has unexpected structure: {type(step)}")
-            
-            if react_observations:
-                observations = react_observations
+        react_observations = []
+        for step_idx, step in enumerate(react_intermediate_steps):
+            if isinstance(step, (list, tuple)) and len(step) >= 2:
+                action = step[0]  # Tool call (AgentAction object)
+                
+                # Extract tool name and input from AgentAction
+                tool_name = getattr(action, 'tool', None) or (action.tool if hasattr(action, 'tool') else str(action))
+                tool_input = getattr(action, 'tool_input', None) or (action.tool_input if hasattr(action, 'tool_input') else {})
+                observation = step[1]
+                
+                # Keep the RAW observation - DO NOT truncate for PM data queries
+                obs_text = f"## Tool: {tool_name}\n**Input:** {tool_input}\n\n**Result:**\n{observation}"
+                react_observations.append(obs_text)
             else:
-                logger.warning("[REPORTER] ⚠️ No observations extracted from react_intermediate_steps, falling back to state observations")
-                observations = state.get("observations", [])
+                logger.warning(f"[REPORTER] Step {step_idx + 1} has unexpected structure: {type(step)}")
+        
+        if react_observations:
+            observations = react_observations
         else:
-            logger.warning("[REPORTER] ⚠️ No react_intermediate_steps found, falling back to state observations")
+            logger.warning("[REPORTER] ⚠️ No observations extracted from react_intermediate_steps, falling back to state observations")
             observations = state.get("observations", [])
+
     else:
         # Non-PM routes: Use the existing plan-based or fallback logic
         if current_plan and not isinstance(current_plan, str) and hasattr(current_plan, 'steps') and current_plan.steps:

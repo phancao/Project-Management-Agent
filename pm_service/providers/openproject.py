@@ -205,7 +205,10 @@ class OpenProjectProvider(BasePMProvider):
         self,
         project_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
-        sprint_id: Optional[str] = None
+        sprint_id: Optional[str] = None,
+        status: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
     ) -> List[PMTask]:
         """
         List all work packages (tasks) with automatic pagination.
@@ -242,6 +245,29 @@ class OpenProjectProvider(BasePMProvider):
             val = int(sprint_id) if str(sprint_id).isdigit() else sprint_id
             filters.append({
                 "version": {"operator": "=", "values": [val]}
+            })
+            
+        # Status filtering
+        if status:
+            if status.lower() == "open":
+                 # OpenProject 'status' filter usually expects ID, but 'o' acts as alias for open?
+                 # Actually OpenProject allows filtering by status id.
+                 # If status is just a string name, we might struggle.
+                 # Assume status is ID if digit, otherwise try status name if known?
+                 # For now, if caller passes ID, use it.
+                 if status.isdigit():
+                     filters.append({
+                         "status": {"operator": "=", "values": [int(status)]}
+                     })
+        
+        # Date filtering
+        if start_date:
+            filters.append({
+                "startDate": {"operator": ">=", "values": [start_date]}
+            })
+        if end_date:
+            filters.append({
+                "dueDate": {"operator": "<=", "values": [end_date]}
             })
         
         # Build base params
@@ -1505,19 +1531,28 @@ class OpenProjectProvider(BasePMProvider):
         self, 
         task_id: Optional[str] = None,
         user_id: Optional[str] = None,
-        project_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        project_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> AsyncIterator[Dict[str, Any]]:
         """
-        Get time entries, optionally filtered by task, user, or project
+        Get time entries, optionally filtered by task, user, project, or date range.
+        Handles pagination automatically.
         
         Args:
             task_id: Filter by work package (task) ID
             user_id: Filter by user ID
             project_id: Filter by project ID
+            start_date: Filter by start date (YYYY-MM-DD)
+            end_date: Filter by end date (YYYY-MM-DD)
             
-        Returns:
-            List of time entries
+        Yields:
+             Time entry dictionaries
         """
+        import logging
+        import json as json_lib
+        logger = logging.getLogger(__name__)
+        
         url = f"{self.base_url}/api/v3/time_entries"
         filters = []
         
@@ -1529,24 +1564,76 @@ class OpenProjectProvider(BasePMProvider):
             filters.append({
                 "user": {"operator": "=", "values": [user_id]}
             })
+            
         # Extract project key from composite format
         actual_project_id = self._extract_project_key(project_id)
         if actual_project_id:
             filters.append({
                 "project": {"operator": "=", "values": [actual_project_id]}
             })
+            
+        # Date range filtering
+        if start_date and end_date:
+            filters.append({
+                "spentOn": {
+                    "operator": "<>d",
+                    "values": [start_date, end_date]
+                }
+            })
+        elif start_date:
+            filters.append({
+                "spentOn": {
+                    "operator": ">=",
+                    "values": [start_date]
+                }
+            })
+        elif end_date:
+            filters.append({
+                "spentOn": {
+                    "operator": "<=",
+                    "values": [end_date]
+                }
+            })
         
+        base_params = {}
         if filters:
-            import json as json_lib
-            params = {"filters": json_lib.dumps(filters)}
-        else:
-            params = {}
+            base_params["filters"] = json_lib.dumps(filters)
+            
+        # Pagination settings
+        page_size = 500
+        offset = 0
+        total_count = None
         
-        response = requests.get(url, headers=self.headers, params=params)
-        response.raise_for_status()
-        
-        data = response.json()
-        return data.get("_embedded", {}).get("elements", [])
+        try:
+            while True:
+                params = {**base_params, "pageSize": page_size, "offset": offset}
+                response = requests.get(url, headers=self.headers, params=params, timeout=30)
+                
+                if response.status_code != 200:
+                    logger.error(f"Failed to list time entries: {response.status_code}")
+                    break
+                    
+                data = response.json()
+                entries = data.get("_embedded", {}).get("elements", [])
+                
+                if total_count is None:
+                    total_count = data.get("total", 0)
+                    logger.info(f"OpenProject get_time_entries: Total {total_count} entries to fetch")
+                    
+                for entry in entries:
+                    yield entry
+                    
+                if len(entries) < page_size:
+                    break
+                    
+                offset += page_size
+                if offset > 50000:  # Safety limit
+                    logger.warning(f"OpenProject get_time_entries: Safety limit reached at offset {offset}")
+                    break
+                    
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching time entries: {e}")
+            raise ValueError(f"Failed to fetch time entries: {str(e)}")
     
     async def get_total_hours_for_task(self, task_id: str) -> float:
         """

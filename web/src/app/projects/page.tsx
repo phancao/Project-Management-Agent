@@ -45,7 +45,7 @@ export default function ProjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
   const [expandedSprint, setExpandedSprint] = useState<string | null>(null);
-  
+
   const getPriorityColor = (priority: string) => {
     switch (priority?.toLowerCase()) {
       case 'high':
@@ -58,7 +58,7 @@ export default function ProjectsPage() {
         return 'bg-gray-50 border-gray-300 text-gray-800';
     }
   };
-  
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -204,14 +204,14 @@ export default function ProjectsPage() {
               <p className="text-gray-600 mt-1">Manage your AI-powered project development</p>
             </div>
             <div className="flex gap-3">
-              <Link 
-                href="/" 
+              <Link
+                href="/"
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
               >
                 Home
               </Link>
-              <Link 
-                href="/chat" 
+              <Link
+                href="/chat"
                 className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-all font-semibold"
               >
                 💬 Start Chat
@@ -228,7 +228,7 @@ export default function ProjectsPage() {
             <div className="text-6xl mb-4">🎯</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Projects Yet</h2>
             <p className="text-gray-600 mb-6">Create your first project by chatting with the AI assistant!</p>
-            <Link 
+            <Link
               href="/chat"
               className="inline-block px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-all font-semibold"
             >
@@ -262,7 +262,7 @@ export default function ProjectsPage() {
                         {project.status.replace('_', ' ')}
                       </span>
                     </div>
-                    
+
                     {project.description && (
                       <p className="text-blue-50 text-sm line-clamp-2">
                         {project.description}
@@ -276,8 +276,15 @@ export default function ProjectsPage() {
                       onClick={() => setExpandedProject(expandedProject === project.id ? null : project.id)}
                       className="w-full px-4 py-3 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 rounded-lg text-sm font-semibold text-gray-800 transition-all border border-gray-300"
                     >
-                      {expandedProject === project.id ? '▼ Hide Details' : '▶ Show Details'}
+                      {expandedProject === project.id ? '▼ Hide Quick View' : '▶ Quick View'}
                     </button>
+
+                    <Link
+                      href={`/projects/${project.id}`}
+                      className="block w-full text-center px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-all font-semibold text-sm"
+                    >
+                      View Project Dashboard
+                    </Link>
 
                     {expandedProject === project.id && (
                       <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -401,7 +408,7 @@ export default function ProjectsPage() {
                                 <p className="text-sm font-medium text-gray-700">
                                   No sprints planned yet
                                 </p>
-                                <Link 
+                                <Link
                                   href={`/pm/chat?project=${project.id}`}
                                   className="text-xs text-blue-600 hover:underline mt-1 inline-block"
                                 >
@@ -468,7 +475,7 @@ export default function ProjectsPage() {
                                 <p className="text-sm font-medium text-gray-700">
                                   No tasks created yet
                                 </p>
-                                <Link 
+                                <Link
                                   href={`/pm/chat?project=${project.id}`}
                                   className="text-xs text-purple-600 hover:underline mt-1 inline-block"
                                 >
@@ -485,13 +492,13 @@ export default function ProjectsPage() {
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Footer */}
                   <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
                     <span className="text-xs text-gray-600">
                       Created {new Date(project.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
-                    <Link 
+                    <Link
                       href={`/pm/chat?project=${project.id}`}
                       className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
                     >

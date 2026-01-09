@@ -12,6 +12,7 @@ export interface PMTask {
     spent_hours?: number;
     remaining_hours?: number;
     actual_hours?: number;
+    start_date?: string;
     title?: string; // Often aliased to name in response
     has_children?: boolean;
 }
@@ -19,7 +20,9 @@ export interface PMTask {
 export async function listTasks(filters: {
     assignee_ids?: string[],
     project_id?: string,
-    status?: string // 'open' = only active tasks, 'all' = include closed
+    status?: string, // 'open' = only active tasks, 'all' = include closed
+    startDate?: string,
+    endDate?: string
 }): Promise<PMTask[]> {
     console.log('[DEBUG API] listTasks called - filters:', filters);
     const params = new URLSearchParams();
@@ -36,6 +39,13 @@ export async function listTasks(filters: {
     // Status filter - 'open' fetches only active tasks, 'all' fetches everything
     if (filters.status) {
         params.append("status", filters.status);
+    }
+    // Date filtering
+    if (filters.startDate) {
+        params.append("start_date", filters.startDate);
+    }
+    if (filters.endDate) {
+        params.append("end_date", filters.endDate);
     }
 
     let url = resolvePMServiceURL("tasks");

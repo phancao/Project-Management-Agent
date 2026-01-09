@@ -328,7 +328,8 @@ class PMHandler:
         sprint_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
         status: Optional[str] = None,
-
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         provider_id: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """
@@ -344,7 +345,7 @@ class PMHandler:
         import time
         
         run_id = f"run_{int(time.time())}"
-        logger.info(f"[PM-DEBUG][{run_id}] list_tasks START: project_id={project_id}, sprint_id={sprint_id}")
+        logger.info(f"[PM-DEBUG][{run_id}] list_tasks START: project_id={project_id}, sprint_id={sprint_id}, dates={start_date}/{end_date}")
 
         tasks = []
         
@@ -412,7 +413,9 @@ class PMHandler:
                         project_id=p_project_id,
                         assignee_id=assignee_id,
                         sprint_id=s_id,
-                        status=status  # Pass status filter to provider
+                        status=status,
+                        start_date=start_date,
+                        end_date=end_date
                     )
                     
                     # Wrapper to inject provider info and filter by sprint

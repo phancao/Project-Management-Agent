@@ -14,7 +14,8 @@ import { TeamMembers } from "./components/team-members";
 import { MemberMatrix } from "./components/member-matrix";
 import { TeamWorklogs } from "./components/team-worklogs";
 import { CapacityPlanningView } from "./components/capacity-planning";
-import { LineChart } from "lucide-react";
+import { EfficiencyView } from "./components/efficiency-view";
+import { LineChart, Timer } from "lucide-react";
 import { useTeamDataContext } from "./context/team-data-context";
 import { TeamPageLoadingOverlay } from "./components/team-page-loading-overlay";
 import { MemberProfileDialog } from "./components/member-profile-dialog";
@@ -69,6 +70,10 @@ function TeamContent() {
                     <ClipboardList className="w-4 h-4 mr-2" />
                     Worklogs
                 </TabsTrigger>
+                <TabsTrigger value="efficiency" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                    <Timer className="w-4 h-4 mr-2" />
+                    Efficiency (EE)
+                </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6 animate-in fade-in-50 duration-300">
@@ -89,6 +94,10 @@ function TeamContent() {
 
             <TabsContent value="worklogs" className="space-y-6 animate-in fade-in-50 duration-300">
                 <TeamWorklogs />
+            </TabsContent>
+
+            <TabsContent value="efficiency" className="space-y-6 animate-in fade-in-50 duration-300">
+                <EfficiencyView />
             </TabsContent>
         </Tabs>
     );

@@ -159,13 +159,18 @@ export function useTeamUsers(memberIds: string[]) {
  * Fetches tasks for each member in PARALLEL (1 API call per member).
  * This avoids fetching 87k+ tasks globally while still getting all team tasks.
  */
-export function useTeamTasks(memberIds: string[]) {
+export function useTeamTasks(memberIds: string[], options?: { startDate?: string; endDate?: string }) {
     // Create a query for each member - React Query will batch and parallelize these
     // Use status='open' to only fetch active tasks (excludes closed/done)
     const taskQueries = useQueries({
         queries: memberIds.map(memberId => ({
-            queryKey: ['pm', 'tasks', 'member', memberId, 'open'],
-            queryFn: () => listTasks({ assignee_ids: [memberId], status: 'open' }),
+            queryKey: ['pm', 'tasks', 'member', memberId, 'open', options?.startDate || 'all', options?.endDate || 'all'],
+            queryFn: () => listTasks({
+                assignee_ids: [memberId],
+                status: 'open',
+                startDate: options?.startDate,
+                endDate: options?.endDate
+            }),
             staleTime: 2 * 60 * 1000, // 2 minutes
             gcTime: 5 * 60 * 1000,    // 5 minutes
         })),

@@ -25,6 +25,8 @@ async def list_tasks(
     sprint_id: Optional[str] = Query(None, description="Filter by sprint ID"),
     assignee_id: Optional[str] = Query(None, description="Filter by assignee ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    start_date: Optional[str] = Query(None, description="Filter by start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Filter by end date (YYYY-MM-DD)"),
     provider_id: Optional[str] = Query(None, description="Filter by provider ID"),
     limit: Optional[int] = Query(None, ge=1, description="Max items to return (unlimited if not specified)"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
@@ -37,7 +39,7 @@ async def list_tasks(
     This endpoint then applies limit/offset for API-level pagination if specified.
     """
     # DEBUG: Log the request with all parameters
-    logger.warning(f"[DEBUG] list_tasks called - assignee_id={assignee_id}, status={status}, project_id={project_id}, limit={limit}")
+    logger.warning(f"[DEBUG] list_tasks called - assignee_id={assignee_id}, status={status}, project_id={project_id}, dates={start_date}/{end_date}, limit={limit}")
     
     handler = PMHandler(db)
     
@@ -48,6 +50,8 @@ async def list_tasks(
             sprint_id=sprint_id,
             assignee_id=assignee_id,
             status=status,
+            start_date=start_date,
+            end_date=end_date,
             provider_id=provider_id,
         )
     except ValueError as e:

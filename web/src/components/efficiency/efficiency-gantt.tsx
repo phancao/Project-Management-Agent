@@ -4,7 +4,7 @@ import { cn } from '~/lib/utils';
 import { type PMUser } from '~/core/api/pm/users';
 import { type PMTimeEntry } from '~/core/api/pm/time-entries';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
-import { type MemberPeriod } from './member-duration-manager';
+import { type MemberPeriod, type Holiday } from './member-duration-manager';
 
 interface EfficiencyGanttProps {
     members: PMUser[];
@@ -14,9 +14,10 @@ interface EfficiencyGanttProps {
     isLoading: boolean;
     viewMode: 'day' | 'week' | 'month';
     activePeriods?: Record<string, MemberPeriod[]>;
+    holidays?: Holiday[];
 }
 
-export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLoading, viewMode, activePeriods = {} }: EfficiencyGanttProps) {
+export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLoading, viewMode, activePeriods = {}, holidays = [] }: EfficiencyGanttProps) {
 
     // 1. Generate Periods (Columns)
     const periods = useMemo(() => {
@@ -45,8 +46,39 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
         }
     };
 
-    // 3. Helper: Get allocation percentage for a member on a specific day
+    // 3. Helper: Check if a day is a holiday
+    const isHoliday = (day: Date): boolean => {
+        return holidays.some(h => isSameDay(h.date, day));
+    };
+
+    // 4. Helper: Check if a day is a vacation for a member
+    const isVacation = (memberId: string, day: Date): boolean => {
+        const memberPeriods = activePeriods[memberId];
+        if (!memberPeriods) return false;
+
+        for (const period of memberPeriods) {
+            if (period.vacations) {
+                for (const vacation of period.vacations) {
+                    if (vacation.from && isWithinInterval(day, {
+                        start: startOfDay(vacation.from),
+                        end: endOfDay(vacation.to || vacation.from)
+                    })) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    };
+
+    // 5. Helper: Get allocation percentage for a member on a specific day
     const getMemberAllocation = (memberId: string, day: Date): number => {
+        // Check for holiday first
+        if (isHoliday(day)) return 0;
+
+        // Check for vacation
+        if (isVacation(memberId, day)) return 0;
+
         const memberPeriods = activePeriods[memberId];
         if (!memberPeriods || memberPeriods.length === 0) {
             return 100; // Default 100% if no periods defined
@@ -229,7 +261,10 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                         const hours = worklogMap.get(dateKey) || 0;
                                         const target = getTargetHours(member.id, period);
                                         const isWknd = viewMode === 'day' && isWeekend(period);
-                                        const percentage = Math.min((hours / target) * 100, 100);
+                                        const isHolidayDay = viewMode === 'day' && isHoliday(period);
+                                        const isVacationDay = viewMode === 'day' && isVacation(member.id, period);
+                                        const isNonWorkingDay = isWknd || isHolidayDay || isVacationDay;
+                                        const percentage = target > 0 ? Math.min((hours / target) * 100, 100) : 0;
 
                                         // SVG circle params
                                         const size = viewMode === 'day' ? 36 : viewMode === 'week' ? 44 : 52;
@@ -247,7 +282,10 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                         };
 
                                         // Check if member is allocated (has non-zero target)
-                                        const isAllocated = target > 0;
+                                        // For day view: also check for active periods if not a non-working day
+                                        const memberPeriodsList = activePeriods[member.id];
+                                        const hasActivePeriod = memberPeriodsList && memberPeriodsList.length > 0;
+                                        const isAllocated = hasActivePeriod ? target > 0 || isNonWorkingDay : true;
 
                                         return (
                                             <div
@@ -255,7 +293,9 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                 className={cn(
                                                     "shrink-0 flex items-center justify-center border-r border-gray-100 dark:border-gray-800 last:border-0 relative",
                                                     viewMode === 'day' ? "w-12 h-12" : viewMode === 'week' ? "w-24 h-16" : "w-32 h-16",
-                                                    isWknd ? "bg-slate-200/80 dark:bg-slate-800/60" : ""
+                                                    isWknd && "bg-slate-200/80 dark:bg-slate-800/60",
+                                                    isHolidayDay && "bg-amber-100/50 dark:bg-amber-900/30",
+                                                    isVacationDay && "bg-emerald-100/50 dark:bg-emerald-900/30"
                                                 )}
                                             >
                                                 {isAllocated && (
@@ -263,7 +303,7 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                         <TooltipTrigger asChild>
                                                             <div className={cn(
                                                                 "relative flex items-center justify-center cursor-pointer",
-                                                                isWknd && "opacity-30"
+                                                                isNonWorkingDay && "opacity-30"
                                                             )}>
                                                                 {/* Pie Wedge Chart - hours out of 8 */}
                                                                 <svg width={size} height={size} className="transform -rotate-90">
@@ -341,7 +381,7 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                                 {/* Hours text in center */}
                                                                 <span className={cn(
                                                                     "absolute inset-0 flex items-center justify-center text-[10px] font-bold",
-                                                                    hours === 0 && !isWknd ? "text-red-500" : "text-gray-700 dark:text-gray-200"
+                                                                    hours === 0 && !isNonWorkingDay ? "text-red-500" : "text-gray-700 dark:text-gray-200"
                                                                 )}>
                                                                     {Number.isInteger(hours) ? hours : hours.toFixed(1)}
                                                                 </span>

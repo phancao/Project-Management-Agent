@@ -17,7 +17,7 @@ import { type PMTask } from '~/core/api/pm/tasks';
 import { type PMTimeEntry } from '~/core/api/pm/time-entries';
 import { EfficiencyGantt } from './efficiency-gantt';
 
-import { MemberDurationManager, type MemberPeriod } from './member-duration-manager';
+import { MemberDurationManager, type MemberPeriod, type Holiday } from './member-duration-manager';
 
 interface EfficiencyDashboardProps {
     members: PMUser[];
@@ -31,6 +31,10 @@ interface EfficiencyDashboardProps {
     activePeriods?: Record<string, MemberPeriod[]>;
     onActivePeriodsChange?: (periods: Record<string, MemberPeriod[]>) => void;
 
+    // Holidays
+    holidays?: Holiday[];
+    onHolidaysChange?: (holidays: Holiday[]) => void;
+
     title?: string;
 }
 
@@ -43,6 +47,8 @@ export function EfficiencyDashboard({
     onDateRangeChange,
     activePeriods = {},
     onActivePeriodsChange,
+    holidays = [],
+    onHolidaysChange,
     title = "Efficiency Dashboard"
 }: EfficiencyDashboardProps) {
 
@@ -68,7 +74,47 @@ export function EfficiencyDashboard({
         const getBusinessDaysCount = (start: Date, end: Date) => {
             if (start > end) return 0;
             const days = eachDayOfInterval({ start, end });
-            return days.filter(day => !isWeekend(day)).length;
+            // Exclude weekends and holidays
+            return days.filter(day => {
+                if (isWeekend(day)) return false;
+                // Check if this day is a holiday
+                const isHolidayDay = holidays.some(h =>
+                    h.date.getFullYear() === day.getFullYear() &&
+                    h.date.getMonth() === day.getMonth() &&
+                    h.date.getDate() === day.getDate()
+                );
+                if (isHolidayDay) return false;
+                return true;
+            }).length;
+        };
+
+        // Helper: Check if a day is a vacation for a specific member
+        const isVacationDay = (memberId: string, day: Date): boolean => {
+            const periods = activePeriods[memberId];
+            if (!periods) return false;
+
+            for (const period of periods) {
+                if (period.vacations) {
+                    for (const vacation of period.vacations) {
+                        if (vacation.from && isWithinInterval(day, {
+                            start: startOfDay(vacation.from),
+                            end: endOfDay(vacation.to || vacation.from)
+                        })) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        };
+
+        // Helper: Check if a day is a holiday
+        const isHolidayDay = (day: Date): boolean => {
+            return holidays.some(h =>
+                h.date.getFullYear() === day.getFullYear() &&
+                h.date.getMonth() === day.getMonth() &&
+                h.date.getDate() === day.getDate()
+            );
         };
 
         const getMemberCapacityHours = (memberId: string) => {
@@ -76,7 +122,15 @@ export function EfficiencyDashboard({
 
             // Default: Full Duration (100% Capacity) if no periods defined
             if (!periods || periods.length === 0) {
-                return getBusinessDaysCount(startDate, endDate) * 8;
+                // Still need to exclude holidays for default case
+                const days = eachDayOfInterval({ start: startDate, end: endDate });
+                let capacity = 0;
+                days.forEach(day => {
+                    if (isWeekend(day)) return;
+                    if (isHolidayDay(day)) return;
+                    capacity += 8;
+                });
+                return capacity;
             }
 
             // Custom Duration with Allocation
@@ -86,6 +140,8 @@ export function EfficiencyDashboard({
 
             days.forEach(day => {
                 if (isWeekend(day)) return;
+                if (isHolidayDay(day)) return; // Exclude holidays
+                if (isVacationDay(memberId, day)) return; // Exclude vacations
 
                 // Find all active periods for this day
                 // Sum allocations (e.g. 50% + 50% = 100%)
@@ -269,6 +325,7 @@ export function EfficiencyDashboard({
                             isLoading={isLoading}
                             viewMode={viewMode}
                             activePeriods={activePeriods}
+                            holidays={holidays}
                         />
                     ) : (
                         <div className="text-center py-10 text-gray-400">Please select a date range</div>
@@ -287,6 +344,8 @@ export function EfficiencyDashboard({
                             members={members}
                             activePeriods={activePeriods}
                             onChange={onActivePeriodsChange}
+                            holidays={holidays}
+                            onHolidaysChange={onHolidaysChange}
                         />
                     </CardContent>
                 </Card>

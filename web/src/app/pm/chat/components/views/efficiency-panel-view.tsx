@@ -6,7 +6,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 import { EfficiencyDashboard } from "~/components/efficiency/efficiency-dashboard";
-import { type MemberPeriod } from "~/components/efficiency/member-duration-manager";
+import { type MemberPeriod, type Holiday } from "~/components/efficiency/member-duration-manager";
 import { listTasks, type PMTask } from "~/core/api/pm/tasks";
 import { listTimeEntries, type PMTimeEntry } from "~/core/api/pm/time-entries";
 import { listUsers, type PMUser } from "~/core/api/pm/users";
@@ -49,6 +49,31 @@ export function EfficiencyPanelView() {
     // Member Active Periods (Persistence) - Using MemberPeriod for allocation support
     const [activePeriods, setActivePeriods] = useState<Record<string, MemberPeriod[]>>({});
 
+    // Holidays state
+    const [holidays, setHolidays] = useState<Holiday[]>([]);
+
+    // Load holidays from localStorage
+    useEffect(() => {
+        if (!projectId) return;
+        try {
+            const saved = localStorage.getItem(`ee-holidays-project-${projectId}`);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                setHolidays(parsed.map((h: any) => ({ ...h, date: new Date(h.date) })));
+            }
+        } catch (e) {
+            console.error("Failed to load holidays", e);
+        }
+    }, [projectId]);
+
+    // Save holidays to localStorage
+    const handleHolidaysChange = (newHolidays: Holiday[]) => {
+        setHolidays(newHolidays);
+        if (projectId) {
+            localStorage.setItem(`ee-holidays-project-${projectId}`, JSON.stringify(newHolidays));
+        }
+    };
+
     // Load from localStorage on mount - with backward compatibility
     useEffect(() => {
         if (!projectId) return;
@@ -61,13 +86,17 @@ export function EfficiencyPanelView() {
                     hydrated[key] = parsed[key].map((item: any) => {
                         // Check if it's new MemberPeriod format or old DateRange format
                         if (item.range) {
-                            // New format: { range: DateRange, allocation: number }
+                            // New format: { range: DateRange, allocation: number, vacations?: DateRange[] }
                             return {
                                 range: {
                                     from: item.range.from ? new Date(item.range.from) : undefined,
                                     to: item.range.to ? new Date(item.range.to) : undefined
                                 },
-                                allocation: item.allocation ?? 100
+                                allocation: item.allocation ?? 100,
+                                vacations: item.vacations?.map((v: any) => ({
+                                    from: v.from ? new Date(v.from) : undefined,
+                                    to: v.to ? new Date(v.to) : undefined
+                                }))
                             };
                         } else {
                             // Old format: DateRange directly
@@ -177,6 +206,8 @@ export function EfficiencyPanelView() {
                 onDateRangeChange={handleDateRangeChange}
                 activePeriods={activePeriods}
                 onActivePeriodsChange={handleActivePeriodsChange}
+                holidays={holidays}
+                onHolidaysChange={handleHolidaysChange}
                 title="Project Efficiency"
             />
         </div>

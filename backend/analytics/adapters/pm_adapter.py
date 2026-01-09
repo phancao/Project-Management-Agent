@@ -1038,6 +1038,7 @@ class PMProviderAnalyticsAdapter(BaseAnalyticsAdapter):
                     "type": task_type,
                     "status": task.status or "To Do",
                     "story_points": story_points,
+                    "estimated_hours": task.estimated_hours or 0,
                 })
             
             logger.info(f"[PMProviderAnalyticsAdapter] Found {len(work_items)} tasks for work distribution")

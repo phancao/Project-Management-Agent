@@ -222,6 +222,17 @@ function MessageListItem({
         // EXTRACT TOOLS
         const toolNames = message.toolCalls?.map((t) => t.name) || [];
 
+        // Render Guard for react_agent: Skip empty bubbles
+        const hasVisibleContent = message.content && /\S/.test(message.content);
+        const validTools = message.toolCalls?.filter(t => t.name && t.name.trim()) || [];
+        const hasTools = validTools.length > 0;
+        const shouldRenderReact = message.role === "user" || hasVisibleContent || hasTools;
+
+        if (message.agent === "react_agent" && !shouldRenderReact) {
+          console.log(`[PM-DEBUG][RENDER] ${new Date().toISOString()} SKIP: id=${message.id}, agent=react_agent, reason=empty_react_bubble`);
+          return null; // Skip empty react_agent bubbles
+        }
+
         content = (
           <div className="w-full px-4">
             <MessageBubble message={message}>
@@ -273,11 +284,15 @@ function MessageListItem({
       const hasTools = validTools.length > 0;
       const hasThoughts = message.reactThoughts && message.reactThoughts.length > 0;
 
-      const shouldRender = hasVisibleContent || hasTools || hasThoughts;
+      // Skip intent_detector messages - they are displayed in status bar, not as chat bubbles
+      const isIntentDetector = message.agent === 'intent_detector';
+
+      const shouldRender = !isIntentDetector && (hasVisibleContent || hasTools || hasThoughts);
 
       // [PM-DEBUG] Render Filter Decision
       if (!shouldRender) {
-        console.log(`[PM-DEBUG][RENDER] ${new Date().toISOString()} SKIP: id=${message.id}, agent=${message.agent}, reason=no_content_tools_thoughts, content_len=${message.content?.length ?? 0}`);
+        const skipReason = isIntentDetector ? 'intent_detector_hidden' : 'no_content_tools_thoughts';
+        console.log(`[PM-DEBUG][RENDER] ${new Date().toISOString()} SKIP: id=${message.id}, agent=${message.agent}, reason=${skipReason}, content_len=${message.content?.length ?? 0}`);
       } else {
         console.log(`[PM-DEBUG][RENDER] ${new Date().toISOString()} SHOW: id=${message.id}, agent=${message.agent}, hasContent=${!!hasVisibleContent}, hasTools=${hasTools}, hasThoughts=${hasThoughts}`);
       }
@@ -300,7 +315,7 @@ function MessageListItem({
                   {message?.content}
                 </Markdown>
               )}
-              {/* DEBUG: Intent/thoughts display (minimal) */}
+              {/* Intent/thoughts display (minimal) */}
               {hasThoughts && (
                 <div className="text-[10px] text-muted-foreground/60 font-mono mb-1">
                   {message.reactThoughts?.map((thought, i) => (

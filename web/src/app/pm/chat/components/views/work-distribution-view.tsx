@@ -24,8 +24,10 @@ export function WorkDistributionView() {
     name: point.label || "Unknown",
     value: point.value,
     storyPoints: point.metadata?.story_points ?? 0,
+    estimatedHours: point.metadata?.estimated_hours ?? 0,
     percentage: point.metadata?.percentage ?? 0,
     pointsPercentage: point.metadata?.points_percentage ?? 0,
+    hoursPercentage: point.metadata?.hours_percentage ?? 0,
     completed: point.metadata?.completed ?? 0,
     inProgress: point.metadata?.in_progress ?? 0,
     todo: point.metadata?.todo ?? 0,
@@ -35,6 +37,7 @@ export function WorkDistributionView() {
   const metadata = chartData?.metadata || {};
   const totalItems = metadata.total_items ?? 0;
   const totalPoints = metadata.total_story_points ?? 0;
+  const totalHours = metadata.total_estimated_hours ?? 0;
   const insights = metadata.insights || [];
 
   if (loading) {
@@ -107,7 +110,7 @@ export function WorkDistributionView() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{chartData?.title || "Work Distribution"}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {totalItems} items • {totalPoints} story points
+            {totalItems} items • {totalPoints} story points • {totalHours} estimated hours
           </p>
         </div>
       </div>
@@ -123,7 +126,7 @@ export function WorkDistributionView() {
 
         <TabsContent value={activeDimension} className="space-y-6 mt-6">
           {/* Pie Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* By Count */}
             <Card className="p-6 overflow-hidden">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Distribution by Count</h3>
@@ -197,6 +200,43 @@ export function WorkDistributionView() {
                 </PieChart>
               </ResponsiveContainer>
             </Card>
+
+            {/* By Estimated Hours */}
+            <Card className="p-6 overflow-hidden">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Distribution by Est. Hours</h3>
+              <ResponsiveContainer width="100%" height={420}>
+                <PieChart>
+                  <Pie
+                    data={distributionData}
+                    cx="50%"
+                    cy="40%"
+                    labelLine={false}
+                    label={false}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="estimatedHours"
+                  >
+                    {distributionData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
+                    formatter={(value: any, name: any, props: any) => [
+                      `${value} hours (${props.payload.hoursPercentage}%)`,
+                      props.payload.name
+                    ]}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={140}
+                    iconType="circle"
+                    wrapperStyle={{ overflow: 'hidden', maxHeight: '140px' }}
+                    formatter={(value, entry: any) => `${value} (${entry.payload.hoursPercentage?.toFixed(1) || 0}%)`}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </Card>
           </div>
 
           {/* Detailed Breakdown Table */}
@@ -209,6 +249,7 @@ export function WorkDistributionView() {
                     <th className="pb-3 font-semibold text-gray-900 dark:text-white">Name</th>
                     <th className="pb-3 font-semibold text-gray-900 dark:text-white text-right">Items</th>
                     <th className="pb-3 font-semibold text-gray-900 dark:text-white text-right">Story Points</th>
+                    <th className="pb-3 font-semibold text-gray-900 dark:text-white text-right">Est. Hours</th>
                     <th className="pb-3 font-semibold text-gray-900 dark:text-white text-right">To Do</th>
                     <th className="pb-3 font-semibold text-gray-900 dark:text-white text-right">In Progress</th>
                     <th className="pb-3 font-semibold text-gray-900 dark:text-white text-right">Done</th>
@@ -231,6 +272,9 @@ export function WorkDistributionView() {
                       </td>
                       <td className="py-3 text-right text-gray-700 dark:text-gray-300">
                         {item.storyPoints} <span className="text-xs text-gray-500">({item.pointsPercentage}%)</span>
+                      </td>
+                      <td className="py-3 text-right text-gray-700 dark:text-gray-300">
+                        {item.estimatedHours} <span className="text-xs text-gray-500">({item.hoursPercentage}%)</span>
                       </td>
                       <td className="py-3 text-right text-gray-700 dark:text-gray-300">{item.todo}</td>
                       <td className="py-3 text-right text-blue-600 dark:text-blue-400">{item.inProgress}</td>

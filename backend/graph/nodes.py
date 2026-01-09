@@ -979,7 +979,8 @@ def detect_pm_intent_llm(user_message: str) -> tuple[bool, str]:
 1. Is it PM-related? (YES/NO)
 2. If PM-related, what type?
    - LIST: listing data (show sprints, list users, get tasks, list epics)
-   - SPRINT: sprint-specific analysis (sprint report, analyze sprint X)
+   - SPRINT: sprint-specific analysis (analyze sprint X, current sprint status)
+   - REPORT: any kind of report (weekly report, project report, sprint report, status report, allocation report)
    - HEALTH: project health/status (project health, project status, overview)
    - ANALYTICS: metrics/charts (burndown, velocity, cycle time)
    - RESOURCES: team workload, resource allocation, who is working on what
@@ -988,7 +989,7 @@ def detect_pm_intent_llm(user_message: str) -> tuple[bool, str]:
 
 Message: "{user_message}"
 
-Reply with ONE of: PM_LIST, PM_SPRINT, PM_HEALTH, PM_ANALYTICS, PM_RESOURCES, PM_PERSON, PM_GENERAL, NOT_PM
+Reply with ONE of: PM_LIST, PM_SPRINT, PM_REPORT, PM_HEALTH, PM_ANALYTICS, PM_RESOURCES, PM_PERSON, PM_GENERAL, NOT_PM
 """
         
         response = llm.invoke([{"role": "user", "content": prompt}])
@@ -1001,6 +1002,8 @@ Reply with ONE of: PM_LIST, PM_SPRINT, PM_HEALTH, PM_ANALYTICS, PM_RESOURCES, PM
         report_type = "general"
         if "LIST" in result_text:
             report_type = "list"
+        elif "REPORT" in result_text:
+            report_type = "report"
         elif "SPRINT" in result_text:
             report_type = "sprint"
         elif "HEALTH" in result_text:
@@ -1679,6 +1682,23 @@ async def reporter_node(state: State, config: RunnableConfig):
     # Don't include all messages from state - that causes token overflow!
     all_template_messages = apply_prompt_template(reporter_template, input_, configurable, input_.get("locale", "en-US"))
     
+    # 🔍 DEBUG: Log the FINAL PROMPT content to debug truncation
+    try:
+        logger.warning(f"[REPORTER-PROMPT-DEBUG] ====== FINAL PROMPT START ======")
+        for i, m in enumerate(all_template_messages):
+            # Safe logging
+            logger.warning(f"[REPORTER-PROMPT-DEBUG] Message {i} type={type(m)}")
+            try:
+                content_str = str(m.content)
+                # Truncate content for log safety if huge, but we need to see if tasks are there.
+                # 32 tasks ~ 15k chars. perfectly fine to log.
+                logger.warning(f"[REPORTER-PROMPT-DEBUG] Content:\n{content_str[:50000]}") 
+            except Exception as e:
+                logger.error(f"[REPORTER-PROMPT-DEBUG] Error logging content: {e}")
+        logger.warning(f"[REPORTER-PROMPT-DEBUG] ====== FINAL PROMPT END ======")
+    except Exception as e:
+        logger.error(f"[REPORTER-PROMPT-DEBUG] CRITICAL ERROR IN DEBUG BLOCK: {e}")
+    
     # Only take the system prompt (first message), not the rest
     invoke_messages = [all_template_messages[0]] if all_template_messages else []
     # CRITICAL FOR PM ROUTES: Extract RAW tool results from react_intermediate_steps
@@ -1687,7 +1707,7 @@ async def reporter_node(state: State, config: RunnableConfig):
     if is_from_react:
         react_intermediate_steps = state.get("react_intermediate_steps", [])
         
-        if react_intermediate_steps:
+
             react_observations = []
             for step_idx, step in enumerate(react_intermediate_steps):
                 if isinstance(step, (list, tuple)) and len(step) >= 2:
@@ -2172,14 +2192,8 @@ async def reporter_node(state: State, config: RunnableConfig):
     
     # Debug: Log what we're actually sending to the LLM
     logger.info(f"Reporter: About to invoke LLM with {len(invoke_messages)} messages")
-    for idx, msg in enumerate(invoke_messages):
-        if isinstance(msg, dict):
-            msg_type = f"dict(role={msg.get('role', 'unknown')})"
-            content_len = len(str(msg.get('content', '')))
-        else:
-            msg_type = type(msg).__name__
-            content_len = len(str(getattr(msg, 'content', '')))
-        logger.info(f"  Message {idx}: {msg_type}, content_len={content_len}")
+
+
     
     # Wrap LLM invocation in try/except to catch errors and notify user/LLM
     try:
@@ -4009,6 +4023,7 @@ async def react_agent_node(
         from backend.utils.json_utils import sanitize_tool_response
         from langchain_core.tools import BaseTool
         from langchain_core.messages import AIMessage, ToolMessage, HumanMessage, SystemMessage
+        from langchain_core.agents import AgentAction
         
         # Get PM tools (synchronous function, no config needed)
         pm_tools = get_pm_tools()
@@ -4053,6 +4068,7 @@ async def react_agent_node(
                 tools=pm_tools,
                 user_query=user_query,
                 project_id=project_id,
+                thread_id=safe_thread_id,
                 max_steps=5,
                 on_tool_result=side_channel_callback
             )
@@ -4067,13 +4083,15 @@ async def react_agent_node(
                         "id": f"agent_result_{ts}",
                         "name": "pm_agent",
                         "args": {"query": user_query}
-                    }]
+                    }],
+                    additional_kwargs={"hidden": True} # Hide redundant tool call bubble
                 )
                 
                 tool_result_msg = ToolMessage(
                     content=result.result,
                     tool_call_id=f"agent_result_{ts}",
-                    name="pm_agent"
+                    name="pm_agent",
+                    additional_kwargs={"hidden": True} # Hide raw JSON from UI since we have optimized thoughts
                 )
                 
                 # Convert agent steps to thoughts for UI
@@ -4133,11 +4151,46 @@ async def react_agent_node(
                 for t in thoughts:
                     logger.info(f"[COUNTER-DEBUG]   thought: {t.get('thought', '')[:100]}")
                 
+
+
+                # Reconstruct react_intermediate_steps for the Reporter
+                # The Reporter expects [(AgentAction, observation), ...]
+                intermediate_steps = []
+                current_action = None
+                
+                for step in result.steps:
+                    if step.type == "tool_call":
+                        # Parse tool args
+                        tool_name = step.metadata.get("tool", "")
+                        tool_args = step.metadata.get("tool_input", {})
+                        if isinstance(tool_args, str):
+                            try:
+                                tool_args = json.loads(tool_args)
+                            except:
+                                pass
+                        
+                        # Create AgentAction
+                        current_action = AgentAction(
+                            tool=tool_name,
+                            tool_input=tool_args,
+                            log=step.content or f"Calling {tool_name}"
+                        )
+                    
+                    elif step.type == "tool_result" and current_action:
+                        # Pair with current action
+                        observation = step.content
+                        intermediate_steps.append((current_action, observation))
+                        current_action = None # Reset
+                
+                # If no steps found (unlikely if tools called), fallback to query/result
+                if not intermediate_steps:
+                     intermediate_steps = [({"query": user_query}, result.result)]
+
                 return Command(
                     update={
                         "messages": [tool_call_msg, tool_result_msg],
                         "final_report": result.result,
-                        "react_intermediate_steps": [({"query": user_query}, result.result)],
+                        "react_intermediate_steps": intermediate_steps,
                         "react_thoughts": thoughts,
                         "routing_mode": "react_first",
                         "goto": "reporter",  # Conditional edge reads this from state
@@ -4299,13 +4352,9 @@ async def react_agent_node(
             
             return tool
         
-        # Wrap all tools to truncate outputs - VERY AGGRESSIVE: 1000 tokens per tool (was 2000)
-        # This prevents scratchpad from accumulating too many tokens
-        # With 3 max iterations, max accumulation = 3K tokens, which is safe
-        wrapped_pm_tools = [wrap_tool_with_truncation(tool, max_tokens=1000) for tool in pm_tools]
-        wrapped_search_tool = wrap_tool_with_truncation(search_tool, max_tokens=1000)
-        
-        tools = wrapped_pm_tools + [wrapped_search_tool]
+        # Use tools directly without truncation - PMToolContextOptimizer handles summarization
+        # User requested removal of fixed limits
+        tools = pm_tools + [search_tool]
     except Exception as e:
         # Escalate if tools fail
         return Command(

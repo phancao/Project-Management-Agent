@@ -735,6 +735,20 @@ function BacklogSection({
  * ========================================================================= */
 
 export function BacklogView() {
+  return (
+    <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+      <div className="rounded-full bg-yellow-100 p-3 mb-4">
+        <Loader2 className="h-6 w-6 text-yellow-600" />
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Backlog Disabled</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mt-2">
+        Backlog rendering is temporarily disabled to accelerate testing cycles.
+      </p>
+    </div>
+  );
+}
+
+function _BacklogViewOriginal() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");

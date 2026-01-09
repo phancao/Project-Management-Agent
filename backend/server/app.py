@@ -1011,7 +1011,10 @@ async def _process_message_chunk(
             # Frontend handles tool call deduplication by ID, but requires the event to create the entry
             has_new_tool_calls = bool(message_chunk.tool_calls)
             
-            if message_id and agent_name in ["pm_agent", "react_agent"] and not skip_progressive_thoughts:
+            # PLAN M FIX: Disable PROGRESSIVE thoughts for pm_agent/react_agent
+            # These agents use PLAN9 side-channel which emits after actual execution.
+            # PROGRESSIVE creates empty REACT boxes for tools that are suggested but never executed.
+            if message_id and agent_name not in ["pm_agent", "react_agent"] and not skip_progressive_thoughts:
                 # Get current step index for this thread
                 step_index = _progressive_step_counter.get(safe_thread_id, 0)
                 
@@ -1058,9 +1061,16 @@ async def _process_message_chunk(
                 # Not doing progressive thoughts, so all tool calls are "new" for event purposes
                 has_new_tool_calls = True
             
-            # Only yield tool_calls event if there are new (non-duplicate) tool calls
-            if has_new_tool_calls:
+            # PLAN M: Suppress tool_calls for pm_agent/react_agent
+            # These agents use PLAN9 side-channel which emits tool_calls after actual execution.
+            # Emitting from LLM stream creates phantom "(waiting...)" entries for unexecuted tools.
+            is_pm_react_agent = agent_name in ["pm_agent", "react_agent"]
+            
+            # Only yield tool_calls event if there are new tool calls AND not pm/react agent
+            if has_new_tool_calls and not is_pm_react_agent:
                 yield _make_event("tool_calls", event_stream_message)
+            elif has_new_tool_calls and is_pm_react_agent:
+                logger.info(f"[{safe_thread_id}] 🔧 [PLAN-M] Suppressing tool_calls for {agent_name} (PLAN9 side-channel handles)")
             else:
                 logger.info(f"[{safe_thread_id}] 🔧 [PROGRESSIVE] SKIPPING duplicate tool_calls event")
         elif message_chunk.tool_call_chunks:
@@ -1462,27 +1472,25 @@ async def _stream_graph_events_core(
                             except (json.JSONDecodeError, KeyError, TypeError):
                                 pass
                             
-                            # Emit thoughts event with counter BEFORE tool_call_result
-                            step_index = _progressive_step_counter.get(safe_thread_id, 0)
-                            thought_text = f"📋 {tool_name}{result_count_info}"
-                            logger.info(f"[COUNTER-DEBUG] {datetime.now().isoformat()} PLAN9 emitting thoughts: {thought_text}")
+                            # Log tool result for debugging
+                            logger.info(f"[PLAN9-DEBUG] {datetime.now().isoformat()} Emitting tool result: {tool_name}{result_count_info}")
                             
-                            tool_result_thought = {
-                                "thought": thought_text,
-                                "before_tool": False,
-                                "step_index": step_index,
-                                "step_type": "tool_result",
-                                "timestamp": datetime.now().isoformat()
+                            # PLAN M: Emit tool_calls event to create UI entry
+                            # NOTE: Removed react_thoughts - ToolsDisplay already shows tool info
+                            tool_call_entry = {
+                                "id": tool_call_id,
+                                "name": tool_name,
+                                "args": {}  # Args not available in side-channel
                             }
-                            thoughts_event = {
+                            tool_calls_event = {
                                 "thread_id": thread_id,
                                 "agent": "pm_agent",
-                                "id": f"tool-result-{tool_call_id}",
+                                "id": f"tool-call-{tool_call_id}",
                                 "role": "assistant",
-                                "react_thoughts": [tool_result_thought]
+                                "tool_calls": [tool_call_entry]
                             }
-                            yield _make_event("thoughts", thoughts_event)
-                            _progressive_step_counter[safe_thread_id] = step_index + 1
+                            yield _make_event("tool_calls", tool_calls_event)
+                            await asyncio.sleep(0.005)  # Brief delay for UI to create entry
                             
                             # Original tool_call_result event
                             tool_result_event = {
@@ -3716,7 +3724,8 @@ async def pm_chat_stream(request: Request):
                         # Stream intent detection decision to frontend
                         report_type_labels = {
                             "list": "📋 Listing Data",
-                            "sprint": "🏃 Sprint Analysis", 
+                            "sprint": "🏃 Sprint Analysis",
+                            "report": "📄 Generating Report",
                             "health": "💚 Project Health",
                             "analytics": "📊 Analytics",
                             "resources": "👥 Resource Analysis",

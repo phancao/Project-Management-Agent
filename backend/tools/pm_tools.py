@@ -501,9 +501,22 @@ async def list_tasks(
                     # Double-check filtering client-side (redundant if server supports it, but safe)
                     if actual_sprint_id:
                         original_count = len(tasks)
+                        
+                        # Helper to extract numeric part from composite ID (uuid:id -> id)
+                        def extract_sprint_num(sprint_id):
+                            if not sprint_id:
+                                return None
+                            s = str(sprint_id)
+                            # If it's a composite ID (uuid:number), extract just the number
+                            if ":" in s:
+                                return s.split(":")[-1]
+                            return s
+                        
+                        filter_sprint_num = extract_sprint_num(actual_sprint_id)
+                        
                         tasks = [
                             t for t in tasks 
-                            if not t.get("sprint_id") or str(t.get("sprint_id")) == str(actual_sprint_id)
+                            if not t.get("sprint_id") or extract_sprint_num(t.get("sprint_id")) == filter_sprint_num
                         ]
                         if len(tasks) < original_count:
                              logger.info(f"[PM-TOOLS] Client-side refined {original_count} -> {len(tasks)} tasks")

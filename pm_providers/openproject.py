@@ -1306,10 +1306,10 @@ class OpenProjectProvider(BasePMProvider):
                 links.get("version", {}).get("href")
             ) if links.get("version", {}).get("href") else None,
             estimated_hours=self._parse_duration_to_hours(
-                data.get("estimatedTime")
+                data.get("estimatedTime") or data.get("derivedEstimatedTime")
             ),
             actual_hours=self._parse_duration_to_hours(
-                data.get("derivedRemainingTime")
+                data.get("spentTime")
             ),
             start_date=self._parse_date(data.get("startDate")),
             due_date=self._parse_date(data.get("dueDate")),
@@ -1561,7 +1561,7 @@ class OpenProjectProvider(BasePMProvider):
             
             total_hours = 0.0
             if days_match:
-                total_hours += float(days_match.group(1)) * 24.0
+                total_hours += float(days_match.group(1)) * 8.0
             if hours_match:
                 total_hours += float(hours_match.group(1))
             if minutes_match:

@@ -4,7 +4,7 @@ API endpoints for user operations.
 """
 
 import logging
-import traceback
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -36,10 +36,7 @@ async def list_users(
     If permission errors occur, they are raised as HTTPException with 403 status
     so the client can properly handle and display them to the user.
     """
-    # DEBUG: Log the request source
-    stack = ''.join(traceback.format_stack()[-5:-1])
-    logger.warning(f"[DEBUG] list_users called - project_id={project_id}, provider_id={provider_id}, limit={limit}")
-    logger.warning(f"[DEBUG] Call stack:\n{stack}")
+    logger.info(f"list_users called - project_id={project_id}, provider_id={provider_id}, limit={limit}")
     
     handler = PMHandler(db)
     try:
@@ -58,7 +55,7 @@ async def list_users(
     else:
         paginated = all_users[offset:] if offset > 0 else all_users
     
-    logger.warning(f"[DEBUG] list_users returning {len(paginated)} of {total} users")
+
     
     return ListResponse(
         items=paginated,

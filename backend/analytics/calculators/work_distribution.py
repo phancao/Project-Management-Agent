@@ -38,6 +38,7 @@ def calculate_work_distribution(
     distribution: Dict[str, Dict[str, Any]] = defaultdict(lambda: {
         "count": 0,
         "story_points": 0,
+        "estimated_hours": 0,
         "completed": 0,
         "in_progress": 0,
         "todo": 0,
@@ -45,6 +46,7 @@ def calculate_work_distribution(
     
     total_items = len(work_items)
     total_points = 0
+    total_hours = 0
     
     for item in work_items:
         key = item.get(dimension, "Unassigned" if dimension == "assignee" else "Unknown")
@@ -52,11 +54,14 @@ def calculate_work_distribution(
             key = "Unassigned" if dimension == "assignee" else "Unknown"
         
         points = item.get("story_points", 0) or 0
+        hours = item.get("estimated_hours", 0) or 0
         status = (item.get("status", "").lower() or "")
         
         distribution[key]["count"] += 1
         distribution[key]["story_points"] += points
+        distribution[key]["estimated_hours"] += hours
         total_points += points
+        total_hours += hours
         
         # Categorize by status
         if "done" in status or "closed" in status or "completed" in status:
@@ -79,14 +84,17 @@ def calculate_work_distribution(
     for i, (key, data) in enumerate(sorted_items):
         percentage = (data["count"] / total_items * 100) if total_items > 0 else 0
         points_percentage = (data["story_points"] / total_points * 100) if total_points > 0 else 0
+        hours_percentage = (data["estimated_hours"] / total_hours * 100) if total_hours > 0 else 0
         
         chart_data.append(ChartDataPoint(
             value=data["count"],
             label=key,
             metadata={
                 "story_points": data["story_points"],
+                "estimated_hours": data["estimated_hours"],
                 "percentage": round(percentage, 1),
                 "points_percentage": round(points_percentage, 1),
+                "hours_percentage": round(hours_percentage, 1),
                 "completed": data["completed"],
                 "in_progress": data["in_progress"],
                 "todo": data["todo"],
@@ -120,6 +128,7 @@ def calculate_work_distribution(
             "dimension": dimension,
             "total_items": total_items,
             "total_story_points": total_points,
+            "total_estimated_hours": total_hours,
             "unique_values": len(distribution),
             "insights": insights,
         },

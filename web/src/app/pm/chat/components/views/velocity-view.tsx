@@ -12,7 +12,7 @@ import { useSearchParams } from "next/navigation";
 export function VelocityView() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project");
-  const { data: chartData, isLoading: loading, error } = useVelocityChart(projectId, 6);
+  const { data: chartData, isLoading: loading, error } = useVelocityChart(projectId, 12);
 
   // Transform chart data for Recharts
   const velocityData = chartData?.series[0]?.data.map((point, index) => {

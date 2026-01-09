@@ -14,7 +14,8 @@ export interface Message {
   | "reporter"
   | "podcast"
   | "pm_agent"
-  | "react_agent";  // NEW: ReAct agent (fast path)
+  | "react_agent"  // NEW: ReAct agent (fast path)
+  | "intent_detector";  // Intent detection agent (not rendered as chat bubble)
   role: MessageRole;
   isStreaming?: boolean;
   content: string;

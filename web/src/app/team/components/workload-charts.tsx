@@ -5,10 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, ReferenceLine, Cell } from "recharts"
 import { useTeamDataContext, useTeamUsers, useTeamTasks, useTeamTimeEntries } from "../context/team-data-context"
 import { extractShortId } from "~/core/api/pm/users"
-import { Loader2, Info, ChevronLeft, ChevronRight, Users } from "lucide-react"
+import { Loader2, Info, ChevronLeft, ChevronRight, Users, CalendarIcon } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover"
 import { Button } from "~/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
+import { Calendar } from "~/components/ui/calendar"
 import { useMemberProfile } from "../page"
 
 // Helper to get start of week (Monday) with offset
@@ -45,6 +46,31 @@ export function WorkloadCharts() {
     const [weekOffset, setWeekOffset] = useState(0)
     // Team selector state
     const [selectedTeamId, setSelectedTeamId] = useState<string>("all")
+    // Date picker state
+    const [datePickerOpen, setDatePickerOpen] = useState(false)
+
+    // Helper to compute week offset from a specific date
+    const getWeekOffsetForDate = (date: Date): number => {
+        const currentWeekStart = getWeekStart(0)
+        const targetWeekStart = new Date(date)
+        const day = targetWeekStart.getDay()
+        const diff = targetWeekStart.getDate() - day + (day === 0 ? -6 : 1)
+        targetWeekStart.setDate(diff)
+        targetWeekStart.setHours(0, 0, 0, 0)
+
+        const diffTime = targetWeekStart.getTime() - currentWeekStart.getTime()
+        const diffWeeks = Math.round(diffTime / (7 * 24 * 60 * 60 * 1000))
+        return diffWeeks
+    }
+
+    // Handle date selection from calendar
+    const handleDateSelect = (date: Date | undefined) => {
+        if (date) {
+            const offset = getWeekOffsetForDate(date)
+            setWeekOffset(offset)
+        }
+        setDatePickerOpen(false)
+    }
 
     // Get selected week's date range
     const weekRange = useMemo(() => {
@@ -215,9 +241,26 @@ export function WorkloadCharts() {
                                 >
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                                <span className="text-sm font-medium px-2 min-w-[140px] text-center">
-                                    {weekRange.displayRange}
-                                </span>
+                                <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            className="h-7 px-2 min-w-[140px] text-center text-sm font-medium hover:bg-muted"
+                                        >
+                                            <CalendarIcon className="h-3 w-3 mr-1.5 text-muted-foreground" />
+                                            {weekRange.displayRange}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="center">
+                                        <Calendar
+                                            mode="single"
+                                            selected={weekRange.startDate}
+                                            defaultMonth={weekRange.startDate}
+                                            onSelect={handleDateSelect}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
                                 <Button
                                     variant="ghost"
                                     size="icon"

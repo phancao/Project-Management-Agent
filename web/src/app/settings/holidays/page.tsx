@@ -1,16 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { CalendarIcon, Plus, Trash2, Calendar, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import type { DateRange } from 'react-day-picker';
 
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Calendar as CalendarPicker } from '~/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
-import { useHolidays, type Holiday } from '~/contexts/holidays-context';
+import { useHolidays } from '~/contexts/holidays-context';
 import { cn } from '~/lib/utils';
 
 export default function HolidaysSettingsPage() {
@@ -18,24 +19,47 @@ export default function HolidaysSettingsPage() {
 
     // Form state
     const [newHolidayName, setNewHolidayName] = useState('');
-    const [newHolidayDate, setNewHolidayDate] = useState<Date>();
+    const [newHolidayRange, setNewHolidayRange] = useState<DateRange | undefined>();
     const [datePickerOpen, setDatePickerOpen] = useState(false);
 
     const handleAddHoliday = () => {
-        if (newHolidayName.trim() && newHolidayDate) {
+        if (newHolidayName.trim() && newHolidayRange?.from) {
             addHoliday({
                 name: newHolidayName.trim(),
-                date: newHolidayDate
+                range: newHolidayRange
             });
             setNewHolidayName('');
-            setNewHolidayDate(undefined);
+            setNewHolidayRange(undefined);
         }
     };
 
-    // Sort holidays by date
-    const sortedHolidays = [...holidays].sort((a, b) =>
-        a.date.getTime() - b.date.getTime()
-    );
+    // Sort holidays by start date
+    const sortedHolidays = [...holidays].sort((a, b) => {
+        const aDate = a.range.from || new Date();
+        const bDate = b.range.from || new Date();
+        return aDate.getTime() - bDate.getTime();
+    });
+
+    // Format date range for display
+    const formatRange = (range: DateRange): string => {
+        if (!range.from) return 'No date';
+        if (!range.to || range.from.getTime() === range.to.getTime()) {
+            return format(range.from, 'MMM d, yyyy');
+        }
+        // Same month
+        if (range.from.getMonth() === range.to.getMonth() && range.from.getFullYear() === range.to.getFullYear()) {
+            return `${format(range.from, 'MMM d')} - ${format(range.to, 'd, yyyy')}`;
+        }
+        return `${format(range.from, 'MMM d')} - ${format(range.to, 'MMM d, yyyy')}`;
+    };
+
+    // Calculate duration
+    const getDuration = (range: DateRange): string => {
+        if (!range.from) return '';
+        const to = range.to || range.from;
+        const days = differenceInDays(to, range.from) + 1;
+        return days === 1 ? '1 day' : `${days} days`;
+    };
 
     if (isLoading) {
         return (
@@ -75,7 +99,7 @@ export default function HolidaysSettingsPage() {
                     <CardContent>
                         <div className="flex gap-3">
                             <Input
-                                placeholder="Holiday name (e.g., New Year's Day)"
+                                placeholder="Holiday name (e.g., Tet Holiday)"
                                 value={newHolidayName}
                                 onChange={(e) => setNewHolidayName(e.target.value)}
                                 className="flex-1"
@@ -85,29 +109,31 @@ export default function HolidaysSettingsPage() {
                                     <Button
                                         variant="outline"
                                         className={cn(
-                                            "w-[200px] justify-start text-left font-normal",
-                                            !newHolidayDate && "text-muted-foreground"
+                                            "w-[280px] justify-start text-left font-normal",
+                                            !newHolidayRange?.from && "text-muted-foreground"
                                         )}
                                     >
                                         <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {newHolidayDate ? format(newHolidayDate, "PPP") : "Pick a date"}
+                                        {newHolidayRange?.from ? (
+                                            formatRange(newHolidayRange)
+                                        ) : (
+                                            "Pick date range"
+                                        )}
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="start">
                                     <CalendarPicker
-                                        mode="single"
-                                        selected={newHolidayDate}
-                                        onSelect={(date) => {
-                                            setNewHolidayDate(date);
-                                            setDatePickerOpen(false);
-                                        }}
+                                        mode="range"
+                                        selected={newHolidayRange}
+                                        onSelect={setNewHolidayRange}
+                                        numberOfMonths={2}
                                         initialFocus
                                     />
                                 </PopoverContent>
                             </Popover>
                             <Button
                                 onClick={handleAddHoliday}
-                                disabled={!newHolidayName.trim() || !newHolidayDate}
+                                disabled={!newHolidayName.trim() || !newHolidayRange?.from}
                             >
                                 <Plus className="w-4 h-4 mr-2" />
                                 Add
@@ -135,22 +161,29 @@ export default function HolidaysSettingsPage() {
                             <div className="space-y-2">
                                 {sortedHolidays.map((holiday, index) => (
                                     <div
-                                        key={`${holiday.date.toISOString()}-${holiday.name}`}
+                                        key={`${holiday.range.from?.toISOString()}-${holiday.name}`}
                                         className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg group hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                                     >
                                         <div className="flex items-center gap-4">
                                             <div className="w-16 text-center">
-                                                <div className="text-2xl font-bold text-indigo-600">
-                                                    {format(holiday.date, 'd')}
-                                                </div>
-                                                <div className="text-xs text-muted-foreground uppercase">
-                                                    {format(holiday.date, 'MMM')}
-                                                </div>
+                                                {holiday.range.from && (
+                                                    <>
+                                                        <div className="text-2xl font-bold text-indigo-600">
+                                                            {format(holiday.range.from, 'd')}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground uppercase">
+                                                            {format(holiday.range.from, 'MMM')}
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                             <div>
                                                 <div className="font-medium">{holiday.name}</div>
-                                                <div className="text-sm text-muted-foreground">
-                                                    {format(holiday.date, 'EEEE, MMMM d, yyyy')}
+                                                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                                                    <span>{formatRange(holiday.range)}</span>
+                                                    <span className="text-xs px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded">
+                                                        {getDuration(holiday.range)}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
@@ -161,7 +194,7 @@ export default function HolidaysSettingsPage() {
                                             onClick={() => {
                                                 // Find actual index in original array
                                                 const actualIndex = holidays.findIndex(h =>
-                                                    h.date.toISOString() === holiday.date.toISOString() &&
+                                                    h.range.from?.toISOString() === holiday.range.from?.toISOString() &&
                                                     h.name === holiday.name
                                                 );
                                                 if (actualIndex !== -1) {
@@ -186,8 +219,9 @@ export default function HolidaysSettingsPage() {
                             <div className="text-sm text-blue-800 dark:text-blue-300">
                                 <p className="font-medium mb-1">How holidays work</p>
                                 <ul className="list-disc list-inside space-y-1 text-blue-700 dark:text-blue-400">
+                                    <li>Holidays can span multiple days (e.g., Tet holiday week)</li>
                                     <li>Holidays are shared across all projects and teams</li>
-                                    <li>Holiday dates are excluded from capacity calculations</li>
+                                    <li>All dates in the range are excluded from capacity calculations</li>
                                     <li>Members on vacation have a separate tracking system per member</li>
                                 </ul>
                             </div>

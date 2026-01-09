@@ -6,7 +6,7 @@ import type { DateRange } from 'react-day-picker';
 
 // Types
 export interface Holiday {
-    date: Date;
+    range: DateRange;  // Date range (from/to)
     name: string;
 }
 
@@ -48,8 +48,11 @@ export function HolidaysProvider({ children }: { children: ReactNode }) {
             if (saved) {
                 const parsed = JSON.parse(saved);
                 setHolidays(parsed.map((h: any) => ({
-                    ...h,
-                    date: new Date(h.date)
+                    name: h.name,
+                    range: {
+                        from: h.range?.from ? new Date(h.range.from) : (h.date ? new Date(h.date) : undefined),
+                        to: h.range?.to ? new Date(h.range.to) : (h.date ? new Date(h.date) : undefined)
+                    }
                 })));
             }
         } catch (e) {
@@ -137,13 +140,24 @@ export function useHolidays() {
     return context;
 }
 
-// Helper: Check if a specific date is a holiday
+// Helper: Check if a specific date is a holiday (within any holiday range)
 export function isHoliday(date: Date, holidays: Holiday[]): boolean {
-    return holidays.some(h =>
-        h.date.getFullYear() === date.getFullYear() &&
-        h.date.getMonth() === date.getMonth() &&
-        h.date.getDate() === date.getDate()
-    );
+    const checkDate = new Date(date);
+    checkDate.setHours(12, 0, 0, 0);
+
+    for (const holiday of holidays) {
+        if (holiday.range.from) {
+            const start = new Date(holiday.range.from);
+            start.setHours(0, 0, 0, 0);
+            const end = holiday.range.to ? new Date(holiday.range.to) : new Date(holiday.range.from);
+            end.setHours(23, 59, 59, 999);
+
+            if (checkDate >= start && checkDate <= end) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 // Helper: Check if a specific date is a vacation for a member

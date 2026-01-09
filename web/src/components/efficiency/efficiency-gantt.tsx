@@ -48,7 +48,16 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
 
     // 3. Helper: Check if a day is a holiday
     const isHoliday = (day: Date): boolean => {
-        return holidays.some(h => isSameDay(h.date, day));
+        const checkDay = new Date(day);
+        checkDay.setHours(12, 0, 0, 0);
+        return holidays.some(h => {
+            if (!h.range.from) return false;
+            const holidayStart = new Date(h.range.from);
+            holidayStart.setHours(0, 0, 0, 0);
+            const holidayEnd = h.range.to ? new Date(h.range.to) : new Date(h.range.from);
+            holidayEnd.setHours(23, 59, 59, 999);
+            return checkDay >= holidayStart && checkDay <= holidayEnd;
+        });
     };
 
     // 4. Helper: Check if a day is a vacation for a member

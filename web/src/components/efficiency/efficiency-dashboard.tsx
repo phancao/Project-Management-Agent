@@ -77,12 +77,17 @@ export function EfficiencyDashboard({
             // Exclude weekends and holidays
             return days.filter(day => {
                 if (isWeekend(day)) return false;
-                // Check if this day is a holiday
-                const isHolidayDay = holidays.some(h =>
-                    h.date.getFullYear() === day.getFullYear() &&
-                    h.date.getMonth() === day.getMonth() &&
-                    h.date.getDate() === day.getDate()
-                );
+                // Check if this day is within any holiday range
+                const isHolidayDay = holidays.some(h => {
+                    if (!h.range.from) return false;
+                    const holidayStart = new Date(h.range.from);
+                    holidayStart.setHours(0, 0, 0, 0);
+                    const holidayEnd = h.range.to ? new Date(h.range.to) : new Date(h.range.from);
+                    holidayEnd.setHours(23, 59, 59, 999);
+                    const checkDay = new Date(day);
+                    checkDay.setHours(12, 0, 0, 0);
+                    return checkDay >= holidayStart && checkDay <= holidayEnd;
+                });
                 if (isHolidayDay) return false;
                 return true;
             }).length;
@@ -110,11 +115,16 @@ export function EfficiencyDashboard({
 
         // Helper: Check if a day is a holiday
         const isHolidayDay = (day: Date): boolean => {
-            return holidays.some(h =>
-                h.date.getFullYear() === day.getFullYear() &&
-                h.date.getMonth() === day.getMonth() &&
-                h.date.getDate() === day.getDate()
-            );
+            const checkDay = new Date(day);
+            checkDay.setHours(12, 0, 0, 0);
+            return holidays.some(h => {
+                if (!h.range.from) return false;
+                const holidayStart = new Date(h.range.from);
+                holidayStart.setHours(0, 0, 0, 0);
+                const holidayEnd = h.range.to ? new Date(h.range.to) : new Date(h.range.from);
+                holidayEnd.setHours(23, 59, 59, 999);
+                return checkDay >= holidayStart && checkDay <= holidayEnd;
+            });
         };
 
         const getMemberCapacityHours = (memberId: string) => {

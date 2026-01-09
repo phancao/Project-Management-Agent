@@ -77,12 +77,13 @@ export function EfficiencyView() {
     // Handle holidays changes (sync to global context)
     const handleHolidaysChange = (newHolidays: Holiday[]) => {
         // Sync with context - compare and update
-        const currentSet = new Set(holidays.map(h => h.date.toISOString() + h.name));
-        const newSet = new Set(newHolidays.map(h => h.date.toISOString() + h.name));
+        const getKey = (h: Holiday) => (h.range.from?.toISOString() || '') + h.name;
+        const currentSet = new Set(holidays.map(getKey));
+        const newSet = new Set(newHolidays.map(getKey));
 
         // Remove holidays not in new list
         holidays.forEach((h, i) => {
-            const key = h.date.toISOString() + h.name;
+            const key = getKey(h);
             if (!newSet.has(key)) {
                 removeHoliday(i);
             }
@@ -90,7 +91,7 @@ export function EfficiencyView() {
 
         // Add holidays not in current list
         newHolidays.forEach(h => {
-            const key = h.date.toISOString() + h.name;
+            const key = getKey(h);
             if (!currentSet.has(key)) {
                 addHoliday(h);
             }

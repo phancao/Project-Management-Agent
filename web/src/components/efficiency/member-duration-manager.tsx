@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
 import { type PMUser } from '~/core/api/pm/users';
 
 export interface Holiday {
-    date: Date;
+    range: DateRange;  // Date range (from/to)
     name: string;
 }
 
@@ -36,7 +36,7 @@ export function MemberDurationManager({ members, activePeriods, onChange, holida
     const [tempDateRange, setTempDateRange] = useState<DateRange | undefined>(undefined);
 
     // Holiday input state
-    const [holidayDate, setHolidayDate] = useState<Date | undefined>(undefined);
+    const [holidayRange, setHolidayRange] = useState<DateRange | undefined>(undefined);
     const [holidayName, setHolidayName] = useState("");
     const [showHolidayPopover, setShowHolidayPopover] = useState(false);
 
@@ -152,12 +152,12 @@ export function MemberDurationManager({ members, activePeriods, onChange, holida
 
     // Holiday handlers
     const handleAddHoliday = () => {
-        if (!holidayDate || !holidayName.trim() || !onHolidaysChange) return;
+        if (!holidayRange?.from || !holidayName.trim() || !onHolidaysChange) return;
 
-        const newHoliday: Holiday = { date: holidayDate, name: holidayName.trim() };
+        const newHoliday: Holiday = { range: holidayRange, name: holidayName.trim() };
         onHolidaysChange([...holidays, newHoliday]);
 
-        setHolidayDate(undefined);
+        setHolidayRange(undefined);
         setHolidayName("");
         setShowHolidayPopover(false);
     };
@@ -230,18 +230,19 @@ export function MemberDurationManager({ members, activePeriods, onChange, holida
                             <PopoverContent className="w-auto p-4" align="end">
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Date</label>
+                                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Date Range</label>
                                         <Calendar
-                                            mode="single"
-                                            selected={holidayDate}
-                                            onSelect={setHolidayDate}
+                                            mode="range"
+                                            selected={holidayRange}
+                                            onSelect={setHolidayRange}
+                                            numberOfMonths={2}
                                             className="rounded-md border"
                                         />
                                     </div>
                                     <div>
                                         <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Name</label>
                                         <Input
-                                            placeholder="e.g., New Year"
+                                            placeholder="e.g., Tet Holiday"
                                             value={holidayName}
                                             onChange={(e) => setHolidayName(e.target.value)}
                                             className="h-8"
@@ -250,7 +251,7 @@ export function MemberDurationManager({ members, activePeriods, onChange, holida
                                     <Button
                                         size="sm"
                                         onClick={handleAddHoliday}
-                                        disabled={!holidayDate || !holidayName.trim()}
+                                        disabled={!holidayRange?.from || !holidayName.trim()}
                                         className="w-full"
                                     >
                                         Add Holiday
@@ -264,7 +265,9 @@ export function MemberDurationManager({ members, activePeriods, onChange, holida
                             {holidays.map((holiday, idx) => (
                                 <Badge key={idx} variant="secondary" className="bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-700">
                                     <PartyPopper className="w-3 h-3 mr-1" />
-                                    {format(holiday.date, "MMM d")} - {holiday.name}
+                                    {holiday.range.from && format(holiday.range.from, "MMM d")}
+                                    {holiday.range.to && holiday.range.to.getTime() !== holiday.range.from?.getTime() && ` - ${format(holiday.range.to, "MMM d")}`}
+                                    {" "}- {holiday.name}
                                     <button onClick={() => handleRemoveHoliday(idx)} className="ml-1.5 hover:text-red-500">
                                         <X className="w-3 h-3" />
                                     </button>

@@ -426,21 +426,23 @@ button {
 }
 
 /* Hover color overrides for consistent hover states */
-/* General hover background transition to use hover color */
+/* General hover background transition to use hover color with higher opacity */
 .hover\:bg-brand\/10:hover,
 .hover\:bg-primary\/10:hover,
-.hover\:bg-accent:hover {
-  background-color: rgba(var(--hover-rgb), 0.1) !important;
+.hover\:bg-accent:hover,
+.hover\:bg-muted\/30:hover,
+.hover\:bg-muted\/50:hover {
+  background-color: rgba(var(--hover-rgb), 0.35) !important;
 }
 
 .hover\:bg-brand\/20:hover,
 .hover\:bg-primary\/20:hover {
-  background-color: rgba(var(--hover-rgb), 0.2) !important;
+  background-color: rgba(var(--hover-rgb), 0.5) !important;
 }
 
-/* Button hover states */
-button:hover:not(:disabled):not([data-state="active"]):not(.bg-brand):not(.bg-primary) {
-  --tw-bg-opacity: 1;
+/* Button hover states - apply hover color to interactive buttons */
+button:hover:not(:disabled):not([data-state="active"]):not(.bg-brand):not(.bg-primary):not([class*="bg-"]) {
+  background-color: rgba(var(--hover-rgb), 0.15) !important;
 }
 
 /* Override common hover patterns to use hover color */
@@ -459,4 +461,9 @@ button:hover:not(:disabled):not([data-state="active"]):not(.bg-brand):not(.bg-pr
 .hover\:border-brand:hover,
 .hover\:border-primary:hover {
   border-color: var(--hover) !important;
+}
+
+/* Navigation links hover */
+a:hover:not(.bg-brand):not(.bg-primary) {
+  color: var(--hover);
 }

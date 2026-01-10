@@ -38,27 +38,27 @@ function TeamContent() {
     return (
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl">
-                <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-sm">
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Overview
                 </TabsTrigger>
-                <TabsTrigger value="members" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                <TabsTrigger value="members" className="rounded-lg data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-sm">
                     <Users className="w-4 h-4 mr-2" />
                     Teams
                 </TabsTrigger>
-                <TabsTrigger value="assignments" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                <TabsTrigger value="assignments" className="rounded-lg data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-sm">
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Project Assignation
                 </TabsTrigger>
-                <TabsTrigger value="planning" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                <TabsTrigger value="planning" className="rounded-lg data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-sm">
                     <LineChart className="w-4 h-4 mr-2" />
                     Planning
                 </TabsTrigger>
-                <TabsTrigger value="worklogs" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                <TabsTrigger value="worklogs" className="rounded-lg data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-sm">
                     <ClipboardList className="w-4 h-4 mr-2" />
                     Worklogs
                 </TabsTrigger>
-                <TabsTrigger value="efficiency" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-sm">
+                <TabsTrigger value="efficiency" className="rounded-lg data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-sm">
                     <Timer className="w-4 h-4 mr-2" />
                     Efficiency (EE)
                 </TabsTrigger>

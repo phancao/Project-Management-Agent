@@ -23,10 +23,6 @@ from ..decorators import mcp_tool, default_value
             "provider_id": {
                 "type": "string",
                 "description": "Optional: Filter by provider ID"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum results (default: 10)"
             }
         },
         "required": ["query"]
@@ -35,12 +31,10 @@ from ..decorators import mcp_tool, default_value
 class SearchProjectsTool(ReadTool):
     """Search projects by query."""
     
-    @default_value("limit", 10)
     async def execute(
         self,
         query: str,
         provider_id: str | None = None,
-        limit: int = 10,
         **kwargs
     ) -> dict[str, Any]:
         """
@@ -49,7 +43,6 @@ class SearchProjectsTool(ReadTool):
         Args:
             query: Search query
             provider_id: Optional provider filter
-            limit: Maximum results
         
         Returns:
             Matching projects
@@ -93,9 +86,6 @@ class SearchProjectsTool(ReadTool):
             if query_lower in p.get("name", "").lower()
             or query_lower in (p.get("description") or "").lower()
         ]
-        
-        # Apply limit
-        matching_projects = matching_projects[:limit]
         
         return {
             "projects": matching_projects,

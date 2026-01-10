@@ -20,11 +20,11 @@ from .tools import (
     register_task_interaction_tools,
     register_provider_config_tools,
 )
-from .tools.analytics_v2.register import register_analytics_tools_v2
-from .tools.projects_v2.register import register_project_tools_v2
-from .tools.tasks_v2.register import register_task_tools_v2
-from .tools.sprints_v2.register import register_sprint_tools_v2
-from .tools.epics_v2.register import register_epic_tools_v2
+from .tools.analytics.register import register_analytics_tools
+from .tools.projects.register import register_project_tools
+from .tools.tasks.register import register_task_tools
+from .tools.sprints.register import register_sprint_tools
+from .tools.epics.register import register_epic_tools
 from .tools.pm_service_tools.register import register_pm_service_user_tools
 from mcp_meeting_server.tools import register_meeting_tools
 
@@ -112,15 +112,14 @@ class PMMCPServer:
             ("provider_config", register_provider_config_tools),  # Provider config tools
             # ("users", register_user_tools),  # User tools - DISABLED: Using pm_service_users instead
             ("task_interactions", register_task_interaction_tools),  # Task interactions
-            # V2 Tools (NEW: Refactored with new architecture)
-            ("analytics_v2", register_analytics_tools_v2),  # Analytics tools (refactored)
-            ("projects_v2", register_project_tools_v2),  # Project tools (hybrid)
-            ("tasks_v2", register_task_tools_v2),  # Task tools (hybrid)
-            ("sprints_v2", register_sprint_tools_v2),  # Sprint tools (hybrid)
-            ("epics_v2", register_epic_tools_v2),  # Epic tools (hybrid)
-            ("epics_v2", register_epic_tools_v2),  # Epic tools (hybrid)
-            ("pm_service_users", register_pm_service_user_tools),  # PM Service user tools (new pattern)
-            ("meeting_tools", register_meeting_tools), # Meeting tools (adapted)
+            # Refactored tools
+            ("analytics", register_analytics_tools),  # Analytics tools
+            ("projects", register_project_tools),  # Project tools
+            ("tasks", register_task_tools),  # Task tools
+            ("sprints", register_sprint_tools),  # Sprint tools
+            ("epics", register_epic_tools),  # Epic tools
+            ("pm_service_users", register_pm_service_user_tools),  # PM Service user tools
+            ("meeting_tools", register_meeting_tools), # Meeting tools
         ]
         
         for module_name, register_func in tool_modules:

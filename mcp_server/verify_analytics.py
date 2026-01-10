@@ -10,9 +10,9 @@ from sqlalchemy.orm import sessionmaker
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from mcp_server.core.tool_context import ToolContext
-from mcp_server.tools.analytics_v2.capacity_planning import CapacityPlanningTool
-from mcp_server.tools.analytics_v2.burndown import BurndownChartTool
-from mcp_server.tools.analytics_v2.velocity import VelocityChartTool
+from mcp_server.tools.analytics.capacity_planning import CapacityPlanningTool
+from mcp_server.tools.analytics.burndown import BurndownChartTool
+from mcp_server.tools.analytics.velocity import VelocityChartTool
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

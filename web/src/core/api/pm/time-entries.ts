@@ -7,6 +7,7 @@ export interface PMTimeEntry {
     hours: number;
     date: string;
     description?: string;
+    activity_type?: string;
 }
 
 export interface ListTimeEntriesOptions {

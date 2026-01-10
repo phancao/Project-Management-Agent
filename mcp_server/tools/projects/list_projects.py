@@ -27,12 +27,6 @@ from ..decorators import mcp_tool, default_value
             "search": {
                 "type": "string",
                 "description": "Search term for project name/description (optional)"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum number of projects to return (default: 100)",
-                "minimum": 1,
-                "maximum": 1000
             }
         }
     }
@@ -42,15 +36,13 @@ class ListProjectsTool(ReadTool):
     List all accessible projects across all PM providers.
     
     This tool queries all active PM providers and aggregates their projects.
-    Results can be filtered by provider, searched by name/description, and limited.
+    Results can be filtered by provider and searched by name/description.
     """
     
-    @default_value("limit", 100)
     async def execute(
         self,
         provider_id: str | None = None,
-        search: str | None = None,
-        limit: int = 100
+        search: str | None = None
     ) -> dict[str, Any]:
         """
         List all accessible projects.
@@ -58,7 +50,6 @@ class ListProjectsTool(ReadTool):
         Args:
             provider_id: Filter projects by provider ID (optional)
             search: Search term for project name/description (optional)
-            limit: Maximum number of projects to return (default: 100)
         
         Returns:
             Dictionary with:
@@ -129,14 +120,12 @@ class ListProjectsTool(ReadTool):
                 or search_lower in p.get("description", "").lower()
             ]
         
-        # Apply limit
+        # Record total
         total_found = len(all_projects)
-        all_projects = all_projects[:limit]
         
         return {
             "projects": all_projects,
             "total": total_found,
-            "returned": len(all_projects),
             "providers_queried": providers_queried,
             "providers_available": len(self.context.provider_manager.get_active_providers())
         }

@@ -1,5 +1,5 @@
 """
-Project Tools Registration (V2)
+Project Tools Registration
 
 Registers all refactored project tools with MCP server.
 Fully independent - no dependency on backend PM Handler.
@@ -22,14 +22,14 @@ from .search_projects import SearchProjectsTool
 logger = logging.getLogger(__name__)
 
 
-def register_project_tools_v2(
+def register_project_tools(
     server: Server,
     context: ToolContext,
     tool_names: list[str] | None = None,
     tool_functions: dict[str, Any] | None = None
 ) -> int:
     """
-    Register refactored project tools (V2) with MCP server.
+    Register project tools with MCP server.
     
     Fully independent implementation using ProviderManager directly.
     No dependency on backend PM Handler.
@@ -95,9 +95,9 @@ def register_project_tools_v2(
             )
         
         tool_count += 1
-        logger.info(f"[Projects V2] Registered tool: {tool_name}")
+        logger.info(f"[Projects] Registered tool: {tool_name}")
     
-    logger.info(f"[Projects V2] Registered {tool_count} project tools (fully independent)")
+    logger.info(f"[Projects] Registered {tool_count} project tools")
     
     return tool_count
 

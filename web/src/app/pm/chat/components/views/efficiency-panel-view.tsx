@@ -7,6 +7,7 @@ import type { DateRange } from "react-day-picker";
 
 import { EfficiencyDashboard } from "~/components/efficiency/efficiency-dashboard";
 import { type MemberPeriod, type Holiday } from "~/components/efficiency/member-duration-manager";
+import { useHolidays } from "~/contexts/holidays-context";
 import { listTasks, type PMTask } from "~/core/api/pm/tasks";
 import { listTimeEntries, type PMTimeEntry } from "~/core/api/pm/time-entries";
 import { listUsers, type PMUser } from "~/core/api/pm/users";
@@ -49,29 +50,31 @@ export function EfficiencyPanelView() {
     // Member Active Periods (Persistence) - Using MemberPeriod for allocation support
     const [activePeriods, setActivePeriods] = useState<Record<string, MemberPeriod[]>>({});
 
-    // Holidays state
-    const [holidays, setHolidays] = useState<Holiday[]>([]);
+    // Holidays from global context (managed at /settings/holidays)
+    const { holidays, addHoliday, removeHoliday } = useHolidays();
 
-    // Load holidays from localStorage
-    useEffect(() => {
-        if (!projectId) return;
-        try {
-            const saved = localStorage.getItem(`ee-holidays-project-${projectId}`);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                setHolidays(parsed.map((h: any) => ({ ...h, date: new Date(h.date) })));
-            }
-        } catch (e) {
-            console.error("Failed to load holidays", e);
-        }
-    }, [projectId]);
-
-    // Save holidays to localStorage
+    // Handle holidays changes (sync to global context)
     const handleHolidaysChange = (newHolidays: Holiday[]) => {
-        setHolidays(newHolidays);
-        if (projectId) {
-            localStorage.setItem(`ee-holidays-project-${projectId}`, JSON.stringify(newHolidays));
-        }
+        // Sync with context - compare and update
+        const getKey = (h: Holiday) => (h.range.from?.toISOString() || '') + h.name;
+        const currentSet = new Set(holidays.map(getKey));
+        const newSet = new Set(newHolidays.map(getKey));
+
+        // Remove holidays not in new list
+        holidays.forEach((h, i) => {
+            const key = getKey(h);
+            if (!newSet.has(key)) {
+                removeHoliday(i);
+            }
+        });
+
+        // Add holidays not in current list
+        newHolidays.forEach(h => {
+            const key = getKey(h);
+            if (!currentSet.has(key)) {
+                addHoliday(h);
+            }
+        });
     };
 
     // Load from localStorage on mount - with backward compatibility

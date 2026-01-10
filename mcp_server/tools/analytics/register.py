@@ -26,7 +26,7 @@ from . import (
 logger = logging.getLogger(__name__)
 
 
-def register_analytics_tools_v2(
+def register_analytics_tools(
     server: Server,
     context: ToolContext,
     tool_names: list[str] | None = None,
@@ -99,9 +99,9 @@ def register_analytics_tools_v2(
             )
         
         tool_count += 1
-        logger.info(f"[Analytics V2] Registered tool: {tool_name}")
+        logger.info(f"[Analytics] Registered tool: {tool_name}")
     
-    logger.info(f"[Analytics V2] Registered {tool_count} analytics tools")
+    logger.info(f"[Analytics] Registered {tool_count} analytics tools")
     
     return tool_count
 

@@ -1,4 +1,4 @@
-"""Epic Tools Registration (V2) - Fully Independent"""
+"""Epic Tools Registration - Fully Independent"""
 import logging
 from typing import Any
 from mcp.server import Server
@@ -14,13 +14,13 @@ from .unlink_task_from_epic import UnlinkTaskFromEpicTool
 
 logger = logging.getLogger(__name__)
 
-def register_epic_tools_v2(
+def register_epic_tools(
     server: Server,
     context: ToolContext,
     tool_names: list[str] | None = None,
     tool_functions: dict[str, Any] | None = None
 ) -> int:
-    """Register epic tools (V2) - fully independent."""
+    """Register epic tools - fully independent."""
     tool_count = 0
     
     tool_classes = [
@@ -55,7 +55,7 @@ def register_epic_tools_v2(
             server._tool_cache[tool_name] = Tool(name=tool_name, description=tool_description, inputSchema=tool_input_schema)
         
         tool_count += 1
-        logger.info(f"[Epics V2] Registered tool: {tool_name}")
+        logger.info(f"[Epics] Registered tool: {tool_name}")
     
-    logger.info(f"[Epics V2] Registered {tool_count} epic tools (fully independent)")
+    logger.info(f"[Epics] Registered {tool_count} epic tools")
     return tool_count

@@ -6,7 +6,7 @@ Task tools using PM Service client.
 from typing import Any, Optional
 
 from ..pm_service_base import PMServiceReadTool, PMServiceWriteTool
-from ..decorators import mcp_tool, default_value
+from ..decorators import mcp_tool
 
 
 @mcp_tool(
@@ -33,10 +33,6 @@ from ..decorators import mcp_tool, default_value
             "status": {
                 "type": "string",
                 "description": "Filter by task status"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum number of tasks to return (default: 100)"
             }
         }
     }
@@ -44,14 +40,12 @@ from ..decorators import mcp_tool, default_value
 class ListTasksTool(PMServiceReadTool):
     """List tasks with filters."""
     
-    @default_value("limit", 100)
     async def execute(
         self,
         project_id: Optional[str] = None,
         sprint_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
-        status: Optional[str] = None,
-        limit: int = 100
+        status: Optional[str] = None
     ) -> dict[str, Any]:
         """List tasks using PM Service."""
         async with self.client as client:
@@ -59,14 +53,12 @@ class ListTasksTool(PMServiceReadTool):
                 project_id=project_id,
                 sprint_id=sprint_id,
                 assignee_id=assignee_id,
-                status=status,
-                limit=limit
+                status=status
             )
         
         return {
             "tasks": result.get("items", []),
-            "total": result.get("total", 0),
-            "returned": result.get("returned", 0)
+            "total": result.get("total", 0)
         }
 
 
@@ -239,4 +231,3 @@ class UpdateTaskTool(PMServiceWriteTool):
                 priority=priority,
                 progress=progress
             )
-

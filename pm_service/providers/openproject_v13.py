@@ -313,7 +313,9 @@ class OpenProjectV13Provider(BasePMProvider):
         project_id: Optional[str] = None,
         assignee_id: Optional[str] = None,
         sprint_id: Optional[str] = None,
-        status: Optional[str] = None  # 'open' = active only, None/'all' = include closed
+        status: Optional[str] = None,  # 'open' = active only, None/'all' = include closed
+        start_date: Optional[str] = None,  # Accepted for API compatibility (not used by OpenProject)
+        end_date: Optional[str] = None,    # Accepted for API compatibility (not used by OpenProject)
     ) -> List[PMTask]:
         """List all work packages (tasks) with pagination support"""
         import json as json_lib
@@ -1868,6 +1870,9 @@ class OpenProjectV13Provider(BasePMProvider):
                     # Extract task_id from workPackage link
                     wp_href = entry_links.get("workPackage", {}).get("href")
                     transformed["task_id"] = self._extract_id_from_href(wp_href) if wp_href else None
+                    # Extract activity_type from activity link (use title for name)
+                    activity_link = entry_links.get("activity", {})
+                    transformed["activity_type"] = activity_link.get("title") if activity_link else None
                     # Use spentOn as date
                     transformed["date"] = entry.get("spentOn")
                     yield transformed

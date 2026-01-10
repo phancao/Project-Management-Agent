@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO, format, eachDayOfInterval, isWeekend, isWithinInterval } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Calendar as CalendarIcon } from "lucide-react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -18,6 +19,18 @@ import { type PMTimeEntry } from '~/core/api/pm/time-entries';
 import { EfficiencyGantt } from './efficiency-gantt';
 
 import { MemberDurationManager, type MemberPeriod, type Holiday } from './member-duration-manager';
+
+// Color palette for activity types
+const ACTIVITY_COLORS = [
+    "#22c55e", // green
+    "#3b82f6", // blue
+    "#f59e0b", // amber
+    "#ef4444", // red
+    "#8b5cf6", // violet
+    "#ec4899", // pink
+    "#14b8a6", // teal
+    "#f97316", // orange
+];
 
 interface EfficiencyDashboardProps {
     members: PMUser[];
@@ -210,6 +223,24 @@ export function EfficiencyDashboard({
 
     }, [members, tasks, timeEntries, dateRange, activePeriods]); // Added timeEntries dependency
 
+    // Aggregate time entries by activity type
+    const activityData = useMemo(() => {
+        const totalHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
+        const activityMap: Record<string, number> = {};
+        timeEntries.forEach((entry) => {
+            const activityName = entry.activity_type || "Unknown";
+            activityMap[activityName] = (activityMap[activityName] || 0) + entry.hours;
+        });
+        return Object.entries(activityMap)
+            .map(([name, hours], index) => ({
+                name,
+                hours,
+                percentage: totalHours > 0 ? ((hours / totalHours) * 100).toFixed(1) : "0",
+                color: ACTIVITY_COLORS[index % ACTIVITY_COLORS.length],
+            }))
+            .sort((a, b) => b.hours - a.hours);
+    }, [timeEntries]);
+
     return (
         <div className="space-y-6">
             {/* KPI Cards */}
@@ -263,6 +294,88 @@ export function EfficiencyDashboard({
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Activity Type Distribution */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">Hours by Activity Type</CardTitle>
+                    <CardDescription>Distribution of logged hours across activity types</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {activityData.length > 0 ? (
+                        <div className="flex flex-col lg:flex-row items-center gap-8">
+                            <div className="w-full lg:w-1/2">
+                                <ResponsiveContainer width="100%" height={240}>
+                                    <PieChart>
+                                        <Pie
+                                            data={activityData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={50}
+                                            outerRadius={90}
+                                            fill="#8884d8"
+                                            dataKey="hours"
+                                            paddingAngle={2}
+                                        >
+                                            {activityData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{
+                                                backgroundColor: "rgba(255, 255, 255, 0.95)",
+                                                border: "1px solid #ccc",
+                                                borderRadius: "8px",
+                                            }}
+                                            formatter={(value, name) => [`${Number(value).toFixed(1)} hours`, name]}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="w-full lg:w-1/2">
+                                <div className="space-y-3">
+                                    {activityData.map((activity) => (
+                                        <div key={activity.name} className="flex items-center gap-3">
+                                            <div
+                                                className="w-4 h-4 rounded-sm flex-shrink-0"
+                                                style={{ backgroundColor: activity.color }}
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-baseline">
+                                                    <span className="font-medium text-gray-900 dark:text-white truncate">
+                                                        {activity.name}
+                                                    </span>
+                                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-2">
+                                                        {activity.hours.toFixed(1)}h
+                                                    </span>
+                                                </div>
+                                                <div className="mt-1 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                    <div
+                                                        className="h-2 rounded-full transition-all duration-300"
+                                                        style={{
+                                                            width: `${activity.percentage}%`,
+                                                            backgroundColor: activity.color
+                                                        }}
+                                                    />
+                                                </div>
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {activity.percentage}% of total
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-400">
+                            <div className="text-3xl mb-2">📊</div>
+                            <p className="text-sm">No activity data for the selected date range</p>
+                            <p className="text-xs mt-1">Activity types will appear when time entries are logged</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* Gantt Chart Section with Control Bar */}
             <Card>

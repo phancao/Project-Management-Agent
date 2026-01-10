@@ -6,7 +6,7 @@ Project tools using PM Service client.
 from typing import Any, Optional
 
 from ..pm_service_base import PMServiceReadTool
-from ..decorators import mcp_tool, default_value
+from ..decorators import mcp_tool
 
 
 @mcp_tool(
@@ -21,10 +21,6 @@ from ..decorators import mcp_tool, default_value
             "provider_id": {
                 "type": "string",
                 "description": "Filter projects by provider ID (optional)"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum number of projects to return (default: 100)"
             }
         }
     }
@@ -32,23 +28,19 @@ from ..decorators import mcp_tool, default_value
 class ListProjectsTool(PMServiceReadTool):
     """List all accessible projects."""
     
-    @default_value("limit", 100)
     async def execute(
         self,
-        provider_id: Optional[str] = None,
-        limit: int = 100
+        provider_id: Optional[str] = None
     ) -> dict[str, Any]:
         """List projects using PM Service."""
         async with self.client as client:
             result = await client.list_projects(
-                provider_id=provider_id,
-                limit=limit
+                provider_id=provider_id
             )
         
         return {
             "projects": result.get("items", []),
-            "total": result.get("total", 0),
-            "returned": result.get("returned", 0)
+            "total": result.get("total", 0)
         }
 
 
@@ -73,4 +65,3 @@ class GetProjectTool(PMServiceReadTool):
         """Get project using PM Service."""
         async with self.client as client:
             return await client.get_project(project_id)
-

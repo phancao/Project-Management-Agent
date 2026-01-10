@@ -1,13 +1,11 @@
 """
-Refactored Analytics Tools (V2)
+Analytics Tools
 
-Modular analytics tools using the new architecture:
+Modular analytics tools using the refactored architecture:
 - Base classes for common functionality
 - Analytics manager for service integration
 - Tool context for shared state
 - Decorators for validation
-
-This replaces the monolithic tools/analytics.py (758 lines).
 """
 
 from .burndown import BurndownChartTool
@@ -19,7 +17,7 @@ from .cycle_time import CycleTimeChartTool
 from .work_distribution import WorkDistributionChartTool
 from .issue_trend import IssueTrendChartTool
 from .capacity_planning import CapacityPlanningTool
-from .register import register_analytics_tools_v2
+from .register import register_analytics_tools
 
 __all__ = [
     "BurndownChartTool",
@@ -30,6 +28,6 @@ __all__ = [
     "CycleTimeChartTool",
     "WorkDistributionChartTool",
     "IssueTrendChartTool",
+    "CapacityPlanningTool",
+    "register_analytics_tools",
 ]
-
-

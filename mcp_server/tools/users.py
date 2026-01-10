@@ -43,7 +43,6 @@ def register_user_tools(
         Args:
             project_id (optional): Filter by project
             provider_id (optional): Filter by provider
-            limit (optional): Maximum number of users to return
         
         Returns:
             List of users
@@ -51,17 +50,15 @@ def register_user_tools(
         try:
             project_id = arguments.get("project_id")
             provider_id = arguments.get("provider_id")
-            limit = arguments.get("limit", 100)
             
             logger.info(
-                f"list_users called: project_id={project_id}, provider_id={provider_id}, limit={limit}"
+                f"list_users called: project_id={project_id}, provider_id={provider_id}"
             )
             
             # Use PM Service to list users
             if context and hasattr(context, 'pm_service'):
                 result = await context.pm_service.list_users(
-                    project_id=project_id,
-                    limit=limit
+                    project_id=project_id
                 )
                 
                 users = result.get("items", [])
@@ -74,8 +71,7 @@ def register_user_tools(
                     type="text",
                     text=json.dumps({
                         "users": users,
-                        "total": total,
-                        "returned": len(users)
+                        "total": total
                     }, ensure_ascii=False, indent=2)
                 )]
             else:
@@ -84,8 +80,7 @@ def register_user_tools(
                     text=json.dumps({
                         "error": "PM Service not available in context",
                         "users": [],
-                        "total": 0,
-                        "returned": 0
+                        "total": 0
                     }, ensure_ascii=False)
                 )]
             
@@ -96,8 +91,7 @@ def register_user_tools(
                 text=json.dumps({
                     "error": f"Error listing users: {str(e)}",
                     "users": [],
-                    "total": 0,
-                    "returned": 0
+                    "total": 0
                 }, ensure_ascii=False)
             )]
     
@@ -195,7 +189,6 @@ def register_user_tools(
             query (required): Search query
             project_id (optional): Filter by project
             provider_id (optional): Filter by provider
-            limit (optional): Maximum results
         
         Returns:
             List of matching users
@@ -210,7 +203,6 @@ def register_user_tools(
             
             project_id = arguments.get("project_id")
             provider_id = arguments.get("provider_id")
-            limit = arguments.get("limit", 10)
             
             logger.info(
                 f"search_users called: query={query}, project_id={project_id}"

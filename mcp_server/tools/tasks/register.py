@@ -1,38 +1,46 @@
-"""Sprint Tools Registration (V2) - Fully Independent"""
+"""Task Tools Registration - Fully Independent"""
 import logging
 from typing import Any
 from mcp.server import Server
 from mcp.types import Tool
 from ...core.tool_context import ToolContext
-from .list_sprints import ListSprintsTool
-from .get_sprint import GetSprintTool
-from .create_sprint import CreateSprintTool
-from .update_sprint import UpdateSprintTool
-from .delete_sprint import DeleteSprintTool
-from .start_sprint import StartSprintTool
-from .complete_sprint import CompleteSprintTool
-from .get_sprint_tasks import GetSprintTasksTool
+from .list_tasks import ListTasksTool
+from .list_my_tasks import ListMyTasksTool
+from .list_tasks_by_assignee import ListTasksByAssigneeTool
+from .list_unassigned_tasks import ListUnassignedTasksTool
+from .list_tasks_in_sprint import ListTasksInSprintTool
+from .get_task import GetTaskTool
+from .create_task import CreateTaskTool
+from .update_task import UpdateTaskTool
+from .delete_task import DeleteTaskTool
+from .assign_task import AssignTaskTool
+from .update_task_status import UpdateTaskStatusTool
+from .search_tasks import SearchTasksTool
 
 logger = logging.getLogger(__name__)
 
-def register_sprint_tools_v2(
+def register_task_tools(
     server: Server,
     context: ToolContext,
     tool_names: list[str] | None = None,
     tool_functions: dict[str, Any] | None = None
 ) -> int:
-    """Register sprint tools (V2) - fully independent."""
+    """Register task tools - fully independent."""
     tool_count = 0
     
     tool_classes = [
-        ListSprintsTool,
-        GetSprintTool,
-        CreateSprintTool,
-        UpdateSprintTool,
-        DeleteSprintTool,
-        StartSprintTool,
-        CompleteSprintTool,
-        GetSprintTasksTool,
+        ListTasksTool,
+        ListMyTasksTool,
+        ListTasksByAssigneeTool,
+        ListUnassignedTasksTool,
+        ListTasksInSprintTool,
+        GetTaskTool,
+        CreateTaskTool,
+        UpdateTaskTool,
+        DeleteTaskTool,
+        AssignTaskTool,
+        UpdateTaskStatusTool,
+        SearchTasksTool,
     ]
     
     for tool_class in tool_classes:
@@ -41,6 +49,8 @@ def register_sprint_tools_v2(
         tool_description = getattr(tool_class, "_mcp_description", "")
         tool_input_schema = getattr(tool_class, "_mcp_input_schema", {"type": "object", "properties": {}, "additionalProperties": True})
         
+        # IMPORTANT: Create a new scope to capture tool_instance correctly
+        # Without this, all handlers would reference the last tool_instance due to closure
         def create_handler(instance):
             @server.call_tool()
             async def tool_handler(name: str = tool_name, arguments: dict[str, Any] = None):
@@ -57,7 +67,7 @@ def register_sprint_tools_v2(
             server._tool_cache[tool_name] = Tool(name=tool_name, description=tool_description, inputSchema=tool_input_schema)
         
         tool_count += 1
-        logger.info(f"[Sprints V2] Registered tool: {tool_name}")
+        logger.info(f"[Tasks] Registered tool: {tool_name}")
     
-    logger.info(f"[Sprints V2] Registered {tool_count} sprint tools (fully independent)")
+    logger.info(f"[Tasks] Registered {tool_count} task tools")
     return tool_count

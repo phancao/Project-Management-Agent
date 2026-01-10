@@ -6,7 +6,7 @@ Sprint tools using PM Service client.
 from typing import Any, Optional
 
 from ..pm_service_base import PMServiceReadTool
-from ..decorators import mcp_tool, default_value
+from ..decorators import mcp_tool
 
 
 @mcp_tool(
@@ -25,10 +25,6 @@ from ..decorators import mcp_tool, default_value
             "status": {
                 "type": "string",
                 "description": "Filter by status (active, closed, future)"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum number of sprints to return (default: 50)"
             }
         }
     }
@@ -36,25 +32,21 @@ from ..decorators import mcp_tool, default_value
 class ListSprintsTool(PMServiceReadTool):
     """List sprints."""
     
-    @default_value("limit", 50)
     async def execute(
         self,
         project_id: Optional[str] = None,
-        status: Optional[str] = None,
-        limit: int = 50
+        status: Optional[str] = None
     ) -> dict[str, Any]:
         """List sprints using PM Service."""
         async with self.client as client:
             result = await client.list_sprints(
                 project_id=project_id,
-                status=status,
-                limit=limit
+                status=status
             )
         
         return {
             "sprints": result.get("items", []),
-            "total": result.get("total", 0),
-            "returned": result.get("returned", 0)
+            "total": result.get("total", 0)
         }
 
 
@@ -79,4 +71,3 @@ class GetSprintTool(PMServiceReadTool):
         """Get sprint using PM Service."""
         async with self.client as client:
             return await client.get_sprint(sprint_id)
-

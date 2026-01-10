@@ -12,6 +12,7 @@ import { CFDView } from "./cfd-view";
 import { CycleTimeView } from "./cycle-time-view";
 import { WorkDistributionView } from "./work-distribution-view";
 import { IssueTrendView } from "./issue-trend-view";
+import { WorklogsView } from "./worklogs-view";
 
 export function ChartsPanelView() {
   const [activeTab, setActiveTab] = useState("burndown");
@@ -40,6 +41,9 @@ export function ChartsPanelView() {
           </TabsTrigger>
           <TabsTrigger value="issue-trend" className="px-4 py-2">
             📊 Trend
+          </TabsTrigger>
+          <TabsTrigger value="worklogs" className="px-4 py-2">
+            ⏱️ Worklogs
           </TabsTrigger>
         </TabsList>
 
@@ -70,6 +74,10 @@ export function ChartsPanelView() {
 
           <TabsContent value="issue-trend" className="mt-0 h-full">
             <IssueTrendView />
+          </TabsContent>
+
+          <TabsContent value="worklogs" className="mt-0 h-full">
+            <WorklogsView />
           </TabsContent>
         </div>
       </Tabs>

@@ -13,7 +13,8 @@ from ..decorators import mcp_tool
     name="list_worklogs",
     description=(
         "List worklogs (time entries) from PM providers. "
-        "Can filter by user, project, or task."
+        "Can filter by user, project, or task. "
+        "Each entry includes: id, user_id, task_id, date, hours, activity_type (e.g., 'Development', 'Management')."
     ),
     input_schema={
         "type": "object",
@@ -37,10 +38,6 @@ from ..decorators import mcp_tool
             "end_date": {
                 "type": "string",
                 "description": "Filter by end date (inclusive, YYYY-MM-DD)"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum number of entries to return (default: 100)"
             }
         }
     }
@@ -54,8 +51,7 @@ class ListWorklogsTool(PMServiceReadTool):
         project_id: Optional[str] = None,
         task_id: Optional[str] = None,
         start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        limit: int = 100
+        end_date: Optional[str] = None
     ) -> dict[str, Any]:
         """
         List worklogs using PM Service.
@@ -70,15 +66,12 @@ class ListWorklogsTool(PMServiceReadTool):
                     end_date=end_date
                 )
             
-            # Apply limit client-side
             all_entries = result.get("items", [])
             total = result.get("total", len(all_entries))
-            limited_entries = all_entries[:limit] if limit else all_entries
             
             response = {
-                "worklogs": limited_entries,
-                "total": total,
-                "returned": len(limited_entries)
+                "worklogs": all_entries,
+                "total": total
             }
             
             if total == 0:

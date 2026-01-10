@@ -6,7 +6,7 @@ User tools using PM Service client.
 from typing import Any, Optional
 
 from ..pm_service_base import PMServiceReadTool
-from ..decorators import mcp_tool, default_value
+from ..decorators import mcp_tool
 
 
 @mcp_tool(
@@ -21,10 +21,6 @@ from ..decorators import mcp_tool, default_value
             "project_id": {
                 "type": "string",
                 "description": "Filter by project ID to get team members"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum number of users to return (default: 100)"
             }
         }
     }
@@ -34,16 +30,10 @@ class ListUsersTool(PMServiceReadTool):
     
     async def execute(
         self,
-        project_id: Optional[str] = None,
-        limit: int = 100
+        project_id: Optional[str] = None
     ) -> dict[str, Any]:
         """
         List users using PM Service.
-        
-        Note: The PM Service client doesn't support limit parameter.
-        All users are fetched and then limited client-side.
-        
-        If permission errors occur, they will be raised and returned to the agent.
         """
         try:
             async with self.client as client:
@@ -51,22 +41,12 @@ class ListUsersTool(PMServiceReadTool):
                     project_id=project_id
                 )
             
-            # Apply limit client-side (PM Service returns all users)
             all_users = result.get("items", [])
             total = result.get("total", len(all_users))
-            limited_users = all_users[:limit] if limit else all_users
-            
-            # Check if this is a legitimate empty result or if there were permission errors
-            # If total is 0 and we have a project_id, it could mean:
-            # 1. No users are assigned to the project (legitimate)
-            # 2. Permission denied (but we caught it and returned empty)
-            # We'll add a note if there were any provider errors
-            has_errors = result.get("_has_errors", False)
             
             response = {
-                "users": limited_users,
-                "total": total,
-                "returned": len(limited_users)
+                "users": all_users,
+                "total": total
             }
             
             # Add informational message if empty result
@@ -118,4 +98,3 @@ class GetUserTool(PMServiceReadTool):
         """Get user using PM Service."""
         async with self.client as client:
             return await client.get_user(user_id)
-

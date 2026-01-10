@@ -35,10 +35,6 @@ from ..decorators import mcp_tool, default_value
             "status": {
                 "type": "string",
                 "description": "Filter by task status"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum number of tasks to return (default: 50, max: 100)"
             }
         }
     }
@@ -46,14 +42,12 @@ from ..decorators import mcp_tool, default_value
 class ListTasksTool(ReadTool):
     """List tasks with filtering options."""
     
-    @default_value("limit", 50)
     async def execute(
         self,
         project_id: str | None = None,
         sprint_id: str | None = None,
         assignee_id: str | None = None,
-        status: str | None = None,
-        limit: int = 50
+        status: str | None = None
     ) -> dict[str, Any]:
         """
         List tasks.
@@ -63,7 +57,6 @@ class ListTasksTool(ReadTool):
             sprint_id: Filter by sprint ID
             assignee_id: Filter by assignee
             status: Filter by status
-            limit: Maximum results
         
         Returns:
             Dictionary with tasks and metadata
@@ -122,15 +115,12 @@ class ListTasksTool(ReadTool):
             status=status
         )
         
-        # Apply limit (cap at 100 max to prevent buffer overflow)
+        # Record total
         total = len(tasks)
-        effective_limit = min(limit, 100)
-        tasks = tasks[:effective_limit]
         
         return {
             "tasks": tasks,
             "total": total,
-            "returned": len(tasks),
             "sprint_filter": actual_sprint_id
         }
     

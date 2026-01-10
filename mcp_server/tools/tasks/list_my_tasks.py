@@ -27,10 +27,6 @@ from ..decorators import mcp_tool, default_value
             "project_id": {
                 "type": "string",
                 "description": "Optional: Filter by specific project ID (format: 'provider_uuid:project_key')"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum number of tasks to return (default: 100)"
             }
         }
     }
@@ -38,12 +34,10 @@ from ..decorators import mcp_tool, default_value
 class ListMyTasksTool(ReadTool):
     """List tasks assigned to the current user."""
     
-    @default_value("limit", 100)
     async def execute(
         self,
         status: str | None = None,
-        project_id: str | None = None,
-        limit: int = 100
+        project_id: str | None = None
     ) -> dict[str, Any]:
         """
         List tasks assigned to the current user.
@@ -51,7 +45,6 @@ class ListMyTasksTool(ReadTool):
         Args:
             status: Optional status filter
             project_id: Optional project filter
-            limit: Maximum results
         
         Returns:
             Dictionary with user's tasks and metadata
@@ -136,15 +129,12 @@ class ListMyTasksTool(ReadTool):
                 if t.get("status", "").lower() == status_lower
             ]
         
-        # Apply limit
+        # Record total
         total = len(tasks)
-        effective_limit = min(limit, 500)
-        tasks = tasks[:effective_limit]
         
         return {
             "tasks": tasks,
             "total": total,
-            "returned": len(tasks),
             "user_id": user_id
         }
     

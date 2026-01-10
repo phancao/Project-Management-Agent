@@ -27,10 +27,6 @@ from ..decorators import mcp_tool, default_value
             "status": {
                 "type": "string",
                 "description": "Optional: Filter by status"
-            },
-            "limit": {
-                "type": "integer",
-                "description": "Maximum results (default: 20)"
             }
         },
         "required": ["query"]
@@ -39,13 +35,11 @@ from ..decorators import mcp_tool, default_value
 class SearchTasksTool(ReadTool):
     """Search tasks by query."""
     
-    @default_value("limit", 20)
     async def execute(
         self,
         query: str,
         project_id: str | None = None,
         status: str | None = None,
-        limit: int = 20,
         **kwargs
     ) -> dict[str, Any]:
         """
@@ -55,7 +49,6 @@ class SearchTasksTool(ReadTool):
             query: Search query
             project_id: Optional project filter
             status: Optional status filter
-            limit: Maximum results
         
         Returns:
             Matching tasks
@@ -108,9 +101,6 @@ class SearchTasksTool(ReadTool):
                 t for t in matching_tasks
                 if t.get("status", "").lower() == status_lower
             ]
-        
-        # Apply limit
-        matching_tasks = matching_tasks[:limit]
         
         return {
             "tasks": matching_tasks,

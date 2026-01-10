@@ -34,7 +34,7 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
   // Views handle their own loading states - no blocking here
 
   return (
-    <div className={cn("flex flex-col h-full bg-gray-50 dark:bg-gray-900", className)}>
+    <div className={cn("flex flex-col h-full bg-transparent", className)}>
       {/* Navigation Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="flex items-center justify-between px-4 py-2">

@@ -58,7 +58,7 @@ function ChatPageContent() {
           <PMHeader selectedProjectId={selectedProjectId} onProjectChange={handleProjectChange} />
 
           {/* Section 2: Left Pane + Section 3: Upper Body + Content Area */}
-          <div className="flex h-screen w-screen justify-center overscroll-none bg-gray-50 dark:bg-gray-900 pt-16">
+          <div className="flex h-screen w-screen justify-center overscroll-none bg-transparent pt-16">
             <PMContent />
           </div>
         </PMDataProvider>

@@ -45,14 +45,14 @@ function MeetingPageContent() {
                     selectedProjectId={selectedProjectId}
                     onProjectChange={handleProjectChange}
                 />
-                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 pt-20 pb-12">
+                <div className="min-h-screen bg-gradient-to-br from-[#1E398D] via-[#14B795] to-[#1C9AD6] pt-20 pb-12">
                     <div className="container mx-auto px-4">
                         {/* Header */}
                         <div className="mb-8">
                             <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
                                 Meeting Notes Agent
                             </h1>
-                            <p className="text-slate-300 text-sm sm:text-base max-w-2xl">
+                            <p className="text-white/80 text-sm sm:text-base max-w-2xl">
                                 Upload meeting recordings to automatically extract summaries, action items, and decisions.
                             </p>
                         </div>
@@ -72,10 +72,10 @@ function MeetingPageContent() {
                                     className={`
                                         flex-1 sm:flex-none px-4 sm:px-6 py-3 rounded-xl font-medium transition-all duration-200 text-xs sm:text-sm md:text-base
                                         ${activeTab === tab.id
-                                            ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30'
+                                            ? 'bg-gradient-to-r from-[#1E398D] to-[#14B795] text-white shadow-lg shadow-[#1E398D]/30'
                                             : tab.disabled
-                                                ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed'
-                                                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                                                ? 'bg-white/10 text-white/40 cursor-not-allowed'
+                                                : 'bg-white/20 text-white hover:bg-white/30'
                                         }
                                     `}
                                 >
@@ -87,7 +87,7 @@ function MeetingPageContent() {
                         </div>
 
                         {/* Content */}
-                        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4 sm:p-6 shadow-2xl">
+                        <div className="bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-700/50 p-4 sm:p-6 shadow-2xl">
                             {activeTab === 'upload' && (
                                 <MeetingUpload
                                     projectId={selectedProjectId}

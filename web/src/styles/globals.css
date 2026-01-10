@@ -160,22 +160,22 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --brand: #162B75;
-  /* Pantone Blue 072 CP */
-  --brand-magenta: #C6007E;
-  /* Pantone 233 CP */
-  --brand-cyan: #009CDC;
-  /* Pantone 2382 CP */
-  --brand-red: #DA291C;
-  /* Pantone 485 CP */
-  --brand-teal: #00A98F;
-  /* Pantone 2400 CP */
-  --brand-orange: #FE5000;
-  /* Pantone Orange 021 CP */
-  --brand-lime: #84BD00;
-  /* Pantone 376 CP */
+  --brand: #1E398D;
+  /* Brand Dark Blue (Xanh Đậm) */
+  --brand-teal: #14B795;
+  /* Brand Teal (Xanh Ngọc) */
+  --brand-orange: #F47920;
+  /* Brand Orange (Cam) */
+  --brand-lightblue: #1C9AD6;
+  /* Brand Light Blue (Xanh Nhạt) */
+  --brand-green: #8DC63F;
+  /* Brand Green (Xanh Lá) */
+  --brand-pink: #CF2C91;
+  /* Brand Pink (Hồng) */
+  --brand-red: #ED1C29;
+  /* Brand Red (Đỏ) - for errors */
   --brand-gray: #B1B3B3;
-  /* Pantone Cool Gray 5 C */
+  /* Neutral Gray */
 
   --novel-highlight-default: #ffffff;
   --novel-highlight-purple: #f6f3f8;
@@ -221,7 +221,8 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-  --brand: #162B75;
+  --brand: #5a7fd9;
+  /* Brand Dark Blue - lighter for dark mode */
 
   --novel-highlight-default: #000000;
   --novel-highlight-purple: #3f2c4b;

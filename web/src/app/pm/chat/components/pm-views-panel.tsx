@@ -42,42 +42,42 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
             <TabsList className="w-full justify-start h-auto bg-transparent p-0 gap-1 overflow-x-auto no-scrollbar scroll-smooth py-1">
               <TabsTrigger
                 value="backlog"
-                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand"
               >
                 <CheckSquare className="w-4 h-4" />
                 Backlog
               </TabsTrigger>
               <TabsTrigger
                 value="board"
-                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand"
               >
                 <FolderKanban className="w-4 h-4" />
                 Board
               </TabsTrigger>
               <TabsTrigger
                 value="charts"
-                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand"
               >
                 <LineChart className="w-4 h-4" />
                 Charts
               </TabsTrigger>
               <TabsTrigger
                 value="timeline"
-                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand"
               >
                 <Calendar className="w-4 h-4" />
                 Timeline
               </TabsTrigger>
               <TabsTrigger
                 value="efficiency"
-                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand"
               >
                 <Timer className="w-4 h-4" />
                 Efficiency
               </TabsTrigger>
               <TabsTrigger
                 value="team"
-                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-900/20"
+                className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand"
               >
                 <Users className="w-4 h-4" />
                 Team

@@ -7,6 +7,8 @@ import type { MCPServerMetadata, SimpleMCPServerMetadata } from "../mcp";
 
 const SETTINGS_KEY = "deerflow.settings";
 
+export type LoadingTheme = 'indigo' | 'blue' | 'purple' | 'emerald' | 'amber' | 'rose';
+
 const DEFAULT_SETTINGS: SettingsState = {
   general: {
     autoAcceptedPlan: false,
@@ -21,6 +23,9 @@ const DEFAULT_SETTINGS: SettingsState = {
     modelProvider: undefined,
     modelName: undefined,
     searchProvider: undefined, // Search provider ID (e.g., "duckduckgo", "tavily")
+  },
+  appearance: {
+    loadingTheme: 'indigo',
   },
   mcp: {
     servers: [],
@@ -41,6 +46,9 @@ export type SettingsState = {
     modelProvider?: string; // Provider ID (e.g., "openai", "anthropic")
     modelName?: string; // Model name (e.g., "gpt-4o", "claude-3-5-sonnet-20241022")
     searchProvider?: string; // Search provider ID (e.g., "duckduckgo", "tavily", "brave_search")
+  };
+  appearance: {
+    loadingTheme: LoadingTheme;
   };
   mcp: {
     servers: MCPServerMetadata[];
@@ -66,10 +74,22 @@ export const loadSettings = () => {
   const json = localStorage.getItem(SETTINGS_KEY);
   if (json) {
     const settings = JSON.parse(json);
+    // Ensure general defaults
     for (const key in DEFAULT_SETTINGS.general) {
       if (!(key in settings.general)) {
         settings.general[key as keyof SettingsState["general"]] =
           DEFAULT_SETTINGS.general[key as keyof SettingsState["general"]];
+      }
+    }
+    // Ensure appearance defaults
+    if (!settings.appearance) {
+      settings.appearance = DEFAULT_SETTINGS.appearance;
+    } else {
+      for (const key in DEFAULT_SETTINGS.appearance) {
+        if (!(key in settings.appearance)) {
+          settings.appearance[key as keyof SettingsState["appearance"]] =
+            DEFAULT_SETTINGS.appearance[key as keyof SettingsState["appearance"]];
+        }
       }
     }
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useMemo, use } from 'react';
-import { Clock, Download, Share2, Filter, ArrowLeft } from "lucide-react";
+import { Clock, Download, Share2, Filter, ArrowLeft, FolderKanban } from "lucide-react";
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
+import { WorkspaceLoading } from '~/components/ui/workspace-loading';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
@@ -160,9 +161,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
     if (projectsLoading || isLoadingData) {
         return (
-            <div className="flex h-screen items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-indigo-600"></div>
-            </div>
+            <WorkspaceLoading
+                title="Loading Project"
+                subtitle="Fetching project data..."
+                items={[
+                    { label: "Project Details", isLoading: projectsLoading },
+                    { label: "Tasks & Time Entries", isLoading: isLoadingData },
+                ]}
+                icon={<FolderKanban className="w-6 h-6 text-white" />}
+                height="h-screen"
+            />
         );
     }
 

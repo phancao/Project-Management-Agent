@@ -5,6 +5,7 @@ import { format, differenceInDays } from 'date-fns';
 import { CalendarIcon, Plus, Trash2, Calendar, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import type { DateRange } from 'react-day-picker';
+import { WorkspaceLoading } from '~/components/ui/workspace-loading';
 
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -63,9 +64,15 @@ export default function HolidaysSettingsPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-indigo-600" />
-            </div>
+            <WorkspaceLoading
+                title="Loading Holidays"
+                subtitle="Fetching holiday data..."
+                items={[
+                    { label: "Holidays", isLoading: true },
+                ]}
+                icon={<Calendar className="w-6 h-6 text-white" />}
+                height="min-h-screen"
+            />
         );
     }
 

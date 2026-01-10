@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { WorkspaceLoading } from '~/components/ui/workspace-loading';
+import { FolderKanban } from 'lucide-react';
 
 interface Task {
   id: string;
@@ -168,13 +170,16 @@ export default function ProjectsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-            <div className="text-gray-700 text-lg font-medium">Loading projects...</div>
-          </div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+        <WorkspaceLoading
+          title="Loading Projects"
+          subtitle="Fetching project data..."
+          items={[
+            { label: "Projects", isLoading: true },
+          ]}
+          icon={<FolderKanban className="w-6 h-6 text-white" />}
+          height="min-h-screen"
+        />
       </div>
     );
   }

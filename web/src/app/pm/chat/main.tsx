@@ -104,7 +104,7 @@ export default function Main() {
   }, [isDragging, isMobile, isCollapsed, handleMouseMove, handleMouseUp]);
 
   return (
-    <div ref={containerRef} className={`flex h-full w-full relative overflow-hidden bg-background ${isMobile ? "pt-16" : "pt-0"}`}>
+    <div ref={containerRef} className={`flex h-full w-full relative overflow-hidden bg-transparent ${isMobile ? "pt-16" : "pt-0"}`}>
       {/* Mobile Toggle */}
       {isMobile && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-lg border border-gray-200/50 dark:border-gray-700/50 rounded-full p-1.5 flex gap-1">

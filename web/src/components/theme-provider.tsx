@@ -26,6 +26,11 @@ const BACKGROUND_HEX: Record<BackgroundColor, { bg: string; card: string; appBg:
   warmGray: { bg: '#f5f5f4', card: '#fafaf9', appBg: '#e7e5e4' },
   coolGray: { bg: '#f1f5f9', card: '#f8fafc', appBg: '#e2e8f0' },
   slate: { bg: '#e2e8f0', card: '#f1f5f9', appBg: '#cbd5e1' },
+  lavender: { bg: '#f5f3ff', card: '#faf5ff', appBg: '#ede9fe' },
+  mint: { bg: '#f0fdf4', card: '#f0fdf9', appBg: '#dcfce7' },
+  rose: { bg: '#fff1f2', card: '#fff5f6', appBg: '#ffe4e6' },
+  sky: { bg: '#f0f9ff', card: '#f0fdff', appBg: '#e0f2fe' },
+  sand: { bg: '#faf5eb', card: '#fdfaf3', appBg: '#f5ebb8' },
 };
 
 /**

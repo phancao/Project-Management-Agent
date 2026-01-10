@@ -11,7 +11,7 @@ const SETTINGS_KEY = "deerflow.settings";
 export type LoadingTheme = 'darkBlue' | 'teal' | 'orange' | 'lightBlue' | 'green' | 'pink';
 export type AccentColor = LoadingTheme; // Same options as loading theme
 export type CardStyle = 'solid' | 'glassmorphic';
-export type BackgroundColor = 'white' | 'cream' | 'warmGray' | 'coolGray' | 'slate';
+export type BackgroundColor = 'white' | 'cream' | 'warmGray' | 'coolGray' | 'slate' | 'lavender' | 'mint' | 'rose' | 'sky' | 'sand';
 
 const DEFAULT_SETTINGS: SettingsState = {
   general: {

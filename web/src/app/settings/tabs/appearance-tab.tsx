@@ -33,9 +33,14 @@ const THEME_MODES = [
 const BACKGROUND_COLORS: { id: BackgroundColor; name: string; hex: string }[] = [
     { id: 'white', name: 'White', hex: '#ffffff' },
     { id: 'cream', name: 'Cream', hex: '#fdfbf7' },
-    { id: 'warmGray', name: 'Warm Gray', hex: '#f5f5f4' },
-    { id: 'coolGray', name: 'Cool Gray', hex: '#f1f5f9' },
+    { id: 'warmGray', name: 'Warm', hex: '#f5f5f4' },
+    { id: 'coolGray', name: 'Cool', hex: '#f1f5f9' },
     { id: 'slate', name: 'Slate', hex: '#e2e8f0' },
+    { id: 'lavender', name: 'Lavender', hex: '#f5f3ff' },
+    { id: 'mint', name: 'Mint', hex: '#f0fdf4' },
+    { id: 'rose', name: 'Rose', hex: '#fff1f2' },
+    { id: 'sky', name: 'Sky', hex: '#f0f9ff' },
+    { id: 'sand', name: 'Sand', hex: '#faf5eb' },
 ];
 
 export const AppearanceTab: Tab = ({ settings, onChange }) => {

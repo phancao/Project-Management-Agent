@@ -41,10 +41,10 @@ function ChartsPageContent() {
 
   return (
     <PMLoadingProvider>
-      <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-900">
+      <div className="flex min-h-screen flex-col bg-transparent">
         <PMHeader />
         <PMLoadingManager />
-        
+
         <main className="flex-1 px-6 py-8">
           <div className="mx-auto max-w-7xl">
             {/* Page Header */}
@@ -72,7 +72,7 @@ function ChartsPageContent() {
                         <span>{summary.current_sprint.progress.toFixed(0)}%</span>
                       </div>
                       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                        <div 
+                        <div
                           className="h-2 rounded-full bg-blue-500"
                           style={{ width: `${summary.current_sprint.progress}%` }}
                         ></div>

@@ -394,7 +394,7 @@ function EpicSidebar({
   });
 
   return (
-    <div className={`${isMobile ? 'w-full border-b' : 'w-64 border-r'} bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden`}>
+    <div className={`${isMobile ? 'w-full border-b' : 'w-64 border-r'} bg-card/80 backdrop-blur-sm border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden`}>
       <div
         className="p-4 flex items-center justify-between cursor-pointer lg:cursor-default"
         onClick={() => isMobile && setIsOpen(!isOpen)}
@@ -2154,9 +2154,9 @@ function _BacklogViewOriginal() {
         />
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
+        <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
           {/* Top Header with Filters */}
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-card/50 backdrop-blur-sm">
             <div className="mb-4">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Backlog</h2>
             </div>

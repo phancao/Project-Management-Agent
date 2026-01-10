@@ -20,7 +20,7 @@ export function ChartsPanelView() {
   return (
     <div className="h-full w-full">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-        <TabsList className="w-full justify-start bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 rounded-none p-2">
+        <TabsList className="w-full justify-start bg-transparent backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 rounded-none p-2">
           <TabsTrigger value="burndown" className="px-4 py-2">
             📉 Burndown
           </TabsTrigger>

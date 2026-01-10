@@ -86,7 +86,7 @@ function initials(name?: string | null) {
 
 function AvatarBubble({ name }: { name: string | null }) {
   return (
-    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-300 bg-white text-sm font-semibold uppercase text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
+    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-300 bg-card text-sm font-semibold uppercase text-gray-700 dark:border-gray-600 dark:text-gray-200">
       {initials(name)}
     </div>
   );
@@ -98,7 +98,7 @@ function TaskCard({ task, isDragging, dragHandleProps }: { task: Task; isDraggin
 
   return (
     <div
-      className={`flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900 ${isDragging ? "opacity-40" : ""
+      className={`flex items-start gap-3 rounded-lg border border-gray-200 bg-card p-3 shadow-sm transition hover:border-gray-300 dark:border-gray-700 ${isDragging ? "opacity-40" : ""
         }`}
     >
       <div
@@ -724,7 +724,7 @@ export function TeamAssignmentsView() {
 
         <DragOverlay>
           {activeDrag ? (
-            <div className="max-w-md rounded-xl border border-blue-400 bg-white p-3 shadow-2xl dark:border-blue-600 dark:bg-gray-900">
+            <div className="max-w-md rounded-xl border border-blue-400 bg-card p-3 shadow-2xl dark:border-blue-600">
               {taskMap.get(activeDrag.taskId) ? (
                 <TaskCard task={taskMap.get(activeDrag.taskId)!} isDragging />
               ) : null}

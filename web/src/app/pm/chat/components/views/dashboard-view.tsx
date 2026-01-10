@@ -63,10 +63,10 @@ export function DashboardView() {
         </div>
       );
     }
-    
+
     const providerType = getProviderType(project.id);
     const providerBadge = getProviderBadge(providerType);
-    
+
     return (
       <div className="flex items-center gap-1.5">
         {providerBadge}
@@ -74,21 +74,21 @@ export function DashboardView() {
       </div>
     );
   };
-  
+
   // Filter tasks if viewing a specific project (but not on overview page)
   const filteredMyTasks = useMemo(() => {
     // On overview page, show all tasks regardless of project
     if (isOverview || !activeProjectId) return myTasks;
     return myTasks.filter(t => t.project_name && projects.find(p => p.id === activeProjectId && p.name === t.project_name));
   }, [myTasks, activeProjectId, projects, isOverview]);
-  
+
   const filteredAllTasks = useMemo(() => {
     // On overview page, show all tasks regardless of project
     if (isOverview || !activeProjectId) return allTasks;
     const activeProject = projects.find(p => p.id === activeProjectId);
     return activeProject ? allTasks.filter(t => t.project_name === activeProject.name) : [];
   }, [allTasks, activeProjectId, projects, isOverview]);
-  
+
   const activeProject = useMemo(() => {
     return activeProjectId ? projects.find(p => p.id === activeProjectId) : null;
   }, [projects, activeProjectId]);
@@ -106,9 +106,9 @@ export function DashboardView() {
         body: JSON.stringify(updates),
       });
       if (!response.ok) throw new Error('Failed to update task');
-      
-      window.dispatchEvent(new CustomEvent("pm_refresh", { 
-        detail: { type: "pm_refresh" } 
+
+      window.dispatchEvent(new CustomEvent("pm_refresh", {
+        detail: { type: "pm_refresh" }
       }));
     } catch (error) {
       console.error("Failed to update task:", error);
@@ -126,7 +126,7 @@ export function DashboardView() {
         <div className="flex-1">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Dashboard</h2>
           {activeProject && (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-card rounded-lg border border-gray-300 dark:border-gray-700">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {activeProject.name}
               </span>
@@ -189,10 +189,10 @@ export function DashboardView() {
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {filteredMyTasks.map((task) => (
-              <div 
-                key={task.id} 
+              <div
+                key={task.id}
                 onClick={() => handleTaskClick(task)}
-                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                className="flex items-center justify-between p-3 bg-card rounded-lg hover:shadow-md transition-shadow cursor-pointer"
               >
                 <div className="flex-1">
                   <div className="font-medium text-gray-900 dark:text-white mb-1">{task.title}</div>
@@ -206,11 +206,10 @@ export function DashboardView() {
                     {task.status}
                   </span>
                   {task.priority && (
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      task.priority === "high" ? "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                      task.priority === "medium" ? "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200" :
-                      "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
-                    }`}>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${task.priority === "high" ? "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200" :
+                        task.priority === "medium" ? "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200" :
+                          "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                      }`}>
                       {task.priority}
                     </span>
                   )}
@@ -235,12 +234,12 @@ export function DashboardView() {
               const providerBadge = getProviderBadge(providerType);
               const projectTasks = allTasks.filter(t => t.project_name === project.name);
               const openProjectTasks = projectTasks.filter(t => t.status !== "completed" && t.status !== "done");
-              
+
               return (
                 <div
                   key={project.id}
                   onClick={() => router.push(`/pm/chat?project=${encodeURIComponent(project.id)}`)}
-                  className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer"
+                  className="p-4 bg-card rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
@@ -260,13 +259,12 @@ export function DashboardView() {
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       <span className="font-medium text-green-600 dark:text-green-400">{openProjectTasks.length}</span> open
                     </div>
-                    <span className={`ml-auto px-2 py-0.5 text-xs rounded ${
-                      project.status === "active" || project.status === "in_progress" 
+                    <span className={`ml-auto px-2 py-0.5 text-xs rounded ${project.status === "active" || project.status === "in_progress"
                         ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
                         : project.status === "completed" || project.status === "done"
-                        ? "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200"
-                        : "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
-                    }`}>
+                          ? "bg-card text-gray-800 dark:text-gray-200"
+                          : "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                      }`}>
                       {project.status || "None"}
                     </span>
                   </div>

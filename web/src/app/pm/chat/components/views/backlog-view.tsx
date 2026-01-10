@@ -259,7 +259,7 @@ function TaskCard({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="group flex items-start gap-2 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all cursor-pointer"
+      className="group flex items-start gap-2 p-3 bg-card rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all cursor-pointer"
     >
       <div
         {...listeners}
@@ -2369,7 +2369,7 @@ function _BacklogViewOriginal() {
 
       <DragOverlay>
         {draggedTask ? (
-          <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border-2 border-blue-400 shadow-2xl opacity-95 max-w-md">
+          <div className="p-3 bg-card rounded-lg border-2 border-blue-400 shadow-2xl opacity-95 max-w-md">
             <div className="font-medium text-sm text-gray-900 dark:text-white line-clamp-2">
               {draggedTask.title}
             </div>

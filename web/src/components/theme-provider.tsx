@@ -34,6 +34,22 @@ const BACKGROUND_HEX: Record<BackgroundColor, { bg: string; card: string; appBg:
 };
 
 /**
+ * Background color options for dark theme
+ */
+const DARK_BACKGROUND_HEX: Record<BackgroundColor, { bg: string; card: string; appBg: string }> = {
+  white: { bg: '#1a1a1a', card: '#262626', appBg: '#0f0f0f' },       // Pure dark
+  cream: { bg: '#1c1917', card: '#292524', appBg: '#0c0a09' },       // Warm dark
+  warmGray: { bg: '#1f1f1f', card: '#2a2a2a', appBg: '#141414' },    // Neutral dark
+  coolGray: { bg: '#1e293b', card: '#334155', appBg: '#0f172a' },    // Slate dark
+  slate: { bg: '#0f172a', card: '#1e293b', appBg: '#020617' },       // Deep slate
+  lavender: { bg: '#1e1b2e', card: '#2a2640', appBg: '#13111c' },    // Purple dark
+  mint: { bg: '#14231a', card: '#1a2f23', appBg: '#0d1711' },        // Green dark
+  rose: { bg: '#231419', card: '#2f1a20', appBg: '#170d10' },        // Rose dark
+  sky: { bg: '#141d26', card: '#1a2633', appBg: '#0d131a' },         // Blue dark
+  sand: { bg: '#1f1b14', card: '#29241a', appBg: '#14110d' },        // Sand dark
+};
+
+/**
  * Convert hex color to RGB string for use in rgba()
  */
 function hexToRgb(hex: string): string {
@@ -70,7 +86,10 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
 
     const colors = ACCENT_HEX[accentColor] || ACCENT_HEX.darkBlue;
     const hoverColors = ACCENT_HEX[hoverColor] || ACCENT_HEX.teal;
-    const bgColors = BACKGROUND_HEX[backgroundColor] || BACKGROUND_HEX.cream;
+    // Use appropriate background palette based on theme
+    const bgColors = isDarkMode
+      ? (DARK_BACKGROUND_HEX[backgroundColor] || DARK_BACKGROUND_HEX.cream)
+      : (BACKGROUND_HEX[backgroundColor] || BACKGROUND_HEX.cream);
 
     // Set accent color CSS properties
     root.style.setProperty('--accent-primary', colors.primary);
@@ -90,12 +109,10 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--hover-rgb', hexToRgb(hoverColors.primary));
     root.style.setProperty('--hover-light', hoverColors.light);
 
-    // Set background color CSS properties (only in light mode)
-    if (!isDarkMode) {
-      root.style.setProperty('--background', bgColors.bg);
-      root.style.setProperty('--card', bgColors.card);
-      root.style.setProperty('--app-background', bgColors.appBg);
-    }
+    // Set background color CSS properties (for both light and dark modes now)
+    root.style.setProperty('--background', bgColors.bg);
+    root.style.setProperty('--card', bgColors.card);
+    root.style.setProperty('--app-background', bgColors.appBg);
   }, [lightAppearance, darkAppearance, legacyAppearance]);
 
   // Re-apply when theme class changes
@@ -126,7 +143,10 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
 
       const colors = ACCENT_HEX[accentColor] || ACCENT_HEX.darkBlue;
       const hoverColors = ACCENT_HEX[hoverColor] || ACCENT_HEX.teal;
-      const bgColors = BACKGROUND_HEX[backgroundColor] || BACKGROUND_HEX.cream;
+      // Use appropriate background palette based on theme
+      const bgColors = isDarkMode
+        ? (DARK_BACKGROUND_HEX[backgroundColor] || DARK_BACKGROUND_HEX.cream)
+        : (BACKGROUND_HEX[backgroundColor] || BACKGROUND_HEX.cream);
 
       root.style.setProperty('--accent-primary', colors.primary);
       root.style.setProperty('--accent-gradient', colors.gradient);
@@ -141,11 +161,10 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
       root.style.setProperty('--hover-rgb', hexToRgb(hoverColors.primary));
       root.style.setProperty('--hover-light', hoverColors.light);
 
-      if (!isDarkMode) {
-        root.style.setProperty('--background', bgColors.bg);
-        root.style.setProperty('--card', bgColors.card);
-        root.style.setProperty('--app-background', bgColors.appBg);
-      }
+      // Set background color CSS properties (for both modes)
+      root.style.setProperty('--background', bgColors.bg);
+      root.style.setProperty('--card', bgColors.card);
+      root.style.setProperty('--app-background', bgColors.appBg);
     };
 
     window.addEventListener('theme-changed', handleThemeChange);

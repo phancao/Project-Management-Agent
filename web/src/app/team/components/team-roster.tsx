@@ -17,50 +17,83 @@ import UserMinus from "lucide-react/dist/esm/icons/user-minus";
 import Users from "lucide-react/dist/esm/icons/users";
 // @ts-expect-error - Direct import
 import Loader2 from "lucide-react/dist/esm/icons/loader-2";
+import { Sparkles, UserPlus } from "lucide-react";
 import type { Team } from "~/core/hooks/use-teams"
 import { useTeamDataContext, useTeamUsers, useAllUsers } from "../context/team-data-context"
 import type { PMUser } from "~/core/api/pm/users"
 import { useMemberProfile } from "../context/member-profile-context"
+import { cn } from "~/lib/utils"
 
-// Clickable member card that opens profile dialog
-function MemberClickable({ member }: { member: PMUser }) {
+// Color palette for member avatars
+const memberColors = [
+    'ring-violet-500/60',
+    'ring-blue-500/60',
+    'ring-emerald-500/60',
+    'ring-amber-500/60',
+    'ring-rose-500/60',
+    'ring-cyan-500/60',
+];
+
+const avatarGradients = [
+    'from-violet-500 to-purple-600',
+    'from-blue-500 to-cyan-600',
+    'from-emerald-500 to-teal-600',
+    'from-amber-500 to-orange-600',
+    'from-rose-500 to-pink-600',
+    'from-indigo-500 to-blue-600',
+];
+
+// Premium Clickable member card that opens profile dialog
+function MemberClickable({ member, index }: { member: PMUser; index: number }) {
     const { openMemberProfile } = useMemberProfile();
+    const ringColor = memberColors[index % memberColors.length];
+    const gradient = avatarGradients[index % avatarGradients.length];
+
     return (
         <button
             onClick={() => openMemberProfile(member.id)}
-            className="flex items-center gap-4 flex-1 min-w-0 text-left"
+            className="flex items-center gap-4 flex-1 min-w-0 text-left group"
         >
-            <Avatar className="h-12 w-12 border border-gray-100 dark:border-gray-800 hover:opacity-80 transition-opacity">
-                <AvatarImage src={member.avatar} />
-                <AvatarFallback className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
-                    {member.name[0]}
-                </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+                <Avatar className={cn(
+                    "h-12 w-12 ring-2 ring-offset-2 ring-offset-slate-900 transition-all duration-300",
+                    ringColor,
+                    "group-hover:scale-105"
+                )}>
+                    <AvatarImage src={member.avatar} />
+                    <AvatarFallback className={cn("text-white font-semibold bg-gradient-to-br", gradient)}>
+                        {member.name[0]}
+                    </AvatarFallback>
+                </Avatar>
+                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" />
+            </div>
             <div className="flex-1 min-w-0">
-                <div className="font-medium truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{member.name}</div>
-                <div className="text-xs text-muted-foreground truncate">{member.email}</div>
+                <div className="font-semibold text-slate-100 truncate group-hover:text-white transition-colors">{member.name}</div>
+                <div className="text-xs text-slate-400 truncate group-hover:text-slate-300 transition-colors">{member.email}</div>
             </div>
         </button>
     );
 }
 
-// Clickable user row for available users
-function UserClickable({ user }: { user: PMUser }) {
+// Premium Clickable user row for available users
+function UserClickable({ user, index }: { user: PMUser; index: number }) {
     const { openMemberProfile } = useMemberProfile();
+    const gradient = avatarGradients[index % avatarGradients.length];
+
     return (
         <button
             onClick={() => openMemberProfile(user.id)}
-            className="flex-1 flex items-center gap-3 min-w-0 text-left"
+            className="flex-1 flex items-center gap-3 min-w-0 text-left group"
         >
-            <Avatar className="h-10 w-10 hover:opacity-80 transition-opacity">
+            <Avatar className="h-10 w-10 transition-all duration-300 group-hover:scale-105">
                 <AvatarImage src={user.avatar} />
-                <AvatarFallback className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 text-sm">
+                <AvatarFallback className={cn("text-white font-semibold text-sm bg-gradient-to-br", gradient)}>
                     {user.name[0]}
                 </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{user.name}</div>
-                <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                <div className="text-sm font-medium text-slate-200 truncate group-hover:text-white transition-colors">{user.name}</div>
+                <div className="text-xs text-slate-500 truncate group-hover:text-slate-400 transition-colors">{user.email}</div>
             </div>
         </button>
     );
@@ -101,128 +134,161 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
 
     if (!team) {
         return (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-                Select a team to view members
+            <div className="flex h-full items-center justify-center text-slate-500">
+                <div className="text-center">
+                    <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="font-medium">Select a team to view members</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <Card className="h-full border-none shadow-none bg-transparent">
-            <CardHeader className="px-0 pt-0">
-                <div className="space-y-1">
-                    <CardTitle className="text-lg">{team.name} Roster</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                        {isLoadingTeamMembers ? "Loading members..." : `${members.length} members`}
-                    </p>
-                </div>
-            </CardHeader>
-            <CardContent className="px-0">
-                {isLoadingTeamMembers ? (
-                    <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <div className="h-full">
+            {/* Premium Header */}
+            <div className="mb-6">
+                <div className="flex items-center gap-3 mb-1">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                        <Users className="w-5 h-5 text-white" />
                     </div>
-                ) : (
-                    <>
-                        {/* Current Team Members */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {members.map((member: PMUser) => (
-                                <div key={member.id} className="group relative flex items-center gap-4 p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/40 hover:border-gray-200 dark:hover:border-gray-700 transition-all">
-                                    <MemberClickable member={member} />
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="absolute top-2 right-2 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                        onClick={() => onRemoveMember(member.id)}
-                                    >
-                                        <UserMinus className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            ))}
-                            {members.length === 0 && (
-                                <div className="col-span-full border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl p-12 text-center">
-                                    <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-700 mb-4" />
-                                    <h3 className="font-medium text-gray-900 dark:text-gray-100">No members yet</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                        Add members from the list below.
-                                    </p>
-                                </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-white">{team.name} Roster</h2>
+                        <p className="text-sm text-slate-400">
+                            {isLoadingTeamMembers ? "Loading members..." : (
+                                <span className="flex items-center gap-1">
+                                    <span className="text-indigo-400 font-semibold">{members.length}</span> members
+                                </span>
                             )}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {isLoadingTeamMembers ? (
+                <div className="flex items-center justify-center py-16">
+                    <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+                        <p className="text-sm text-slate-400">Loading team members...</p>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    {/* Current Team Members */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {members.map((member: PMUser, index: number) => (
+                            <div
+                                key={member.id}
+                                className={cn(
+                                    "group relative flex items-center gap-4 p-4 rounded-xl transition-all duration-300",
+                                    "bg-gradient-to-r from-slate-800/80 to-slate-900/80 backdrop-blur-sm",
+                                    "border border-slate-700/50 hover:border-indigo-500/50",
+                                    "hover:shadow-lg hover:shadow-indigo-500/10"
+                                )}
+                            >
+                                <MemberClickable member={member} index={index} />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute top-2 right-2 h-8 w-8 text-slate-500 opacity-0 group-hover:opacity-100 transition-all hover:text-red-400 hover:bg-red-950/50"
+                                    onClick={() => onRemoveMember(member.id)}
+                                >
+                                    <UserMinus className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        ))}
+                        {members.length === 0 && (
+                            <div className="col-span-full border-2 border-dashed border-slate-700 rounded-2xl p-12 text-center">
+                                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-800 flex items-center justify-center">
+                                    <Users className="w-8 h-8 text-slate-600" />
+                                </div>
+                                <h3 className="font-semibold text-slate-200">No members yet</h3>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Add members from the list below.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Available Users Section */}
+                    <div className="mt-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="text-base font-semibold text-slate-200 flex items-center gap-2">
+                                    <UserPlus className="w-4 h-4 text-indigo-400" />
+                                    Available Users
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    {isLoadingAllUsers
+                                        ? "Loading users..."
+                                        : `${availableUsers.length} users not in this team`}
+                                </p>
+                            </div>
+                            <div className="relative w-72">
+                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                                <Input
+                                    placeholder="Search users..."
+                                    className="pl-10 h-10 bg-slate-800/50 border-slate-700/50 text-slate-200 placeholder:text-slate-500 focus:border-indigo-500/50 focus:ring-indigo-500/20 rounded-xl"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    disabled={isLoadingAllUsers}
+                                />
+                                {searchQuery && (
+                                    <button
+                                        className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300 transition-colors"
+                                        onClick={() => setSearchQuery("")}
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Available Users Section */}
-                        <div className="mt-8">
-                            <div className="flex items-center justify-between mb-4">
-                                <div>
-                                    <h3 className="text-sm font-semibold text-muted-foreground">Available Users</h3>
-                                    <p className="text-xs text-muted-foreground">
-                                        {isLoadingAllUsers
-                                            ? "Loading users..."
-                                            : `${availableUsers.length} users not in this team`}
-                                    </p>
-                                </div>
-                                <div className="relative w-64">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Search users..."
-                                        className="pl-9 h-9"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        disabled={isLoadingAllUsers}
-                                    />
-                                    {searchQuery && (
-                                        <button
-                                            className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                                            onClick={() => setSearchQuery("")}
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </button>
-                                    )}
+                        {isLoadingAllUsers ? (
+                            <div className="flex items-center justify-center py-12 border-2 border-dashed border-slate-700 rounded-2xl">
+                                <div className="flex flex-col items-center gap-3">
+                                    <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+                                    <p className="text-sm text-slate-400">Loading available users...</p>
                                 </div>
                             </div>
-
-                            {isLoadingAllUsers ? (
-                                <div className="flex items-center justify-center py-12 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl">
-                                    <div className="flex flex-col items-center gap-3">
-                                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                                        <p className="text-sm text-muted-foreground">Loading available users...</p>
-                                    </div>
-                                </div>
-                            ) : availableUsers.length > 0 ? (
-                                <>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                        {(searchQuery ? filteredAvailable : availableUsers).slice(0, 12).map((user: PMUser) => (
-                                            <div
-                                                key={user.id}
-                                                className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all text-left group"
+                        ) : availableUsers.length > 0 ? (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {(searchQuery ? filteredAvailable : availableUsers).slice(0, 12).map((user: PMUser, index: number) => (
+                                        <div
+                                            key={user.id}
+                                            className={cn(
+                                                "group flex items-center gap-3 p-3 rounded-xl transition-all duration-300",
+                                                "border-2 border-dashed border-slate-700/50",
+                                                "hover:border-indigo-500/50 hover:bg-indigo-500/5"
+                                            )}
+                                        >
+                                            <UserClickable user={user} index={index} />
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-9 w-9 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all"
+                                                onClick={() => handleAddMember(user.id)}
                                             >
-                                                <UserClickable user={user} />
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 hover:bg-transparent"
-                                                    onClick={() => handleAddMember(user.id)}
-                                                >
-                                                    <Plus className="w-4 h-4 text-muted-foreground group-hover:text-indigo-500 flex-shrink-0" />
-                                                </Button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {availableUsers.length > 12 && !searchQuery && (
-                                        <p className="text-xs text-center text-muted-foreground mt-3">
-                                            Showing 12 of {availableUsers.length} available users. Use search to find more.
-                                        </p>
-                                    )}
-                                </>
-                            ) : (
-                                <div className="text-center py-8 text-muted-foreground text-sm">
-                                    No available users to add
+                                                <Plus className="w-5 h-5" />
+                                            </Button>
+                                        </div>
+                                    ))}
                                 </div>
-                            )}
-                        </div>
-                    </>
-                )}
-            </CardContent>
-        </Card>
+                                {availableUsers.length > 12 && !searchQuery && (
+                                    <p className="text-xs text-center text-slate-500 mt-4">
+                                        Showing 12 of {availableUsers.length} available users. Use search to find more.
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <div className="text-center py-10 text-slate-500">
+                                <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                <p className="text-sm">No available users to add</p>
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
+        </div>
     );
 }

@@ -79,8 +79,8 @@ export function TeamMembers() {
     }
 
     return (
-        <div className="grid grid-cols-12 gap-6 h-[700px]">
-            <div className="col-span-3 h-full">
+        <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[600px] overflow-hidden">
+            <div className="w-[280px] shrink-0 h-full">
                 <TeamList
                     teams={teams}
                     selectedTeamId={selectedTeamId}
@@ -89,7 +89,7 @@ export function TeamMembers() {
                     onDeleteTeam={deleteTeam}
                 />
             </div>
-            <div className="col-span-9 h-full overflow-y-auto">
+            <div className="flex-1 h-full overflow-y-auto pr-2">
                 <TeamRoster
                     team={selectedTeam}
                     onAddMember={(userId) => selectedTeamId && addMemberToTeam(selectedTeamId, userId)}

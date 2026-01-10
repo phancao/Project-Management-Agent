@@ -8,6 +8,8 @@ import type { MCPServerMetadata, SimpleMCPServerMetadata } from "../mcp";
 const SETTINGS_KEY = "deerflow.settings";
 
 export type LoadingTheme = 'indigo' | 'blue' | 'purple' | 'emerald' | 'amber' | 'rose';
+export type AccentColor = LoadingTheme; // Same options as loading theme
+export type CardStyle = 'solid' | 'glassmorphic';
 
 const DEFAULT_SETTINGS: SettingsState = {
   general: {
@@ -26,6 +28,8 @@ const DEFAULT_SETTINGS: SettingsState = {
   },
   appearance: {
     loadingTheme: 'indigo',
+    accentColor: 'indigo',
+    cardStyle: 'solid' as CardStyle,
   },
   mcp: {
     servers: [],
@@ -49,6 +53,8 @@ export type SettingsState = {
   };
   appearance: {
     loadingTheme: LoadingTheme;
+    accentColor: AccentColor;
+    cardStyle: CardStyle;
   };
   mcp: {
     servers: MCPServerMetadata[];

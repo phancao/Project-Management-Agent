@@ -2,56 +2,12 @@
 
 import { cn } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
-import { useSettingsStore, type LoadingTheme } from "~/core/store";
+import { useThemeColors, THEME_COLORS } from "~/core/hooks/use-theme-colors";
+import type { AccentColor } from "~/core/store";
 // @ts-expect-error - Direct import
 import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 // @ts-expect-error - Direct import
 import Users from "lucide-react/dist/esm/icons/users";
-
-// Theme color mappings
-const THEME_COLORS: Record<LoadingTheme, {
-    gradient: string;
-    shadow: string;
-    spinner: string;
-    darkShadow: string;
-}> = {
-    indigo: {
-        gradient: 'from-indigo-500 to-violet-600',
-        shadow: 'shadow-indigo-500/30',
-        spinner: 'text-indigo-500 dark:text-indigo-400',
-        darkShadow: 'dark:shadow-indigo-500/10',
-    },
-    blue: {
-        gradient: 'from-blue-500 to-cyan-600',
-        shadow: 'shadow-blue-500/30',
-        spinner: 'text-blue-500 dark:text-blue-400',
-        darkShadow: 'dark:shadow-blue-500/10',
-    },
-    purple: {
-        gradient: 'from-purple-500 to-pink-600',
-        shadow: 'shadow-purple-500/30',
-        spinner: 'text-purple-500 dark:text-purple-400',
-        darkShadow: 'dark:shadow-purple-500/10',
-    },
-    emerald: {
-        gradient: 'from-emerald-500 to-teal-600',
-        shadow: 'shadow-emerald-500/30',
-        spinner: 'text-emerald-500 dark:text-emerald-400',
-        darkShadow: 'dark:shadow-emerald-500/10',
-    },
-    amber: {
-        gradient: 'from-amber-500 to-orange-600',
-        shadow: 'shadow-amber-500/30',
-        spinner: 'text-amber-500 dark:text-amber-400',
-        darkShadow: 'dark:shadow-amber-500/10',
-    },
-    rose: {
-        gradient: 'from-rose-500 to-pink-600',
-        shadow: 'shadow-rose-500/30',
-        spinner: 'text-rose-500 dark:text-rose-400',
-        darkShadow: 'dark:shadow-rose-500/10',
-    },
-};
 
 export interface LoadingItem {
     label: string;
@@ -72,7 +28,7 @@ export interface WorkspaceLoadingProps {
     /** Height for inline mode */
     height?: string;
     /** Override theme color (if not provided, uses settings) */
-    colorTheme?: LoadingTheme;
+    colorTheme?: AccentColor;
 }
 
 /**
@@ -91,9 +47,8 @@ export function WorkspaceLoading({
     colorTheme,
 }: WorkspaceLoadingProps) {
     // Get theme from settings if not provided
-    const settingsTheme = useSettingsStore((state) => state.appearance?.loadingTheme || 'indigo');
-    const theme = colorTheme || settingsTheme;
-    const colors = THEME_COLORS[theme];
+    const { accent, accentColorName } = useThemeColors();
+    const colors = colorTheme ? THEME_COLORS[colorTheme] : accent;
 
     const content = (
         <div className={cn(
@@ -173,13 +128,12 @@ export function WorkspaceLoading({
  * For use within components that need a lightweight loading state.
  */
 export function InlineLoading({ message = "Loading..." }: { message?: string }) {
-    const theme = useSettingsStore((state) => state.appearance?.loadingTheme || 'indigo');
-    const colors = THEME_COLORS[theme];
+    const { accent } = useThemeColors();
 
     return (
         <div className="flex items-center justify-center py-12">
             <div className="flex flex-col items-center gap-3">
-                <Loader2 className={cn("h-8 w-8 animate-spin", colors.spinner)} />
+                <Loader2 className={cn("h-8 w-8 animate-spin", accent.spinner)} />
                 <p className="text-sm text-gray-500 dark:text-slate-400">{message}</p>
             </div>
         </div>

@@ -113,6 +113,13 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--background', bgColors.bg);
     root.style.setProperty('--card', bgColors.card);
     root.style.setProperty('--app-background', bgColors.appBg);
+    // Also set Tailwind color variable to ensure it updates
+    root.style.setProperty('--color-app', bgColors.appBg);
+    root.style.setProperty('--color-background', bgColors.bg);
+    // Force body background update
+    if (document.body) {
+      document.body.style.backgroundColor = bgColors.appBg;
+    }
   }, [lightAppearance, darkAppearance, legacyAppearance]);
 
   // Re-apply when theme class changes
@@ -165,6 +172,12 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
       root.style.setProperty('--background', bgColors.bg);
       root.style.setProperty('--card', bgColors.card);
       root.style.setProperty('--app-background', bgColors.appBg);
+      root.style.setProperty('--color-app', bgColors.appBg);
+      root.style.setProperty('--color-background', bgColors.bg);
+      // Force body background update
+      if (document.body) {
+        document.body.style.backgroundColor = bgColors.appBg;
+      }
     };
 
     window.addEventListener('theme-changed', handleThemeChange);

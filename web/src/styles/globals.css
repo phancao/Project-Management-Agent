@@ -411,3 +411,16 @@ button {
 .focus\:ring-indigo-500:focus {
   --tw-ring-color: var(--accent-primary) !important;
 }
+
+/* Background color overrides for light mode */
+:root:not(.dark) .bg-white {
+  background-color: var(--background) !important;
+}
+
+:root:not(.dark) .bg-gray-50 {
+  background-color: var(--app-background) !important;
+}
+
+:root:not(.dark) .bg-gray-100 {
+  background-color: var(--app-background) !important;
+}

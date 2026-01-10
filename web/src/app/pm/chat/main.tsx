@@ -157,7 +157,7 @@ export default function Main() {
             maxWidth: isMobile ? "100%" : `${chatWidth}%`,
             display: isMobile && mobileView !== "chat" ? "none" : "flex"
           }}
-          className="flex-shrink-0 flex-grow-0 border-r border-border/40 overflow-hidden bg-app/20 dark:bg-gray-900/50 transition-all duration-300"
+          className="flex-shrink-0 flex-grow-0 border-r border-border/40 overflow-hidden bg-transparent transition-all duration-300"
         >
           <MessagesBlock className="h-full" />
         </div>

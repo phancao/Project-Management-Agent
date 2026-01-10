@@ -136,7 +136,7 @@ export function MessagesBlock({ className }: { className?: string }) {
         />
 
         {!isReplay && !responding && messageCount === 0 && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-start bg-app/50 dark:bg-gray-900/80 backdrop-blur-sm overflow-y-auto pt-10 md:pt-20">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-start bg-transparent backdrop-blur-sm overflow-y-auto pt-10 md:pt-20">
             <ConversationStarter
               className="w-full max-w-none"
               onSend={handleSend}

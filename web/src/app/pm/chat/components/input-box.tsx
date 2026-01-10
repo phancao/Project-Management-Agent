@@ -123,7 +123,7 @@ export function InputBox({
   return (
     <div
       className={cn(
-        "bg-card/85 dark:bg-card/45 relative flex h-full w-full flex-col rounded-2xl md:rounded-3xl border border-border/60 shadow-xl backdrop-blur-md transition-all duration-300 focus-within:border-brand/40 focus-within:ring-1 focus-within:ring-brand/10",
+        "bg-background/95 dark:bg-card/45 relative flex h-full w-full flex-col rounded-2xl md:rounded-3xl border border-border/60 shadow-xl backdrop-blur-md transition-all duration-300 focus-within:border-brand/40 focus-within:ring-1 focus-within:ring-brand/10",
         className,
       )}
       ref={containerRef}

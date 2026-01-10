@@ -3,10 +3,10 @@
 
 "use client";
 
-import { Palette, Layers, Sun, Moon, Monitor } from "lucide-react";
+import { Palette, Layers, Sun, Moon, Monitor, PaintBucket } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "~/lib/utils";
-import type { SettingsState, AccentColor, CardStyle } from "~/core/store";
+import type { SettingsState, AccentColor, CardStyle, BackgroundColor } from "~/core/store";
 import type { Tab } from "./types";
 
 // Brand colors with hex values
@@ -30,9 +30,18 @@ const THEME_MODES = [
     { id: 'system', name: 'System', icon: Monitor, description: 'Follow system' },
 ] as const;
 
+const BACKGROUND_COLORS: { id: BackgroundColor; name: string; hex: string }[] = [
+    { id: 'white', name: 'White', hex: '#ffffff' },
+    { id: 'cream', name: 'Cream', hex: '#fdfbf7' },
+    { id: 'warmGray', name: 'Warm Gray', hex: '#f5f5f4' },
+    { id: 'coolGray', name: 'Cool Gray', hex: '#f1f5f9' },
+    { id: 'slate', name: 'Slate', hex: '#e2e8f0' },
+];
+
 export const AppearanceTab: Tab = ({ settings, onChange }) => {
     const accentColor = settings.appearance?.accentColor || 'darkBlue';
     const cardStyle = settings.appearance?.cardStyle || 'solid';
+    const backgroundColor = settings.appearance?.backgroundColor || 'cream';
     const { theme = 'system', setTheme } = useTheme();
 
     const handleAccentChange = (color: AccentColor) => {
@@ -56,6 +65,15 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
 
     const handleThemeModeChange = (mode: string) => {
         setTheme(mode);
+    };
+
+    const handleBackgroundChange = (bg: BackgroundColor) => {
+        onChange({
+            appearance: {
+                ...settings.appearance,
+                backgroundColor: bg,
+            },
+        });
     };
 
     const selectedColor = ACCENT_COLORS.find(c => c.id === accentColor);
@@ -189,6 +207,46 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                                 {cardStyle === style.id && (
                                     <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
                                         <span className="text-[8px] text-primary-foreground">✓</span>
+                                    </div>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Background Color (Light Mode) */}
+            <div className="space-y-4">
+                <div>
+                    <label className="text-sm font-medium flex items-center gap-2">
+                        <PaintBucket className="w-4 h-4" />
+                        Background Color (Light Mode)
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-3">
+                        Adjust brightness of the light theme background.
+                    </p>
+
+                    <div className="grid grid-cols-5 gap-2">
+                        {BACKGROUND_COLORS.map((bg) => (
+                            <button
+                                key={bg.id}
+                                onClick={() => handleBackgroundChange(bg.id)}
+                                className={cn(
+                                    "relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
+                                    backgroundColor === bg.id
+                                        ? "border-primary bg-primary/5 shadow-md"
+                                        : "border-transparent bg-muted/30 hover:bg-muted/50"
+                                )}
+                            >
+                                <div
+                                    className="w-8 h-8 rounded-lg shadow-sm border border-gray-300"
+                                    style={{ backgroundColor: bg.hex }}
+                                />
+                                <span className="text-[10px] font-medium">{bg.name}</span>
+
+                                {backgroundColor === bg.id && (
+                                    <div className="absolute top-1 right-1 w-3 h-3 rounded-full bg-primary flex items-center justify-center">
+                                        <span className="text-[6px] text-primary-foreground">✓</span>
                                     </div>
                                 )}
                             </button>

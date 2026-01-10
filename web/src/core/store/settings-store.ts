@@ -11,6 +11,7 @@ const SETTINGS_KEY = "deerflow.settings";
 export type LoadingTheme = 'darkBlue' | 'teal' | 'orange' | 'lightBlue' | 'green' | 'pink';
 export type AccentColor = LoadingTheme; // Same options as loading theme
 export type CardStyle = 'solid' | 'glassmorphic';
+export type BackgroundColor = 'white' | 'cream' | 'warmGray' | 'coolGray' | 'slate';
 
 const DEFAULT_SETTINGS: SettingsState = {
   general: {
@@ -31,6 +32,7 @@ const DEFAULT_SETTINGS: SettingsState = {
     loadingTheme: 'darkBlue',
     accentColor: 'darkBlue',
     cardStyle: 'solid' as CardStyle,
+    backgroundColor: 'cream' as BackgroundColor, // Less bright default
   },
   mcp: {
     servers: [],
@@ -56,6 +58,7 @@ export type SettingsState = {
     loadingTheme: LoadingTheme;
     accentColor: AccentColor;
     cardStyle: CardStyle;
+    backgroundColor: BackgroundColor;
   };
   mcp: {
     servers: MCPServerMetadata[];

@@ -3,7 +3,7 @@
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import * as React from "react";
 import { useEffect } from "react";
-import { useSettingsStore, type AccentColor } from "~/core/store";
+import { useSettingsStore, type AccentColor, type BackgroundColor } from "~/core/store";
 
 /**
  * Brand color hex values for CSS injection
@@ -18,6 +18,17 @@ const ACCENT_HEX: Record<AccentColor, { primary: string; gradient: string; light
 };
 
 /**
+ * Background color options for light theme
+ */
+const BACKGROUND_HEX: Record<BackgroundColor, { bg: string; card: string; appBg: string }> = {
+  white: { bg: '#ffffff', card: '#ffffff', appBg: '#f8fafc' },
+  cream: { bg: '#fdfbf7', card: '#ffffff', appBg: '#f5f2ed' },
+  warmGray: { bg: '#f5f5f4', card: '#fafaf9', appBg: '#e7e5e4' },
+  coolGray: { bg: '#f1f5f9', card: '#f8fafc', appBg: '#e2e8f0' },
+  slate: { bg: '#e2e8f0', card: '#f1f5f9', appBg: '#cbd5e1' },
+};
+
+/**
  * Convert hex color to RGB string for use in rgba()
  */
 function hexToRgb(hex: string): string {
@@ -27,17 +38,19 @@ function hexToRgb(hex: string): string {
 }
 
 /**
- * AccentColorProvider injects dynamic CSS variables based on the selected accent color.
- * This allows the entire UI to update when the user changes the accent in Settings.
+ * AccentColorProvider injects dynamic CSS variables based on the selected settings.
+ * This allows the entire UI to update when the user changes settings in Appearance.
  */
 function AccentColorProvider({ children }: { children: React.ReactNode }) {
   const accentColor = useSettingsStore((state) => state.appearance?.accentColor || 'darkBlue');
+  const backgroundColor = useSettingsStore((state) => state.appearance?.backgroundColor || 'cream');
 
   useEffect(() => {
     const colors = ACCENT_HEX[accentColor] || ACCENT_HEX.darkBlue;
+    const bgColors = BACKGROUND_HEX[backgroundColor] || BACKGROUND_HEX.cream;
     const root = document.documentElement;
 
-    // Set CSS custom properties for dynamic theming
+    // Set accent color CSS properties
     root.style.setProperty('--accent-primary', colors.primary);
     root.style.setProperty('--accent-gradient', colors.gradient);
     root.style.setProperty('--accent-light', colors.light);
@@ -49,7 +62,15 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--ring', colors.primary);
     root.style.setProperty('--sidebar-primary', colors.primary);
     root.style.setProperty('--sidebar-ring', colors.primary);
-  }, [accentColor]);
+
+    // Set background color CSS properties (only in light mode)
+    const isDarkMode = root.classList.contains('dark');
+    if (!isDarkMode) {
+      root.style.setProperty('--background', bgColors.bg);
+      root.style.setProperty('--card', bgColors.card);
+      root.style.setProperty('--app-background', bgColors.appBg);
+    }
+  }, [accentColor, backgroundColor]);
 
   return <>{children}</>;
 }

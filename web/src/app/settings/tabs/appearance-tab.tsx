@@ -9,13 +9,14 @@ import { cn } from "~/lib/utils";
 import type { SettingsState, AccentColor, CardStyle } from "~/core/store";
 import type { Tab } from "./types";
 
-const ACCENT_COLORS: { id: AccentColor; name: string; gradient: string }[] = [
-    { id: 'indigo', name: 'Indigo', gradient: 'from-indigo-500 to-violet-600' },
-    { id: 'blue', name: 'Blue', gradient: 'from-blue-500 to-cyan-600' },
-    { id: 'purple', name: 'Purple', gradient: 'from-purple-500 to-pink-600' },
-    { id: 'emerald', name: 'Emerald', gradient: 'from-emerald-500 to-teal-600' },
-    { id: 'amber', name: 'Amber', gradient: 'from-amber-500 to-orange-600' },
-    { id: 'rose', name: 'Rose', gradient: 'from-rose-500 to-pink-600' },
+// Brand colors with hex values
+const ACCENT_COLORS: { id: AccentColor; name: string; hex: string; secondary?: string }[] = [
+    { id: 'darkBlue', name: 'Dark Blue', hex: '#1E398D', secondary: '#14B795' },
+    { id: 'teal', name: 'Teal', hex: '#14B795' },
+    { id: 'orange', name: 'Orange', hex: '#F47920' },
+    { id: 'lightBlue', name: 'Light Blue', hex: '#1C9AD6' },
+    { id: 'green', name: 'Green', hex: '#8DC63F' },
+    { id: 'pink', name: 'Pink', hex: '#CF2C91' },
 ];
 
 const CARD_STYLES: { id: CardStyle; name: string; description: string }[] = [
@@ -30,7 +31,7 @@ const THEME_MODES = [
 ] as const;
 
 export const AppearanceTab: Tab = ({ settings, onChange }) => {
-    const accentColor = settings.appearance?.accentColor || 'indigo';
+    const accentColor = settings.appearance?.accentColor || 'darkBlue';
     const cardStyle = settings.appearance?.cardStyle || 'solid';
     const { theme = 'system', setTheme } = useTheme();
 
@@ -56,6 +57,8 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
     const handleThemeModeChange = (mode: string) => {
         setTheme(mode);
     };
+
+    const selectedColor = ACCENT_COLORS.find(c => c.id === accentColor);
 
     return (
         <div className="space-y-8">
@@ -108,7 +111,7 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                 <div>
                     <label className="text-sm font-medium flex items-center gap-2">
                         <Palette className="w-4 h-4" />
-                        Accent Color
+                        Brand Accent Color
                     </label>
                     <p className="text-xs text-muted-foreground mb-3">
                         Primary color for buttons, badges, and loading indicators.
@@ -126,11 +129,14 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                                         : "border-transparent bg-muted/30 hover:bg-muted/50"
                                 )}
                             >
+                                {/* Color swatch with gradient for darkBlue */}
                                 <div
-                                    className={cn(
-                                        "w-10 h-10 rounded-xl bg-gradient-to-br shadow-lg",
-                                        color.gradient
-                                    )}
+                                    className="w-10 h-10 rounded-xl shadow-lg"
+                                    style={{
+                                        background: color.secondary
+                                            ? `linear-gradient(135deg, ${color.hex} 0%, ${color.secondary} 100%)`
+                                            : color.hex
+                                    }}
                                 />
                                 <span className="text-xs font-medium">{color.name}</span>
 
@@ -196,10 +202,12 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                 <label className="text-sm font-medium mb-3 block">Preview</label>
                 <div className="flex items-center gap-4">
                     <div
-                        className={cn(
-                            "w-12 h-12 rounded-xl bg-gradient-to-br shadow-lg flex items-center justify-center",
-                            ACCENT_COLORS.find(c => c.id === accentColor)?.gradient
-                        )}
+                        className="w-12 h-12 rounded-xl shadow-lg flex items-center justify-center"
+                        style={{
+                            background: selectedColor?.secondary
+                                ? `linear-gradient(135deg, ${selectedColor.hex} 0%, ${selectedColor.secondary} 100%)`
+                                : selectedColor?.hex
+                        }}
                     >
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     </div>

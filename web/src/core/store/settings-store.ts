@@ -7,7 +7,8 @@ import type { MCPServerMetadata, SimpleMCPServerMetadata } from "../mcp";
 
 const SETTINGS_KEY = "deerflow.settings";
 
-export type LoadingTheme = 'indigo' | 'blue' | 'purple' | 'emerald' | 'amber' | 'rose';
+// Brand colors from company guidelines
+export type LoadingTheme = 'darkBlue' | 'teal' | 'orange' | 'lightBlue' | 'green' | 'pink';
 export type AccentColor = LoadingTheme; // Same options as loading theme
 export type CardStyle = 'solid' | 'glassmorphic';
 
@@ -27,8 +28,8 @@ const DEFAULT_SETTINGS: SettingsState = {
     searchProvider: undefined, // Search provider ID (e.g., "duckduckgo", "tavily")
   },
   appearance: {
-    loadingTheme: 'indigo',
-    accentColor: 'indigo',
+    loadingTheme: 'darkBlue',
+    accentColor: 'darkBlue',
     cardStyle: 'solid' as CardStyle,
   },
   mcp: {

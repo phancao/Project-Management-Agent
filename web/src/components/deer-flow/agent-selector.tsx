@@ -233,7 +233,7 @@ export function AgentSelector() {
         <SelectTrigger
           className={cn(
             "rounded-2xl w-auto h-8 text-xs shrink-0 px-3",
-            "!border-brand !text-white",
+            "bg-brand border-brand text-white hover:bg-brand/90",
           )}
         >
           <div className="flex items-center gap-1.5">
@@ -285,7 +285,7 @@ export function AgentSelector() {
         <SelectTrigger
           className={cn(
             "rounded-2xl w-auto h-8 text-xs shrink-0 px-3",
-            "!border-brand !text-white",
+            "bg-brand border-brand text-white hover:bg-brand/90",
           )}
         >
           <div className="flex items-center gap-1.5">
@@ -338,7 +338,7 @@ export function AgentSelector() {
         <SelectTrigger
           className={cn(
             "rounded-2xl w-auto h-8 text-xs shrink-0 px-3",
-            "!border-brand !text-white",
+            "bg-brand border-brand text-white hover:bg-brand/90",
           )}
         >
           <div className="flex items-center gap-1.5">

@@ -232,7 +232,9 @@ export function InputBox({
               <Button
                 className={cn(
                   "rounded-full shrink-0 h-9 px-4 text-xs font-semibold transition-all duration-300",
-                  enableDeepThinking ? "bg-brand/10 border-brand/50 text-brand shadow-sm shadow-brand/10" : "bg-muted-foreground/5 border-transparent hover:bg-muted-foreground/10",
+                  enableDeepThinking
+                    ? "bg-brand/20 dark:bg-brand/10 border-brand/50 text-brand shadow-sm shadow-brand/10"
+                    : "bg-gray-100 dark:bg-muted-foreground/5 border-gray-200 dark:border-transparent text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted-foreground/10",
                 )}
                 variant="outline"
                 onClick={() => {
@@ -255,7 +257,7 @@ export function InputBox({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-10 w-10 rounded-full bg-muted-foreground/5 hover:bg-brand/10 border border-transparent transition-all duration-300",
+                "h-10 w-10 rounded-full bg-gray-100 dark:bg-muted-foreground/5 hover:bg-brand/10 border border-gray-200 dark:border-transparent transition-all duration-300",
                 isEnhancing && "animate-pulse",
                 !isEnhancing && currentPrompt.trim() !== "" && "hover:border-brand/30"
               )}

@@ -35,19 +35,19 @@ const BACKGROUND_HEX: Record<BackgroundColor, { bg: string; card: string; appBg:
 
 /**
  * Background color options for dark theme
- * Card colors use rgba with 80% opacity to allow background to show through
+ * Card colors use rgba with 60% opacity to allow background to show through
  */
 const DARK_BACKGROUND_HEX: Record<BackgroundColor, { bg: string; card: string; appBg: string }> = {
-  white: { bg: '#1a1a1a', card: 'rgba(38, 38, 38, 0.8)', appBg: '#0f0f0f' },       // Pure dark
-  cream: { bg: '#1c1917', card: 'rgba(41, 37, 36, 0.8)', appBg: '#0c0a09' },       // Warm dark
-  warmGray: { bg: '#1f1f1f', card: 'rgba(42, 42, 42, 0.8)', appBg: '#141414' },    // Neutral dark
-  coolGray: { bg: '#1e293b', card: 'rgba(51, 65, 85, 0.8)', appBg: '#0f172a' },    // Slate dark
-  slate: { bg: '#0f172a', card: 'rgba(30, 41, 59, 0.8)', appBg: '#020617' },       // Deep slate
-  lavender: { bg: '#1e1b2e', card: 'rgba(42, 38, 64, 0.8)', appBg: '#13111c' },    // Purple dark
-  mint: { bg: '#14231a', card: 'rgba(26, 47, 35, 0.8)', appBg: '#0d1711' },        // Green dark
-  rose: { bg: '#231419', card: 'rgba(47, 26, 32, 0.8)', appBg: '#170d10' },        // Rose dark
-  sky: { bg: '#141d26', card: 'rgba(26, 38, 51, 0.8)', appBg: '#0d131a' },         // Blue dark
-  sand: { bg: '#1f1b14', card: 'rgba(41, 36, 26, 0.8)', appBg: '#14110d' },        // Sand dark
+  white: { bg: '#1a1a1a', card: 'rgba(38, 38, 38, 0.6)', appBg: '#0f0f0f' },       // Pure dark
+  cream: { bg: '#1c1917', card: 'rgba(41, 37, 36, 0.6)', appBg: '#0c0a09' },       // Warm dark
+  warmGray: { bg: '#1f1f1f', card: 'rgba(42, 42, 42, 0.6)', appBg: '#141414' },    // Neutral dark
+  coolGray: { bg: '#1e293b', card: 'rgba(51, 65, 85, 0.6)', appBg: '#0f172a' },    // Slate dark
+  slate: { bg: '#0f172a', card: 'rgba(30, 41, 59, 0.6)', appBg: '#020617' },       // Deep slate
+  lavender: { bg: '#1e1b2e', card: 'rgba(42, 38, 64, 0.6)', appBg: '#13111c' },    // Purple dark
+  mint: { bg: '#14231a', card: 'rgba(26, 47, 35, 0.6)', appBg: '#0d1711' },        // Green dark
+  rose: { bg: '#231419', card: 'rgba(47, 26, 32, 0.6)', appBg: '#170d10' },        // Rose dark
+  sky: { bg: '#141d26', card: 'rgba(26, 38, 51, 0.6)', appBg: '#0d131a' },         // Blue dark
+  sand: { bg: '#1f1b14', card: 'rgba(41, 36, 26, 0.6)', appBg: '#14110d' },        // Sand dark
 };
 
 /**

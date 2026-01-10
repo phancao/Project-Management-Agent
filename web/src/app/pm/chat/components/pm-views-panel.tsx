@@ -36,7 +36,7 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
   return (
     <div className={cn("flex flex-col h-full bg-transparent", className)}>
       {/* Navigation Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-transparent backdrop-blur-sm">
         <div className="flex items-center justify-between px-4 py-2">
           <Tabs value={activeView} onValueChange={(v) => setActiveView(v as PMView)} className="flex-1 overflow-hidden">
             <TabsList className="w-full justify-start h-auto bg-transparent p-0 gap-1 overflow-x-auto no-scrollbar scroll-smooth py-1">

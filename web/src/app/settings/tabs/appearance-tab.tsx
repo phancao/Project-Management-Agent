@@ -44,6 +44,20 @@ const BACKGROUND_COLORS: { id: BackgroundColor; name: string; hex: string }[] = 
     { id: 'sand', name: 'Sand', hex: '#faf5eb' },
 ];
 
+// Dark theme background colors
+const DARK_BACKGROUND_COLORS: { id: BackgroundColor; name: string; hex: string }[] = [
+    { id: 'white', name: 'Pure Dark', hex: '#1a1a1a' },
+    { id: 'cream', name: 'Warm Dark', hex: '#1c1917' },
+    { id: 'warmGray', name: 'Neutral', hex: '#1f1f1f' },
+    { id: 'coolGray', name: 'Slate', hex: '#1e293b' },
+    { id: 'slate', name: 'Deep Slate', hex: '#0f172a' },
+    { id: 'lavender', name: 'Purple', hex: '#1e1b2e' },
+    { id: 'mint', name: 'Forest', hex: '#14231a' },
+    { id: 'rose', name: 'Wine', hex: '#231419' },
+    { id: 'sky', name: 'Navy', hex: '#141d26' },
+    { id: 'sand', name: 'Espresso', hex: '#1f1b14' },
+];
+
 export const AppearanceTab: Tab = ({ settings, onChange }) => {
     const { theme = 'system', setTheme, resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
@@ -329,19 +343,21 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                 </div>
             </div>
 
-            {/* Background Color (Light Mode) */}
+            {/* Background Color */}
             <div className="space-y-4">
                 <div>
                     <label className="text-sm font-medium flex items-center gap-2">
                         <PaintBucket className="w-4 h-4" />
-                        Background Color (Light Mode)
+                        Background Color {isDarkMode ? '(Dark Mode)' : '(Light Mode)'}
                     </label>
                     <p className="text-xs text-muted-foreground mb-3">
-                        Adjust brightness of the light theme background.
+                        {isDarkMode
+                            ? 'Choose your preferred dark theme background.'
+                            : 'Adjust brightness of the light theme background.'}
                     </p>
 
                     <div className="grid grid-cols-5 gap-2">
-                        {BACKGROUND_COLORS.map((bg) => (
+                        {(isDarkMode ? DARK_BACKGROUND_COLORS : BACKGROUND_COLORS).map((bg) => (
                             <button
                                 key={bg.id}
                                 onClick={() => handleBackgroundChange(bg.id)}
@@ -353,7 +369,10 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                                 )}
                             >
                                 <div
-                                    className="w-8 h-8 rounded-lg shadow-sm border border-gray-300"
+                                    className={cn(
+                                        "w-8 h-8 rounded-lg shadow-sm border",
+                                        isDarkMode ? "border-gray-600" : "border-gray-300"
+                                    )}
                                     style={{ backgroundColor: bg.hex }}
                                 />
                                 <span className="text-[10px] font-medium">{bg.name}</span>

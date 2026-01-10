@@ -190,8 +190,8 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --app-background: var(--background);
+  /* --background and --app-background are set dynamically by ThemeProvider
+     to allow user-configurable dark background colors */
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);

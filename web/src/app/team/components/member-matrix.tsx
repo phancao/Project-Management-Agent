@@ -66,7 +66,7 @@ function SortableMember({ member, index }: { member: PMUser; index: number }) {
             style={style}
             className={cn(
                 "group flex items-center gap-2 p-2.5 rounded-xl border transition-all duration-300 relative",
-                "bg-white dark:bg-gradient-to-r dark:from-slate-800/80 dark:to-slate-900/80 backdrop-blur-sm",
+                "bg-card backdrop-blur-sm",
                 "border-gray-200 dark:border-slate-700/50 hover:border-indigo-300 dark:hover:border-indigo-500/50",
                 "hover:shadow-lg hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10",
                 isDragging ? "opacity-30 scale-95 grayscale" : "opacity-100"
@@ -159,7 +159,7 @@ function MemberPill({ member, index }: { member: PMUser; index: number }) {
             onClick={() => openMemberProfile(member.id)}
             className={cn(
                 "group flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full",
-                "bg-white dark:bg-slate-800/80 backdrop-blur-sm",
+                "bg-card backdrop-blur-sm",
                 "border border-gray-200 dark:border-slate-700/50 hover:border-indigo-300 dark:hover:border-slate-600",
                 "shadow-md hover:shadow-lg hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10",
                 "hover:scale-105 transition-all duration-200",
@@ -449,7 +449,7 @@ export function MemberMatrix() {
         >
             <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[600px] overflow-hidden">
                 {/* --- Premium Sidebar: Team Members --- */}
-                <Card className="w-[340px] shrink-0 h-full flex flex-col border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/5 rounded-2xl overflow-hidden bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950">
+                <Card className="w-[340px] shrink-0 h-full flex flex-col border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/5 rounded-2xl overflow-hidden bg-card">
                     {/* Glassmorphic Header */}
                     <div className="relative p-4 border-b border-gray-100 dark:border-slate-800/50 space-y-4 shrink-0 bg-gradient-to-r from-indigo-50 dark:from-indigo-500/10 via-violet-50/50 dark:via-violet-500/5 to-transparent">
                         {/* Subtle animated background */}
@@ -500,7 +500,7 @@ export function MemberMatrix() {
                         <div className="pr-4 pb-10 space-y-6">
                             {/* Active Projects Section */}
                             {activeProjects.length > 0 && (
-                                <Card className="overflow-hidden border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/10 rounded-2xl bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950">
+                                <Card className="overflow-hidden border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/10 rounded-2xl bg-card">
                                     <CardHeader className="py-4 px-6 bg-gradient-to-r from-indigo-50 dark:from-indigo-500/10 via-violet-50/50 dark:via-violet-500/5 to-transparent border-b border-gray-100 dark:border-slate-800/50">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
@@ -534,7 +534,7 @@ export function MemberMatrix() {
 
                             {/* Available Projects Section */}
                             {availableProjects.length > 0 && (
-                                <Card className="overflow-hidden border border-gray-200 dark:border-0 shadow-lg dark:shadow-xl rounded-2xl bg-white dark:bg-gradient-to-b dark:from-slate-900/80 dark:to-slate-950/80">
+                                <Card className="overflow-hidden border border-gray-200 dark:border-0 shadow-lg dark:shadow-xl rounded-2xl bg-card">
                                     <CardHeader className="py-4 px-6 bg-gray-50 dark:bg-slate-800/30 border-b border-gray-100 dark:border-slate-800/50">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">

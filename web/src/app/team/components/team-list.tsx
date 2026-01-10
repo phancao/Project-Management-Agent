@@ -80,7 +80,7 @@ export function TeamList({ teams, selectedTeamId, onTeamSelect, onCreateTeam, on
 
     return (
         <>
-            <div className="flex flex-col h-full bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 rounded-2xl border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/5 overflow-hidden">
+            <div className="flex flex-col h-full bg-card rounded-2xl border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/5 overflow-hidden">
                 {/* Premium Header */}
                 <div className="relative p-4 border-b border-gray-100 dark:border-slate-800/50 bg-gradient-to-r from-indigo-50 dark:from-indigo-500/10 via-violet-50/50 dark:via-violet-500/5 to-transparent">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/50 dark:from-indigo-500/10 via-transparent to-transparent" />

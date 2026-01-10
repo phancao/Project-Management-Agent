@@ -3,10 +3,10 @@
 
 "use client";
 
-import { Palette, Layers, Sun, Moon, Monitor, PaintBucket } from "lucide-react";
+import { Palette, Layers, Sun, Moon, Monitor, PaintBucket, MousePointerClick } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "~/lib/utils";
-import type { SettingsState, AccentColor, CardStyle, BackgroundColor } from "~/core/store";
+import type { SettingsState, AccentColor, CardStyle, BackgroundColor, HoverColor } from "~/core/store";
 import type { Tab } from "./types";
 
 // Brand colors with hex values
@@ -45,6 +45,7 @@ const BACKGROUND_COLORS: { id: BackgroundColor; name: string; hex: string }[] = 
 
 export const AppearanceTab: Tab = ({ settings, onChange }) => {
     const accentColor = settings.appearance?.accentColor || 'darkBlue';
+    const hoverColor = settings.appearance?.hoverColor || 'teal';
     const cardStyle = settings.appearance?.cardStyle || 'solid';
     const backgroundColor = settings.appearance?.backgroundColor || 'cream';
     const { theme = 'system', setTheme } = useTheme();
@@ -55,6 +56,15 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                 ...settings.appearance,
                 loadingTheme: color, // Keep loading theme in sync with accent
                 accentColor: color,
+            },
+        });
+    };
+
+    const handleHoverChange = (color: HoverColor) => {
+        onChange({
+            appearance: {
+                ...settings.appearance,
+                hoverColor: color,
             },
         });
     };
@@ -164,6 +174,46 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                                 <span className="text-xs font-medium">{color.name}</span>
 
                                 {accentColor === color.id && (
+                                    <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                                        <span className="text-[8px] text-primary-foreground">✓</span>
+                                    </div>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Hover Color */}
+            <div className="space-y-4">
+                <div>
+                    <label className="text-sm font-medium flex items-center gap-2">
+                        <MousePointerClick className="w-4 h-4" />
+                        Hover Color
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-3">
+                        Color shown when hovering over buttons and interactive elements.
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-3">
+                        {ACCENT_COLORS.map((color) => (
+                            <button
+                                key={color.id}
+                                onClick={() => handleHoverChange(color.id)}
+                                className={cn(
+                                    "relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                                    hoverColor === color.id
+                                        ? "border-primary bg-primary/5 shadow-md"
+                                        : "border-transparent bg-muted/30 hover:bg-muted/50"
+                                )}
+                            >
+                                <div
+                                    className="w-10 h-10 rounded-xl shadow-lg"
+                                    style={{ background: color.hex }}
+                                />
+                                <span className="text-xs font-medium">{color.name}</span>
+
+                                {hoverColor === color.id && (
                                     <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
                                         <span className="text-[8px] text-primary-foreground">✓</span>
                                     </div>

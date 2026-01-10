@@ -3,7 +3,7 @@
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import * as React from "react";
 import { useEffect } from "react";
-import { useSettingsStore, type AccentColor, type BackgroundColor } from "~/core/store";
+import { useSettingsStore, type AccentColor, type BackgroundColor, type HoverColor } from "~/core/store";
 
 /**
  * Brand color hex values for CSS injection
@@ -48,10 +48,12 @@ function hexToRgb(hex: string): string {
  */
 function AccentColorProvider({ children }: { children: React.ReactNode }) {
   const accentColor = useSettingsStore((state) => state.appearance?.accentColor || 'darkBlue');
+  const hoverColor = useSettingsStore((state) => state.appearance?.hoverColor || 'teal');
   const backgroundColor = useSettingsStore((state) => state.appearance?.backgroundColor || 'cream');
 
   useEffect(() => {
     const colors = ACCENT_HEX[accentColor] || ACCENT_HEX.darkBlue;
+    const hoverColors = ACCENT_HEX[hoverColor] || ACCENT_HEX.teal;
     const bgColors = BACKGROUND_HEX[backgroundColor] || BACKGROUND_HEX.cream;
     const root = document.documentElement;
 
@@ -68,6 +70,11 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--sidebar-primary', colors.primary);
     root.style.setProperty('--sidebar-ring', colors.primary);
 
+    // Set hover color CSS properties
+    root.style.setProperty('--hover', hoverColors.primary);
+    root.style.setProperty('--hover-rgb', hexToRgb(hoverColors.primary));
+    root.style.setProperty('--hover-light', hoverColors.light);
+
     // Set background color CSS properties (only in light mode)
     const isDarkMode = root.classList.contains('dark');
     if (!isDarkMode) {
@@ -75,7 +82,7 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
       root.style.setProperty('--card', bgColors.card);
       root.style.setProperty('--app-background', bgColors.appBg);
     }
-  }, [accentColor, backgroundColor]);
+  }, [accentColor, hoverColor, backgroundColor]);
 
   return <>{children}</>;
 }

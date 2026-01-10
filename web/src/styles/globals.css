@@ -424,3 +424,39 @@ button {
 :root:not(.dark) .bg-gray-100 {
   background-color: var(--app-background) !important;
 }
+
+/* Hover color overrides for consistent hover states */
+/* General hover background transition to use hover color */
+.hover\:bg-brand\/10:hover,
+.hover\:bg-primary\/10:hover,
+.hover\:bg-accent:hover {
+  background-color: rgba(var(--hover-rgb), 0.1) !important;
+}
+
+.hover\:bg-brand\/20:hover,
+.hover\:bg-primary\/20:hover {
+  background-color: rgba(var(--hover-rgb), 0.2) !important;
+}
+
+/* Button hover states */
+button:hover:not(:disabled):not([data-state="active"]):not(.bg-brand):not(.bg-primary) {
+  --tw-bg-opacity: 1;
+}
+
+/* Override common hover patterns to use hover color */
+.hover\:text-brand:hover,
+.hover\:text-primary:hover {
+  color: var(--hover) !important;
+}
+
+/* Group hover text */
+.group:hover .group-hover\:text-brand,
+.group:hover .group-hover\:text-primary {
+  color: var(--hover) !important;
+}
+
+/* Border hover states */
+.hover\:border-brand:hover,
+.hover\:border-primary:hover {
+  border-color: var(--hover) !important;
+}

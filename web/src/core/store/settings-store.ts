@@ -10,6 +10,7 @@ const SETTINGS_KEY = "deerflow.settings";
 // Brand colors from company guidelines
 export type LoadingTheme = 'darkBlue' | 'teal' | 'orange' | 'lightBlue' | 'green' | 'pink';
 export type AccentColor = LoadingTheme; // Same options as loading theme
+export type HoverColor = LoadingTheme; // Hover color uses same palette
 export type CardStyle = 'solid' | 'glassmorphic';
 export type BackgroundColor = 'white' | 'cream' | 'warmGray' | 'coolGray' | 'slate' | 'lavender' | 'mint' | 'rose' | 'sky' | 'sand';
 
@@ -31,6 +32,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   appearance: {
     loadingTheme: 'darkBlue',
     accentColor: 'darkBlue',
+    hoverColor: 'teal',
     cardStyle: 'solid' as CardStyle,
     backgroundColor: 'cream' as BackgroundColor, // Less bright default
   },
@@ -57,6 +59,7 @@ export type SettingsState = {
   appearance: {
     loadingTheme: LoadingTheme;
     accentColor: AccentColor;
+    hoverColor: HoverColor;
     cardStyle: CardStyle;
     backgroundColor: BackgroundColor;
   };

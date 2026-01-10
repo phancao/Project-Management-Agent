@@ -37,7 +37,7 @@ function TeamContent() {
 
     return (
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl">
+            <TabsList className="bg-transparent p-1 rounded-xl">
                 <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-sm">
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Overview
@@ -104,7 +104,7 @@ export default function TeamPage() {
     return (
         <MemberProfileContext.Provider value={{ openMemberProfile }}>
             <TeamPageLoadingOverlay />
-            <div className="min-h-screen bg-white dark:bg-gray-950">
+            <div className="min-h-screen bg-transparent">
                 <PMHeader />
                 <div className="pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
                     <div className="flex items-center justify-between mb-8">

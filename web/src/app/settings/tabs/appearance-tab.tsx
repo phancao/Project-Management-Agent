@@ -1,7 +1,10 @@
 // Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 // SPDX-License-Identifier: MIT
 
-import { Palette, Layers } from "lucide-react";
+"use client";
+
+import { Palette, Layers, Sun, Moon, Monitor } from "lucide-react";
+import { useTheme } from "next-themes";
 import { cn } from "~/lib/utils";
 import type { SettingsState, AccentColor, CardStyle } from "~/core/store";
 import type { Tab } from "./types";
@@ -20,9 +23,16 @@ const CARD_STYLES: { id: CardStyle; name: string; description: string }[] = [
     { id: 'glassmorphic', name: 'Glass', description: 'Frosted glass with blur' },
 ];
 
+const THEME_MODES = [
+    { id: 'light', name: 'Light', icon: Sun, description: 'Light mode' },
+    { id: 'dark', name: 'Dark', icon: Moon, description: 'Dark mode' },
+    { id: 'system', name: 'System', icon: Monitor, description: 'Follow system' },
+] as const;
+
 export const AppearanceTab: Tab = ({ settings, onChange }) => {
     const accentColor = settings.appearance?.accentColor || 'indigo';
     const cardStyle = settings.appearance?.cardStyle || 'solid';
+    const { theme = 'system', setTheme } = useTheme();
 
     const handleAccentChange = (color: AccentColor) => {
         onChange({
@@ -43,6 +53,10 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
         });
     };
 
+    const handleThemeModeChange = (mode: string) => {
+        setTheme(mode);
+    };
+
     return (
         <div className="space-y-8">
             <div>
@@ -50,6 +64,43 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                 <p className="text-sm text-muted-foreground">
                     Customize the look and feel of the application.
                 </p>
+            </div>
+
+            {/* Theme Mode */}
+            <div className="space-y-4">
+                <div>
+                    <label className="text-sm font-medium flex items-center gap-2">
+                        <Sun className="w-4 h-4" />
+                        Theme Mode
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-3">
+                        Choose between light, dark, or system preference.
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-3">
+                        {THEME_MODES.map((mode) => (
+                            <button
+                                key={mode.id}
+                                onClick={() => handleThemeModeChange(mode.id)}
+                                className={cn(
+                                    "relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                                    theme === mode.id
+                                        ? "border-primary bg-primary/5 shadow-md"
+                                        : "border-transparent bg-muted/30 hover:bg-muted/50"
+                                )}
+                            >
+                                <mode.icon className="w-6 h-6" />
+                                <span className="text-xs font-medium">{mode.name}</span>
+
+                                {theme === mode.id && (
+                                    <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                                        <span className="text-[8px] text-primary-foreground">✓</span>
+                                    </div>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {/* Accent Color */}

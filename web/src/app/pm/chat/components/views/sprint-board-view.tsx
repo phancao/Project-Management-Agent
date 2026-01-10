@@ -107,7 +107,7 @@ function TaskCard({ task, onClick, disabled }: { task: BoardTask; onClick: () =>
       style={style}
       data-task-id={taskId}
       {...attributes}
-      className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow transition cursor-pointer"
+      className="flex items-center gap-2 p-3 bg-card rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow transition cursor-pointer"
     >
       <div
         {...listeners}
@@ -137,7 +137,7 @@ function TaskDragPreview({ task, measurements }: { task: BoardTask | null; measu
 
   return (
     <div
-      className="p-3 bg-white dark:bg-gray-800 rounded-lg border-2 border-blue-400 shadow-2xl opacity-95 cursor-grabbing"
+      className="p-3 bg-card rounded-lg border-2 border-blue-400 shadow-2xl opacity-95 cursor-grabbing"
       style={{
         width: measurements.taskWidth ? `${measurements.taskWidth}px` : 'auto',
         maxWidth: '24rem',
@@ -169,8 +169,8 @@ function ColumnDragPreview({ column, tasks, measurements }: { column: { id: stri
       }}
     >
       <div className="absolute top-0 left-0 right-0">
-        <div className="rounded-xl shadow-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-800">
+        <div className="rounded-xl shadow-2xl bg-card border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 bg-muted">
             <div className="flex items-center gap-2">
               <GripHorizontal className="w-4 h-4 text-gray-400" />
               <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-100">{column.title}</h3>
@@ -179,7 +179,7 @@ function ColumnDragPreview({ column, tasks, measurements }: { column: { id: stri
           </div>
           <div className="p-3 space-y-2">
             {previewTasks.map((task) => (
-              <div key={task.id} className="p-2 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs text-gray-700 dark:text-gray-300">
+              <div key={task.id} className="p-2 rounded bg-card border border-gray-200 dark:border-gray-700 text-xs text-gray-700 dark:text-gray-300">
                 {task.title}
               </div>
             ))}
@@ -234,7 +234,7 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId, 
       <div
         className={`flex items-center justify-between px-3 py-2 rounded-t-lg border-b ${isActive
           ? "bg-blue-100 dark:bg-blue-900 border-blue-400 dark:border-blue-500"
-          : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+          : "bg-muted border-gray-200 dark:border-gray-700"
           }`}
       >
         <div className="flex items-center gap-2">
@@ -256,7 +256,7 @@ function SortableColumn({ column, orderId, tasks, onTaskClick, draggedColumnId, 
           ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-400 dark:ring-blue-500"
           : isActive
             ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30"
-            : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+            : "border-gray-200 dark:border-gray-700 bg-transparent"
           } p-3 space-y-2 min-h-24 transition-all`}
       >
         <SortableContext items={tasks.map((task) => String(task.id))} strategy={verticalListSortingStrategy}>

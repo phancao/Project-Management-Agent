@@ -240,7 +240,7 @@ function TimelineTooltip({
   const end = addDays(minDate, datum.startOffset + datum.duration);
 
   return (
-    <div className="rounded-md border border-gray-200 bg-white p-3 text-xs shadow-md dark:border-gray-700 dark:bg-gray-900">
+    <div className="rounded-md border border-gray-200 bg-card p-3 text-xs shadow-md dark:border-gray-700">
       <div className="font-semibold text-gray-900 dark:text-gray-100">{datum.name}</div>
       <div className="mt-1 text-gray-600 dark:text-gray-300">
         {formatDateLong(start)} → {formatDateLong(end)} ({datum.duration} days)
@@ -528,7 +528,7 @@ function TimelineContent({
         </div>
 
         {sprintChart.data.length === 0 || !sprintChart.minDate ? (
-          <div className="rounded border border-dashed border-gray-300 bg-gray-50 py-12 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900">
+          <div className="rounded border border-dashed border-gray-300 bg-transparent py-12 text-center text-sm text-gray-500 dark:border-gray-700">
             No sprints have complete scheduling information yet.
           </div>
         ) : (
@@ -623,7 +623,7 @@ function TimelineContent({
             Failed to load timeline: {timelineError.message}
           </div>
         ) : taskChart.data.length === 0 || !taskChart.minDate ? (
-          <div className="rounded border border-dashed border-gray-300 bg-gray-50 py-12 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900">
+          <div className="rounded border border-dashed border-gray-300 bg-transparent py-12 text-center text-sm text-gray-500 dark:border-gray-700">
             No tasks match the current filters or have complete scheduling information.
           </div>
         ) : (

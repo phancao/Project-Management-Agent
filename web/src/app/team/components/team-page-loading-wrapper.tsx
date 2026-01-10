@@ -3,7 +3,8 @@
 import { useMemo } from "react";
 import { useTeams } from "~/core/hooks/use-teams";
 import { useTeamData } from "~/core/hooks/use-team-data";
-import { LoadingProgress } from "./loading-progress";
+import { WorkspaceLoading } from "~/components/ui/workspace-loading";
+import { Users } from "lucide-react";
 
 interface TeamPageLoadingWrapperProps {
     children: React.ReactNode;
@@ -32,20 +33,24 @@ export function TeamPageLoadingWrapper({ children }: TeamPageLoadingWrapperProps
 
     const isAnyLoading = isLoadingTeams || isLoadingUsers || isLoadingTasks || isLoadingTimeEntries;
 
+    if (!isAnyLoading) {
+        return <>{children}</>;
+    }
+
     return (
         <>
-            {isAnyLoading && (
-                <LoadingProgress
-                    isLoadingTeams={isLoadingTeams}
-                    isLoadingUsers={isLoadingUsers}
-                    isLoadingTasks={isLoadingTasks}
-                    isLoadingTimeEntries={isLoadingTimeEntries}
-                    teamsCount={teams.length}
-                    usersCount={usersCount}
-                    tasksCount={tasksCount}
-                    timeEntriesCount={timeEntriesCount}
-                />
-            )}
+            <WorkspaceLoading
+                title="Loading Team Data"
+                subtitle="Fetching from providers..."
+                items={[
+                    { label: "Teams", isLoading: isLoadingTeams, count: teams.length },
+                    { label: "Users", isLoading: isLoadingUsers, count: usersCount },
+                    { label: "Tasks", isLoading: isLoadingTasks, count: tasksCount },
+                    { label: "Time Entries", isLoading: isLoadingTimeEntries, count: timeEntriesCount },
+                ]}
+                icon={<Users className="w-6 h-6 text-white" />}
+                overlay={true}
+            />
             {children}
         </>
     );

@@ -6,7 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Input } from "~/components/ui/input";
-import { GripVertical, Loader2, Users, ListTodo, Briefcase, Search, UserPlus, FolderKanban, Sparkles, Zap, Activity } from 'lucide-react';
+import { GripVertical, Users, ListTodo, Briefcase, Search, UserPlus, FolderKanban, Sparkles, Zap, Activity } from 'lucide-react';
+import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import {
     DndContext,
     closestCenter,
@@ -65,18 +66,18 @@ function SortableMember({ member, index }: { member: PMUser; index: number }) {
             style={style}
             className={cn(
                 "group flex items-center gap-2 p-2.5 rounded-xl border transition-all duration-300 relative",
-                "bg-gradient-to-r from-slate-800/80 to-slate-900/80 backdrop-blur-sm",
-                "border-slate-700/50 hover:border-indigo-500/50",
-                "hover:shadow-lg hover:shadow-indigo-500/10",
+                "bg-white dark:bg-gradient-to-r dark:from-slate-800/80 dark:to-slate-900/80 backdrop-blur-sm",
+                "border-gray-200 dark:border-slate-700/50 hover:border-indigo-300 dark:hover:border-indigo-500/50",
+                "hover:shadow-lg hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10",
                 isDragging ? "opacity-30 scale-95 grayscale" : "opacity-100"
             )}
         >
             {/* Animated gradient border on hover */}
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-violet-500/0 to-indigo-500/0 group-hover:from-indigo-500/5 group-hover:via-violet-500/10 group-hover:to-indigo-500/5 transition-all duration-500" />
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/0 via-violet-500/0 to-indigo-500/0 group-hover:from-indigo-500/5 group-hover:via-violet-500/10 group-hover:to-indigo-500/5 transition-all duration-500" />
 
             {/* Drag Handle */}
-            <div {...attributes} {...listeners} className="shrink-0 cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-slate-700/50 transition-colors z-10">
-                <GripVertical className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors" />
+            <div {...attributes} {...listeners} className="shrink-0 cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors z-10">
+                <GripVertical className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-colors" />
             </div>
 
             <button
@@ -85,7 +86,7 @@ function SortableMember({ member, index }: { member: PMUser; index: number }) {
             >
                 <div className="relative shrink-0">
                     <Avatar className={cn(
-                        "w-9 h-9 ring-2 ring-offset-1 ring-offset-slate-900 transition-all duration-300",
+                        "w-9 h-9 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 transition-all duration-300",
                         ringColor,
                         "group-hover:scale-105"
                     )}>
@@ -95,13 +96,13 @@ function SortableMember({ member, index }: { member: PMUser; index: number }) {
                         </AvatarFallback>
                     </Avatar>
                     {/* Online indicator */}
-                    <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900" />
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden">
-                    <p className="text-sm font-semibold text-slate-100 truncate group-hover:text-white transition-colors">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-white transition-colors">
                         {member.name}
                     </p>
-                    <p className="text-[11px] text-slate-400 truncate group-hover:text-slate-300 transition-colors">
+                    <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate group-hover:text-gray-600 dark:group-hover:text-slate-300 transition-colors">
                         {member.email}
                     </p>
                 </div>
@@ -158,22 +159,22 @@ function MemberPill({ member, index }: { member: PMUser; index: number }) {
             onClick={() => openMemberProfile(member.id)}
             className={cn(
                 "group flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full",
-                "bg-slate-800/80 backdrop-blur-sm",
-                "border border-slate-700/50 hover:border-slate-600",
-                "shadow-md hover:shadow-lg hover:shadow-indigo-500/10",
+                "bg-white dark:bg-slate-800/80 backdrop-blur-sm",
+                "border border-gray-200 dark:border-slate-700/50 hover:border-indigo-300 dark:hover:border-slate-600",
+                "shadow-md hover:shadow-lg hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10",
                 "hover:scale-105 transition-all duration-200",
-                "hover:bg-slate-700/80"
+                "hover:bg-gray-50 dark:hover:bg-slate-700/80"
             )}
             title={member.email}
             style={{ zIndex: 10 - index }}
         >
-            <Avatar className="w-6 h-6 ring-1 ring-slate-600 group-hover:ring-indigo-500/50 transition-all">
+            <Avatar className="w-6 h-6 ring-1 ring-gray-200 dark:ring-slate-600 group-hover:ring-indigo-400 dark:group-hover:ring-indigo-500/50 transition-all">
                 <AvatarImage src={member.avatar} />
                 <AvatarFallback className={cn("text-[9px] font-bold text-white bg-gradient-to-br", gradient)}>
                     {member.name[0]}
                 </AvatarFallback>
             </Avatar>
-            <span className="text-xs font-medium text-slate-200 group-hover:text-white max-w-[70px] truncate transition-colors">
+            <span className="text-xs font-medium text-gray-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-white max-w-[70px] truncate transition-colors">
                 {member.name.split(' ')[0]}
             </span>
         </button>
@@ -217,10 +218,10 @@ function DroppableProjectRow({
             ref={setNodeRef}
             className={cn(
                 "group relative flex items-center gap-4 px-4 py-4 transition-all duration-300",
-                "border-b border-slate-800/50",
+                "border-b border-gray-100 dark:border-slate-800/50",
                 isOver
-                    ? "bg-indigo-500/10 ring-2 ring-indigo-500/50 ring-inset"
-                    : "hover:bg-slate-800/30",
+                    ? "bg-indigo-50 dark:bg-indigo-500/10 ring-2 ring-indigo-400 dark:ring-indigo-500/50 ring-inset"
+                    : "hover:bg-gray-50 dark:hover:bg-slate-800/30",
                 "hover:translate-x-1"
             )}
         >
@@ -238,8 +239,8 @@ function DroppableProjectRow({
                 "shadow-lg",
                 assignedMembers.length > 0
                     ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
-                    : "bg-slate-800 text-slate-400 border border-slate-700",
-                "group-hover:scale-110 group-hover:shadow-indigo-500/20"
+                    : "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-400 border border-gray-200 dark:border-slate-700",
+                "group-hover:scale-110 group-hover:shadow-indigo-200 dark:group-hover:shadow-indigo-500/20"
             )}>
                 <FolderKanban className="w-5 h-5" />
             </div>
@@ -247,7 +248,7 @@ function DroppableProjectRow({
             {/* Project Name & Info */}
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-sm text-slate-100 truncate group-hover:text-white transition-colors" title={project.name}>
+                    <h3 className="font-semibold text-sm text-gray-900 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-white transition-colors" title={project.name}>
                         {project.name}
                     </h3>
                     {project.status && project.status.toLowerCase() !== 'none' && (
@@ -255,12 +256,12 @@ function DroppableProjectRow({
                     )}
                 </div>
                 <div className="flex items-center gap-3">
-                    <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <p className="text-xs text-gray-500 dark:text-slate-400 flex items-center gap-1.5">
                         <ListTodo className="w-3 h-3" />
-                        <span className="font-medium text-slate-300">{taskCount}</span> tasks
+                        <span className="font-medium text-gray-700 dark:text-slate-300">{taskCount}</span> tasks
                     </p>
                     {taskCount >= 50 && (
-                        <span className="flex items-center gap-1 text-[10px] text-amber-400/80">
+                        <span className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400/80">
                             <Zap className="w-3 h-3" />
                             {activity.label}
                         </span>
@@ -278,7 +279,7 @@ function DroppableProjectRow({
                             ))}
                         </div>
                         {assignedMembers.length > 4 && (
-                            <span className="ml-3 text-xs font-semibold text-indigo-400 bg-indigo-500/20 px-2 py-1 rounded-full border border-indigo-500/30">
+                            <span className="ml-3 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-500/20 px-2 py-1 rounded-full border border-indigo-200 dark:border-indigo-500/30">
                                 +{assignedMembers.length - 4}
                             </span>
                         )}
@@ -287,8 +288,8 @@ function DroppableProjectRow({
                     <span className={cn(
                         "flex items-center gap-2 text-xs px-4 py-2 rounded-xl border-2 border-dashed transition-all duration-300",
                         isOver
-                            ? "border-indigo-400 text-indigo-400 bg-indigo-500/10 scale-105"
-                            : "border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-400"
+                            ? "border-indigo-400 text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 scale-105"
+                            : "border-gray-300 dark:border-slate-700 text-gray-400 dark:text-slate-500 hover:border-gray-400 dark:hover:border-slate-600 hover:text-gray-500 dark:hover:text-slate-400"
                     )}>
                         <UserPlus className="w-4 h-4" />
                         {isOver ? "Release to assign" : "Drop to assign"}
@@ -303,7 +304,7 @@ function DroppableProjectRow({
                     "text-xs shrink-0 h-8 w-8 rounded-full flex items-center justify-center font-bold transition-all",
                     assignedMembers.length > 0
                         ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/30 group-hover:scale-110"
-                        : "bg-slate-800 text-slate-400 border border-slate-700"
+                        : "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700"
                 )}
             >
                 {assignedMembers.length}
@@ -423,51 +424,17 @@ export function MemberMatrix() {
 
     // --- Premium Loading State ---
     if (isLoading) {
-        const loadingItems = [
-            { label: "Users", isLoading: isLoadingUsers || isFetchingUsers, count: usersCount },
-            { label: "Tasks", isLoading: isLoadingTasks || isFetchingTasks, count: tasksCount },
-            { label: "Projects", isLoading: loadingProjects, count: projects.length },
-        ];
-
         return (
-            <div className="h-[600px] w-full flex items-center justify-center p-4">
-                <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl shadow-2xl shadow-indigo-500/10 p-8 w-full max-w-sm backdrop-blur-sm">
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                            <Users className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="text-base font-bold text-white">Initializing Workspace</h3>
-                            <p className="text-sm text-slate-400">Gathering team data...</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        {loadingItems.map((item) => (
-                            <div key={item.label} className="flex items-center gap-3">
-                                {item.isLoading ? (
-                                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                                ) : (
-                                    <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
-                                        <span className="text-[8px] text-white">✓</span>
-                                    </div>
-                                )}
-                                <span className={cn(
-                                    "text-sm",
-                                    item.isLoading ? "text-slate-400" : "text-slate-200"
-                                )}>
-                                    {item.label}
-                                </span>
-                                {!item.isLoading && item.count > 0 && (
-                                    <Badge className="ml-auto bg-slate-700 text-slate-300 text-[10px]">
-                                        {item.count}
-                                    </Badge>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
+            <WorkspaceLoading
+                title="Initializing Workspace"
+                subtitle="Gathering team data..."
+                items={[
+                    { label: "Users", isLoading: isLoadingUsers || isFetchingUsers, count: usersCount },
+                    { label: "Tasks", isLoading: isLoadingTasks || isFetchingTasks, count: tasksCount },
+                    { label: "Projects", isLoading: loadingProjects, count: projects.length },
+                ]}
+                icon={<Users className="w-6 h-6 text-white" />}
+            />
         );
     }
 
@@ -482,29 +449,29 @@ export function MemberMatrix() {
         >
             <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[600px] overflow-hidden">
                 {/* --- Premium Sidebar: Team Members --- */}
-                <Card className="w-[340px] shrink-0 h-full flex flex-col border-0 shadow-2xl shadow-indigo-500/5 rounded-2xl overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950">
+                <Card className="w-[340px] shrink-0 h-full flex flex-col border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/5 rounded-2xl overflow-hidden bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950">
                     {/* Glassmorphic Header */}
-                    <div className="relative p-4 border-b border-slate-800/50 space-y-4 shrink-0 bg-gradient-to-r from-indigo-500/10 via-violet-500/5 to-transparent">
+                    <div className="relative p-4 border-b border-gray-100 dark:border-slate-800/50 space-y-4 shrink-0 bg-gradient-to-r from-indigo-50 dark:from-indigo-500/10 via-violet-50/50 dark:via-violet-500/5 to-transparent">
                         {/* Subtle animated background */}
-                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/10 via-transparent to-transparent" />
+                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/50 dark:from-indigo-500/10 via-transparent to-transparent" />
 
                         <div className="relative flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
                                     <Users className="w-4 h-4 text-white" />
                                 </div>
-                                <h3 className="font-bold text-base text-white">Team Roster</h3>
+                                <h3 className="font-bold text-base text-gray-900 dark:text-white">Team Roster</h3>
                             </div>
-                            <Badge className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold">
+                            <Badge className="bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 text-xs font-bold">
                                 {filteredMembers.length}
                             </Badge>
                         </div>
 
                         <div className="relative">
-                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-slate-500" />
                             <Input
                                 placeholder="Filter members..."
-                                className="h-10 pl-10 text-sm bg-slate-800/50 border-slate-700/50 text-slate-200 placeholder:text-slate-500 focus:border-indigo-500/50 focus:ring-indigo-500/20 rounded-xl"
+                                className="h-10 pl-10 text-sm bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/50 text-gray-700 dark:text-slate-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-indigo-300 dark:focus:border-indigo-500/50 focus:ring-indigo-200 dark:focus:ring-indigo-500/20 rounded-xl"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
@@ -517,7 +484,7 @@ export function MemberMatrix() {
                                 <SortableMember key={member.id} member={member} index={index} />
                             ))}
                             {filteredMembers.length === 0 && (
-                                <div className="text-center py-12 text-slate-500">
+                                <div className="text-center py-12 text-gray-400 dark:text-slate-500">
                                     <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
                                     <p className="text-sm font-medium">No members found</p>
                                     <p className="text-xs mt-1">Try a different search term</p>
@@ -533,16 +500,16 @@ export function MemberMatrix() {
                         <div className="pr-4 pb-10 space-y-6">
                             {/* Active Projects Section */}
                             {activeProjects.length > 0 && (
-                                <Card className="overflow-hidden border-0 shadow-2xl shadow-indigo-500/10 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950">
-                                    <CardHeader className="py-4 px-6 bg-gradient-to-r from-indigo-500/10 via-violet-500/5 to-transparent border-b border-slate-800/50">
+                                <Card className="overflow-hidden border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/10 rounded-2xl bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950">
+                                    <CardHeader className="py-4 px-6 bg-gradient-to-r from-indigo-50 dark:from-indigo-500/10 via-violet-50/50 dark:via-violet-500/5 to-transparent border-b border-gray-100 dark:border-slate-800/50">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
                                                     <Users className="w-5 h-5 text-white" />
                                                 </div>
                                                 <div>
-                                                    <CardTitle className="text-base font-bold text-white">Active Projects</CardTitle>
-                                                    <CardDescription className="text-xs text-slate-400">Projects with team members assigned</CardDescription>
+                                                    <CardTitle className="text-base font-bold text-gray-900 dark:text-white">Active Projects</CardTitle>
+                                                    <CardDescription className="text-xs text-gray-500 dark:text-slate-400">Projects with team members assigned</CardDescription>
                                                 </div>
                                             </div>
                                             <Badge className="bg-indigo-500 text-white font-bold px-3 py-1 shadow-lg shadow-indigo-500/30">
@@ -567,19 +534,19 @@ export function MemberMatrix() {
 
                             {/* Available Projects Section */}
                             {availableProjects.length > 0 && (
-                                <Card className="overflow-hidden border-0 shadow-xl rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80">
-                                    <CardHeader className="py-4 px-6 bg-slate-800/30 border-b border-slate-800/50">
+                                <Card className="overflow-hidden border border-gray-200 dark:border-0 shadow-lg dark:shadow-xl rounded-2xl bg-white dark:bg-gradient-to-b dark:from-slate-900/80 dark:to-slate-950/80">
+                                    <CardHeader className="py-4 px-6 bg-gray-50 dark:bg-slate-800/30 border-b border-gray-100 dark:border-slate-800/50">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center">
-                                                    <Briefcase className="w-5 h-5 text-slate-400" />
+                                                <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex items-center justify-center">
+                                                    <Briefcase className="w-5 h-5 text-gray-400 dark:text-slate-400" />
                                                 </div>
                                                 <div>
-                                                    <CardTitle className="text-base font-semibold text-slate-300">Available Projects</CardTitle>
-                                                    <CardDescription className="text-xs text-slate-500">Drop team members to assign</CardDescription>
+                                                    <CardTitle className="text-base font-semibold text-gray-700 dark:text-slate-300">Available Projects</CardTitle>
+                                                    <CardDescription className="text-xs text-gray-400 dark:text-slate-500">Drop team members to assign</CardDescription>
                                                 </div>
                                             </div>
-                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 border border-slate-700 font-bold">
+                                            <Badge variant="secondary" className="bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 font-bold">
                                                 {availableProjects.length}
                                             </Badge>
                                         </div>

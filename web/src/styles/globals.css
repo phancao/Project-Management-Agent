@@ -255,3 +255,159 @@ textarea {
 button {
   cursor: pointer;
 }
+
+/* Dynamic accent color variables (set by ThemeProvider) */
+:root {
+  --accent-primary: #1E398D;
+  --accent-gradient: #14B795;
+  --accent-light: #5a7fd9;
+  --accent-primary-rgb: 30, 57, 141;
+}
+
+/* Override Tailwind indigo colors with brand accent */
+.bg-indigo-50 {
+  background-color: rgba(var(--accent-primary-rgb), 0.05) !important;
+}
+
+.bg-indigo-100 {
+  background-color: rgba(var(--accent-primary-rgb), 0.1) !important;
+}
+
+.bg-indigo-200 {
+  background-color: rgba(var(--accent-primary-rgb), 0.2) !important;
+}
+
+.bg-indigo-500 {
+  background-color: var(--accent-primary) !important;
+}
+
+.bg-indigo-600 {
+  background-color: var(--accent-primary) !important;
+}
+
+.bg-indigo-900\/20 {
+  background-color: rgba(var(--accent-primary-rgb), 0.2) !important;
+}
+
+.bg-indigo-900\/30 {
+  background-color: rgba(var(--accent-primary-rgb), 0.3) !important;
+}
+
+.bg-indigo-500\/10 {
+  background-color: rgba(var(--accent-primary-rgb), 0.1) !important;
+}
+
+.bg-indigo-500\/20 {
+  background-color: rgba(var(--accent-primary-rgb), 0.2) !important;
+}
+
+.text-indigo-400 {
+  color: var(--accent-light) !important;
+}
+
+.text-indigo-500 {
+  color: var(--accent-primary) !important;
+}
+
+.text-indigo-600 {
+  color: var(--accent-primary) !important;
+}
+
+.text-indigo-700 {
+  color: var(--accent-primary) !important;
+}
+
+.border-indigo-200 {
+  border-color: rgba(var(--accent-primary-rgb), 0.2) !important;
+}
+
+.border-indigo-400 {
+  border-color: rgba(var(--accent-primary-rgb), 0.6) !important;
+}
+
+.border-indigo-500\/30 {
+  border-color: rgba(var(--accent-primary-rgb), 0.3) !important;
+}
+
+.ring-indigo-400 {
+  --tw-ring-color: rgba(var(--accent-primary-rgb), 0.6) !important;
+}
+
+.ring-indigo-500 {
+  --tw-ring-color: var(--accent-primary) !important;
+}
+
+.ring-indigo-500\/50 {
+  --tw-ring-color: rgba(var(--accent-primary-rgb), 0.5) !important;
+}
+
+.shadow-indigo-100 {
+  --tw-shadow-color: rgba(var(--accent-primary-rgb), 0.1) !important;
+}
+
+.shadow-indigo-500\/10 {
+  --tw-shadow-color: rgba(var(--accent-primary-rgb), 0.1) !important;
+}
+
+.shadow-indigo-500\/30 {
+  --tw-shadow-color: rgba(var(--accent-primary-rgb), 0.3) !important;
+}
+
+/* Hover state overrides */
+.hover\:bg-indigo-50:hover {
+  background-color: rgba(var(--accent-primary-rgb), 0.05) !important;
+}
+
+.hover\:bg-indigo-100:hover {
+  background-color: rgba(var(--accent-primary-rgb), 0.1) !important;
+}
+
+.hover\:bg-indigo-500\/5:hover {
+  background-color: rgba(var(--accent-primary-rgb), 0.05) !important;
+}
+
+.hover\:bg-indigo-500\/10:hover {
+  background-color: rgba(var(--accent-primary-rgb), 0.1) !important;
+}
+
+.hover\:bg-indigo-900\/30:hover {
+  background-color: rgba(var(--accent-primary-rgb), 0.3) !important;
+}
+
+.hover\:text-indigo-400:hover {
+  color: var(--accent-light) !important;
+}
+
+.hover\:text-indigo-500:hover {
+  color: var(--accent-primary) !important;
+}
+
+.hover\:text-indigo-600:hover {
+  color: var(--accent-primary) !important;
+}
+
+.hover\:border-indigo-300:hover {
+  border-color: rgba(var(--accent-primary-rgb), 0.4) !important;
+}
+
+.hover\:border-indigo-500\/50:hover {
+  border-color: rgba(var(--accent-primary-rgb), 0.5) !important;
+}
+
+/* Group hover overrides */
+.group-hover\:text-indigo-400:hover {
+  color: var(--accent-light) !important;
+}
+
+.group-hover\:text-indigo-500:hover {
+  color: var(--accent-primary) !important;
+}
+
+.group-hover\:text-indigo-600:hover {
+  color: var(--accent-primary) !important;
+}
+
+/* Focus state overrides */
+.focus\:ring-indigo-500:focus {
+  --tw-ring-color: var(--accent-primary) !important;
+}

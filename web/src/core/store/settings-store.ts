@@ -121,10 +121,20 @@ export const loadSettings = () => {
     } else {
       for (const key in DEFAULT_SETTINGS.appearance) {
         if (!(key in settings.appearance)) {
-          settings.appearance[key as keyof SettingsState["appearance"]] =
-            DEFAULT_SETTINGS.appearance[key as keyof SettingsState["appearance"]];
+          settings.appearance[key as keyof ThemeAppearance] =
+            DEFAULT_SETTINGS.appearance[key as keyof ThemeAppearance];
         }
       }
+    }
+
+    // Migrate to new lightAppearance/darkAppearance structure
+    if (!settings.lightAppearance) {
+      // Use existing appearance as light theme settings
+      settings.lightAppearance = { ...settings.appearance };
+    }
+    if (!settings.darkAppearance) {
+      // Use default dark theme settings
+      settings.darkAppearance = { ...DEFAULT_DARK_APPEARANCE };
     }
 
     try {

@@ -84,14 +84,7 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
     const hoverColor = appearance?.hoverColor || 'teal';
     const backgroundColor = appearance?.backgroundColor || 'cream';
 
-    // DEBUG: Log what we're setting
-    console.log('[THEME-DEBUG] useEffect triggered:', {
-      isDarkMode,
-      backgroundColor,
-      darkAppearance,
-      lightAppearance,
-      appearance
-    });
+
 
     const colors = ACCENT_HEX[accentColor] || ACCENT_HEX.darkBlue;
     const hoverColors = ACCENT_HEX[hoverColor] || ACCENT_HEX.teal;
@@ -119,12 +112,6 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--hover-light', hoverColors.light);
 
     // Set background color CSS properties (for both light and dark modes now)
-    console.log('[THEME-DEBUG] Setting background colors:', {
-      isDarkMode,
-      backgroundColor,
-      bgColors,
-      bodyBgWillBe: bgColors.appBg
-    });
     root.style.setProperty('--background', bgColors.bg);
     root.style.setProperty('--card', bgColors.card);
     root.style.setProperty('--app-background', bgColors.appBg);
@@ -134,7 +121,6 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
     // Force body background update
     if (document.body) {
       document.body.style.backgroundColor = bgColors.appBg;
-      console.log('[THEME-DEBUG] Body background set to:', bgColors.appBg);
     }
   }, [lightAppearance, darkAppearance, legacyAppearance]);
 

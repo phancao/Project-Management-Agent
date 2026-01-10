@@ -3,11 +3,12 @@
 
 "use client";
 
-import { Palette, Layers, Sun, Moon, Monitor, PaintBucket, MousePointerClick } from "lucide-react";
+import { Palette, Layers, Sun, Moon, Monitor, PaintBucket, MousePointerClick, AlertCircle } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "~/lib/utils";
-import type { SettingsState, AccentColor, CardStyle, BackgroundColor, HoverColor } from "~/core/store";
+import type { SettingsState, AccentColor, CardStyle, BackgroundColor, HoverColor, ThemeAppearance } from "~/core/store";
 import type { Tab } from "./types";
+import { useEffect, useState } from "react";
 
 // Brand colors with hex values
 const ACCENT_COLORS: { id: AccentColor; name: string; hex: string; secondary?: string }[] = [
@@ -44,38 +45,78 @@ const BACKGROUND_COLORS: { id: BackgroundColor; name: string; hex: string }[] = 
 ];
 
 export const AppearanceTab: Tab = ({ settings, onChange }) => {
-    const accentColor = settings.appearance?.accentColor || 'darkBlue';
-    const hoverColor = settings.appearance?.hoverColor || 'teal';
-    const cardStyle = settings.appearance?.cardStyle || 'solid';
-    const backgroundColor = settings.appearance?.backgroundColor || 'cream';
-    const { theme = 'system', setTheme } = useTheme();
+    const { theme = 'system', setTheme, resolvedTheme } = useTheme();
+    const [mounted, setMounted] = useState(false);
+
+    // Check if we're in dark mode (considering 'system' which resolves to actual theme)
+    const isDarkMode = resolvedTheme === 'dark';
+
+    // Get the appropriate appearance settings based on current theme
+    const currentAppearance: ThemeAppearance = isDarkMode
+        ? (settings.darkAppearance || settings.appearance)
+        : (settings.lightAppearance || settings.appearance);
+
+    const accentColor = currentAppearance?.accentColor || 'darkBlue';
+    const hoverColor = currentAppearance?.hoverColor || 'teal';
+    const cardStyle = currentAppearance?.cardStyle || 'solid';
+    const backgroundColor = currentAppearance?.backgroundColor || 'cream';
+
+    // Handle hydration
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const handleAccentChange = (color: AccentColor) => {
-        onChange({
-            appearance: {
-                ...settings.appearance,
-                loadingTheme: color, // Keep loading theme in sync with accent
-                accentColor: color,
-            },
-        });
+        const updatedAppearance: ThemeAppearance = {
+            ...currentAppearance,
+            loadingTheme: color,
+            accentColor: color,
+        };
+
+        if (isDarkMode) {
+            onChange({
+                darkAppearance: updatedAppearance,
+                // Keep legacy appearance in sync with light theme
+                appearance: settings.lightAppearance || settings.appearance,
+            });
+        } else {
+            onChange({
+                lightAppearance: updatedAppearance,
+                appearance: updatedAppearance, // Keep legacy in sync
+            });
+        }
     };
 
     const handleHoverChange = (color: HoverColor) => {
-        onChange({
-            appearance: {
-                ...settings.appearance,
-                hoverColor: color,
-            },
-        });
+        const updatedAppearance: ThemeAppearance = {
+            ...currentAppearance,
+            hoverColor: color,
+        };
+
+        if (isDarkMode) {
+            onChange({ darkAppearance: updatedAppearance });
+        } else {
+            onChange({
+                lightAppearance: updatedAppearance,
+                appearance: updatedAppearance,
+            });
+        }
     };
 
     const handleCardStyleChange = (style: CardStyle) => {
-        onChange({
-            appearance: {
-                ...settings.appearance,
-                cardStyle: style,
-            },
-        });
+        const updatedAppearance: ThemeAppearance = {
+            ...currentAppearance,
+            cardStyle: style,
+        };
+
+        if (isDarkMode) {
+            onChange({ darkAppearance: updatedAppearance });
+        } else {
+            onChange({
+                lightAppearance: updatedAppearance,
+                appearance: updatedAppearance,
+            });
+        }
     };
 
     const handleThemeModeChange = (mode: string) => {
@@ -83,12 +124,19 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
     };
 
     const handleBackgroundChange = (bg: BackgroundColor) => {
-        onChange({
-            appearance: {
-                ...settings.appearance,
-                backgroundColor: bg,
-            },
-        });
+        const updatedAppearance: ThemeAppearance = {
+            ...currentAppearance,
+            backgroundColor: bg,
+        };
+
+        if (isDarkMode) {
+            onChange({ darkAppearance: updatedAppearance });
+        } else {
+            onChange({
+                lightAppearance: updatedAppearance,
+                appearance: updatedAppearance,
+            });
+        }
     };
 
     const selectedColor = ACCENT_COLORS.find(c => c.id === accentColor);
@@ -100,6 +148,17 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                 <p className="text-sm text-muted-foreground">
                     Customize the look and feel of the application.
                 </p>
+                {mounted && (
+                    <div className={cn(
+                        "mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium",
+                        isDarkMode
+                            ? "bg-gray-800 text-gray-200 border border-gray-700"
+                            : "bg-amber-50 text-amber-700 border border-amber-200"
+                    )}>
+                        {isDarkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                        Configuring {isDarkMode ? 'Dark' : 'Light'} Theme
+                    </div>
+                )}
             </div>
 
             {/* Theme Mode */}
@@ -337,7 +396,7 @@ export const AppearanceTab: Tab = ({ settings, onChange }) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

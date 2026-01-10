@@ -44,18 +44,33 @@ function hexToRgb(hex: string): string {
 
 /**
  * AccentColorProvider injects dynamic CSS variables based on the selected settings.
- * This allows the entire UI to update when the user changes settings in Appearance.
+ * Uses theme-specific settings (lightAppearance/darkAppearance) for each mode.
  */
 function AccentColorProvider({ children }: { children: React.ReactNode }) {
-  const accentColor = useSettingsStore((state) => state.appearance?.accentColor || 'darkBlue');
-  const hoverColor = useSettingsStore((state) => state.appearance?.hoverColor || 'teal');
-  const backgroundColor = useSettingsStore((state) => state.appearance?.backgroundColor || 'cream');
+  // Get theme-specific appearance settings
+  const lightAppearance = useSettingsStore((state) => state.lightAppearance);
+  const darkAppearance = useSettingsStore((state) => state.darkAppearance);
+  // Legacy fallback
+  const legacyAppearance = useSettingsStore((state) => state.appearance);
 
   useEffect(() => {
+    const root = document.documentElement;
+
+    // Determine current theme
+    const isDarkMode = root.classList.contains('dark');
+
+    // Select appropriate appearance settings based on theme
+    const appearance = isDarkMode
+      ? (darkAppearance || legacyAppearance)
+      : (lightAppearance || legacyAppearance);
+
+    const accentColor = appearance?.accentColor || 'darkBlue';
+    const hoverColor = appearance?.hoverColor || 'teal';
+    const backgroundColor = appearance?.backgroundColor || 'cream';
+
     const colors = ACCENT_HEX[accentColor] || ACCENT_HEX.darkBlue;
     const hoverColors = ACCENT_HEX[hoverColor] || ACCENT_HEX.teal;
     const bgColors = BACKGROUND_HEX[backgroundColor] || BACKGROUND_HEX.cream;
-    const root = document.documentElement;
 
     // Set accent color CSS properties
     root.style.setProperty('--accent-primary', colors.primary);
@@ -76,13 +91,70 @@ function AccentColorProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--hover-light', hoverColors.light);
 
     // Set background color CSS properties (only in light mode)
-    const isDarkMode = root.classList.contains('dark');
     if (!isDarkMode) {
       root.style.setProperty('--background', bgColors.bg);
       root.style.setProperty('--card', bgColors.card);
       root.style.setProperty('--app-background', bgColors.appBg);
     }
-  }, [accentColor, hoverColor, backgroundColor]);
+  }, [lightAppearance, darkAppearance, legacyAppearance]);
+
+  // Re-apply when theme class changes
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          // Trigger re-render by dispatching a custom event
+          window.dispatchEvent(new CustomEvent('theme-changed'));
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, { attributes: true });
+
+    const handleThemeChange = () => {
+      // Force re-apply CSS variables when theme changes
+      const root = document.documentElement;
+      const isDarkMode = root.classList.contains('dark');
+
+      const appearance = isDarkMode
+        ? (darkAppearance || legacyAppearance)
+        : (lightAppearance || legacyAppearance);
+
+      const accentColor = appearance?.accentColor || 'darkBlue';
+      const hoverColor = appearance?.hoverColor || 'teal';
+      const backgroundColor = appearance?.backgroundColor || 'cream';
+
+      const colors = ACCENT_HEX[accentColor] || ACCENT_HEX.darkBlue;
+      const hoverColors = ACCENT_HEX[hoverColor] || ACCENT_HEX.teal;
+      const bgColors = BACKGROUND_HEX[backgroundColor] || BACKGROUND_HEX.cream;
+
+      root.style.setProperty('--accent-primary', colors.primary);
+      root.style.setProperty('--accent-gradient', colors.gradient);
+      root.style.setProperty('--accent-light', colors.light);
+      root.style.setProperty('--accent-primary-rgb', hexToRgb(colors.primary));
+      root.style.setProperty('--brand', colors.primary);
+      root.style.setProperty('--primary', colors.primary);
+      root.style.setProperty('--ring', colors.primary);
+      root.style.setProperty('--sidebar-primary', colors.primary);
+      root.style.setProperty('--sidebar-ring', colors.primary);
+      root.style.setProperty('--hover', hoverColors.primary);
+      root.style.setProperty('--hover-rgb', hexToRgb(hoverColors.primary));
+      root.style.setProperty('--hover-light', hoverColors.light);
+
+      if (!isDarkMode) {
+        root.style.setProperty('--background', bgColors.bg);
+        root.style.setProperty('--card', bgColors.card);
+        root.style.setProperty('--app-background', bgColors.appBg);
+      }
+    };
+
+    window.addEventListener('theme-changed', handleThemeChange);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('theme-changed', handleThemeChange);
+    };
+  }, [lightAppearance, darkAppearance, legacyAppearance]);
 
   return <>{children}</>;
 }

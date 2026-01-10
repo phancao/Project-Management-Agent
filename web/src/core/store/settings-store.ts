@@ -14,6 +14,31 @@ export type HoverColor = LoadingTheme; // Hover color uses same palette
 export type CardStyle = 'solid' | 'glassmorphic';
 export type BackgroundColor = 'white' | 'cream' | 'warmGray' | 'coolGray' | 'slate' | 'lavender' | 'mint' | 'rose' | 'sky' | 'sand';
 
+// Theme-specific appearance settings
+export type ThemeAppearance = {
+  loadingTheme: LoadingTheme;
+  accentColor: AccentColor;
+  hoverColor: HoverColor;
+  cardStyle: CardStyle;
+  backgroundColor: BackgroundColor;
+};
+
+const DEFAULT_LIGHT_APPEARANCE: ThemeAppearance = {
+  loadingTheme: 'darkBlue',
+  accentColor: 'darkBlue',
+  hoverColor: 'teal',
+  cardStyle: 'solid',
+  backgroundColor: 'cream',
+};
+
+const DEFAULT_DARK_APPEARANCE: ThemeAppearance = {
+  loadingTheme: 'teal',
+  accentColor: 'teal',
+  hoverColor: 'lightBlue',
+  cardStyle: 'solid',
+  backgroundColor: 'white', // Not used in dark mode, but keep for consistency
+};
+
 const DEFAULT_SETTINGS: SettingsState = {
   general: {
     autoAcceptedPlan: false,
@@ -29,13 +54,11 @@ const DEFAULT_SETTINGS: SettingsState = {
     modelName: undefined,
     searchProvider: undefined, // Search provider ID (e.g., "duckduckgo", "tavily")
   },
-  appearance: {
-    loadingTheme: 'darkBlue',
-    accentColor: 'darkBlue',
-    hoverColor: 'teal',
-    cardStyle: 'solid' as CardStyle,
-    backgroundColor: 'cream' as BackgroundColor, // Less bright default
-  },
+  // Legacy appearance field for backwards compatibility (will be migrated)
+  appearance: DEFAULT_LIGHT_APPEARANCE,
+  // New separate theme appearances
+  lightAppearance: DEFAULT_LIGHT_APPEARANCE,
+  darkAppearance: DEFAULT_DARK_APPEARANCE,
   mcp: {
     servers: [],
   },
@@ -56,13 +79,11 @@ export type SettingsState = {
     modelName?: string; // Model name (e.g., "gpt-4o", "claude-3-5-sonnet-20241022")
     searchProvider?: string; // Search provider ID (e.g., "duckduckgo", "tavily", "brave_search")
   };
-  appearance: {
-    loadingTheme: LoadingTheme;
-    accentColor: AccentColor;
-    hoverColor: HoverColor;
-    cardStyle: CardStyle;
-    backgroundColor: BackgroundColor;
-  };
+  // Legacy appearance (for backwards compatibility)
+  appearance: ThemeAppearance;
+  // Separate theme appearances
+  lightAppearance: ThemeAppearance;
+  darkAppearance: ThemeAppearance;
   mcp: {
     servers: MCPServerMetadata[];
   };

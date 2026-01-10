@@ -11,6 +11,8 @@ export interface LoadingItem {
     label: string;
     isLoading: boolean;
     count?: number;
+    /** Optional: if true, this item is done loading. If false, it's waiting to start. If not provided, derives from isLoading. */
+    isDone?: boolean;
 }
 
 export interface WorkspaceLoadingProps {
@@ -67,28 +69,38 @@ export function WorkspaceLoading({
 
             {/* Loading Items */}
             <div className="space-y-3">
-                {items.map((item) => (
-                    <div key={item.label} className="flex items-center gap-3">
-                        {item.isLoading ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500 dark:text-indigo-400" />
-                        ) : (
-                            <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
-                                <span className="text-[8px] text-white">✓</span>
-                            </div>
-                        )}
-                        <span className={cn(
-                            "text-sm",
-                            item.isLoading ? "text-gray-500 dark:text-slate-400" : "text-gray-700 dark:text-slate-200"
-                        )}>
-                            {item.label}
-                        </span>
-                        {!item.isLoading && item.count !== undefined && item.count > 0 && (
-                            <Badge className="ml-auto bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 text-[10px] hover:bg-gray-100 dark:hover:bg-slate-700">
-                                {item.count}
-                            </Badge>
-                        )}
-                    </div>
-                ))}
+                {items.map((item) => {
+                    // Determine if item is done: either explicit isDone, or !isLoading with a count
+                    const isDone = item.isDone !== undefined ? item.isDone : (!item.isLoading && (item.count !== undefined && item.count > 0));
+
+                    return (
+                        <div key={item.label} className="flex items-center gap-3">
+                            {item.isLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-indigo-500 dark:text-indigo-400" />
+                            ) : isDone ? (
+                                <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                                    <span className="text-[8px] text-white">✓</span>
+                                </div>
+                            ) : (
+                                // Pending state - empty circle
+                                <div className="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-slate-600" />
+                            )}
+                            <span className={cn(
+                                "text-sm",
+                                item.isLoading ? "text-gray-500 dark:text-slate-400" :
+                                    isDone ? "text-gray-700 dark:text-slate-200" :
+                                        "text-gray-400 dark:text-slate-500"
+                            )}>
+                                {item.label}
+                            </span>
+                            {isDone && item.count !== undefined && item.count > 0 && (
+                                <Badge className="ml-auto bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 text-[10px] hover:bg-gray-100 dark:hover:bg-slate-700">
+                                    {item.count}
+                                </Badge>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

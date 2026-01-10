@@ -122,44 +122,45 @@
 
 :root {
   --radius: 0.625rem;
-  --app-background: #fffaf5;
-  --background: oklch(1 0 0);
-  --foreground: rgba(0, 0, 0, 0.72);
-  --card: oklch(1 0 0);
-  --card-foreground: var(--foreground);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: #C6007E;
-  /* Pantone 233 CP */
-  --chart-2: #009CDC;
-  /* Pantone 2382 CP */
-  --chart-3: #DA291C;
-  /* Pantone 485 CP */
-  --chart-4: #00A98F;
-  /* Pantone 2400 CP */
-  --chart-5: #FE5000;
-  /* Pantone Orange 021 CP */
+  --app-background: #f8fafc;
+  --background: #ffffff;
+  --foreground: #1e293b;
+  --card: #ffffff;
+  --card-foreground: #1e293b;
+  --popover: #ffffff;
+  --popover-foreground: #1e293b;
+  /* Primary uses brand dark blue */
+  --primary: #1E398D;
+  --primary-foreground: #ffffff;
+  /* Secondary uses lighter teal tint */
+  --secondary: #e8f5f2;
+  --secondary-foreground: #0f766e;
+  /* Muted uses soft gray-blue */
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  /* Accent uses brand teal */
+  --accent: #14B795;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  /* Borders use visible gray */
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #1E398D;
+  /* Charts use brand colors */
+  --chart-1: #1E398D;
+  --chart-2: #14B795;
+  --chart-3: #F47920;
+  --chart-4: #1C9AD6;
+  --chart-5: #8DC63F;
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #1e293b;
+  --sidebar-primary: #1E398D;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8f5f2;
+  --sidebar-accent-foreground: #1E398D;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #1E398D;
   --brand: #1E398D;
   /* Brand Dark Blue (Xanh Đậm) */
   --brand-teal: #14B795;
@@ -174,18 +175,18 @@
   /* Brand Pink (Hồng) */
   --brand-red: #ED1C29;
   /* Brand Red (Đỏ) - for errors */
-  --brand-gray: #B1B3B3;
-  /* Neutral Gray */
+  --brand-gray: #94a3b8;
+  /* Neutral Gray - darker for better contrast */
 
   --novel-highlight-default: #ffffff;
-  --novel-highlight-purple: #f6f3f8;
-  --novel-highlight-red: #fdebeb;
-  --novel-highlight-yellow: #fbf4a2;
-  --novel-highlight-blue: #c1ecf9;
-  --novel-highlight-green: #acf79f;
-  --novel-highlight-orange: #faebdd;
-  --novel-highlight-pink: #faf1f5;
-  --novel-highlight-gray: #f1f1ef;
+  --novel-highlight-purple: #f3e8ff;
+  --novel-highlight-red: #fee2e2;
+  --novel-highlight-yellow: #fef9c3;
+  --novel-highlight-blue: #dbeafe;
+  --novel-highlight-green: #dcfce7;
+  --novel-highlight-orange: #ffedd5;
+  --novel-highlight-pink: #fce7f3;
+  --novel-highlight-gray: #f1f5f9;
 }
 
 .dark {

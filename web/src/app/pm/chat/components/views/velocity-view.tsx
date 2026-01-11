@@ -6,6 +6,7 @@
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Card } from "~/components/ui/card";
+import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import { useVelocityChart } from "~/core/api/hooks/pm/use-analytics";
 import { useSearchParams } from "next/navigation";
 
@@ -34,22 +35,13 @@ export function VelocityView() {
 
   if (loading) {
     return (
-      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
-        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-xs">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center text-lg">
-              ⚡
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">Loading Velocity</h3>
-              <p className="text-xs text-muted-foreground">Calculating sprint data...</p>
-            </div>
-          </div>
-          <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-            <div className="h-full w-1/2 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full animate-pulse" />
-          </div>
-        </div>
-      </div>
+      <WorkspaceLoading
+        title="Loading Velocity"
+        subtitle="Calculating sprint data..."
+        items={[
+          { label: "Sprint Data", isLoading: true },
+        ]}
+      />
     );
   }
 

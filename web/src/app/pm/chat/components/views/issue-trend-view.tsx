@@ -6,6 +6,7 @@
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Card } from "~/components/ui/card";
+import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import { useIssueTrendChart } from "~/core/api/hooks/pm/use-analytics";
 import { useSearchParams } from "next/navigation";
 
@@ -34,22 +35,13 @@ export function IssueTrendView() {
 
   if (loading) {
     return (
-      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
-        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-xs">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center text-lg">
-              📊
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">Loading Issue Trend</h3>
-              <p className="text-xs text-muted-foreground">Analyzing trends...</p>
-            </div>
-          </div>
-          <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-            <div className="h-full w-1/2 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full animate-pulse" />
-          </div>
-        </div>
-      </div>
+      <WorkspaceLoading
+        title="Loading Issue Trend"
+        subtitle="Analyzing trends..."
+        items={[
+          { label: "Trend Data", isLoading: true },
+        ]}
+      />
     );
   }
 
@@ -108,8 +100,8 @@ export function IssueTrendView() {
         </div>
         {netChange !== 0 && (
           <div className={`px-3 py-1 rounded-full text-sm font-medium ${netChange > 0
-              ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-              : "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+            ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+            : "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
             }`}>
             {netChange > 0 ? "⚠️" : "✅"} {netChange > 0 ? "+" : ""}{netChange} Net Change
           </div>

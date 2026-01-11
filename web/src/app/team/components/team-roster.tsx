@@ -174,10 +174,11 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                                 key={member.id}
                                 className={cn(
                                     "group relative flex items-center gap-4 p-4 rounded-xl transition-all duration-300",
-                                    "bg-card",
-                                    "border border-gray-200 dark:border-slate-700/50",
-                                    "hover:border-indigo-300 dark:hover:border-indigo-500/50",
-                                    "hover:shadow-lg hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10"
+                                    "bg-card shadow-lg dark:shadow-xl dark:shadow-indigo-500/5",
+                                    "border border-gray-200/80 dark:border-slate-700/30",
+                                    "hover:border-indigo-300/80 dark:hover:border-indigo-500/40",
+                                    "hover:shadow-xl hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10",
+                                    "hover:scale-[1.01]"
                                 )}
                             >
                                 <MemberClickable member={member} index={index} />
@@ -248,8 +249,10 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                                             key={user.id}
                                             className={cn(
                                                 "group flex items-center gap-3 p-3 rounded-xl transition-all duration-300",
-                                                "border-2 border-dashed border-gray-200 dark:border-slate-700/50",
-                                                "hover:border-indigo-300 dark:hover:border-indigo-500/50 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5"
+                                                "bg-card/50 shadow-md dark:shadow-lg dark:shadow-indigo-500/5",
+                                                "border border-dashed border-gray-200/80 dark:border-slate-700/30",
+                                                "hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:border-solid",
+                                                "hover:bg-card hover:shadow-lg hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10"
                                             )}
                                         >
                                             <UserClickable user={user} index={index} />

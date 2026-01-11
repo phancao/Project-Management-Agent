@@ -198,7 +198,7 @@ export function EfficiencyPanelView() {
     return (
         <div className="h-full space-y-4">
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold tracking-tight">Efficiency Metrics</h2>
+                <h2 className="text-lg font-semibold tracking-tight">Efficiency (EE)</h2>
             </div>
             <EfficiencyDashboard
                 members={projectMembers}

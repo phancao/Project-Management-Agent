@@ -17,6 +17,7 @@ import { type PMUser } from '~/core/api/pm/users';
 import { type PMTask } from '~/core/api/pm/tasks';
 import { type PMTimeEntry } from '~/core/api/pm/time-entries';
 import { EfficiencyGantt } from './efficiency-gantt';
+import { useCardGlow, useStatCardGlow } from '~/core/hooks/use-theme-colors';
 
 import { MemberDurationManager, type MemberPeriod, type Holiday } from './member-duration-manager';
 
@@ -64,6 +65,10 @@ export function EfficiencyDashboard({
     onHolidaysChange,
     title = "Efficiency Dashboard"
 }: EfficiencyDashboardProps) {
+
+    // Get configurable glow classes from theme settings
+    const cardGlow = useCardGlow();
+    const statCardGlow = useStatCardGlow();
 
     // View Mode State
     const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
@@ -245,7 +250,7 @@ export function EfficiencyDashboard({
         <div className="space-y-6">
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card>
+                <Card className={statCardGlow.className}>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-gray-500">EE (Efficiency)</CardTitle>
                     </CardHeader>
@@ -260,7 +265,7 @@ export function EfficiencyDashboard({
                         <p className="text-xs text-gray-400 mt-1">Target: &gt;90%</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className={statCardGlow.className}>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-gray-500">Billable FTE</CardTitle>
                     </CardHeader>
@@ -271,7 +276,7 @@ export function EfficiencyDashboard({
                         <p className="text-xs text-gray-400 mt-1">Actual Man-Months (Equiv.)</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className={statCardGlow.className}>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-gray-500">Total Headcount</CardTitle>
                     </CardHeader>
@@ -282,7 +287,7 @@ export function EfficiencyDashboard({
                         <p className="text-xs text-gray-400 mt-1">Active Members</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className={statCardGlow.className}>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-gray-500">Un-billable / Bench</CardTitle>
                     </CardHeader>
@@ -296,7 +301,7 @@ export function EfficiencyDashboard({
             </div>
 
             {/* Activity Type Distribution */}
-            <Card>
+            <Card className={cardGlow.className}>
                 <CardHeader>
                     <CardTitle className="text-base">Hours by Activity Type</CardTitle>
                     <CardDescription>Distribution of logged hours across activity types</CardDescription>
@@ -378,7 +383,7 @@ export function EfficiencyDashboard({
             </Card>
 
             {/* Gantt Chart Section with Control Bar */}
-            <Card>
+            <Card className={cardGlow.className}>
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div>
@@ -457,7 +462,7 @@ export function EfficiencyDashboard({
             </Card>
             {/* Member Durations */}
             {onActivePeriodsChange && members.length > 0 && (
-                <Card>
+                <Card className={cardGlow.className}>
                     <CardHeader>
                         <CardTitle className="text-base">Member Active Periods</CardTitle>
                         <CardDescription>Specify when members joined or left the project to refine capacity calculations.</CardDescription>

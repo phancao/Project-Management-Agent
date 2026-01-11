@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { useTheme } from "next-themes";
+import { useCardGlow } from "~/core/hooks/use-theme-colors";
 
 interface CapacityChartProps {
     data: Array<{
@@ -33,6 +34,7 @@ interface CapacityChartProps {
 const CapacityChart = ({ data, projects, totalCapacity }: CapacityChartProps) => {
     const { theme } = useTheme();
     const isDark = theme === "dark";
+    const cardGlow = useCardGlow();
 
     const projectBars = useMemo(() => {
         return projects.map((project) => (
@@ -49,7 +51,7 @@ const CapacityChart = ({ data, projects, totalCapacity }: CapacityChartProps) =>
     }, [projects]);
 
     return (
-        <Card>
+        <Card className={cardGlow.className}>
             <CardHeader>
                 <CardTitle>Resource Demand vs Capacity</CardTitle>
                 <CardDescription>

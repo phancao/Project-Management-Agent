@@ -6,6 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { useMemberProfile } from "../context/member-profile-context";
+import { useCardGlow } from "~/core/hooks/use-theme-colors";
 // @ts-expect-error - Direct import
 import Check from "lucide-react/dist/esm/icons/check";
 // @ts-expect-error - Direct import
@@ -35,6 +36,7 @@ function TimesheetAvatar({ userId, userName }: { userId: string; userName: strin
 
 export function TimesheetGrid() {
     const [entries, setEntries] = useState(initialEntries);
+    const cardGlow = useCardGlow();
 
     const handleApprove = (id: string) => {
         setEntries(entries.map(e => e.id === id ? { ...e, status: 'approved' } : e));
@@ -45,7 +47,7 @@ export function TimesheetGrid() {
     };
 
     return (
-        <Card>
+        <Card className={cardGlow.className}>
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                     <CardTitle>Time Entries</CardTitle>

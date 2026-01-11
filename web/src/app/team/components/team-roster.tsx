@@ -24,6 +24,7 @@ import { useTeamDataContext, useTeamUsers, useAllUsers } from "../context/team-d
 import type { PMUser } from "~/core/api/pm/users"
 import { useMemberProfile } from "../context/member-profile-context"
 import { cn } from "~/lib/utils"
+import { useCardGlow } from "~/core/hooks/use-theme-colors"
 
 // Color palette for member avatars
 const memberColors = [
@@ -108,6 +109,7 @@ interface TeamRosterProps {
 
 export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProps) {
     const [searchQuery, setSearchQuery] = useState("");
+    const cardGlow = useCardGlow();
 
     // Use the team's memberIds directly (not context), so newly added members show immediately
     const teamMemberIds = team?.memberIds || [];
@@ -174,12 +176,8 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                                 key={member.id}
                                 className={cn(
                                     "group relative flex items-center gap-4 p-4 rounded-xl transition-all duration-300",
-                                    "bg-card shadow-lg shadow-indigo-500/10 dark:shadow-xl dark:shadow-indigo-500/20",
-                                    "border border-indigo-500/20 dark:border-indigo-500/30",
-                                    "ring-1 ring-indigo-500/10 dark:ring-indigo-500/20",
-                                    "hover:border-indigo-400/40 dark:hover:border-indigo-500/50",
-                                    "hover:shadow-xl hover:shadow-indigo-400/20 dark:hover:shadow-indigo-500/30",
-                                    "hover:ring-indigo-400/20 dark:hover:ring-indigo-500/30",
+                                    "bg-card",
+                                    cardGlow.className,
                                     "hover:scale-[1.01]"
                                 )}
                             >

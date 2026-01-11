@@ -31,6 +31,7 @@ import type { PMTask } from "~/core/api/pm/tasks";
 import type { PMUser } from "~/core/api/pm/users";
 import { cn } from "~/lib/utils";
 import { useMemberProfile } from "../context/member-profile-context";
+import { useCardGlow } from "~/core/hooks/use-theme-colors";
 
 // --- Premium Draggable Member Item ---
 function SortableMember({ member, index }: { member: PMUser; index: number }) {
@@ -315,6 +316,9 @@ function DroppableProjectRow({
 
 
 export function MemberMatrix() {
+    // Get configurable glow classes from theme settings
+    const cardGlow = useCardGlow();
+
     // Get essential data from context
     const { allMemberIds, isLoading: isContextLoading } = useTeamDataContext();
 
@@ -449,7 +453,7 @@ export function MemberMatrix() {
         >
             <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[600px] overflow-hidden">
                 {/* --- Premium Sidebar: Team Members --- */}
-                <Card className="w-[340px] shrink-0 h-full flex flex-col border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/5 rounded-2xl overflow-hidden bg-card">
+                <Card className={`w-[340px] shrink-0 h-full flex flex-col rounded-2xl overflow-hidden bg-card ${cardGlow.className}`}>
                     {/* Glassmorphic Header */}
                     <div className="relative p-4 border-b border-gray-100 dark:border-slate-800/50 space-y-4 shrink-0 bg-gradient-to-r from-indigo-50 dark:from-indigo-500/10 via-violet-50/50 dark:via-violet-500/5 to-transparent">
                         {/* Subtle animated background */}
@@ -500,7 +504,7 @@ export function MemberMatrix() {
                         <div className="pr-4 pb-10 space-y-6">
                             {/* Active Projects Section */}
                             {activeProjects.length > 0 && (
-                                <Card className="overflow-hidden border border-gray-200 dark:border-0 shadow-lg dark:shadow-2xl dark:shadow-indigo-500/10 rounded-2xl bg-card">
+                                <Card className={`overflow-hidden rounded-2xl bg-card ${cardGlow.className}`}>
                                     <CardHeader className="py-4 px-6 bg-gradient-to-r from-indigo-50 dark:from-indigo-500/10 via-violet-50/50 dark:via-violet-500/5 to-transparent border-b border-gray-100 dark:border-slate-800/50">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
@@ -534,7 +538,7 @@ export function MemberMatrix() {
 
                             {/* Available Projects Section */}
                             {availableProjects.length > 0 && (
-                                <Card className="overflow-hidden border border-gray-200 dark:border-0 shadow-lg dark:shadow-xl rounded-2xl bg-card">
+                                <Card className={`overflow-hidden rounded-2xl bg-card ${cardGlow.className}`}>
                                     <CardHeader className="py-4 px-6 bg-muted/30 border-b border-gray-100 dark:border-slate-800/50">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">

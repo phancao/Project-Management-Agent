@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar"
 import { Badge } from "~/components/ui/badge"
 import { cn } from "~/lib/utils"
 import { useMemberProfile } from "../context/member-profile-context"
+import { useCardGlow } from "~/core/hooks/use-theme-colors"
 
 interface TeamData {
     id: string
@@ -82,6 +83,7 @@ function MemberAvatarCell({ member }: { member: MemberWorklogRow }) {
 // Individual team card component with its own state
 function TeamWorklogCard({ team }: { team: TeamData }) {
     const [weekOffset, setWeekOffset] = useState(0)
+    const cardGlow = useCardGlow()
 
     // Get active provider IDs from context to filter stale members
     const { activeProviderIds } = useTeamDataContext()
@@ -155,7 +157,7 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
     const isCurrentWeek = weekOffset === 0
 
     return (
-        <Card>
+        <Card className={cardGlow.className}>
             <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2 text-base">

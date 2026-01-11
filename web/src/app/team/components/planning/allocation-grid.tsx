@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 import { useMemberProfile } from "../../context/member-profile-context";
+import { useCardGlow } from "~/core/hooks/use-theme-colors";
 
 interface AllocationGridProps {
     weeks: string[];
@@ -19,6 +20,7 @@ interface AllocationGridProps {
 
 const AllocationGrid = ({ weeks, members }: AllocationGridProps) => {
     const { openMemberProfile } = useMemberProfile();
+    const cardGlow = useCardGlow();
 
     const getUtilizationColor = (percentage: number) => {
         if (percentage > 180) return "bg-red-500 text-white font-bold ring-2 ring-red-500 ring-offset-2 dark:ring-offset-gray-950";
@@ -29,7 +31,7 @@ const AllocationGrid = ({ weeks, members }: AllocationGridProps) => {
     };
 
     return (
-        <Card>
+        <Card className={cardGlow.className}>
             <CardHeader>
                 <div className="flex items-center justify-between">
                     <div>

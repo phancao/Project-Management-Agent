@@ -298,6 +298,7 @@ export function TeamAssignmentsView() {
   const [isSaving, setIsSaving] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterSprint, setFilterSprint] = useState<string>("all");
+  const filterGlow = useCardGlow();
 
   const userNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -619,7 +620,7 @@ export function TeamAssignmentsView() {
 
       <div className="flex flex-wrap gap-2">
         <Select value={filterSprint} onValueChange={setFilterSprint}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className={cn("w-48 h-9", filterGlow.className)}>
             <SelectValue placeholder="Sprint" />
           </SelectTrigger>
           <SelectContent>
@@ -633,7 +634,7 @@ export function TeamAssignmentsView() {
         </Select>
 
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className={cn("w-48 h-9", filterGlow.className)}>
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -648,12 +649,11 @@ export function TeamAssignmentsView() {
 
         <Button
           variant="outline"
-          size="sm"
           onClick={() => {
             setFilterSprint("all");
             setFilterStatus("all");
           }}
-          className="text-xs"
+          className={cn("h-9 px-4 text-sm", filterGlow.className)}
         >
           Reset Filters
         </Button>

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
 import { MessagesBlock } from "./components/messages-block";
 import { PMViewsPanel } from "./components/pm-views-panel";
+import { useCardGlow } from "~/core/hooks/use-theme-colors";
 
 const STORAGE_KEY = "pm-chat-panel-width";
 const COLLAPSE_STORAGE_KEY = "pm-chat-panel-collapsed";
@@ -129,20 +130,48 @@ export default function Main() {
         </div>
       )}
 
-      {/* Collapsed State - Expand Button */}
+      {/* Collapsed State - Clickable Expand Panel with Glowing Effect */}
       {!isMobile && isCollapsed && (
-        <div className="flex-shrink-0 w-12 h-full bg-background border-r border-border/40 flex flex-col items-center py-4 gap-2">
-          <button
-            onClick={toggleCollapse}
-            className="p-2 rounded-lg bg-brand/10 hover:bg-brand/20 text-brand transition-all duration-200 group"
-            title="Expand chat panel"
-          >
-            <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
-          </button>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="writing-mode-vertical text-xs text-muted-foreground font-medium flex items-center gap-2 rotate-180" style={{ writingMode: 'vertical-rl' }}>
-              <MessageSquare className="w-4 h-4 rotate-90" />
-              AI Chat
+        <div
+          onClick={toggleCollapse}
+          className="flex-shrink-0 w-14 h-full bg-background/80 backdrop-blur-sm border-r border-border/40 flex flex-col items-center py-4 gap-2 cursor-pointer hover:bg-brand/5 transition-all duration-300 group relative overflow-hidden"
+          title="Expand chat panel"
+        >
+          {/* Animated glow border effect */}
+          <div
+            className="absolute inset-0 opacity-70"
+            style={{
+              background: `linear-gradient(180deg, transparent 0%, var(--accent-primary) 50%, transparent 100%)`,
+              backgroundSize: '100% 200%',
+              animation: 'glowPulse 2s ease-in-out infinite',
+            }}
+          />
+          <style jsx>{`
+            @keyframes glowPulse {
+              0%, 100% { 
+                opacity: 0.3;
+                background-position: 0% 0%;
+              }
+              50% { 
+                opacity: 0.7;
+                background-position: 0% 100%;
+              }
+            }
+          `}</style>
+
+          {/* Inner content */}
+          <div className="relative z-10 flex flex-col items-center h-full">
+            {/* Expand indicator arrow */}
+            <div className="p-2 rounded-lg bg-brand/10 group-hover:bg-brand/20 text-brand transition-all duration-200">
+              <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform animate-pulse" />
+            </div>
+
+            {/* Vertical "AI Chat" text */}
+            <div className="flex-1 flex items-center justify-center">
+              <div className="writing-mode-vertical text-xs text-muted-foreground group-hover:text-brand font-medium flex items-center gap-2 rotate-180 transition-colors" style={{ writingMode: 'vertical-rl' }}>
+                <MessageSquare className="w-4 h-4 rotate-90" />
+                AI Chat
+              </div>
             </div>
           </div>
         </div>

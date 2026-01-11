@@ -110,3 +110,11 @@ In particular, we want to express our deep appreciation for:
 - Last but not least, special thanks to [SToneX](https://github.com/stonexer) for his great contribution for [token-by-token visual effect](./src/core/rehype/rehype-split-words-into-spans.ts)
 
 These outstanding projects form the backbone of DeerFlow and exemplify the transformative power of open source collaboration.
+
+## 🐛 BugBase Admin Panel
+
+The web UI includes a built-in BugBase admin panel for managing bug reports.
+
+- **URL**: `/bugbase`
+- **Features**: List bugs, view details with screenshots, update status.
+- **Reporting**: Click the bug icon in the bottom-right corner of any page to report an issue.

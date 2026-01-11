@@ -5,7 +5,8 @@ import { useTeamDataContext, useTeamUsers, useTeamTasks } from "../context/team-
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { CapacityChart } from "./planning/capacity-chart";
 import { AllocationGrid } from "./planning/allocation-grid";
-import { Loader2, CalendarRange, AlertCircle } from "lucide-react";
+import { CalendarRange, AlertCircle } from "lucide-react";
+import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import type { PMTask } from "~/core/api/pm/tasks";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 
@@ -129,9 +130,16 @@ export function CapacityPlanningView() {
 
     if (isLoading) {
         return (
-            <div className="h-[600px] flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-            </div>
+            <WorkspaceLoading
+                title="Loading Capacity Data"
+                subtitle="Analyzing team workload..."
+                items={[
+                    { label: "Members", isLoading: isLoadingUsers },
+                    { label: "Tasks", isLoading: isLoadingTasks },
+                    { label: "Projects", isLoading: isLoadingProjects },
+                ]}
+                icon={<CalendarRange className="w-6 h-6 text-white" />}
+            />
         );
     }
 

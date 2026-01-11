@@ -20,6 +20,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, Filter, GripVertical, Search, Plus, Calendar, Loader2 } from "lucide-react";
+import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
@@ -2061,63 +2062,16 @@ function _BacklogViewOriginal() {
   const isLoading = loadingState.filterData.loading || (shouldLoadTasks && loading) || (shouldLoadTasks && isFetching);
 
   if (isLoading) {
-    // Calculate loading progress
-    const loadingItems = [
-      { label: "Tasks", isLoading: loading, count: allTasks?.length || 0 },
-      { label: "Sprints", isLoading: sprintsLoading, count: sprints?.length || 0 },
-    ];
-    const completedCount = loadingItems.filter(item => !item.isLoading).length;
-    const progressPercent = Math.round((completedCount / loadingItems.length) * 100);
-
     return (
-      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
-        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
-              </div>
-              Loading Backlog
-            </h3>
-            <span className="text-xs font-mono text-muted-foreground">
-              {progressPercent}%
-            </span>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-
-          <div className="space-y-2">
-            {loadingItems.map((item, index) => (
-              <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
-                <div className="flex items-center gap-2">
-                  {index === 0 ? <ListTodo className="w-3.5 h-3.5 text-green-500" /> : <Target className="w-3.5 h-3.5 text-purple-500" />}
-                  <span className="text-xs font-medium">{item.label}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-xs font-mono tabular-nums ${item.isLoading ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
-                    {item.isLoading ? (item.count > 0 ? item.count : "...") : item.count}
-                  </span>
-                  {item.isLoading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                  ) : (
-                    <div className="w-3.5 h-3.5 text-green-500">✓</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-[10px] text-muted-foreground mt-3 text-center">
-            Loading tasks and sprints...
-          </p>
-        </div>
-      </div>
+      <WorkspaceLoading
+        title="Loading Backlog"
+        subtitle="Loading tasks and sprints..."
+        items={[
+          { label: "Tasks", isLoading: loading, count: allTasks?.length || 0 },
+          { label: "Sprints", isLoading: sprintsLoading, count: sprints?.length || 0 },
+        ]}
+        icon={<ListTodo className="w-6 h-6 text-white" />}
+      />
     );
   }
 

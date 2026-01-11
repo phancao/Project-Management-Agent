@@ -21,6 +21,7 @@ import {
 import { format, startOfWeek, endOfWeek, eachWeekOfInterval, parseISO } from "date-fns";
 
 import { Card } from "~/components/ui/card";
+import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import { listTimeEntries, type PMTimeEntry } from "~/core/api/pm/time-entries";
 import { listUsers, type PMUser } from "~/core/api/pm/users";
 
@@ -193,22 +194,14 @@ export function WorklogsView() {
     // Loading state
     if (isLoading) {
         return (
-            <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
-                <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-xs">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center text-lg">
-                            📊
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-semibold">Loading Worklogs</h3>
-                            <p className="text-xs text-muted-foreground">Aggregating time entries...</p>
-                        </div>
-                    </div>
-                    <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full w-1/2 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-pulse" />
-                    </div>
-                </div>
-            </div>
+            <WorkspaceLoading
+                title="Loading Worklogs"
+                subtitle="Aggregating time entries..."
+                items={[
+                    { label: "Time Entries", isLoading: true },
+                    { label: "Team Members", isLoading: true },
+                ]}
+            />
         );
     }
 

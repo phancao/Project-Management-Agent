@@ -260,7 +260,7 @@ function TaskCard({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="group flex items-start gap-2 p-3 bg-card rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all cursor-pointer"
+      className="group flex items-start gap-2 p-3 bg-card rounded-xl border border-gray-200/80 dark:border-slate-700/30 shadow-md dark:shadow-lg dark:shadow-indigo-500/5 hover:shadow-lg hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10 hover:border-indigo-300/80 dark:hover:border-indigo-500/40 transition-all duration-300 cursor-pointer"
     >
       <div
         {...listeners}
@@ -335,11 +335,11 @@ function EpicCard({
     <button
       ref={setNodeRef}
       onClick={onClick}
-      className={`w-full text-left p-2 rounded transition-colors ${isSelected
-        ? "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+      className={`w-full text-left p-2 rounded-xl transition-all duration-300 ${isSelected
+        ? "bg-indigo-50 dark:bg-gradient-to-r dark:from-indigo-500/20 dark:to-violet-500/10 border border-indigo-200 dark:border-indigo-500/30 shadow-lg shadow-indigo-100 dark:shadow-indigo-500/10 text-indigo-700 dark:text-white"
         : isOver
           ? "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 ring-2 ring-green-400"
-          : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          : "hover:bg-gray-50 dark:hover:bg-slate-800/50 text-gray-700 dark:text-gray-300 border border-transparent hover:border-gray-200 dark:hover:border-slate-700/50"
         }`}
     >
       <div className="flex items-center gap-2 mb-1">

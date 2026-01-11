@@ -146,28 +146,64 @@ export function DashboardView() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-          <div className="text-sm text-blue-600 dark:text-blue-400 font-medium">Total Projects</div>
-          <div className="text-3xl font-bold text-blue-900 dark:text-blue-100 mt-2">
-            {projectsLoading ? "..." : projects.length}
+        <Card className="p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-200 dark:border-blue-900">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm text-blue-600 dark:text-blue-400 font-medium">Total Projects</div>
+              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                {projectsLoading ? "..." : projects.length}
+              </div>
+            </div>
           </div>
         </Card>
-        <Card className="p-4 bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800">
-          <div className="text-sm text-purple-600 dark:text-purple-400 font-medium">Active Projects</div>
-          <div className="text-3xl font-bold text-purple-900 dark:text-purple-100 mt-2">
-            {projectsLoading ? "..." : activeProjects.length}
+        <Card className="p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-200 dark:border-purple-900">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm text-purple-600 dark:text-purple-400 font-medium">Active Projects</div>
+              <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                {projectsLoading ? "..." : activeProjects.length}
+              </div>
+            </div>
           </div>
         </Card>
-        <Card className="p-4 bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
-          <div className="text-sm text-green-600 dark:text-green-400 font-medium">Open Tasks</div>
-          <div className="text-3xl font-bold text-green-900 dark:text-green-100 mt-2">
-            {tasksLoading ? "..." : openTasks.length}
+        <Card className="p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-200 dark:border-green-900">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/30">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm text-green-600 dark:text-green-400 font-medium">Open Tasks</div>
+              <div className="text-2xl font-bold text-green-900 dark:text-green-100">
+                {tasksLoading ? "..." : openTasks.length}
+              </div>
+            </div>
           </div>
         </Card>
-        <Card className="p-4 bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800">
-          <div className="text-sm text-orange-600 dark:text-orange-400 font-medium">My Tasks</div>
-          <div className="text-3xl font-bold text-orange-900 dark:text-orange-100 mt-2">
-            {tasksLoading ? "..." : filteredMyTasks.length}
+        <Card className="p-4 bg-gradient-to-br from-orange-500/10 to-amber-500/10 border-orange-200 dark:border-orange-900">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm text-orange-600 dark:text-orange-400 font-medium">My Tasks</div>
+              <div className="text-2xl font-bold text-orange-900 dark:text-orange-100">
+                {tasksLoading ? "..." : filteredMyTasks.length}
+              </div>
+            </div>
           </div>
         </Card>
       </div>
@@ -192,7 +228,7 @@ export function DashboardView() {
               <div
                 key={task.id}
                 onClick={() => handleTaskClick(task)}
-                className="flex items-center justify-between p-3 bg-card rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                className="flex items-center justify-between p-3 bg-card rounded-xl border border-gray-200/80 dark:border-slate-700/30 shadow-md dark:shadow-lg dark:shadow-indigo-500/5 hover:shadow-lg hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10 hover:border-indigo-300/80 dark:hover:border-indigo-500/40 transition-all duration-300 cursor-pointer"
               >
                 <div className="flex-1">
                   <div className="font-medium text-gray-900 dark:text-white mb-1">{task.title}</div>
@@ -207,8 +243,8 @@ export function DashboardView() {
                   </span>
                   {task.priority && (
                     <span className={`px-2 py-1 rounded text-xs font-medium ${task.priority === "high" ? "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                        task.priority === "medium" ? "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200" :
-                          "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                      task.priority === "medium" ? "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200" :
+                        "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
                       }`}>
                       {task.priority}
                     </span>
@@ -239,7 +275,7 @@ export function DashboardView() {
                 <div
                   key={project.id}
                   onClick={() => router.push(`/pm/chat?project=${encodeURIComponent(project.id)}`)}
-                  className="p-4 bg-card rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer"
+                  className="p-4 bg-card rounded-xl border border-gray-200/80 dark:border-slate-700/30 shadow-lg dark:shadow-xl dark:shadow-indigo-500/5 hover:shadow-xl hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10 hover:border-indigo-300/80 dark:hover:border-indigo-500/40 hover:scale-[1.01] transition-all duration-300 cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
@@ -260,10 +296,10 @@ export function DashboardView() {
                       <span className="font-medium text-green-600 dark:text-green-400">{openProjectTasks.length}</span> open
                     </div>
                     <span className={`ml-auto px-2 py-0.5 text-xs rounded ${project.status === "active" || project.status === "in_progress"
-                        ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
-                        : project.status === "completed" || project.status === "done"
-                          ? "bg-card text-gray-800 dark:text-gray-200"
-                          : "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                      ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
+                      : project.status === "completed" || project.status === "done"
+                        ? "bg-card text-gray-800 dark:text-gray-200"
+                        : "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
                       }`}>
                       {project.status || "None"}
                     </span>

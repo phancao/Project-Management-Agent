@@ -174,7 +174,7 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                                 key={member.id}
                                 className={cn(
                                     "group relative flex items-center gap-4 p-4 rounded-xl transition-all duration-300",
-                                    "bg-white dark:bg-slate-800/80",
+                                    "bg-card",
                                     "border border-gray-200 dark:border-slate-700/50",
                                     "hover:border-indigo-300 dark:hover:border-indigo-500/50",
                                     "hover:shadow-lg hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10"
@@ -193,7 +193,7 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                         ))}
                         {members.length === 0 && (
                             <div className="col-span-full border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-2xl p-12 text-center">
-                                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
+                                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center">
                                     <Users className="w-8 h-8 text-gray-400 dark:text-slate-600" />
                                 </div>
                                 <h3 className="font-semibold text-gray-700 dark:text-slate-200">No members yet</h3>
@@ -222,7 +222,7 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-slate-500" />
                                 <Input
                                     placeholder="Search users..."
-                                    className="pl-10 h-10 bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/50 text-gray-700 dark:text-slate-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-indigo-300 dark:focus:border-indigo-500/50 focus:ring-indigo-200 dark:focus:ring-indigo-500/20 rounded-xl"
+                                    className="pl-10 h-10 bg-muted/50 border-gray-200 dark:border-slate-700/50 text-gray-700 dark:text-slate-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-indigo-300 dark:focus:border-indigo-500/50 focus:ring-indigo-200 dark:focus:ring-indigo-500/20 rounded-xl"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     disabled={isLoadingAllUsers}

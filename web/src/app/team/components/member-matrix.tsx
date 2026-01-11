@@ -239,7 +239,7 @@ function DroppableProjectRow({
                 "shadow-lg",
                 assignedMembers.length > 0
                     ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
-                    : "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-400 border border-gray-200 dark:border-slate-700",
+                    : "bg-muted text-gray-400 dark:text-slate-400 border border-gray-200 dark:border-slate-700",
                 "group-hover:scale-110 group-hover:shadow-indigo-200 dark:group-hover:shadow-indigo-500/20"
             )}>
                 <FolderKanban className="w-5 h-5" />
@@ -304,7 +304,7 @@ function DroppableProjectRow({
                     "text-xs shrink-0 h-8 w-8 rounded-full flex items-center justify-center font-bold transition-all",
                     assignedMembers.length > 0
                         ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/30 group-hover:scale-110"
-                        : "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700"
+                        : "bg-muted text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700"
                 )}
             >
                 {assignedMembers.length}
@@ -471,7 +471,7 @@ export function MemberMatrix() {
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-slate-500" />
                             <Input
                                 placeholder="Filter members..."
-                                className="h-10 pl-10 text-sm bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/50 text-gray-700 dark:text-slate-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-indigo-300 dark:focus:border-indigo-500/50 focus:ring-indigo-200 dark:focus:ring-indigo-500/20 rounded-xl"
+                                className="h-10 pl-10 text-sm bg-muted/50 border-gray-200 dark:border-slate-700/50 text-gray-700 dark:text-slate-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-indigo-300 dark:focus:border-indigo-500/50 focus:ring-indigo-200 dark:focus:ring-indigo-500/20 rounded-xl"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
@@ -535,10 +535,10 @@ export function MemberMatrix() {
                             {/* Available Projects Section */}
                             {availableProjects.length > 0 && (
                                 <Card className="overflow-hidden border border-gray-200 dark:border-0 shadow-lg dark:shadow-xl rounded-2xl bg-card">
-                                    <CardHeader className="py-4 px-6 bg-gray-50 dark:bg-slate-800/30 border-b border-gray-100 dark:border-slate-800/50">
+                                    <CardHeader className="py-4 px-6 bg-muted/30 border-b border-gray-100 dark:border-slate-800/50">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex items-center justify-center">
+                                                <div className="w-10 h-10 rounded-xl bg-muted border border-gray-200 dark:border-slate-700 flex items-center justify-center">
                                                     <Briefcase className="w-5 h-5 text-gray-400 dark:text-slate-400" />
                                                 </div>
                                                 <div>
@@ -546,7 +546,7 @@ export function MemberMatrix() {
                                                     <CardDescription className="text-xs text-gray-400 dark:text-slate-500">Drop team members to assign</CardDescription>
                                                 </div>
                                             </div>
-                                            <Badge variant="secondary" className="bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 font-bold">
+                                            <Badge variant="secondary" className="bg-muted text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 font-bold">
                                                 {availableProjects.length}
                                             </Badge>
                                         </div>

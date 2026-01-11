@@ -49,6 +49,7 @@ import { useTasks, type Task } from "~/core/api/hooks/pm/use-tasks";
 import { useUsers } from "~/core/api/hooks/pm/use-users";
 import { useSprints } from "~/core/api/hooks/pm/use-sprints";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
+import { useCardGlow } from "~/core/hooks/use-theme-colors";
 
 const UNASSIGNED_KEY = "__unassigned__";
 
@@ -96,11 +97,15 @@ function AvatarBubble({ name }: { name: string | null }) {
 function TaskCard({ task, isDragging, dragHandleProps }: { task: Task; isDragging?: boolean; dragHandleProps?: DragHandleProps }) {
   const listenerProps = dragHandleProps?.listeners ?? {};
   const attributeProps = dragHandleProps?.attributes ?? {};
+  const cardGlow = useCardGlow();
 
   return (
     <div
-      className={`flex items-start gap-3 rounded-lg border border-gray-200 bg-card p-3 shadow-sm transition hover:border-gray-300 dark:border-gray-700 ${isDragging ? "opacity-40" : ""
-        }`}
+      className={cn(
+        "flex items-start gap-3 rounded-lg bg-card p-3 shadow-sm transition",
+        cardGlow.className,
+        isDragging && "opacity-40"
+      )}
     >
       <div
         className="mt-1 cursor-grab text-gray-400 dark:text-gray-500"
@@ -191,13 +196,15 @@ function UserCard({
     return "bg-emerald-500"; // Under capacity
   };
 
+  const cardGlow = useCardGlow();
+
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-xl border bg-card shadow-sm transition-all duration-200",
+        "rounded-xl bg-card shadow-sm transition-all duration-200",
+        cardGlow.className,
         isOver && "border-blue-400 ring-2 ring-blue-200 dark:ring-blue-800",
-        !isOver && "border-border"
       )}
     >
       {/* Main Row - User Info | Progress Bar | Expand Icon */}

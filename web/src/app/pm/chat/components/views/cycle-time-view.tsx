@@ -8,12 +8,17 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Scatter, S
 import { Card } from "~/components/ui/card";
 import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import { useCycleTimeChart } from "~/core/api/hooks/pm/use-analytics";
+import { useCardGlow, useStatCardGlow } from "~/core/hooks/use-theme-colors";
 import { useSearchParams } from "next/navigation";
 
 export function CycleTimeView() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project");
   const { data: chartData, isLoading: loading, error } = useCycleTimeChart(projectId, undefined, 60);
+
+  // Get configurable glow classes from theme settings
+  const cardGlow = useCardGlow();
+  const statCardGlow = useStatCardGlow();
 
   // Transform chart data for Recharts
   const scatterData = chartData?.series[0]?.data.map((point) => ({
@@ -123,7 +128,7 @@ export function CycleTimeView() {
           </p>
         </div>
         {outliers.length > 0 && (
-          <div className="px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+          <div className="inline-flex items-center h-7 px-3 rounded-full text-sm font-medium shadow-lg ring-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 shadow-red-500/30 dark:shadow-red-500/40 ring-red-500/20 dark:ring-red-500/30">
             ⚠ {outliers.length} Outlier{outliers.length > 1 ? 's' : ''}
           </div>
         )}
@@ -131,30 +136,30 @@ export function CycleTimeView() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card className="p-4">
+        <Card className={`p-4 ${statCardGlow.className}`}>
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Average</div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{avgCycleTime.toFixed(1)}d</div>
         </Card>
-        <Card className="p-4">
+        <Card className={`p-4 ${statCardGlow.className}`}>
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Median</div>
           <div className="text-2xl font-bold text-blue-600">{medianCycleTime.toFixed(1)}d</div>
         </Card>
-        <Card className="p-4">
+        <Card className={`p-4 ${statCardGlow.className}`}>
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">50th %ile</div>
           <div className="text-2xl font-bold text-green-600">{p50.toFixed(1)}d</div>
         </Card>
-        <Card className="p-4">
+        <Card className={`p-4 ${statCardGlow.className}`}>
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">85th %ile</div>
           <div className="text-2xl font-bold text-orange-600">{p85.toFixed(1)}d</div>
         </Card>
-        <Card className="p-4">
+        <Card className={`p-4 ${statCardGlow.className}`}>
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">95th %ile</div>
           <div className="text-2xl font-bold text-red-600">{p95.toFixed(1)}d</div>
         </Card>
       </div>
 
       {/* Cycle Time Chart */}
-      <Card className="p-6">
+      <Card className={`p-6 ${cardGlow.className}`}>
         <ResponsiveContainer width="100%" height={400}>
           <ScatterChart>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
@@ -224,7 +229,7 @@ export function CycleTimeView() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Insights */}
         {insights.length > 0 && (
-          <Card className="p-6">
+          <Card className={`p-6 ${cardGlow.className}`}>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Insights</h3>
             <div className="space-y-3">
               {insights.map((insight: string, index: number) => (
@@ -239,7 +244,7 @@ export function CycleTimeView() {
 
         {/* Outliers */}
         {outliers.length > 0 && (
-          <Card className="p-6">
+          <Card className={`p-6 ${cardGlow.className}`}>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Outliers (Above 95th Percentile)</h3>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {outliers.map((outlier: any, index: number) => (

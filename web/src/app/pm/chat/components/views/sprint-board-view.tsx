@@ -108,7 +108,7 @@ function TaskCard({ task, onClick, disabled }: { task: BoardTask; onClick: () =>
       style={style}
       data-task-id={taskId}
       {...attributes}
-      className="flex items-center gap-2 p-3 bg-card rounded-xl border border-gray-200/80 dark:border-slate-700/30 shadow-lg dark:shadow-xl dark:shadow-indigo-500/5 hover:shadow-xl hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10 hover:border-indigo-300/80 dark:hover:border-indigo-500/40 transition-all duration-300 cursor-pointer"
+      className="flex items-center gap-2 p-3 bg-card rounded-xl border border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-xl dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/20 hover:shadow-xl hover:shadow-indigo-400/20 dark:hover:shadow-indigo-500/30 hover:border-indigo-400/40 dark:hover:border-indigo-500/50 hover:ring-indigo-400/20 dark:hover:ring-indigo-500/30 transition-all duration-300 cursor-pointer"
     >
       <div
         {...listeners}
@@ -1290,7 +1290,7 @@ export function SprintBoardView() {
         <div className="flex items-center gap-4">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sprint Board</h2>
           {availableStatuses.length > 0 && (
-            <Button variant="outline" size="sm" onClick={() => setIsColumnDialogOpen(true)} className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsColumnDialogOpen(true)} className="gap-2 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 hover:border-indigo-400/40 dark:hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-400/20 dark:hover:shadow-indigo-500/30">
               <Settings2 className="w-4 h-4" />
               Columns
             </Button>
@@ -1308,14 +1308,14 @@ export function SprintBoardView() {
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              className="pl-10"
+              className="pl-10 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15 focus:border-indigo-400/40 dark:focus:border-indigo-500/50"
               placeholder="Search tasks..."
             />
           </div>
           <div className="flex gap-3">
             {availablePriorities.length > 0 && (
               <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[140px] border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
                   <SelectValue placeholder="Priority" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1330,7 +1330,7 @@ export function SprintBoardView() {
             )}
             {epics.length > 0 && (
               <Select value={epicFilter ?? "all"} onValueChange={(value) => setEpicFilter(value === "all" ? null : value)}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[140px] border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
                   <SelectValue placeholder="Epic" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1346,7 +1346,7 @@ export function SprintBoardView() {
             )}
             {sprints.length > 0 && (
               <Select value={sprintFilter ?? "all"} onValueChange={(value) => setSprintFilter(value === "all" ? null : value)}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[140px] border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
                   <SelectValue placeholder="Sprint" />
                 </SelectTrigger>
                 <SelectContent>

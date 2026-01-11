@@ -42,6 +42,18 @@ export const THEME_COLORS: Record<AccentColor, {
     ring: string;
     // CSS custom property style for dynamic use
     style: { '--accent-color': string };
+    // Card glow effect classes (border, shadow, ring)
+    cardGlow: {
+        border: string;
+        shadow: string;
+        ring: string;
+    };
+    // Stat card glow effect classes (smaller cards for metrics)
+    statCardGlow: {
+        border: string;
+        shadow: string;
+        ring: string;
+    };
 }> = {
     darkBlue: {
         hex: '#1E398D',
@@ -56,6 +68,16 @@ export const THEME_COLORS: Record<AccentColor, {
         badgeText: 'text-[#1E398D] dark:text-[#5a7fd9]',
         ring: 'ring-[#1E398D]',
         style: { '--accent-color': '#1E398D' },
+        cardGlow: {
+            border: 'border-[#1E398D]/40 dark:border-[#1E398D]/50',
+            shadow: 'shadow-lg shadow-[#1E398D]/30 dark:shadow-[#1E398D]/40',
+            ring: 'ring-1 ring-[#1E398D]/30 dark:ring-[#1E398D]/40',
+        },
+        statCardGlow: {
+            border: 'border-[#1E398D]/40 dark:border-[#1E398D]/50',
+            shadow: 'shadow-lg shadow-[#1E398D]/25 dark:shadow-[#1E398D]/35',
+            ring: 'ring-1 ring-[#1E398D]/25 dark:ring-[#1E398D]/35',
+        },
     },
     teal: {
         hex: '#14B795',
@@ -70,6 +92,16 @@ export const THEME_COLORS: Record<AccentColor, {
         badgeText: 'text-[#14B795] dark:text-[#4fd9bc]',
         ring: 'ring-[#14B795]',
         style: { '--accent-color': '#14B795' },
+        cardGlow: {
+            border: 'border-[#14B795]/40 dark:border-[#14B795]/50',
+            shadow: 'shadow-lg shadow-[#14B795]/30 dark:shadow-[#14B795]/40',
+            ring: 'ring-1 ring-[#14B795]/30 dark:ring-[#14B795]/40',
+        },
+        statCardGlow: {
+            border: 'border-[#14B795]/40 dark:border-[#14B795]/50',
+            shadow: 'shadow-lg shadow-[#14B795]/25 dark:shadow-[#14B795]/35',
+            ring: 'ring-1 ring-[#14B795]/25 dark:ring-[#14B795]/35',
+        },
     },
     orange: {
         hex: '#F47920',
@@ -84,6 +116,16 @@ export const THEME_COLORS: Record<AccentColor, {
         badgeText: 'text-[#F47920] dark:text-[#f9a05c]',
         ring: 'ring-[#F47920]',
         style: { '--accent-color': '#F47920' },
+        cardGlow: {
+            border: 'border-[#F47920]/40 dark:border-[#F47920]/50',
+            shadow: 'shadow-lg shadow-[#F47920]/30 dark:shadow-[#F47920]/40',
+            ring: 'ring-1 ring-[#F47920]/30 dark:ring-[#F47920]/40',
+        },
+        statCardGlow: {
+            border: 'border-[#F47920]/40 dark:border-[#F47920]/50',
+            shadow: 'shadow-lg shadow-[#F47920]/25 dark:shadow-[#F47920]/35',
+            ring: 'ring-1 ring-[#F47920]/25 dark:ring-[#F47920]/35',
+        },
     },
     lightBlue: {
         hex: '#1C9AD6',
@@ -98,6 +140,16 @@ export const THEME_COLORS: Record<AccentColor, {
         badgeText: 'text-[#1C9AD6] dark:text-[#5cb8e6]',
         ring: 'ring-[#1C9AD6]',
         style: { '--accent-color': '#1C9AD6' },
+        cardGlow: {
+            border: 'border-[#1C9AD6]/40 dark:border-[#1C9AD6]/50',
+            shadow: 'shadow-lg shadow-[#1C9AD6]/30 dark:shadow-[#1C9AD6]/40',
+            ring: 'ring-1 ring-[#1C9AD6]/30 dark:ring-[#1C9AD6]/40',
+        },
+        statCardGlow: {
+            border: 'border-[#1C9AD6]/40 dark:border-[#1C9AD6]/50',
+            shadow: 'shadow-lg shadow-[#1C9AD6]/25 dark:shadow-[#1C9AD6]/35',
+            ring: 'ring-1 ring-[#1C9AD6]/25 dark:ring-[#1C9AD6]/35',
+        },
     },
     green: {
         hex: '#8DC63F',
@@ -112,6 +164,16 @@ export const THEME_COLORS: Record<AccentColor, {
         badgeText: 'text-[#8DC63F] dark:text-[#a8d46a]',
         ring: 'ring-[#8DC63F]',
         style: { '--accent-color': '#8DC63F' },
+        cardGlow: {
+            border: 'border-[#8DC63F]/40 dark:border-[#8DC63F]/50',
+            shadow: 'shadow-lg shadow-[#8DC63F]/30 dark:shadow-[#8DC63F]/40',
+            ring: 'ring-1 ring-[#8DC63F]/30 dark:ring-[#8DC63F]/40',
+        },
+        statCardGlow: {
+            border: 'border-[#8DC63F]/40 dark:border-[#8DC63F]/50',
+            shadow: 'shadow-lg shadow-[#8DC63F]/25 dark:shadow-[#8DC63F]/35',
+            ring: 'ring-1 ring-[#8DC63F]/25 dark:ring-[#8DC63F]/35',
+        },
     },
     pink: {
         hex: '#CF2C91',
@@ -126,6 +188,16 @@ export const THEME_COLORS: Record<AccentColor, {
         badgeText: 'text-[#CF2C91] dark:text-[#e066b5]',
         ring: 'ring-[#CF2C91]',
         style: { '--accent-color': '#CF2C91' },
+        cardGlow: {
+            border: 'border-[#CF2C91]/40 dark:border-[#CF2C91]/50',
+            shadow: 'shadow-lg shadow-[#CF2C91]/30 dark:shadow-[#CF2C91]/40',
+            ring: 'ring-1 ring-[#CF2C91]/30 dark:ring-[#CF2C91]/40',
+        },
+        statCardGlow: {
+            border: 'border-[#CF2C91]/40 dark:border-[#CF2C91]/50',
+            shadow: 'shadow-lg shadow-[#CF2C91]/25 dark:shadow-[#CF2C91]/35',
+            ring: 'ring-1 ring-[#CF2C91]/25 dark:ring-[#CF2C91]/35',
+        },
     },
 };
 
@@ -190,4 +262,51 @@ export function getThemeColors(accentColor: AccentColor = 'darkBlue') {
  */
 export function getCardStyles(cardStyle: CardStyle = 'solid') {
     return CARD_STYLES[cardStyle];
+}
+
+/**
+ * Hook to get card glow classes that follow the accent color setting
+ * Returns a combined className string for easy use in components
+ */
+export function useCardGlow() {
+    const accentColor = useSettingsStore((state) => state.appearance?.accentColor || 'darkBlue');
+    const glow = THEME_COLORS[accentColor].cardGlow;
+
+    return {
+        // Combined className for easy use
+        className: `${glow.border} ${glow.shadow} ${glow.ring}`,
+        // Individual classes for more control
+        border: glow.border,
+        shadow: glow.shadow,
+        ring: glow.ring,
+    };
+}
+
+/**
+ * Hook to get stat card glow classes that follow the accent color setting
+ * (For smaller metric cards)
+ */
+export function useStatCardGlow() {
+    const accentColor = useSettingsStore((state) => state.appearance?.accentColor || 'darkBlue');
+    const glow = THEME_COLORS[accentColor].statCardGlow;
+
+    return {
+        className: `${glow.border} ${glow.shadow} ${glow.ring}`,
+        border: glow.border,
+        shadow: glow.shadow,
+        ring: glow.ring,
+    };
+}
+
+/**
+ * Get card glow classes without hook (for non-component usage)
+ */
+export function getCardGlow(accentColor: AccentColor = 'darkBlue') {
+    const glow = THEME_COLORS[accentColor].cardGlow;
+    return {
+        className: `${glow.border} ${glow.shadow} ${glow.ring}`,
+        border: glow.border,
+        shadow: glow.shadow,
+        ring: glow.ring,
+    };
 }

@@ -173,7 +173,7 @@ export function SprintReportView() {
         </div>
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
           <Select value={selectedSprintId ?? undefined} onValueChange={handleSprintChange}>
-            <SelectTrigger className="min-w-[20rem] max-w-full pr-10 text-left">
+            <SelectTrigger className="min-w-[20rem] max-w-full pr-10 text-left border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
               <SelectValue placeholder="Select sprint" className="truncate" />
             </SelectTrigger>
             <SelectContent className="min-w-[20rem] max-w-xl">
@@ -207,14 +207,19 @@ export function SprintReportView() {
             </SelectContent>
           </Select>
 
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${completionRate >= 90 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : completionRate >= 70 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
+          <div className={`inline-flex items-center h-7 px-3 rounded-full text-sm font-medium shadow-lg ring-1 ${completionRate >= 90
+            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 shadow-green-500/30 dark:shadow-green-500/40 ring-green-500/20 dark:ring-green-500/30'
+            : completionRate >= 70
+              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 shadow-yellow-500/30 dark:shadow-yellow-500/40 ring-yellow-500/20 dark:ring-yellow-500/30'
+              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 shadow-red-500/30 dark:shadow-red-500/40 ring-red-500/20 dark:ring-red-500/30'
+            }`}>
             {completionRate.toFixed(0)}% Complete
           </div>
         </div>
       </div>
 
       {/* Commitment Metrics */}
-      <Card className="p-6">
+      <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sprint Commitment</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
@@ -251,7 +256,7 @@ export function SprintReportView() {
       </Card>
 
       {/* Scope Changes */}
-      <Card className="p-6">
+      <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Scope Changes</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
@@ -278,7 +283,7 @@ export function SprintReportView() {
       {/* Work Breakdown & Team Performance */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Work Breakdown */}
-        <Card className="p-6">
+        <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Work Breakdown</h3>
           <div className="space-y-3">
             {Object.entries(report.work_breakdown).map(([type, count]) => (
@@ -294,7 +299,7 @@ export function SprintReportView() {
         </Card>
 
         {/* Team Performance */}
-        <Card className="p-6">
+        <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Team Performance</h3>
           <div className="space-y-4">
             <div>
@@ -335,7 +340,7 @@ export function SprintReportView() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Highlights */}
           {report.highlights.length > 0 && (
-            <Card className="p-6">
+            <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
               <h3 className="text-lg font-semibold text-green-600 dark:text-green-400 mb-4">✨ Highlights</h3>
               <ul className="space-y-2">
                 {report.highlights.map((highlight, index) => (
@@ -350,7 +355,7 @@ export function SprintReportView() {
 
           {/* Concerns */}
           {report.concerns.length > 0 && (
-            <Card className="p-6">
+            <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
               <h3 className="text-lg font-semibold text-yellow-600 dark:text-yellow-400 mb-4">⚠️ Concerns</h3>
               <ul className="space-y-2">
                 {report.concerns.map((concern, index) => (

@@ -212,7 +212,7 @@ export function BurndownView() {
         </div>
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
           <Select value={selectedSprintId ?? undefined} onValueChange={handleSprintChange}>
-            <SelectTrigger className="min-w-[20rem] max-w-full pr-10 text-left">
+            <SelectTrigger className="min-w-[20rem] max-w-full pr-10 text-left border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
               <SelectValue placeholder="Select sprint" className="truncate" />
             </SelectTrigger>
             <SelectContent className="min-w-[20rem] max-w-xl">
@@ -247,7 +247,10 @@ export function BurndownView() {
           </Select>
 
           {onTrack !== undefined && (
-            <div className={`px-3 py-1 rounded-full text-sm font-medium ${onTrack ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}`}>
+            <div className={`inline-flex items-center h-7 px-3 rounded-full text-sm font-medium shadow-lg ring-1 ${onTrack
+              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 shadow-green-500/30 dark:shadow-green-500/40 ring-green-500/20 dark:ring-green-500/30'
+              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 shadow-yellow-500/30 dark:shadow-yellow-500/40 ring-yellow-500/20 dark:ring-yellow-500/30'
+              }`}>
               {onTrack ? '✓ On Track' : '⚠ Behind Schedule'}
             </div>
           )}
@@ -256,19 +259,19 @@ export function BurndownView() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Scope</div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalScope.toFixed(1)} pts</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Completed</div>
           <div className="text-2xl font-bold text-green-600">{completed.toFixed(1)} pts</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Remaining</div>
           <div className="text-2xl font-bold text-orange-600">{remaining.toFixed(1)} pts</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Progress</div>
           <div className="text-2xl font-bold text-blue-600">
             {completionPercentage.toFixed(0)}%
@@ -277,7 +280,7 @@ export function BurndownView() {
       </div>
 
       {/* Burndown Chart */}
-      <Card className="p-6">
+      <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
         <ResponsiveContainer width="100%" height={400}>
           <AreaChart data={burndownData}>
             <defs>
@@ -322,7 +325,7 @@ export function BurndownView() {
 
       {/* Scope Changes */}
       {metadata.scope_changes && (
-        <Card className="p-6">
+        <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Scope Changes</h3>
           <div className="grid grid-cols-3 gap-4">
             <div>

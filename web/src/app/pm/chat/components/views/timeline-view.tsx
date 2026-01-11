@@ -385,7 +385,7 @@ function TimelineContent({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
               <CalendarRange className="h-4 w-4" />
@@ -400,7 +400,7 @@ function TimelineContent({
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300">
               <ListChecks className="h-4 w-4" />
@@ -415,7 +415,7 @@ function TimelineContent({
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300">
               <Users className="h-4 w-4" />
@@ -430,7 +430,7 @@ function TimelineContent({
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300">
               <CalendarRange className="h-4 w-4" />
@@ -571,7 +571,7 @@ function TimelineContent({
           <div className="flex flex-wrap gap-2">
             {sprintOptions.length > 0 ? (
               <Select value={sprintFilter} onValueChange={setSprintFilter}>
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-[160px] border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
                   <SelectValue placeholder="Sprint" />
                 </SelectTrigger>
                 <SelectContent>
@@ -587,7 +587,7 @@ function TimelineContent({
 
             {statusOptions.length > 0 ? (
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-[160px] border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -603,7 +603,7 @@ function TimelineContent({
 
             {assigneeOptions.length > 0 ? (
               <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
                   <SelectValue placeholder="Assignee" />
                 </SelectTrigger>
                 <SelectContent>

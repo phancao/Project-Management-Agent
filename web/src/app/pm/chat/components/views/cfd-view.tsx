@@ -106,7 +106,7 @@ export function CFDView() {
           </p>
         </div>
         {bottlenecks.length > 0 && (
-          <div className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+          <div className="inline-flex items-center h-7 px-3 rounded-full text-sm font-medium shadow-lg ring-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200 shadow-yellow-500/30 dark:shadow-yellow-500/40 ring-yellow-500/20 dark:ring-yellow-500/30">
             ⚠ {bottlenecks.length} Bottleneck{bottlenecks.length > 1 ? 's' : ''}
           </div>
         )}
@@ -114,27 +114,27 @@ export function CFDView() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Items</div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalItems}</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Avg WIP</div>
           <div className="text-2xl font-bold text-orange-600">{avgWIP.toFixed(1)}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Work in Progress</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Avg Cycle Time</div>
           <div className="text-2xl font-bold text-blue-600">{avgCycleTime.toFixed(1)} days</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Flow Efficiency</div>
           <div className="text-2xl font-bold text-green-600">{flowEfficiency.toFixed(0)}%</div>
         </Card>
       </div>
 
       {/* CFD Chart */}
-      <Card className="p-6">
+      <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
         <ResponsiveContainer width="100%" height={400}>
           <AreaChart data={cfdData}>
             <defs>
@@ -171,7 +171,7 @@ export function CFDView() {
       {/* Status Distribution & Bottlenecks */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Status Distribution */}
-        <Card className="p-6">
+        <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Current Distribution</h3>
           <div className="space-y-3">
             {Object.entries(statusDistribution).map(([status, count]) => {
@@ -203,7 +203,7 @@ export function CFDView() {
         </Card>
 
         {/* Bottlenecks & Insights */}
-        <Card className="p-6">
+        <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Insights</h3>
           <div className="space-y-3">
             {bottlenecks.length > 0 ? (

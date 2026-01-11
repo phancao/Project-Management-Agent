@@ -13,6 +13,7 @@ import { Badge } from "~/components/ui/badge";
 import { Progress } from "~/components/ui/progress";
 import { useMemberProfile } from "../context/member-profile-context";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
+import { useCardGlow, useStatCardGlow } from "~/core/hooks/use-theme-colors";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 // Color palette for pie chart
@@ -138,6 +139,10 @@ function MemberAvatar({ member }: { member: PMUser }) {
 }
 
 export function TeamOverview() {
+    // Get configurable glow classes from theme settings
+    const cardGlow = useCardGlow();
+    const statCardGlow = useStatCardGlow();
+
     // Get current week's date range
     const weekRange = useMemo(() => {
         const start = getWeekStart()
@@ -281,7 +286,7 @@ export function TeamOverview() {
         <div className="grid gap-6">
             {/* Aggregate Summary Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border-indigo-200 dark:border-indigo-900">
+                <Card className={`bg-gradient-to-br from-indigo-500/10 to-purple-500/10 ${statCardGlow.className}`}>
                     <CardContent className="pt-4">
                         <div className="flex items-center gap-2 mb-2">
                             <Users className="w-4 h-4 text-indigo-500" />
@@ -290,7 +295,7 @@ export function TeamOverview() {
                         <div className="text-2xl font-bold">{aggregateStats.totalMembers}</div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-200 dark:border-blue-900">
+                <Card className={`bg-gradient-to-br from-blue-500/10 to-cyan-500/10 ${statCardGlow.className}`}>
                     <CardContent className="pt-4">
                         <div className="flex items-center gap-2 mb-2">
                             <ListTodo className="w-4 h-4 text-blue-500" />
@@ -299,7 +304,7 @@ export function TeamOverview() {
                         <div className="text-2xl font-bold">{aggregateStats.totalTasks}</div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-200 dark:border-green-900">
+                <Card className={`bg-gradient-to-br from-green-500/10 to-emerald-500/10 ${statCardGlow.className}`}>
                     <CardContent className="pt-4">
                         <div className="flex items-center gap-2 mb-2">
                             <TrendingUp className="w-4 h-4 text-green-500" />
@@ -308,7 +313,7 @@ export function TeamOverview() {
                         <div className="text-2xl font-bold">{aggregateStats.avgUtilization}%</div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-200 dark:border-purple-900">
+                <Card className={`bg-gradient-to-br from-purple-500/10 to-pink-500/10 ${statCardGlow.className}`}>
                     <CardContent className="pt-4">
                         <div className="flex items-center gap-2 mb-2">
                             <Briefcase className="w-4 h-4 text-purple-500" />
@@ -323,7 +328,7 @@ export function TeamOverview() {
             {perTeamExperience.map((teamData) => (
                 <div key={teamData.teamId} className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                     {/* Main Chart Card - col-span-5 */}
-                    <Card className="col-span-5">
+                    <Card className={`col-span-5 ${cardGlow.className}`}>
                         <CardHeader>
                             <div className="flex items-center justify-between">
                                 <div>
@@ -382,7 +387,7 @@ export function TeamOverview() {
                     </Card>
 
                     {/* Details Card - col-span-2 */}
-                    <Card className="col-span-2">
+                    <Card className={`col-span-2 ${cardGlow.className}`}>
                         <CardHeader>
                             <CardTitle>Project Details</CardTitle>
                             <CardDescription>All projects ({teamData.experience.length})</CardDescription>

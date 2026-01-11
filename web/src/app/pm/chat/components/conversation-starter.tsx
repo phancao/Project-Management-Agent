@@ -38,7 +38,7 @@ export function ConversationStarter({
             }}
           >
             <div
-              className="bg-card/50 hover:bg-card group relative h-full w-full cursor-pointer overflow-hidden rounded-3xl border border-border/50 p-6 backdrop-blur-sm transition-all duration-300 hover:border-brand/50 hover:shadow-xl hover:-translate-y-1"
+              className="bg-card/50 hover:bg-card group relative h-full w-full cursor-pointer overflow-hidden rounded-3xl border border-indigo-500/20 dark:border-indigo-500/30 ring-1 ring-indigo-500/10 dark:ring-indigo-500/20 shadow-lg shadow-indigo-500/5 dark:shadow-xl dark:shadow-indigo-500/15 p-6 backdrop-blur-sm transition-all duration-300 hover:border-indigo-400/40 dark:hover:border-indigo-500/50 hover:ring-indigo-400/20 dark:hover:ring-indigo-500/30 hover:shadow-xl hover:shadow-indigo-400/15 dark:hover:shadow-indigo-500/25 hover:-translate-y-1"
               onClick={() => {
                 onSend?.(question);
               }}

@@ -110,10 +110,10 @@ export function WorkDistributionView() {
       {/* Dimension Tabs */}
       <Tabs value={activeDimension} onValueChange={(v) => setActiveDimension(v as Dimension)}>
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="assignee">👤 By Assignee</TabsTrigger>
-          <TabsTrigger value="priority">🎯 By Priority</TabsTrigger>
-          <TabsTrigger value="type">📋 By Type</TabsTrigger>
-          <TabsTrigger value="status">📊 By Status</TabsTrigger>
+          <TabsTrigger value="assignee" className="data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">👤 By Assignee</TabsTrigger>
+          <TabsTrigger value="priority" className="data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">🎯 By Priority</TabsTrigger>
+          <TabsTrigger value="type" className="data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">📋 By Type</TabsTrigger>
+          <TabsTrigger value="status" className="data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">📊 By Status</TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeDimension} className="space-y-6 mt-6">
@@ -232,7 +232,7 @@ export function WorkDistributionView() {
           </div>
 
           {/* Detailed Breakdown Table */}
-          <Card className="p-6">
+          <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Detailed Breakdown</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -280,7 +280,7 @@ export function WorkDistributionView() {
 
           {/* Insights */}
           {insights.length > 0 && (
-            <Card className="p-6">
+            <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Insights</h3>
               <div className="space-y-3">
                 {insights.map((insight: string, index: number) => (

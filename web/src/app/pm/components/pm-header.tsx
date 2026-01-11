@@ -200,7 +200,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
           size="sm"
           className={cn(
             "rounded-xl font-medium transition-all duration-300",
-            isChat ? "bg-brand text-white shadow-lg shadow-brand/25 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
+            isChat ? "bg-brand text-white shadow-lg shadow-brand/40 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
             vertical ? "w-full justify-start text-base py-6" : "px-5"
           )}
         >
@@ -217,7 +217,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
           size="sm"
           className={cn(
             "rounded-xl font-medium transition-all duration-300 hover:bg-brand/5 hover:text-brand",
-            pathname?.includes('/team') ? "bg-brand text-white shadow-lg shadow-brand/25 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
+            pathname?.includes('/team') ? "bg-brand text-white shadow-lg shadow-brand/40 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
             vertical ? "w-full justify-start text-base py-6" : "px-5"
           )}
         >
@@ -235,7 +235,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
           size="sm"
           className={cn(
             "rounded-xl font-medium transition-all duration-300 hover:bg-brand/5 hover:text-brand",
-            isMeeting ? "bg-brand text-white shadow-lg shadow-brand/25 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
+            isMeeting ? "bg-brand text-white shadow-lg shadow-brand/40 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
             vertical ? "w-full justify-start text-base py-6" : "px-5"
           )}
         >
@@ -320,7 +320,7 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
                     variant="outline"
                     role="combobox"
                     aria-expanded={projectComboboxOpen}
-                    className="w-full justify-between overflow-hidden rounded-xl border-border/60 hover:border-brand/40 bg-background/50 backdrop-blur-sm transition-all shadow-sm"
+                    className="w-full justify-between overflow-hidden rounded-xl border-indigo-500/20 dark:border-indigo-500/30 bg-background/50 backdrop-blur-sm transition-all shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-400/20 dark:hover:shadow-indigo-500/30"
                     disabled={projectsLoading || projects.length === 0}
                   >
                     {selectedProject ? (

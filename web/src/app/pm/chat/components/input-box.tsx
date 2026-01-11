@@ -123,7 +123,11 @@ export function InputBox({
   return (
     <div
       className={cn(
-        "bg-background/95 dark:bg-card/45 relative flex h-full w-full flex-col rounded-2xl md:rounded-3xl border border-border/60 shadow-xl backdrop-blur-md transition-all duration-300 focus-within:border-brand/40 focus-within:ring-1 focus-within:ring-brand/10",
+        "bg-background/95 dark:bg-card/45 relative flex h-full w-full flex-col rounded-2xl md:rounded-3xl backdrop-blur-md transition-all duration-300",
+        "border border-indigo-500/20 dark:border-indigo-500/30",
+        "ring-1 ring-indigo-500/10 dark:ring-indigo-500/20",
+        "shadow-xl shadow-indigo-500/5 dark:shadow-2xl dark:shadow-indigo-500/15",
+        "focus-within:border-indigo-400/40 dark:focus-within:border-indigo-500/50 focus-within:ring-indigo-400/20 dark:focus-within:ring-indigo-500/30",
         className,
       )}
       ref={containerRef}
@@ -257,9 +261,9 @@ export function InputBox({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-10 w-10 rounded-full bg-gray-100 dark:bg-muted-foreground/5 hover:bg-brand/10 border border-gray-200 dark:border-transparent transition-all duration-300",
+                "h-10 w-10 rounded-full bg-gray-100 dark:bg-muted-foreground/5 hover:bg-brand/10 border border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 transition-all duration-300",
                 isEnhancing && "animate-pulse",
-                !isEnhancing && currentPrompt.trim() !== "" && "hover:border-brand/30"
+                !isEnhancing && currentPrompt.trim() !== "" && "hover:border-brand/40 hover:shadow-xl hover:shadow-brand/30"
               )}
               onClick={handleEnhancePrompt}
               disabled={isEnhancing || currentPrompt.trim() === ""}
@@ -279,8 +283,9 @@ export function InputBox({
               size="icon"
               className={cn(
                 "h-10 w-10 rounded-full transition-all duration-500",
-                currentPrompt.trim() !== "" && !responding && "bg-brand hover:bg-brand/90 text-white scale-110 shadow-lg shadow-brand/20",
-                responding && "bg-destructive hover:bg-destructive/90 text-white shadow-lg shadow-destructive/20"
+                currentPrompt.trim() !== "" && !responding && "bg-brand hover:bg-brand/90 text-white scale-110 shadow-lg shadow-brand/40 hover:shadow-xl hover:shadow-brand/50",
+                responding && "bg-destructive hover:bg-destructive/90 text-white shadow-lg shadow-destructive/40",
+                currentPrompt.trim() === "" && !responding && "border border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20"
               )}
               onClick={() => inputRef.current?.submit()}
             >

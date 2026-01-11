@@ -276,7 +276,7 @@ export function WorklogsView() {
 
             {/* Activity Type Pie Chart */}
             {activityData.length > 0 && (
-                <Card className="p-6">
+                <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                         Hours by Activity Type
                     </h3>
@@ -349,7 +349,7 @@ export function WorklogsView() {
             )}
 
             {/* Stacked Bar Chart */}
-            <Card className="p-6">
+            <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                     Weekly Worklogs by Team Member
                 </h3>
@@ -397,7 +397,7 @@ export function WorklogsView() {
             </Card>
 
             {/* Summary Table */}
-            <Card className="p-6">
+            <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                     Member Summary
                 </h3>

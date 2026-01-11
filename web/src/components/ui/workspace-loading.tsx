@@ -52,7 +52,10 @@ export function WorkspaceLoading({
 
     const content = (
         <div className={cn(
-            "bg-card rounded-2xl border border-gray-200 dark:border-0 shadow-xl dark:shadow-2xl dark:shadow-indigo-500/5 p-8 w-full max-w-sm backdrop-blur-sm",
+            "bg-card rounded-2xl p-8 w-full max-w-sm backdrop-blur-sm",
+            "border border-indigo-500/30 dark:border-indigo-500/40",
+            "ring-1 ring-indigo-500/20 dark:ring-indigo-500/30",
+            "shadow-xl shadow-indigo-500/10 dark:shadow-2xl dark:shadow-indigo-500/25",
             colors.darkShadow
         )}>
             {/* Header */}

@@ -2125,7 +2125,7 @@ function _BacklogViewOriginal() {
                     placeholder="Search tasks..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15"
                   />
                 </div>
               </div>
@@ -2133,7 +2133,7 @@ function _BacklogViewOriginal() {
                 <div className="flex gap-2">
                   {availableStatuses.length > 0 && (
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-[140px] border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
                         <Filter className="w-4 h-4 mr-2" />
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
@@ -2147,7 +2147,7 @@ function _BacklogViewOriginal() {
                   )}
                   {availablePriorities.length > 0 && (
                     <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-[140px] border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 hover:border-indigo-400/40 dark:hover:border-indigo-500/50">
                         <SelectValue placeholder="Priority" />
                       </SelectTrigger>
                       <SelectContent>

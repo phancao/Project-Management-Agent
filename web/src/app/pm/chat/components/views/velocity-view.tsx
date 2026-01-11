@@ -111,27 +111,32 @@ export function VelocityView() {
             Last {velocityData.length} Sprints
           </p>
         </div>
-        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${getTrendColor()} bg-gray-100 dark:bg-gray-800`}>
-          <span className="text-xl">{getTrendIcon()}</span>
+        <div className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-medium shadow-lg ring-1 ${trend === "increasing"
+          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 shadow-green-500/30 dark:shadow-green-500/40 ring-green-500/20 dark:ring-green-500/30"
+          : trend === "decreasing"
+            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 shadow-red-500/30 dark:shadow-red-500/40 ring-red-500/20 dark:ring-red-500/30"
+            : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 shadow-gray-500/30 dark:shadow-gray-500/40 ring-gray-500/20 dark:ring-gray-500/30"
+          }`}>
+          <span>{getTrendIcon()}</span>
           <span className="capitalize">{trend}</span>
         </div>
       </div>
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Average Velocity</div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{averageVelocity.toFixed(1)} pts</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Median Velocity</div>
           <div className="text-2xl font-bold text-blue-600">{medianVelocity.toFixed(1)} pts</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Latest Sprint</div>
           <div className="text-2xl font-bold text-green-600">{latestVelocity.toFixed(1)} pts</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Predictability</div>
           <div className="text-2xl font-bold text-purple-600">
             {(predictabilityScore * 100).toFixed(0)}%
@@ -140,7 +145,7 @@ export function VelocityView() {
       </div>
 
       {/* Velocity Chart */}
-      <Card className="p-6">
+      <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={velocityData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
@@ -168,7 +173,7 @@ export function VelocityView() {
       </Card>
 
       {/* Insights */}
-      <Card className="p-6">
+      <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Insights</h3>
         <div className="space-y-3">
           <div className="flex items-start gap-3">

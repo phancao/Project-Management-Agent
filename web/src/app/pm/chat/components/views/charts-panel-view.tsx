@@ -21,28 +21,28 @@ export function ChartsPanelView() {
     <div className="h-full w-full">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
         <TabsList className="w-full justify-start bg-transparent backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 rounded-none p-2">
-          <TabsTrigger value="burndown" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/25">
+          <TabsTrigger value="burndown" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">
             📉 Burndown
           </TabsTrigger>
-          <TabsTrigger value="velocity" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/25">
+          <TabsTrigger value="velocity" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">
             ⚡ Velocity
           </TabsTrigger>
-          <TabsTrigger value="sprint-report" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/25">
+          <TabsTrigger value="sprint-report" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">
             📊 Sprint Report
           </TabsTrigger>
-          <TabsTrigger value="cfd" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/25">
+          <TabsTrigger value="cfd" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">
             📈 CFD
           </TabsTrigger>
-          <TabsTrigger value="cycle-time" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/25">
+          <TabsTrigger value="cycle-time" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">
             ⏱️ Cycle Time
           </TabsTrigger>
-          <TabsTrigger value="work-distribution" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/25">
+          <TabsTrigger value="work-distribution" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">
             🥧 Distribution
           </TabsTrigger>
-          <TabsTrigger value="issue-trend" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/25">
+          <TabsTrigger value="issue-trend" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">
             📊 Trend
           </TabsTrigger>
-          <TabsTrigger value="worklogs" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/25">
+          <TabsTrigger value="worklogs" className="px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 border border-transparent data-[state=active]:border-indigo-500/30 dark:data-[state=active]:border-indigo-500/40">
             ⏱️ Worklogs
           </TabsTrigger>
         </TabsList>

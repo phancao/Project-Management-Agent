@@ -174,10 +174,12 @@ export function TeamRoster({ team, onAddMember, onRemoveMember }: TeamRosterProp
                                 key={member.id}
                                 className={cn(
                                     "group relative flex items-center gap-4 p-4 rounded-xl transition-all duration-300",
-                                    "bg-card shadow-lg dark:shadow-xl dark:shadow-indigo-500/5",
-                                    "border border-gray-200/80 dark:border-slate-700/30",
-                                    "hover:border-indigo-300/80 dark:hover:border-indigo-500/40",
-                                    "hover:shadow-xl hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10",
+                                    "bg-card shadow-lg shadow-indigo-500/10 dark:shadow-xl dark:shadow-indigo-500/20",
+                                    "border border-indigo-500/20 dark:border-indigo-500/30",
+                                    "ring-1 ring-indigo-500/10 dark:ring-indigo-500/20",
+                                    "hover:border-indigo-400/40 dark:hover:border-indigo-500/50",
+                                    "hover:shadow-xl hover:shadow-indigo-400/20 dark:hover:shadow-indigo-500/30",
+                                    "hover:ring-indigo-400/20 dark:hover:ring-indigo-500/30",
                                     "hover:scale-[1.01]"
                                 )}
                             >

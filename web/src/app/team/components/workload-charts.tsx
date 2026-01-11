@@ -11,6 +11,7 @@ import { Button } from "~/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import { Calendar } from "~/components/ui/calendar"
 import { useMemberProfile } from "../context/member-profile-context"
+import { useCardGlow } from "~/core/hooks/use-theme-colors"
 
 // Helper to get start of week (Monday) with offset
 function getWeekStart(weekOffset: number = 0): Date {
@@ -42,6 +43,9 @@ const COMPLETED_STATUSES = [
 ];
 
 export function WorkloadCharts() {
+    // Get configurable glow classes from theme settings
+    const cardGlow = useCardGlow();
+
     // Week navigation state
     const [weekOffset, setWeekOffset] = useState(0)
     // Team selector state
@@ -206,7 +210,7 @@ export function WorkloadCharts() {
 
     return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="col-span-5">
+            <Card className={`col-span-5 ${cardGlow.className}`}>
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div>
@@ -424,9 +428,10 @@ export function WorkloadCharts() {
 // Separate component for Workload Details to use the hook
 function WorkloadDetails({ workloadData }: { workloadData: Array<{ id: string; name: string; fullName: string; timeSpent: number; taskCount: number; totalWorkload: number; status: string }> }) {
     const { openMemberProfile } = useMemberProfile();
+    const cardGlow = useCardGlow();
 
     return (
-        <Card className="col-span-2">
+        <Card className={`col-span-2 ${cardGlow.className}`}>
             <CardHeader>
                 <CardTitle>Workload Details</CardTitle>
                 <CardDescription>All team members ({workloadData.length})</CardDescription>

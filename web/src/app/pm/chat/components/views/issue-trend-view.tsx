@@ -110,21 +110,21 @@ export function IssueTrendView() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Created</div>
           <div className="text-2xl font-bold text-blue-600">{totalCreated}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {avgCreatedPerDay.toFixed(1)}/day
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Resolved</div>
           <div className="text-2xl font-bold text-green-600">{totalResolved}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {avgResolvedPerDay.toFixed(1)}/day
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Net Change</div>
           <div className={`text-2xl font-bold ${netChange > 0 ? "text-red-600" : netChange < 0 ? "text-green-600" : "text-gray-600"}`}>
             {netChange > 0 ? "+" : ""}{netChange}
@@ -133,7 +133,7 @@ export function IssueTrendView() {
             {netChange > 0 ? "Backlog growing" : netChange < 0 ? "Backlog shrinking" : "Stable"}
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Cumulative Net</div>
           <div className={`text-2xl font-bold ${cumulativeNet > 0 ? "text-red-600" : cumulativeNet < 0 ? "text-green-600" : "text-gray-600"}`}>
             {cumulativeNet > 0 ? "+" : ""}{cumulativeNet}
@@ -142,7 +142,7 @@ export function IssueTrendView() {
             Total impact
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Resolution Rate</div>
           <div className="text-2xl font-bold text-purple-600">
             {totalCreated + totalResolved > 0
@@ -156,7 +156,7 @@ export function IssueTrendView() {
       </div>
 
       {/* Trend Chart */}
-      <Card className="p-6">
+      <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Issue Trend Over Time</h3>
         <ResponsiveContainer width="100%" height={400}>
           <ComposedChart data={trendData}>
@@ -210,7 +210,7 @@ export function IssueTrendView() {
 
       {/* Insights */}
       {insights.length > 0 && (
-        <Card className="p-6">
+        <Card className="p-6 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Insights</h3>
           <div className="space-y-3">
             {insights.map((insight: string, index: number) => (

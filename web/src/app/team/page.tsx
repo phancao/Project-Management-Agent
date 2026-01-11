@@ -35,6 +35,27 @@ function TeamContent() {
         return null;
     }
 
+    // Render only the active tab's content (lazy loading)
+    // This prevents ALL tabs from mounting simultaneously and triggering redundant API calls
+    const renderActiveTab = () => {
+        switch (activeTab) {
+            case "overview":
+                return <TeamOverview />;
+            case "members":
+                return <TeamMembers />;
+            case "assignments":
+                return <MemberMatrix />;
+            case "planning":
+                return <CapacityPlanningView />;
+            case "worklogs":
+                return <TeamWorklogs />;
+            case "efficiency":
+                return <EfficiencyView />;
+            default:
+                return <TeamOverview />;
+        }
+    };
+
     return (
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="bg-transparent p-1 rounded-xl">
@@ -64,29 +85,9 @@ function TeamContent() {
                 </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="space-y-6 animate-in fade-in-50 duration-300">
-                <TeamOverview />
-            </TabsContent>
-
-            <TabsContent value="members" className="space-y-6 animate-in fade-in-50 duration-300">
-                <TeamMembers />
-            </TabsContent>
-
-            <TabsContent value="assignments" className="space-y-6 animate-in fade-in-50 duration-300">
-                <MemberMatrix />
-            </TabsContent>
-
-            <TabsContent value="planning" className="space-y-6 animate-in fade-in-50 duration-300">
-                <CapacityPlanningView />
-            </TabsContent>
-
-            <TabsContent value="worklogs" className="space-y-6 animate-in fade-in-50 duration-300">
-                <TeamWorklogs />
-            </TabsContent>
-
-            <TabsContent value="efficiency" className="space-y-6 animate-in fade-in-50 duration-300">
-                <EfficiencyView />
-            </TabsContent>
+            <div className="space-y-6 animate-in fade-in-50 duration-300">
+                {renderActiveTab()}
+            </div>
         </Tabs>
     );
 }

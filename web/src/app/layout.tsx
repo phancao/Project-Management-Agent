@@ -18,6 +18,7 @@ import { LoadingProvider } from "~/core/contexts/loading-context";
 import { LoadingScreen } from "~/components/ui/loading-screen";
 import { AuthProvider } from "~/core/contexts/auth-context";
 import { HolidaysProvider } from "~/contexts/holidays-context";
+import { BugBaseProvider } from "~/components/bugbase";
 
 export const metadata: Metadata = {
   title: "🌌 Galaxy AI Project Manager",
@@ -59,7 +60,9 @@ export default async function RootLayout({
             <LoadingScreen />
             <ThemeProviderWrapper>
               <HolidaysProvider>
-                <AuthProvider>{children}</AuthProvider>
+                <AuthProvider>
+                  <BugBaseProvider>{children}</BugBaseProvider>
+                </AuthProvider>
               </HolidaysProvider>
             </ThemeProviderWrapper>
           </LoadingProvider>

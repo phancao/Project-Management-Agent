@@ -280,6 +280,28 @@ The system uses an intelligent conversation flow manager that:
 - **Task Planner Agent**: Breaks down projects into actionable tasks
 - **Knowledge Agent**: Manages knowledge base and search
 
+
+## 🐛 BugBase Self-Improvement System
+
+**BugBase** is a closed-loop system that allows the AI Project Manager to fix its own bugs. It enables users to report issues directly from the UI, and AI agents to investigate and resolve them autonomously.
+
+### Core Components
+
+1.  **Frontend Widget**: Floating report button that captures screenshots and navigation history.
+2.  **MCP Server**: A dedicated Model Context Protocol server (`bugbase_mcp_server`) that bridges the gap between the app and AI coding assistants (Antigravity/Cursor).
+3.  **Admin Panel**: A centralized dashboard at `/bugbase` to view and triage reports.
+
+### Features
+
+- **One-Click Reporting**: Automatically captures state, URL, and screenshot.
+- **AI-Readable Reports**: Exposed via MCP tools (`list_bugs`, `get_bug_details`).
+- **Autonomous Fixing**: AI agents can read a bug, check the screenshot, find the code, fix it, and mark the bug as resolved.
+
+### Quick Links
+
+- **Admin Panel**: [http://localhost:3000/bugbase](http://localhost:3000/bugbase)
+- **MCP Setup**: See `bugbase_mcp_server/README.md` for connection instructions.
+
 ## 🗄️ Database Schema
 
 ### Core Tables

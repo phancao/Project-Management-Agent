@@ -103,6 +103,8 @@ services:
       # This allows Next.js API routes to reach the backend running on the host
       - API_URL=http://host.docker.internal:8000
       - NODE_OPTIONS=--max-old-space-size=4096
+      # BugBase MCP Server URL for bug report submission
+      - BUGBASE_MCP_URL=http://bugbase-mcp-server:8082
     ports:
       - "3000:3000"
     depends_on:
@@ -291,12 +293,68 @@ services:
           cpus: '0.5'
           memory: 512M
 
+  # BugBase Database (PostgreSQL - for self-improvement bug tracking)
+  bugbase_postgres:
+    container_name: bugbase-postgres
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: bugbase
+      POSTGRES_USER: bugbase_user
+      POSTGRES_PASSWORD: bugbase_password
+    volumes:
+      - bugbase_postgres_data:/var/lib/postgresql/data
+      - ./database/bugbase_schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U bugbase_user -d bugbase" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # BugBase MCP Server - Bug reporting and AI-assisted bug fixing
+  bugbase_mcp_server:
+    container_name: bugbase-mcp-server
+    build:
+      context: .
+      dockerfile: Dockerfile.bugbase
+    environment:
+      - DATABASE_URL=postgresql://bugbase_user:bugbase_password@bugbase-postgres:5432/bugbase
+      - MCP_TRANSPORT=sse
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8082
+      - SCREENSHOT_DIR=/app/uploads/screenshots
+    ports:
+      - "8082:8082"
+    depends_on:
+      bugbase_postgres:
+        condition: service_healthy
+    volumes:
+      - ./bugbase_mcp_server:/app
+      - ./uploads/screenshots:/app/uploads/screenshots
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8082/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
 volumes:
   postgres_data:
   mcp_postgres_data:
   qdrant_data:
   openproject_db_data_v13:
   openproject_data_v13:
+  bugbase_postgres_data:
 
 
 networks:

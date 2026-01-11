@@ -191,7 +191,10 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
 
   const NavButtons = ({ vertical = false }: { vertical?: boolean }) => (
     <div className={`flex ${vertical ? 'flex-col gap-2 w-full' : 'items-center gap-3 border-r border-border/40 pr-6'}`}>
-      <Link href={`/pm/chat${selectedProject ? `?project=${selectedProject}` : ''}`} className={vertical ? 'w-full' : ''}>
+      <Link
+        href={`/pm/chat${selectedProject ? `?project=${selectedProject}` : ''}`}
+        className={vertical ? 'w-full' : ''}
+      >
         <Button
           variant={isChat ? "default" : "ghost"}
           size="sm"
@@ -205,7 +208,10 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
         </Button>
       </Link>
 
-      <Link href="/team" className={vertical ? 'w-full' : ''}>
+      <Link
+        href="/team"
+        className={vertical ? 'w-full' : ''}
+      >
         <Button
           variant={pathname?.includes('/team') ? "default" : "ghost"}
           size="sm"
@@ -220,7 +226,10 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
         </Button>
       </Link>
 
-      <Link href="/meeting" className={vertical ? 'w-full' : ''}>
+      <Link
+        href="/meeting"
+        className={vertical ? 'w-full' : ''}
+      >
         <Button
           variant={isMeeting ? "default" : "ghost"}
           size="sm"

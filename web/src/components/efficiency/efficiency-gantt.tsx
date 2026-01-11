@@ -291,10 +291,54 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                         };
 
                                         // Check if member is allocated (has non-zero target)
-                                        // For day view: also check for active periods if not a non-working day
+                                        // For day view: weekends should only show if within an active period
                                         const memberPeriodsList = activePeriods[member.id];
                                         const hasActivePeriod = memberPeriodsList && memberPeriodsList.length > 0;
-                                        const isAllocated = hasActivePeriod ? target > 0 || isNonWorkingDay : true;
+
+                                        // Debug log (only for first period column to avoid spam)
+                                        if (periods.indexOf(period) === 0 && hasActivePeriod) {
+                                            console.log('[EfficiencyGantt] Member:', member.name, 'ID:', member.id);
+                                            console.log('  -> Period from data:', memberPeriodsList[0]?.range?.from, 'type:', typeof memberPeriodsList[0]?.range?.from);
+                                            console.log('  -> Period to data:', memberPeriodsList[0]?.range?.to, 'type:', typeof memberPeriodsList[0]?.range?.to);
+                                        }
+
+                                        // Check if this day falls within any active period (including weekends)
+                                        const isWithinAnyActivePeriod = hasActivePeriod && memberPeriodsList.some(p => {
+                                            if (!p.range.from) return false;
+                                            // Ensure dates are Date objects (might be strings from localStorage)
+                                            const fromDate = p.range.from instanceof Date ? p.range.from : new Date(p.range.from as string);
+                                            const toDate = p.range.to
+                                                ? (p.range.to instanceof Date ? p.range.to : new Date(p.range.to as string))
+                                                : fromDate;
+
+                                            const result = isWithinInterval(period, {
+                                                start: startOfDay(fromDate),
+                                                end: endOfDay(toDate)
+                                            });
+
+                                            // Debug: Log for Luong Vo Dai on Sep 19 (should be false)
+                                            const monthDay = `${period.getMonth() + 1}-${period.getDate()}`;
+                                            if (member.name.includes('Luong') && monthDay === '9-19') {
+                                                console.log('[DEBUG] Luong Sep 19 check:');
+                                                console.log('  period:', period.toISOString());
+                                                console.log('  fromDate:', fromDate.toISOString());
+                                                console.log('  toDate:', toDate.toISOString());
+                                                console.log('  isWithinInterval result:', result);
+                                            }
+
+                                            return result;
+                                        });
+
+                                        // Member is allocated if:
+                                        // 1. No active periods defined (default to showing all)
+                                        // 2. Has active periods AND this day is within one of them
+                                        const isAllocated = hasActivePeriod ? isWithinAnyActivePeriod : true;
+
+                                        // Debug: Log final isAllocated for Luong on Sep 19
+                                        const monthDay2 = `${period.getMonth() + 1}-${period.getDate()}`;
+                                        if (member.name.includes('Luong') && monthDay2 === '9-19') {
+                                            console.log('[DEBUG] Luong Sep 19 final:', { hasActivePeriod, isWithinAnyActivePeriod, isAllocated });
+                                        }
 
                                         return (
                                             <div
@@ -312,88 +356,103 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                         <TooltipTrigger asChild>
                                                             <div className={cn(
                                                                 "relative flex items-center justify-center cursor-pointer",
-                                                                isNonWorkingDay && "opacity-30"
+                                                                isWknd && "opacity-40"
                                                             )}>
-                                                                {/* Pie Wedge Chart - hours out of 8 */}
-                                                                <svg width={size} height={size} className="transform -rotate-90">
-                                                                    {/* Background circle (outline) */}
-                                                                    <circle
-                                                                        cx={size / 2}
-                                                                        cy={size / 2}
-                                                                        r={radius - 2}
-                                                                        fill="none"
-                                                                        strokeWidth={2}
-                                                                        className="stroke-gray-300 dark:stroke-gray-600"
-                                                                    />
-                                                                    {/* Pie wedge for hours logged (out of 8h max) */}
-                                                                    {hours > 0 && (() => {
-                                                                        const hoursAngle = Math.min((hours / 8) * 360, 360);
-                                                                        const startAngle = 0;
-                                                                        const endAngle = hoursAngle;
-                                                                        const largeArc = endAngle > 180 ? 1 : 0;
-                                                                        const cx = size / 2;
-                                                                        const cy = size / 2;
-                                                                        const r = radius - 4;
-
-                                                                        // Handle full circle case
-                                                                        if (hours >= 8) {
-                                                                            return (
-                                                                                <circle
-                                                                                    cx={cx}
-                                                                                    cy={cy}
-                                                                                    r={r}
-                                                                                    className={cn(
-                                                                                        "transition-all duration-500",
-                                                                                        percentage > 105 ? "fill-red-500" : percentage >= 90 ? "fill-emerald-500" : "fill-amber-400"
-                                                                                    )}
-                                                                                />
-                                                                            );
-                                                                        }
-
-                                                                        const x1 = cx;
-                                                                        const y1 = cy - r;
-                                                                        const x2 = cx + r * Math.sin((endAngle * Math.PI) / 180);
-                                                                        const y2 = cy - r * Math.cos((endAngle * Math.PI) / 180);
-
-                                                                        return (
-                                                                            <path
-                                                                                d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`}
-                                                                                className={cn(
-                                                                                    "transition-all duration-500",
-                                                                                    percentage > 105 ? "fill-red-500" : percentage >= 90 ? "fill-emerald-500" : "fill-amber-400"
-                                                                                )}
+                                                                {/* Show icons for holidays/vacations, chart for work days */}
+                                                                {isHolidayDay ? (
+                                                                    /* Holiday Icon */
+                                                                    <div className="flex items-center justify-center w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-900/50 border-2 border-amber-300 dark:border-amber-600">
+                                                                        <span className="text-lg">🎉</span>
+                                                                    </div>
+                                                                ) : isVacationDay ? (
+                                                                    /* Vacation Icon */
+                                                                    <div className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900/50 border-2 border-emerald-300 dark:border-emerald-600">
+                                                                        <span className="text-lg">🏖️</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    /* Regular Work Day - Pie Wedge Chart */
+                                                                    <>
+                                                                        <svg width={size} height={size} className="transform -rotate-90">
+                                                                            {/* Background circle (outline) */}
+                                                                            <circle
+                                                                                cx={size / 2}
+                                                                                cy={size / 2}
+                                                                                r={radius - 2}
+                                                                                fill="none"
+                                                                                strokeWidth={2}
+                                                                                className="stroke-gray-300 dark:stroke-gray-600"
                                                                             />
-                                                                        );
-                                                                    })()}
-                                                                    {/* Clock tick marks (8 ticks for 8 hours) */}
-                                                                    {[...Array(8)].map((_, i) => {
-                                                                        const angle = (i / 8) * 360;
-                                                                        const tickOuterRadius = size / 2 - 1;
-                                                                        const tickInnerRadius = tickOuterRadius - 5;
-                                                                        const x1 = size / 2 + tickInnerRadius * Math.cos((angle * Math.PI) / 180);
-                                                                        const y1 = size / 2 + tickInnerRadius * Math.sin((angle * Math.PI) / 180);
-                                                                        const x2 = size / 2 + tickOuterRadius * Math.cos((angle * Math.PI) / 180);
-                                                                        const y2 = size / 2 + tickOuterRadius * Math.sin((angle * Math.PI) / 180);
-                                                                        return (
-                                                                            <line
-                                                                                key={i}
-                                                                                x1={x1}
-                                                                                y1={y1}
-                                                                                x2={x2}
-                                                                                y2={y2}
-                                                                                strokeWidth={1.5}
-                                                                                className="stroke-gray-600 dark:stroke-gray-400"
-                                                                            />
-                                                                        );
-                                                                    })}
-                                                                </svg>
-                                                                {/* Hours text in center */}
-                                                                <span className={cn(
-                                                                    "absolute inset-0 flex items-center justify-center text-[10px] font-bold",
-                                                                    hours === 0 && !isNonWorkingDay ? "text-red-500" : "text-gray-700 dark:text-gray-200"
-                                                                )}>
-                                                                    {Number.isInteger(hours) ? hours : hours.toFixed(1)}
-                                                                </span>
+                                                                            {/* Pie wedge for hours logged (out of 8h max) */}
+                                                                            {hours > 0 && (() => {
+                                                                                const hoursAngle = Math.min((hours / 8) * 360, 360);
+                                                                                const startAngle = 0;
+                                                                                const endAngle = hoursAngle;
+                                                                                const largeArc = endAngle > 180 ? 1 : 0;
+                                                                                const cx = size / 2;
+                                                                                const cy = size / 2;
+                                                                                const r = radius - 4;
+
+                                                                                // Handle full circle case
+                                                                                if (hours >= 8) {
+                                                                                    return (
+                                                                                        <circle
+                                                                                            cx={cx}
+                                                                                            cy={cy}
+                                                                                            r={r}
+                                                                                            className={cn(
+                                                                                                "transition-all duration-500",
+                                                                                                percentage > 105 ? "fill-red-500" : percentage >= 90 ? "fill-emerald-500" : "fill-amber-400"
+                                                                                            )}
+                                                                                        />
+                                                                                    );
+                                                                                }
+
+                                                                                const x1 = cx;
+                                                                                const y1 = cy - r;
+                                                                                const x2 = cx + r * Math.sin((endAngle * Math.PI) / 180);
+                                                                                const y2 = cy - r * Math.cos((endAngle * Math.PI) / 180);
+
+                                                                                return (
+                                                                                    <path
+                                                                                        d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`}
+                                                                                        className={cn(
+                                                                                            "transition-all duration-500",
+                                                                                            percentage > 105 ? "fill-red-500" : percentage >= 90 ? "fill-emerald-500" : "fill-amber-400"
+                                                                                        )}
+                                                                                    />
+                                                                                );
+                                                                            })()}
+                                                                            {/* Clock tick marks (8 ticks for 8 hours) */}
+                                                                            {[...Array(8)].map((_, i) => {
+                                                                                const angle = (i / 8) * 360;
+                                                                                const tickOuterRadius = size / 2 - 1;
+                                                                                const tickInnerRadius = tickOuterRadius - 5;
+                                                                                const x1 = size / 2 + tickInnerRadius * Math.cos((angle * Math.PI) / 180);
+                                                                                const y1 = size / 2 + tickInnerRadius * Math.sin((angle * Math.PI) / 180);
+                                                                                const x2 = size / 2 + tickOuterRadius * Math.cos((angle * Math.PI) / 180);
+                                                                                const y2 = size / 2 + tickOuterRadius * Math.sin((angle * Math.PI) / 180);
+                                                                                return (
+                                                                                    <line
+                                                                                        key={i}
+                                                                                        x1={x1}
+                                                                                        y1={y1}
+                                                                                        x2={x2}
+                                                                                        y2={y2}
+                                                                                        strokeWidth={1.5}
+                                                                                        className="stroke-gray-600 dark:stroke-gray-400"
+                                                                                    />
+                                                                                );
+                                                                            })}
+                                                                        </svg>
+                                                                        {/* Hours text in center */}
+                                                                        <span className={cn(
+                                                                            "absolute inset-0 flex items-center justify-center text-[10px] font-bold",
+                                                                            hours === 0 && !isWknd ? "text-red-500" : "text-gray-700 dark:text-gray-200"
+                                                                        )}>
+                                                                            {Number.isInteger(hours) ? hours : hours.toFixed(1)}
+                                                                        </span>
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </TooltipTrigger>
                                                         <TooltipContent side="top" className="text-xs">
@@ -402,10 +461,18 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                                 {viewMode === 'week' && `Week of ${format(period, 'MMM d')}`}
                                                                 {viewMode === 'month' && format(period, 'MMMM yyyy')}
                                                             </div>
-                                                            <div>{member.name}: {hours.toFixed(2)} hours</div>
-                                                            <div className="text-gray-400 mt-1 capitalize">
-                                                                Target: {target}h ({percentage.toFixed(0)}%)
-                                                            </div>
+                                                            {isHolidayDay ? (
+                                                                <div className="text-amber-600 dark:text-amber-400">🎉 Holiday</div>
+                                                            ) : isVacationDay ? (
+                                                                <div className="text-emerald-600 dark:text-emerald-400">🏖️ Vacation</div>
+                                                            ) : (
+                                                                <>
+                                                                    <div>{member.name}: {hours.toFixed(2)} hours</div>
+                                                                    <div className="text-gray-400 mt-1 capitalize">
+                                                                        Target: {target}h ({percentage.toFixed(0)}%)
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 )}

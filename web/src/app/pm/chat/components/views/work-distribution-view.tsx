@@ -3,21 +3,36 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import { Card } from "~/components/ui/card";
 import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { useWorkDistributionChart } from "~/core/api/hooks/pm/use-analytics";
+import { useWorkDistributionChart, usePrefetchWorkDistribution } from "~/core/api/hooks/pm/use-analytics";
 import { useSearchParams } from "next/navigation";
 
 type Dimension = "assignee" | "priority" | "type" | "status";
+const ALL_DIMENSIONS: Dimension[] = ["assignee", "priority", "type", "status"];
 
 export function WorkDistributionView() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project");
   const [activeDimension, setActiveDimension] = useState<Dimension>("assignee");
+
+  // Prefetch all dimensions on mount for instant tab switching
+  const prefetchDistribution = usePrefetchWorkDistribution();
+
+  useEffect(() => {
+    if (projectId) {
+      // Prefetch all other dimensions in the background
+      ALL_DIMENSIONS.forEach((dimension) => {
+        if (dimension !== activeDimension) {
+          prefetchDistribution(projectId, dimension);
+        }
+      });
+    }
+  }, [projectId, prefetchDistribution]); // Only run on mount and projectId change
 
   const { data: chartData, isLoading: loading, error } = useWorkDistributionChart(projectId, activeDimension);
 

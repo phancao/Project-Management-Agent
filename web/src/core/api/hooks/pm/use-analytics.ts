@@ -1,4 +1,5 @@
 // Analytics API hooks for fetching chart data
+import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { resolveServiceURL } from "~/core/api/resolve-service-url";
 import { usePMRefresh } from "./use-pm-refresh";
@@ -90,14 +91,14 @@ export function useBurndownChart(projectId: string | null, sprintId?: string, sc
     queryKey: ["analytics", "burndown", projectId, sprintId, scopeType],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
-      
+
       const params = new URLSearchParams();
       if (sprintId) params.append("sprint_id", sprintId);
       params.append("scope_type", scopeType);
-      
+
       const url = resolveServiceURL(`analytics/projects/${projectId}/burndown?${params.toString()}`);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         let errorDetail = response.statusText;
         try {
@@ -108,7 +109,7 @@ export function useBurndownChart(projectId: string | null, sprintId?: string, sc
         }
         throw new Error(`Failed to fetch burndown chart: ${errorDetail}`);
       }
-      
+
       return response.json() as Promise<ChartResponse>;
     },
     enabled: !!projectId,
@@ -133,10 +134,10 @@ export function useVelocityChart(projectId: string | null, sprintCount: number =
     queryKey: ["analytics", "velocity", projectId, sprintCount],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
-      
+
       const url = resolveServiceURL(`analytics/projects/${projectId}/velocity?sprint_count=${sprintCount}`);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         let errorDetail = response.statusText;
         try {
@@ -147,7 +148,7 @@ export function useVelocityChart(projectId: string | null, sprintCount: number =
         }
         throw new Error(`Failed to fetch velocity chart: ${errorDetail}`);
       }
-      
+
       return response.json() as Promise<ChartResponse>;
     },
     enabled: !!projectId,
@@ -172,14 +173,14 @@ export function useSprintReport(sprintId: string | null, projectId: string | nul
     queryKey: ["analytics", "sprint-report", sprintId, projectId],
     queryFn: async () => {
       if (!sprintId || !projectId) throw new Error("Sprint ID and Project ID are required");
-      
+
       const url = resolveServiceURL(`analytics/sprints/${sprintId}/report?project_id=${projectId}`);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         throw new Error(`Failed to fetch sprint report: ${response.statusText}`);
       }
-      
+
       return response.json() as Promise<SprintReport>;
     },
     enabled: !!sprintId && !!projectId,
@@ -204,14 +205,14 @@ export function useProjectSummary(projectId: string | null) {
     queryKey: ["analytics", "summary", projectId],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
-      
+
       const url = resolveServiceURL(`analytics/projects/${projectId}/summary`);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         throw new Error(`Failed to fetch project summary: ${response.statusText}`);
       }
-      
+
       return response.json() as Promise<ProjectSummary>;
     },
     enabled: !!projectId,
@@ -236,14 +237,14 @@ export function useCFDChart(projectId: string | null, sprintId?: string, daysBac
     queryKey: ["analytics", "cfd", projectId, sprintId, daysBack],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
-      
+
       const params = new URLSearchParams();
       if (sprintId) params.append("sprint_id", sprintId);
       params.append("days_back", daysBack.toString());
-      
+
       const url = resolveServiceURL(`analytics/projects/${projectId}/cfd?${params.toString()}`);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         let errorDetail = response.statusText;
         try {
@@ -254,7 +255,7 @@ export function useCFDChart(projectId: string | null, sprintId?: string, daysBac
         }
         throw new Error(`Failed to fetch CFD chart: ${errorDetail}`);
       }
-      
+
       return response.json() as Promise<ChartResponse>;
     },
     enabled: !!projectId,
@@ -279,14 +280,14 @@ export function useCycleTimeChart(projectId: string | null, sprintId?: string, d
     queryKey: ["analytics", "cycleTime", projectId, sprintId, daysBack],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
-      
+
       const params = new URLSearchParams();
       if (sprintId) params.append("sprint_id", sprintId);
       params.append("days_back", daysBack.toString());
-      
+
       const url = resolveServiceURL(`analytics/projects/${projectId}/cycle-time?${params.toString()}`);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         let errorDetail = response.statusText;
         try {
@@ -297,7 +298,7 @@ export function useCycleTimeChart(projectId: string | null, sprintId?: string, d
         }
         throw new Error(`Failed to fetch cycle time chart: ${errorDetail}`);
       }
-      
+
       return response.json() as Promise<ChartResponse>;
     },
     enabled: !!projectId,
@@ -317,7 +318,7 @@ export function useCycleTimeChart(projectId: string | null, sprintId?: string, d
  * Hook to fetch Work Distribution chart data
  */
 export function useWorkDistributionChart(
-  projectId: string | null, 
+  projectId: string | null,
   dimension: "assignee" | "priority" | "type" | "status" = "assignee",
   sprintId?: string
 ) {
@@ -326,14 +327,14 @@ export function useWorkDistributionChart(
     queryKey: ["analytics", "workDistribution", projectId, dimension, sprintId],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
-      
+
       const params = new URLSearchParams();
       params.append("dimension", dimension);
       if (sprintId) params.append("sprint_id", sprintId);
-      
+
       const url = resolveServiceURL(`analytics/projects/${projectId}/work-distribution?${params.toString()}`);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         let errorDetail = response.statusText;
         try {
@@ -344,7 +345,7 @@ export function useWorkDistributionChart(
         }
         throw new Error(`Failed to fetch work distribution chart: ${errorDetail}`);
       }
-      
+
       return response.json() as Promise<ChartResponse>;
     },
     enabled: !!projectId,
@@ -361,6 +362,47 @@ export function useWorkDistributionChart(
 }
 
 /**
+ * Hook to prefetch Work Distribution chart data for instant tab switching.
+ * Returns a callback that can prefetch distribution data for any dimension.
+ */
+export function usePrefetchWorkDistribution() {
+  const queryClient = useQueryClient();
+
+  const prefetch = useCallback(
+    (projectId: string, dimension: "assignee" | "priority" | "type" | "status", sprintId?: string) => {
+      queryClient.prefetchQuery({
+        queryKey: ["analytics", "workDistribution", projectId, dimension, sprintId],
+        queryFn: async () => {
+          const params = new URLSearchParams();
+          params.append("dimension", dimension);
+          if (sprintId) params.append("sprint_id", sprintId);
+
+          const url = resolveServiceURL(`analytics/projects/${projectId}/work-distribution?${params.toString()}`);
+          const response = await fetch(url);
+
+          if (!response.ok) {
+            let errorDetail = response.statusText;
+            try {
+              const errorData = await response.json();
+              errorDetail = errorData.detail || errorData.message || errorDetail;
+            } catch {
+              // If response is not JSON, use status text
+            }
+            throw new Error(`Failed to fetch work distribution chart: ${errorDetail}`);
+          }
+
+          return response.json() as Promise<ChartResponse>;
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutes
+      });
+    },
+    [queryClient]
+  );
+
+  return prefetch;
+}
+
+/**
  * Hook to fetch Issue Trend Analysis chart data
  */
 export function useIssueTrendChart(projectId: string | null, daysBack: number = 30, sprintId?: string) {
@@ -369,14 +411,14 @@ export function useIssueTrendChart(projectId: string | null, daysBack: number = 
     queryKey: ["analytics", "issueTrend", projectId, daysBack, sprintId],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
-      
+
       const params = new URLSearchParams();
       params.append("days_back", daysBack.toString());
       if (sprintId) params.append("sprint_id", sprintId);
-      
+
       const url = resolveServiceURL(`analytics/projects/${projectId}/issue-trend?${params.toString()}`);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         let errorDetail = response.statusText;
         try {
@@ -387,7 +429,7 @@ export function useIssueTrendChart(projectId: string | null, daysBack: number = 
         }
         throw new Error(`Failed to fetch issue trend chart: ${errorDetail}`);
       }
-      
+
       return response.json() as Promise<ChartResponse>;
     },
     enabled: !!projectId,

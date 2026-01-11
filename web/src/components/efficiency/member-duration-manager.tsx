@@ -127,6 +127,7 @@ export function MemberDurationManager({ members, activePeriods, onChange, holida
                 ...activePeriods,
                 [memberId]: newPeriods
             });
+            console.log('[MemberDurationManager] Added period for member:', memberId, 'New periods:', newPeriods);
         }
 
         setTempDateRange(undefined);
@@ -167,6 +168,7 @@ export function MemberDurationManager({ members, activePeriods, onChange, holida
             ...activePeriods,
             [vacationMember]: updatedPeriods
         });
+        console.log('[MemberDurationManager] Added vacation for member:', vacationMember, 'Updated periods:', updatedPeriods);
 
         setVacationRange(undefined);
         setVacationMember(null);

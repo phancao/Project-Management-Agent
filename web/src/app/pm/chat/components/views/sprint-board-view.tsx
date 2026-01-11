@@ -108,7 +108,7 @@ function TaskCard({ task, onClick, disabled }: { task: BoardTask; onClick: () =>
       style={style}
       data-task-id={taskId}
       {...attributes}
-      className="flex items-center gap-2 p-3 bg-card rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow transition cursor-pointer"
+      className="flex items-center gap-2 p-3 bg-card rounded-xl border border-gray-200/80 dark:border-slate-700/30 shadow-lg dark:shadow-xl dark:shadow-indigo-500/5 hover:shadow-xl hover:shadow-indigo-100 dark:hover:shadow-indigo-500/10 hover:border-indigo-300/80 dark:hover:border-indigo-500/40 transition-all duration-300 cursor-pointer"
     >
       <div
         {...listeners}

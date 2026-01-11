@@ -24,6 +24,7 @@ import { toast } from "sonner";
 
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
+import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
@@ -1248,60 +1249,16 @@ export function SprintBoardView() {
   const isLoadingBoard = (loadingState.filterData.loading && !hasTasks) || (shouldLoadTasks && loading && !hasTasks) || (shouldLoadTasks && isFetching);
 
   if (isLoadingBoard) {
-    // Calculate loading progress
-    const loadingItems = [
-      { label: "Tasks", isLoading: loading, count: tasks?.length || 0 },
-      { label: "Statuses", isLoading: statusesLoading, count: availableStatuses?.length || 0 },
-    ];
-    const completedCount = loadingItems.filter(item => !item.isLoading).length;
-    const progressPercent = Math.round((completedCount / loadingItems.length) * 100);
-
     return (
-      <div className="h-full w-full flex items-center justify-center bg-muted/20 p-4">
-        <div className="bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <Settings2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
-              </div>
-              Loading Board
-            </h3>
-            <span className="text-xs font-mono text-muted-foreground">
-              {progressPercent}%
-            </span>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-
-          <div className="space-y-2">
-            {loadingItems.map((item, index) => (
-              <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-muted/30 rounded-md">
-                <span className="text-xs font-medium">{item.label}</span>
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-xs font-mono tabular-nums ${item.isLoading ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
-                    {item.isLoading ? (item.count > 0 ? item.count : "...") : item.count}
-                  </span>
-                  {item.isLoading ? (
-                    <Settings2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                  ) : (
-                    <div className="w-3.5 h-3.5 text-green-500">✓</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-[10px] text-muted-foreground mt-3 text-center">
-            Loading tasks and statuses...
-          </p>
-        </div>
-      </div>
+      <WorkspaceLoading
+        title="Loading Board"
+        subtitle="Loading tasks and statuses..."
+        items={[
+          { label: "Tasks", isLoading: loading, count: tasks?.length || 0 },
+          { label: "Statuses", isLoading: statusesLoading, count: availableStatuses?.length || 0 },
+        ]}
+        icon={<Settings2 className="w-6 h-6 text-white" />}
+      />
     );
   }
 

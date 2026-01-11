@@ -52,7 +52,7 @@ export function WorkspaceLoading({
 
     const content = (
         <div className={cn(
-            "bg-white dark:bg-gradient-to-br dark:from-slate-900 dark:to-slate-800 border border-gray-200 dark:border-slate-700/50 rounded-2xl shadow-xl dark:shadow-2xl p-8 w-full max-w-sm backdrop-blur-sm",
+            "bg-card border border-border rounded-2xl shadow-xl p-8 w-full max-w-sm backdrop-blur-sm",
             colors.darkShadow
         )}>
             {/* Header */}
@@ -65,8 +65,8 @@ export function WorkspaceLoading({
                     {icon || <Users className="w-6 h-6 text-white" />}
                 </div>
                 <div>
-                    <h3 className="text-base font-bold text-gray-900 dark:text-white">{title}</h3>
-                    <p className="text-sm text-gray-500 dark:text-slate-400">{subtitle}</p>
+                    <h3 className="text-base font-bold text-foreground">{title}</h3>
+                    <p className="text-sm text-muted-foreground">{subtitle}</p>
                 </div>
             </div>
 
@@ -86,18 +86,18 @@ export function WorkspaceLoading({
                                 </div>
                             ) : (
                                 // Pending state - empty circle
-                                <div className="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-slate-600" />
+                                <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30" />
                             )}
                             <span className={cn(
                                 "text-sm",
-                                item.isLoading ? "text-gray-500 dark:text-slate-400" :
-                                    isDone ? "text-gray-700 dark:text-slate-200" :
-                                        "text-gray-400 dark:text-slate-500"
+                                item.isLoading ? "text-muted-foreground" :
+                                    isDone ? "text-foreground" :
+                                        "text-muted-foreground/60"
                             )}>
                                 {item.label}
                             </span>
                             {isDone && item.count !== undefined && item.count > 0 && (
-                                <Badge className="ml-auto bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 text-[10px] hover:bg-gray-100 dark:hover:bg-slate-700">
+                                <Badge className="ml-auto bg-muted text-muted-foreground text-[10px] hover:bg-muted">
                                     {item.count}
                                 </Badge>
                             )}
@@ -134,7 +134,7 @@ export function InlineLoading({ message = "Loading..." }: { message?: string }) 
         <div className="flex items-center justify-center py-12">
             <div className="flex flex-col items-center gap-3">
                 <Loader2 className={cn("h-8 w-8 animate-spin", accent.spinner)} />
-                <p className="text-sm text-gray-500 dark:text-slate-400">{message}</p>
+                <p className="text-sm text-muted-foreground">{message}</p>
             </div>
         </div>
     );

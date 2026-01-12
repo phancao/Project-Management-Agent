@@ -137,13 +137,46 @@ export function DailyWorkloadCalendar({ dateRange, timeEntries, activityColors, 
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <div className="mt-2 cursor-pointer hover:scale-105 transition-transform">
-                                                <DailyWorklogChart
-                                                    hours={totalHours}
-                                                    size={28} // Slightly smaller to fit grid
-                                                    strokeWidth={3}
-                                                    isWeekend={isWknd}
-                                                    showText={true}
-                                                />
+                                                {(() => {
+                                                    const hours = totalHours;
+                                                    const target = 8; // Default to 8h standard
+                                                    const pct = target > 0 ? (hours / target) * 100 : 0;
+                                                    let glowColorClass = "";
+
+                                                    if (hours > target && Math.abs(hours - target) > 0.1) {
+                                                        // Over-logged: Brighter Emerald Glow
+                                                        glowColorClass = "bg-emerald-300 dark:bg-emerald-400";
+                                                    } else if (pct >= 0 && pct < 50 && !isWknd) {
+                                                        // Severe Under: Red Glow (Exclude Weekends)
+                                                        glowColorClass = "bg-red-400 dark:bg-red-500";
+                                                    } else if (pct >= 50 && pct < 90) {
+                                                        // Moderate Under: Amber Glow
+                                                        glowColorClass = "bg-amber-300 dark:bg-amber-400";
+                                                    }
+
+                                                    return (
+                                                        <div className="relative flex items-center justify-center">
+                                                            {/* Backdrop Glow Layer */}
+                                                            {glowColorClass && (
+                                                                <div className={cn(
+                                                                    "absolute inset-1 rounded-full blur-sm animate-pulse",
+                                                                    glowColorClass
+                                                                )} />
+                                                            )}
+
+                                                            {/* Chart Layer (Solid) */}
+                                                            <div className="relative z-10">
+                                                                <DailyWorklogChart
+                                                                    hours={totalHours}
+                                                                    size={28}
+                                                                    strokeWidth={3}
+                                                                    isWeekend={isWknd}
+                                                                    showText={true}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </TooltipTrigger>
                                         <TooltipContent className="text-xs z-50">

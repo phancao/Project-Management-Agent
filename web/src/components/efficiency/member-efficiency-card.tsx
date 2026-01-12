@@ -200,7 +200,10 @@ export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityC
                                                     padding: "8px"
                                                 }}
                                                 itemStyle={{ color: "var(--foreground)" }}
-                                                formatter={(value, name) => [`${Number(value).toFixed(1)}h`, name]}
+                                                formatter={(value, name, item) => [
+                                                    `${Number(value).toFixed(1)}h (${item.payload.percentage ?? 0}%)`,
+                                                    name
+                                                ]}
                                             />
                                         </PieChart>
                                     </ResponsiveContainer>

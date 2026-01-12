@@ -22,14 +22,17 @@ export function DailyWorklogChart({
 }: DailyWorklogChartProps) {
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
+    // Visual percentage for the stroke (capped/min at 100)
     const percentage = target > 0 ? Math.min((hours / target) * 100, 100) : 0;
+    // Raw percentage for status color (can exceed 100)
+    const rawPercentage = target > 0 ? (hours / target) * 100 : 0;
 
     // Status Logic
     const getStatusColor = () => {
         if (hours === 0) return 'fill-transparent';
-        if (percentage > 105) return 'fill-red-500';
-        if (percentage >= 90) return 'fill-emerald-500';
-        return 'fill-amber-400';
+        if (rawPercentage < 50) return 'fill-red-500'; // Severe under-performance (< 50%)
+        if (rawPercentage >= 90) return 'fill-emerald-500'; // Green for >= 90%
+        return 'fill-amber-400'; // Moderate under-performance (50-90%)
     };
 
     return (

@@ -447,7 +447,10 @@ export function EfficiencyDashboard({
                                                 fontSize: "12px"
                                             }}
                                             itemStyle={{ color: "var(--foreground)" }}
-                                            formatter={(value, name) => [`${Number(value).toFixed(1)} hours`, name]}
+                                            formatter={(value, name, item) => [
+                                                `${Number(value).toFixed(1)} hours (${item.payload.percentage ?? 0}%)`,
+                                                name
+                                            ]}
                                         />
                                     </PieChart>
                                 </ResponsiveContainer>

@@ -255,11 +255,11 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                         {members.map(member => (
                             <div key={member.id} className="flex hover:bg-gray-50/50 dark:hover:bg-gray-900/30 transition-colors group">
                                 {/* Member Name */}
-                                <div className="sticky left-0 w-48 shrink-0 p-3 flex items-center gap-2 bg-white dark:bg-gray-950 group-hover:bg-gray-100 dark:group-hover:bg-gray-900 border-r border-gray-100 dark:border-gray-800 z-10">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-medium">
+                                <div className="sticky left-0 w-48 shrink-0 p-3 flex items-center gap-2 bg-card group-hover:bg-muted/50 border-r border-border z-20">
+                                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
                                         {member.name.charAt(0)}
                                     </div>
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate" title={member.name}>
+                                    <span className="text-sm font-medium text-foreground truncate" title={member.name}>
                                         {member.name}
                                     </span>
                                 </div>
@@ -372,17 +372,45 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                                     </div>
                                                                 ) : (
                                                                     /* Regular Work Day - Pie Wedge Chart */
-                                                                    <DailyWorklogChart
-                                                                        hours={hours}
-                                                                        target={8} // Gantt view always assumes 8h standard for circle visual? Or use 'target'? 
-                                                                        // The logic calculated 'target' dynamically but the visual ticks are hardcoded to 8.
-                                                                        // Let's pass 'target' if we want accuracy, but visual ticks implies 8h scale.
-                                                                        // Replicating original visual: ticks = 8.
-                                                                        size={size}
-                                                                        strokeWidth={strokeWidth}
-                                                                        isWeekend={isWknd}
-                                                                        showText={true}
-                                                                    />
+                                                                    (() => {
+                                                                        const pct = target > 0 ? (hours / target) * 100 : 0;
+                                                                        let glowColorClass = "";
+
+                                                                        if (hours > target && Math.abs(hours - target) > 0.1) {
+                                                                            // Over-logged: Brighter Emerald Glow
+                                                                            glowColorClass = "bg-emerald-300 dark:bg-emerald-400";
+                                                                        } else if (pct >= 0 && pct < 50 && !isWknd) {
+                                                                            // Severe Under: Red Glow (Exclude Weekends)
+                                                                            glowColorClass = "bg-red-400 dark:bg-red-500";
+                                                                        } else if (pct >= 50 && pct < 90) {
+                                                                            // Moderate Under: Amber Glow
+                                                                            glowColorClass = "bg-amber-300 dark:bg-amber-400";
+                                                                        }
+
+                                                                        return (
+                                                                            <div className="relative flex items-center justify-center">
+                                                                                {/* Backdrop Glow Layer */}
+                                                                                {glowColorClass && (
+                                                                                    <div className={cn(
+                                                                                        "absolute inset-1 rounded-full blur-sm animate-pulse",
+                                                                                        glowColorClass
+                                                                                    )} />
+                                                                                )}
+
+                                                                                {/* Chart Layer (Solid) */}
+                                                                                <div className="relative z-10">
+                                                                                    <DailyWorklogChart
+                                                                                        hours={hours}
+                                                                                        target={target}
+                                                                                        size={size}
+                                                                                        strokeWidth={strokeWidth}
+                                                                                        isWeekend={isWknd}
+                                                                                        showText={true}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })()
                                                                 )}
                                                             </div>
                                                         </TooltipTrigger>

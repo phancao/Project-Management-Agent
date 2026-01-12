@@ -94,7 +94,7 @@ export function useStoreRegistry() {
         async function fetchRegistry() {
             try {
                 // Fetch from our new API route
-                const res = await fetch('/api/pm-store');
+                const res = await fetch('/api/pm-store', { cache: 'no-store' });
                 const manifest = await res.json();
 
                 // Hydrate the manifest with actual components and icons

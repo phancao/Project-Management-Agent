@@ -68,6 +68,7 @@ const PLUGIN_MANIFEST = [
         type: "page",
         meta: {
             title: "Project Resource Distribution",
+            shortTitle: "PM Distribution",
             description: "Work distribution by type, assignee, or priority.",
             category: "Analytics",
             icon: "PieChart",

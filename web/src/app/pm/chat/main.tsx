@@ -20,7 +20,7 @@ export default function Main() {
   const [isDragging, setIsDragging] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileView, setMobileView] = useState<"chat" | "board">("chat");
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Detect mobile

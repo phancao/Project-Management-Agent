@@ -1,4 +1,4 @@
-import { CheckSquare, FolderKanban, RefreshCw, LayoutGrid, Plus, X, LayoutTemplate, GripVertical } from "lucide-react";
+import { CheckSquare, FolderKanban, RefreshCw, LayoutGrid, Plus, X, LayoutTemplate, GripVertical, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -40,8 +40,8 @@ interface PMViewsPanelProps {
 interface SortableTabProps {
   id: string;
   value: string;
-  children: React.ReactNode;
   onClose: (e: React.MouseEvent) => void;
+  children: React.ReactNode; // Keep children for flexibility, but structure it
 }
 
 function SortableTab({ id, value, children, onClose }: SortableTabProps) {
@@ -58,7 +58,7 @@ function SortableTab({ id, value, children, onClose }: SortableTabProps) {
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 50 : "auto",
-    opacity: isDragging ? 0.3 : 1, // Make ghost more transparent
+    opacity: isDragging ? 0.3 : 1,
   };
 
   return (
@@ -66,20 +66,36 @@ function SortableTab({ id, value, children, onClose }: SortableTabProps) {
       <TabsTrigger
         value={value}
         className={cn(
-          "group/tab flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 pr-2 cursor-grab active:cursor-grabbing relative pl-2",
+          "group/tab relative flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 cursor-grab active:cursor-grabbing",
+          "hover:pl-8 hover:pr-8", // Make room for controls on hover
+
           // Base styles
           "data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40",
+
           // Dragging styles
           isDragging && "ring-2 ring-brand ring-offset-2 bg-brand/10 dark:bg-brand/20 border-brand border-dashed border",
-          // Hover indication for moveable items
-          "hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:pl-2"
+
+          // Hover background (if desired, consistency check?)
+          // Standard tabs don't usually have a gray bg, but it helps distinguish the 'card' nature of these dynamic tabs
+          "hover:bg-gray-100 dark:hover:bg-gray-800/50"
         )}
       >
-        {/* Grip Handle - Reveals on Hover */}
-        <div className="w-0 overflow-hidden group-hover/tab:w-4 transition-all duration-300 opacity-0 group-hover/tab:opacity-100 -ml-1">
+        {/* Grip Handle - Absolute Left */}
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/tab:opacity-100 transition-opacity duration-200">
           <GripVertical className="w-3 h-3 text-gray-400" />
         </div>
+
+        {/* Content (Icon + Text) */}
         {children}
+
+        {/* Close Button - Absolute Right */}
+        <div
+          role="button"
+          onClick={onClose}
+          className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/tab:opacity-100 transition-opacity duration-200 p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/20"
+        >
+          <X className="w-3 h-3" />
+        </div>
       </TabsTrigger>
     </div>
   );
@@ -141,7 +157,7 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
       <div className="border-b border-gray-200 dark:border-gray-700 bg-transparent backdrop-blur-sm">
         <div className="flex items-center justify-between px-4 py-2">
           <Tabs value={activeView} onValueChange={handleViewChange} className="flex-1 overflow-hidden">
-            <TabsList className="w-full justify-start h-auto bg-transparent p-0 gap-1 overflow-x-auto no-scrollbar scroll-smooth py-1">
+            <TabsList className="justify-start h-auto bg-transparent p-0 gap-1 overflow-x-auto no-scrollbar scroll-smooth py-1">
 
               {/* Main Dashboard Tab - Always First */}
               <TabsTrigger
@@ -190,41 +206,40 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
                         value={instance.instanceId}
                         onClose={(e) => handleCloseTab(e, instance.instanceId, title)}
                       >
-                        <Icon className="w-4 h-4" />
-                        <span className="truncate max-w-[100px]">{title}</span>
-                        <div
-                          role="button"
-                          onClick={(e) => handleCloseTab(e, instance.instanceId, title)}
-                          className="ml-1 p-0.5 rounded-full hover:bg-white/20 opacity-0 group-hover/tab:opacity-100 transition-opacity"
-                        >
-                          <X className="w-3 h-3" />
-                        </div>
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="truncate max-w-[200px]">{title}</span>
                       </SortableTab>
                     );
                   })}
                 </SortableContext>
               </DndContext>
 
-              {/* Store Tab (Always last) */}
-              <TabsTrigger
-                value="store"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-900 data-[state=active]:bg-gray-100 dark:data-[state=active]:bg-gray-800 data-[state=active]:text-foreground data-[state=active]:shadow-none"
-              >
-                <Plus className="w-4 h-4" />
-                PM Page Store
-              </TabsTrigger>
-
             </TabsList>
           </Tabs>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            className="gap-2 ml-2 shrink-0 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 hover:border-indigo-400/40 dark:hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-400/20 dark:hover:shadow-indigo-500/30"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </Button>
+
+          <div className="flex items-center gap-2 ml-2 shrink-0">
+            {/* Store Button (Fixed on Right) */}
+            <button
+              onClick={() => setActiveView("store")}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-900 transition-all duration-200",
+                activeView === "store" ? "bg-gray-100 dark:bg-gray-800 text-foreground shadow-none" : "text-muted-foreground"
+              )}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <Plus className="w-3 h-3" />
+            </button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              title="Refresh Data"
+              className="w-8 h-8 p-0 shrink-0 rounded-xl border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/20 hover:border-indigo-400/40 dark:hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-400/20 dark:hover:shadow-indigo-500/30"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 

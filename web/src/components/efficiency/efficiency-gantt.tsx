@@ -255,7 +255,7 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                         {members.map(member => (
                             <div key={member.id} className="flex hover:bg-gray-50/50 dark:hover:bg-gray-900/30 transition-colors group">
                                 {/* Member Name */}
-                                <div className="sticky left-0 w-48 shrink-0 p-3 flex items-center gap-2 bg-card group-hover:bg-muted/50 border-r border-border z-20">
+                                <div className="sticky left-0 w-48 shrink-0 p-3 flex items-center gap-2 bg-white dark:bg-sidebar group-hover:bg-gray-50 dark:group-hover:bg-sidebar border-r border-border z-20">
                                     <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
                                         {member.name.charAt(0)}
                                     </div>

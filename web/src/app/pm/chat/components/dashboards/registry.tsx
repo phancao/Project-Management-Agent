@@ -1,6 +1,6 @@
 import React from "react";
 import type { LucideIcon } from "lucide-react";
-import { BarChart2, TrendingUp, Users, Activity } from "lucide-react";
+import { BarChart2, TrendingUp, Users, Activity, Calendar, LineChart, Timer, PieChart, Clock, FileText, CheckSquare, LayoutGrid } from "lucide-react";
 
 export type ConfigType = "string" | "number" | "boolean" | "select";
 
@@ -32,7 +32,7 @@ export interface DashboardPlugin {
 
 // --- Sample Components ---
 
-import { VelocityDashboard } from "./plugins/velocity-dashboard";
+
 
 const SprintStatusWidget = ({ config }: { config: Record<string, any> }) => {
     return (
@@ -65,64 +65,119 @@ const MemberFocusDashboard = ({ config }: { config: Record<string, any> }) => {
     );
 };
 
-// --- The Registry ---
+// --- Icon Map for Remote Resolution ---
+// Since we get icon names as strings from the API, we need to map them back to components.
+const ICON_MAP: Record<string, LucideIcon> = {
+    "TrendingUp": TrendingUp,
+    "LineChart": LineChart,
+    "FileText": FileText,
+    "BarChart2": BarChart2,
+    "Clock": Clock,
+    "PieChart": PieChart,
+    "Calendar": Calendar,
+    "Timer": Timer,
+    "Users": Users,
+    "Activity": Activity,
+    "CheckSquare": CheckSquare,
+};
 
-export const dashboardRegistry: DashboardPlugin[] = [
-    {
-        id: "team-velocity",
-        type: "page",
-        meta: {
-            title: "Team Velocity",
-            description: "Analyze team velocity over time (Completed vs Committed).",
-            category: "Analytics",
-            icon: TrendingUp,
-            author: "System",
-            version: "1.1.0",
-        },
-        component: VelocityDashboard,
-        configSchema: {
-            title: { type: "string", label: "Dashboard Title", defaultValue: "Team Velocity" },
-            chartType: { type: "select", label: "Chart Type", options: ["Bar", "Line"], defaultValue: "Bar" },
-            showTrend: { type: "boolean", label: "Show Average Trend", defaultValue: true },
-            metric: { type: "select", label: "Metric Label", options: ["Points", "Hours"], defaultValue: "Hours" },
-        },
-    },
-    {
-        id: "sprint-health-widget",
-        type: "widget",
-        meta: {
-            title: "Sprint Health",
-            description: "Quick glance at current sprint status and timeline.",
-            category: "Planning",
-            icon: Activity,
-            author: "System",
-            version: "1.0.0",
-            size: { w: 1, h: 1 },
-        },
-        component: SprintStatusWidget,
-        configSchema: {
-            title: { type: "string", label: "Widget Title", defaultValue: "Sprint Health" },
-        },
-    },
-    {
-        id: "member-focus",
-        type: "page",
-        meta: {
-            title: "Member Focus",
-            description: "Deep dive into individual member focus time patterns.",
-            category: "Team",
-            icon: Users,
-            author: "System",
-            version: "0.5.0",
-        },
-        component: MemberFocusDashboard,
-        configSchema: {
-            title: { type: "string", label: "Dashboard Title", defaultValue: "Member Focus" },
-            grouping: { type: "select", label: "Group By", options: ["Day", "Week", "Sprint"], defaultValue: "Day" },
-        },
-    },
-];
+// --- Hook for Accessing the Registry ---
+
+import { useState, useEffect } from "react";
+
+export function useStoreRegistry() {
+    const [plugins, setPlugins] = useState<DashboardPlugin[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchRegistry() {
+            try {
+                // Fetch from our new API route
+                const res = await fetch('/api/pm-store');
+                const manifest = await res.json();
+
+                // Hydrate the manifest with actual components and icons
+                const hydratedPlugins: DashboardPlugin[] = manifest.map((item: any) => {
+                    const Component = COMPONENT_MAP[item.id];
+                    if (!Component) console.warn(`Component not found for plugin ${item.id}`);
+
+                    const Icon = ICON_MAP[item.meta.icon] || LayoutGrid; // Default icon
+
+                    return {
+                        ...item,
+                        meta: {
+                            ...item.meta,
+                            icon: Icon
+                        },
+                        component: Component
+                    };
+                }).filter((p: any) => p.component !== undefined); // Filter out items with missing code
+
+                setPlugins(hydratedPlugins);
+            } catch (error) {
+                console.error("Failed to fetch plugin registry:", error);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchRegistry();
+    }, []);
+
+    const getPlugin = (id: string) => plugins.find(p => p.id === id);
+
+    return { plugins, loading, getPlugin };
+}
+
+// --- The Registry (Deprecated/Legacy Export) ---
+// We keep this temporarily if needed, but it should be empty or unused.
+export const dashboardRegistry: DashboardPlugin[] = [];
+
+
+// --- Imported Standard Views ---
+import { ChartsPanelView } from "../views/charts-panel-view";
+import { TimelineView } from "../views/timeline-view";
+import { EfficiencyPanelView } from "../views/efficiency-panel-view";
+import { TeamAssignmentsView } from "../views/team-assignments-view";
+import {
+    BurndownPage,
+    VelocityPage,
+    SprintReportPage,
+    CFDPage,
+    CycleTimePage,
+    WorkDistributionPage,
+    IssueTrendPage,
+    WorklogsPage
+} from "./plugins/standard-charts";
+
+// Map IDs to actual components
+export const COMPONENT_MAP: Record<string, React.ComponentType<{ config: Record<string, any> }>> = {
+    // Pages
+    "team-velocity": VelocityPage,
+    "burndown-chart": BurndownPage,
+    "sprint-report": SprintReportPage,
+    "cfd-chart": CFDPage,
+    "cycle-time": CycleTimePage,
+    "work-distribution": WorkDistributionPage,
+    "issue-trend": IssueTrendPage,
+    "worklogs": WorklogsPage,
+    "timeline-view": TimelineView,
+    "efficiency-view": EfficiencyPanelView,
+    "team-view": TeamAssignmentsView,
+
+    // Widgets
+    "sprint-health-widget": SprintStatusWidget,
+
+    // Custom Samples
+    "member-focus": MemberFocusDashboard,
+};
 
 export function getDashboardPlugin(id: string): DashboardPlugin | undefined {
-    return dashboardRegistry.find((p) => p.id === id);
+    // This function will now need to be context-aware or replaced by a hook
+    // For now, allow it to return a skeletal object if needed, but ideally we move away from synchronous static registry access.
+    // However, for backward compatibility during migration, we might need a fallback.
+    // Ideally, consumers should use useStoreRegistry() instead of this function.
+
+    // Fallback: If we can't find metadata synchronously, we return undefined.
+    return undefined;
 }

@@ -13,19 +13,20 @@ import {
     SheetTrigger,
     SheetDescription,
 } from "~/components/ui/sheet";
-import { dashboardRegistry } from "../dashboards/registry";
+import { useStoreRegistry } from "../dashboards/registry";
 import { toast } from "sonner";
 import { ScrollArea } from "~/components/ui/scroll-area";
 
 export function MainDashboardView() {
     const { widgets, uninstallInstance, installPlugin } = useDashboardStore();
     const [storeOpen, setStoreOpen] = useState(false);
+    const { plugins, loading } = useStoreRegistry();
 
-    const availableWidgets = dashboardRegistry.filter(plugin => plugin.type === 'widget');
+    const availableWidgets = plugins.filter(plugin => plugin.type === 'widget');
 
-    const handleAddWidget = (pluginId: string, title: string) => {
-        installPlugin(pluginId);
-        toast.success(`Added ${title} widget`);
+    const handleAddWidget = (plugin: any) => {
+        installPlugin(plugin);
+        toast.success(`Added ${plugin.meta.title} widget`);
         setStoreOpen(false);
     }
 
@@ -39,7 +40,7 @@ export function MainDashboardView() {
             </SheetTrigger>
             <SheetContent className="w-[400px] sm:w-[540px]">
                 <SheetHeader>
-                    <SheetTitle>Add Widget</SheetTitle>
+                    <SheetTitle>PM Dashboard Store</SheetTitle>
                     <SheetDescription>
                         Choose a widget to add to your dashboard.
                     </SheetDescription>
@@ -52,7 +53,7 @@ export function MainDashboardView() {
                                 <div
                                     key={plugin.id}
                                     className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-brand/50 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all cursor-pointer group"
-                                    onClick={() => handleAddWidget(plugin.id, plugin.meta.title)}
+                                    onClick={() => handleAddWidget(plugin)}
                                 >
                                     <div className="p-3 rounded-lg bg-gray-100 dark:bg-gray-900 text-gray-500 group-hover:text-brand group-hover:bg-brand/10 transition-colors">
                                         <Icon className="w-5 h-5" />

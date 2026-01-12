@@ -15,10 +15,11 @@ interface DashboardStore {
     widgets: DashboardInstance[];
 
     // Actions
-    installPlugin: (pluginId: string) => void; // Smart install
+    installPlugin: (plugin: any) => void; // Smart install accepting full plugin object
     uninstallInstance: (instanceId: string) => void;
     updateInstanceConfig: (instanceId: string, newConfig: Record<string, any>) => void;
     getInstance: (instanceId: string) => DashboardInstance | undefined;
+    movePage: (oldIndex: number, newIndex: number) => void; // Reorder pages
 }
 
 export const useDashboardStore = create<DashboardStore>()(
@@ -27,21 +28,21 @@ export const useDashboardStore = create<DashboardStore>()(
             pages: [],
             widgets: [],
 
-            installPlugin: (pluginId: string) => {
-                const plugin = getDashboardPlugin(pluginId);
+            installPlugin: (plugin: any) => {
+                // plugin is now the full object passed from the UI
                 if (!plugin) return;
 
                 // Construct default config from schema
                 const defaultConfig: Record<string, any> = {};
                 if (plugin.configSchema) {
-                    Object.entries(plugin.configSchema).forEach(([key, field]) => {
+                    Object.entries(plugin.configSchema).forEach(([key, field]: [string, any]) => {
                         defaultConfig[key] = field.defaultValue;
                     });
                 }
 
                 const newInstance: DashboardInstance = {
                     instanceId: uuidv4(),
-                    pluginId: pluginId,
+                    pluginId: plugin.id,
                     config: defaultConfig,
                     createdAt: Date.now(),
                 };
@@ -78,6 +79,19 @@ export const useDashboardStore = create<DashboardStore>()(
             getInstance: (instanceId: string) => {
                 const { pages, widgets } = get();
                 return pages.find((i) => i.instanceId === instanceId) || widgets.find((i) => i.instanceId === instanceId);
+            },
+
+            movePage: (oldIndex: number, newIndex: number) => {
+                set((state) => {
+                    const newPages = [...state.pages];
+                    if (oldIndex >= 0 && oldIndex < newPages.length) {
+                        const [removed] = newPages.splice(oldIndex, 1);
+                        if (removed) {
+                            newPages.splice(newIndex, 0, removed);
+                        }
+                    }
+                    return { pages: newPages };
+                });
             },
         }),
         {

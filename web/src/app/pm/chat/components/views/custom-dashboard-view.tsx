@@ -2,9 +2,9 @@
 
 import React, { useState } from "react";
 import { useDashboardStore } from "~/core/store/use-dashboard-store";
-import { getDashboardPlugin } from "../dashboards/registry";
+import { useStoreRegistry } from "../dashboards/registry";
 import { Button } from "~/components/ui/button";
-import { Settings, X, Save, AlertCircle, Trash2 } from "lucide-react";
+import { Settings, X, Save, AlertCircle, Trash2, Loader2 } from "lucide-react";
 import {
     Sheet,
     SheetContent,
@@ -36,6 +36,17 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
     const instance = getInstance(instanceId);
     const [configOpen, setConfigOpen] = useState(false);
 
+    // Use the dynamic registry hook instead of static lookup
+    const { getPlugin, loading } = useStoreRegistry();
+
+    // 1. Hoist state initialization
+    // Use an empty object fallback if instance is missing to satisfy the hook rule
+    const [tempConfig, setTempConfig] = useState(instance?.config || {});
+
+    // 2. Derive logic safely
+    const plugin = instance ? getPlugin(instance.pluginId) : undefined;
+
+    // 3. Early returns ONLY after all hooks are called
     if (!instance) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-gray-400">
@@ -46,7 +57,14 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
         );
     }
 
-    const plugin = getDashboardPlugin(instance.pluginId);
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                <Loader2 className="w-8 h-8 animate-spin mb-4" />
+                <p>Loading plugin...</p>
+            </div>
+        )
+    }
 
     if (!plugin) {
         return (
@@ -60,9 +78,6 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
 
     const Component = plugin.component;
     const schema = plugin.configSchema;
-
-    // Local state for the configuration form
-    const [tempConfig, setTempConfig] = useState(instance.config);
 
     const handleSaveConfig = () => {
         updateInstanceConfig(instanceId, tempConfig);

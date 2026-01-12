@@ -1,26 +1,35 @@
 "use client";
 
-import { dashboardRegistry } from "../dashboards/registry";
+import { useStoreRegistry } from "../dashboards/registry";
 import { useDashboardStore } from "~/core/store/use-dashboard-store";
 import { Button } from "~/components/ui/button";
-import { LayoutGrid, Download, Plus } from "lucide-react";
+import { LayoutGrid, Download, Plus, Loader2 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { toast } from "sonner";
 
 export function StorePanelView() {
     const { installPlugin } = useDashboardStore();
+    const { plugins, loading } = useStoreRegistry();
 
-    const handleInstall = (pluginId: string, title: string, type: string) => {
-        installPlugin(pluginId);
-        toast.success(`Installed "${title}" ${type}`);
+    const handleInstall = (plugin: any) => {
+        installPlugin(plugin);
+        toast.success(`Installed "${plugin.meta.title}" ${plugin.type}`);
     };
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center text-gray-400">
+                <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+        )
+    }
 
     return (
         <div className="p-6 h-full overflow-auto">
             <div className="mb-8">
                 <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-2">
                     <LayoutGrid className="w-6 h-6 text-brand" />
-                    Dashboard Pages
+                    PM Page Store
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400 mt-2">
                     Extend your workspace with new full-page <strong>Dashboard Views</strong>.
@@ -28,7 +37,7 @@ export function StorePanelView() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {dashboardRegistry.filter(p => p.type === 'page').map((plugin) => {
+                {plugins.filter(p => p.type === 'page').map((plugin) => {
                     const Icon = plugin.meta.icon;
                     const isPage = true;
 
@@ -63,7 +72,7 @@ export function StorePanelView() {
                                 <span className="text-xs text-gray-400">v{plugin.meta.version} • {plugin.meta.author}</span>
                                 <Button
                                     size="sm"
-                                    onClick={() => handleInstall(plugin.id, plugin.meta.title, plugin.type)}
+                                    onClick={() => handleInstall(plugin)}
                                     className="bg-brand hover:bg-brand/90 text-white shadow-lg shadow-brand/20"
                                 >
                                     <Plus className="w-4 h-4 mr-2" />

@@ -30,23 +30,22 @@ async function proxy(request: NextRequest, props: { params: Promise<{ path: stri
         headers.delete("host");
         headers.delete("connection");
 
+
         const response = await fetch(url, {
             method: request.method,
             headers: headers,
             body: request.body ? request.body : undefined,
-            // @ts-ignore - duplex is required for streaming bodies in some node versions/nextjs, though might be auto-handled
+            // @ts-ignore - duplex is required for streaming bodies in some node versions/nextjs
             duplex: 'half',
             signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
 
-        const data = await response.blob();
-
         const responseHeaders = new Headers(response.headers);
         // Ensure CORS is handled by Next.js or preserved
 
-        return new NextResponse(data, {
+        return new NextResponse(response.body, {
             status: response.status,
             statusText: response.statusText,
             headers: responseHeaders
@@ -56,6 +55,7 @@ async function proxy(request: NextRequest, props: { params: Promise<{ path: stri
 
         // Check if it's an abort error (timeout)
         if (error instanceof Error && error.name === 'AbortError') {
+
             console.error(`[PM-Service Proxy] Request timeout after ${REQUEST_TIMEOUT_MS}ms for ${url}`);
             return NextResponse.json(
                 { error: "PM Service Request Timeout", details: `Request exceeded ${REQUEST_TIMEOUT_MS / 1000}s timeout` },

@@ -14,13 +14,14 @@ interface DailyWorkloadCalendarProps {
     timeEntries: PMTimeEntry[];
     activityColors: string[];
     activePeriods?: MemberPeriod[];
+    overallDateRange?: { from: Date; to: Date };
 }
 
 function parseISO(date: string): Date {
     return new Date(date);
 }
 
-export function DailyWorkloadCalendar({ dateRange, timeEntries, activityColors, activePeriods }: DailyWorkloadCalendarProps) {
+export function DailyWorkloadCalendar({ dateRange, timeEntries, activityColors, activePeriods, overallDateRange }: DailyWorkloadCalendarProps) {
     const days = useMemo(() => {
         if (!dateRange.from || !dateRange.to) return [];
         return eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -100,6 +101,8 @@ export function DailyWorkloadCalendar({ dateRange, timeEntries, activityColors, 
 
                         // Check if day is within active periods
                         let isActive = true;
+
+                        // 1. Check member specific active periods
                         if (activePeriods && activePeriods.length > 0) {
                             isActive = activePeriods.some(p => {
                                 if (!p.range.from) return false;
@@ -112,6 +115,13 @@ export function DailyWorkloadCalendar({ dateRange, timeEntries, activityColors, 
                                 const inside = isWithinInterval(day, { start, end });
                                 return inside;
                             });
+                        }
+
+                        // 2. Check global date range limit
+                        if (isActive && overallDateRange) {
+                            if (!isWithinInterval(day, { start: startOfDay(overallDateRange.from), end: endOfDay(overallDateRange.to) })) {
+                                isActive = false;
+                            }
                         }
 
                         return (

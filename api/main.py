@@ -951,6 +951,7 @@ async def get_burndown_chart(
 async def get_velocity_chart(
     project_id: str,
     sprint_count: int = 6,
+    measure: str = "story_points",
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -958,11 +959,13 @@ async def get_velocity_chart(
     
     Query Parameters:
     - sprint_count: Number of recent sprints to include (default: 6)
+    - measure: Metric to use ("story_points" or "hours")
     """
     try:
         chart_data = await analytics_service.get_velocity_chart(
             project_id=project_id,
-            sprint_count=sprint_count
+            sprint_count=sprint_count,
+            measure=measure
         )
         return chart_data.model_dump()
     except Exception as e:

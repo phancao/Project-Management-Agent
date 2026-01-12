@@ -97,7 +97,8 @@ class AnalyticsService:
     async def get_velocity_chart(
         self,
         project_id: str,
-        sprint_count: int = 6
+        sprint_count: int = 6,
+        measure: str = "story_points"
     ) -> ChartResponse:
         """
         Get velocity chart for recent sprints.
@@ -105,11 +106,12 @@ class AnalyticsService:
         Args:
             project_id: Project identifier
             sprint_count: Number of recent sprints to include
+            measure: Metric to use ("story_points" or "hours")
         
         Returns:
             ChartResponse with velocity data
         """
-        cache_key = f"velocity_{project_id}_{sprint_count}"
+        cache_key = f"velocity_{project_id}_{sprint_count}_{measure}"
         
         # Check cache
         cached = self._get_from_cache(cache_key)
@@ -143,7 +145,7 @@ class AnalyticsService:
         ]
         
         # Calculate velocity
-        result = VelocityCalculator.calculate(sprint_history)
+        result = VelocityCalculator.calculate(sprint_history, measure)
         
         # Cache result
         self._set_cache(cache_key, result)

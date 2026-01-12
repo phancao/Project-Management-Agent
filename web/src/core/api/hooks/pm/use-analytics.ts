@@ -128,14 +128,14 @@ export function useBurndownChart(projectId: string | null, sprintId?: string, sc
 /**
  * Hook to fetch velocity chart data
  */
-export function useVelocityChart(projectId: string | null, sprintCount: number = 6) {
+export function useVelocityChart(projectId: string | null, sprintCount: number = 6, measure: "story_points" | "hours" = "story_points") {
   const queryClient = useQueryClient();
   const query = useQuery({
-    queryKey: ["analytics", "velocity", projectId, sprintCount],
+    queryKey: ["analytics", "velocity", projectId, sprintCount, measure],
     queryFn: async () => {
       if (!projectId) throw new Error("Project ID is required");
 
-      const url = resolveServiceURL(`analytics/projects/${projectId}/velocity?sprint_count=${sprintCount}`);
+      const url = resolveServiceURL(`analytics/projects/${projectId}/velocity?sprint_count=${sprintCount}&measure=${measure}`);
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -158,7 +158,7 @@ export function useVelocityChart(projectId: string | null, sprintCount: number =
 
   // Listen for PM refresh events and invalidate query
   usePMRefresh(() => {
-    queryClient.invalidateQueries({ queryKey: ["analytics", "velocity", projectId, sprintCount] });
+    queryClient.invalidateQueries({ queryKey: ["analytics", "velocity", projectId, sprintCount, measure] });
   });
 
   return query;

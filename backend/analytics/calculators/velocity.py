@@ -17,12 +17,13 @@ class VelocityCalculator:
     """Calculates velocity chart data"""
     
     @staticmethod
-    def calculate(sprint_history: List[SprintData]) -> ChartResponse:
+    def calculate(sprint_history: List[SprintData], measure: str = "story_points") -> ChartResponse:
         """
         Calculate velocity chart from sprint history.
         
         Args:
             sprint_history: List of completed sprints with work items
+            measure: Metric to use ("story_points" or "hours")
         
         Returns:
             ChartResponse with committed and completed velocity series
@@ -39,8 +40,23 @@ class VelocityCalculator:
         # Extract velocity data from sprints
         velocity_data = []
         for i, sprint in enumerate(sprint_history, start=1):
-            planned = sprint.planned_points or 0
-            completed = sprint.completed_points or 0
+            if measure == "hours":
+                # For hours, we sum up estimated_hours of work items
+                # Committed: Sum of all items in the sprint (assuming current scope = committed)
+                planned = sum((item.estimated_hours or 0) for item in sprint.work_items)
+                
+                # Completed: Sum of completed items
+                # Check for DONE status
+                from backend.analytics.models import TaskStatus
+                completed = sum(
+                    (item.estimated_hours or 0) 
+                    for item in sprint.work_items 
+                    if item.status == TaskStatus.DONE
+                )
+            else:
+                # Default to story points
+                planned = sprint.planned_points or 0
+                completed = sprint.completed_points or 0
             
             velocity_data.append(VelocityDataPoint(
                 sprint_name=sprint.name,
@@ -50,10 +66,10 @@ class VelocityCalculator:
                 carry_over=0  # TODO: Calculate from previous sprint
             ))
         
-        return VelocityCalculator.calculate_from_data(velocity_data)
+        return VelocityCalculator.calculate_from_data(velocity_data, measure)
     
     @staticmethod
-    def calculate_from_data(velocity_data: List[VelocityDataPoint]) -> ChartResponse:
+    def calculate_from_data(velocity_data: List[VelocityDataPoint], measure: str = "story_points") -> ChartResponse:
         """
         Calculate velocity chart from velocity data points.
         
@@ -126,11 +142,15 @@ class VelocityCalculator:
             for vd in velocity_data
         ]
         
+        unit = "Hours" if measure == "hours" else "Story Points"
+        
         return ChartResponse(
             chart_type=ChartType.VELOCITY,
-            title=f"Team Velocity (Last {len(velocity_data)} Sprints)",
+            title=f"Team Velocity ({unit}) - Last {len(velocity_data)} Sprints",
             series=[committed_series, completed_series],
             metadata={
+                "unit": unit,
+                "measure": measure,
                 "average_velocity": round(avg_velocity, 1),
                 "median_velocity": round(median_velocity, 1),
                 "trend": trend,

@@ -249,6 +249,7 @@ export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityC
                                     timeEntries={calendarVisibleEntries} // Pass local window entries
                                     activityColors={activityColors}
                                     activePeriods={activePeriods}
+                                    overallDateRange={dateRange}
                                 />
                             </div>
 
@@ -262,6 +263,7 @@ export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityC
                                     timeEntries={calendarVisibleEntries}
                                     activityColors={activityColors}
                                     activePeriods={activePeriods}
+                                    overallDateRange={dateRange}
                                 />
                             </div>
                         </div>

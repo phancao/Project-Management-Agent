@@ -3,7 +3,15 @@
 
 "use client";
 
+import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 
 import { Card } from "~/components/ui/card";
 import { WorkspaceLoading } from "~/components/ui/workspace-loading";
@@ -13,7 +21,14 @@ import { useSearchParams } from "next/navigation";
 export function VelocityView() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project");
-  const { data: chartData, isLoading: loading, error } = useVelocityChart(projectId, 12);
+
+  const [sprintCount, setSprintCount] = useState<number>(6);
+  const [measure, setMeasure] = useState<"story_points" | "hours">("story_points");
+
+  const { data: chartData, isLoading: loading, error } = useVelocityChart(projectId, sprintCount, measure);
+
+  const unitLabel = measure === "hours" ? "Hours" : "Story Points";
+  const unitSuffix = measure === "hours" ? "h" : "pts";
 
   // Transform chart data for Recharts
   const velocityData = chartData?.series[0]?.data.map((point, index) => {
@@ -107,9 +122,35 @@ export function VelocityView() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{chartData?.title || "Team Velocity"}</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Last {velocityData.length} Sprints
-          </p>
+          <div className="flex items-center gap-4 mt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Show:</span>
+              <Select value={sprintCount.toString()} onValueChange={(v) => setSprintCount(Number(v))}>
+                <SelectTrigger className="h-8 w-[140px]">
+                  <SelectValue placeholder="Last 6 Sprints" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3">Last 3 Sprints</SelectItem>
+                  <SelectItem value="6">Last 6 Sprints</SelectItem>
+                  <SelectItem value="12">Last 12 Sprints</SelectItem>
+                  <SelectItem value="24">Last 24 Sprints</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Unit:</span>
+              <Select value={measure} onValueChange={(v) => setMeasure(v as "story_points" | "hours")}>
+                <SelectTrigger className="h-8 w-[140px]">
+                  <SelectValue placeholder="Story Points" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="story_points">Story Points</SelectItem>
+                  <SelectItem value="hours">Hours</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
         <div className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-medium shadow-lg ring-1 ${trend === "increasing"
           ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 shadow-green-500/30 dark:shadow-green-500/40 ring-green-500/20 dark:ring-green-500/30"
@@ -126,15 +167,15 @@ export function VelocityView() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Average Velocity</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">{averageVelocity.toFixed(1)} pts</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white">{averageVelocity.toFixed(1)} {unitSuffix}</div>
         </Card>
         <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Median Velocity</div>
-          <div className="text-2xl font-bold text-blue-600">{medianVelocity.toFixed(1)} pts</div>
+          <div className="text-2xl font-bold text-blue-600">{medianVelocity.toFixed(1)} {unitSuffix}</div>
         </Card>
         <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Latest Sprint</div>
-          <div className="text-2xl font-bold text-green-600">{latestVelocity.toFixed(1)} pts</div>
+          <div className="text-2xl font-bold text-green-600">{latestVelocity.toFixed(1)} {unitSuffix}</div>
         </Card>
         <Card className="p-4 border-indigo-500/20 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10 dark:shadow-indigo-500/15 ring-1 ring-indigo-500/10 dark:ring-indigo-500/15">
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Predictability</div>
@@ -150,10 +191,10 @@ export function VelocityView() {
           <BarChart data={velocityData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="sprint" stroke="#666" />
-            <YAxis stroke="#666" label={{ value: 'Story Points', angle: -90, position: 'insideLeft' }} />
+            <YAxis stroke="#666" label={{ value: unitLabel, angle: -90, position: 'insideLeft' }} />
             <Tooltip
               contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
-              formatter={(value: any) => `${Number(value).toFixed(1)} pts`}
+              formatter={(value: any) => `${Number(value).toFixed(1)} ${unitSuffix}`}
             />
             <Legend />
             <Bar
@@ -180,7 +221,7 @@ export function VelocityView() {
             <div className="w-2 h-2 rounded-full bg-blue-500 mt-2"></div>
             <div>
               <p className="text-sm text-gray-700 dark:text-gray-300">
-                <span className="font-semibold">Average velocity:</span> {averageVelocity.toFixed(1)} story points per sprint
+                <span className="font-semibold">Average velocity:</span> {averageVelocity.toFixed(1)} {unitLabel.toLowerCase()} per sprint
               </p>
             </div>
           </div>
@@ -207,7 +248,7 @@ export function VelocityView() {
             <div className="w-2 h-2 rounded-full bg-purple-500 mt-2"></div>
             <div>
               <p className="text-sm text-gray-700 dark:text-gray-300">
-                <span className="font-semibold">Recommendation:</span> For next sprint, consider committing to ~{averageVelocity.toFixed(0)} story points based on historical average
+                <span className="font-semibold">Recommendation:</span> For next sprint, consider committing to ~{averageVelocity.toFixed(0)} {unitLabel.toLowerCase()} based on historical average
               </p>
             </div>
           </div>

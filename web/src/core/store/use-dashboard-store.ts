@@ -11,10 +11,11 @@ export interface DashboardInstance {
 }
 
 interface DashboardStore {
-    instances: DashboardInstance[];
+    pages: DashboardInstance[];
+    widgets: DashboardInstance[];
 
     // Actions
-    installInstance: (pluginId: string) => void;
+    installPlugin: (pluginId: string) => void; // Smart install
     uninstallInstance: (instanceId: string) => void;
     updateInstanceConfig: (instanceId: string, newConfig: Record<string, any>) => void;
     getInstance: (instanceId: string) => DashboardInstance | undefined;
@@ -23,9 +24,10 @@ interface DashboardStore {
 export const useDashboardStore = create<DashboardStore>()(
     persist(
         (set, get) => ({
-            instances: [],
+            pages: [],
+            widgets: [],
 
-            installInstance: (pluginId: string) => {
+            installPlugin: (pluginId: string) => {
                 const plugin = getDashboardPlugin(pluginId);
                 if (!plugin) return;
 
@@ -44,31 +46,42 @@ export const useDashboardStore = create<DashboardStore>()(
                     createdAt: Date.now(),
                 };
 
-                set((state) => ({
-                    instances: [...state.instances, newInstance],
-                }));
+                if (plugin.type === 'widget') {
+                    set((state) => ({
+                        widgets: [...state.widgets, newInstance],
+                    }));
+                } else {
+                    set((state) => ({
+                        pages: [...state.pages, newInstance],
+                    }));
+                }
             },
 
             uninstallInstance: (instanceId: string) => {
                 set((state) => ({
-                    instances: state.instances.filter((i) => i.instanceId !== instanceId),
+                    pages: state.pages.filter((i) => i.instanceId !== instanceId),
+                    widgets: state.widgets.filter((i) => i.instanceId !== instanceId),
                 }));
             },
 
             updateInstanceConfig: (instanceId: string, newConfig: Record<string, any>) => {
                 set((state) => ({
-                    instances: state.instances.map((i) =>
+                    pages: state.pages.map((i) =>
+                        i.instanceId === instanceId ? { ...i, config: { ...i.config, ...newConfig } } : i
+                    ),
+                    widgets: state.widgets.map((i) =>
                         i.instanceId === instanceId ? { ...i, config: { ...i.config, ...newConfig } } : i
                     ),
                 }));
             },
 
             getInstance: (instanceId: string) => {
-                return get().instances.find((i) => i.instanceId === instanceId);
+                const { pages, widgets } = get();
+                return pages.find((i) => i.instanceId === instanceId) || widgets.find((i) => i.instanceId === instanceId);
             },
         }),
         {
-            name: "pm-dashboard-instances-store", // LocalStorage key
+            name: "pm-dashboard-store-v2", // New version key
         }
     )
 );

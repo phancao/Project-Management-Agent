@@ -735,7 +735,7 @@ function BacklogSection({
  * MAIN BACKLOG VIEW
  * ========================================================================= */
 
-export function BacklogView() {
+export function BacklogViewPlaceholder() {
   return (
     <div className="h-full flex flex-col items-center justify-center p-8 text-center">
       <div className="rounded-full bg-yellow-100 p-3 mb-4">
@@ -749,7 +749,7 @@ export function BacklogView() {
   );
 }
 
-function _BacklogViewOriginal() {
+export function BacklogView() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");

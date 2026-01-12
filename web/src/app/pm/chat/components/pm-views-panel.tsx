@@ -1,4 +1,4 @@
-import { CheckSquare, FolderKanban, LineChart, Calendar, Users, RefreshCw, Timer, LayoutGrid, Plus, X } from "lucide-react";
+import { CheckSquare, FolderKanban, LineChart, Calendar, Users, RefreshCw, Timer, LayoutGrid, Plus, X, LayoutTemplate } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -13,19 +13,20 @@ import { TeamAssignmentsView } from "./views/team-assignments-view";
 import { TimelineView } from "./views/timeline-view";
 import { StorePanelView } from "./views/store-panel-view";
 import { CustomDashboardView } from "./views/custom-dashboard-view";
+import { MainDashboardView } from "./views/main-dashboard-view"; // [NEW]
 import { useDashboardStore } from "~/core/store/use-dashboard-store";
 import { getDashboardPlugin } from "./dashboards/registry";
 import { toast } from "sonner";
 
-type PMView = "backlog" | "board" | "charts" | "timeline" | "team" | "efficiency" | "store" | string;
+type PMView = "dashboard" | "backlog" | "board" | "charts" | "timeline" | "team" | "efficiency" | "store" | string;
 
 interface PMViewsPanelProps {
   className?: string;
 }
 
 export function PMViewsPanel({ className }: PMViewsPanelProps) {
-  const [activeView, setActiveView] = useState<PMView>("backlog");
-  const { instances, uninstallInstance } = useDashboardStore();
+  const [activeView, setActiveView] = useState<PMView>("dashboard"); // Default to Dashboard
+  const { pages, uninstallInstance } = useDashboardStore(); // Use pages for tabs
 
   const handleRefresh = () => {
     // Trigger pm_refresh event to refresh all data
@@ -40,18 +41,18 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
   const handleCloseTab = (e: React.MouseEvent, instanceId: string, title: string) => {
     e.stopPropagation(); // Prevent tab switch
 
-    // Switch to backlog if closing active tab
+    // Switch to dashboard if closing active tab
     if (activeView === instanceId) {
-      setActiveView("backlog");
+      setActiveView("dashboard");
     }
 
     uninstallInstance(instanceId);
-    toast.info(`Closed "${title}" dashboard`);
+    toast.info(`Closed "${title}" tab`);
   };
 
   // Helper to check if current view is a standard view
   const isStandardView = (view: string) => {
-    return ["backlog", "board", "charts", "timeline", "efficiency", "team", "store"].includes(view);
+    return ["dashboard", "backlog", "board", "charts", "timeline", "efficiency", "team", "store"].includes(view);
   };
 
   return (
@@ -61,6 +62,16 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
         <div className="flex items-center justify-between px-4 py-2">
           <Tabs value={activeView} onValueChange={handleViewChange} className="flex-1 overflow-hidden">
             <TabsList className="w-full justify-start h-auto bg-transparent p-0 gap-1 overflow-x-auto no-scrollbar scroll-smooth py-1">
+
+              {/* Main Dashboard Tab - Always First */}
+              <TabsTrigger
+                value="dashboard"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40"
+              >
+                <LayoutTemplate className="w-4 h-4" />
+                Dashboard
+              </TabsTrigger>
+
               <TabsTrigger
                 value="backlog"
                 className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40"
@@ -104,11 +115,11 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
                 Team
               </TabsTrigger>
 
-              {/* Dynamic Tabs for Installed Dashboard Instances */}
-              {instances.map((instance) => {
+              {/* Dynamic Tabs for Installed Pages Only (Not Widgets) */}
+              {pages.map((instance) => {
                 const plugin = getDashboardPlugin(instance.pluginId);
                 // Allow rendering tab even if plugin missing (so user can close it)
-                const title = instance.config.title || plugin?.meta.title || "Unknown Dashboard";
+                const title = instance.config.title || plugin?.meta.title || "Unknown Page";
                 const Icon = plugin?.meta.icon || LayoutGrid;
 
                 return (
@@ -155,6 +166,9 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
 
       {/* View Content */}
       <div className="flex-1 overflow-auto p-4">
+        {activeView === "dashboard" && (
+          <MainDashboardView />
+        )}
         {activeView === "backlog" && <BacklogView />}
         {activeView === "board" && <SprintBoardView />}
         {activeView === "charts" && <ChartsPanelView />}
@@ -163,7 +177,7 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
         {activeView === "team" && <TeamAssignmentsView />}
         {activeView === "store" && <StorePanelView />}
 
-        {/* Render Custom Dashboard Instance if it's not a standard view */}
+        {/* Render Custom Dashboard Instance (Page) if it's not a standard view */}
         {!isStandardView(activeView) && (
           <CustomDashboardView instanceId={activeView} />
         )}

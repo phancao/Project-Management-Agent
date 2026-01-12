@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useDashboardStore } from "~/core/store/use-dashboard-store";
 import { getDashboardPlugin } from "../dashboards/registry";
 import { Button } from "~/components/ui/button";
-import { Settings, X, Save, AlertCircle } from "lucide-react";
+import { Settings, X, Save, AlertCircle, Trash2 } from "lucide-react";
 import {
     Sheet,
     SheetContent,
@@ -28,9 +28,10 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 
 interface CustomDashboardViewProps {
     instanceId: string;
+    onRemove?: () => void;
 }
 
-export function CustomDashboardView({ instanceId }: CustomDashboardViewProps) {
+export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardViewProps) {
     const { getInstance, updateInstanceConfig } = useDashboardStore();
     const instance = getInstance(instanceId);
     const [configOpen, setConfigOpen] = useState(false);
@@ -133,12 +134,11 @@ export function CustomDashboardView({ instanceId }: CustomDashboardViewProps) {
     return (
         <div className="relative h-full w-full flex flex-col">
             {/* Header / Toolbar */}
-            <div className="flex items-center justify-end px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/20 backdrop-blur-sm z-10">
+            <div className="flex items-center justify-end px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-950/20 backdrop-blur-sm z-10 gap-1">
                 <Sheet open={configOpen} onOpenChange={setConfigOpen}>
                     <SheetTrigger asChild>
-                        <Button variant="ghost" size="sm" className="gap-2 text-gray-500 hover:text-brand">
+                        <Button variant="ghost" size="icon" className="w-8 h-8 text-gray-400 hover:text-brand hover:bg-brand/5" title="Configure">
                             <Settings className="w-4 h-4" />
-                            Configure
                         </Button>
                     </SheetTrigger>
                     <SheetContent>
@@ -169,6 +169,18 @@ export function CustomDashboardView({ instanceId }: CustomDashboardViewProps) {
                         </SheetFooter>
                     </SheetContent>
                 </Sheet>
+
+                {onRemove && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onRemove}
+                        className="w-8 h-8 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        title="Remove Widget"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </Button>
+                )}
             </div>
 
             {/* Main Content */}

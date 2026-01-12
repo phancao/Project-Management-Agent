@@ -8,11 +8,11 @@ import { cn } from "~/lib/utils";
 import { toast } from "sonner";
 
 export function StorePanelView() {
-    const { installInstance } = useDashboardStore();
+    const { installPlugin } = useDashboardStore();
 
-    const handleInstall = (pluginId: string, title: string) => {
-        installInstance(pluginId);
-        toast.success(`Installed new "${title}" dashboard`);
+    const handleInstall = (pluginId: string, title: string, type: string) => {
+        installPlugin(pluginId);
+        toast.success(`Installed "${title}" ${type}`);
     };
 
     return (
@@ -20,16 +20,17 @@ export function StorePanelView() {
             <div className="mb-8">
                 <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-2">
                     <LayoutGrid className="w-6 h-6 text-brand" />
-                    Dashboard Store
+                    Dashboard Pages
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400 mt-2">
-                    Create new dashboard instances from these blueprints. Each installation creates a new configurable tab.
+                    Extend your workspace with new full-page <strong>Dashboard Views</strong>.
                 </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {dashboardRegistry.map((plugin) => {
+                {dashboardRegistry.filter(p => p.type === 'page').map((plugin) => {
                     const Icon = plugin.meta.icon;
+                    const isPage = true;
 
                     return (
                         <div
@@ -40,6 +41,9 @@ export function StorePanelView() {
                                 <div className="p-3 rounded-lg bg-gray-100 dark:bg-gray-900 group-hover:scale-110 transition-transform duration-300">
                                     <Icon className="w-6 h-6 text-gray-700 dark:text-gray-300 group-hover:text-brand" />
                                 </div>
+                                <span className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                    {plugin.type}
+                                </span>
                             </div>
 
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
@@ -59,11 +63,11 @@ export function StorePanelView() {
                                 <span className="text-xs text-gray-400">v{plugin.meta.version} • {plugin.meta.author}</span>
                                 <Button
                                     size="sm"
-                                    onClick={() => handleInstall(plugin.id, plugin.meta.title)}
+                                    onClick={() => handleInstall(plugin.id, plugin.meta.title, plugin.type)}
                                     className="bg-brand hover:bg-brand/90 text-white shadow-lg shadow-brand/20"
                                 >
                                     <Plus className="w-4 h-4 mr-2" />
-                                    Create Instance
+                                    Add Tab
                                 </Button>
                             </div>
                         </div>

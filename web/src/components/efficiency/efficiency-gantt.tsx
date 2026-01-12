@@ -5,6 +5,7 @@ import { type PMUser } from '~/core/api/pm/users';
 import { type PMTimeEntry } from '~/core/api/pm/time-entries';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { type MemberPeriod, type Holiday } from './member-duration-manager';
+import { DailyWorklogChart } from './daily-worklog-chart';
 
 interface EfficiencyGanttProps {
     members: PMUser[];
@@ -371,87 +372,17 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                                     </div>
                                                                 ) : (
                                                                     /* Regular Work Day - Pie Wedge Chart */
-                                                                    <>
-                                                                        <svg width={size} height={size} className="transform -rotate-90">
-                                                                            {/* Background circle (outline) */}
-                                                                            <circle
-                                                                                cx={size / 2}
-                                                                                cy={size / 2}
-                                                                                r={radius - 2}
-                                                                                fill="none"
-                                                                                strokeWidth={2}
-                                                                                className="stroke-gray-300 dark:stroke-gray-600"
-                                                                            />
-                                                                            {/* Pie wedge for hours logged (out of 8h max) */}
-                                                                            {hours > 0 && (() => {
-                                                                                const hoursAngle = Math.min((hours / 8) * 360, 360);
-                                                                                const startAngle = 0;
-                                                                                const endAngle = hoursAngle;
-                                                                                const largeArc = endAngle > 180 ? 1 : 0;
-                                                                                const cx = size / 2;
-                                                                                const cy = size / 2;
-                                                                                const r = radius - 4;
-
-                                                                                // Handle full circle case
-                                                                                if (hours >= 8) {
-                                                                                    return (
-                                                                                        <circle
-                                                                                            cx={cx}
-                                                                                            cy={cy}
-                                                                                            r={r}
-                                                                                            className={cn(
-                                                                                                "transition-all duration-500",
-                                                                                                percentage > 105 ? "fill-red-500" : percentage >= 90 ? "fill-emerald-500" : "fill-amber-400"
-                                                                                            )}
-                                                                                        />
-                                                                                    );
-                                                                                }
-
-                                                                                const x1 = cx;
-                                                                                const y1 = cy - r;
-                                                                                const x2 = cx + r * Math.sin((endAngle * Math.PI) / 180);
-                                                                                const y2 = cy - r * Math.cos((endAngle * Math.PI) / 180);
-
-                                                                                return (
-                                                                                    <path
-                                                                                        d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`}
-                                                                                        className={cn(
-                                                                                            "transition-all duration-500",
-                                                                                            percentage > 105 ? "fill-red-500" : percentage >= 90 ? "fill-emerald-500" : "fill-amber-400"
-                                                                                        )}
-                                                                                    />
-                                                                                );
-                                                                            })()}
-                                                                            {/* Clock tick marks (8 ticks for 8 hours) */}
-                                                                            {[...Array(8)].map((_, i) => {
-                                                                                const angle = (i / 8) * 360;
-                                                                                const tickOuterRadius = size / 2 - 1;
-                                                                                const tickInnerRadius = tickOuterRadius - 5;
-                                                                                const x1 = size / 2 + tickInnerRadius * Math.cos((angle * Math.PI) / 180);
-                                                                                const y1 = size / 2 + tickInnerRadius * Math.sin((angle * Math.PI) / 180);
-                                                                                const x2 = size / 2 + tickOuterRadius * Math.cos((angle * Math.PI) / 180);
-                                                                                const y2 = size / 2 + tickOuterRadius * Math.sin((angle * Math.PI) / 180);
-                                                                                return (
-                                                                                    <line
-                                                                                        key={i}
-                                                                                        x1={x1}
-                                                                                        y1={y1}
-                                                                                        x2={x2}
-                                                                                        y2={y2}
-                                                                                        strokeWidth={1.5}
-                                                                                        className="stroke-gray-600 dark:stroke-gray-400"
-                                                                                    />
-                                                                                );
-                                                                            })}
-                                                                        </svg>
-                                                                        {/* Hours text in center */}
-                                                                        <span className={cn(
-                                                                            "absolute inset-0 flex items-center justify-center text-[10px] font-bold",
-                                                                            hours === 0 && !isWknd ? "text-red-500" : "text-gray-700 dark:text-gray-200"
-                                                                        )}>
-                                                                            {Number.isInteger(hours) ? hours : hours.toFixed(1)}
-                                                                        </span>
-                                                                    </>
+                                                                    <DailyWorklogChart
+                                                                        hours={hours}
+                                                                        target={8} // Gantt view always assumes 8h standard for circle visual? Or use 'target'? 
+                                                                        // The logic calculated 'target' dynamically but the visual ticks are hardcoded to 8.
+                                                                        // Let's pass 'target' if we want accuracy, but visual ticks implies 8h scale.
+                                                                        // Replicating original visual: ticks = 8.
+                                                                        size={size}
+                                                                        strokeWidth={strokeWidth}
+                                                                        isWeekend={isWknd}
+                                                                        showText={true}
+                                                                    />
                                                                 )}
                                                             </div>
                                                         </TooltipTrigger>

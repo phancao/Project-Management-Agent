@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO, format, eachDayOfInterval, isWeekend, isWithinInterval } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Calendar as CalendarIcon } from "lucide-react";
@@ -20,6 +20,7 @@ import { EfficiencyGantt } from './efficiency-gantt';
 import { useCardGlow, useStatCardGlow } from '~/core/hooks/use-theme-colors';
 
 import { MemberDurationManager, type MemberPeriod, type Holiday } from './member-duration-manager';
+import { MemberEfficiencyCard } from './member-efficiency-card';
 
 // Color palette for activity types
 const ACTIVITY_COLORS = [
@@ -73,9 +74,53 @@ export function EfficiencyDashboard({
     // View Mode State
     const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
 
-    // Calculation Logic for EE
+    // Member Exclusion State
+    const [excludedMemberIds, setExcludedMemberIds] = useState<string[]>([]);
+
+    // Load View Mode and Exclusion List from localStorage
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const savedMode = localStorage.getItem('ee-dashboard-view-mode');
+            if (savedMode === 'day' || savedMode === 'week' || savedMode === 'month') {
+                setViewMode(savedMode);
+            }
+
+            const savedExcluded = localStorage.getItem('ee-dashboard-excluded-members');
+            if (savedExcluded) {
+                try {
+                    setExcludedMemberIds(JSON.parse(savedExcluded));
+                } catch (e) {
+                    console.error("Failed to parse excluded members", e);
+                }
+            }
+        }
+    }, []);
+
+    const handleViewModeChange = (v: string) => {
+        const mode = v as 'day' | 'week' | 'month';
+        setViewMode(mode);
+        localStorage.setItem('ee-dashboard-view-mode', mode);
+    };
+
+    const handleToggleExclusion = (memberId: string) => {
+        setExcludedMemberIds(prev => {
+            const next = prev.includes(memberId)
+                ? prev.filter(id => id !== memberId)
+                : [...prev, memberId];
+
+            localStorage.setItem('ee-dashboard-excluded-members', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    // Filter members based on exclusion list for calculations and display
+    const activeMembers = useMemo(() => {
+        return members.filter(m => !excludedMemberIds.includes(m.id));
+    }, [members, excludedMemberIds]);
+
+    // Calculation Logic for EE (using activeMembers)
     const metrics = useMemo(() => {
-        if (!dateRange?.from || !dateRange?.to || members.length === 0) {
+        if (!dateRange?.from || !dateRange?.to || activeMembers.length === 0) {
             return {
                 headcount: 0,
                 billableBMM: 0,
@@ -87,7 +132,7 @@ export function EfficiencyDashboard({
 
         const startDate = startOfDay(dateRange.from);
         const endDate = endOfDay(dateRange.to);
-        const headcount = members.length;
+        const headcount = activeMembers.length;
 
         const getBusinessDaysCount = (start: Date, end: Date) => {
             if (start > end) return 0;
@@ -109,6 +154,37 @@ export function EfficiencyDashboard({
                 if (isHolidayDay) return false;
                 return true;
             }).length;
+        };
+
+        // Helper: Check if a day counts as "Active Capacity" for a member
+        const isMemberActiveOnDay = (memberId: string, day: Date, periods: MemberPeriod[]) => {
+            // 1. Weekend Check
+            if (isWeekend(day)) return false;
+
+            // 2. Holiday Check
+            if (isHolidayDay(day)) return false;
+
+            // 3. Vacation Check (Explicit)
+            if (isVacationDay(memberId, day)) return false;
+
+            // 4. Default Mode (No periods defined) -> Active
+            if (!periods || periods.length === 0) return true;
+
+            // 5. Check specific active periods
+            let isActive = false;
+            periods.forEach(period => {
+                if (period.range.from && isWithinInterval(day, {
+                    start: startOfDay(period.range.from),
+                    end: endOfDay(period.range.to || period.range.from)
+                })) {
+                    // Only counts if allocation > 0 (otherwise it's effectively a vacation/gap)
+                    if (period.allocation > 0) isActive = true;
+                }
+            });
+
+            if (isActive) return true;
+
+            return false;
         };
 
         // Helper: Check if a day is a vacation for a specific member
@@ -145,71 +221,107 @@ export function EfficiencyDashboard({
             });
         };
 
-        const getMemberCapacityHours = (memberId: string) => {
-            const periods = activePeriods[memberId];
+        let totalCapacityHours = 0;
 
-            // Default: Full Duration (100% Capacity) if no periods defined
+        // Ensure we calculate capacity for EACH member based on their specific duration
+        activeMembers.forEach(member => {
+            const periods = activePeriods[member.id];
+
+            // If no periods defined -> member is active for entire range (standard behavior)
             if (!periods || periods.length === 0) {
-                // Still need to exclude holidays for default case
+                let memberCapacity = 0;
                 const days = eachDayOfInterval({ start: startDate, end: endDate });
-                let capacity = 0;
+
                 days.forEach(day => {
-                    if (isWeekend(day)) return;
-                    if (isHolidayDay(day)) return;
-                    capacity += 8;
-                });
-                return capacity;
-            }
+                    if (!isWeekend(day)) {
+                        // Check holidays
+                        const isHoliday = holidays.some(h => {
+                            if (!h.range.from) return false;
+                            const holidayStart = new Date(h.range.from);
+                            holidayStart.setHours(0, 0, 0, 0);
+                            const holidayEnd = h.range.to ? new Date(h.range.to) : new Date(h.range.from);
+                            holidayEnd.setHours(23, 59, 59, 999);
+                            const checkDay = new Date(day);
+                            checkDay.setHours(12, 0, 0, 0);
+                            return checkDay >= holidayStart && checkDay <= holidayEnd;
+                        });
 
-            // Custom Duration with Allocation
-            const days = eachDayOfInterval({ start: startDate, end: endDate });
-
-            let memberTotalCapacity = 0;
-
-            days.forEach(day => {
-                if (isWeekend(day)) return;
-                if (isHolidayDay(day)) return; // Exclude holidays
-                if (isVacationDay(memberId, day)) return; // Exclude vacations
-
-                // Find all active periods for this day
-                // Sum allocations (e.g. 50% + 50% = 100%)
-                let dailyAllocation = 0;
-                let isActive = false;
-
-                periods.forEach(period => {
-                    if (period.range.from && isWithinInterval(day, {
-                        start: startOfDay(period.range.from),
-                        end: endOfDay(period.range.to || period.range.from)
-                    })) {
-                        isActive = true;
-                        dailyAllocation += period.allocation;
+                        if (!isHoliday) {
+                            memberCapacity += 8;
+                        }
                     }
                 });
+                totalCapacityHours += memberCapacity;
+                return;
+            }
 
-                if (isActive) {
-                    // Cap at 100%? Or allow overtime planning? 
-                    // Standard capacity should probably be actual allocation.
-                    // If someone is 50% allocated, their target is 4h.
-                    memberTotalCapacity += 8 * (dailyAllocation / 100);
+            // Member has defined periods
+            // Iterate through every day of the global range check if it falls into any active period
+            // Iterate through every day of the global range check if it falls into any active period
+            const days = eachDayOfInterval({ start: startDate, end: endDate });
+
+            days.forEach(day => {
+                // 1. Must be weekday
+                if (isWeekend(day)) return;
+
+                // 2. Must not be holiday
+                const isHoliday = holidays.some(h => {
+                    if (!h.range.from) return false;
+                    const holidayStart = new Date(h.range.from);
+                    holidayStart.setHours(0, 0, 0, 0);
+                    const holidayEnd = h.range.to ? new Date(h.range.to) : new Date(h.range.from);
+                    holidayEnd.setHours(23, 59, 59, 999);
+                    const checkDay = new Date(day);
+                    checkDay.setHours(12, 0, 0, 0);
+                    return checkDay >= holidayStart && checkDay <= holidayEnd;
+                });
+                if (isHoliday) return;
+
+                // 3. Must be inside an active period
+                // AND not be a personal vacation day
+                const activePeriod = periods.find(p => p.range.from && isWithinInterval(day, {
+                    start: startOfDay(p.range.from),
+                    end: endOfDay(p.range.to || p.range.from)
+                }));
+
+                if (activePeriod) {
+                    // Check if specific day is a vacation day for this member
+                    if (isVacationDay(member.id, day)) {
+                        return; // It is a vacation, 0 capacity
+                    }
+
+                    // Add capacity based on allocation %
+                    const allocation = activePeriod.allocation || 100;
+                    totalCapacityHours += 8 * (allocation / 100);
                 }
             });
-
-            return memberTotalCapacity;
-        };
-
-        // Calculate Total Capacity (Sum of individual capacities)
-        let totalCapacityHours = 0;
-        members.forEach(member => {
-            totalCapacityHours += getMemberCapacityHours(member.id);
         });
 
-        // Calculate Actual Hours
+        // Calculate Actual Hours - FILTERED by Active Periods
         let totalAllocatedHours = 0;
         timeEntries.forEach(entry => {
             if (!entry.date) return;
             const entryDate = parseISO(entry.date);
             if (entryDate < startDate || entryDate > endDate) return;
-            totalAllocatedHours += entry.hours;
+
+            // CRITICAL FIX: Only count hours if the member was actually "Active" on this day
+            // This prevents "1-day active duration" users from having "30-days of work" counted against "1-day capacity".
+            const periods = activePeriods[entry.user_id];
+
+            // If unknown user (not in members list), maybe we should count it? 
+            // Or strict filter? Let's strict filter to be safe with the math.
+            // But if user is missing from members list, they don't contribute to capacity either.
+            // So filtering is correct.
+            const isKnownMember = activeMembers.some(m => m.id === entry.user_id);
+            if (isKnownMember) {
+                if (isMemberActiveOnDay(entry.user_id, entryDate, periods || [])) {
+                    totalAllocatedHours += entry.hours;
+                }
+            } else {
+                // Fallback for non-members? (Shouldn't happen in this view usually)
+                // If we count them here, we inflate numerator without denominator.
+                // Better to skip.
+            }
         });
 
         const eePercent = totalCapacityHours > 0 ? (totalAllocatedHours / totalCapacityHours) * 100 : 0;
@@ -226,7 +338,7 @@ export function EfficiencyDashboard({
             totalAllocatedHours
         };
 
-    }, [members, tasks, timeEntries, dateRange, activePeriods]); // Added timeEntries dependency
+    }, [members, tasks, timeEntries, dateRange, activePeriods, activeMembers]); // Added timeEntries dependency
 
     // Aggregate time entries by activity type
     const activityData = useMemo(() => {
@@ -308,64 +420,73 @@ export function EfficiencyDashboard({
                 </CardHeader>
                 <CardContent>
                     {activityData.length > 0 ? (
-                        <div className="flex flex-col lg:flex-row items-center gap-8">
-                            <div className="w-full lg:w-1/2">
-                                <ResponsiveContainer width="100%" height={240}>
+                        <div className="flex flex-col lg:flex-row items-center gap-8 h-full">
+                            <div className="w-full lg:w-[45%] relative aspect-square max-w-[400px]">
+                                <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
                                             data={activityData}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={50}
-                                            outerRadius={90}
+                                            innerRadius="60%"
+                                            outerRadius="100%"
                                             fill="#8884d8"
                                             dataKey="hours"
                                             paddingAngle={2}
                                         >
                                             {activityData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                                <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
                                             ))}
                                         </Pie>
                                         <Tooltip
                                             contentStyle={{
-                                                backgroundColor: "rgba(255, 255, 255, 0.95)",
-                                                border: "1px solid #ccc",
+                                                backgroundColor: "var(--card)",
+                                                borderColor: "var(--border)",
                                                 borderRadius: "8px",
+                                                color: "var(--foreground)",
+                                                fontSize: "12px"
                                             }}
+                                            itemStyle={{ color: "var(--foreground)" }}
                                             formatter={(value, name) => [`${Number(value).toFixed(1)} hours`, name]}
                                         />
                                     </PieChart>
                                 </ResponsiveContainer>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <span className="text-3xl font-bold">{metrics.totalAllocatedHours.toFixed(0)}</span>
+                                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Hours</span>
+                                </div>
                             </div>
-                            <div className="w-full lg:w-1/2">
-                                <div className="space-y-3">
+                            <div className="w-full lg:flex-1">
+                                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                                     {activityData.map((activity) => (
-                                        <div key={activity.name} className="flex items-center gap-3">
+                                        <div key={activity.name} className="flex items-center gap-3 group">
                                             <div
-                                                className="w-4 h-4 rounded-sm flex-shrink-0"
+                                                className="w-4 h-4 rounded-full flex-shrink-0"
                                                 style={{ backgroundColor: activity.color }}
                                             />
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex justify-between items-baseline">
-                                                    <span className="font-medium text-gray-900 dark:text-white truncate">
+                                                <div className="flex justify-between items-baseline mb-1">
+                                                    <span className="font-medium truncate group-hover:text-primary transition-colors">
                                                         {activity.name}
                                                     </span>
-                                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-2">
-                                                        {activity.hours.toFixed(1)}h
-                                                    </span>
+                                                    <div className="flex items-baseline gap-2">
+                                                        <span className="text-sm font-bold">
+                                                            {activity.hours.toFixed(1)}h
+                                                        </span>
+                                                        <span className="text-xs text-muted-foreground w-12 text-right">
+                                                            {activity.percentage}%
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div className="mt-1 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                <div className="w-full bg-secondary/50 rounded-full h-2 overflow-hidden">
                                                     <div
-                                                        className="h-2 rounded-full transition-all duration-300"
+                                                        className="h-full rounded-full transition-all duration-500"
                                                         style={{
                                                             width: `${activity.percentage}%`,
                                                             backgroundColor: activity.color
                                                         }}
                                                     />
                                                 </div>
-                                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                    {activity.percentage}% of total
-                                                </span>
                                             </div>
                                         </div>
                                     ))}
@@ -381,6 +502,7 @@ export function EfficiencyDashboard({
                     )}
                 </CardContent>
             </Card>
+
 
             {/* Gantt Chart Section with Control Bar */}
             <Card className={cardGlow.className}>
@@ -433,7 +555,7 @@ export function EfficiencyDashboard({
                                     />
                                 </PopoverContent>
                             </Popover>
-                            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'day' | 'week' | 'month')}>
+                            <Tabs value={viewMode} onValueChange={handleViewModeChange}>
                                 <TabsList className="h-8">
                                     <TabsTrigger value="day" className="text-xs px-3">Day</TabsTrigger>
                                     <TabsTrigger value="week" className="text-xs px-3">Week</TabsTrigger>
@@ -446,7 +568,7 @@ export function EfficiencyDashboard({
                 <CardContent>
                     {dateRange?.from && dateRange?.to ? (
                         <EfficiencyGantt
-                            members={members}
+                            members={activeMembers}
                             timeEntries={timeEntries}
                             startDate={dateRange.from}
                             endDate={dateRange.to}
@@ -474,9 +596,31 @@ export function EfficiencyDashboard({
                             onChange={onActivePeriodsChange}
                             holidays={holidays}
                             onHolidaysChange={onHolidaysChange}
+                            excludedMemberIds={excludedMemberIds}
+                            onToggleExclusion={handleToggleExclusion}
                         />
                     </CardContent>
                 </Card>
+            )}
+
+            {/* Individual Member Efficiency Cards */}
+            {dateRange?.from && dateRange?.to && activeMembers.length > 0 && (
+                <div className="space-y-6 pt-4">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold tracking-tight">Member Details</h3>
+                    </div>
+                    {activeMembers.map(member => (
+                        <MemberEfficiencyCard
+                            key={member.id}
+                            member={member}
+                            // [PM-DEBUG] Passing active periods
+                            activePeriods={activePeriods[member.id]}
+                            timeEntries={timeEntries}
+                            dateRange={{ from: dateRange.from!, to: dateRange.to! }}
+                            activityColors={ACTIVITY_COLORS}
+                        />
+                    ))}
+                </div>
             )}
         </div>
     );

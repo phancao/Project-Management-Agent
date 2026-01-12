@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format, parse, isValid } from 'date-fns';
-import { Calendar as CalendarIcon, Plus, X, Percent, PartyPopper, TreePalm, ExternalLink } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, X, Percent, PartyPopper, TreePalm, ExternalLink, Eye, EyeOff } from "lucide-react";
 import type { DateRange } from 'react-day-picker';
 import Link from "next/link";
 
@@ -30,9 +30,20 @@ interface MemberDurationManagerProps {
     onChange: (periods: Record<string, MemberPeriod[]>) => void;
     holidays?: Holiday[];
     onHolidaysChange?: (holidays: Holiday[]) => void;
+
+    // Member Exclusion Props
+    excludedMemberIds?: string[];
+    onToggleExclusion?: (memberId: string) => void;
 }
 
-export function MemberDurationManager({ members, activePeriods, onChange, holidays = [] }: MemberDurationManagerProps) {
+export function MemberDurationManager({
+    members,
+    activePeriods,
+    onChange,
+    holidays = [],
+    excludedMemberIds = [],
+    onToggleExclusion
+}: MemberDurationManagerProps) {
     const [selectedMember, setSelectedMember] = useState<string | null>(null);
     const [tempDateRange, setTempDateRange] = useState<DateRange | undefined>(undefined);
 
@@ -233,14 +244,42 @@ export function MemberDurationManager({ members, activePeriods, onChange, holida
                     {members.map(member => {
                         const periods = activePeriods[member.id] || [];
                         const isAdding = selectedMember === member.id;
+                        const isExcluded = excludedMemberIds.includes(member.id);
 
                         return (
-                            <div key={member.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div
+                                key={member.id}
+                                className={cn(
+                                    "p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors",
+                                    isExcluded ? "bg-gray-50 dark:bg-gray-900/50 opacity-60" : ""
+                                )}
+                            >
                                 <div className="flex items-center gap-3 min-w-[200px]">
+                                    {/* Exclusion Toggle */}
+                                    {onToggleExclusion && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className={cn(
+                                                "h-6 w-6 shrink-0",
+                                                isExcluded ? "text-gray-400" : "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                                            )}
+                                            onClick={() => onToggleExclusion(member.id)}
+                                            title={isExcluded ? "Include in report" : "Exclude from report"}
+                                        >
+                                            {isExcluded ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </Button>
+                                    )}
+
                                     <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-sm font-medium">
                                         {member.name.charAt(0)}
                                     </div>
-                                    <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{member.name}</span>
+                                    <span className={cn(
+                                        "font-medium text-sm text-gray-900 dark:text-gray-100",
+                                        isExcluded && "line-through text-gray-500"
+                                    )}>
+                                        {member.name}
+                                    </span>
                                 </div>
 
                                 <div className="flex-1 flex flex-wrap items-center gap-2">

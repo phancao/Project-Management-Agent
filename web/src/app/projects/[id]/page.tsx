@@ -44,10 +44,33 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     const [isLoadingData, setIsLoadingData] = useState(false);
 
     // Date Range for Efficiency (Local State here so we can fetch when it changes)
-    const [dateRange, setDateRange] = useState<DateRange | undefined>({
-        from: startOfMonth(new Date()),
-        to: new Date(),
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+        // Initialize from localStorage if available
+        if (typeof window !== 'undefined' && projectId) {
+            const saved = localStorage.getItem(`ee-daterange-project-${projectId}`);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return {
+                        from: parsed.from ? new Date(parsed.from) : undefined,
+                        to: parsed.to ? new Date(parsed.to) : undefined
+                    };
+                } catch { /* ignore */ }
+            }
+        }
+        return {
+            from: startOfMonth(new Date()),
+            to: new Date(),
+        };
     });
+
+    // Handle date range change with persistence
+    const handleDateRangeChange = (range: DateRange | undefined) => {
+        setDateRange(range);
+        if (projectId && range) {
+            localStorage.setItem(`ee-daterange-project-${projectId}`, JSON.stringify(range));
+        }
+    };
 
     // Member Active Periods (Persistence)
     const [activePeriods, setActivePeriods] = useState<Record<string, MemberPeriod[]>>({});
@@ -220,7 +243,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                                 timeEntries={timeEntries}
                                 isLoading={isLoadingData}
                                 dateRange={dateRange}
-                                onDateRangeChange={setDateRange}
+                                onDateRangeChange={handleDateRangeChange}
                                 activePeriods={activePeriods}
                                 onActivePeriodsChange={handleActivePeriodsChange}
                                 title="Project Efficiency"

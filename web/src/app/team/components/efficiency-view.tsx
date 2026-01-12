@@ -19,10 +19,32 @@ export function EfficiencyView() {
     const { holidays, addHoliday, removeHoliday } = useHolidays();
 
     // 2. State for Date Range (Default: Current Month)
-    const [date, setDate] = useState<DateRange | undefined>({
-        from: startOfMonth(new Date()),
-        to: new Date(),
+    const [date, setDate] = useState<DateRange | undefined>(() => {
+        // Initialize from localStorage if available
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('ee-daterange-team-global');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return {
+                        from: parsed.from ? new Date(parsed.from) : undefined,
+                        to: parsed.to ? new Date(parsed.to) : undefined
+                    };
+                } catch { /* ignore */ }
+            }
+        }
+        return {
+            from: startOfMonth(new Date()),
+            to: new Date(),
+        };
     });
+
+    const handleDateRangeChange = (range: DateRange | undefined) => {
+        setDate(range);
+        if (range) {
+            localStorage.setItem('ee-daterange-team-global', JSON.stringify(range));
+        }
+    };
 
     // 3. State for Member Active Periods (persisted globally for team)
     const [activePeriods, setActivePeriods] = useState<Record<string, MemberPeriod[]>>({});
@@ -105,7 +127,7 @@ export function EfficiencyView() {
             timeEntries={teamTimeEntries}
             isLoading={isLoading}
             dateRange={date}
-            onDateRangeChange={setDate}
+            onDateRangeChange={handleDateRangeChange}
             activePeriods={activePeriods}
             onActivePeriodsChange={handleActivePeriodsChange}
             holidays={holidays}

@@ -1,9 +1,4 @@
-// Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-// SPDX-License-Identifier: MIT
-
-"use client";
-
-import { CheckSquare, FolderKanban, LineChart, Calendar, Users, RefreshCw, Timer } from "lucide-react";
+import { CheckSquare, FolderKanban, LineChart, Calendar, Users, RefreshCw, Timer, LayoutGrid, Plus, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -16,8 +11,13 @@ import { EfficiencyPanelView } from "./views/efficiency-panel-view";
 import { SprintBoardView } from "./views/sprint-board-view";
 import { TeamAssignmentsView } from "./views/team-assignments-view";
 import { TimelineView } from "./views/timeline-view";
+import { StorePanelView } from "./views/store-panel-view";
+import { CustomDashboardView } from "./views/custom-dashboard-view";
+import { useDashboardStore } from "~/core/store/use-dashboard-store";
+import { getDashboardPlugin } from "./dashboards/registry";
+import { toast } from "sonner";
 
-type PMView = "backlog" | "board" | "charts" | "timeline" | "team" | "efficiency";
+type PMView = "backlog" | "board" | "charts" | "timeline" | "team" | "efficiency" | "store" | string;
 
 interface PMViewsPanelProps {
   className?: string;
@@ -25,20 +25,41 @@ interface PMViewsPanelProps {
 
 export function PMViewsPanel({ className }: PMViewsPanelProps) {
   const [activeView, setActiveView] = useState<PMView>("backlog");
+  const { instances, uninstallInstance } = useDashboardStore();
 
   const handleRefresh = () => {
     // Trigger pm_refresh event to refresh all data
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
   };
 
-  // Views handle their own loading states - no blocking here
+  // Handle view change to support custom dashboards
+  const handleViewChange = (view: string) => {
+    setActiveView(view);
+  };
+
+  const handleCloseTab = (e: React.MouseEvent, instanceId: string, title: string) => {
+    e.stopPropagation(); // Prevent tab switch
+
+    // Switch to backlog if closing active tab
+    if (activeView === instanceId) {
+      setActiveView("backlog");
+    }
+
+    uninstallInstance(instanceId);
+    toast.info(`Closed "${title}" dashboard`);
+  };
+
+  // Helper to check if current view is a standard view
+  const isStandardView = (view: string) => {
+    return ["backlog", "board", "charts", "timeline", "efficiency", "team", "store"].includes(view);
+  };
 
   return (
     <div className={cn("flex flex-col h-full bg-transparent", className)}>
       {/* Navigation Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700 bg-transparent backdrop-blur-sm">
         <div className="flex items-center justify-between px-4 py-2">
-          <Tabs value={activeView} onValueChange={(v) => setActiveView(v as PMView)} className="flex-1 overflow-hidden">
+          <Tabs value={activeView} onValueChange={handleViewChange} className="flex-1 overflow-hidden">
             <TabsList className="w-full justify-start h-auto bg-transparent p-0 gap-1 overflow-x-auto no-scrollbar scroll-smooth py-1">
               <TabsTrigger
                 value="backlog"
@@ -82,6 +103,42 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
                 <Users className="w-4 h-4" />
                 Team
               </TabsTrigger>
+
+              {/* Dynamic Tabs for Installed Dashboard Instances */}
+              {instances.map((instance) => {
+                const plugin = getDashboardPlugin(instance.pluginId);
+                // Allow rendering tab even if plugin missing (so user can close it)
+                const title = instance.config.title || plugin?.meta.title || "Unknown Dashboard";
+                const Icon = plugin?.meta.icon || LayoutGrid;
+
+                return (
+                  <TabsTrigger
+                    key={instance.instanceId}
+                    value={instance.instanceId}
+                    className="group/tab flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 data-[state=active]:bg-brand data-[state=active]:text-white dark:data-[state=active]:bg-brand data-[state=active]:shadow-lg data-[state=active]:shadow-brand/40 pr-2"
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="truncate max-w-[100px]">{title}</span>
+                    <div
+                      role="button"
+                      onClick={(e) => handleCloseTab(e, instance.instanceId, title)}
+                      className="ml-1 p-0.5 rounded-full hover:bg-white/20 opacity-0 group-hover/tab:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </div>
+                  </TabsTrigger>
+                );
+              })}
+
+              {/* Store Tab (Always last) */}
+              <TabsTrigger
+                value="store"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-900 data-[state=active]:bg-gray-100 dark:data-[state=active]:bg-gray-800 data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <Plus className="w-4 h-4" />
+                Store
+              </TabsTrigger>
+
             </TabsList>
           </Tabs>
           <Button
@@ -104,6 +161,12 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
         {activeView === "timeline" && <TimelineView />}
         {activeView === "efficiency" && <EfficiencyPanelView />}
         {activeView === "team" && <TeamAssignmentsView />}
+        {activeView === "store" && <StorePanelView />}
+
+        {/* Render Custom Dashboard Instance if it's not a standard view */}
+        {!isStandardView(activeView) && (
+          <CustomDashboardView instanceId={activeView} />
+        )}
       </div>
     </div>
   );

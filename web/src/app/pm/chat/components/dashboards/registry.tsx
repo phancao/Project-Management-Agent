@@ -25,6 +25,7 @@ export interface DashboardPlugin {
         author: string;
         version: string;
         size?: { w: number; h: number }; // For widgets: width/height in grid units (1-4)
+        shortTitle?: string; // Optional shorter title for tabs
     };
     component: React.ComponentType<{ config: Record<string, any> }>;
     configSchema?: Record<string, ConfigField>; // Schema for user customization

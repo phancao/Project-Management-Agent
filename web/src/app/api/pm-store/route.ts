@@ -67,7 +67,7 @@ const PLUGIN_MANIFEST = [
         id: "work-distribution",
         type: "page",
         meta: {
-            title: "Distribution",
+            title: "Project Resource Distribution",
             description: "Work distribution by type, assignee, or priority.",
             category: "Analytics",
             icon: "PieChart",
@@ -115,7 +115,8 @@ const PLUGIN_MANIFEST = [
         id: "efficiency-view",
         type: "page",
         meta: {
-            title: "Efficiency",
+            title: "Project Resource Efficiency (EE)",
+            shortTitle: "PM Efficiency (EE)",
             description: "Track time usage, focus hours, and meeting load.",
             category: "Analytics",
             icon: "Timer",

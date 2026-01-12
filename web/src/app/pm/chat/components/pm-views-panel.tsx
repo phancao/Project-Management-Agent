@@ -179,8 +179,8 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
                 >
                   {pages.map((instance) => {
                     const plugin = getPlugin(instance.pluginId);
-                    // Allow rendering tab even if plugin missing (so user can close it)
-                    const title = instance.config.title || plugin?.meta.title || "Unknown Page";
+                    // Prioritize live metadata shortTitle for tabs, then title
+                    const title = plugin?.meta.shortTitle || plugin?.meta.title || instance.config.title || "Unknown Page";
                     const Icon = plugin?.meta.icon || LayoutGrid;
 
                     return (

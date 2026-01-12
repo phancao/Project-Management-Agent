@@ -31,6 +31,82 @@ interface CustomDashboardViewProps {
     onRemove?: () => void;
 }
 
+import { useSearchParams } from "next/navigation";
+import { useUsers } from "~/core/api/hooks/pm/use-users";
+import { Checkbox } from "~/components/ui/checkbox";
+
+// Helper component to avoid hook rules issues in renderConfigField
+function TeamMemberSelector({
+    value,
+    onChange
+}: {
+    value?: string[];
+    onChange: (val: string[]) => void;
+}) {
+    const searchParams = useSearchParams();
+    const projectId = searchParams?.get("project");
+    const { users, loading } = useUsers(projectId ?? undefined);
+
+    const selected = new Set(value || []);
+
+    const toggleMember = (id: string, checked: boolean) => {
+        const newSet = new Set(selected);
+        if (checked) {
+            newSet.add(id);
+        } else {
+            newSet.delete(id);
+        }
+        onChange(Array.from(newSet));
+    };
+
+    if (loading) {
+        return <div className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Loading project members...</div>;
+    }
+
+    if (users.length === 0) {
+        return <div className="text-sm text-gray-500">No members found in this project.</div>;
+    }
+
+    return (
+        <div className="border rounded-md p-2 space-y-2 max-h-[200px] overflow-y-auto">
+            <div className="flex items-center space-x-2 pb-2 border-b mb-2">
+                <Checkbox
+                    id="select-all"
+                    checked={selected.size === users.length && users.length > 0}
+                    onCheckedChange={(checked) => {
+                        if (checked) {
+                            onChange(users.map(u => u.id));
+                        } else {
+                            onChange([]);
+                        }
+                    }}
+                />
+                <label
+                    htmlFor="select-all"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                    Select All
+                </label>
+            </div>
+            {users.map((user) => (
+                <div key={user.id} className="flex items-center space-x-2">
+                    <Checkbox
+                        id={`user-${user.id}`}
+                        checked={selected.has(user.id)}
+                        onCheckedChange={(checked) => toggleMember(user.id, checked as boolean)}
+                    />
+                    <label
+                        htmlFor={`user-${user.id}`}
+                        className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                        {user.name || user.email || user.username || user.id}
+                    </label>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardViewProps) {
     const { getInstance, updateInstanceConfig } = useDashboardStore();
     const instance = getInstance(instanceId);
@@ -139,6 +215,17 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
+                );
+            case "team-members":
+                return (
+                    <div className="space-y-2">
+                        <Label htmlFor={key}>{field.label}</Label>
+                        <p className="text-xs text-muted-foreground mb-2">{field.description}</p>
+                        <TeamMemberSelector
+                            value={tempConfig[key]}
+                            onChange={(val) => setTempConfig({ ...tempConfig, [key]: val })}
+                        />
                     </div>
                 );
             default:

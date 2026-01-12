@@ -2,7 +2,7 @@ import React from "react";
 import type { LucideIcon } from "lucide-react";
 import { BarChart2, TrendingUp, Users, Activity, Calendar, LineChart, Timer, PieChart, Clock, FileText, CheckSquare, LayoutGrid } from "lucide-react";
 
-export type ConfigType = "string" | "number" | "boolean" | "select";
+export type ConfigType = "string" | "number" | "boolean" | "select" | "team-members";
 
 export interface ConfigField {
     type: ConfigType;
@@ -140,6 +140,7 @@ import { ChartsPanelView } from "../views/charts-panel-view";
 import { TimelineView } from "../views/timeline-view";
 import { EfficiencyPanelView } from "../views/efficiency-panel-view";
 import { TeamAssignmentsView } from "../views/team-assignments-view";
+import { TeamWorklogsPage, TeamEfficiencyPage } from "./plugins/team-views"; // [NEW]
 import {
     BurndownPage,
     VelocityPage,
@@ -161,9 +162,11 @@ export const COMPONENT_MAP: Record<string, React.ComponentType<{ config: Record<
     "cycle-time": CycleTimePage,
     "work-distribution": WorkDistributionPage,
     "issue-trend": IssueTrendPage,
-    "worklogs": WorklogsPage,
+    "worklogs": WorklogsPage, // Keeping for backward compat or direct usage
+    "team-worklogs": TeamWorklogsPage, // [NEW]
     "timeline-view": TimelineView,
-    "efficiency-view": EfficiencyPanelView,
+    "efficiency-view": EfficiencyPanelView, // Keeping for backward compat
+    "team-efficiency": TeamEfficiencyPage, // [NEW]
     "team-view": TeamAssignmentsView,
 
     // Widgets

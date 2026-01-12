@@ -89,13 +89,52 @@ const PLUGIN_MANIFEST = [
         },
     },
     {
+        id: "team-worklogs",
+        type: "page",
+        meta: {
+            title: "Team Worklogs",
+            description: "Weekly breakdown of hours logged by team members.",
+            category: "Team",
+            icon: "Clock",
+            author: "Galaxy AI",
+            version: "1.2.0",
+            shortTitle: "Team Worklogs"
+        },
+        configSchema: {
+            title: {
+                type: "string",
+                label: "Tab Title",
+                defaultValue: "Team Worklogs",
+            },
+            teamMembers: {
+                type: "team-members",
+                label: "Team Members",
+                description: "Select members to include.",
+                defaultValue: []
+            }
+        },
+    },
+    {
         id: "worklogs",
         type: "page",
         meta: {
             title: "Worklogs",
-            description: "Detailed log of time spent on tasks.",
+            description: "Detailed log of time spent on tasks (Project Scope).",
             category: "Analytics",
             icon: "Clock",
+            author: "System",
+            version: "1.0.0",
+        },
+    },
+    {
+        id: "efficiency-view",
+        type: "page",
+        meta: {
+            title: "Project Resource Efficiency (EE)",
+            shortTitle: "PM Efficiency (EE)",
+            description: "Detailed efficiency metrics and allocation heatmaps (Project Scope).",
+            category: "Analytics",
+            icon: "Timer",
             author: "System",
             version: "1.0.0",
         },
@@ -113,16 +152,29 @@ const PLUGIN_MANIFEST = [
         },
     },
     {
-        id: "efficiency-view",
+        id: "team-efficiency",
         type: "page",
         meta: {
-            title: "Project Resource Efficiency (EE)",
-            shortTitle: "PM Efficiency (EE)",
+            title: "Team Efficiency (EE)",
             description: "Track time usage, focus hours, and meeting load.",
-            category: "Analytics",
-            icon: "Timer",
-            author: "System",
-            version: "1.0.0",
+            category: "Team",
+            icon: "PieChart",
+            author: "Galaxy AI",
+            version: "2.1.0",
+            shortTitle: "Team Efficiency"
+        },
+        configSchema: {
+            title: {
+                type: "string",
+                label: "Tab Title",
+                defaultValue: "Team Efficiency",
+            },
+            teamMembers: {
+                type: "team-members",
+                label: "Team Members",
+                description: "Select members to track.",
+                defaultValue: []
+            }
         },
     },
     {

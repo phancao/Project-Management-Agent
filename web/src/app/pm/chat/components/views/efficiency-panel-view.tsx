@@ -12,7 +12,7 @@ import { listTasks, type PMTask } from "~/core/api/pm/tasks";
 import { listTimeEntries, type PMTimeEntry } from "~/core/api/pm/time-entries";
 import { listUsers, type PMUser } from "~/core/api/pm/users";
 
-export function EfficiencyPanelView() {
+export function EfficiencyPanelView({ configuredMemberIds }: { configuredMemberIds?: string[] }) {
     const searchParams = useSearchParams();
     const projectId = searchParams.get("project");
 
@@ -182,10 +182,17 @@ export function EfficiencyPanelView() {
         }
     }, [projectId, dateRange, tasks]);
 
-    // 3. Filter Members to Project Team (Active Assignees)
+    // 3. Determine Displayed Members
     const projectMembers = useMemo(() => {
+        // If specific members are configured (from Store), use ONLY them
+        if (configuredMemberIds && configuredMemberIds.length > 0) {
+            const allowedIds = new Set(configuredMemberIds);
+            return users.filter(u => allowedIds.has(u.id));
+        }
+
+        // Default: Auto-detect members who have tasks assigned in this project
         return users.filter(u => tasks.some(t => t.assignee_id === u.id));
-    }, [users, tasks]);
+    }, [users, tasks, configuredMemberIds]);
 
     if (!projectId) {
         return (

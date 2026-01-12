@@ -57,7 +57,7 @@ interface WeeklyWorklogData {
     [memberId: string]: number | string;
 }
 
-export function WorklogsView() {
+export function WorklogsView({ configuredMemberIds }: { configuredMemberIds?: string[] }) {
     const searchParams = useSearchParams();
     const projectId = searchParams?.get("project");
 
@@ -113,14 +113,20 @@ export function WorklogsView() {
         return map;
     }, [users]);
 
-    // Get unique member IDs from time entries
+    // Get unique member IDs from time entries, OR use configured members
     const activeMemberIds = useMemo(() => {
+        // If explicitly configured, use those (and only those)
+        if (configuredMemberIds && configuredMemberIds.length > 0) {
+            return configuredMemberIds;
+        }
+
+        // Default: Auto-detect from time entries
         const ids = new Set<string>();
         timeEntries.forEach((entry) => {
             if (entry.user_id) ids.add(entry.user_id);
         });
         return Array.from(ids);
-    }, [timeEntries]);
+    }, [timeEntries, configuredMemberIds]);
 
     // Aggregate data by week
     const chartData = useMemo(() => {

@@ -120,11 +120,28 @@ export function useTeamDataContext(): TeamDataContextValue {
  * Fetches ONLY the specific team members by ID (not all 500 users).
  */
 export function useTeamUsers(memberIds: string[]) {
+    // Safety Net: Filter out members from disabled providers
+    const { mappings } = useProviders();
+
+    const activeMemberIds = useMemo(() => {
+        if (mappings.isActiveMap.size === 0) return memberIds;
+
+        return memberIds.filter(id => {
+            const providerId = id.split(':')[0];
+            if (!providerId || id.indexOf(':') === -1) return true;
+            return mappings.isActiveMap.get(providerId) !== false;
+        });
+    }, [memberIds, mappings]);
+
     // Fetch each team member in parallel by their ID
     const userQueries = useQueries({
-        queries: memberIds.map(memberId => ({
+        queries: activeMemberIds.map(memberId => ({
             queryKey: ['pm', 'user', memberId],
-            queryFn: () => getUser(memberId),
+            queryFn: () => {
+                const providerId = memberId.indexOf(':') !== -1 ? memberId.split(':')[0] : undefined;
+                return getUser(memberId, providerId);
+            },
+            enabled: !!memberId && activeMemberIds.includes(memberId), // Only fetch if member is valid and provider is active
             staleTime: 5 * 60 * 1000, // 5 minutes
             gcTime: 10 * 60 * 1000,   // 10 minutes
             retry: false, // Don't retry - user might not exist for this provider
@@ -140,7 +157,7 @@ export function useTeamUsers(memberIds: string[]) {
 
     // Empty memberIds is a valid state (no members), not a loading state
     // Only loading if we have queries that are actively loading
-    const isLoading = memberIds.length > 0 && userQueries.some(q => q.isLoading);
+    const isLoading = activeMemberIds.length > 0 && userQueries.some(q => q.isLoading);
     const isFetching = userQueries.some(q => q.isFetching);
     const error = userQueries.find(q => q.error)?.error || null;
 
@@ -156,23 +173,57 @@ export function useTeamUsers(memberIds: string[]) {
 
 /**
  * Hook for tabs that need tasks data.
- * Fetches tasks for each member in PARALLEL (1 API call per member).
- * This avoids fetching 87k+ tasks globally while still getting all team tasks.
+ * Groups members by provider, filters disabled providers, queries per-provider.
  */
-export function useTeamTasks(memberIds: string[], options?: { startDate?: string; endDate?: string }) {
-    // Create a query for each member - React Query will batch and parallelize these
-    // Use status='open' to only fetch active tasks (excludes closed/done)
+export function useTeamTasks(memberIds: string[], options?: { startDate?: string; endDate?: string; status?: string }) {
+    // Get provider mappings to check active status
+    const { mappings, loading: isLoadingProviders } = useProviders();
+
+    // Group members by provider and filter out disabled providers
+    const providerGroups = useMemo(() => {
+        const groups = new Map<string, string[]>();
+
+        for (const id of memberIds) {
+            const providerId = id.split(':')[0];
+            if (!providerId || id.indexOf(':') === -1) continue;
+
+            // Skip disabled providers
+            if (mappings.isActiveMap.size > 0 && mappings.isActiveMap.get(providerId) === false) {
+                continue;
+            }
+
+            const existing = groups.get(providerId) || [];
+            groups.set(providerId, [...existing, id]);
+        }
+
+        return groups;
+    }, [memberIds, mappings]);
+
+    // Convert to array for useQueries
+    const providerEntries = useMemo(() => Array.from(providerGroups.entries()), [providerGroups]);
+
+    const statusFilter = options?.status || 'open';
+    const startDate = options?.startDate || 'all';
+    const endDate = options?.endDate || 'all';
+
+    // One query per provider (not per member)
     const taskQueries = useQueries({
-        queries: memberIds.map(memberId => ({
-            queryKey: ['pm', 'tasks', 'member', memberId, 'open', options?.startDate || 'all', options?.endDate || 'all'],
-            queryFn: () => listTasks({
-                assignee_ids: [memberId],
-                status: 'open',
-                startDate: options?.startDate,
-                endDate: options?.endDate
-            }),
-            staleTime: 2 * 60 * 1000, // 2 minutes
-            gcTime: 5 * 60 * 1000,    // 5 minutes
+        queries: providerEntries.map(([providerId, providerMemberIds]) => ({
+            queryKey: ['pm', 'tasks', 'provider', providerId, providerMemberIds.sort().join(','), statusFilter, startDate, endDate],
+            queryFn: () => {
+                return listTasks({
+                    assignee_ids: providerMemberIds,
+                    status: statusFilter,
+                    startDate: options?.startDate,
+                    endDate: options?.endDate,
+                    providerId: providerId
+                });
+            },
+            retry: false,
+            staleTime: 2 * 60 * 1000,
+            gcTime: 5 * 60 * 1000,
+            // Only enable after providers are loaded
+            enabled: !isLoadingProviders && providerMemberIds.length > 0,
         })),
     });
 
@@ -187,12 +238,10 @@ export function useTeamTasks(memberIds: string[], options?: { startDate?: string
         return Array.from(taskMap.values());
     }, [taskQueries]);
 
-    // teamTasks is the same as allTasks (already filtered by member)
     const teamTasks = allTasks;
 
-    // Empty memberIds is a valid state (no tasks), not a loading state
-    // Only loading if we have queries that are actively loading
-    const isLoading = memberIds.length > 0 && taskQueries.some(q => q.isLoading);
+    // Only loading if providers are loading OR we have active queries loading
+    const isLoading = isLoadingProviders || (providerEntries.length > 0 && taskQueries.some(q => q.isLoading));
     const isFetching = taskQueries.some(q => q.isFetching);
     const error = taskQueries.find(q => q.error)?.error || null;
 
@@ -208,32 +257,105 @@ export function useTeamTasks(memberIds: string[], options?: { startDate?: string
 
 /**
  * Hook for tabs that need time entries data.
- * Call this within components that need time entries.
- * Supports optional date range filtering for efficient server-side queries.
+ * Groups members by provider, queries per-provider, merges results.
  */
 export function useTeamTimeEntries(memberIds: string[], options?: { startDate?: string; endDate?: string }) {
-    const timeQuery = useQuery({
-        queryKey: ['pm', 'time_entries', options?.startDate || 'all', options?.endDate || 'all'],
-        queryFn: () => listTimeEntries({
-            startDate: options?.startDate,
-            endDate: options?.endDate,
-        }),
-        staleTime: 2 * 60 * 1000, // 2 minutes
-        gcTime: 5 * 60 * 1000,    // 5 minutes
+    // Get provider mappings to check active status
+    const { mappings, loading: isLoadingProviders } = useProviders();
+
+    // Group members by provider and filter out disabled providers
+    const providerGroups = useMemo(() => {
+        const groups = new Map<string, string[]>();
+
+        for (const id of memberIds) {
+            const providerId = id.split(':')[0];
+            if (!providerId || id.indexOf(':') === -1) continue;
+
+            // Skip disabled providers
+            if (mappings.isActiveMap.size > 0 && mappings.isActiveMap.get(providerId) === false) {
+                continue;
+            }
+
+            const existing = groups.get(providerId) || [];
+            groups.set(providerId, [...existing, id]);
+        }
+
+        return groups;
+    }, [memberIds, mappings]);
+
+    // Convert to array for useQueries
+    const providerEntries = useMemo(() => Array.from(providerGroups.entries()), [providerGroups]);
+
+    const startDate = options?.startDate || 'all';
+    const endDate = options?.endDate || 'all';
+
+    // One query per provider
+    const timeQueries = useQueries({
+        queries: providerEntries.map(([providerId, providerMemberIds]) => ({
+            queryKey: ['pm', 'time_entries', 'provider', providerId, providerMemberIds.sort().join(','), startDate, endDate],
+            queryFn: async () => {
+                console.log('[PM-DEBUG][TIME_ENTRIES] QUERY:', {
+                    providerId,
+                    memberIds: providerMemberIds,
+                    startDate: options?.startDate,
+                    endDate: options?.endDate
+                });
+                const result = await listTimeEntries({
+                    userIds: providerMemberIds,
+                    startDate: options?.startDate,
+                    endDate: options?.endDate,
+                    providerId: providerId
+                });
+                console.log('[PM-DEBUG][TIME_ENTRIES] RESULT:', {
+                    count: result.length,
+                    sampleUserIds: result.slice(0, 5).map((e: any) => e.user_id),
+                    sampleProviderIds: result.slice(0, 5).map((e: any) => e.provider_id)
+                });
+                return result;
+            },
+            retry: false,
+            staleTime: 5 * 60 * 1000,
+            gcTime: 10 * 60 * 1000,
+            enabled: !isLoadingProviders && providerMemberIds.length > 0,
+        })),
     });
 
-    const allTimeEntries = timeQuery.data || [];
-    const teamTimeEntries = useMemo(() =>
-        allTimeEntries.filter(te => memberIds.includes(te.user_id)),
-        [allTimeEntries, memberIds]
-    );
+    // Merge all time entries from all providers
+    const allTimeEntries = useMemo(() => {
+        const entries: PMTimeEntry[] = [];
+        timeQueries.forEach(query => {
+            (query.data || []).forEach(entry => {
+                entries.push(entry);
+            });
+        });
+        console.log('[PM-DEBUG][TIME_ENTRIES] allTimeEntries:', entries.length);
+        return entries;
+    }, [timeQueries]);
+
+    const teamTimeEntries = useMemo(() => {
+        const filtered = allTimeEntries.filter(te => memberIds.includes(te.user_id));
+        console.log('[PM-DEBUG][TIME_ENTRIES] FILTER:', {
+            allCount: allTimeEntries.length,
+            memberIds: memberIds,
+            filteredCount: filtered.length,
+            mismatchSample: allTimeEntries.length > 0 && filtered.length === 0
+                ? allTimeEntries.slice(0, 5).map(e => e.user_id)
+                : null
+        });
+        return filtered;
+    }, [allTimeEntries, memberIds]);
+
+    // Only loading if providers are loading OR we have active queries loading
+    const isLoading = isLoadingProviders || (providerEntries.length > 0 && timeQueries.some(q => q.isLoading));
+    const isFetching = timeQueries.some(q => q.isFetching);
+    const error = timeQueries.find(q => q.error)?.error || null;
 
     return {
         allTimeEntries,
         teamTimeEntries,
-        isLoading: timeQuery.isLoading,
-        isFetching: timeQuery.isFetching,
-        error: timeQuery.error,
+        isLoading,
+        isFetching,
+        error,
         count: allTimeEntries.length,
     };
 }

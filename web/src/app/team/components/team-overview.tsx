@@ -138,7 +138,7 @@ function MemberAvatar({ member }: { member: PMUser }) {
     );
 }
 
-export function TeamOverview() {
+export function TeamOverview({ configuredMemberIds, providerId }: { configuredMemberIds?: string[], providerId?: string }) {
     // Get configurable glow classes from theme settings
     const cardGlow = useCardGlow();
     const statCardGlow = useStatCardGlow();
@@ -152,15 +152,54 @@ export function TeamOverview() {
     }, [])
 
     // Get essential data from context
-    const { teams, allMemberIds, isLoading: isContextLoading } = useTeamDataContext();
+    const { teams: contextTeams, allMemberIds: contextAllMemberIds, isLoading: isContextLoading } = useTeamDataContext();
 
-    // Load heavy data for this tab
-    const { allUsers, teamMembers: members, isLoading: isLoadingUsers, isFetching: isFetchingUsers, count: usersCount } = useTeamUsers(allMemberIds);
-    const { allTasks, teamTasks: tasks, isLoading: isLoadingTasks, isFetching: isFetchingTasks, count: tasksCount } = useTeamTasks(allMemberIds);
+    // Determine effective teams and member IDs based on configuration
+    const { effectiveTeams, effectiveMemberIds } = useMemo(() => {
+        // Check if configuredMemberIds is DEFINED (not undefined/null)
+        if (configuredMemberIds) {
+            if (configuredMemberIds.length > 0) {
+                // If custom members are selected, create a synthetic team
+                return {
+                    effectiveTeams: [{
+                        id: 'custom-view',
+                        name: 'Selected Team',
+                        memberIds: configuredMemberIds,
+                        projectId: '', // N/A
+                        createdAt: '', // N/A
+                        updatedAt: ''  // N/A
+                    }],
+                    effectiveMemberIds: configuredMemberIds
+                };
+            } else {
+                // EXPLICITLY EMPTY selection -> Show nothing (do not fall back to default)
+                return {
+                    effectiveTeams: [],
+                    effectiveMemberIds: []
+                };
+            }
+        }
+
+        // Undefined/null configuration -> Fallback to default context (all teams)
+        return {
+            effectiveTeams: contextTeams,
+            effectiveMemberIds: contextAllMemberIds
+        };
+    }, [configuredMemberIds, contextTeams, contextAllMemberIds]);
+
+    // Load heavy data for this tab (using effective IDs)
+    // Note: useTeamUsers doesn't strictly need providerId as it loads by ID, but we could enforce it if needed.
+    // However, tasks and time entries absolutely need the provider context if supplied.
+    const { allUsers, teamMembers: members, isLoading: isLoadingUsers, isFetching: isFetchingUsers, count: usersCount } = useTeamUsers(effectiveMemberIds);
+
+    // Pass providerId explicitly to ensure data is fetched from the correct source
+    const { allTasks, teamTasks: tasks, isLoading: isLoadingTasks, isFetching: isFetchingTasks, count: tasksCount } = useTeamTasks(effectiveMemberIds, { status: 'open', providerId });
+    // [NEW] Fetch ALL history (including closed tasks) for Team Experience aggregation
+    const { allTasks: allHistoryTasks, isLoading: isLoadingHistoryTasks } = useTeamTasks(effectiveMemberIds, { status: 'all', providerId });
     // Load time entries for current week to calculate utilization
     const { teamTimeEntries, isLoading: isLoadingTimeEntries } = useTeamTimeEntries(
-        allMemberIds,
-        { startDate: weekRange.start, endDate: weekRange.end }
+        effectiveMemberIds,
+        { startDate: weekRange.start, endDate: weekRange.end, providerId }
     );
 
     // Calculate stats per team
@@ -169,7 +208,7 @@ export function TeamOverview() {
             return [];
         }
 
-        return teams.map(team => {
+        return effectiveTeams.map(team => {
             // Get members for this team
             const teamMembers = allUsers.filter(u => team.memberIds.includes(u.id));
 
@@ -205,7 +244,7 @@ export function TeamOverview() {
                 totalTasks: teamTasks.length,
             };
         });
-    }, [teams, allUsers, allTasks, teamTimeEntries, isLoadingUsers, isLoadingTasks, isLoadingTimeEntries]);
+    }, [effectiveTeams, allUsers, allTasks, teamTimeEntries, isLoadingUsers, isLoadingTasks, isLoadingTimeEntries]);
 
     // Aggregate stats for summary
     const aggregateStats = useMemo(() => {
@@ -229,8 +268,9 @@ export function TeamOverview() {
 
     // Per-team experience breakdown
     const perTeamExperience = useMemo(() => {
-        return teams.map(team => {
-            const teamTasks = allTasks.filter(t =>
+        return effectiveTeams.map(team => {
+            // Use allHistoryTasks instead of allTasks to include closed/completed tasks in experience history
+            const teamTasks = allHistoryTasks.filter(t =>
                 t.assignee_id && team.memberIds.includes(t.assignee_id)
             );
             const projectMap = new Map<string, { id: string; name: string; hours: number; taskCount: number }>();
@@ -252,9 +292,9 @@ export function TeamOverview() {
                 totalHours: experience.reduce((sum, p) => sum + p.hours, 0),
             };
         }).filter(t => t.experience.length > 0);
-    }, [teams, allTasks, projects]);
+    }, [effectiveTeams, allHistoryTasks, projects]);
 
-    const isLoading = isContextLoading || isLoadingUsers || isLoadingTasks || isFetchingUsers || isFetchingTasks;
+    const isLoading = isContextLoading || isLoadingUsers || isLoadingTasks || isFetchingUsers || isFetchingTasks || isLoadingHistoryTasks;
 
     if (isLoading) {
         return (
@@ -270,7 +310,7 @@ export function TeamOverview() {
         );
     }
 
-    if (teams.length === 0) {
+    if (effectiveTeams.length === 0) {
         return (
             <Card className="p-8 text-center">
                 <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
@@ -417,7 +457,7 @@ export function TeamOverview() {
                 </div>
             ))}
 
-            <WorkloadCharts />
+            <WorkloadCharts effectiveMemberIds={effectiveMemberIds} effectiveTeams={effectiveTeams} />
         </div>
     );
 }

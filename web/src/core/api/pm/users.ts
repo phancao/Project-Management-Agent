@@ -27,33 +27,66 @@ export function matchesUserId(userId: string, targetId: string): boolean {
     return extractShortId(userId) === extractShortId(targetId);
 }
 
-export async function listUsers(projectId?: string): Promise<PMUser[]> {
-    console.log('[DEBUG API] listUsers called - projectId:', projectId);
-    let url = resolvePMServiceURL("users");
+export async function listUsers(projectId?: string, providerId?: string): Promise<PMUser[]> {
+    console.log('[DEBUG API] listUsers called - projectId:', projectId, 'providerId:', providerId);
 
-    if (projectId) {
+    const pageSize = 100;
+
+    const fetchPage = async (page: number) => {
+        let url = resolvePMServiceURL("users");
         const params = new URLSearchParams();
-        params.append("project_id", projectId);
-        url = `${url}?${params.toString()}`;
+        if (projectId) params.append("project_id", projectId);
+        if (providerId) params.append("provider_id", providerId);
+        params.append("pageSize", pageSize.toString());
+        params.append("page", page.toString());
+
+        const response = await fetch(`${url}?${params.toString()}`, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || "Failed to list users");
+        }
+
+        return await response.json();
+    };
+
+    // 1. Fetch first page to get metadata
+    const firstPageData = await fetchPage(1);
+
+    let allItems: any[] = [];
+    let totalItems = 0;
+
+    if (Array.isArray(firstPageData)) {
+        allItems = firstPageData;
+    } else {
+        totalItems = firstPageData.total || 0;
+        allItems = firstPageData.items || [];
     }
 
-    const response = await fetch(url, {
-        method: "GET",
-        headers: {
-            "Content-Type": "application/json",
-        },
-    });
+    // 2. Fetch remaining pages if needed
+    if (totalItems > allItems.length) {
+        const totalPages = Math.ceil(totalItems / pageSize);
+        const pagePromises = [];
 
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Failed to list users");
+        for (let p = 2; p <= totalPages; p++) {
+            pagePromises.push(fetchPage(p));
+        }
+
+        const results = await Promise.all(pagePromises);
+        results.forEach(data => {
+            if (data.items) {
+                allItems = allItems.concat(data.items);
+            }
+        });
     }
 
-    // Backend returns { items: [], total: ... } 
-    // We need to check the shape. Based on other clients/routers, it returns ListResponse
-    const data = await response.json();
     // Add shortId to each user
-    return (data.items || []).map((user: Omit<PMUser, 'shortId'>) => ({
+    return allItems.map((user: Omit<PMUser, 'shortId'>) => ({
         ...user,
         shortId: extractShortId(user.id),
     }));
@@ -63,9 +96,13 @@ export async function listUsers(projectId?: string): Promise<PMUser[]> {
  * Fetch a single user by ID.
  * Returns null if user not found (instead of throwing).
  */
-export async function getUser(userId: string): Promise<PMUser | null> {
-    console.log('[DEBUG API] getUser called - userId:', userId);
-    const url = resolvePMServiceURL(`users/${userId}`);
+export async function getUser(userId: string, providerId?: string): Promise<PMUser | null> {
+    console.log('[DEBUG API] getUser called - userId:', userId, 'providerId:', providerId);
+    // If providerId is supplied, pass it as query param
+    let url = resolvePMServiceURL(`users/${userId}`);
+    if (providerId) {
+        url += `?provider_id=${providerId}`;
+    }
 
     const response = await fetch(url, {
         method: "GET",

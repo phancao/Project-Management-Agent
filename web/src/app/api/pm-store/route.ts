@@ -118,7 +118,7 @@ const PLUGIN_MANIFEST = [
         id: "worklogs",
         type: "page",
         meta: {
-            title: "Worklogs",
+            title: "Project Worklogs",
             description: "Detailed log of time spent on tasks (Project Scope).",
             category: "Analytics",
             icon: "Clock",
@@ -175,6 +175,25 @@ const PLUGIN_MANIFEST = [
                 description: "Select members to track.",
                 defaultValue: []
             }
+        },
+    },
+    {
+        id: "team-overview",
+        type: "page",
+        meta: {
+            title: "Team Overview",
+            description: "Aggregate team stats, utilization, and project distribution.",
+            category: "Team",
+            icon: "BarChart2",
+            author: "Galaxy AI",
+            version: "1.0.0",
+        },
+        configSchema: {
+            teamMembers: {
+                type: "team-members",
+                label: "Team Members",
+                description: "Select members to include in this overview.",
+            },
         },
     },
     {

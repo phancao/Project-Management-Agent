@@ -57,7 +57,7 @@ interface WeeklyWorklogData {
     [memberId: string]: number | string;
 }
 
-export function WorklogsView({ configuredMemberIds }: { configuredMemberIds?: string[] }) {
+export function WorklogsView({ configuredMemberIds, instanceId }: { configuredMemberIds?: string[]; instanceId?: string }) {
     const searchParams = useSearchParams();
     const projectId = searchParams?.get("project");
 
@@ -68,24 +68,38 @@ export function WorklogsView({ configuredMemberIds }: { configuredMemberIds?: st
 
     // Fetch data
     useEffect(() => {
-        if (!projectId) return;
+        // If neither project nor members are selected, we might want to show a global view or prompt?
+        // User requested "global query" support, so we proceed.
 
         const loadData = async () => {
             setIsLoading(true);
             setError(null);
 
             try {
-                // Fetch time entries for the project (last 3 months by default)
+                // Fetch time entries (last 3 months by default)
                 const endDate = new Date();
                 const startDate = new Date();
-                startDate.setMonth(startDate.getMonth() - 3);
+                startDate.setMonth(startDate.getMonth() - 3); // Default 3 months
+
+                const fetchOptions: any = {
+                    startDate: format(startDate, "yyyy-MM-dd"),
+                    endDate: format(endDate, "yyyy-MM-dd"),
+                };
+
+                // Filter Strategy:
+                // 1. If members are configured, filter by them (ignore project scope to show their cross-project work? Or implicit intersection?)
+                //    User said: "don't querry using Project ID by default. It should querry from each members or global"
+                //    So we prefer Member IDs.
+                if (configuredMemberIds && configuredMemberIds.length > 0) {
+                    fetchOptions.userIds = configuredMemberIds;
+                } else if (projectId) {
+                    // 2. If no specific members, fall back to Project scope
+                    fetchOptions.projectId = projectId;
+                }
+                // 3. If neither, it fetches GLOBAL entries (as requested)
 
                 const [entries, userList] = await Promise.all([
-                    listTimeEntries({
-                        projectId,
-                        startDate: format(startDate, "yyyy-MM-dd"),
-                        endDate: format(endDate, "yyyy-MM-dd"),
-                    }),
+                    listTimeEntries(fetchOptions),
                     listUsers(),
                 ]);
 
@@ -99,7 +113,7 @@ export function WorklogsView({ configuredMemberIds }: { configuredMemberIds?: st
         };
 
         void loadData();
-    }, [projectId]);
+    }, [projectId, configuredMemberIds]);
 
     // Create user id → name/color mapping
     const userMap = useMemo(() => {
@@ -211,14 +225,7 @@ export function WorklogsView({ configuredMemberIds }: { configuredMemberIds?: st
         );
     }
 
-    // No project selected
-    if (!projectId) {
-        return (
-            <div className="h-full flex items-center justify-center p-8 text-muted-foreground">
-                <p>Please select a project to view worklogs chart.</p>
-            </div>
-        );
-    }
+
 
     // Error state
     if (error) {

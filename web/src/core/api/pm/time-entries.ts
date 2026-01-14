@@ -15,51 +15,74 @@ export interface ListTimeEntriesOptions {
     startDate?: string;  // YYYY-MM-DD
     endDate?: string;    // YYYY-MM-DD
     projectId?: string;
+    providerId?: string;
 }
 
-export async function listTimeEntries(options?: ListTimeEntriesOptions): Promise<PMTimeEntry[]> {
-    const params = new URLSearchParams();
+export async function listTimeEntries(options?: {
+    projectId?: string;
+    userIds?: string[];
+    taskId?: string;
+    startDate?: string;
+    endDate?: string;
+    providerId?: string;
+}) {
+    const pageSize = 500;
 
-    // Use server-side date filtering for efficient queries
-    // This is the proper solution for large datasets
-    if (options?.startDate) {
-        params.append("start_date", options.startDate);
+    const fetchPage = async (page: number) => {
+        const params = new URLSearchParams();
+        if (options?.startDate) params.append("start_date", options.startDate);
+        if (options?.endDate) params.append("end_date", options.endDate);
+        if (options?.userIds && options.userIds.length > 0) {
+            options.userIds.forEach(id => params.append("user_id", id));
+        }
+        if (options?.projectId) params.append("project_id", options.projectId);
+        if (options?.providerId) params.append("provider_id", options.providerId);
+
+        // Fixed: Use correct param names that match backend (limit/offset, not pageSize/page)
+        params.append("limit", pageSize.toString());
+        params.append("offset", ((page - 1) * pageSize).toString());
+
+        let url = resolvePMServiceURL("time_entries");
+        const queryString = params.toString();
+        if (queryString) url = `${url}?${queryString}`;
+
+        const response = await fetch(url, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || "Failed to list time entries");
+        }
+        return await response.json();
+    };
+
+    // 1. Fetch first page
+    const firstPageData = await fetchPage(1);
+
+    let allItems: any[] = [];
+    let totalItems = 0;
+
+    if (Array.isArray(firstPageData)) {
+        allItems = firstPageData;
+    } else {
+        allItems = firstPageData.items || [];
+        totalItems = firstPageData.total || 0;
     }
-    if (options?.endDate) {
-        params.append("end_date", options.endDate);
+
+    // 2. Fetch remaining pages
+    if (totalItems > allItems.length) {
+        const totalPages = Math.ceil(totalItems / pageSize);
+        const pagePromises = [];
+        for (let p = 2; p <= totalPages; p++) {
+            pagePromises.push(fetchPage(p));
+        }
+        const results = await Promise.all(pagePromises);
+        results.forEach(data => {
+            if (data.items) allItems = allItems.concat(data.items);
+        });
     }
 
-    // API supports user_id filter (singular)
-    if (options?.userIds && options.userIds.length === 1) {
-        params.append("user_id", options.userIds[0]!);
-    }
-
-    // Project filter
-    if (options?.projectId) {
-        params.append("project_id", options.projectId);
-    }
-
-    // Request enough entries for filtered date range
-    params.append("limit", "5000");
-
-    let url = resolvePMServiceURL("time_entries");
-    const queryString = params.toString();
-    if (queryString) {
-        url = `${url}?${queryString}`;
-    }
-
-    const response = await fetch(url, {
-        method: "GET",
-        headers: {
-            "Content-Type": "application/json",
-        },
-    });
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Failed to list time entries");
-    }
-
-    const data = await response.json();
-    return data.items || [];
+    return allItems;
 }

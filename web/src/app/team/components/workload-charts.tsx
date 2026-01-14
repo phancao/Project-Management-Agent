@@ -42,7 +42,12 @@ const COMPLETED_STATUSES = [
     'ready4sit', 'developed', 'confirmed', 'specified' // Dev work done, pending review/test
 ];
 
-export function WorkloadCharts() {
+interface WorkloadChartsProps {
+    effectiveMemberIds?: string[];
+    effectiveTeams?: any[]; // Using any[] to match context structure or import Team type if needed
+}
+
+export function WorkloadCharts({ effectiveMemberIds: propMemberIds, effectiveTeams: propTeams }: WorkloadChartsProps) {
     // Get configurable glow classes from theme settings
     const cardGlow = useCardGlow();
 
@@ -93,14 +98,18 @@ export function WorkloadCharts() {
     const isCurrentWeek = weekOffset === 0
 
     // Get essential data from context (includes teams)
-    const { teams, allMemberIds, isLoading: isContextLoading } = useTeamDataContext();
+    const { teams: contextTeams, allMemberIds: contextAllMemberIds, isLoading: isContextLoading } = useTeamDataContext();
+
+    // Use props if provided, otherwise context
+    const teams = propTeams || contextTeams;
+    const allMemberIds = propMemberIds || contextAllMemberIds;
 
     // Filter member IDs based on selected team
     const filteredMemberIds = useMemo(() => {
         if (selectedTeamId === "all") {
             return allMemberIds;
         }
-        const team = teams.find(t => t.id === selectedTeamId);
+        const team = teams.find((t: any) => t.id === selectedTeamId);
         return team?.memberIds || [];
     }, [selectedTeamId, teams, allMemberIds]);
 

@@ -2,29 +2,26 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 import { EfficiencyDashboard } from "~/components/efficiency/efficiency-dashboard";
 import { type MemberPeriod, type Holiday } from "~/components/efficiency/member-duration-manager";
 import { useHolidays } from "~/contexts/holidays-context";
-import { listTasks, type PMTask } from "~/core/api/pm/tasks";
-import { listTimeEntries, type PMTimeEntry } from "~/core/api/pm/time-entries";
-import { listUsers, type PMUser } from "~/core/api/pm/users";
+import { useTeamUsers, useTeamTasks, useTeamTimeEntries } from "~/app/team/context/team-data-context";
 
-export function EfficiencyPanelView({ configuredMemberIds }: { configuredMemberIds?: string[] }) {
+export function EfficiencyPanelView({ configuredMemberIds, instanceId }: { configuredMemberIds?: string[]; instanceId?: string }) {
     const searchParams = useSearchParams();
     const projectId = searchParams.get("project");
 
-    const [isLoading, setIsLoading] = useState(false);
-    const [tasks, setTasks] = useState<PMTask[]>([]);
-    const [users, setUsers] = useState<PMUser[]>([]);
-    const [timeEntries, setTimeEntries] = useState<PMTimeEntry[]>([]);
+    // Keys for localStorage - scoped to instance if available, else project, else global
+    const storageKeyDate = instanceId ? `ee-daterange-instance-${instanceId}` : (projectId ? `ee-daterange-project-${projectId}` : `ee-daterange-global`);
+    const storageKeyDurations = instanceId ? `ee-durations-instance-${instanceId}` : (projectId ? `ee-durations-project-${projectId}` : `ee-durations-global`);
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
         // Initialize from localStorage if available
-        if (typeof window !== 'undefined' && projectId) {
-            const saved = localStorage.getItem(`ee-daterange-project-${projectId}`);
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(storageKeyDate);
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
@@ -42,8 +39,8 @@ export function EfficiencyPanelView({ configuredMemberIds }: { configuredMemberI
     // Save dateRange to localStorage when it changes
     const handleDateRangeChange = (range: DateRange | undefined) => {
         setDateRange(range);
-        if (projectId && range) {
-            localStorage.setItem(`ee-daterange-project-${projectId}`, JSON.stringify(range));
+        if (range) {
+            localStorage.setItem(storageKeyDate, JSON.stringify(range));
         }
     };
 
@@ -79,9 +76,8 @@ export function EfficiencyPanelView({ configuredMemberIds }: { configuredMemberI
 
     // Load from localStorage on mount - with backward compatibility
     useEffect(() => {
-        if (!projectId) return;
         try {
-            const saved = localStorage.getItem(`ee-durations-project-${projectId}`);
+            const saved = localStorage.getItem(storageKeyDurations);
             if (saved) {
                 const parsed = JSON.parse(saved);
                 const hydrated: Record<string, MemberPeriod[]> = {};
@@ -89,7 +85,6 @@ export function EfficiencyPanelView({ configuredMemberIds }: { configuredMemberI
                     hydrated[key] = parsed[key].map((item: any) => {
                         // Check if it's new MemberPeriod format or old DateRange format
                         if (item.range) {
-                            // New format: { range: DateRange, allocation: number, vacations?: DateRange[] }
                             return {
                                 range: {
                                     from: item.range.from ? new Date(item.range.from) : undefined,
@@ -102,13 +97,12 @@ export function EfficiencyPanelView({ configuredMemberIds }: { configuredMemberI
                                 }))
                             };
                         } else {
-                            // Old format: DateRange directly
                             return {
                                 range: {
                                     from: item.from ? new Date(item.from) : undefined,
                                     to: item.to ? new Date(item.to) : undefined
                                 },
-                                allocation: 100 // Default allocation for old data
+                                allocation: 100
                             };
                         }
                     });
@@ -118,89 +112,35 @@ export function EfficiencyPanelView({ configuredMemberIds }: { configuredMemberI
         } catch (e) {
             console.error("Failed to load active periods", e);
         }
-    }, [projectId]);
+    }, [storageKeyDurations]);
 
     const handleActivePeriodsChange = (periods: Record<string, MemberPeriod[]>) => {
         setActivePeriods(periods);
-        if (projectId) {
-            localStorage.setItem(`ee-durations-project-${projectId}`, JSON.stringify(periods));
-        }
+        localStorage.setItem(storageKeyDurations, JSON.stringify(periods));
     };
 
-    // 1. Fetch Base Data (Users & Tasks) when project changes
-    useEffect(() => {
-        if (!projectId) return;
+    // Use effective member IDs - either configured or empty (will cause hooks to return empty)
+    const effectiveMemberIds = configuredMemberIds || [];
 
-        const loadBaseData = async () => {
-            setIsLoading(true);
-            try {
-                // Fetch Users and Project Tasks
-                const [fetchedUsers, fetchedTasks] = await Promise.all([
-                    listUsers(),
-                    listTasks({ project_id: projectId }),
-                ]);
-                setUsers(fetchedUsers);
-                setTasks(fetchedTasks);
-            } catch (error) {
-                console.error("Failed to load project data for efficiency view", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+    // Use provider-grouped hooks from team-data-context
+    const { teamMembers: users, isLoading: isLoadingUsers } = useTeamUsers(effectiveMemberIds);
 
-        void loadBaseData();
-    }, [projectId]);
+    const { teamTasks: tasks, isLoading: isLoadingTasks } = useTeamTasks(effectiveMemberIds, {
+        startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
+        endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+    });
 
-    // 2. Fetch Time Entries when Date Range Matches
-    useEffect(() => {
-        if (!projectId || !dateRange?.from || !dateRange?.to) return;
+    const { teamTimeEntries: timeEntries, isLoading: isLoadingTimeEntries } = useTeamTimeEntries(effectiveMemberIds, {
+        startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
+        endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+    });
 
-        const loadTimeEntries = async () => {
-            setIsLoading(true);
-            try {
-                const entries = await listTimeEntries({
-                    startDate: format(dateRange.from!, 'yyyy-MM-dd'),
-                    endDate: format(dateRange.to!, 'yyyy-MM-dd')
-                });
+    const isLoading = isLoadingUsers || isLoadingTasks || isLoadingTimeEntries;
 
-                // Client-side filter: Only entries linked to Project Tasks
-                const projectTaskIds = new Set(tasks.map(t => t.id));
-                const projectEntries = entries.filter(e => e.task_id && projectTaskIds.has(e.task_id));
-
-                setTimeEntries(projectEntries);
-
-            } catch (error) {
-                console.error("Failed to load time entries", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        // Only fetch/filter time entries if we have tasks loaded (to filter against)
-        if (tasks.length > 0) {
-            void loadTimeEntries();
-        }
-    }, [projectId, dateRange, tasks]);
-
-    // 3. Determine Displayed Members
+    // Determine Displayed Members - just use the loaded users (already filtered by hooks)
     const projectMembers = useMemo(() => {
-        // If specific members are configured (from Store), use ONLY them
-        if (configuredMemberIds && configuredMemberIds.length > 0) {
-            const allowedIds = new Set(configuredMemberIds);
-            return users.filter(u => allowedIds.has(u.id));
-        }
-
-        // Default: Auto-detect members who have tasks assigned in this project
-        return users.filter(u => tasks.some(t => t.assignee_id === u.id));
-    }, [users, tasks, configuredMemberIds]);
-
-    if (!projectId) {
-        return (
-            <div className="flex h-full items-center justify-center p-8 text-muted-foreground">
-                <p>Please select a project to view efficiency metrics.</p>
-            </div>
-        );
-    }
+        return users;
+    }, [users]);
 
     return (
         <div className="h-full space-y-4">

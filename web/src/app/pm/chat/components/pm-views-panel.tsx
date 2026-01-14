@@ -129,6 +129,20 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
     window.dispatchEvent(new CustomEvent("pm_refresh", { detail: { type: "pm_refresh" } }));
   };
 
+  // ONE-TIME CLEANUP: Remove legacy team management data
+  // This can be removed in future cleanups
+  useState(() => {
+    if (typeof window !== "undefined") {
+      const keys = ["gravity_teams_v1"];
+      keys.forEach(key => {
+        if (localStorage.getItem(key)) {
+          console.log(`[Cleanup] Removing legacy storage key: ${key}`);
+          localStorage.removeItem(key);
+        }
+      });
+    }
+  });
+
   // Handle view change to support custom dashboards
   const handleViewChange = (view: string) => {
     setActiveView(view);
@@ -219,15 +233,18 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
 
           <div className="flex items-center gap-2 ml-2 shrink-0">
             {/* Store Button (Fixed on Right) */}
+            {/* Store Button (Fixed on Right) */}
             <button
               onClick={() => setActiveView("store")}
               className={cn(
-                "flex items-center gap-1.5 px-2 py-1 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-900 transition-all duration-200",
-                activeView === "store" ? "bg-gray-100 dark:bg-gray-800 text-foreground shadow-none" : "text-muted-foreground"
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium text-xs transition-all duration-200 shadow-sm",
+                // Premium Gradient Style
+                "bg-gradient-to-r from-violet-500 to-indigo-500 text-white hover:shadow-indigo-500/25 hover:shadow-md hover:scale-105 active:scale-95",
+                activeView === "store" ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-gray-900" : ""
               )}
             >
-              <ShoppingBag className="w-4 h-4" />
-              <Plus className="w-3 h-3" />
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Store</span>
             </button>
 
             <Button

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useDashboardStore } from "~/core/store/use-dashboard-store";
 import { useStoreRegistry } from "../dashboards/registry";
 import { Button } from "~/components/ui/button";
-import { Settings, X, Save, AlertCircle, Trash2, Loader2 } from "lucide-react";
+import { Settings, X, Save, AlertCircle, Trash2, Loader2, Plus } from "lucide-react";
 import {
     Sheet,
     SheetContent,
@@ -31,9 +31,8 @@ interface CustomDashboardViewProps {
     onRemove?: () => void;
 }
 
-import { useSearchParams } from "next/navigation";
-import { useUsers } from "~/core/api/hooks/pm/use-users";
-import { Checkbox } from "~/components/ui/checkbox";
+import { useAllUsers } from "~/app/team/context/team-data-context";
+import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 
 // Helper component to avoid hook rules issues in renderConfigField
 function TeamMemberSelector({
@@ -43,15 +42,14 @@ function TeamMemberSelector({
     value?: string[];
     onChange: (val: string[]) => void;
 }) {
-    const searchParams = useSearchParams();
-    const projectId = searchParams?.get("project");
-    const { users, loading } = useUsers(projectId ?? undefined);
+    const { allUsers: users, isLoading: loading } = useAllUsers(true);
+    const [searchTerm, setSearchTerm] = useState("");
 
     const selected = new Set(value || []);
 
-    const toggleMember = (id: string, checked: boolean) => {
+    const toggleMember = (id: string, add: boolean) => {
         const newSet = new Set(selected);
-        if (checked) {
+        if (add) {
             newSet.add(id);
         } else {
             newSet.delete(id);
@@ -59,50 +57,117 @@ function TeamMemberSelector({
         onChange(Array.from(newSet));
     };
 
+    // Word-boundary search filter
+    const filteredUsers = users.filter(user => {
+        if (!searchTerm.trim()) return true;
+        const searchLower = searchTerm.toLowerCase().trim();
+        const name = (user.name || "").toLowerCase();
+        const email = (user.email || "").toLowerCase();
+        // Split by word boundaries (space, dot, @)
+        const nameWords = name.split(/[\s.@]+/);
+        const emailWords = email.split(/[\s.@]+/);
+        return [...nameWords, ...emailWords].some(word => word.startsWith(searchLower));
+    });
+
+    const selectedUsers = users.filter(u => selected.has(u.id));
+    const availableUsers = filteredUsers.filter(u => !selected.has(u.id));
+
     if (loading) {
-        return <div className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Loading project members...</div>;
+        return <div className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Loading members...</div>;
     }
 
     if (users.length === 0) {
-        return <div className="text-sm text-gray-500">No members found in this project.</div>;
+        return <div className="text-sm text-gray-500">No members found.</div>;
     }
 
     return (
-        <div className="border rounded-md p-2 space-y-2 max-h-[200px] overflow-y-auto">
-            <div className="flex items-center space-x-2 pb-2 border-b mb-2">
-                <Checkbox
-                    id="select-all"
-                    checked={selected.size === users.length && users.length > 0}
-                    onCheckedChange={(checked) => {
-                        if (checked) {
-                            onChange(users.map(u => u.id));
-                        } else {
-                            onChange([]);
-                        }
-                    }}
-                />
-                <label
-                    htmlFor="select-all"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                    Select All
-                </label>
-            </div>
-            {users.map((user) => (
-                <div key={user.id} className="flex items-center space-x-2">
-                    <Checkbox
-                        id={`user-${user.id}`}
-                        checked={selected.has(user.id)}
-                        onCheckedChange={(checked) => toggleMember(user.id, checked as boolean)}
-                    />
-                    <label
-                        htmlFor={`user-${user.id}`}
-                        className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                        {user.name || user.email || user.username || user.id}
-                    </label>
+        <div className="flex flex-col min-w-0 overflow-hidden" style={{ height: 'calc(100vh - 350px)', minHeight: '400px' }}>
+            {/* Selected Members Section */}
+            <div className="flex-1 min-h-0 border rounded-lg mb-3 flex flex-col">
+                <div className="p-2 border-b bg-brand/5 text-xs font-medium text-muted-foreground shrink-0 flex items-center justify-between">
+                    <span>Selected Members</span>
+                    <span className="bg-brand/20 text-brand px-1.5 py-0.5 rounded-full text-[10px]">
+                        {selectedUsers.length}
+                    </span>
                 </div>
-            ))}
+                <div className="flex-1 overflow-y-auto p-2">
+                    {selectedUsers.length === 0 ? (
+                        <div className="text-center py-4 text-sm text-muted-foreground">
+                            No members selected
+                        </div>
+                    ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                            {selectedUsers.map(user => (
+                                <div
+                                    key={user.id}
+                                    className="flex items-center gap-1.5 bg-brand/10 border border-brand/20 px-2 py-1 rounded-full text-xs"
+                                >
+                                    <span className="truncate max-w-[120px]">{user.name || user.email}</span>
+                                    <button
+                                        onClick={() => toggleMember(user.id, false)}
+                                        className="w-4 h-4 rounded-full hover:bg-destructive/20 hover:text-destructive flex items-center justify-center shrink-0"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Search Input - Sandwiched */}
+            <div className="shrink-0 pb-3">
+                <Input
+                    placeholder="Search users..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-9"
+                />
+            </div>
+
+            {/* Available Users Section */}
+            <div className="flex-1 min-h-0 min-w-0 border rounded-lg flex flex-col overflow-hidden">
+                <div className="p-2 border-b bg-muted/30 text-xs font-medium text-muted-foreground shrink-0 flex items-center justify-between">
+                    <span>Available Users</span>
+                    <span className="text-[10px]">{availableUsers.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-1">
+                    {availableUsers.length === 0 ? (
+                        <div className="text-center py-4 text-sm text-muted-foreground">
+                            {selected.size > 0 ? "All users selected" : "No users found"}
+                        </div>
+                    ) : (
+                        availableUsers.map((user) => (
+                            <div
+                                key={user.id}
+                                className="flex items-center gap-2 p-2 pr-1 rounded hover:bg-muted/50 group flex-nowrap"
+                                style={{ maxWidth: '100%' }}
+                            >
+                                <Avatar className="h-6 w-6 shrink-0 flex-none">
+                                    <AvatarImage src={user.avatar} />
+                                    <AvatarFallback className="text-[10px] bg-muted">
+                                        {user.name?.charAt(0) || "?"}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0 overflow-hidden">
+                                    <span className="text-sm font-medium block truncate">
+                                        {user.name || user.email || user.id}
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleMember(user.id, true)}
+                                    className="h-7 w-7 p-0 shrink-0 flex-none border hover:bg-brand/10 hover:text-brand hover:border-brand"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
@@ -219,13 +284,15 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
                 );
             case "team-members":
                 return (
-                    <div className="space-y-2">
+                    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                         <Label htmlFor={key}>{field.label}</Label>
-                        <p className="text-xs text-muted-foreground mb-2">{field.description}</p>
-                        <TeamMemberSelector
-                            value={tempConfig[key]}
-                            onChange={(val) => setTempConfig({ ...tempConfig, [key]: val })}
-                        />
+                        <p className="text-xs text-muted-foreground mb-2 shrink-0">{field.description}</p>
+                        <div className="flex-1 min-h-0 overflow-hidden">
+                            <TeamMemberSelector
+                                value={tempConfig[key]}
+                                onChange={(val) => setTempConfig({ ...tempConfig, [key]: val })}
+                            />
+                        </div>
                     </div>
                 );
             default:
@@ -243,7 +310,7 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
                             <Settings className="w-4 h-4" />
                         </Button>
                     </SheetTrigger>
-                    <SheetContent>
+                    <SheetContent className="flex flex-col h-full">
                         <SheetHeader>
                             <SheetTitle>Configure Dashboard</SheetTitle>
                             <p className="text-sm text-gray-500">
@@ -251,8 +318,8 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
                             </p>
                         </SheetHeader>
 
-                        <ScrollArea className="h-[calc(100vh-200px)] mt-6 pr-4">
-                            <div className="space-y-6">
+                        <ScrollArea className="flex-1 mt-6 min-w-0 overflow-hidden w-full">
+                            <div className="flex flex-col h-full min-w-0 px-4 overflow-hidden w-full" style={{ maxWidth: 'calc(384px - 32px)' }}>
                                 {schema &&
                                     Object.entries(schema).map(([key, field]) => (
                                         <div key={key}>{renderConfigField(key, field)}</div>
@@ -260,7 +327,7 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
                             </div>
                         </ScrollArea>
 
-                        <SheetFooter className="mt-8">
+                        <SheetFooter className="flex-none border-t pt-4 mt-4 bg-background">
                             <SheetClose asChild>
                                 <Button variant="outline">Cancel</Button>
                             </SheetClose>

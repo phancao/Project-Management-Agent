@@ -125,15 +125,16 @@ export function ReportButton() {
                     disabled={isCapturing}
                     className={cn(
                         "p-3 rounded-r-lg bg-background/90 backdrop-blur-sm transition-all duration-300",
-                        "hover:bg-brand/10 hover:scale-105",
-                        "focus:outline-none focus:ring-2 focus:ring-brand/50",
+                        // Red theme for bug reporting
+                        "hover:bg-red-500/10 hover:scale-105",
+                        "focus:outline-none focus:ring-2 focus:ring-red-500/50",
                         cardGlow.className,
                         isCapturing && "opacity-50 cursor-wait"
                     )}
                     title="Report a bug"
                 >
                     <Bug className={cn(
-                        "w-5 h-5 text-brand transition-transform",
+                        "w-5 h-5 text-red-600 transition-transform",
                         isCapturing && "animate-spin"
                     )} />
                 </button>

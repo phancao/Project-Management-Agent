@@ -1053,65 +1053,93 @@ class PMHandler:
         self,
         provider_id: Optional[str] = None,
         task_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        user_id: Optional[str | list[str]] = None,
         project_id: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None
     ) -> list[dict[str, Any]]:
         """
         List time entries from providers with buffered storage.
+        
+        IMPORTANT: When user_id contains provider prefix (e.g., 'provider_id:user_id'),
+        we MUST filter results to only return entries that match the exact composite user_id.
         """
         import logging
         logger = logging.getLogger(__name__)
         
-        # If specific provider requested
-        if provider_id:
-            providers = [self.get_provider_by_id(provider_id)]
-            providers = [p for p in providers if p]
+        # Parse composite user IDs and group by provider
+        # Format: { provider_id -> [raw_user_id, ...], None -> [raw_user_id, ...] }
+        user_ids_by_provider: dict[Optional[str], list[str]] = {}
+        # Keep track of requested composite IDs for filtering
+        requested_composite_user_ids: set[str] = set()
+        
+        if user_id:
+            user_id_list = user_id if isinstance(user_id, list) else [user_id]
+            for uid in user_id_list:
+                uid_provider, parsed_uid = self._parse_composite_id(uid)
+                requested_composite_user_ids.add(uid)  # Store original composite ID
+                
+                # Group by provider from composite ID
+                effective_provider = uid_provider or provider_id
+                if effective_provider not in user_ids_by_provider:
+                    user_ids_by_provider[effective_provider] = []
+                user_ids_by_provider[effective_provider].append(parsed_uid)
         else:
-            providers = self.get_active_providers()
-            
-        # Parse composite IDs if provided
+            # No user filter - query with None
+            user_ids_by_provider[provider_id] = [None]
+        
+        # Parse other composite IDs
         actual_task_id = None
         if task_id:
-            pid, actual_task_id = self._parse_composite_id(task_id)
-            if pid and not provider_id:
-                # If specific provider implied by task ID, filter providers? 
-                # Original logic didn't filter explicitly here but did parsing.
-                # We'll stick to logic: filter only if provider_id explicitly passed or we want to optimize.
-                pass
+            _, actual_task_id = self._parse_composite_id(task_id)
         
-        actual_user_id = None
-        if user_id:
-             _, actual_user_id = self._parse_composite_id(user_id)
-             
         actual_project_id = None
         if project_id:
-             _, actual_project_id = self._parse_composite_id(project_id)
+            _, actual_project_id = self._parse_composite_id(project_id)
 
         from ..utils.data_buffer import DataBuffer
-        buffer = DataBuffer(prefix="time_")
+        buffer = DataBuffer(prefix="time_entries_")
         
-        for provider_conn in providers:
+        # Determine which providers to query based on user_id grouping
+        providers_to_query = []
+        if provider_id:
+            # Explicit provider_id filter
+            p = self.get_provider_by_id(provider_id)
+            if p:
+                providers_to_query.append((p, user_ids_by_provider.get(provider_id) or user_ids_by_provider.get(None, [None])))
+        else:
+            # Query providers based on user_id grouping
+            for prov_id, raw_user_ids in user_ids_by_provider.items():
+                if prov_id:
+                    p = self.get_provider_by_id(prov_id)
+                    if p:
+                        providers_to_query.append((p, raw_user_ids))
+                else:
+                    # No provider specified - query all active providers
+                    for p in self.get_active_providers():
+                        providers_to_query.append((p, raw_user_ids))
+        
+        for provider_conn, raw_user_ids in providers_to_query:
             try:
-                # Create provider instance
                 provider = self.create_provider_instance(provider_conn)
                 
                 if hasattr(provider, 'get_time_entries'):
-                    logger.info(f"[PM-DEBUG] Streaming time entries from {provider_conn.name}...")
+                    logger.info(f"[PM] Streaming time entries from {provider_conn.name}...")
                     
-                    # Async iterator call
-                    iterator = provider.get_time_entries(
-                        task_id=actual_task_id,
-                        user_id=actual_user_id,
-                        project_id=actual_project_id,
-                        start_date=start_date,
-                        end_date=end_date
-                    )
-                    
-                    # Wrapper generator to inject provider info
+                    async def combined_iterator():
+                        for target_uid in raw_user_ids:
+                            iterator = provider.get_time_entries(
+                                task_id=actual_task_id,
+                                user_id=target_uid,
+                                project_id=actual_project_id,
+                                start_date=start_date,
+                                end_date=end_date
+                            )
+                            async for item in iterator:
+                                yield item
+
                     async def enriched_iterator():
-                        async for entry in iterator:
+                        async for entry in combined_iterator():
                             # Convert pydantic if needed
                             if hasattr(entry, 'dict'):
                                 d = entry.dict()
@@ -1132,6 +1160,13 @@ class PMHandler:
                             if raw_user_id and ":" not in str(raw_user_id):
                                 d["user_id"] = f"{provider_id_prefix}:{raw_user_id}"
                             
+                            # CRITICAL: Filter by requested composite user IDs
+                            # Only yield entries that match the exact requested user_id (with provider prefix)
+                            if requested_composite_user_ids:
+                                entry_user_id = d.get("user_id")
+                                if entry_user_id not in requested_composite_user_ids:
+                                    continue  # Skip entries not matching requested user IDs
+                            
                             # Normalize task_id with provider prefix
                             raw_task_id = d.get("task_id")
                             if raw_task_id and ":" not in str(raw_task_id):
@@ -1142,7 +1177,7 @@ class PMHandler:
                             yield d
                             
                     count = await buffer.write_items(enriched_iterator())
-                    logger.info(f"[PM-DEBUG] Streamed {count} entries from {provider_conn.name}")
+                    logger.info(f"[PM] Streamed {count} entries from {provider_conn.name}")
                     
             except Exception as e:
                 self.record_error(str(provider_conn.id), e)

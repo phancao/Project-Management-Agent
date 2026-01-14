@@ -191,40 +191,9 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
 
   const NavButtons = ({ vertical = false }: { vertical?: boolean }) => (
     <div className={`flex ${vertical ? 'flex-col gap-2 w-full' : 'items-center gap-3 border-r border-border/40 pr-6'}`}>
-      <Link
-        href={`/pm/chat${selectedProject ? `?project=${selectedProject}` : ''}`}
-        className={vertical ? 'w-full' : ''}
-      >
-        <Button
-          variant={isChat ? "default" : "ghost"}
-          size="sm"
-          className={cn(
-            "rounded-xl font-medium transition-all duration-300",
-            isChat ? "bg-brand text-white shadow-lg shadow-brand/40 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
-            vertical ? "w-full justify-start text-base py-6" : "px-5"
-          )}
-        >
-          Project Management
-        </Button>
-      </Link>
 
-      <Link
-        href="/team"
-        className={vertical ? 'w-full' : ''}
-      >
-        <Button
-          variant={pathname?.includes('/team') ? "default" : "ghost"}
-          size="sm"
-          className={cn(
-            "rounded-xl font-medium transition-all duration-300 hover:bg-brand/5 hover:text-brand",
-            pathname?.includes('/team') ? "bg-brand text-white shadow-lg shadow-brand/40 hover:bg-brand/90" : "hover:bg-brand/5 hover:text-brand",
-            vertical ? "w-full justify-start text-base py-6" : "px-5"
-          )}
-        >
-          <span className="mr-2">👥</span>
-          <span>Team Management</span>
-        </Button>
-      </Link>
+
+
 
       <Link
         href="/meeting"
@@ -300,12 +269,15 @@ export function PMHeader({ selectedProjectId: propSelectedProjectId, onProjectCh
             </Sheet>
           )}
 
-          {/* Logo / Title (Hidden on small mobile if no room, but usually stays) */}
+          {/* Logo / Title - Linked to Home */}
           {!isMobile && (
-            <div className="flex items-center gap-3 shrink-0 mr-4">
+            <Link
+              href={`/pm/chat${selectedProject ? `?project=${selectedProject}` : ''}`}
+              className="flex items-center gap-3 shrink-0 mr-4 hover:opacity-80 transition-opacity"
+            >
               <span className="text-2xl filter drop-shadow-sm">🌌</span>
               <span className="font-semibold text-lg tracking-tight text-foreground/90 hidden sm:inline-block">Galaxy AI Project Manager</span>
-            </div>
+            </Link>
           )}
 
           {/* Navigation Tabs - Hidden on mobile */}

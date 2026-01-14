@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 
-import { resolveServiceURL } from "~/core/api/resolve-service-url";
+import { resolvePMServiceURL } from "~/core/api/resolve-pm-service-url";
 import { usePMRefresh } from "./use-pm-refresh";
 
 export interface Project {
@@ -14,15 +14,18 @@ export interface Project {
 }
 
 const fetchProjects = async (): Promise<Project[]> => {
-  const url = resolveServiceURL("pm/projects");
+  const pageSize = 100;
 
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      // Remove timeout for now to see if request completes
-      // The backend responds in ~0.75s, so 10s timeout should be fine
+  const fetchPage = async (page: number) => {
+    let url = resolvePMServiceURL("projects");
+    const params = new URLSearchParams();
+    params.append("pageSize", pageSize.toString());
+    params.append("page", page.toString());
+
+    // Remove default timeouts by using AbortController with long timeout if needed, 
+    // but standard fetch should be fine.
+    const response = await fetch(`${url}?${params.toString()}`, {
+      headers: { 'Content-Type': 'application/json' },
     });
 
     if (!response.ok) {
@@ -30,8 +33,46 @@ const fetchProjects = async (): Promise<Project[]> => {
       console.error('[useProjects] Failed to fetch projects:', response.status, errorText);
       throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
     }
-    const data = await response.json();
-    return data;
+
+    return await response.json();
+  };
+
+  try {
+    // 1. Fetch first page
+    const firstPageData = await fetchPage(1);
+
+    // Handle both array response (if legacy) and paginated response
+    let allItems: Project[] = [];
+    let totalItems = 0;
+
+    if (Array.isArray(firstPageData)) {
+      // Legacy or non-paginated endpoint
+      return firstPageData;
+    } else {
+      // Paginated endpoint { items: [], total: ... }
+      allItems = firstPageData.items || [];
+      totalItems = firstPageData.total || 0;
+    }
+
+    // 2. Fetch remaining pages if needed
+    if (totalItems > allItems.length) {
+      const totalPages = Math.ceil(totalItems / pageSize);
+      const pagePromises = [];
+
+      for (let p = 2; p <= totalPages; p++) {
+        pagePromises.push(fetchPage(p));
+      }
+
+      const results = await Promise.all(pagePromises);
+      results.forEach(data => {
+        if (data.items) {
+          allItems = allItems.concat(data.items);
+        }
+      });
+    }
+
+    return allItems;
+
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       console.error('[useProjects] Request was aborted');

@@ -3,7 +3,7 @@
 API endpoints for time entry operations.
 """
 
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/time_entries", tags=["time_entries"])
 @router.get("", response_model=ListResponse)
 async def list_time_entries(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
-    user_id: Optional[str] = Query(None, description="Filter by user ID"),
+    user_id: Optional[list[str]] = Query(None, description="Filter by user IDs (one or more)"),
     task_id: Optional[str] = Query(None, description="Filter by task ID"),
     start_date: Optional[str] = Query(None, description="Filter by start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Filter by end date (YYYY-MM-DD)"),

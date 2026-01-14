@@ -27,7 +27,7 @@ export interface DashboardPlugin {
         size?: { w: number; h: number }; // For widgets: width/height in grid units (1-4)
         shortTitle?: string; // Optional shorter title for tabs
     };
-    component: React.ComponentType<{ config: Record<string, any> }>;
+    component: React.ComponentType<{ config: Record<string, any>; instanceId?: string }>;
     configSchema?: Record<string, ConfigField>; // Schema for user customization
 }
 
@@ -140,7 +140,7 @@ import { ChartsPanelView } from "../views/charts-panel-view";
 import { TimelineView } from "../views/timeline-view";
 import { EfficiencyPanelView } from "../views/efficiency-panel-view";
 import { TeamAssignmentsView } from "../views/team-assignments-view";
-import { TeamWorklogsPage, TeamEfficiencyPage } from "./plugins/team-views"; // [NEW]
+import { TeamWorklogsPage, TeamEfficiencyPage, TeamOverviewPage } from "./plugins/team-views"; // [NEW]
 import {
     BurndownPage,
     VelocityPage,
@@ -165,9 +165,10 @@ export const COMPONENT_MAP: Record<string, React.ComponentType<{ config: Record<
     "worklogs": WorklogsPage, // Keeping for backward compat or direct usage
     "team-worklogs": TeamWorklogsPage, // [NEW]
     "timeline-view": TimelineView,
-    "efficiency-view": EfficiencyPanelView, // Keeping for backward compat
+    "efficiency-view": (props: { config: Record<string, any>; instanceId?: string }) => <EfficiencyPanelView instanceId={props.instanceId} />, // Adapter
     "team-efficiency": TeamEfficiencyPage, // [NEW]
-    "team-view": TeamAssignmentsView,
+    "team-overview": TeamOverviewPage, // [NEW]
+    "team-view": () => <TeamAssignmentsView />, // Adapter for no-prop component
 
     // Widgets
     "sprint-health-widget": SprintStatusWidget,

@@ -152,6 +152,7 @@ export function TeamEfficiencyView({
     const { teamTasks: tasks, isLoading: isLoadingTasks } = useTeamTasks(effectiveMemberIds, {
         startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
         endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+        status: 'all',  // Include closed tasks so we can look up task names for worklogs
     });
 
     const { teamTimeEntries: timeEntries, isLoading: isLoadingTimeEntries } = useTeamTimeEntries(effectiveMemberIds, {

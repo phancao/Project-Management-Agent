@@ -9,6 +9,12 @@ export interface PMTimeEntry {
     date: string;
     description?: string;
     activity_type?: string;
+    // HAL links with embedded titles
+    _links?: {
+        workPackage?: { href: string; title?: string };
+        project?: { href: string; title?: string };
+        activity?: { href: string; title?: string };
+    };
 }
 
 export interface ListTimeEntriesOptions {

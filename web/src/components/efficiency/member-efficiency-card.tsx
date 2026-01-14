@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { type PMUser } from '~/core/api/pm/users';
 import { type PMTimeEntry } from '~/core/api/pm/time-entries';
+import { type PMTask } from '~/core/api/pm/tasks';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import { useCardGlow } from '~/core/hooks/use-theme-colors';
 import { type MemberPeriod } from './member-duration-manager';
@@ -11,17 +12,19 @@ import { eachDayOfInterval, format, parseISO, startOfDay, endOfDay, isWithinInte
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { DailyWorklogChart } from './daily-worklog-chart';
 import { cn } from "~/lib/utils";
+import { ExternalLink } from 'lucide-react';
 
 interface MemberEfficiencyCardProps {
     member: PMUser;
     timeEntries: PMTimeEntry[];
+    tasks?: PMTask[];  // Tasks for looking up task names
     dateRange: { from: Date; to: Date };
     activityColors: string[];
     activePeriods?: MemberPeriod[];
     isLoading?: boolean;
 }
 
-export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityColors, activePeriods, isLoading }: MemberEfficiencyCardProps) {
+export function MemberEfficiencyCard({ member, timeEntries, tasks = [], dateRange, activityColors, activePeriods, isLoading }: MemberEfficiencyCardProps) {
     const cardGlow = useCardGlow();
 
     // Generate all days in the date range for horizontal scroll
@@ -77,9 +80,20 @@ export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityC
             .sort((a, b) => b.hours - a.hours);
     }, [memberEntries, activityColors, totalHours]);
 
+    // Build task lookup map for quick name resolution
+    const taskMap = useMemo(() => {
+        const map = new Map<string, PMTask>();
+        tasks.forEach(t => map.set(t.id, t));
+        return map;
+    }, [tasks]);
+
     // Build daily data map for quick lookup
     const dailyData = useMemo(() => {
-        const map = new Map<string, { total: number; breakdown: { name: string, hours: number, color: string }[] }>();
+        const map = new Map<string, {
+            total: number;
+            breakdown: { name: string, hours: number, color: string }[];
+            taskBreakdown: { taskId: string, taskName: string, hours: number, activityType: string }[];
+        }>();
 
         days.forEach(day => {
             const dayKey = format(day, 'yyyy-MM-dd');
@@ -87,11 +101,11 @@ export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityC
             const totalHours = dayEntries.reduce((sum, e) => sum + e.hours, 0);
 
             if (totalHours === 0) {
-                map.set(dayKey, { total: 0, breakdown: [] });
+                map.set(dayKey, { total: 0, breakdown: [], taskBreakdown: [] });
                 return;
             }
 
-            // Group by activity for Tooltip
+            // Group by activity for Tooltip (existing behavior)
             const activityGroups: Record<string, number> = {};
             dayEntries.forEach(e => {
                 const type = e.activity_type || "Unknown";
@@ -104,11 +118,37 @@ export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityC
                 color: activityColors[index % activityColors.length] || '#ccc'
             }));
 
-            map.set(dayKey, { total: totalHours, breakdown });
+            // Group by task for detailed view with task names
+            const taskGroups: Record<string, { hours: number, activityType: string, taskNameFromLinks?: string }> = {};
+            dayEntries.forEach(e => {
+                const taskId = e.task_id || 'no-task';
+                if (!taskGroups[taskId]) {
+                    taskGroups[taskId] = {
+                        hours: 0,
+                        activityType: e.activity_type || 'Unknown',
+                        // Store task name from HAL links (always available in time entry)
+                        taskNameFromLinks: e._links?.workPackage?.title
+                    };
+                }
+                taskGroups[taskId].hours += e.hours;
+            });
+
+            const taskBreakdown = Object.entries(taskGroups).map(([taskId, data]) => {
+                const task = taskMap.get(taskId);
+                return {
+                    taskId,
+                    // Use _links.workPackage.title first, then task lookup, then fallback
+                    taskName: data.taskNameFromLinks || task?.name || task?.title || (taskId === 'no-task' ? 'General Work' : `Task ${taskId.split(':').pop()}`),
+                    hours: data.hours,
+                    activityType: data.activityType
+                };
+            }).sort((a, b) => b.hours - a.hours);
+
+            map.set(dayKey, { total: totalHours, breakdown, taskBreakdown });
         });
 
         return map;
-    }, [days, memberEntries, activityColors]);
+    }, [days, memberEntries, activityColors, taskMap]);
 
     // Group days by month for calendar grid layout
     const monthCalendars = useMemo(() => {
@@ -352,15 +392,22 @@ export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityC
                                                                             </div>
                                                                         </div>
                                                                     </TooltipTrigger>
-                                                                    <TooltipContent className="text-xs z-50">
+                                                                    <TooltipContent className="text-xs z-50 max-w-[280px]">
                                                                         <div className="font-semibold mb-1 border-b pb-1">{format(day, 'EEE, MMM d')}</div>
-                                                                        <div className="space-y-1">
-                                                                            {data && data.breakdown.length > 0 ? (
+                                                                        <div className="space-y-1.5">
+                                                                            {data && data.taskBreakdown && data.taskBreakdown.length > 0 ? (
                                                                                 <>
-                                                                                    {data.breakdown.map((item, i) => (
-                                                                                        <div key={i} className="flex items-center gap-2">
-                                                                                            <div className="w-2 h-2 rounded-full" style={{ background: item.color }} />
-                                                                                            <span>{item.name}: {item.hours.toFixed(1)}h</span>
+                                                                                    {data.taskBreakdown.map((item, i) => (
+                                                                                        <div key={i} className="flex items-start gap-2">
+                                                                                            <div className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: activityColors[i % activityColors.length] }} />
+                                                                                            <div className="flex-1 min-w-0">
+                                                                                                <div className="font-medium truncate" title={item.taskName}>
+                                                                                                    {item.taskName}
+                                                                                                </div>
+                                                                                                <div className="text-[11px] opacity-80">
+                                                                                                    {item.activityType} · {item.hours.toFixed(1)}h
+                                                                                                </div>
+                                                                                            </div>
                                                                                         </div>
                                                                                     ))}
                                                                                     <div className="pt-1 mt-1 border-t border-gray-500/20 flex justify-between font-bold">

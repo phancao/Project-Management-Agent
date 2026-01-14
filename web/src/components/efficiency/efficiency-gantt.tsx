@@ -3,6 +3,7 @@ import { format, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, sta
 import { cn } from '~/lib/utils';
 import { type PMUser } from '~/core/api/pm/users';
 import { type PMTimeEntry } from '~/core/api/pm/time-entries';
+import { type PMTask } from '~/core/api/pm/tasks';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { type MemberPeriod, type Holiday } from './member-duration-manager';
 import { DailyWorklogChart } from './daily-worklog-chart';
@@ -10,6 +11,7 @@ import { DailyWorklogChart } from './daily-worklog-chart';
 interface EfficiencyGanttProps {
     members: PMUser[];
     timeEntries: PMTimeEntry[];
+    tasks?: PMTask[];  // Tasks for looking up task names
     startDate: Date;
     endDate: Date;
     isLoading: boolean;
@@ -18,7 +20,7 @@ interface EfficiencyGanttProps {
     holidays?: Holiday[];
 }
 
-export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLoading, viewMode, activePeriods = {}, holidays = [] }: EfficiencyGanttProps) {
+export function EfficiencyGantt({ members, timeEntries, tasks = [], startDate, endDate, isLoading, viewMode, activePeriods = {}, holidays = [] }: EfficiencyGanttProps) {
 
     // 1. Generate Periods (Columns)
     const periods = useMemo(() => {
@@ -137,25 +139,48 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
         return totalCapacity;
     };
 
+    // Build task lookup map for quick name resolution
+    const taskMap = useMemo(() => {
+        const map = new Map<string, PMTask>();
+        tasks.forEach(t => map.set(t.id, t));
+        return map;
+    }, [tasks]);
 
-    // 4. Aggregate hours per member per period
+    // 4. Aggregate hours per member per period (with task breakdown)
     const worklogMap = useMemo(() => {
-        const map = new Map<string, number>();
+        const hoursMap = new Map<string, number>();
+        const taskBreakdownMap = new Map<string, { taskId: string, taskName: string, hours: number }[]>();
+
         timeEntries.forEach(entry => {
             if (!entry.date) return;
-            const entryDate = new Date(entry.date); // parseISO handled by new Date usually or explicit parse
-            // Using split for performance on ISO strings if available, but date-fns parse safe
-            // Let's just use string split if 'day', else parse
-
             const keyDate = new Date(entry.date);
             const periodKey = getPeriodKey(keyDate);
             const key = `${entry.user_id}_${periodKey}`;
 
-            const existing = map.get(key) || 0;
-            map.set(key, existing + entry.hours);
+            // Aggregate total hours
+            const existing = hoursMap.get(key) || 0;
+            hoursMap.set(key, existing + entry.hours);
+
+            // Aggregate task breakdown
+            const taskBreakdown = taskBreakdownMap.get(key) || [];
+            const taskId = entry.task_id || 'no-task';
+            // Use _links.workPackage.title directly from time entry (always available)
+            // Fall back to task lookup, then to ID-based name
+            const taskNameFromLinks = entry._links?.workPackage?.title;
+            const task = taskMap.get(taskId);
+            const taskName = taskNameFromLinks || task?.name || task?.title || (taskId === 'no-task' ? 'General Work' : `Task ${taskId.split(':').pop()}`);
+
+            const existingTask = taskBreakdown.find(t => t.taskId === taskId);
+            if (existingTask) {
+                existingTask.hours += entry.hours;
+            } else {
+                taskBreakdown.push({ taskId, taskName, hours: entry.hours });
+            }
+            taskBreakdownMap.set(key, taskBreakdown);
         });
-        return map;
-    }, [timeEntries, viewMode]);
+
+        return { hoursMap, taskBreakdownMap };
+    }, [timeEntries, viewMode, taskMap]);
 
     // 5. Status Color Helper (Dynamic Target)
     const getStatusColor = (hours: number, target: number) => {
@@ -268,7 +293,8 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                 <TooltipProvider delayDuration={0}>
                                     {periods.map(period => {
                                         const dateKey = `${member.id}_${getPeriodKey(period)}`;
-                                        const hours = worklogMap.get(dateKey) || 0;
+                                        const hours = worklogMap.hoursMap.get(dateKey) || 0;
+                                        const taskBreakdown = worklogMap.taskBreakdownMap.get(dateKey) || [];
                                         const target = getTargetHours(member.id, period);
                                         const isWknd = viewMode === 'day' && isWeekend(period);
                                         const isHolidayDay = viewMode === 'day' && isHoliday(period);
@@ -414,8 +440,8 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                                 )}
                                                             </div>
                                                         </TooltipTrigger>
-                                                        <TooltipContent side="top" className="text-xs">
-                                                            <div className="font-semibold mb-1">
+                                                        <TooltipContent side="top" className="text-xs max-w-[280px]">
+                                                            <div className="font-semibold mb-1 border-b pb-1">
                                                                 {viewMode === 'day' && format(period, 'MMM d, yyyy')}
                                                                 {viewMode === 'week' && `Week of ${format(period, 'MMM d')}`}
                                                                 {viewMode === 'month' && format(period, 'MMMM yyyy')}
@@ -425,12 +451,36 @@ export function EfficiencyGantt({ members, timeEntries, startDate, endDate, isLo
                                                             ) : isVacationDay ? (
                                                                 <div className="text-emerald-600 dark:text-emerald-400">🏖️ Vacation</div>
                                                             ) : (
-                                                                <>
-                                                                    <div>{member.name}: {hours.toFixed(2)} hours</div>
-                                                                    <div className="text-gray-400 mt-1 capitalize">
-                                                                        Target: {target}h ({percentage.toFixed(0)}%)
+                                                                <div className="space-y-1.5">
+                                                                    {taskBreakdown.length > 0 ? (
+                                                                        <>
+                                                                            {taskBreakdown.sort((a, b) => b.hours - a.hours).slice(0, 5).map((task, i) => (
+                                                                                <div key={task.taskId} className="flex items-start gap-2">
+                                                                                    <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-indigo-500" />
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <div className="font-medium truncate" title={task.taskName}>
+                                                                                            {task.taskName}
+                                                                                        </div>
+                                                                                        <div className="text-[11px] opacity-80">
+                                                                                            {task.hours.toFixed(1)}h
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                            {taskBreakdown.length > 5 && (
+                                                                                <div className="text-muted-foreground text-[10px]">
+                                                                                    +{taskBreakdown.length - 5} more tasks
+                                                                                </div>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <div>{member.name}: {hours.toFixed(2)} hours</div>
+                                                                    )}
+                                                                    <div className="pt-1 mt-1 border-t border-gray-500/20 flex justify-between font-bold">
+                                                                        <span>Total</span>
+                                                                        <span>{hours.toFixed(1)}h / {target}h ({percentage.toFixed(0)}%)</span>
                                                                     </div>
-                                                                </>
+                                                                </div>
                                                             )}
                                                         </TooltipContent>
                                                     </Tooltip>

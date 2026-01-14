@@ -642,6 +642,7 @@ export function EfficiencyDashboard({
                         <EfficiencyGantt
                             members={activeMembers}
                             timeEntries={timeEntries}
+                            tasks={tasks}
                             startDate={dateRange.from}
                             endDate={dateRange.to}
                             isLoading={isLoading}
@@ -706,6 +707,7 @@ export function EfficiencyDashboard({
                             // [PM-DEBUG] Passing active periods (using effective periods with auto-inference)
                             activePeriods={effectiveActivePeriods[member.id]}
                             timeEntries={timeEntries}
+                            tasks={tasks}
                             dateRange={{ from: dateRange.from!, to: dateRange.to! }}
                             activityColors={ACTIVITY_COLORS}
                             isLoading={isLoading}

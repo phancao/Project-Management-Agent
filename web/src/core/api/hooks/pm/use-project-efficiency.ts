@@ -40,7 +40,9 @@ async function fetchProjectMembers(projectId: string, providerId: string): Promi
         throw new Error(error.detail || "Failed to fetch project members");
     }
 
-    return response.json();
+    const data = await response.json();
+    // Handle both array and paginated response formats
+    return Array.isArray(data) ? data : (data.items || []);
 }
 
 export function useProjectMembers(projectId: string | undefined, providerId: string | undefined) {

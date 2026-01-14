@@ -53,8 +53,6 @@ export function WorkloadCharts({ effectiveMemberIds: propMemberIds, effectiveTea
 
     // Week navigation state
     const [weekOffset, setWeekOffset] = useState(0)
-    // Team selector state
-    const [selectedTeamId, setSelectedTeamId] = useState<string>("all")
     // Date picker state
     const [datePickerOpen, setDatePickerOpen] = useState(false)
 
@@ -98,26 +96,16 @@ export function WorkloadCharts({ effectiveMemberIds: propMemberIds, effectiveTea
     const isCurrentWeek = weekOffset === 0
 
     // Get essential data from context (includes teams)
-    const { teams: contextTeams, allMemberIds: contextAllMemberIds, isLoading: isContextLoading } = useTeamDataContext();
+    const { allMemberIds: contextAllMemberIds, isLoading: isContextLoading } = useTeamDataContext();
 
-    // Use props if provided, otherwise context
-    const teams = propTeams || contextTeams;
+    // Use props if provided, otherwise context - no team filtering needed
     const allMemberIds = propMemberIds || contextAllMemberIds;
 
-    // Filter member IDs based on selected team
-    const filteredMemberIds = useMemo(() => {
-        if (selectedTeamId === "all") {
-            return allMemberIds;
-        }
-        const team = teams.find((t: any) => t.id === selectedTeamId);
-        return team?.memberIds || [];
-    }, [selectedTeamId, teams, allMemberIds]);
-
-    // Load members, tasks, and time entries for filtered members
-    const { teamMembers: members, isLoading: isLoadingUsers } = useTeamUsers(filteredMemberIds);
-    const { teamTasks: tasks, isLoading: isLoadingTasks } = useTeamTasks(filteredMemberIds);
+    // Load members, tasks, and time entries for all members
+    const { teamMembers: members, isLoading: isLoadingUsers } = useTeamUsers(allMemberIds);
+    const { teamTasks: tasks, isLoading: isLoadingTasks } = useTeamTasks(allMemberIds);
     const { teamTimeEntries: timeEntries, isLoading: isLoadingTimeEntries, isFetching: isFetchingTimeEntries } = useTeamTimeEntries(
-        filteredMemberIds,
+        allMemberIds,
         { startDate: weekRange.start, endDate: weekRange.end }
     );
 
@@ -229,21 +217,6 @@ export function WorkloadCharts({ effectiveMemberIds: propMemberIds, effectiveTea
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                            {/* Team selector */}
-                            <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                                <SelectTrigger className="w-[160px] h-8 text-xs">
-                                    <Users className="w-3 h-3 mr-1" />
-                                    <SelectValue placeholder="Select team" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Teams</SelectItem>
-                                    {teams.map(team => (
-                                        <SelectItem key={team.id} value={team.id}>
-                                            {team.name} ({team.memberIds.length})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
                             {/* Week navigation */}
                             <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
                                 <Button

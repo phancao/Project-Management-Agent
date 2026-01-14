@@ -18,9 +18,10 @@ interface MemberEfficiencyCardProps {
     dateRange: { from: Date; to: Date };
     activityColors: string[];
     activePeriods?: MemberPeriod[];
+    isLoading?: boolean;
 }
 
-export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityColors, activePeriods }: MemberEfficiencyCardProps) {
+export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityColors, activePeriods, isLoading }: MemberEfficiencyCardProps) {
     const cardGlow = useCardGlow();
 
     // Generate all days in the date range for horizontal scroll
@@ -323,8 +324,8 @@ export function MemberEfficiencyCard({ member, timeEntries, dateRange, activityC
                                                                 {format(day, 'd')}
                                                             </div>
 
-                                                            {/* Chart */}
-                                                            {isActive && (
+                                                            {/* Chart - Only show when not loading */}
+                                                            {isActive && !isLoading && (
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
                                                                         <div className={cn(

@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO, format, eachDayOfInterval, isWeekend, isWithinInterval } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import { cn } from "~/lib/utils";
@@ -12,6 +12,7 @@ import { Calendar } from "~/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 
 import { type PMUser } from '~/core/api/pm/users';
 import { type PMTask } from '~/core/api/pm/tasks';
@@ -76,6 +77,9 @@ export function EfficiencyDashboard({
 
     // Member Exclusion State
     const [excludedMemberIds, setExcludedMemberIds] = useState<string[]>([]);
+
+    // Collapsible state for Member Active Periods
+    const [isActivePeriodsOpen, setIsActivePeriodsOpen] = useState(true);
 
     // Load View Mode and Exclusion List from localStorage
     useEffect(() => {
@@ -585,25 +589,42 @@ export function EfficiencyDashboard({
                     )}
                 </CardContent>
             </Card>
-            {/* Member Durations */}
+            {/* Member Durations - Collapsible */}
             {onActivePeriodsChange && members.length > 0 && (
-                <Card className={cardGlow.className}>
-                    <CardHeader>
-                        <CardTitle className="text-base">Member Active Periods</CardTitle>
-                        <CardDescription>Specify when members joined or left the project to refine capacity calculations.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <MemberDurationManager
-                            members={members}
-                            activePeriods={activePeriods}
-                            onChange={onActivePeriodsChange}
-                            holidays={holidays}
-                            onHolidaysChange={onHolidaysChange}
-                            excludedMemberIds={excludedMemberIds}
-                            onToggleExclusion={handleToggleExclusion}
-                        />
-                    </CardContent>
-                </Card>
+                <Collapsible open={isActivePeriodsOpen} onOpenChange={setIsActivePeriodsOpen}>
+                    <Card className={cardGlow.className}>
+                        <CollapsibleTrigger asChild>
+                            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="text-base">Member Active Periods</CardTitle>
+                                        <CardDescription>Specify when members joined or left the project to refine capacity calculations.</CardDescription>
+                                    </div>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                        {isActivePeriodsOpen ? (
+                                            <ChevronUp className="h-4 w-4" />
+                                        ) : (
+                                            <ChevronDown className="h-4 w-4" />
+                                        )}
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                            <CardContent>
+                                <MemberDurationManager
+                                    members={members}
+                                    activePeriods={activePeriods}
+                                    onChange={onActivePeriodsChange}
+                                    holidays={holidays}
+                                    onHolidaysChange={onHolidaysChange}
+                                    excludedMemberIds={excludedMemberIds}
+                                    onToggleExclusion={handleToggleExclusion}
+                                />
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
             )}
 
             {/* Individual Member Efficiency Cards */}
@@ -621,6 +642,7 @@ export function EfficiencyDashboard({
                             timeEntries={timeEntries}
                             dateRange={{ from: dateRange.from!, to: dateRange.to! }}
                             activityColors={ACTIVITY_COLORS}
+                            isLoading={isLoading}
                         />
                     ))}
                 </div>

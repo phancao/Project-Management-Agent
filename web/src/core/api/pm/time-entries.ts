@@ -4,6 +4,7 @@ export interface PMTimeEntry {
     id: string;
     task_id?: string;
     user_id: string;
+    project_id?: string;  // Extracted from HAL links or direct field
     hours: number;
     date: string;
     description?: string;

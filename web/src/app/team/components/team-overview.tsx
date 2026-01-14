@@ -3,10 +3,10 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { WorkloadCharts } from "./workload-charts";
 import { useTeamDataContext, useTeamUsers, useTeamTasks, useTeamTimeEntries } from "../context/team-data-context";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { PMTask } from "~/core/api/pm/tasks";
 import type { PMUser } from "~/core/api/pm/users";
-import { BarChart3, Users, ListTodo, TrendingUp, Briefcase, Clock } from "lucide-react";
+import { BarChart3, Users, ListTodo, TrendingUp, Briefcase, Clock, ChevronLeft, ChevronRight, CalendarIcon } from "lucide-react";
 import { WorkspaceLoading } from "~/components/ui/workspace-loading";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
@@ -15,18 +15,26 @@ import { useMemberProfile } from "../context/member-profile-context";
 import { useProjects } from "~/core/api/hooks/pm/use-projects";
 import { useCardGlow, useStatCardGlow } from "~/core/hooks/use-theme-colors";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { Button } from "~/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { Calendar } from "~/components/ui/calendar";
 
 // Color palette for pie chart
 const PIE_COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#10b981'];
 
-// Helper to get start of current week (Monday)
-function getWeekStart(): Date {
+// Helper to get start of week (Monday) with offset
+function getWeekStart(weekOffset: number = 0): Date {
     const d = new Date()
     const day = d.getDay()
     const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-    d.setDate(diff)
+    d.setDate(diff + (weekOffset * 7))
     d.setHours(0, 0, 0, 0)
     return d
+}
+
+// Format date for display
+function formatDateDisplay(date: Date): string {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 // Format date as YYYY-MM-DD (local timezone)
@@ -143,13 +151,42 @@ export function TeamOverview({ configuredMemberIds, providerId }: { configuredMe
     const cardGlow = useCardGlow();
     const statCardGlow = useStatCardGlow();
 
-    // Get current week's date range
+    // Week navigation state for Project Distribution
+    const [weekOffset, setWeekOffset] = useState(0)
+    const [datePickerOpen, setDatePickerOpen] = useState(false)
+    const isCurrentWeek = weekOffset === 0
+
+    // Helper to compute week offset from a specific date
+    const getWeekOffsetForDate = (date: Date): number => {
+        const currentWeekStart = getWeekStart(0)
+        const targetWeekStart = new Date(date)
+        const day = targetWeekStart.getDay()
+        const diff = targetWeekStart.getDate() - day + (day === 0 ? -6 : 1)
+        targetWeekStart.setDate(diff)
+        targetWeekStart.setHours(0, 0, 0, 0)
+        const diffTime = targetWeekStart.getTime() - currentWeekStart.getTime()
+        return Math.round(diffTime / (7 * 24 * 60 * 60 * 1000))
+    }
+
+    // Handle date selection from calendar
+    const handleDateSelect = (date: Date | undefined) => {
+        if (date) setWeekOffset(getWeekOffsetForDate(date))
+        setDatePickerOpen(false)
+    }
+
+    // Get selected week's date range
     const weekRange = useMemo(() => {
-        const start = getWeekStart()
+        const start = getWeekStart(weekOffset)
         const end = new Date(start)
         end.setDate(end.getDate() + 6)
-        return { start: formatDateKey(start), end: formatDateKey(end) }
-    }, [])
+        return {
+            start: formatDateKey(start),
+            end: formatDateKey(end),
+            startDate: start,
+            endDate: end,
+            displayRange: `${formatDateDisplay(start)} - ${formatDateDisplay(end)}`
+        }
+    }, [weekOffset])
 
     // Get essential data from context
     const { teams: contextTeams, allMemberIds: contextAllMemberIds, isLoading: isContextLoading } = useTeamDataContext();
@@ -266,33 +303,34 @@ export function TeamOverview({ configuredMemberIds, providerId }: { configuredMe
         return proj ? proj.name : id.split(':').pop() || id;
     };
 
-    // Per-team experience breakdown
+    // Per-team project distribution based on WORKLOGS (time entries)
     const perTeamExperience = useMemo(() => {
         return effectiveTeams.map(team => {
-            // Use allHistoryTasks instead of allTasks to include closed/completed tasks in experience history
-            const teamTasks = allHistoryTasks.filter(t =>
-                t.assignee_id && team.memberIds.includes(t.assignee_id)
-            );
-            const projectMap = new Map<string, { id: string; name: string; hours: number; taskCount: number }>();
-            teamTasks.forEach((task: PMTask) => {
-                const projectId = task.project_id || 'unassigned';
+            // Group time entries by project for this team's members
+            const teamEntries = teamTimeEntries.filter(te => team.memberIds.includes(te.user_id));
+            const projectMap = new Map<string, { id: string; name: string; hours: number; entryCount: number }>();
+
+            teamEntries.forEach(entry => {
+                // Use project_id directly from time entry (enriched by backend)
+                const projectId = entry.project_id || 'unassigned';
                 const projectName = getProjectName(projectId);
-                const existing = projectMap.get(projectId) || { id: projectId, name: projectName, hours: 0, taskCount: 0 };
-                existing.hours += task.spent_hours || 0;
-                existing.taskCount += 1;
+                const existing = projectMap.get(projectId) || { id: projectId, name: projectName, hours: 0, entryCount: 0 };
+                existing.hours += entry.hours || 0;
+                existing.entryCount += 1;
                 projectMap.set(projectId, existing);
             });
-            const experience = Array.from(projectMap.values())
-                .filter(p => p.hours > 0 || p.taskCount > 0)
+
+            const distribution = Array.from(projectMap.values())
+                .filter(p => p.hours > 0)
                 .sort((a, b) => b.hours - a.hours);
             return {
                 teamId: team.id,
                 teamName: team.name,
-                experience,
-                totalHours: experience.reduce((sum, p) => sum + p.hours, 0),
+                distribution,
+                totalHours: distribution.reduce((sum, p) => sum + p.hours, 0),
             };
-        }).filter(t => t.experience.length > 0);
-    }, [effectiveTeams, allHistoryTasks, projects]);
+        }).filter(t => t.distribution.length > 0);
+    }, [effectiveTeams, teamTimeEntries, projects]);
 
     const isLoading = isContextLoading || isLoadingUsers || isLoadingTasks || isFetchingUsers || isFetchingTasks || isLoadingHistoryTasks;
 
@@ -374,11 +412,62 @@ export function TeamOverview({ configuredMemberIds, providerId }: { configuredMe
                                 <div>
                                     <CardTitle className="flex items-center gap-2">
                                         <Briefcase className="w-5 h-5" />
-                                        {teamData.teamName}
+                                        Project Distribution
                                     </CardTitle>
                                     <CardDescription>
-                                        {teamData.totalHours.toFixed(0)}h logged across {teamData.experience.length} projects
+                                        {teamData.totalHours.toFixed(0)}h logged across {teamData.distribution.length} projects
                                     </CardDescription>
+                                </div>
+                                {/* Date range picker */}
+                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() => setWeekOffset(prev => prev - 1)}
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </Button>
+                                        <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    className="h-7 px-2 min-w-[140px] text-center text-sm font-medium hover:bg-muted"
+                                                >
+                                                    <CalendarIcon className="h-3 w-3 mr-1.5 text-muted-foreground" />
+                                                    {weekRange.displayRange}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="center">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={weekRange.startDate}
+                                                    defaultMonth={weekRange.startDate}
+                                                    onSelect={handleDateSelect}
+                                                    initialFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() => setWeekOffset(prev => prev + 1)}
+                                            disabled={isCurrentWeek}
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    {!isCurrentWeek && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setWeekOffset(0)}
+                                        >
+                                            Today
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         </CardHeader>
@@ -389,7 +478,7 @@ export function TeamOverview({ configuredMemberIds, providerId }: { configuredMe
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
-                                                data={teamData.experience.slice(0, 8).map((p: { name: string; hours: number }) => ({ name: p.name, value: p.hours }))}
+                                                data={teamData.distribution.slice(0, 8).map((p: { name: string; hours: number }) => ({ name: p.name, value: p.hours }))}
                                                 cx="50%"
                                                 cy="50%"
                                                 innerRadius={55}
@@ -397,7 +486,7 @@ export function TeamOverview({ configuredMemberIds, providerId }: { configuredMe
                                                 dataKey="value"
                                                 strokeWidth={1}
                                             >
-                                                {teamData.experience.slice(0, 8).map((_: unknown, i: number) => (
+                                                {teamData.distribution.slice(0, 8).map((_: unknown, i: number) => (
                                                     <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                                                 ))}
                                             </Pie>
@@ -407,19 +496,19 @@ export function TeamOverview({ configuredMemberIds, providerId }: { configuredMe
                                 </div>
                                 {/* Project badges */}
                                 <div className="flex-1 flex flex-wrap gap-2 content-start">
-                                    {teamData.experience.slice(0, 10).map((proj: { id: string; name: string; hours: number; taskCount: number }, idx: number) => (
+                                    {teamData.distribution.slice(0, 10).map((proj: { id: string; name: string; hours: number; entryCount: number }, idx: number) => (
                                         <span
                                             key={proj.id}
                                             className="inline-flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 rounded-full px-3 py-1 text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors cursor-default"
-                                            title={`${proj.name}: ${proj.hours.toFixed(1)}h across ${proj.taskCount} tasks`}
+                                            title={`${proj.name}: ${proj.hours.toFixed(1)}h (${proj.entryCount} entries)`}
                                             style={{ borderLeft: `3px solid ${PIE_COLORS[idx % PIE_COLORS.length]}` }}
                                         >
                                             <span className="font-medium text-gray-700 dark:text-gray-300 max-w-[100px] truncate">{proj.name}</span>
                                             <span className="font-bold text-indigo-600 dark:text-indigo-400">{proj.hours.toFixed(0)}h</span>
                                         </span>
                                     ))}
-                                    {teamData.experience.length > 10 && (
-                                        <span className="text-xs text-muted-foreground px-2">+{teamData.experience.length - 10} more</span>
+                                    {teamData.distribution.length > 10 && (
+                                        <span className="text-xs text-muted-foreground px-2">+{teamData.distribution.length - 10} more</span>
                                     )}
                                 </div>
                             </div>
@@ -430,11 +519,11 @@ export function TeamOverview({ configuredMemberIds, providerId }: { configuredMe
                     <Card className={`col-span-2 ${cardGlow.className}`}>
                         <CardHeader>
                             <CardTitle>Project Details</CardTitle>
-                            <CardDescription>All projects ({teamData.experience.length})</CardDescription>
+                            <CardDescription>All projects ({teamData.distribution.length})</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                                {teamData.experience.map((proj: { id: string; name: string; hours: number; taskCount: number }, idx: number) => (
+                                {teamData.distribution.map((proj: { id: string; name: string; hours: number; entryCount: number }, idx: number) => (
                                     <div key={proj.id} className="flex items-center">
                                         <div
                                             className="w-2 h-2 rounded-full shrink-0 mr-2"
@@ -443,7 +532,7 @@ export function TeamOverview({ configuredMemberIds, providerId }: { configuredMe
                                         <div className="flex-1 space-y-0.5 min-w-0">
                                             <p className="text-sm font-medium leading-none truncate">{proj.name}</p>
                                             <p className="text-xs text-muted-foreground">
-                                                {proj.taskCount} tasks
+                                                {proj.entryCount} entries
                                             </p>
                                         </div>
                                         <div className="font-bold text-sm text-indigo-600 dark:text-indigo-400 shrink-0">

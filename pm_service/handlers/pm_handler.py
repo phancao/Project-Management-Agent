@@ -1172,6 +1172,27 @@ class PMHandler:
                             if raw_task_id and ":" not in str(raw_task_id):
                                 d["task_id"] = f"{provider_id_prefix}:{raw_task_id}"
                             
+                            # Extract project_id from HAL links (OpenProject format)
+                            # The raw entry may have _links.project.href like "/api/v3/projects/123"
+                            links = d.get("_links", {})
+                            if links:
+                                project_link = links.get("project", {})
+                                if project_link and isinstance(project_link, dict):
+                                    project_href = project_link.get("href", "")
+                                    if project_href:
+                                        # Extract ID from href like "/api/v3/projects/123"
+                                        raw_project_id = project_href.split("/")[-1]
+                                        if raw_project_id and ":" not in raw_project_id:
+                                            d["project_id"] = f"{provider_id_prefix}:{raw_project_id}"
+                                        else:
+                                            d["project_id"] = raw_project_id
+                            
+                            # Also check for direct project_id field (for non-HAL providers)
+                            if not d.get("project_id"):
+                                raw_project_id = d.get("project_id")
+                                if raw_project_id and ":" not in str(raw_project_id):
+                                    d["project_id"] = f"{provider_id_prefix}:{raw_project_id}"
+                            
                             d["provider_id"] = str(provider_conn.id)
                             d["provider_name"] = provider_conn.name
                             yield d

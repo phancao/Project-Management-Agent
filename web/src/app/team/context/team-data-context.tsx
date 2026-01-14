@@ -294,24 +294,12 @@ export function useTeamTimeEntries(memberIds: string[], options?: { startDate?: 
         queries: providerEntries.map(([providerId, providerMemberIds]) => ({
             queryKey: ['pm', 'time_entries', 'provider', providerId, providerMemberIds.sort().join(','), startDate, endDate],
             queryFn: async () => {
-                console.log('[PM-DEBUG][TIME_ENTRIES] QUERY:', {
-                    providerId,
-                    memberIds: providerMemberIds,
-                    startDate: options?.startDate,
-                    endDate: options?.endDate
-                });
-                const result = await listTimeEntries({
+                return listTimeEntries({
                     userIds: providerMemberIds,
                     startDate: options?.startDate,
                     endDate: options?.endDate,
                     providerId: providerId
                 });
-                console.log('[PM-DEBUG][TIME_ENTRIES] RESULT:', {
-                    count: result.length,
-                    sampleUserIds: result.slice(0, 5).map((e: any) => e.user_id),
-                    sampleProviderIds: result.slice(0, 5).map((e: any) => e.provider_id)
-                });
-                return result;
             },
             retry: false,
             staleTime: 5 * 60 * 1000,
@@ -328,21 +316,11 @@ export function useTeamTimeEntries(memberIds: string[], options?: { startDate?: 
                 entries.push(entry);
             });
         });
-        console.log('[PM-DEBUG][TIME_ENTRIES] allTimeEntries:', entries.length);
         return entries;
     }, [timeQueries]);
 
     const teamTimeEntries = useMemo(() => {
-        const filtered = allTimeEntries.filter(te => memberIds.includes(te.user_id));
-        console.log('[PM-DEBUG][TIME_ENTRIES] FILTER:', {
-            allCount: allTimeEntries.length,
-            memberIds: memberIds,
-            filteredCount: filtered.length,
-            mismatchSample: allTimeEntries.length > 0 && filtered.length === 0
-                ? allTimeEntries.slice(0, 5).map(e => e.user_id)
-                : null
-        });
-        return filtered;
+        return allTimeEntries.filter(te => memberIds.includes(te.user_id));
     }, [allTimeEntries, memberIds]);
 
     // Only loading if providers are loading OR we have active queries loading

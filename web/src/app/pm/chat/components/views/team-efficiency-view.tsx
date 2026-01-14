@@ -22,11 +22,13 @@ import { useTeamUsers, useTeamTasks, useTeamTimeEntries } from "~/app/team/conte
 interface TeamEfficiencyViewProps {
     configuredMemberIds?: string[];  // Member IDs to include
     instanceId?: string;
+    title?: string;  // Configurable title from store
 }
 
 export function TeamEfficiencyView({
     configuredMemberIds,
-    instanceId
+    instanceId,
+    title = "Team Efficiency"
 }: TeamEfficiencyViewProps) {
     // Keys for localStorage - scoped to instance, else global
     const storageKeyDate = instanceId
@@ -174,7 +176,7 @@ export function TeamEfficiencyView({
     return (
         <div className="h-full space-y-4">
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold tracking-tight">Team Efficiency (EE)</h2>
+                <h2 className="text-lg font-semibold tracking-tight">{title} (EE)</h2>
             </div>
             <EfficiencyDashboard
                 members={users}
@@ -187,7 +189,7 @@ export function TeamEfficiencyView({
                 onActivePeriodsChange={handleActivePeriodsChange}
                 holidays={holidays}
                 onHolidaysChange={handleHolidaysChange}
-                title="Team Efficiency"
+                title={title}
             />
         </div>
     );

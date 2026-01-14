@@ -5,8 +5,6 @@ import { listTimeEntries, type PMTimeEntry } from "../api/pm/time-entries";
 import { useMemo } from "react";
 
 export function useTeamData(memberIds: string[]) {
-    // DEBUG: Log when this hook is called
-    console.log('[DEBUG] useTeamData (use-team-data.ts) called with', memberIds.length, 'memberIds:', memberIds);
 
     // 1. Fetch ONLY specific team members by ID (not all 500 users)
     const userQueries = useQueries({

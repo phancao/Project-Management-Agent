@@ -16,7 +16,8 @@ export const TeamWorklogsPage = ({ config, instanceId }: { config: Record<string
 export const TeamEfficiencyPage = ({ config, instanceId }: { config: Record<string, any>; instanceId?: string }) => {
     // config.teamMembers should be an array of string IDs
     const memberIds = config.teamMembers as string[] | undefined;
-    return <TeamEfficiencyView configuredMemberIds={memberIds} instanceId={instanceId} />;
+    const title = config.title as string | undefined;
+    return <TeamEfficiencyView configuredMemberIds={memberIds} instanceId={instanceId} title={title} />;
 };
 
 export const TeamOverviewPage = ({ config }: { config: Record<string, any> }) => {

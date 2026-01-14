@@ -209,8 +209,8 @@ export function PMViewsPanel({ className }: PMViewsPanelProps) {
                 >
                   {pages.map((instance) => {
                     const plugin = getPlugin(instance.pluginId);
-                    // Prioritize live metadata shortTitle for tabs, then title
-                    const title = plugin?.meta.shortTitle || plugin?.meta.title || instance.config.title || "Unknown Page";
+                    // Prioritize user-configured title first, then fall back to plugin metadata
+                    const title = instance.config.title || plugin?.meta.shortTitle || plugin?.meta.title || "Unknown Page";
                     const Icon = plugin?.meta.icon || LayoutGrid;
 
                     return (

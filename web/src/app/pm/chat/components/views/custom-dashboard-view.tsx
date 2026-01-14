@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useDashboardStore } from "~/core/store/use-dashboard-store";
 import { useStoreRegistry } from "../dashboards/registry";
 import { Button } from "~/components/ui/button";
-import { Settings, X, Save, AlertCircle, Trash2, Loader2, Plus } from "lucide-react";
+import { Settings, X, Save, AlertCircle, Trash2, Loader2, Plus, Database, FolderOpen } from "lucide-react";
 import {
     Sheet,
     SheetContent,
@@ -25,6 +25,7 @@ import {
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { Badge } from "~/components/ui/badge";
 
 interface CustomDashboardViewProps {
     instanceId: string;
@@ -33,6 +34,153 @@ interface CustomDashboardViewProps {
 
 import { useAllUsers } from "~/app/team/context/team-data-context";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+import { useProviders } from "~/core/api/hooks/pm/use-providers";
+import { useProjectsByProvider } from "~/core/api/hooks/pm/use-projects";
+
+// Helper to extract a friendly display name from provider
+function getProviderDisplayName(provider: { provider_type: string; base_url: string }) {
+    try {
+        const hostname = new URL(provider.base_url).hostname;
+        // Extract meaningful part (e.g., "openproject.example.com" -> "example.com")
+        const parts = hostname.split('.');
+        if (parts.length >= 2) {
+            return parts.slice(-2).join('.');
+        }
+        return hostname;
+    } catch {
+        return provider.base_url;
+    }
+}
+
+// Helper component for Provider selection
+function ProviderSelector({
+    value,
+    onChange
+}: {
+    value?: string;
+    onChange: (val: string) => void;
+}) {
+    const { providers, loading } = useProviders();
+
+    if (loading) {
+        return (
+            <div className="h-10 flex items-center gap-2 px-3 border rounded-md bg-muted/30">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Loading providers...</span>
+            </div>
+        );
+    }
+
+    const activeProviders = providers.filter(p => p.is_active);
+
+    if (activeProviders.length === 0) {
+        return (
+            <div className="h-10 flex items-center gap-2 px-3 border rounded-md bg-muted/30 text-muted-foreground text-sm">
+                No providers configured
+            </div>
+        );
+    }
+
+    // Get the selected provider for display
+    const selectedProvider = activeProviders.find(p => p.id === value);
+
+    return (
+        <Select value={value || ""} onValueChange={onChange}>
+            <SelectTrigger className="h-10">
+                {selectedProvider ? (
+                    <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs bg-brand/10 text-brand border-brand/20">
+                            {selectedProvider.provider_type.toUpperCase()}
+                        </Badge>
+                        <span>{getProviderDisplayName(selectedProvider)}</span>
+                    </div>
+                ) : (
+                    <SelectValue placeholder="Select a provider..." />
+                )}
+            </SelectTrigger>
+            <SelectContent>
+                {activeProviders.map(provider => (
+                    <SelectItem key={provider.id} value={provider.id}>
+                        <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs bg-brand/10 text-brand border-brand/20">
+                                {provider.provider_type.toUpperCase()}
+                            </Badge>
+                            <span>{getProviderDisplayName(provider)}</span>
+                        </div>
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}
+
+// Helper component for Project selection (depends on Provider)
+function ProjectByProviderSelector({
+    value,
+    onChange,
+    providerId
+}: {
+    value?: string;
+    onChange: (val: string) => void;
+    providerId?: string;
+}) {
+    const { projects, loading } = useProjectsByProvider(providerId);
+
+    if (!providerId) {
+        return (
+            <div className="h-10 flex items-center gap-2 px-3 border rounded-md bg-muted/20 border-dashed">
+                <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground italic">Select a provider first</span>
+            </div>
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="h-10 flex items-center gap-2 px-3 border rounded-md bg-muted/30">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Loading projects...</span>
+            </div>
+        );
+    }
+
+    if (projects.length === 0) {
+        return (
+            <div className="h-10 flex items-center gap-2 px-3 border rounded-md bg-muted/20 text-muted-foreground text-sm">
+                <AlertCircle className="w-4 h-4" />
+                No projects found for this provider
+            </div>
+        );
+    }
+
+    // Find selected project for display
+    const selectedProject = projects.find(p => p.id === value);
+
+    return (
+        <Select value={value || ""} onValueChange={onChange}>
+            <SelectTrigger className="h-10">
+                {selectedProject ? (
+                    <div className="flex items-center gap-2">
+                        <FolderOpen className="w-4 h-4 text-brand" />
+                        <span>{selectedProject.name}</span>
+                    </div>
+                ) : (
+                    <SelectValue placeholder="Select a project..." />
+                )}
+            </SelectTrigger>
+            <SelectContent>
+                {projects.map(project => (
+                    <SelectItem key={project.id} value={project.id}>
+                        <div className="flex items-center gap-2">
+                            <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                            {project.name}
+                        </div>
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}
 
 // Helper component to avoid hook rules issues in renderConfigField
 function TeamMemberSelector({
@@ -293,6 +441,49 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
                                 onChange={(val) => setTempConfig({ ...tempConfig, [key]: val })}
                             />
                         </div>
+                    </div>
+                );
+            case "provider":
+                return (
+                    <div className="space-y-3 pt-2">
+                        <Label className="flex items-center gap-2">
+                            <Database className="w-4 h-4 text-muted-foreground" />
+                            {field.label}
+                        </Label>
+                        {field.description && (
+                            <p className="text-xs text-muted-foreground">{field.description}</p>
+                        )}
+                        <ProviderSelector
+                            value={tempConfig[key]}
+                            onChange={(val) => {
+                                // When provider changes, also clear the dependent project field
+                                const dependentField = Object.entries(schema || {}).find(
+                                    ([, f]: [string, any]) => f.dependsOn === key
+                                );
+                                if (dependentField) {
+                                    setTempConfig({ ...tempConfig, [key]: val, [dependentField[0]]: undefined });
+                                } else {
+                                    setTempConfig({ ...tempConfig, [key]: val });
+                                }
+                            }}
+                        />
+                    </div>
+                );
+            case "project-by-provider":
+                return (
+                    <div className="space-y-3 pt-4">
+                        <Label className="flex items-center gap-2">
+                            <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                            {field.label}
+                        </Label>
+                        {field.description && (
+                            <p className="text-xs text-muted-foreground">{field.description}</p>
+                        )}
+                        <ProjectByProviderSelector
+                            value={tempConfig[key]}
+                            onChange={(val) => setTempConfig({ ...tempConfig, [key]: val })}
+                            providerId={tempConfig[field.dependsOn]}
+                        />
                     </div>
                 );
             default:

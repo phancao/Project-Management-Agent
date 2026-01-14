@@ -4,19 +4,114 @@ import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { format, startOfMonth } from "date-fns";
 import type { DateRange } from "react-day-picker";
+import { Settings2, Database, FolderOpen, Loader2 } from "lucide-react";
 
 import { EfficiencyDashboard } from "~/components/efficiency/efficiency-dashboard";
 import { type MemberPeriod, type Holiday } from "~/components/efficiency/member-duration-manager";
 import { useHolidays } from "~/contexts/holidays-context";
-import { useTeamUsers, useTeamTasks, useTeamTimeEntries } from "~/app/team/context/team-data-context";
+import {
+    useProjectMembers,
+    useProjectTasks,
+    useProjectTimeEntries
+} from "~/core/api/hooks/pm/use-project-efficiency";
+import { useProviders } from "~/core/api/hooks/pm/use-providers";
+import { useProjectsByProvider } from "~/core/api/hooks/pm/use-projects";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Badge } from "~/components/ui/badge";
 
-export function EfficiencyPanelView({ configuredMemberIds, instanceId }: { configuredMemberIds?: string[]; instanceId?: string }) {
+/**
+ * Project Efficiency (EE) Panel View
+ * 
+ * This is a Project-Centric widget that queries data by projectId and providerId.
+ * It follows the Widget Autonomy Standard:
+ * - providerId is MANDATORY (can be configured inline)
+ * - Data is fetched from the remote provider, not from local DB
+ */
+interface EfficiencyPanelViewProps {
+    projectId?: string;     // Project to query data from (can be configured inline)
+    providerId?: string;    // Provider ID (can be configured inline)
+    instanceId?: string;
+}
+
+export function EfficiencyPanelView({
+    projectId: propProjectId,
+    providerId: propProviderId,
+    instanceId
+}: EfficiencyPanelViewProps) {
     const searchParams = useSearchParams();
-    const projectId = searchParams.get("project");
+
+    // Storage keys for configuration persistence
+    const storageKeyConfig = instanceId
+        ? `ee-config-instance-${instanceId}`
+        : `ee-config-global`;
+
+    // Local selection state (persisted to localStorage)
+    const [selectedProviderId, setSelectedProviderId] = useState<string | undefined>(() => {
+        if (propProviderId) return propProviderId;
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(storageKeyConfig);
+            if (saved) {
+                try {
+                    const config = JSON.parse(saved);
+                    return config.providerId;
+                } catch { /* ignore */ }
+            }
+        }
+        return undefined;
+    });
+
+    const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(() => {
+        if (propProjectId) return propProjectId;
+        // Check URL params
+        const urlProjectId = searchParams.get("project");
+        if (urlProjectId) return urlProjectId;
+        // Check localStorage
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(storageKeyConfig);
+            if (saved) {
+                try {
+                    const config = JSON.parse(saved);
+                    return config.projectId;
+                } catch { /* ignore */ }
+            }
+        }
+        return undefined;
+    });
+
+    // Save config to localStorage when selections change
+    useEffect(() => {
+        if (selectedProviderId || selectedProjectId) {
+            localStorage.setItem(storageKeyConfig, JSON.stringify({
+                providerId: selectedProviderId,
+                projectId: selectedProjectId
+            }));
+        }
+    }, [selectedProviderId, selectedProjectId, storageKeyConfig]);
+
+    // Fetch providers
+    const { providers, loading: loadingProviders } = useProviders();
+
+    // Fetch projects for selected provider
+    const { projects, loading: loadingProjects } = useProjectsByProvider(selectedProviderId);
+
+    // Handle provider change - reset project selection
+    const handleProviderChange = (providerId: string) => {
+        setSelectedProviderId(providerId);
+        setSelectedProjectId(undefined); // Reset project when provider changes
+    };
+
+    // Use effective IDs (from props or local selection)
+    const effectiveProviderId = propProviderId || selectedProviderId;
+    const effectiveProjectId = propProjectId || selectedProjectId;
 
     // Keys for localStorage - scoped to instance if available, else project, else global
-    const storageKeyDate = instanceId ? `ee-daterange-instance-${instanceId}` : (projectId ? `ee-daterange-project-${projectId}` : `ee-daterange-global`);
-    const storageKeyDurations = instanceId ? `ee-durations-instance-${instanceId}` : (projectId ? `ee-durations-project-${projectId}` : `ee-durations-global`);
+    const storageKeyDate = instanceId
+        ? `ee-daterange-instance-${instanceId}`
+        : (effectiveProjectId ? `ee-daterange-project-${effectiveProjectId}` : `ee-daterange-global`);
+    const storageKeyDurations = instanceId
+        ? `ee-durations-instance-${instanceId}`
+        : (effectiveProjectId ? `ee-durations-project-${effectiveProjectId}` : `ee-durations-global`);
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
         // Initialize from localStorage if available
@@ -119,36 +214,159 @@ export function EfficiencyPanelView({ configuredMemberIds, instanceId }: { confi
         localStorage.setItem(storageKeyDurations, JSON.stringify(periods));
     };
 
-    // Use effective member IDs - either configured or empty (will cause hooks to return empty)
-    const effectiveMemberIds = configuredMemberIds || [];
+    // ==================================================
+    // PROJECT-CENTRIC DATA FETCHING (Widget Autonomy Standard)
+    // ==================================================
 
-    // Use provider-grouped hooks from team-data-context
-    const { teamMembers: users, isLoading: isLoadingUsers } = useTeamUsers(effectiveMemberIds);
-
-    const { teamTasks: tasks, isLoading: isLoadingTasks } = useTeamTasks(effectiveMemberIds, {
+    const dateOptions = useMemo(() => ({
         startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
         endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
-    });
+    }), [dateRange]);
 
-    const { teamTimeEntries: timeEntries, isLoading: isLoadingTimeEntries } = useTeamTimeEntries(effectiveMemberIds, {
-        startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
-        endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
-    });
+    // Fetch project members (users assigned to this project)
+    const {
+        data: members = [],
+        isLoading: isLoadingMembers
+    } = useProjectMembers(effectiveProjectId, effectiveProviderId);
 
-    const isLoading = isLoadingUsers || isLoadingTasks || isLoadingTimeEntries;
+    // Fetch project tasks
+    const {
+        data: tasks = [],
+        isLoading: isLoadingTasks
+    } = useProjectTasks(effectiveProjectId, effectiveProviderId, dateOptions);
 
-    // Determine Displayed Members - just use the loaded users (already filtered by hooks)
-    const projectMembers = useMemo(() => {
-        return users;
-    }, [users]);
+    // Fetch project time entries (worklogs)
+    const {
+        data: timeEntries = [],
+        isLoading: isLoadingTimeEntries
+    } = useProjectTimeEntries(effectiveProjectId, effectiveProviderId, dateOptions);
+
+    const isLoading = isLoadingMembers || isLoadingTasks || isLoadingTimeEntries;
+
+    // ==================================================
+    // CONFIGURATION UI (when no provider/project selected)
+    // ==================================================
+
+    if (!effectiveProviderId || !effectiveProjectId) {
+        return (
+            <div className="h-full flex items-center justify-center p-6">
+                <Card className="w-full max-w-md">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Settings2 className="w-5 h-5" />
+                            Configure Project Efficiency
+                        </CardTitle>
+                        <CardDescription>
+                            Select a provider and project to view efficiency metrics.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {/* Provider Selection */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <Database className="w-4 h-4 text-muted-foreground" />
+                                Provider
+                            </label>
+                            <Select
+                                value={selectedProviderId || ""}
+                                onValueChange={handleProviderChange}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder={loadingProviders ? "Loading providers..." : "Select a provider"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {providers.filter(p => p.is_active).map(provider => (
+                                        <SelectItem key={provider.id} value={provider.id}>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className="text-xs">
+                                                    {provider.provider_type}
+                                                </Badge>
+                                                {provider.provider_type} ({new URL(provider.base_url).hostname})
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Project Selection (only shown after provider is selected) */}
+                        {selectedProviderId && (
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium flex items-center gap-2">
+                                    <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                                    Project
+                                </label>
+                                <Select
+                                    value={selectedProjectId || ""}
+                                    onValueChange={setSelectedProjectId}
+                                    disabled={loadingProjects}
+                                >
+                                    <SelectTrigger>
+                                        {loadingProjects ? (
+                                            <div className="flex items-center gap-2">
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Loading projects...
+                                            </div>
+                                        ) : (
+                                            <SelectValue placeholder="Select a project" />
+                                        )}
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {projects.map(project => (
+                                            <SelectItem key={project.id} value={project.id}>
+                                                {project.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {projects.length === 0 && !loadingProjects && (
+                                    <p className="text-xs text-muted-foreground">
+                                        No projects found for this provider.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    // ==================================================
+    // MAIN DASHBOARD VIEW
+    // ==================================================
+
+    // Find the selected project name for display
+    const selectedProject = projects.find(p => p.id === effectiveProjectId);
+    const selectedProvider = providers.find(p => p.id === effectiveProviderId);
 
     return (
         <div className="h-full space-y-4">
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold tracking-tight">Efficiency (EE)</h2>
+                <div className="flex items-center gap-4">
+                    <h2 className="text-lg font-semibold tracking-tight">Project Efficiency (EE)</h2>
+                    {/* Compact project indicator with change option */}
+                    <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs">
+                            {selectedProvider?.provider_type || 'Provider'}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                            {selectedProject?.name || effectiveProjectId}
+                        </span>
+                        <button
+                            className="text-xs text-muted-foreground hover:text-foreground underline"
+                            onClick={() => {
+                                setSelectedProviderId(undefined);
+                                setSelectedProjectId(undefined);
+                            }}
+                        >
+                            Change
+                        </button>
+                    </div>
+                </div>
             </div>
             <EfficiencyDashboard
-                members={projectMembers}
+                members={members}
                 tasks={tasks}
                 timeEntries={timeEntries}
                 isLoading={isLoading}

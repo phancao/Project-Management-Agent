@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { WorklogsView } from '../../views/worklogs-view';
-import { EfficiencyPanelView } from '../../views/efficiency-panel-view';
+import { TeamEfficiencyView } from '../../views/team-efficiency-view';
 import { TeamOverview } from "~/app/team/components/team-overview";
 import { TeamDataProvider } from "~/app/team/context/team-data-context";
 import { MemberProfileContext } from "~/app/team/context/member-profile-context";
@@ -16,7 +16,7 @@ export const TeamWorklogsPage = ({ config, instanceId }: { config: Record<string
 export const TeamEfficiencyPage = ({ config, instanceId }: { config: Record<string, any>; instanceId?: string }) => {
     // config.teamMembers should be an array of string IDs
     const memberIds = config.teamMembers as string[] | undefined;
-    return <EfficiencyPanelView configuredMemberIds={memberIds} instanceId={instanceId} />;
+    return <TeamEfficiencyView configuredMemberIds={memberIds} instanceId={instanceId} />;
 };
 
 export const TeamOverviewPage = ({ config }: { config: Record<string, any> }) => {

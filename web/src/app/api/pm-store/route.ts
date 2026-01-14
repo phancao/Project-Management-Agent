@@ -136,7 +136,20 @@ const PLUGIN_MANIFEST = [
             category: "Analytics",
             icon: "Timer",
             author: "System",
-            version: "1.0.0",
+            version: "1.1.0",
+        },
+        configSchema: {
+            providerId: {
+                type: "provider",
+                label: "Provider",
+                description: "Select the PM provider to fetch data from.",
+            },
+            projectId: {
+                type: "project-by-provider",
+                label: "Project",
+                description: "Select the project to analyze.",
+                dependsOn: "providerId",
+            },
         },
     },
     {

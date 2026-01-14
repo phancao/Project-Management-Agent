@@ -112,3 +112,55 @@ export function useProjects() {
   return { projects, loading, error, refresh };
 }
 
+/**
+ * Hook to fetch projects for a specific provider
+ * Used for cascading provider → project selection
+ */
+export function useProjectsByProvider(providerId: string | undefined) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!providerId) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+
+    const fetchProviderProjects = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const params = new URLSearchParams();
+        params.append("provider_id", providerId);
+        params.append("pageSize", "100");
+
+        const url = `${resolvePMServiceURL("projects")}?${params.toString()}`;
+        const response = await fetch(url, {
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch projects: ${response.status}`);
+        }
+
+        const data = await response.json();
+        // Handle both array and paginated response
+        const items = Array.isArray(data) ? data : (data.items || []);
+        setProjects(items);
+      } catch (err) {
+        console.error('[useProjectsByProvider] Error:', err);
+        setError(err as Error);
+        setProjects([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProviderProjects();
+  }, [providerId]);
+
+  return { projects, loading, error };
+}

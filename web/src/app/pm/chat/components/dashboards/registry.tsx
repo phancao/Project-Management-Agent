@@ -165,7 +165,13 @@ export const COMPONENT_MAP: Record<string, React.ComponentType<{ config: Record<
     "worklogs": WorklogsPage, // Keeping for backward compat or direct usage
     "team-worklogs": TeamWorklogsPage, // [NEW]
     "timeline-view": TimelineView,
-    "efficiency-view": (props: { config: Record<string, any>; instanceId?: string }) => <EfficiencyPanelView instanceId={props.instanceId} />, // Adapter
+    "efficiency-view": (props: { config: Record<string, any>; instanceId?: string }) => (
+        <EfficiencyPanelView
+            projectId={props.config.projectId}
+            providerId={props.config.providerId}
+            instanceId={props.instanceId}
+        />
+    ),
     "team-efficiency": TeamEfficiencyPage, // [NEW]
     "team-overview": TeamOverviewPage, // [NEW]
     "team-view": () => <TeamAssignmentsView />, // Adapter for no-prop component

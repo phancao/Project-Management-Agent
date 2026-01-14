@@ -254,9 +254,6 @@ export async function sendMessage(
     for await (const event of stream) {
       const { type, data } = event;
 
-      // [PM-DEBUG] Store Layer
-      console.log(`[PM-DEBUG][STORE] ${new Date().toISOString()} EVENT: type=${type}, id=${data?.id ?? 'none'}, agent=${data?.agent ?? 'none'}`);
-
 
 
       // Handle PM refresh events to update PM views

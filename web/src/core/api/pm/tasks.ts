@@ -25,8 +25,6 @@ export async function listTasks(filters: {
     endDate?: string,
     providerId?: string // [NEW] Enforce specific provider
 }): Promise<PMTask[]> {
-    console.log('[DEBUG API] listTasks called - filters:', filters);
-
 
     const pageSize = 100;
 

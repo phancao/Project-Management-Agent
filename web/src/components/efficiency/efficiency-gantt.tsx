@@ -322,12 +322,7 @@ export function EfficiencyGantt({ members, timeEntries, tasks = [], startDate, e
                                         const memberPeriodsList = activePeriods[member.id];
                                         const hasActivePeriod = memberPeriodsList && memberPeriodsList.length > 0;
 
-                                        // Debug log (only for first period column to avoid spam)
-                                        if (periods.indexOf(period) === 0 && hasActivePeriod) {
-                                            console.log('[EfficiencyGantt] Member:', member.name, 'ID:', member.id);
-                                            console.log('  -> Period from data:', memberPeriodsList[0]?.range?.from, 'type:', typeof memberPeriodsList[0]?.range?.from);
-                                            console.log('  -> Period to data:', memberPeriodsList[0]?.range?.to, 'type:', typeof memberPeriodsList[0]?.range?.to);
-                                        }
+
 
                                         // Check if this day falls within any active period (including weekends)
                                         const isWithinAnyActivePeriod = hasActivePeriod && memberPeriodsList.some(p => {
@@ -343,15 +338,7 @@ export function EfficiencyGantt({ members, timeEntries, tasks = [], startDate, e
                                                 end: endOfDay(toDate)
                                             });
 
-                                            // Debug: Log for Luong Vo Dai on Sep 19 (should be false)
-                                            const monthDay = `${period.getMonth() + 1}-${period.getDate()}`;
-                                            if (member.name.includes('Luong') && monthDay === '9-19') {
-                                                console.log('[DEBUG] Luong Sep 19 check:');
-                                                console.log('  period:', period.toISOString());
-                                                console.log('  fromDate:', fromDate.toISOString());
-                                                console.log('  toDate:', toDate.toISOString());
-                                                console.log('  isWithinInterval result:', result);
-                                            }
+
 
                                             return result;
                                         });
@@ -361,11 +348,7 @@ export function EfficiencyGantt({ members, timeEntries, tasks = [], startDate, e
                                         // 2. Has active periods AND this day is within one of them
                                         const isAllocated = hasActivePeriod ? isWithinAnyActivePeriod : true;
 
-                                        // Debug: Log final isAllocated for Luong on Sep 19
-                                        const monthDay2 = `${period.getMonth() + 1}-${period.getDate()}`;
-                                        if (member.name.includes('Luong') && monthDay2 === '9-19') {
-                                            console.log('[DEBUG] Luong Sep 19 final:', { hasActivePeriod, isWithinAnyActivePeriod, isAllocated });
-                                        }
+
 
                                         return (
                                             <div

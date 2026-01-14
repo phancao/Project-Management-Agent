@@ -28,7 +28,6 @@ export function matchesUserId(userId: string, targetId: string): boolean {
 }
 
 export async function listUsers(projectId?: string, providerId?: string): Promise<PMUser[]> {
-    console.log('[DEBUG API] listUsers called - projectId:', projectId, 'providerId:', providerId);
 
     const pageSize = 100;
 
@@ -97,7 +96,6 @@ export async function listUsers(projectId?: string, providerId?: string): Promis
  * Returns null if user not found (instead of throwing).
  */
 export async function getUser(userId: string, providerId?: string): Promise<PMUser | null> {
-    console.log('[DEBUG API] getUser called - userId:', userId, 'providerId:', providerId);
     // If providerId is supplied, pass it as query param
     let url = resolvePMServiceURL(`users/${userId}`);
     if (providerId) {

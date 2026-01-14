@@ -229,7 +229,6 @@ function MessageListItem({
         const shouldRenderReact = message.role === "user" || hasVisibleContent || hasTools;
 
         if (message.agent === "react_agent" && !shouldRenderReact) {
-          console.log(`[PM-DEBUG][RENDER] ${new Date().toISOString()} SKIP: id=${message.id}, agent=react_agent, reason=empty_react_bubble`);
           return null; // Skip empty react_agent bubbles
         }
 
@@ -288,14 +287,6 @@ function MessageListItem({
       const isIntentDetector = message.agent === 'intent_detector';
 
       const shouldRender = !isIntentDetector && (hasVisibleContent || hasTools || hasThoughts);
-
-      // [PM-DEBUG] Render Filter Decision
-      if (!shouldRender) {
-        const skipReason = isIntentDetector ? 'intent_detector_hidden' : 'no_content_tools_thoughts';
-        console.log(`[PM-DEBUG][RENDER] ${new Date().toISOString()} SKIP: id=${message.id}, agent=${message.agent}, reason=${skipReason}, content_len=${message.content?.length ?? 0}`);
-      } else {
-        console.log(`[PM-DEBUG][RENDER] ${new Date().toISOString()} SHOW: id=${message.id}, agent=${message.agent}, hasContent=${!!hasVisibleContent}, hasTools=${hasTools}, hasThoughts=${hasThoughts}`);
-      }
 
 
 

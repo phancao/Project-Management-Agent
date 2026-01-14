@@ -34,6 +34,9 @@ interface MemberDurationManagerProps {
     // Member Exclusion Props
     excludedMemberIds?: string[];
     onToggleExclusion?: (memberId: string) => void;
+
+    // Auto-inferred periods (shown with different color)
+    inferredPeriods?: Record<string, MemberPeriod[]>;
 }
 
 export function MemberDurationManager({
@@ -42,7 +45,8 @@ export function MemberDurationManager({
     onChange,
     holidays = [],
     excludedMemberIds = [],
-    onToggleExclusion
+    onToggleExclusion,
+    inferredPeriods = {}
 }: MemberDurationManagerProps) {
     const [selectedMember, setSelectedMember] = useState<string | null>(null);
     const [tempDateRange, setTempDateRange] = useState<DateRange | undefined>(undefined);
@@ -283,7 +287,35 @@ export function MemberDurationManager({
                                 </div>
 
                                 <div className="flex-1 flex flex-wrap items-center gap-2">
-                                    {periods.length === 0 && !isAdding && (
+                                    {/* Auto-inferred periods (shown first, in amber color) */}
+                                    {(inferredPeriods[member.id] || []).map((period, index) => (
+                                        <div key={`inferred-${index}`} className="flex flex-col gap-1">
+                                            <div
+                                                className="relative flex items-center gap-1.5 py-1 pr-2 pl-2 rounded-md overflow-hidden bg-amber-200 dark:bg-amber-900/50 border border-dashed border-amber-400 dark:border-amber-600"
+                                                title="Auto-detected from worklogs"
+                                            >
+                                                {/* Progress bar fill as background */}
+                                                <div
+                                                    className="absolute inset-0 bg-amber-400 dark:bg-amber-700 transition-all duration-300"
+                                                    style={{ width: `${period.allocation}%` }}
+                                                />
+                                                {/* Content on top */}
+                                                <CalendarIcon className="relative w-3 h-3 text-amber-800 dark:text-amber-200" />
+                                                <span className="relative text-sm text-amber-900 dark:text-amber-100 font-medium">
+                                                    {format(period.range.from!, "MMM d")} - {period.range.to ? format(period.range.to, "MMM d") : "..."}
+                                                </span>
+                                                <Badge
+                                                    variant="outline"
+                                                    className="relative ml-1 text-[10px] px-1 py-0 bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-200 border-amber-400 dark:border-amber-600"
+                                                >
+                                                    Auto
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {/* Show "Full Project Duration" only if no periods (manual or inferred) exist */}
+                                    {periods.length === 0 && (inferredPeriods[member.id] || []).length === 0 && !isAdding && (
                                         <span className="text-xs text-gray-400 italic">Full Project Duration (100%)</span>
                                     )}
 

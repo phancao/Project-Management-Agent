@@ -122,6 +122,71 @@ export function EfficiencyDashboard({
         return members.filter(m => !excludedMemberIds.includes(m.id));
     }, [members, excludedMemberIds]);
 
+    // Auto-infer active periods from time entries for members without configured periods
+    // This uses the first and last time entry dates as the member's active period
+    const effectiveActivePeriods = useMemo(() => {
+        const result: Record<string, MemberPeriod[]> = { ...activePeriods };
+
+        // For each active member, check if they have configured periods
+        activeMembers.forEach(member => {
+            const existingPeriods = activePeriods[member.id];
+
+            // If member already has configured periods, skip auto-inference
+            if (existingPeriods && existingPeriods.length > 0) {
+                return;
+            }
+
+            // Get all time entries for this member
+            const memberEntries = timeEntries.filter(te => te.user_id === member.id);
+
+            if (memberEntries.length === 0) {
+                // No time entries - leave as undefined (will be treated as inactive)
+                return;
+            }
+
+            // Parse dates and find min/max
+            const entryDates = memberEntries
+                .map(te => te.date ? new Date(te.date) : null)
+                .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
+
+            if (entryDates.length === 0) {
+                return;
+            }
+
+            // Sort dates to find first and last
+            entryDates.sort((a, b) => a.getTime() - b.getTime());
+            const firstDate = entryDates[0];
+            const lastDate = entryDates[entryDates.length - 1];
+
+            // Create an auto-inferred period for this member
+            result[member.id] = [{
+                range: {
+                    from: startOfDay(firstDate),
+                    to: endOfDay(lastDate)
+                },
+                allocation: 100, // Default full allocation
+                vacations: []
+            }];
+        });
+
+        return result;
+    }, [activePeriods, activeMembers, timeEntries]);
+
+    // Compute inferred-only periods (for visual distinction in UI)
+    // These are periods that exist in effectiveActivePeriods but NOT in activePeriods
+    const inferredOnlyPeriods = useMemo(() => {
+        const result: Record<string, MemberPeriod[]> = {};
+
+        Object.keys(effectiveActivePeriods).forEach(memberId => {
+            // If member has no manually configured periods, any effective periods are inferred
+            if (!activePeriods[memberId] || activePeriods[memberId].length === 0) {
+                result[memberId] = effectiveActivePeriods[memberId] || [];
+            }
+        });
+
+        return result;
+    }, [activePeriods, effectiveActivePeriods]);
+
     // Calculation Logic for EE (using activeMembers)
     const metrics = useMemo(() => {
         if (!dateRange?.from || !dateRange?.to || activeMembers.length === 0) {
@@ -193,7 +258,7 @@ export function EfficiencyDashboard({
 
         // Helper: Check if a day is a vacation for a specific member
         const isVacationDay = (memberId: string, day: Date): boolean => {
-            const periods = activePeriods[memberId];
+            const periods = effectiveActivePeriods[memberId];
             if (!periods) return false;
 
             for (const period of periods) {
@@ -229,7 +294,7 @@ export function EfficiencyDashboard({
 
         // Ensure we calculate capacity for EACH member based on their specific duration
         activeMembers.forEach(member => {
-            const periods = activePeriods[member.id];
+            const periods = effectiveActivePeriods[member.id];
 
             // If no periods defined -> member is active for entire range (standard behavior)
             if (!periods || periods.length === 0) {
@@ -310,7 +375,7 @@ export function EfficiencyDashboard({
 
             // CRITICAL FIX: Only count hours if the member was actually "Active" on this day
             // This prevents "1-day active duration" users from having "30-days of work" counted against "1-day capacity".
-            const periods = activePeriods[entry.user_id];
+            const periods = effectiveActivePeriods[entry.user_id];
 
             // If unknown user (not in members list), maybe we should count it? 
             // Or strict filter? Let's strict filter to be safe with the math.
@@ -342,7 +407,7 @@ export function EfficiencyDashboard({
             totalAllocatedHours
         };
 
-    }, [members, tasks, timeEntries, dateRange, activePeriods, activeMembers]); // Added timeEntries dependency
+    }, [members, tasks, timeEntries, dateRange, effectiveActivePeriods, activeMembers]); // Uses effectiveActivePeriods
 
     // Aggregate time entries by activity type
     const activityData = useMemo(() => {
@@ -581,7 +646,7 @@ export function EfficiencyDashboard({
                             endDate={dateRange.to}
                             isLoading={isLoading}
                             viewMode={viewMode}
-                            activePeriods={activePeriods}
+                            activePeriods={effectiveActivePeriods}
                             holidays={holidays}
                         />
                     ) : (
@@ -620,6 +685,7 @@ export function EfficiencyDashboard({
                                     onHolidaysChange={onHolidaysChange}
                                     excludedMemberIds={excludedMemberIds}
                                     onToggleExclusion={handleToggleExclusion}
+                                    inferredPeriods={inferredOnlyPeriods}
                                 />
                             </CardContent>
                         </CollapsibleContent>
@@ -637,8 +703,8 @@ export function EfficiencyDashboard({
                         <MemberEfficiencyCard
                             key={member.id}
                             member={member}
-                            // [PM-DEBUG] Passing active periods
-                            activePeriods={activePeriods[member.id]}
+                            // [PM-DEBUG] Passing active periods (using effective periods with auto-inference)
+                            activePeriods={effectiveActivePeriods[member.id]}
                             timeEntries={timeEntries}
                             dateRange={{ from: dateRange.from!, to: dateRange.to! }}
                             activityColors={ACTIVITY_COLORS}

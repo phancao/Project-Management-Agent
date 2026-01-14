@@ -26,6 +26,7 @@ export interface ProjectEfficiencyOptions {
 
 async function fetchProjectMembers(projectId: string, providerId: string): Promise<PMUser[]> {
     const params = new URLSearchParams();
+    params.append("project_id", projectId);
     params.append("provider_id", providerId);
 
     const url = `${resolvePMServiceURL("users")}?${params.toString()}`;

@@ -82,15 +82,15 @@ function TeamMemberSelector({
 
     return (
         <div className="flex flex-col min-w-0 overflow-hidden" style={{ height: 'calc(100vh - 350px)', minHeight: '400px' }}>
-            {/* Selected Members Section */}
-            <div className="flex-1 min-h-0 border rounded-lg mb-3 flex flex-col">
+            {/* Selected Members Section - Dynamic height with max */}
+            <div className="shrink-0 border rounded-lg mb-3 flex flex-col" style={{ maxHeight: '150px' }}>
                 <div className="p-2 border-b bg-brand/5 text-xs font-medium text-muted-foreground shrink-0 flex items-center justify-between">
                     <span>Selected Members</span>
                     <span className="bg-brand/20 text-brand px-1.5 py-0.5 rounded-full text-[10px]">
                         {selectedUsers.length}
                     </span>
                 </div>
-                <div className="flex-1 overflow-y-auto p-2">
+                <div className="overflow-y-auto p-2">
                     {selectedUsers.length === 0 ? (
                         <div className="text-center py-4 text-sm text-muted-foreground">
                             No members selected
@@ -285,8 +285,8 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
             case "team-members":
                 return (
                     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-                        <Label htmlFor={key}>{field.label}</Label>
-                        <p className="text-xs text-muted-foreground mb-2 shrink-0">{field.description}</p>
+                        <Label htmlFor={key} className="mt-6">{field.label}</Label>
+                        <p className="text-xs text-muted-foreground mb-3 shrink-0">{field.description}</p>
                         <div className="flex-1 min-h-0 overflow-hidden">
                             <TeamMemberSelector
                                 value={tempConfig[key]}
@@ -318,14 +318,14 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
                             </p>
                         </SheetHeader>
 
-                        <ScrollArea className="flex-1 mt-6 min-w-0 overflow-hidden w-full">
-                            <div className="flex flex-col h-full min-w-0 px-4 overflow-hidden w-full" style={{ maxWidth: 'calc(384px - 32px)' }}>
+                        <div className="flex-1 mt-6 min-w-0 overflow-hidden flex flex-col px-6">
+                            <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
                                 {schema &&
                                     Object.entries(schema).map(([key, field]) => (
                                         <div key={key}>{renderConfigField(key, field)}</div>
                                     ))}
                             </div>
-                        </ScrollArea>
+                        </div>
 
                         <SheetFooter className="flex-none border-t pt-4 mt-4 bg-background">
                             <SheetClose asChild>

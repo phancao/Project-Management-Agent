@@ -180,6 +180,71 @@ services:
       retries: 10
       start_period: 180s # OpenProject takes time to start
 
+  # OpenProject Database v17 (PostgreSQL 17 for production)
+  # OpenProject 17.0 released Jan 14, 2026 - Open Source Edition
+  # IMPORTANT: OpenProject v17 REQUIRES PostgreSQL 17 (uses transaction_timeout parameter)
+  openproject_db_v17:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: openproject
+      POSTGRES_PASSWORD: openproject
+      POSTGRES_DB: openproject
+    volumes:
+      - openproject_db_data_v17:/var/lib/postgresql/data
+    ports:
+      - "5437:5432" # Different port to avoid conflict
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U openproject -d openproject" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      default:
+        aliases:
+          - openproject-db-v17
+
+  # OpenProject Application v17.0 (Open Source Edition - Released Jan 14, 2026)
+  # Features: Real-time collaborative editing, enhanced meeting management, redesigned project homepages
+  openproject_v17:
+    image: openproject/openproject:17
+    environment:
+      OPENPROJECT_DB_HOST: openproject_db_v17
+      OPENPROJECT_DB_PORT: 5432
+      OPENPROJECT_DB_USERNAME: openproject
+      OPENPROJECT_DB_PASSWORD: openproject
+      OPENPROJECT_DB_DATABASE: openproject
+      # Explicitly set DATABASE_URL to override any default local connection
+      DATABASE_URL: postgres://openproject:openproject@openproject-db-v17:5432/openproject
+      OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY_V17:-development-secret-key-v17-change-in-production}
+      OPENPROJECT_HOST__NAME: localhost:8084
+      OPENPROJECT_HTTPS: "false"
+      OPENPROJECT_DEFAULT__LANGUAGE: en
+      # Hide Enterprise upgrade banners in Community Edition
+      OPENPROJECT_EE__MANAGER__VISIBLE: "false"
+      # Disable Enterprise-only modules to hide them from the menu
+      # Valid modules: work_package_tracking, news, wiki, repository, forums, activity, 
+      # costs, backlogs, github, gitlab, board_view, budgets, meetings, 
+      # team_planner_view, calendar_view, documents, gantt
+      # NOTE: board_view controls ALL boards (Basic + Enterprise types) - cannot selectively disable
+      OPENPROJECT_DISABLED__MODULES: "team_planner_view"
+      # Hide specific menu items from the global sidebar menu
+      # portfolios = Portfolios menu item (Enterprise feature)
+      OPENPROJECT_HIDDEN__MENU__ITEMS_GLOBAL__MENU: "portfolios"
+    ports:
+      - "8084:80"
+    depends_on:
+      openproject_db_v17:
+        condition: service_healthy
+    volumes:
+      - openproject_data_v17:/var/openproject/assets
+      - openproject_pgdata_v17:/var/openproject/pgdata
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost/health_check" ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s # OpenProject takes time to start
+
   # MCP Server Database (separate from backend)
   # MCP Server Database (separate from backend)
   mcp_postgres:
@@ -354,6 +419,9 @@ volumes:
   qdrant_data:
   openproject_db_data_v13:
   openproject_data_v13:
+  openproject_db_data_v17:
+  openproject_data_v17:
+  openproject_pgdata_v17:
   bugbase_postgres_data:
 
 

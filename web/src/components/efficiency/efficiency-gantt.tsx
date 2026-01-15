@@ -436,30 +436,37 @@ export function EfficiencyGantt({ members, timeEntries, tasks = [], startDate, e
                                                             ) : isVacationDay ? (
                                                                 <div className="text-emerald-600 dark:text-emerald-400">🏖️ Vacation</div>
                                                             ) : (
-                                                                <div className="space-y-1.5">
+                                                                <div className="space-y-2">
                                                                     {taskBreakdown.length > 0 ? (
                                                                         <>
-                                                                            {taskBreakdown.sort((a, b) => b.hours - a.hours).slice(0, 5).map((task, i) => (
-                                                                                <div key={task.taskId} className="flex items-start gap-2">
-                                                                                    <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-indigo-500" />
-                                                                                    <div className="flex-1 min-w-0">
-                                                                                        <div className="font-medium truncate" title={task.taskName}>
-                                                                                            {task.taskName}
-                                                                                        </div>
-                                                                                        <div className="text-[10px] opacity-70 truncate" title={task.projectName}>
-                                                                                            {task.projectName}
-                                                                                        </div>
-                                                                                        <div className="text-[11px] opacity-80">
-                                                                                            {task.hours.toFixed(1)}h
-                                                                                        </div>
+                                                                            {/* Group tasks by project */}
+                                                                            {Object.entries(
+                                                                                taskBreakdown.reduce((acc, task) => {
+                                                                                    const project = task.projectName || 'Unknown Project';
+                                                                                    if (!acc[project]) acc[project] = [];
+                                                                                    acc[project].push(task);
+                                                                                    return acc;
+                                                                                }, {} as Record<string, typeof taskBreakdown>)
+                                                                            ).map(([projectName, projectTasks]) => (
+                                                                                <div key={projectName} className="space-y-1">
+                                                                                    <div className="text-[10px] opacity-70 font-medium truncate" title={projectName}>
+                                                                                        📁 {projectName}
                                                                                     </div>
+                                                                                    {projectTasks.sort((a, b) => b.hours - a.hours).slice(0, 5).map((task) => (
+                                                                                        <div key={task.taskId} className="flex items-start gap-2 pl-2">
+                                                                                            <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-indigo-400" />
+                                                                                            <div className="flex-1 min-w-0 flex justify-between items-baseline gap-2">
+                                                                                                <span className="font-medium truncate" title={task.taskName}>
+                                                                                                    {task.taskName}
+                                                                                                </span>
+                                                                                                <span className="text-[11px] opacity-80 shrink-0">
+                                                                                                    {task.hours.toFixed(1)}h
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))}
                                                                                 </div>
                                                                             ))}
-                                                                            {taskBreakdown.length > 5 && (
-                                                                                <div className="text-muted-foreground text-[10px]">
-                                                                                    +{taskBreakdown.length - 5} more tasks
-                                                                                </div>
-                                                                            )}
                                                                         </>
                                                                     ) : (
                                                                         <div>{member.name}: {hours.toFixed(2)} hours</div>

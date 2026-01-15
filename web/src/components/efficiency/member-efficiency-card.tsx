@@ -396,23 +396,35 @@ export function MemberEfficiencyCard({ member, timeEntries, tasks = [], dateRang
                                                                     </TooltipTrigger>
                                                                     <TooltipContent className="text-xs z-50 max-w-[280px]">
                                                                         <div className="font-semibold mb-1 border-b pb-1">{format(day, 'EEE, MMM d')}</div>
-                                                                        <div className="space-y-1.5">
+                                                                        <div className="space-y-2">
                                                                             {data && data.taskBreakdown && data.taskBreakdown.length > 0 ? (
                                                                                 <>
-                                                                                    {data.taskBreakdown.map((item, i) => (
-                                                                                        <div key={i} className="flex items-start gap-2">
-                                                                                            <div className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: activityColors[i % activityColors.length] }} />
-                                                                                            <div className="flex-1 min-w-0">
-                                                                                                <div className="font-medium truncate" title={item.taskName}>
-                                                                                                    {item.taskName}
-                                                                                                </div>
-                                                                                                <div className="text-[10px] opacity-70 truncate" title={item.projectName}>
-                                                                                                    {item.projectName}
-                                                                                                </div>
-                                                                                                <div className="text-[11px] opacity-80">
-                                                                                                    {item.activityType} · {item.hours.toFixed(1)}h
-                                                                                                </div>
+                                                                                    {/* Group tasks by project */}
+                                                                                    {Object.entries(
+                                                                                        data.taskBreakdown.reduce((acc, item) => {
+                                                                                            const project = item.projectName || 'Unknown Project';
+                                                                                            if (!acc[project]) acc[project] = [];
+                                                                                            acc[project].push(item);
+                                                                                            return acc;
+                                                                                        }, {} as Record<string, typeof data.taskBreakdown>)
+                                                                                    ).map(([projectName, projectTasks]) => (
+                                                                                        <div key={projectName} className="space-y-1">
+                                                                                            <div className="text-[10px] opacity-70 font-medium truncate" title={projectName}>
+                                                                                                📁 {projectName}
                                                                                             </div>
+                                                                                            {projectTasks.sort((a, b) => b.hours - a.hours).map((item, i) => (
+                                                                                                <div key={i} className="flex items-start gap-2 pl-2">
+                                                                                                    <div className="w-1.5 h-1.5 rounded-full mt-1 shrink-0" style={{ background: activityColors[i % activityColors.length] }} />
+                                                                                                    <div className="flex-1 min-w-0 flex justify-between items-baseline gap-2">
+                                                                                                        <span className="font-medium truncate" title={item.taskName}>
+                                                                                                            {item.taskName}
+                                                                                                        </span>
+                                                                                                        <span className="text-[11px] opacity-80 shrink-0">
+                                                                                                            {item.hours.toFixed(1)}h
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            ))}
                                                                                         </div>
                                                                                     ))}
                                                                                     <div className="pt-1 mt-1 border-t border-gray-500/20 flex justify-between font-bold">

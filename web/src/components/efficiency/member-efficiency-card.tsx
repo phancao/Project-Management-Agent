@@ -119,7 +119,7 @@ export function MemberEfficiencyCard({ member, timeEntries, tasks = [], dateRang
             }));
 
             // Group by task for detailed view with task names
-            const taskGroups: Record<string, { hours: number, activityType: string, taskNameFromLinks?: string }> = {};
+            const taskGroups: Record<string, { hours: number, activityType: string, taskNameFromLinks?: string, projectNameFromLinks?: string }> = {};
             dayEntries.forEach(e => {
                 const taskId = e.task_id || 'no-task';
                 if (!taskGroups[taskId]) {
@@ -127,7 +127,8 @@ export function MemberEfficiencyCard({ member, timeEntries, tasks = [], dateRang
                         hours: 0,
                         activityType: e.activity_type || 'Unknown',
                         // Store task name from HAL links (always available in time entry)
-                        taskNameFromLinks: e._links?.workPackage?.title
+                        taskNameFromLinks: e._links?.workPackage?.title,
+                        projectNameFromLinks: e._links?.project?.title
                     };
                 }
                 taskGroups[taskId].hours += e.hours;
@@ -139,6 +140,7 @@ export function MemberEfficiencyCard({ member, timeEntries, tasks = [], dateRang
                     taskId,
                     // Use _links.workPackage.title first, then task lookup, then fallback
                     taskName: data.taskNameFromLinks || task?.name || task?.title || (taskId === 'no-task' ? 'General Work' : `Task ${taskId.split(':').pop()}`),
+                    projectName: data.projectNameFromLinks || 'Unknown Project',
                     hours: data.hours,
                     activityType: data.activityType
                 };
@@ -403,6 +405,9 @@ export function MemberEfficiencyCard({ member, timeEntries, tasks = [], dateRang
                                                                                             <div className="flex-1 min-w-0">
                                                                                                 <div className="font-medium truncate" title={item.taskName}>
                                                                                                     {item.taskName}
+                                                                                                </div>
+                                                                                                <div className="text-[10px] opacity-70 truncate" title={item.projectName}>
+                                                                                                    {item.projectName}
                                                                                                 </div>
                                                                                                 <div className="text-[11px] opacity-80">
                                                                                                     {item.activityType} · {item.hours.toFixed(1)}h

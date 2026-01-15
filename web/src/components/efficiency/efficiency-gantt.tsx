@@ -149,7 +149,7 @@ export function EfficiencyGantt({ members, timeEntries, tasks = [], startDate, e
     // 4. Aggregate hours per member per period (with task breakdown)
     const worklogMap = useMemo(() => {
         const hoursMap = new Map<string, number>();
-        const taskBreakdownMap = new Map<string, { taskId: string, taskName: string, hours: number }[]>();
+        const taskBreakdownMap = new Map<string, { taskId: string, taskName: string, projectName: string, hours: number }[]>();
 
         timeEntries.forEach(entry => {
             if (!entry.date) return;
@@ -167,14 +167,16 @@ export function EfficiencyGantt({ members, timeEntries, tasks = [], startDate, e
             // Use _links.workPackage.title directly from time entry (always available)
             // Fall back to task lookup, then to ID-based name
             const taskNameFromLinks = entry._links?.workPackage?.title;
+            const projectNameFromLinks = entry._links?.project?.title;
             const task = taskMap.get(taskId);
             const taskName = taskNameFromLinks || task?.name || task?.title || (taskId === 'no-task' ? 'General Work' : `Task ${taskId.split(':').pop()}`);
+            const projectName = projectNameFromLinks || 'Unknown Project';
 
             const existingTask = taskBreakdown.find(t => t.taskId === taskId);
             if (existingTask) {
                 existingTask.hours += entry.hours;
             } else {
-                taskBreakdown.push({ taskId, taskName, hours: entry.hours });
+                taskBreakdown.push({ taskId, taskName, projectName, hours: entry.hours });
             }
             taskBreakdownMap.set(key, taskBreakdown);
         });
@@ -443,6 +445,9 @@ export function EfficiencyGantt({ members, timeEntries, tasks = [], startDate, e
                                                                                     <div className="flex-1 min-w-0">
                                                                                         <div className="font-medium truncate" title={task.taskName}>
                                                                                             {task.taskName}
+                                                                                        </div>
+                                                                                        <div className="text-[10px] opacity-70 truncate" title={task.projectName}>
+                                                                                            {task.projectName}
                                                                                         </div>
                                                                                         <div className="text-[11px] opacity-80">
                                                                                             {task.hours.toFixed(1)}h

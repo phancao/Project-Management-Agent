@@ -98,7 +98,7 @@ export default function ProjectsPage() {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/api/projects', {
+      const response = await fetch('/api/projects', {
         headers: {
           'Authorization': 'Bearer mock_token',
         },
@@ -119,7 +119,7 @@ export default function ProjectsPage() {
 
   const fetchTasks = async (projectId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/projects/${projectId}/tasks`, {
+      const response = await fetch(`/api/projects/${projectId}/tasks`, {
         headers: {
           'Authorization': 'Bearer mock_token',
         },
@@ -136,7 +136,7 @@ export default function ProjectsPage() {
 
   const fetchSprints = async (projectId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/projects/${projectId}/sprints`, {
+      const response = await fetch(`/api/projects/${projectId}/sprints`, {
         headers: {
           'Authorization': 'Bearer mock_token',
         },
@@ -153,7 +153,7 @@ export default function ProjectsPage() {
 
   const fetchSprintTasks = async (sprintId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/sprints/${sprintId}/tasks`, {
+      const response = await fetch(`/api/sprints/${sprintId}/tasks`, {
         headers: {
           'Authorization': 'Bearer mock_token',
         },

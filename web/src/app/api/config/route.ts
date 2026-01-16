@@ -3,7 +3,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ?? 'http://127.0.0.1:8000';
+// Server-side: Use Docker internal URL (api is the docker-compose service name)
+// API_URL env is set in docker-compose.yml for the frontend container
+const BACKEND_URL = process.env.API_URL || 'http://api:8000';
 
 export async function GET(request: NextRequest) {
   try {

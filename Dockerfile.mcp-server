@@ -30,14 +30,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Create logs and data directories
 RUN mkdir -p /app/logs /app/data
 
-# Expose port for SSE/HTTP transports
-EXPOSE 8080
+# Expose port for SSE/HTTP transports (default: 8081, configurable via MCP_PORT)
 
-# Health check
+# Health check (uses default port 8081, expects docker-compose to override via CMD if different)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:${MCP_PORT:-8081}/health || exit 1
 
-# Run the MCP server with SSE transport by default (can be overridden)
+# Run the MCP server - port comes from MCP_PORT env var (set by docker-compose)
 # For stdio transport, use: uv run python scripts/run_pm_mcp_server.py --transport stdio
-CMD ["uv", "run", "python", "scripts/run_pm_mcp_server.py", "--transport", "sse", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["sh", "-c", "uv run python scripts/run_pm_mcp_server.py --transport sse --host 0.0.0.0 --port ${MCP_PORT:-8081}"]
 

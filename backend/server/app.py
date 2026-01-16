@@ -219,6 +219,12 @@ app.add_middleware(
 )
 
 
+# ==================== Azure AD (Office 365) SSO ====================
+# Include Azure AD OAuth routes for enterprise SSO
+from backend.server.azure_ad_auth import router as azure_ad_router
+app.include_router(azure_ad_router, prefix="/api/auth")
+
+
 # ==================== Authentication Endpoints ====================
 
 @app.post("/api/auth/register")

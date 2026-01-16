@@ -5,7 +5,8 @@
  * Auth API functions for login, register, and user session management.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use relative URL so requests go through the gateway (nginx on port 8080)
+const API_URL = '';
 
 export interface User {
     id: string;
@@ -142,13 +143,21 @@ export async function getCurrentUser(): Promise<User | null> {
             },
         });
 
-        if (!response.ok) {
+        if (response.status === 401) {
+            // Only clear auth data on explicit unauthorized response
             clearAuthData();
             return null;
         }
 
+        if (!response.ok) {
+            // Other errors (500, network issues) - don't clear auth, just fail silently
+            console.warn('[Auth] Failed to validate token, keeping existing session');
+            return null;
+        }
+
         return await response.json() as User;
-    } catch {
+    } catch (error) {
+        console.warn('[Auth] Error validating token:', error);
         return null;
     }
 }

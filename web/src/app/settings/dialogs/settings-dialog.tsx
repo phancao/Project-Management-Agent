@@ -121,8 +121,34 @@ export function SettingsDialog() {
         </DialogHeader>
         <Tabs value={activeTabId}>
           <div className="flex h-120 w-full overflow-auto border-y">
-            <ul className="flex w-50 shrink-0 border-r p-1">
-              <div className="size-full">
+            <div className="flex w-50 shrink-0 flex-col border-r">
+              {/* Account Info Section */}
+              {user && (
+                <div className="p-3 border-b">
+                  <div className="flex items-center gap-3">
+                    {/* Avatar */}
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#1E398D] to-[#14B795] flex items-center justify-center text-white font-semibold text-sm shrink-0">
+                      {user.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-sm truncate">{user.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLogout}
+                    className="w-full mt-3 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 justify-start"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              )}
+
+              {/* Menu Items */}
+              <ul className="flex-1 p-1">
                 {SETTINGS_TABS.map((tab) => (
                   <li
                     key={tab.id}
@@ -149,8 +175,8 @@ export function SettingsDialog() {
                     )}
                   </li>
                 ))}
-              </div>
-            </ul>
+              </ul>
+            </div>
             <div className="min-w-0 flex-grow">
               <div
                 id="settings-content-scrollable"
@@ -168,23 +194,7 @@ export function SettingsDialog() {
             </div>
           </div>
         </Tabs>
-        <DialogFooter className="flex justify-between sm:justify-between">
-          <div className="flex items-center gap-3">
-            {user && (
-              <span className="text-sm text-muted-foreground">
-                Signed in as <span className="font-medium">{user.name}</span>
-              </span>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
-          </div>
+        <DialogFooter className="flex justify-end">
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>
               {tCommon('cancel')}

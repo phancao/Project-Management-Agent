@@ -51,9 +51,14 @@ class User(Base):  # type: ignore
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False)
-    password_hash = Column(String(255), nullable=True)  # For login auth
+    password_hash = Column(String(255), nullable=True)  # For login auth (NULL for SSO-only users)
     name = Column(String(255), nullable=False)
     role = Column(String(50), default='user')
+    
+    # OAuth/SSO fields
+    azure_ad_id = Column(String(255), nullable=True, unique=True)  # Microsoft user ID
+    oauth_provider = Column(String(50), nullable=True)  # 'azure_ad', 'local', etc.
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

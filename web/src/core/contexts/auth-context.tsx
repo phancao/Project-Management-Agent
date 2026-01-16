@@ -56,16 +56,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setIsLoading(false);
 
                 // Then validate token in background
+                // Note: getCurrentUser will clear auth data internally on 401
                 const validUser = await getCurrentUser();
                 if (validUser) {
                     // Update with fresh user data
                     setUser(validUser);
-                } else {
-                    // Token invalid, clear storage and state
-                    apiLogout();
-                    setToken(null);
-                    setUser(null);
                 }
+                // If validUser is null but token wasn't explicitly rejected (401),
+                // keep the existing session from localStorage
             } else {
                 setIsLoading(false);
             }

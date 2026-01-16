@@ -185,10 +185,12 @@ function ProjectByProviderSelector({
 // Helper component to avoid hook rules issues in renderConfigField
 function TeamMemberSelector({
     value,
-    onChange
+    onChange,
+    providerId
 }: {
     value?: string[];
     onChange: (val: string[]) => void;
+    providerId?: string;
 }) {
     const { allUsers: users, isLoading: loading } = useAllUsers(true);
     const [searchTerm, setSearchTerm] = useState("");
@@ -205,8 +207,13 @@ function TeamMemberSelector({
         onChange(Array.from(newSet));
     };
 
+    // Filter users by providerId (user.id format: "providerId:userId")
+    const providerFilteredUsers = providerId
+        ? users.filter(user => user.id.startsWith(providerId + ':'))
+        : users;
+
     // Word-boundary search filter
-    const filteredUsers = users.filter(user => {
+    const filteredUsers = providerFilteredUsers.filter(user => {
         if (!searchTerm.trim()) return true;
         const searchLower = searchTerm.toLowerCase().trim();
         const name = (user.name || "").toLowerCase();
@@ -217,15 +224,31 @@ function TeamMemberSelector({
         return [...nameWords, ...emailWords].some(word => word.startsWith(searchLower));
     });
 
-    const selectedUsers = users.filter(u => selected.has(u.id));
+    // Selected users - filter by provider if specified
+    const selectedUsers = users.filter(u => {
+        if (!selected.has(u.id)) return false;
+        // If providerId is set, only show selected users from that provider
+        if (providerId && !u.id.startsWith(providerId + ':')) return false;
+        return true;
+    });
     const availableUsers = filteredUsers.filter(u => !selected.has(u.id));
+
+    // Show prompt if no provider selected
+    if (!providerId) {
+        return (
+            <div className="h-24 flex items-center justify-center gap-2 px-3 border rounded-md bg-muted/20 border-dashed">
+                <Database className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground italic">Select a provider first to load users</span>
+            </div>
+        );
+    }
 
     if (loading) {
         return <div className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Loading members...</div>;
     }
 
-    if (users.length === 0) {
-        return <div className="text-sm text-gray-500">No members found.</div>;
+    if (providerFilteredUsers.length === 0) {
+        return <div className="text-sm text-gray-500">No users found for this provider.</div>;
     }
 
     return (
@@ -439,6 +462,7 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
                             <TeamMemberSelector
                                 value={tempConfig[key]}
                                 onChange={(val) => setTempConfig({ ...tempConfig, [key]: val })}
+                                providerId={field.dependsOn ? tempConfig[field.dependsOn] : undefined}
                             />
                         </div>
                     </div>
@@ -545,7 +569,8 @@ export function CustomDashboardView({ instanceId, onRemove }: CustomDashboardVie
 
             {/* Main Content */}
             <div className="flex-1 overflow-auto animate-in fade-in duration-300">
-                <Component config={instance.config} />
+                {/* Key forces full component remount when config changes (e.g., providerId) */}
+                <Component key={JSON.stringify(instance.config)} config={instance.config} />
             </div>
         </div>
     );

@@ -81,7 +81,7 @@ function MemberAvatarCell({ member }: { member: MemberWorklogRow }) {
 }
 
 // Individual team card component with its own state
-function TeamWorklogCard({ team }: { team: TeamData }) {
+function TeamWorklogCard({ team, providerId }: { team: TeamData; providerId?: string }) {
     const [weekOffset, setWeekOffset] = useState(0)
     const cardGlow = useCardGlow()
 
@@ -120,7 +120,7 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
     const { teamMembers, isLoading: isLoadingUsers } = useTeamUsers(validMemberIds)
     const { teamTimeEntries, isLoading: isLoadingTimeEntries, isFetching } = useTeamTimeEntries(
         validMemberIds,
-        { startDate: weekRange.start, endDate: weekRange.end }
+        { startDate: weekRange.start, endDate: weekRange.end, providerId }
     )
 
     const isInitialLoading = isLoadingUsers || isLoadingTimeEntries
@@ -285,15 +285,20 @@ function TeamWorklogCard({ team }: { team: TeamData }) {
     )
 }
 
+// Props interface following Widget Autonomy Standard
+interface TeamWorklogsProps {
+    providerId?: string;  // Provider ID for data filtering
+}
+
 // Main component - just renders team cards
-export function TeamWorklogs() {
+export function TeamWorklogs({ providerId }: TeamWorklogsProps) {
     const { teams } = useTeamDataContext()
 
     return (
         <div className="space-y-6">
             {/* Per-Team Worklog Cards - each with independent state */}
             {teams.map(team => (
-                <TeamWorklogCard key={team.id} team={team} />
+                <TeamWorklogCard key={team.id} team={team} providerId={providerId} />
             ))}
 
             {/* Legend */}

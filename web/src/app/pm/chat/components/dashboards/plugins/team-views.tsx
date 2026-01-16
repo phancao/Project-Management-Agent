@@ -8,9 +8,11 @@ import { MemberProfileContext } from "~/app/team/context/member-profile-context"
 import { MemberProfileDialog } from "~/app/team/components/member-profile-dialog";
 
 export const TeamWorklogsPage = ({ config, instanceId }: { config: Record<string, any>; instanceId?: string }) => {
-    // config.teamMembers should be an array of string IDs
+    // Extract config values
     const memberIds = config.teamMembers as string[] | undefined;
-    return <WorklogsView configuredMemberIds={memberIds} instanceId={instanceId} />;
+    const providerId = config.providerId as string | undefined;
+    const projectId = config.projectId as string | undefined;
+    return <WorklogsView configuredMemberIds={memberIds} instanceId={instanceId} providerId={providerId} projectId={projectId} />;
 };
 
 export const TeamEfficiencyPage = ({ config, instanceId }: { config: Record<string, any>; instanceId?: string }) => {

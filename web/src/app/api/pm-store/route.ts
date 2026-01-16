@@ -101,16 +101,17 @@ const PLUGIN_MANIFEST = [
             shortTitle: "Team Worklogs"
         },
         configSchema: {
-            title: {
-                type: "string",
-                label: "Tab Title",
-                defaultValue: "Team Worklogs",
+            providerId: {
+                type: "provider",
+                label: "Provider",
+                description: "Select the PM provider to fetch users and worklogs from.",
             },
             teamMembers: {
                 type: "team-members",
                 label: "Team Members",
-                description: "Select members to include.",
-                defaultValue: []
+                description: "Select members from the provider to include.",
+                defaultValue: [],
+                dependsOn: "providerId",  // Load users from selected provider
             }
         },
     },

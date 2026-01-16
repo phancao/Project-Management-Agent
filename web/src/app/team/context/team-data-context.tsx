@@ -175,9 +175,12 @@ export function useTeamUsers(memberIds: string[]) {
  * Hook for tabs that need tasks data.
  * Groups members by provider, filters disabled providers, queries per-provider.
  */
-export function useTeamTasks(memberIds: string[], options?: { startDate?: string; endDate?: string; status?: string }) {
+export function useTeamTasks(memberIds: string[], options?: { startDate?: string; endDate?: string; status?: string; providerId?: string }) {
     // Get provider mappings to check active status
     const { mappings, loading: isLoadingProviders } = useProviders();
+
+    // If explicit providerId is passed, use only that provider
+    const explicitProviderId = options?.providerId;
 
     // Group members by provider and filter out disabled providers
     const providerGroups = useMemo(() => {
@@ -186,6 +189,9 @@ export function useTeamTasks(memberIds: string[], options?: { startDate?: string
         for (const id of memberIds) {
             const providerId = id.split(':')[0];
             if (!providerId || id.indexOf(':') === -1) continue;
+
+            // Skip if explicit providerId is set and doesn't match
+            if (explicitProviderId && providerId !== explicitProviderId) continue;
 
             // Skip disabled providers
             if (mappings.isActiveMap.size > 0 && mappings.isActiveMap.get(providerId) === false) {
@@ -197,7 +203,7 @@ export function useTeamTasks(memberIds: string[], options?: { startDate?: string
         }
 
         return groups;
-    }, [memberIds, mappings]);
+    }, [memberIds, mappings, explicitProviderId]);
 
     // Convert to array for useQueries
     const providerEntries = useMemo(() => Array.from(providerGroups.entries()), [providerGroups]);
@@ -259,9 +265,12 @@ export function useTeamTasks(memberIds: string[], options?: { startDate?: string
  * Hook for tabs that need time entries data.
  * Groups members by provider, queries per-provider, merges results.
  */
-export function useTeamTimeEntries(memberIds: string[], options?: { startDate?: string; endDate?: string }) {
+export function useTeamTimeEntries(memberIds: string[], options?: { startDate?: string; endDate?: string; providerId?: string }) {
     // Get provider mappings to check active status
     const { mappings, loading: isLoadingProviders } = useProviders();
+
+    // If explicit providerId is passed, use only that provider
+    const explicitProviderId = options?.providerId;
 
     // Group members by provider and filter out disabled providers
     const providerGroups = useMemo(() => {
@@ -270,6 +279,9 @@ export function useTeamTimeEntries(memberIds: string[], options?: { startDate?: 
         for (const id of memberIds) {
             const providerId = id.split(':')[0];
             if (!providerId || id.indexOf(':') === -1) continue;
+
+            // Skip if explicit providerId is set and doesn't match
+            if (explicitProviderId && providerId !== explicitProviderId) continue;
 
             // Skip disabled providers
             if (mappings.isActiveMap.size > 0 && mappings.isActiveMap.get(providerId) === false) {
@@ -281,7 +293,7 @@ export function useTeamTimeEntries(memberIds: string[], options?: { startDate?: 
         }
 
         return groups;
-    }, [memberIds, mappings]);
+    }, [memberIds, mappings, explicitProviderId]);
 
     // Convert to array for useQueries
     const providerEntries = useMemo(() => Array.from(providerGroups.entries()), [providerGroups]);

@@ -57,19 +57,27 @@ interface WeeklyWorklogData {
     [memberId: string]: number | string;
 }
 
-export function WorklogsView({ configuredMemberIds, instanceId }: { configuredMemberIds?: string[]; instanceId?: string }) {
+export function WorklogsView({ configuredMemberIds, instanceId, providerId, projectId: configProjectId }: { configuredMemberIds?: string[]; instanceId?: string; providerId?: string; projectId?: string }) {
     const searchParams = useSearchParams();
-    const projectId = searchParams?.get("project");
+    // Use config projectId first, fallback to URL param
+    const projectId = configProjectId || searchParams?.get("project");
 
     const [timeEntries, setTimeEntries] = useState<PMTimeEntry[]>([]);
     const [users, setUsers] = useState<PMUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // STRICT Widget Autonomy: Require explicit providerId to fetch data
+    // Legacy member IDs from localStorage without a configured provider are ignored
+    const hasValidConfig = Boolean(providerId);
+
     // Fetch data
     useEffect(() => {
-        // If neither project nor members are selected, we might want to show a global view or prompt?
-        // User requested "global query" support, so we proceed.
+        // Widget Autonomy: Do not fetch if no valid configuration
+        if (!hasValidConfig) {
+            setIsLoading(false);
+            return;
+        }
 
         const loadData = async () => {
             setIsLoading(true);
@@ -87,20 +95,18 @@ export function WorklogsView({ configuredMemberIds, instanceId }: { configuredMe
                 };
 
                 // Filter Strategy:
-                // 1. If members are configured, filter by them (ignore project scope to show their cross-project work? Or implicit intersection?)
-                //    User said: "don't querry using Project ID by default. It should querry from each members or global"
-                //    So we prefer Member IDs.
+                // 1. If members are configured, filter by them
                 if (configuredMemberIds && configuredMemberIds.length > 0) {
                     fetchOptions.userIds = configuredMemberIds;
                 } else if (projectId) {
                     // 2. If no specific members, fall back to Project scope
                     fetchOptions.projectId = projectId;
                 }
-                // 3. If neither, it fetches GLOBAL entries (as requested)
+                // 3. If only providerId is set but no members/project, fetch all from that provider
 
                 const [entries, userList] = await Promise.all([
-                    listTimeEntries(fetchOptions),
-                    listUsers(),
+                    listTimeEntries({ ...fetchOptions, providerId }),
+                    listUsers(undefined, providerId),  // First arg is projectId, second is providerId
                 ]);
 
                 setTimeEntries(entries);
@@ -113,7 +119,7 @@ export function WorklogsView({ configuredMemberIds, instanceId }: { configuredMe
         };
 
         void loadData();
-    }, [projectId, configuredMemberIds]);
+    }, [projectId, configuredMemberIds, providerId, hasValidConfig]);
 
     // Create user id → name/color mapping
     const userMap = useMemo(() => {
@@ -210,6 +216,32 @@ export function WorklogsView({ configuredMemberIds, instanceId }: { configuredMe
             }))
             .sort((a, b) => b.hours - a.hours);
     }, [timeEntries, totalHours]);
+
+    // Widget Autonomy: Show configuration prompt if no valid config
+    if (!hasValidConfig) {
+        return (
+            <div className="space-y-6 p-6">
+                <Card className="p-6 text-center">
+                    <div className="mx-auto max-w-md space-y-4">
+                        <div className="flex justify-center">
+                            <div className="rounded-full bg-amber-100 p-3 dark:bg-amber-900/30">
+                                <span className="text-2xl">⚙️</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                Provider Required
+                            </h3>
+                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                Please configure a provider for this widget to view worklogs.
+                                Open the widget settings to select a data provider.
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        );
+    }
 
     // Loading state
     if (isLoading) {
@@ -313,9 +345,10 @@ export function WorklogsView({ configuredMemberIds, instanceId }: { configuredMe
                                     </Pie>
                                     <Tooltip
                                         contentStyle={{
-                                            backgroundColor: "rgba(255, 255, 255, 0.95)",
+                                            backgroundColor: "#ffffff",
                                             border: "1px solid #ccc",
                                             borderRadius: "8px",
+                                            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
                                         }}
                                         formatter={(value, name) => [`${Number(value).toFixed(1)} hours`, name]}
                                     />
@@ -381,10 +414,16 @@ export function WorklogsView({ configuredMemberIds, instanceId }: { configuredMe
                             tick={{ fontSize: 12 }}
                         />
                         <Tooltip
+                            wrapperStyle={{
+                                zIndex: 1000,
+                                opacity: 1,
+                            }}
                             contentStyle={{
-                                backgroundColor: "rgba(255, 255, 255, 0.95)",
-                                border: "1px solid #ccc",
+                                backgroundColor: "#ffffff",
+                                border: "1px solid #e5e7eb",
                                 borderRadius: "8px",
+                                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                                opacity: 1,
                             }}
                             formatter={(value, name) => [
                                 `${Number(value ?? 0).toFixed(1)} hours`,

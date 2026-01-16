@@ -124,7 +124,20 @@ const PLUGIN_MANIFEST = [
             category: "Analytics",
             icon: "Clock",
             author: "System",
-            version: "1.0.0",
+            version: "2.0.0",
+        },
+        configSchema: {
+            providerId: {
+                type: "provider",
+                label: "Provider",
+                description: "Select the PM provider to fetch data from.",
+            },
+            projectId: {
+                type: "project-by-provider",
+                label: "Project",
+                description: "Select the project to view worklogs for.",
+                dependsOn: "providerId",
+            },
         },
     },
     {

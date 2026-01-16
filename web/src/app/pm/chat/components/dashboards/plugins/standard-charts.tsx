@@ -20,4 +20,9 @@ export const CFDPage = ({ config }: { config: any }) => <CFDView />;
 export const CycleTimePage = ({ config }: { config: any }) => <CycleTimeView />;
 export const WorkDistributionPage = ({ config }: { config: any }) => <WorkDistributionView />;
 export const IssueTrendPage = ({ config }: { config: any }) => <IssueTrendView />;
-export const WorklogsPage = ({ config }: { config: any }) => <WorklogsView />;
+export const WorklogsPage = ({ config }: { config: Record<string, any> }) => (
+    <WorklogsView
+        providerId={config.providerId}
+        projectId={config.projectId}
+    />
+);
